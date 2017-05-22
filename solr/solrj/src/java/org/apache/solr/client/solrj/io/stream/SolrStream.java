@@ -26,6 +26,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
@@ -68,6 +70,7 @@ public class SolrStream extends TupleStream {
   private transient SolrClientCache cache;
   private String slice;
   private long checkpoint = -1;
+  private CloseableHttpResponse closeableHttpResponse;
 
   /**
    * @param baseUrl Base URL of the stream.
@@ -190,11 +193,7 @@ public class SolrStream extends TupleStream {
   * */
 
   public void close() throws IOException {
-
-    if (tupleStreamParser != null) {
-      tupleStreamParser.close();
-    }
-
+    closeableHttpResponse.close();
     if(cache == null) {
       client.close();
     }
@@ -268,7 +267,7 @@ public class SolrStream extends TupleStream {
   }
 
   // temporary...
-  public static TupleStreamParser constructParser(SolrClient server, SolrParams requestParams) throws IOException, SolrServerException {
+  public TupleStreamParser constructParser(SolrClient server, SolrParams requestParams) throws IOException, SolrServerException {
     String p = requestParams.get("qt");
     if (p != null) {
       ModifiableSolrParams modifiableSolrParams = (ModifiableSolrParams) requestParams;
@@ -282,6 +281,7 @@ public class SolrStream extends TupleStream {
     query.setMethod(SolrRequest.METHOD.POST);
     NamedList<Object> genericResponse = server.request(query);
     InputStream stream = (InputStream) genericResponse.get("stream");
+    this.closeableHttpResponse = (CloseableHttpResponse)genericResponse.get("closeableResponse");
     if (CommonParams.JAVABIN.equals(wt)) {
       return new JavabinTupleStreamParser(stream, true);
     } else {
@@ -289,6 +289,4 @@ public class SolrStream extends TupleStream {
       return new JSONTupleStream(reader);
     }
   }
-
-
 }
