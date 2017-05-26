@@ -148,18 +148,21 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
     SortSpec sortSpec = info.getResponseBuilder().getSortSpec();
 
     if(sortSpec == null) {
-      exception = new IOException(new SyntaxError("No sort criteria was provided."));
+      writeException((new IOException(new SyntaxError("No sort criteria was provided."))), writer, true);
+      return;
     }
 
     SolrIndexSearcher searcher = req.getSearcher();
     Sort sort = searcher.weightSort(sortSpec.getSort());
 
     if(sort == null) {
-      exception = new IOException(new SyntaxError("No sort criteria was provided."));
+      writeException((new IOException(new SyntaxError("No sort criteria was provided."))), writer, true);
+      return;
     }
 
     if(sort != null && sort.needsScores()) {
-      exception = new IOException(new SyntaxError("Scoring is not currently supported with xsort."));
+      writeException((new IOException(new SyntaxError("Scoring is not currently supported with xsort."))), writer, true);
+      return;
     }
 
     // There is a bailout in SolrIndexSearcher.getDocListNC when there are _no_ docs in the index at all.
@@ -175,7 +178,8 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
       totalHits = ((Integer)req.getContext().get("totalHits")).intValue();
       sets = (FixedBitSet[]) req.getContext().get("export");
       if (sets == null) {
-        exception = new IOException(new SyntaxError("xport RankQuery is required for xsort: rq={!xport}"));
+        writeException((new IOException(new SyntaxError("xport RankQuery is required for xsort: rq={!xport}"))), writer, true);
+        return;
       }
     }
     SolrParams params = req.getParams();
@@ -184,7 +188,8 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
     String[] fields = null;
 
     if(fl == null) {
-      exception = new IOException(new SyntaxError("export field list (fl) must be specified."));
+      writeException((new IOException(new SyntaxError("export field list (fl) must be specified."))), writer, true);
+      return;
     } else  {
       fields = fl.split(",");
 
@@ -193,8 +198,8 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
         fields[i] = fields[i].trim();
 
         if(fields[i].equals("score")) {
-          exception =  new IOException(new SyntaxError("Scoring is not currently supported with xsort."));
-          break;
+          writeException((new IOException(new SyntaxError("Scoring is not currently supported with xsort."))), writer, true);
+          return;
         }
       }
     }
@@ -202,12 +207,7 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
     try {
       fieldWriters = getFieldWriters(fields, req.getSearcher());
     } catch (Exception e) {
-      exception = e;
-    }
-
-
-    if(exception != null) {
-      writeException(exception, writer, true);
+      writeException(e, writer, true);
       return;
     }
 
