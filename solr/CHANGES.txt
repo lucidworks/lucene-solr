@@ -598,6 +598,8 @@ Bug Fixes
 
 * SOLR-10319: SolrCore "instanceDir" metric not visible in JMX. (ab)
 
+* SOLR-10983: Fix DOWNNODE -> queue-work explosion (Scott Blum, Joshua Humphries)
+
 Optimizations
 ----------------------
 
@@ -823,6 +825,9 @@ New Features
   any facet command.  The filters are applied after any domain change operations.
   Example:  { type:terms, field:category, filter:"user:yonik" } 
   (yonik)
+  
+* SOLR-10719: Creating a core.properties fails if the parent of core.properties is a symlinked dierctory
+  (Erick Erickson)
 
 * SOLR-9442, SOLR-9787: Adds Array of Name Type Value (json.nl=arrntv) style to JSONResponseWriter.
   (Jonny Marks, Christine Poerschke, hossman)

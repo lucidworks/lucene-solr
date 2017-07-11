@@ -78,7 +78,7 @@ public abstract class TupleStream implements Closeable, Serializable, MapWriter 
     open();
     ew.put("docs", (IteratorWriter) iw -> {
       try {
-        for (; ; ) {
+        for ( ; ; ) {
           Tuple tuple = read();
           if (tuple != null) {
             iw.add(tuple);
@@ -90,8 +90,9 @@ public abstract class TupleStream implements Closeable, Serializable, MapWriter 
             break;
           }
         }
-      } catch (IOException e) {
-        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
+      } catch (Throwable e) {
+        close();
+        throw new IOException(e);
       }
     });
   }
