@@ -292,6 +292,7 @@ public class ParallelStream extends CloudSolrStream implements Expressible {
         ZkCoreNodeProps zkProps = new ZkCoreNodeProps(rep);
         String url = zkProps.getCoreUrl();
         SolrStream solrStream = new SolrStream(url, paramsLoc);
+        solrStream.setStreamContext(streamContext);
         solrStreams.add(solrStream);
       }
 

@@ -562,6 +562,8 @@ Bug Fixes
 
 * SOLR-9032: Admin UI now correctly implements Create Alias command (Upayavira, Alexandre Rafalovitch)
 
+* SOLR-10983: Fix DOWNNODE -> queue-work explosion (Scott Blum, Joshua Humphries)
+
 Optimizations
 ----------------------
 
