@@ -16,6 +16,12 @@ In this release, there is an example Solr server including a bundled
 servlet container in the directory named "example".
 See the Quick Start guide at http://lucene.apache.org/solr/quickstart.html
 
+==================  6.6.2 backports ==================
+Jetty ugraded to: Jetty 9.4.8.v20171121
+
+* SOLR-11810: Upgrade Jetty to 9.4.8.v20171121 (Varun Thacker, Erick Erickson)
+
+
 ==================  6.6.2 ==================
 
 Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.
@@ -27,7 +33,7 @@ Carrot2 3.15.0
 Velocity 1.7 and Velocity Tools 2.0
 Apache UIMA 2.3.1
 Apache ZooKeeper 3.4.10
-Jetty 9.3.14.v20161028
+Jetty 9.3.20.v20170531
 
 Upgrade Notes
 ----------------------
@@ -67,7 +73,7 @@ Carrot2 3.15.0
 Velocity 1.7 and Velocity Tools 2.0
 Apache UIMA 2.3.1
 Apache ZooKeeper 3.4.10
-Jetty 9.3.14.v20161028
+Jetty 9.3.20.v20170531
 
 Bug Fixes
 ----------------------
@@ -121,7 +127,7 @@ Carrot2 3.15.0
 Velocity 1.7 and Velocity Tools 2.0
 Apache UIMA 2.3.1
 Apache ZooKeeper 3.4.10
-Jetty 9.3.14.v20161028
+Jetty 9.3.20.v20170531
 
 Upgrade Notes
 ----------------------
@@ -429,6 +435,8 @@ Other Changes
 
 ==================  6.5.1 ==================
 
+* SOLR-11810: Upgrade Jetty to 9.4.8.v20171121 (Varun Thacker, Erick Erickson)
+
 Bug Fixes
 ----------------------
 
@@ -475,7 +483,7 @@ Carrot2 3.15.0
 Velocity 1.7 and Velocity Tools 2.0
 Apache UIMA 2.3.1
 Apache ZooKeeper 3.4.6
-Jetty 9.3.14.v20161028
+Jetty 9.3.20.v20170531
 Apache Calcite 1.11.0
 
 Detailed Change List
