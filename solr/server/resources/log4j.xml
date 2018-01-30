@@ -21,7 +21,7 @@
   <appender name="AsynFile" class="org.apache.log4j.FileAppender">
     <param name="file" value="${solr.log.dir}/solr.log"/>
     <layout class="org.apache.log4j.PatternLayout">
-      <param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p (%t) [%X{collection} %X{shard} %X{replica} %X{core}] %c %m%n"/>
+      <param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p (%t) [%X{collection} %X{shard} %X{replica} %X{core}] %m%n"/>
     </layout>
   </appender>
   <appender name="AsynFile" class="org.apache.log4j.AsyncAppender">
