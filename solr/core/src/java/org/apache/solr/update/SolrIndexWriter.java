@@ -171,7 +171,9 @@ public class SolrIndexWriter extends IndexWriter {
   @SuppressForbidden(reason = "Need currentTimeMillis, commit time should be used only for debugging purposes, " +
       " but currently suspiciously used for replication as well")
   public static void setCommitData(IndexWriter iw) {
-    log.info("Calling setCommitData with IW:" + iw.toString());
+    if (log.isInfoEnabled()) {
+      log.info("Calling setCommitData with IW:" + iw.toString());
+    }
     final Map<String,String> commitData = new HashMap<>();
     commitData.put(COMMIT_TIME_MSEC_KEY, String.valueOf(System.currentTimeMillis()));
     iw.setLiveCommitData(commitData.entrySet());

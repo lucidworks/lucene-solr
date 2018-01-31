@@ -600,7 +600,9 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
         solrCoreState.getCommitLock().lock();
       }
 
-      log.info("start "+cmd);
+      if (log.isInfoEnabled()) {
+        log.info("start " + cmd);
+      }
 
       // We must cancel pending commits *before* we actually execute the commit.
 
