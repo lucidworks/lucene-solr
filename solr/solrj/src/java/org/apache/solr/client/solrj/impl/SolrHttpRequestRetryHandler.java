@@ -38,18 +38,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class SolrHttpRequestRetryHandler implements HttpRequestRetryHandler {
-  
+
   private static final String GET = "GET";
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-  
+
   public static final SolrHttpRequestRetryHandler INSTANCE = new SolrHttpRequestRetryHandler();
-  
+
+  private final int RETRY_PAUSE = Integer.parseInt(System.getProperty("org.apache.solr.client.solrj.pause", "100"));
+
   /** the number of times a method will be retried */
   private final int retryCount;
-  
+
   private final Set<Class<? extends IOException>> nonRetriableClasses;
-  
+
   /**
    * Create the request retry handler using the specified IOException classes
    *
@@ -67,7 +69,7 @@ public class SolrHttpRequestRetryHandler implements HttpRequestRetryHandler {
       this.nonRetriableClasses.add(clazz);
     }
   }
-  
+
   /**
    * Create the request retry handler using the following list of non-retriable IOException classes: <br>
    * <ul>
@@ -76,7 +78,7 @@ public class SolrHttpRequestRetryHandler implements HttpRequestRetryHandler {
    * <li>ConnectException</li>
    * <li>SSLException</li>
    * </ul>
-   * 
+   *
    * @param retryCount
    *          how many times to retry; 0 means no retries
    *          true if it's OK to retry non-idempotent requests that have been sent
@@ -86,7 +88,7 @@ public class SolrHttpRequestRetryHandler implements HttpRequestRetryHandler {
     this(retryCount, Arrays.asList(InterruptedIOException.class, UnknownHostException.class,
         ConnectException.class, SSLException.class));
   }
-  
+
   /**
    * Create the request retry handler with a retry count of 3, requestSentRetryEnabled false and using the following
    * list of non-retriable IOException classes: <br>
@@ -98,14 +100,22 @@ public class SolrHttpRequestRetryHandler implements HttpRequestRetryHandler {
    * </ul>
    */
   public SolrHttpRequestRetryHandler() {
-    this(3);
+    this(5);
   }
-  
+
   @Override
   public boolean retryRequest(final IOException exception, final int executionCount, final HttpContext context) {
-    log.debug("Retry http request {} out of {}", executionCount, this.retryCount);
+    if (log.isInfoEnabled()) {
+      log.info("LUCENESOLR-1407: Retry http request {} out of {} for request {}", executionCount, this.retryCount, HttpClientContext.adapt(context).getRequest());
+    }
     if (executionCount > this.retryCount) {
-      log.debug("Do not retry, over max retry count");
+      log.warn("LUCENESOLR-1407: Do not retry, over max retry count");
+      return false;
+    }
+    try {
+      Thread.sleep(RETRY_PAUSE); //Wait b/w retries
+    } catch (InterruptedException e) {
+      log.error("LUCENESOLR-1407: Server threw InterruptedException while waiting between retries " , e);
       return false;
     }
     if (this.nonRetriableClasses.contains(exception.getClass())) {
@@ -121,35 +131,50 @@ public class SolrHttpRequestRetryHandler implements HttpRequestRetryHandler {
     }
     final HttpClientContext clientContext = HttpClientContext.adapt(context);
     final HttpRequest request = clientContext.getRequest();
-    
+
     if (requestIsAborted(request)) {
-      log.debug("Do not retry, request was aborted");
+      log.info("LUCENESOLR-1407: Do not retry, request was aborted");
       return false;
     }
-    
+
     if (handleAsIdempotent(clientContext)) {
-      log.debug("Retry, request should be idempotent");
+      //So that we know request was actually retried
+      log.info("LUCENESOLR-1407: retry=true request was idempotent");
       return true;
     }
 
-    log.debug("Do not retry, no allow rules matched");
+    log.info("LUCENESOLR-1407: Do not retry, no allow rules matched");
     return false;
   }
-  
+
   public int getRetryCount() {
     return retryCount;
   }
-  
+
   protected boolean handleAsIdempotent(final HttpClientContext context) {
     String method = context.getRequest().getRequestLine().getMethod();
     // do not retry admin requests, even if they are GET as they are not idempotent
+
+    log.info("LUCENESOLR-1407: " + context.getRequest().getRequestLine().getUri() +  " Method: " + method);
+
     if (context.getRequest().getRequestLine().getUri().startsWith("/admin/")) {
       log.debug("Do not retry, this is an admin request");
       return false;
     }
+    try {
+      //add POST and maybe update?
+      //nocommit: remove try-catch when we're more confident with tests
+      if (context.getRequest().getRequestLine().getUri().contains("FROMLEADER")) {
+        log.info("LUCENESOLR-1407: returning true, FROMLEADER is true.");
+        return true;
+      }
+    } catch (NullPointerException npe) {
+      log.warn("LUCENESOLR-1407 NPE ", npe);
+    }
+
     return method.equals(GET);
   }
-  
+
   protected boolean requestIsAborted(final HttpRequest request) {
     HttpRequest req = request;
     if (request instanceof RequestWrapper) { // does not forward request to original
@@ -157,5 +182,5 @@ public class SolrHttpRequestRetryHandler implements HttpRequestRetryHandler {
     }
     return (req instanceof HttpUriRequest && ((HttpUriRequest) req).isAborted());
   }
-  
+
 }
