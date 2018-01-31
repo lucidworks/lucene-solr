@@ -201,7 +201,15 @@ public class ExecutorUtil {
 
       String ctxStr = contextString.toString().replace("/", "//");
       final String submitterContextStr = ctxStr.length() <= MAX_THREAD_NAME_LEN ? ctxStr : ctxStr.substring(0, MAX_THREAD_NAME_LEN);
-      final Exception submitterStackTrace = new Exception("Submitter stack trace");
+      final Exception submitterStackTrace;
+      //This is NOT the final solution for SOLR-11880 where we realized that
+      //a lot of usages we don't even need to create this since the caller is catching the exception.
+      //So till that's committed this is a short term workaround
+      if (log.isDebugEnabled()) {
+        submitterStackTrace = new Exception("Submitter stack trace");
+      } else {
+        submitterStackTrace = null;
+      }
       final List<InheritableThreadLocalProvider> providersCopy = providers;
       final ArrayList<AtomicReference> ctx = providersCopy.isEmpty() ? null : new ArrayList<>(providersCopy.size());
       if (ctx != null) {
@@ -231,7 +239,12 @@ public class ExecutorUtil {
           if (t instanceof OutOfMemoryError) {
             throw t;
           }
-          log.error("Uncaught exception {} thrown by thread: {}", t, currentThread.getName(), submitterStackTrace);
+          if (log.isDebugEnabled()) {
+            log.error("Uncaught exception {} thrown by thread: {}", t, currentThread.getName(), submitterStackTrace);
+          } else {
+            log.error("Uncaught exception {} thrown by thread: {}", t, currentThread.getName());
+          }
+
           throw t;
         } finally {
           isServerPool.remove();
