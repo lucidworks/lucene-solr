@@ -92,6 +92,8 @@ public class HttpClientUtil {
   
   public static final String SYS_PROP_CHECK_PEER_NAME = "solr.ssl.checkPeerName";
 
+  public static final String SYS_PROP_DISABLE_STALE_CHECK = "solr.http.disableStaleCheck";
+
   /**
    * A Java system property to select the {@linkplain HttpClientConfigurer} used for
    * configuring the {@linkplain HttpClientConfigurer} instance by default.

@@ -68,6 +68,12 @@ public class HttpClientConfigurer {
       HttpClientUtil.setAllowCompression(httpClient,
           config.getBool(HttpClientUtil.PROP_ALLOW_COMPRESSION));
     }
+
+    boolean disableStaleCheck = toBooleanDefaultIfNull(
+        toBooleanObject(System.getProperty(HttpClientUtil.SYS_PROP_DISABLE_STALE_CHECK)), false);
+    if (disableStaleCheck) {
+      HttpClientUtil.setStaleCheckingEnabled(httpClient, false);
+    }
     
     boolean sslCheckPeerName = toBooleanDefaultIfNull(
         toBooleanObject(System.getProperty(HttpClientUtil.SYS_PROP_CHECK_PEER_NAME)), true);
