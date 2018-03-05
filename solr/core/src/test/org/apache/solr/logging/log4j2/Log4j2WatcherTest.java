@@ -30,6 +30,7 @@ import org.apache.solr.logging.ListenerConfig;
 import org.apache.solr.logging.LoggerInfo;
 import org.junit.Test;
 
+@LuceneTestCase.SuppressSysoutChecks(bugUrl = "Stuff gets printed")
 public class Log4j2WatcherTest extends LuceneTestCase {
 
   @Test
