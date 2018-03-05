@@ -62,6 +62,7 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakFilters;
 import com.carrotsearch.randomizedtesting.rules.SystemPropertiesRestoreRule;
 import org.apache.commons.io.FileUtils;
 import org.apache.http.client.HttpClient;
+import org.apache.logging.log4j.Level;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -379,7 +380,7 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
     return result;
   }
 
-  private static Map<String, String> savedClassLogLevels = new HashMap<>();
+  private static Map<String, Level> savedClassLogLevels = new HashMap<>();
 
   public static void initClassLogLevels() {
     Class currentClass = RandomizedContext.current().getTargetClass();
@@ -387,11 +388,11 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
     if (annotation == null) {
       return;
     }
-    Map<String, String> previousLevels = LogLevel.Configurer.setLevels(annotation.value());
+    Map<String, Level> previousLevels = LogLevel.Configurer.setLevels(annotation.value());
     savedClassLogLevels.putAll(previousLevels);
   }
 
-  private Map<String, String> savedMethodLogLevels = new HashMap<>();
+  private Map<String, Level> savedMethodLogLevels = new HashMap<>();
 
   @Before
   public void initMethodLogLevels() {
@@ -400,7 +401,7 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
     if (annotation == null) {
       return;
     }
-    Map<String, String> previousLevels = LogLevel.Configurer.setLevels(annotation.value());
+    Map<String, Level> previousLevels = LogLevel.Configurer.setLevels(annotation.value());
     savedMethodLogLevels.putAll(previousLevels);
   }
 

@@ -163,7 +163,6 @@ public class SolrHttpRequestRetryHandler implements HttpRequestRetryHandler {
     }
     try {
       //add POST and maybe update?
-      //nocommit: remove try-catch when we're more confident with tests
       if (context.getRequest().getRequestLine().getUri().contains("FROMLEADER")) {
         log.info("LUCENESOLR-1407: returning true, FROMLEADER is true.");
         return true;

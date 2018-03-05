@@ -71,7 +71,7 @@ REM If solr.xml is not stored in ZooKeeper, this directory needs to contain solr
 REM set SOLR_HOME=
 
 REM Changes the logging level. Valid values: ALL, TRACE, DEBUG, INFO, WARN, ERROR, FATAL, OFF. Default is INFO
-REM This is an alternative to changing the rootLogger in log4j.properties
+REM This is an alternative to changing the rootLogger in log4j2.xml
 REM set SOLR_LOG_LEVEL=INFO
 
 REM Location where Solr should write logs to. Absolute or relative to solr start dir

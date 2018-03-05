@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+  -->
+
+<Configuration status="warn">
+  <Appenders>
+    <Console name="CONSOLE" target="SYSTEM_OUT">
+      <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p (%t) [%X{collection} %X{shard} %X{replica} %X{core}] %c %m%n"/>
+    </Console>
+    <RollingRandomAccessFile name="SOLR_LOG" fileName="${log4j:configParentLocation}/../logs/solr.log"
+                             append="true" immediateFlush="false" ignoreExceptions="true"
+                             filePattern="${log4j:configParentLocation}/../logs/archive/$${date:yyyy-MM}/solr-%d{yyyy-MM-dd}.log.gz">
+      <Policies>
+        <TimeBasedTriggeringPolicy/>
+        <SizeBasedTriggeringPolicy size="250 MB"/>
+      </Policies>
+      <DefaultRolloverStrategy max="5"/>
+      <PatternLayout pattern="%d %-5p [%t] %C{2} (%F:%L) - %m%n"/>
+    </RollingRandomAccessFile>
+    <Async name="ASYNC">
+      <AppenderRef ref="SOLR_LOG"/>
+      <AppenderRef ref="CONSOLE"/>
+    </Async>
+  </Appenders>
+  <Loggers>
+    <Root level="warn">
+      <AppenderRef ref="ASYNC"/>
+    </Root>
+    <AsyncLogger name="org.apache.hadoop" level="warn" additivity="false">
+      <AppenderRef ref="ASYNC"/>
+    </AsyncLogger>
+    <AsyncLogger name="org.apache.solr.update.LoggingInfoStream" level="warn" additivity="false">
+      <AppenderRef ref="ASYNC"/>
+    </AsyncLogger>
+
+    <AsyncLogger name="org.apache.zookeeper" level="warn" additivity="false">
+      <AppenderRef ref="ASYNC"/>
+    </AsyncLogger>
+    <AsyncLogger name="org.eclipse.jetty" level="warn" additivity="false">
+      <AppenderRef ref="ASYNC"/>
+    </AsyncLogger>
+    <AsyncLogger name="org.eclipse.jetty.server.Server" level="warn" additivity="false">
+      <AppenderRef ref="ASYNC"/>
+    </AsyncLogger>
+    <AsyncLogger name="org.eclipse.jetty.server.ServerConnector" level="warn" additivity="false">
+      <AppenderRef ref="ASYNC"/>
+    </AsyncLogger>
+    <AsyncLogger name="org.apache.http.wire" level="warn" additivity="false">
+      <AppenderRef ref="ASYNC"/>
+    </AsyncLogger>
+    <AsyncLogger name="org.apache.http.client" level="warn" additivity="false">
+      <AppenderRef ref="ASYNC"/>
+    </AsyncLogger>
+    <AsyncLogger name="org.apache.xerces.parsers.SAXParser" level="warn" additivity="false">
+      <AppenderRef ref="ASYNC"/>
+    </AsyncLogger>
+  </Loggers>
+</Configuration>
