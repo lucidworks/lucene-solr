@@ -29,6 +29,8 @@ Jetty ugraded to: Jetty 9.4.8.v20171121
 
 * SOLR-7887: Upgrade to Log4J2 (Varun Thacker, Erick Erickson)
 
+* SOLR-11503: Collections created with legacyCloud=true cannot be opened if legacyCloud=false (Erick Erickson)
+
 ==================  6.6.2 ==================
 
 Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.
