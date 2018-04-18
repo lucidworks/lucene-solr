@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.lang.invoke.MethodHandles;
 import java.net.ConnectException;
+import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.Collection;
@@ -105,8 +106,11 @@ public class SolrHttpRequestRetryHandler implements HttpRequestRetryHandler {
 
   @Override
   public boolean retryRequest(final IOException exception, final int executionCount, final HttpContext context) {
+    final HttpClientContext clientContext = HttpClientContext.adapt(context);
+    final HttpRequest request = clientContext.getRequest();
+
     if (log.isInfoEnabled()) {
-      log.info("LUCENESOLR-1407: Retry http request {} out of {} for request {}", executionCount, this.retryCount, HttpClientContext.adapt(context).getRequest());
+      log.info("LUCENESOLR-1407: Retry http request {} out of {} for requestUri={} with exception={} method={}", executionCount, this.retryCount, request.getRequestLine().getUri(), exception.getClass().getName(), request.getRequestLine().getMethod());
     }
     if (executionCount > this.retryCount) {
       log.warn("LUCENESOLR-1407: Do not retry, over max retry count");
@@ -118,19 +122,23 @@ public class SolrHttpRequestRetryHandler implements HttpRequestRetryHandler {
       log.error("LUCENESOLR-1407: Server threw InterruptedException while waiting between retries " , e);
       return false;
     }
+
     if (this.nonRetriableClasses.contains(exception.getClass())) {
-      log.debug("Do not retry, non retriable class {}", exception.getClass().getName());
+      log.debug("Do not retry, non retriable class={}", exception.getClass().getName());
       return false;
     } else {
+      //Classes that extend InterruptedIOException
+      //ConnectTimeoutException
+      //ConnectionPoolTimeoutException
+      //RequestAbortedException
+      //SocketTimeoutException ( it's okay to retry this )
       for (final Class<? extends IOException> rejectException : this.nonRetriableClasses) {
-        if (rejectException.isInstance(exception)) {
+        if (rejectException.isInstance(exception) && !(exception instanceof SocketTimeoutException)) {
           log.debug("Do not retry, non retriable class {}", exception.getClass().getName());
           return false;
         }
       }
     }
-    final HttpClientContext clientContext = HttpClientContext.adapt(context);
-    final HttpRequest request = clientContext.getRequest();
 
     if (requestIsAborted(request)) {
       log.info("LUCENESOLR-1407: Do not retry, request was aborted");
@@ -154,8 +162,6 @@ public class SolrHttpRequestRetryHandler implements HttpRequestRetryHandler {
   protected boolean handleAsIdempotent(final HttpClientContext context) {
     String method = context.getRequest().getRequestLine().getMethod();
     // do not retry admin requests, even if they are GET as they are not idempotent
-
-    log.info("LUCENESOLR-1407: " + context.getRequest().getRequestLine().getUri() +  " Method: " + method);
 
     if (context.getRequest().getRequestLine().getUri().startsWith("/admin/")) {
       log.debug("Do not retry, this is an admin request");
