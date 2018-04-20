@@ -197,7 +197,7 @@ public class TopGroupsResultTransformer implements ShardResultTransformer<List<C
 
     final IndexSchema schema = rb.req.getSearcher().getSchema();
     SchemaField uniqueField = schema.getUniqueKeyField();
-    for (GroupDocs<BytesRef> searchGroup : data.groups) {
+    for (GroupDocs searchGroup : data.groups) {
       NamedList<Object> groupResult = new NamedList<>();
       groupResult.add("totalHits", searchGroup.totalHits);
       if (!Float.isNaN(searchGroup.maxScore)) {
@@ -235,8 +235,14 @@ public class TopGroupsResultTransformer implements ShardResultTransformer<List<C
         document.add("sortValues", convertedSortValues);
       }
       groupResult.add("documents", documents);
-      String groupValue = searchGroup.groupValue != null ?
-          groupField.getType().indexedToReadable(searchGroup.groupValue, new CharsRefBuilder()).toString(): null;
+      String groupValue = null;
+      if (searchGroup.groupValue instanceof BytesRef) {
+        groupValue = searchGroup.groupValue != null ?
+            groupField.getType().indexedToReadable((BytesRef) searchGroup.groupValue, new CharsRefBuilder()).toString() : null;
+      }
+      else if (searchGroup != null && searchGroup.groupValue != null) {
+        groupValue = searchGroup.groupValue.toString();
+      }
       result.add(groupValue, groupResult);
     }
 

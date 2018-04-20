@@ -29,6 +29,7 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.mutable.MutableValue;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.SchemaField;
+import org.apache.solr.schema.TextField;
 import org.apache.solr.search.grouping.Command;
 
 import java.io.IOException;
@@ -132,7 +133,7 @@ public class TopGroupsFieldCommand implements Command<TopGroups<BytesRef>> {
 
     final List<Collector> collectors = new ArrayList<>(1);
     final FieldType fieldType = field.getType();
-    if (fieldType.getNumberType() != null) {
+    if (fieldType.getNumberType() != null || (fieldType instanceof TextField)) {
       ValueSource vs = fieldType.getValueSource(field, null);
       Collection<SearchGroup<MutableValue>> v = GroupConverter.toMutable(field, firstPhaseGroups);
       secondPassCollector = new FunctionSecondPassGroupingCollector(

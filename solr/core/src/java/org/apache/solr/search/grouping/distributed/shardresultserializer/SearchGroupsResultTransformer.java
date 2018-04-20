@@ -116,7 +116,7 @@ public class SearchGroupsResultTransformer implements ShardResultTransformer<Lis
   private NamedList serializeSearchGroup(Collection<SearchGroup<BytesRef>> data, SearchGroupsFieldCommand command) {
     final NamedList<Object[]> result = new NamedList<>(data.size());
 
-    for (SearchGroup<BytesRef> searchGroup : data) {
+    for (SearchGroup searchGroup : data) {
       Object[] convertedSortValues = new Object[searchGroup.sortValues.length];
       for (int i = 0; i < searchGroup.sortValues.length; i++) {
         Object sortValue = searchGroup.sortValues[i];
@@ -125,7 +125,13 @@ public class SearchGroupsResultTransformer implements ShardResultTransformer<Lis
         convertedSortValues[i] = ShardResultTransformerUtils.marshalSortValue(sortValue, field);
       }
       SchemaField field = searcher.getSchema().getFieldOrNull(command.getKey());
-      String groupValue = searchGroup.groupValue != null ? field.getType().indexedToReadable(searchGroup.groupValue, new CharsRefBuilder()).toString() : null;
+      String groupValue = null;
+      if (searchGroup.groupValue instanceof BytesRef) {
+        groupValue = searchGroup.groupValue != null ? field.getType().indexedToReadable((BytesRef) searchGroup.groupValue, new CharsRefBuilder()).toString() : null;
+      }
+      else if (searchGroup != null && searchGroup.groupValue != null) {
+        groupValue = searchGroup.groupValue.toString();
+      }
       result.add(groupValue, convertedSortValues);
     }
 

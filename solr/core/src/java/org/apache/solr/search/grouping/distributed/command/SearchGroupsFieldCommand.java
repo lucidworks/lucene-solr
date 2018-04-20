@@ -29,6 +29,7 @@ import org.apache.lucene.search.grouping.term.TermFirstPassGroupingCollector;
 import org.apache.lucene.util.BytesRef;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.SchemaField;
+import org.apache.solr.schema.TextField;
 import org.apache.solr.search.grouping.Command;
 
 import java.io.IOException;
@@ -96,7 +97,7 @@ public class SearchGroupsFieldCommand implements Command<SearchGroupsFieldComman
     final List<Collector> collectors = new ArrayList<>(2);
     final FieldType fieldType = field.getType();
     if (topNGroups > 0) {
-      if (fieldType.getNumberType() != null) {
+      if (fieldType.getNumberType() != null || (fieldType instanceof TextField)) {
         ValueSource vs = fieldType.getValueSource(field, null);
         firstPassGroupingCollector = new FunctionFirstPassGroupingCollector(vs, new HashMap<Object,Object>(), groupSort, topNGroups);
       } else {

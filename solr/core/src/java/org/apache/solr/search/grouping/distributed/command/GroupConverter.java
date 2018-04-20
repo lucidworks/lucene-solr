@@ -32,9 +32,11 @@ import org.apache.lucene.util.mutable.MutableValueDouble;
 import org.apache.lucene.util.mutable.MutableValueFloat;
 import org.apache.lucene.util.mutable.MutableValueInt;
 import org.apache.lucene.util.mutable.MutableValueLong;
+import org.apache.lucene.util.mutable.MutableValueStr;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.NumberType;
 import org.apache.solr.schema.SchemaField;
+import org.apache.solr.schema.TextField;
 
 /** 
  * this is a transition class: for numeric types we use function-based distributed grouping,
@@ -72,60 +74,73 @@ class GroupConverter {
       converted.sortValues = original.sortValues; // ?
       NumberType type = fieldType.getNumberType();
       final MutableValue v;
-      switch (type) {
-        case INTEGER:
-          MutableValueInt mutableInt = new MutableValueInt();
-          if (original.groupValue == null) {
-            mutableInt.value = 0;
-            mutableInt.exists = false;
-          } else {
-            mutableInt.value = (Integer) fieldType.toObject(field, original.groupValue);
-          }
-          v = mutableInt;
-          break;
-        case FLOAT:
-          MutableValueFloat mutableFloat = new MutableValueFloat();
-          if (original.groupValue == null) {
-            mutableFloat.value = 0;
-            mutableFloat.exists = false;
-          } else {
-            mutableFloat.value = (Float) fieldType.toObject(field, original.groupValue);
-          }
-          v = mutableFloat;
-          break;
-        case DOUBLE:
-          MutableValueDouble mutableDouble = new MutableValueDouble();
-          if (original.groupValue == null) {
-            mutableDouble.value = 0;
-            mutableDouble.exists = false;
-          } else {
-            mutableDouble.value = (Double) fieldType.toObject(field, original.groupValue);
-          }
-          v = mutableDouble;
-          break;
-        case LONG:
-          MutableValueLong mutableLong = new MutableValueLong();
-          if (original.groupValue == null) {
-            mutableLong.value = 0;
-            mutableLong.exists = false;
-          } else {
-            mutableLong.value = (Long) fieldType.toObject(field, original.groupValue);
-          }
-          v = mutableLong;
-          break;
-        case DATE:
-          MutableValueDate mutableDate = new MutableValueDate();
-          if (original.groupValue == null) {
-            mutableDate.value = 0;
-            mutableDate.exists = false;
-          } else {
-            mutableDate.value = ((Date)fieldType.toObject(field, original.groupValue)).getTime();
-          }
-          v = mutableDate;
-          break;
-        default:
-          throw new AssertionError();
+
+      if (type == null && (fieldType instanceof TextField)) {
+        MutableValueStr mutableValueStr = new MutableValueStr();
+        BytesRefBuilder bytesRefBuilder = new BytesRefBuilder();
+        if (original.groupValue != null) {
+          bytesRefBuilder.copyBytes(original.groupValue);
+        }
+        mutableValueStr.value = bytesRefBuilder;
+        v = mutableValueStr;
       }
+      else {
+        switch (type) {
+          case INTEGER:
+            MutableValueInt mutableInt = new MutableValueInt();
+            if (original.groupValue == null) {
+              mutableInt.value = 0;
+              mutableInt.exists = false;
+            } else {
+              mutableInt.value = (Integer) fieldType.toObject(field, original.groupValue);
+            }
+            v = mutableInt;
+            break;
+          case FLOAT:
+            MutableValueFloat mutableFloat = new MutableValueFloat();
+            if (original.groupValue == null) {
+              mutableFloat.value = 0;
+              mutableFloat.exists = false;
+            } else {
+              mutableFloat.value = (Float) fieldType.toObject(field, original.groupValue);
+            }
+            v = mutableFloat;
+            break;
+          case DOUBLE:
+            MutableValueDouble mutableDouble = new MutableValueDouble();
+            if (original.groupValue == null) {
+              mutableDouble.value = 0;
+              mutableDouble.exists = false;
+            } else {
+              mutableDouble.value = (Double) fieldType.toObject(field, original.groupValue);
+            }
+            v = mutableDouble;
+            break;
+          case LONG:
+            MutableValueLong mutableLong = new MutableValueLong();
+            if (original.groupValue == null) {
+              mutableLong.value = 0;
+              mutableLong.exists = false;
+            } else {
+              mutableLong.value = (Long) fieldType.toObject(field, original.groupValue);
+            }
+            v = mutableLong;
+            break;
+          case DATE:
+            MutableValueDate mutableDate = new MutableValueDate();
+            if (original.groupValue == null) {
+              mutableDate.value = 0;
+              mutableDate.exists = false;
+            } else {
+              mutableDate.value = ((Date) fieldType.toObject(field, original.groupValue)).getTime();
+            }
+            v = mutableDate;
+            break;
+          default:
+            throw new AssertionError();
+        }
+      }
+
       converted.groupValue = v;
       result.add(converted);
     }
