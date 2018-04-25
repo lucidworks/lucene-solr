@@ -82,6 +82,10 @@ class GroupConverter {
           bytesRefBuilder.copyBytes(original.groupValue);
         }
         mutableValueStr.value = bytesRefBuilder;
+        if (mutableValueStr.toObject().toString().equals("(null)")) {
+          mutableValueStr.value = new BytesRefBuilder();
+          mutableValueStr.exists = false;
+        }
         v = mutableValueStr;
       }
       else {
