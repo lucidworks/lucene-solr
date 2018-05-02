@@ -195,6 +195,45 @@ public class TestExportWriter extends SolrTestCaseJ4 {
     s =  h.query(req("q", "id:(1 2 3)", "qt", "/export", "fl", "intdv", "sort", "floatdv asc,floatdv desc,floatdv asc,intdv desc"));
     assertJsonEquals(s, "{\"responseHeader\": {\"status\": 0}, \"response\":{\"numFound\":3, \"docs\":[{\"intdv\":3},{\"intdv\":2},{\"intdv\":1}]}}");
 
+    //Test five sort fields
+    s =  h.query(req("q", "id:(1 2 3)", "qt", "/export", "fl", "intdv", "sort", "intdv desc,floatdv asc,floatdv desc,floatdv asc,intdv desc"));
+    assertJsonEquals(s, "{\"responseHeader\": {\"status\": 0}, \"response\":{\"numFound\":3, \"docs\":[{\"intdv\":3},{\"intdv\":2},{\"intdv\":1}]}}");
+    s =  h.query(req("q", "id:(1 2 3)", "qt", "/export", "fl", "intdv", "sort", "floatdv desc,intdv asc,floatdv desc,floatdv desc,intdv desc"));
+    assertJsonEquals(s, "{\"responseHeader\": {\"status\": 0}, \"response\":{\"numFound\":3, \"docs\":[{\"intdv\":1},{\"intdv\":2},{\"intdv\":3}]}}");
+
+    //Test six sort fields
+    s =  h.query(req("q", "id:(1 2 3)", "qt", "/export", "fl", "intdv", "sort", "floatdv asc,intdv desc,floatdv asc,floatdv desc,floatdv asc,intdv asc"));
+    assertJsonEquals(s, "{\"responseHeader\": {\"status\": 0}, \"response\":{\"numFound\":3, \"docs\":[{\"intdv\":3},{\"intdv\":2},{\"intdv\":1}]}}");
+
+    //Test seven sort fields
+    s =  h.query(req("q", "id:(1 2 3)", "qt", "/export", "fl", "intdv", "sort", "floatdv desc,intdv asc,floatdv desc,floatdv asc,floatdv desc,floatdv asc,intdv desc"));
+    assertJsonEquals(s, "{\"responseHeader\": {\"status\": 0}, \"response\":{\"numFound\":3, \"docs\":[{\"intdv\":1},{\"intdv\":2},{\"intdv\":3}]}}");
+
+    //Test eight sort fields
+    s =  h.query(req("q", "id:(1 2 3)", "qt", "/export", "fl", "intdv", "sort", "floatdv asc,intdv desc,floatdv asc,floatdv desc,floatdv asc,floatdv desc,floatdv asc,intdv asc"));
+    assertJsonEquals(s, "{\"responseHeader\": {\"status\": 0}, \"response\":{\"numFound\":3, \"docs\":[{\"intdv\":3},{\"intdv\":2},{\"intdv\":1}]}}");
+    s =  h.query(req("q", "id:(1 2 3)", "qt", "/export", "fl", "intdv", "sort", "intdv asc,floatdv desc,floatdv asc,floatdv desc,floatdv asc,floatdv desc,floatdv asc,intdv desc"));
+    assertJsonEquals(s, "{\"responseHeader\": {\"status\": 0}, \"response\":{\"numFound\":3, \"docs\":[{\"intdv\":1},{\"intdv\":2},{\"intdv\":3}]}}");
+
+    //Test nine sort fields
+    s =  h.query(req("q", "id:(1 2 3)", "qt", "/export", "fl", "intdv", "sort", "intdv asc,floatdv desc,floatdv asc,floatdv desc,floatdv asc,floatdv desc,intdv asc,intdv desc,floatdv asc"));
+    assertJsonEquals(s, "{\"responseHeader\": {\"status\": 0}, \"response\":{\"numFound\":3, \"docs\":[{\"intdv\":1},{\"intdv\":2},{\"intdv\":3}]}}");
+    s =  h.query(req("q", "id:(1 2 3)", "qt", "/export", "fl", "intdv", "sort", "floatdv asc,intdv desc,floatdv asc,floatdv desc,floatdv asc,floatdv desc,intdv desc,intdv asc,floatdv asc"));
+    assertJsonEquals(s, "{\"responseHeader\": {\"status\": 0}, \"response\":{\"numFound\":3, \"docs\":[{\"intdv\":3},{\"intdv\":2},{\"intdv\":1}]}}");
+
+    //Test ten sort fields
+    s =  h.query(req("q", "id:(1 2 3)", "qt", "/export", "fl", "intdv", "sort", "intdv asc,floatdv desc,floatdv asc,floatdv desc,floatdv asc,floatdv desc,intdv asc,intdv desc,floatdv desc,floatdv asc"));
+    assertJsonEquals(s, "{\"responseHeader\": {\"status\": 0}, \"response\":{\"numFound\":3, \"docs\":[{\"intdv\":1},{\"intdv\":2},{\"intdv\":3}]}}");
+    s =  h.query(req("q", "id:(1 2 3)", "qt", "/export", "fl", "intdv", "sort", "floatdv asc,intdv desc,floatdv asc,floatdv desc,floatdv asc,floatdv desc,intdv desc,intdv asc,floatdv desc,floatdv asc"));
+    assertJsonEquals(s, "{\"responseHeader\": {\"status\": 0}, \"response\":{\"numFound\":3, \"docs\":[{\"intdv\":3},{\"intdv\":2},{\"intdv\":1}]}}");
+
+    //Test eleven sort fields
+    try {
+      s =  h.query(req("q", "id:(1 2 3)", "qt", "/export", "fl", "intdv", "sort", "floatdv desc,floatdv asc,floatdv desc,floatdv asc,floatdv desc,floatdv asc,floatdv desc,floatdv asc,floatdv desc,floatdv asc,intdv desc"));
+    } catch (Exception e) {
+      assertEquals("should throw error of max sort limit", "A max of 10 sorts can be specified" , e.getMessage());
+    }
+
     s =  h.query(req("q", "id:(1 2 3)", "qt", "/export", "fl", "intdv", "sort", "doubledv desc"));
     assertJsonEquals(s, "{\"responseHeader\": {\"status\": 0}, \"response\":{\"numFound\":3, \"docs\":[{\"intdv\":3},{\"intdv\":1},{\"intdv\":2}]}}");
 
