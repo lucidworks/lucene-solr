@@ -172,7 +172,7 @@ public class TestCloudJSONFacetJoinDomain extends SolrCloudTestCase {
   /**
    * Given a (random) field number, returns a random (integer based) value for that field.
    * NOTE: The number of unique values in each field is constant acording to {@link #UNIQUE_FIELD_VALS}
-   * but the precise <em>range</em> of values will vary for each unique field number, such that cross field joins 
+   * but the precise <em>range</em> of values will vary for each unique field number, such that cross field joins
    * will match fewer documents based on how far apart the field numbers are.
    *
    * @see #UNIQUE_FIELD_VALS
@@ -215,7 +215,7 @@ public class TestCloudJSONFacetJoinDomain extends SolrCloudTestCase {
 
   public void testSanityCheckDomainMethods() throws Exception {
     { 
-      final JoinDomain empty = new JoinDomain(null, null, null);
+      final JoinDomain empty = new JoinDomain(null, null, null, null);
       assertEquals(null, empty.toJSONFacetParamValue());
       final SolrParams out = empty.applyDomainToQuery("safe_key", params("q","qqq"));
       assertNotNull(out);
@@ -223,7 +223,7 @@ public class TestCloudJSONFacetJoinDomain extends SolrCloudTestCase {
       assertEquals("qqq", out.get("q"));
     }
     {
-      final JoinDomain join = new JoinDomain("xxx", "yyy", null);
+      final JoinDomain join = new JoinDomain("xxx", "yyy", null, null);
       assertEquals("domain:{join:{from:xxx,to:yyy}}", join.toJSONFacetParamValue().toString());
       final SolrParams out = join.applyDomainToQuery("safe_key", params("q","qqq"));
       assertNotNull(out);
@@ -232,7 +232,7 @@ public class TestCloudJSONFacetJoinDomain extends SolrCloudTestCase {
       
     }
     {
-      final JoinDomain filter = new JoinDomain(null, null, "zzz");
+      final JoinDomain filter = new JoinDomain(null, null, "zzz", null);
       assertEquals("domain:{filter:'zzz'}", filter.toJSONFacetParamValue().toString());
       final SolrParams out = filter.applyDomainToQuery("safe_key", params("q","qqq"));
       assertNotNull(out);
@@ -240,7 +240,7 @@ public class TestCloudJSONFacetJoinDomain extends SolrCloudTestCase {
       assertEquals("zzz AND qqq", out.get("q"));
     }
     {
-      final JoinDomain both = new JoinDomain("xxx", "yyy", "zzz");
+      final JoinDomain both = new JoinDomain("xxx", "yyy", "zzz", null);
       assertEquals("domain:{join:{from:xxx,to:yyy},filter:'zzz'}", both.toJSONFacetParamValue().toString());
       final SolrParams out = both.applyDomainToQuery("safe_key", params("q","qqq"));
       assertNotNull(out);
@@ -258,47 +258,47 @@ public class TestCloudJSONFacetJoinDomain extends SolrCloudTestCase {
 
     { // sanity check our test methods can handle a query matching no docs
       Map<String,TermFacet> facets = new LinkedHashMap<>();
-      TermFacet top = new TermFacet(strfield(9), new JoinDomain(strfield(5), strfield(9), strfield(9)+":[* TO *]"));
-      top.subFacets.put("sub", new TermFacet(strfield(11), new JoinDomain(strfield(8), strfield(8), null)));
+      TermFacet top = new TermFacet(strfield(9), new JoinDomain(strfield(5), strfield(9), strfield(9)+":[* TO *]", null));
+      top.subFacets.put("sub", new TermFacet(strfield(11), new JoinDomain(strfield(8), strfield(8), null, null)));
       facets.put("empty_top", top);
       assertFacetCountsAreCorrect(facets, strfield(7) + ":bogus");
     }
     
     { // sanity check our test methods can handle a query where a facet filter prevents any doc from having terms
       Map<String,TermFacet> facets = new LinkedHashMap<>();
-      TermFacet top = new TermFacet(strfield(9), new JoinDomain(null, null, "-*:*"));
-      top.subFacets.put("sub", new TermFacet(strfield(11), new JoinDomain(strfield(8), strfield(8), null)));
+      TermFacet top = new TermFacet(strfield(9), new JoinDomain(null, null, "-*:*", null));
+      top.subFacets.put("sub", new TermFacet(strfield(11), new JoinDomain(strfield(8), strfield(8), null, null)));
       facets.put("filtered_top", top);
       assertFacetCountsAreCorrect(facets, "*:*");
     }
     
     { // sanity check our test methods can handle a query where a facet filter prevents any doc from having sub-terms
       Map<String,TermFacet> facets = new LinkedHashMap<>();
-      TermFacet top = new TermFacet(strfield(9), new JoinDomain(strfield(8), strfield(8), null));
-      top.subFacets.put("sub", new TermFacet(strfield(11), new JoinDomain(null, null, "-*:*")));
+      TermFacet top = new TermFacet(strfield(9), new JoinDomain(strfield(8), strfield(8), null, null));
+      top.subFacets.put("sub", new TermFacet(strfield(11), new JoinDomain(null, null, "-*:*", null)));
       facets.put("filtered_top", top);
       assertFacetCountsAreCorrect(facets, "*:*");
     }
   
     { // strings
       Map<String,TermFacet> facets = new LinkedHashMap<>();
-      TermFacet top = new TermFacet(strfield(9), new JoinDomain(strfield(5), strfield(9), strfield(9)+":[* TO *]"));
-      top.subFacets.put("facet_5", new TermFacet(strfield(11), new JoinDomain(strfield(8), strfield(8), null)));
+      TermFacet top = new TermFacet(strfield(9), new JoinDomain(strfield(5), strfield(9), strfield(9)+":[* TO *]", null));
+      top.subFacets.put("facet_5", new TermFacet(strfield(11), new JoinDomain(strfield(8), strfield(8), null, null)));
       facets.put("facet_4", top);
       assertFacetCountsAreCorrect(facets, "("+strfield(7)+":6 OR "+strfield(9)+":6 OR "+strfield(6)+":19 OR "+strfield(0)+":11)");
     }
 
     { // ints
       Map<String,TermFacet> facets = new LinkedHashMap<>();
-      TermFacet top = new TermFacet(intfield(9), new JoinDomain(intfield(5), intfield(9), null));
+      TermFacet top = new TermFacet(intfield(9), new JoinDomain(intfield(5), intfield(9), null, null));
       facets.put("top", top);
       assertFacetCountsAreCorrect(facets, "("+intfield(7)+":6 OR "+intfield(3)+":3)");
     }
 
     { // some domains with filter only, no actual join
       Map<String,TermFacet> facets = new LinkedHashMap<>();
-      TermFacet top = new TermFacet(strfield(9), new JoinDomain(null, null, strfield(9)+":[* TO *]"));
-      top.subFacets.put("facet_5", new TermFacet(strfield(11), new JoinDomain(null, null, strfield(3)+":[* TO 5]")));
+      TermFacet top = new TermFacet(strfield(9), new JoinDomain(null, null, strfield(9)+":[* TO *]", null));
+      top.subFacets.put("facet_5", new TermFacet(strfield(11), new JoinDomain(null, null, strfield(3)+":[* TO 5]", null)));
       facets.put("top", top);
       assertFacetCountsAreCorrect(facets, "("+strfield(7)+":6 OR "+strfield(9)+":6 OR "+strfield(6)+":19 OR "+strfield(0)+":11)");
 
@@ -307,39 +307,39 @@ public class TestCloudJSONFacetJoinDomain extends SolrCloudTestCase {
     { // low limits, explicit refinement
       Map<String,TermFacet> facets = new LinkedHashMap<>();
       TermFacet top = new TermFacet(strfield(9),
-                                    new JoinDomain(strfield(5), strfield(9), strfield(9)+":[* TO *]"),
+                                    new JoinDomain(strfield(5), strfield(9), strfield(9)+":[* TO *]", null),
                                     5, 0, true);
       top.subFacets.put("facet_5", new TermFacet(strfield(11),
-                                                 new JoinDomain(strfield(8), strfield(8), null),
+                                                 new JoinDomain(strfield(8), strfield(8), null, null),
                                                  10, 0, true));
       facets.put("facet_4", top);
       assertFacetCountsAreCorrect(facets, "("+strfield(7)+":6 OR "+strfield(9)+":6 OR "+strfield(6)+":19 OR "+strfield(0)+":11)");
     }
-    
+
     { // low limit, high overrequest
       Map<String,TermFacet> facets = new LinkedHashMap<>();
       TermFacet top = new TermFacet(strfield(9),
-                                    new JoinDomain(strfield(5), strfield(9), strfield(9)+":[* TO *]"),
+                                    new JoinDomain(strfield(5), strfield(9), strfield(9)+":[* TO *]", null),
                                     5, UNIQUE_FIELD_VALS + 10, false);
       top.subFacets.put("facet_5", new TermFacet(strfield(11),
-                                                 new JoinDomain(strfield(8), strfield(8), null),
+                                                 new JoinDomain(strfield(8), strfield(8), null, null),
                                                  10, UNIQUE_FIELD_VALS + 10, false));
       facets.put("facet_4", top);
       assertFacetCountsAreCorrect(facets, "("+strfield(7)+":6 OR "+strfield(9)+":6 OR "+strfield(6)+":19 OR "+strfield(0)+":11)");
     }
-    
+
     { // low limit, low overrequest, explicit refinement
       Map<String,TermFacet> facets = new LinkedHashMap<>();
       TermFacet top = new TermFacet(strfield(9),
-                                    new JoinDomain(strfield(5), strfield(9), strfield(9)+":[* TO *]"),
+                                    new JoinDomain(strfield(5), strfield(9), strfield(9)+":[* TO *]", null),
                                     5, 7, true);
       top.subFacets.put("facet_5", new TermFacet(strfield(11),
-                                                 new JoinDomain(strfield(8), strfield(8), null),
+                                                 new JoinDomain(strfield(8), strfield(8), null, null),
                                                  10, 7, true));
       facets.put("facet_4", top);
       assertFacetCountsAreCorrect(facets, "("+strfield(7)+":6 OR "+strfield(9)+":6 OR "+strfield(6)+":19 OR "+strfield(0)+":11)");
     }
-    
+
   }
 
   public void testTheTestRandomRefineParam() {
@@ -356,7 +356,7 @@ public class TestCloudJSONFacetJoinDomain extends SolrCloudTestCase {
       }
     }
   }
-  
+
   public void testTheTestTermFacetShouldFreakOutOnBadRefineOptions() {
     expectThrows(AssertionError.class, () -> {
         final TermFacet bogus = new TermFacet("foo", null, 5, 0, false);
@@ -589,12 +589,12 @@ public class TestCloudJSONFacetJoinDomain extends SolrCloudTestCase {
       final int limit = r.nextInt(UNIQUE_FIELD_VALS * 2);
       if (limit >= UNIQUE_FIELD_VALS && r.nextBoolean()) {
         return -1; // unlimited
-      } else if (limit == DEFAULT_LIMIT && r.nextBoolean()) { 
+      } else if (limit == DEFAULT_LIMIT && r.nextBoolean()) {
         return null; // sometimes, don't specify limit if it's the default
       }
       return limit;
     }
-    
+
     /**
      * picks a random value for the "overrequest" param, biased in favor of interesting test cases
      *
@@ -640,11 +640,11 @@ public class TestCloudJSONFacetJoinDomain extends SolrCloudTestCase {
       // explicitly or implicitly indicate refinement is not needed
       return r.nextBoolean() ? false : null;
     }
-    
+
     /**
-     * Deterministicly identifies if the specified limit &amp; overrequest params <b>require</b> 
+     * Deterministicly identifies if the specified limit &amp; overrequest params <b>require</b>
      * a "refine:true" param be used in the the request, in order for the counts to be 100% accurate.
-     * 
+     *
      * @see #UNIQUE_FIELD_VALS
      */
     public static boolean isRefinementNeeded(Integer limitParam, Integer overrequestParam) {
@@ -652,7 +652,7 @@ public class TestCloudJSONFacetJoinDomain extends SolrCloudTestCase {
       if (FORCE_DISABLE_REFINEMENT) {
         return false;
       }
-      
+
       // use the "effective" values if the params are null
       final int limit = null == limitParam ? DEFAULT_LIMIT : limitParam;
       final int overrequest = null == overrequestParam ? 0 : overrequestParam;
@@ -660,11 +660,11 @@ public class TestCloudJSONFacetJoinDomain extends SolrCloudTestCase {
       return
         // don't presume how much overrequest will be done by default, just check the limit
         (overrequest < 0 && limit < UNIQUE_FIELD_VALS)
-        // if the user specified overrequest is not "enough" to get all unique values 
+        // if the user specified overrequest is not "enough" to get all unique values
         || (overrequest >= 0 && (long)limit + overrequest < UNIQUE_FIELD_VALS);
     }
-    
-    /** 
+
+    /**
      * recursive helper method for building random facets
      *
      * @param keyCounter used to ensure every generated facet has a unique key name
@@ -701,17 +701,19 @@ public class TestCloudJSONFacetJoinDomain extends SolrCloudTestCase {
     public final String from;
     public final String to;
     public final String filter; // not bothering with more then 1 filter, not the point of the test
+    public final String method;
 
-    /** 
+    /**
      * @param from left side of join field name, null if domain involves no joining
      * @param to right side of join field name, null if domain involves no joining
      * @param filter filter to apply to domain, null if domain involves no filtering
      */
-    public JoinDomain(String from, String to, String filter) { 
+    public JoinDomain(String from, String to, String filter, String method) {
       assert ! ((null ==  from) ^ (null == to)) : "if from is null, to must be null";
       this.from = from;
       this.to = to;
       this.filter = filter;
+      this.method = method;
     }
 
     /** 
@@ -732,6 +734,9 @@ public class TestCloudJSONFacetJoinDomain extends SolrCloudTestCase {
       }
       if (null != filter) {
         sb.append("filter:'").append(filter).append("'");
+      }
+      if (null != method) {
+        sb.append(", method:'").append(method).append("'");
       }
       sb.append("}");
       return sb;
@@ -782,11 +787,25 @@ public class TestCloudJSONFacetJoinDomain extends SolrCloudTestCase {
         break;
       }
 
+      String method = "enum"; //default
+      //must be doc-values to consider method=dv
+      if (from != null && (from.endsWith("_sds") || from.endsWith("_sdsS"))) {
+        if (random().nextBoolean()) {
+          method = "dv";
+        }
+      }
+      //must be doc-values AND point field to consider method=dv
+      if (from != null && (from.endsWith("_ids") || from.endsWith("_idsS"))) {
+        if (random().nextBoolean() && Boolean.getBoolean(NUMERIC_POINTS_SYSPROP)) {
+          method = "dv";
+        }
+      }
+
       // keep it simple, only filter on string fields - not point of test
       final String filterField = strfield(random().nextInt(MAX_FIELD_NUM));
       
       final String filter = random().nextBoolean() ? null : filterField+":[* TO *]";
-      return new JoinDomain(from, to, filter);
+      return new JoinDomain(from, to, filter, method);
     }
   }
   

@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
+import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
@@ -54,7 +55,9 @@ import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.schema.TrieField;
+import org.apache.solr.search.join.GraphEdgeCollector;
 import org.apache.solr.search.join.GraphPointsCollector;
+import org.apache.solr.search.join.GraphTermsCollector;
 import org.apache.solr.search.join.ScoreJoinQParserPlugin;
 import org.apache.solr.util.RTimer;
 import org.apache.solr.util.RefCounted;
@@ -62,15 +65,109 @@ import org.apache.solr.util.RefCounted;
 public class JoinQParserPlugin extends QParserPlugin {
   public static final String NAME = "join";
 
+  public enum JoinMethod {
+    DV,  // Collects all from candidates and searches them in one query against the to field
+    ENUM, // TermsEnum approach where we iterate over every term and cross check
+    SMART // let solr decide the algorithm
+    ;
+
+    public static JoinQParserPlugin.JoinMethod fromString(String method) {
+      if (method == null || method.length()==0) return DEFAULT_METHOD;
+      switch (method) {
+        case "dv": return DV;
+        case "enum": return ENUM;
+        case "smart": return SMART;
+        default:
+          throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Unknown Join method " + method);
+      }
+    }
+
+    final static JoinQParserPlugin.JoinMethod DEFAULT_METHOD = SMART;
+  }
+
+  private static final int NUM_DOCS_THRESHOLD = 500_000;
+
+  public static JoinQParserPlugin.JoinMethod chooseJoinMethod(SolrIndexSearcher searcher, SchemaField fromSchemaField) {
+    return chooseJoinMethod(searcher, fromSchemaField, -1);
+  }
+
+  /**
+   * Call this method when the user has not specified a join method.
+   *
+   * This is how we choose a method:
+   * 1. If the field doesn't have docValues defined then we always use the enum based approach.
+   *    This will fail a validation check for point fields as the approach is not supported for point fields.
+   * 2. Based on the number of eligible documents :
+   *    The JSON Facet knows the "domain" size ( number of docs ) on which the join will be executed.
+   *    We pick the DV approach if the number of docs is less than NUM_DOCS_THRESHOLD.
+   * 3. If the number of unique values in the "from" field is less than 10% of the index size
+   *    then we choose the enum based approach.
+   *
+   * @param searcher A {@link SolrIndexSearcher} object
+   * @param fromSchemaField The schema definition of the "from" field
+   * @param domainSize If we know the number of documents matching on which the join is performed.
+   *                   -1 if we don't have this information
+   * @return The JoinMethod
+   *
+   */
+  public static JoinMethod chooseJoinMethod(SolrIndexSearcher searcher, SchemaField fromSchemaField, int domainSize) {
+    if (!fromSchemaField.hasDocValues()) {
+      return JoinMethod.ENUM;
+    }
+
+    if (fromSchemaField.getType().isPointField()) {
+      return JoinMethod.DV; // only dv supported
+    }
+
+    if (domainSize > 0 && domainSize < NUM_DOCS_THRESHOLD) {
+      //naive estimation based on domain size. This information is not present when executing joins directly
+      return JoinMethod.DV;
+    }
+
+    List<LeafReaderContext> leaves = searcher.getLeafContexts();
+    long[] numDocsPerLeaf = new long[leaves.size()];
+    long[] cardinalityPerLeaf = new long[leaves.size()];
+    for (int i=0; i<leaves.size(); i++) {
+      try {
+        numDocsPerLeaf[i] = leaves.get(i).reader().maxDoc();
+        cardinalityPerLeaf[i] = DocValues.getSortedSet(leaves.get(i).reader(), fromSchemaField.getName()).getValueCount();
+      } catch (IOException e) {
+        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, e);
+      }
+    }
+    return chooseJoinMethodByDvStats(numDocsPerLeaf, cardinalityPerLeaf);
+  }
+
+  public static JoinMethod chooseJoinMethodByDvStats(long[] numDocsPerLeaf, long[] cardinalityPerLeaf) {
+    assert numDocsPerLeaf.length == cardinalityPerLeaf.length;
+    if (numDocsPerLeaf.length == 0) {
+      return JoinMethod.ENUM;
+    }
+    double sumRatio = 0;
+    for (int i=0; i<numDocsPerLeaf.length; i++) {
+      sumRatio += (double) cardinalityPerLeaf[i] / numDocsPerLeaf[i];
+    }
+    double ratio = sumRatio / numDocsPerLeaf.length;
+    if (ratio <= .1) { //low cardinality
+      return JoinMethod.ENUM;
+    } else {
+      return JoinMethod.DV;
+    }
+  }
+
   @Override
   public QParser createParser(String qstr, SolrParams localParams, SolrParams params, SolrQueryRequest req) {
     return new QParser(qstr, localParams, params, req) {
-      
+
       @Override
       public Query parse() throws SyntaxError {
-        if(localParams!=null && localParams.get(ScoreJoinQParserPlugin.SCORE)!=null){
+        if (localParams!=null && localParams.get(ScoreJoinQParserPlugin.SCORE)!=null) {
+          if (localParams.get("method") != null) {
+            throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
+                "method param is not supported in conjunction with the score param");
+          }
           return new ScoreJoinQParserPlugin().createParser(qstr, localParams, params, req).parse();
-        }else{
+        } else{
           return parseJoin();
         }
       }
@@ -80,6 +177,8 @@ public class JoinQParserPlugin extends QParserPlugin {
         final String fromIndex = getParam("fromIndex");
         final String toField = getParam("to");
         final String v = localParams.get("v");
+        JoinMethod method = JoinMethod.fromString(getParam("method"));
+
         final String coreName;
 
         Query fromQuery;
@@ -116,7 +215,7 @@ public class JoinQParserPlugin extends QParserPlugin {
           fromQuery = fromQueryParser.getQuery();
         }
 
-        JoinQuery jq = new JoinQuery(fromField, toField, coreName == null ? fromIndex : coreName, fromQuery);
+        JoinQuery jq = new JoinQuery(fromField, toField, coreName == null ? fromIndex : coreName, fromQuery, method, null);
         jq.fromCoreOpenTime = fromCoreOpenTime;
         return jq;
       }
@@ -129,9 +228,23 @@ public class JoinQParserPlugin extends QParserPlugin {
    * @param subQuery the query to define the starting set of documents on the "left side" of the join
    * @param fromField "left side" field name to use in the join
    * @param toField "right side" field name to use in the join
+   * @param method use the graph collector algorithm VS terms enum
+   * @param domainFilters Filter candidate documents that need to be returned after the join operation.
+   *                      The provided filters can be reused. Pass null if you want all the matches
    */
-  public static Query createJoinQuery(Query subQuery, String fromField, String toField) {
-    return new JoinQuery(fromField, toField, null, subQuery);
+  public static Query createJoinQuery(Query subQuery, String fromField, String toField, JoinMethod method, List<Query> domainFilters) {
+    List<Query> queryFilters = null;
+    //TODO We should not expose domainFilters to join field like I explored in this patch. It gives us less flexibility on what to cache
+    //need to do more research if it's helpful or not to expose ( are we leap frogging by execute this with the main query? )
+    if (domainFilters != null) {
+      queryFilters = new ArrayList<>(domainFilters.size());
+      for (Query domainFilter : domainFilters) {
+        WrappedQuery q = new WrappedQuery(domainFilter);
+        q.setCache(false);
+        queryFilters.add(q);
+      }
+    }
+    return new JoinQuery(fromField, toField, null, subQuery, method, queryFilters);
   }
   
 }
@@ -143,8 +256,10 @@ class JoinQuery extends Query {
   String fromIndex; // TODO: name is missleading here compared to JoinQParserPlugin usage - here it must be a core name
   Query q;
   long fromCoreOpenTime;
+  JoinQParserPlugin.JoinMethod method;
+  final List<Query> domainFilters;
 
-  public JoinQuery(String fromField, String toField, String coreName, Query subQuery) {
+  public JoinQuery(String fromField, String toField, String coreName, Query subQuery, JoinQParserPlugin.JoinMethod method, List<Query> domainFilters) {
     assert null != fromField;
     assert null != toField;
     assert null != subQuery;
@@ -152,6 +267,8 @@ class JoinQuery extends Query {
     this.fromField = fromField;
     this.toField = toField;
     this.q = subQuery;
+    this.method = method;
+    this.domainFilters = domainFilters;
     
     this.fromIndex = coreName; // may be null
   }
@@ -301,24 +418,75 @@ class JoinQuery extends Query {
       SchemaField fromSchemaField = fromSearcher.getSchema().getField(fromField);
       SchemaField toSchemaField = toSearcher.getSchema().getField(toField);
 
-      boolean usePoints = false;
-      if (toSchemaField.getType().isPointField()) {
-        if (!fromSchemaField.hasDocValues()) {
-          throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "join from field " + fromSchemaField + " should have docValues to join with points field " + toSchemaField);
+      validateJoinMethod(method, fromSchemaField);
+      if (method == JoinQParserPlugin.JoinMethod.SMART) {
+        method = JoinQParserPlugin.chooseJoinMethod(fromSearcher, fromSchemaField);
+      }
+
+
+      if (method == JoinQParserPlugin.JoinMethod.DV) {
+        GraphEdgeCollector collector;
+        if (toSchemaField.getType().isPointField()) {
+          collector = new GraphPointsCollector(fromSchemaField, null, null);
+        } else {
+          collector = new GraphTermsCollector(fromSchemaField, null, null);
         }
-        usePoints = true;
+        return executeJoinQuery(collector, toSchemaField);
       }
 
-      if (!usePoints) {
-        return getDocSetEnumerate();
+      return getDocSetEnumerate();
+    }
+
+    public void validateJoinMethod(JoinQParserPlugin.JoinMethod method, SchemaField schemaField) {
+      if (method == JoinQParserPlugin.JoinMethod.DV) {
+        //field must have docValues enabled for method=dv
+        if (!schemaField.hasDocValues()) {
+          throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "method=dv only works for fields with docValues=true");
+        }
       }
 
-      // point fields
-      GraphPointsCollector collector = new GraphPointsCollector(fromSchemaField, null, null);
+      if (schemaField.getType().isPointField()) {
+        if (!schemaField.hasDocValues()) {
+          throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Point fields must have docValues=true");
+        }
+        if (method == JoinQParserPlugin.JoinMethod.ENUM && schemaField.getType().isPointField()) {
+          //Is a user explicitly asks for method=enum then throw error if it's a point field as it's not supported
+          throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "method=enum not supported on a point field");
+        }
+      }
+
+    }
+
+    /**
+     * This method executes the join by collecting all eligible values in the "from" field and then firing a query
+     * against the "to" field to get the matching documents applying any filters specified to speed up execution
+     *
+     * If the number of matches in the "from" field is very high ( for example above 10k ) then this could potentially
+     * be slower than it's alternate solutions
+     *
+     * See {@link GraphEdgeCollector} for more performance characteristics
+     *
+     * @param collector a graph collector based on the field type.
+     * @param toSchemaField Schema definition for the "to" field
+     * @return A DocSet after the join and applying any provided filters
+     * @throws IOException
+     */
+    protected DocSet executeJoinQuery(GraphEdgeCollector collector, SchemaField toSchemaField) throws IOException {
       fromSearcher.search(q, collector);
-      Query resultQ = collector.getResultQuery(toSchemaField, false);
+      Query joinQ = collector.getResultQuery(toSchemaField, false);
+
+      if (domainFilters != null) {
+
+        WrappedQuery uncachedQ = new WrappedQuery(joinQ);
+        uncachedQ.setCache(false);
+
+        domainFilters.add(uncachedQ);
+        DocSet result = joinQ==null ? DocSet.EMPTY : toSearcher.getDocSet(domainFilters);
+        return result;
+      }
+
       // don't cache the resulting docSet... the query may be very large.  Better to cache the results of the join query itself
-      DocSet result = resultQ==null ? DocSet.EMPTY : toSearcher.getDocSetNC(resultQ, null);
+      DocSet result = joinQ==null ? DocSet.EMPTY : toSearcher.getDocSetNC(joinQ, null);
       return result;
     }
 

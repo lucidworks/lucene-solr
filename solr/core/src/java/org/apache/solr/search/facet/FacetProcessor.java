@@ -38,6 +38,7 @@ import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.BitDocSet;
 import org.apache.solr.search.DocIterator;
 import org.apache.solr.search.DocSet;
+import org.apache.solr.search.JoinQParserPlugin;
 import org.apache.solr.search.QParser;
 import org.apache.solr.search.QueryContext;
 import org.apache.solr.search.SolrIndexSearcher;
@@ -49,7 +50,7 @@ public abstract class FacetProcessor<FacetRequestT extends FacetRequest>  {
   FacetContext fcontext;
   FacetRequestT freq;
 
-  DocSet filter;  // additional filters specified by "filter"  // TODO: do these need to be on the context to support recomputing during multi-select?
+  List<Query> qlist;
   LinkedHashMap<String,SlotAcc> accMap;
   SlotAcc[] accs;
   CountSlotAcc countAcc;
@@ -149,8 +150,7 @@ public abstract class FacetProcessor<FacetRequestT extends FacetRequest>  {
       }
 
     }
-
-    this.filter = fcontext.searcher.getDocSet(qlist);
+    this.qlist = qlist;
   }
 
   private void handleDomainChanges() throws IOException {
@@ -161,12 +161,16 @@ public abstract class FacetProcessor<FacetRequestT extends FacetRequest>  {
     // We still calculate them first because we can use it in a parent->child domain change.
     evalFilters();
 
-    handleJoinField();
-    
-    boolean appliedFilters = handleBlockJoin();
+    boolean appliedFilters = false;
 
-    if (this.filter != null && !appliedFilters) {
-      fcontext.base = fcontext.base.intersection( filter );
+    if (freq.domain.joinField != null) {
+      appliedFilters = handleJoinField();
+    } else if (freq.domain.toChildren || freq.domain.toParent) {
+      appliedFilters = handleBlockJoin();
+    }
+
+    if (this.qlist != null && !appliedFilters) {
+      fcontext.base = fcontext.base.intersection( fcontext.searcher.getDocSet(qlist) );
     }
   }
 
@@ -231,18 +235,30 @@ public abstract class FacetProcessor<FacetRequestT extends FacetRequest>  {
     fcontext.base = fcontext.searcher.getDocSet(qlist);
   }
 
-  /** modifies the context base if there is a join field domain change */
-  private void handleJoinField() throws IOException {
-    if (null == freq.domain.joinField) return;
+  /** modifies the context base if there is a join field domain change
+    * returns true if filters have been applied
+   */
+  private boolean handleJoinField() throws IOException {
 
-    final Query domainQuery = freq.domain.joinField.createDomainQuery(fcontext);
-    fcontext.base = fcontext.searcher.getDocSet(domainQuery);
+    JoinQParserPlugin.JoinMethod method = freq.domain.joinField.method;
+    if (freq.domain.joinField.method == JoinQParserPlugin.JoinMethod.SMART) {
+      method = JoinQParserPlugin.chooseJoinMethod(fcontext.searcher,
+          fcontext.req.getSchema().getField(freq.domain.joinField.from), fcontext.base.size());
+    }
+
+    final Query domainQuery = freq.domain.joinField.createDomainQuery(fcontext, method, qlist);
+//    fcontext.base = fcontext.searcher.getDocSet(domainQuery);
+    fcontext.base = fcontext.searcher.getDocSetNC(domainQuery, null);
+    if (method == JoinQParserPlugin.JoinMethod.DV) {
+      return true; //DV which uses the graph collectors supports filters
+    } else {
+      return false;
+    }
   }
-    
+
   // returns "true" if filters were applied to fcontext.base already
   private boolean handleBlockJoin() throws IOException {
     boolean appliedFilters = false;
-    if (!(freq.domain.toChildren || freq.domain.toParent)) return appliedFilters;
 
     // TODO: avoid query parsing per-bucket somehow...
     String parentStr = freq.domain.parents;
@@ -262,12 +278,8 @@ public abstract class FacetProcessor<FacetRequestT extends FacetRequest>  {
     if (freq.domain.toChildren) {
       // If there are filters on this facet, then use them as acceptDocs when executing toChildren.
       // We need to remember to not redundantly re-apply these filters after.
-      DocSet acceptDocs = this.filter;
-      if (acceptDocs == null) {
-        acceptDocs = fcontext.searcher.getLiveDocs();
-      } else {
-        appliedFilters = true;
-      }
+      DocSet acceptDocs = (null == qlist) ? fcontext.searcher.getLiveDocs() : fcontext.searcher.getDocSet(qlist);
+      appliedFilters = true;
       result = BlockJoin.toChildren(input, parents, acceptDocs, fcontext.qcontext);
     } else {
       result = BlockJoin.toParents(input, parents, fcontext.qcontext);

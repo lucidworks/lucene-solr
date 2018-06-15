@@ -17,6 +17,7 @@
 package org.apache.solr;
 
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.search.JoinQParserPlugin;
 import org.noggit.JSONUtil;
 import org.noggit.ObjectBuilder;
 import org.apache.solr.request.SolrQueryRequest;
@@ -52,40 +53,68 @@ public class TestJoin extends SolrTestCaseJ4 {
     initCore("solrconfig.xml","schema12.xml");
   }
 
+  public void runWithMethod(String method) throws Exception {
+    String dept_id_field = "dept_id_s";
+    String dept_field = "dept_s";
+    String noexist_field = "noexist_s";
+    if (method.equals("dv")) {
+      dept_id_field = "dept_id_sd";
+      dept_field = "dept_sd";
+      noexist_field = "noexist_sd";
+    }
 
-  @Test
-  public void testJoin() throws Exception {
-    assertU(add(doc("id", "1","name", "john", "title", "Director", "dept_s","Engineering")));
-    assertU(add(doc("id", "2","name", "mark", "title", "VP", "dept_s","Marketing")));
-    assertU(add(doc("id", "3","name", "nancy", "title", "MTS", "dept_s","Sales")));
-    assertU(add(doc("id", "4","name", "dave", "title", "MTS", "dept_s","Support", "dept_s","Engineering")));
-    assertU(add(doc("id", "5","name", "tina", "title", "VP", "dept_s","Engineering")));
+    assertU(add(doc("id", "1","name", "john", "title", "Director", dept_field,"Engineering")));
+    assertU(add(doc("id", "2","name", "mark", "title", "VP", dept_field,"Marketing")));
+    assertU(add(doc("id", "3","name", "nancy", "title", "MTS", dept_field,"Sales")));
+    assertU(add(doc("id", "4","name", "dave", "title", "MTS", dept_field,"Support", dept_field,"Engineering")));
+    assertU(add(doc("id", "5","name", "tina", "title", "VP", dept_field,"Engineering")));
 
-    assertU(add(doc("id","10", "dept_id_s", "Engineering", "text","These guys develop stuff")));
-    assertU(add(doc("id","11", "dept_id_s", "Marketing", "text","These guys make you look good")));
-    assertU(add(doc("id","12", "dept_id_s", "Sales", "text","These guys sell stuff")));
-    assertU(add(doc("id","13", "dept_id_s", "Support", "text","These guys help customers")));
+    assertU(add(doc("id","10", dept_id_field, "Engineering", "text","These guys develop stuff")));
+    assertU(add(doc("id","11", dept_id_field, "Marketing", "text","These guys make you look good")));
+    assertU(add(doc("id","12", dept_id_field, "Sales", "text","These guys sell stuff")));
+    assertU(add(doc("id","13", dept_id_field, "Support", "text","These guys help customers")));
+
+    assertU(add(doc("id","14", "num_from_pi", "1", "is_point_doc_s",  "yes")));
+    assertU(add(doc("id","15", "num_to_pi", "1", "is_point_doc_s",  "yes")));
 
     assertU(commit());
 
     ModifiableSolrParams p = params("sort","id asc");
 
     // test debugging
-    assertJQ(req(p, "q","{!join from=dept_s to=dept_id_s}title:MTS", "fl","id", "debugQuery","true")
-        ,"/debug/join/{!join from=dept_s to=dept_id_s}title:MTS=={'_MATCH_':'fromSetSize,toSetSize', 'fromSetSize':2, 'toSetSize':3}"
-    );
+    if (method.equals("enum")) {
+      assertJQ(req(p, "q","{!join from=dept_s to=dept_id_s method='enum'}title:MTS", "fl","id", "debugQuery","true")
+          ,"/debug/join/{!join from=dept_s to=dept_id_s}title:MTS=={'_MATCH_':'fromSetSize,toSetSize', 'fromSetSize':2, 'toSetSize':3}"
+      );
+    }
 
-    assertJQ(req(p, "q","{!join from=dept_s to=dept_id_s}title:MTS", "fl","id")
+    try {
+      assertJQ(req(p, "q","{!join from=dept_id_s to=dept_s method=dv}title:MTS", "fl","id")
+          ,"/response=={'numFound':3,'start':0,'docs':[{'id':'10'},{'id':'12'},{'id':'13'}]}");
+      fail("method=dv should only work on a DV field");
+    } catch (Exception e) {
+      //expected
+    }
+
+    try {
+      assertJQ(req(p, "q","{!join from=num_from_pi to=num_to_pi method=enum}is_point_doc_s:*", "fl","id")
+          ,"/response=={'numFound':1,'start':0,'docs':[{'id':'15'}]}");
+      fail("method=enum does not work with point fields");
+    } catch (Exception e) {
+      //expected
+    }
+
+    assertJQ(req(p, "q","{!join from=$from_field to=$to_field method=$method}title:MTS", "fl","id", "method", method, "from_field", dept_field, "to_field", dept_id_field)
         ,"/response=={'numFound':3,'start':0,'docs':[{'id':'10'},{'id':'12'},{'id':'13'}]}"
     );
 
     // empty from
-    assertJQ(req(p, "q","{!join from=noexist_s to=dept_id_s}*:*", "fl","id")
+    assertJQ(req(p, "q","{!join from=$from_field to=$to_field method=$method}*:*", "fl","id", "method", method, "from_field", noexist_field, "to_field", dept_id_field)
         ,"/response=={'numFound':0,'start':0,'docs':[]}"
     );
 
     // empty to
-    assertJQ(req(p, "q","{!join from=dept_s to=noexist_s}*:*", "fl","id")
+    assertJQ(req(p, "q","{!join from=$from_field to=$to_field method=$method}*:*", "fl","id", "method", method, "from_field", dept_field, "to_field", noexist_field)
         ,"/response=={'numFound':0,'start':0,'docs':[]}"
     );
 
@@ -95,7 +124,7 @@ public class TestJoin extends SolrTestCaseJ4 {
     );
 
     // find people that develop stuff
-    assertJQ(req(p, "q","{!join from=dept_id_s to=dept_s}text:develop", "fl","id")
+    assertJQ(req(p, "q","{!join from=$from_field to=$to_field method=$method}text:develop", "fl","id", "method", method, "from_field", dept_id_field, "to_field", dept_field)
         ,"/response=={'numFound':3,'start':0,'docs':[{'id':'1'},{'id':'4'},{'id':'5'}]}"
     );
 
@@ -104,47 +133,58 @@ public class TestJoin extends SolrTestCaseJ4 {
         ,"/response=={'numFound':2,'start':0,'docs':[{'id':'3'},{'id':'4'}]}"
     );
 
-    assertJQ(req(p, "q","{!join from=dept_s to=dept_id_s}title:MTS", "fl","id", "debugQuery","true")
+    assertJQ(req(p, "q","{!join from=$from_field to=$to_field method=$method}title:MTS", "fl","id",
+        "debugQuery","true", "method", method, "from_field", dept_field, "to_field", dept_id_field)
         ,"/response=={'numFound':3,'start':0,'docs':[{'id':'10'},{'id':'12'},{'id':'13'}]}"
     );
-    
+
     // expected outcome for a sub query matching dave joined against departments
-    final String davesDepartments = 
-      "/response=={'numFound':2,'start':0,'docs':[{'id':'10'},{'id':'13'}]}";
+    final String davesDepartments =
+        "/response=={'numFound':2,'start':0,'docs':[{'id':'10'},{'id':'13'}]}";
 
     // straight forward query
-    assertJQ(req(p, "q","{!join from=dept_s to=dept_id_s}name:dave",
-                 "fl","id"),
-             davesDepartments);
+    assertJQ(req(p, "q","{!join from=$from_field to=$to_field method=$method}name:dave",
+        "fl","id", "from_field", dept_field, "to_field", dept_id_field, "method", method),
+        davesDepartments);
 
     // variable deref for sub-query parsing
-    assertJQ(req(p, "q","{!join from=dept_s to=dept_id_s v=$qq}",
-                 "qq","{!dismax}dave",
-                 "qf","name",
-                 "fl","id", 
-                 "debugQuery","true"),
-             davesDepartments);
+    assertJQ(req(p, "q","{!join from=$from_field to=$to_field  method=$method v=$qq}",
+        "qq","{!dismax}dave",
+        "qf","name",
+        "fl","id",
+        "debugQuery","true",
+        "from_field", dept_field, "to_field", dept_id_field, "method", method),
+        davesDepartments);
 
     // variable deref for sub-query parsing w/localparams
-    assertJQ(req(p, "q","{!join from=dept_s to=dept_id_s v=$qq}",
-                 "qq","{!dismax qf=name}dave",
-                 "fl","id", 
-                 "debugQuery","true"),
-             davesDepartments);
+    assertJQ(req(p, "q","{!join from=$from_field to=$to_field method=$method v=$qq}",
+        "qq","{!dismax qf=name}dave",
+        "fl","id",
+        "debugQuery","true",
+        "from_field", dept_field, "to_field", dept_id_field, "method", method),
+        davesDepartments);
 
     // defType local param to control sub-query parsing
-    assertJQ(req(p, "q","{!join from=dept_s to=dept_id_s defType=dismax}dave",
-                 "qf","name",
-                 "fl","id", 
-                 "debugQuery","true"),
-             davesDepartments);
+    assertJQ(req(p, "q","{!join from=$from_field to=$to_field method=$method defType=dismax}dave",
+        "qf","name",
+        "fl","id",
+        "debugQuery","true",
+        "from_field", dept_field, "to_field", dept_id_field, "method", method),
+        davesDepartments);
 
     // find people that develop stuff - but limit via filter query to a name of "john"
     // this tests filters being pushed down to queries (SOLR-3062)
-    assertJQ(req(p, "q","{!join from=dept_id_s to=dept_s}text:develop", "fl","id", "fq", "name:john")
-             ,"/response=={'numFound':1,'start':0,'docs':[{'id':'1'}]}"
-            );
+    assertJQ(req(p, "q","{!join from=$from_field to=$to_field method=$method}text:develop", "fl","id", "fq", "name:john",
+        "from_field", dept_id_field, "to_field", dept_field, "method", method)
+        ,"/response=={'numFound':1,'start':0,'docs':[{'id':'1'}]}"
+    );
+  }
 
+
+  @Test
+  public void testJoin() throws Exception {
+    runWithMethod("dv");
+    runWithMethod("enum");
   }
 
 
@@ -156,7 +196,7 @@ public class TestJoin extends SolrTestCaseJ4 {
     // groups of fields that have any chance of matching... used to
     // increase test effectiveness by avoiding 0 resultsets much of the time.
     String[][] compat = new String[][] {
-        {"small_s","small2_s","small2_ss","small3_ss"},
+        {"small_s","small2_s","small2_ss","small3_ss", "small_sd", "small2_sd", "small3_sd"},
         {"small_i","small2_i","small2_is","small3_is", "small_i_dv", "small_is_dv"}
     };
 
@@ -168,9 +208,12 @@ public class TestJoin extends SolrTestCaseJ4 {
       types.add(new FldType("id",ONE_ONE, new SVal('A','Z',4,4)));
       types.add(new FldType("score_f",ONE_ONE, new FVal(1,100)));  // field used to score
       types.add(new FldType("small_s",ZERO_ONE, new SVal('a',(char)('c'+indexSize/3),1,1)));
+      types.add(new FldType("small_sd",ZERO_ONE, new SVal('a',(char)('c'+indexSize/3),1,1)));
       types.add(new FldType("small2_s",ZERO_ONE, new SVal('a',(char)('c'+indexSize/3),1,1)));
       types.add(new FldType("small2_ss",ZERO_TWO, new SVal('a',(char)('c'+indexSize/3),1,1)));
+      types.add(new FldType("small2_sd",ZERO_TWO, new SVal('a',(char)('c'+indexSize/3),1,1)));
       types.add(new FldType("small3_ss",new IRange(0,25), new SVal('A','z',1,1)));
+      types.add(new FldType("small3_sd",new IRange(0,25), new SVal('A','z',1,1)));
       types.add(new FldType("small_i",ZERO_ONE, new IRange(0,5+indexSize/3)));
       types.add(new FldType("small2_i",ZERO_ONE, new IRange(0,5+indexSize/3)));
       types.add(new FldType("small2_is",ZERO_TWO, new IRange(0,5+indexSize/3)));
@@ -193,12 +236,11 @@ public class TestJoin extends SolrTestCaseJ4 {
           toField = (random().nextInt(100) < 50) ? fromField : types.get(random().nextInt(types.size())).fname;
         } else
         */
-        {
-          // otherwise, pick compatible fields that have a chance of matching indexed tokens
-          String[] group = compat[random().nextInt(compat.length)];
-          fromField = group[random().nextInt(group.length)];
-          toField = group[random().nextInt(group.length)];
-        }
+        // otherwise, pick compatible fields that have a chance of matching indexed tokens
+        int groupNumber = random().nextInt(compat.length);
+        String[] group = compat[groupNumber];
+        fromField = group[random().nextInt(group.length)];
+        toField = group[random().nextInt(group.length)];
 
         Map<Comparable, Set<Comparable>> pivot = pivots.get(fromField+"/"+toField);
         if (pivot == null) {
@@ -224,8 +266,16 @@ public class TestJoin extends SolrTestCaseJ4 {
 
         // todo: use different join queries for better coverage
 
+        String method = "enum";
+        if (fromField.endsWith("_sd")) {
+          method = "dv";
+        }
+        if ("true".equals(System.getProperty("solr.tests.numeric.dv")) && groupNumber == 1) {
+          method = "dv";
+        }
+
         SolrQueryRequest req = req("wt","json","indent","true", "echoParams","all",
-            "q","{!join from="+fromField+" to="+toField
+            "q","{!join method='" + method + "' from="+fromField+" to="+toField
                 + (random().nextInt(4)==0 ? " fromIndex=collection1" : "")
                 +"}*:*"
         );
@@ -287,6 +337,17 @@ public class TestJoin extends SolrTestCaseJ4 {
       ids.addAll(output);
     }
     return ids;
+  }
+
+  @Test
+  public void testJoinMethodFromStats() {
+    assertEquals(JoinQParserPlugin.JoinMethod.ENUM,  JoinQParserPlugin.chooseJoinMethodByDvStats( new long[]{100},  new long[]{10}));
+    assertEquals(JoinQParserPlugin.JoinMethod.DV,  JoinQParserPlugin.chooseJoinMethodByDvStats( new long[]{100},  new long[]{11}));
+    assertEquals(JoinQParserPlugin.JoinMethod.ENUM,  JoinQParserPlugin.chooseJoinMethodByDvStats( new long[]{100},  new long[]{0}));
+    assertEquals(JoinQParserPlugin.JoinMethod.ENUM,  JoinQParserPlugin.chooseJoinMethodByDvStats( new long[]{},  new long[]{}));
+    long[] numDocsPerSegment = new long[]{100, 500, 400};
+    long[] cardinalityPerSegment = new long[]{100, 5, 40};
+    assertEquals(JoinQParserPlugin.JoinMethod.DV,  JoinQParserPlugin.chooseJoinMethodByDvStats(numDocsPerSegment, cardinalityPerSegment));
   }
 
 }

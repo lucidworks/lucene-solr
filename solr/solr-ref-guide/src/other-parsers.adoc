@@ -488,7 +488,20 @@ You can optionally use the `score` parameter to return scores of the subordinate
 [WARNING]
 ====
 Specifying `score` local parameter switches the join algorithm. This might have performance implication on large indices, but it's more important that this algorithm won't work for single value numeric field starting from 7.0. Users are encouraged to change field types to string and rebuild indexes during migration.
+
+The `score` doesn't allow you to specify a `method` parameter
 ====
+
+=== Join Parser Execution
+
+The join parser can choose between two methods of execution. The "method" parameter is described below
+
+*method*
+
+`enum`::
+Default approach where we enumerate over the indexed terms and check each term for an intersection. The execution time depends on O(field_cardinality)
+`dv`::
+For every document in the domain, we look up it's values. The execution time depends on O(number_of_matched_docs) . The "from" field must have doc-values enabled for this method. This is the only execution method for point fields.
 
 === Joining Across Collections
 

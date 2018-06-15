@@ -1163,7 +1163,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
   }
 
   // query must be positive
-  protected DocSet getDocSetNC(Query query, DocSet filter) throws IOException {
+  public DocSet getDocSetNC(Query query, DocSet filter) throws IOException {
     return DocSetUtil.createDocSet(this, query, filter);
   }
 

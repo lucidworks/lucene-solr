@@ -108,13 +108,16 @@ public abstract class FacetRequest {
     public static class JoinField {
       public final String from;
       public final String to;
+      public final JoinQParserPlugin.JoinMethod method;
       
-      private JoinField(String from, String to) {
+      private JoinField(String from, String to, JoinQParserPlugin.JoinMethod method) {
         assert null != from;
         assert null != to;
+        assert null != method;
         
         this.from = from;
         this.to = to;
+        this.method = method;
       }
 
       /**
@@ -141,32 +144,36 @@ public abstract class FacetRequest {
             throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
                                     "'join' domain change requires non-null 'from' and 'to' field names");
           }
-          if (2 != join.size()) {
+          String methodStr = join.get("method");
+          JoinQParserPlugin.JoinMethod method = JoinQParserPlugin.JoinMethod.fromString(methodStr);
+
+          int allowedParams = methodStr == null ? 2 : 3;
+          if ((allowedParams != join.size())) {
             throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
-                                    "'join' domain change contains unexpected keys, only 'from' and 'to' supported: "
-                                    + join.toString());
+                "'join' domain change contains unexpected keys, only 'from' and 'to' and 'method' " +
+                    "supported: " + join.toString());
           }
-          domain.joinField = new JoinField(join.get("from"), join.get("to"));
+          domain.joinField = new JoinField(join.get("from"), join.get("to"), method);
         }
       }
 
       /**
-       * Creates a Query that can be used to recompute the new "base" for this domain, realtive to the 
+       * Creates a Query that can be used to recompute the new "base" for this domain, relative to the
        * current base of the FacetContext.
        */
-      public Query createDomainQuery(FacetContext fcontext) throws IOException {
+      public Query createDomainQuery(FacetContext fcontext, JoinQParserPlugin.JoinMethod method, List<Query> domainFilters) throws IOException {
         // NOTE: this code lives here, instead of in FacetProcessor.handleJoin, in order to minimize
         // the number of classes that have to know about the number of possible settings on the join
         // (ie: if we add a score mode, or some other modifier to how the joins are done)
-        
+
         final SolrConstantScoreQuery fromQuery = new SolrConstantScoreQuery(fcontext.base.getTopFilter());
         // this shouldn't matter once we're wrapped in a join query, but just in case it ever does...
-        fromQuery.setCache(false); 
+        fromQuery.setCache(false);
 
-        return JoinQParserPlugin.createJoinQuery(fromQuery, this.from, this.to);
+        return JoinQParserPlugin.createJoinQuery(fromQuery, this.from, this.to, method, domainFilters);
       }
-      
-      
+
+
     }
     
   }
@@ -485,8 +492,6 @@ abstract class FacetParser<FacetRequestT extends FacetRequest> {
 
 
       } // end "domain"
-
-
     }
   }
 
