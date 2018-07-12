@@ -53,7 +53,7 @@ public class ClusterStatus {
   }
 
   @SuppressWarnings("unchecked")
-  public  void getClusterStatus(NamedList results)
+  public void getClusterStatus(NamedList results)
       throws KeeperException, InterruptedException {
     // read aliases
     Aliases aliases = zkStateReader.getAliases();
@@ -130,9 +130,19 @@ public class ClusterStatus {
       if (collectionVsAliases.containsKey(name) && !collectionVsAliases.get(name).isEmpty()) {
         collectionStatus.put("aliases", collectionVsAliases.get(name));
       }
-      String configName = zkStateReader.readConfigName(name);
-      collectionStatus.put("configName", configName);
-      collectionProps.add(name, collectionStatus);
+      try {
+        String configName = zkStateReader.readConfigName(name);
+        collectionStatus.put("configName", configName);
+        collectionProps.add(name, collectionStatus);
+      } catch (SolrException e) {
+        if (e.getCause() instanceof KeeperException.NoNodeException)  {
+          //Workaround till we fix SOLR-12544
+          zkStateReader.forciblyRefreshAllClusterStateSlow();
+
+          // skip this collection because the collection's znode has been deleted
+          // which can happen during aggressive collection removal, see SOLR-10720
+        } else throw e;
+      }
     }
 
     List<String> liveNodes = zkStateReader.getZkClient().getChildren(ZkStateReader.LIVE_NODES_ZKNODE, null, true);
