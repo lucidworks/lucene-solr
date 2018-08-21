@@ -323,7 +323,7 @@ The non-function fields in the field list determine the fields to calculate the 
 
 *`GROUP BY` Clause*
 
-The `GROUP BY` clause can contain up to 10 fields in the Solr index. These fields should correspond with the non-function fields in the field list.
+The `GROUP BY` clause can contain up to 4 fields in the Solr index. These fields should correspond with the non-function fields in the field list.
 
 === HAVING Clause
 

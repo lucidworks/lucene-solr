@@ -443,10 +443,16 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
       }
     }
 
-    if(sortValues.length <= 10) {
-      return new SortDoc(sortValues);
+    if(sortValues.length == 1) {
+      return new SingleValueSortDoc(sortValues[0]);
+    } else if(sortValues.length == 2) {
+      return new DoubleValueSortDoc(sortValues[0], sortValues[1]);
+    } else if(sortValues.length == 3) {
+      return new TripleValueSortDoc(sortValues[0], sortValues[1], sortValues[2]);
+    } else if(sortValues.length == 4) {
+      return new QuadValueSortDoc(sortValues[0], sortValues[1], sortValues[2], sortValues[3]);
     } else {
-      throw new IOException("A max of 10 sorts can be specified");
+      throw new IOException("A max of 4 sorts can be specified");
     }
   }
 
@@ -493,6 +499,7 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
     private SortValue[] sortValues;
 
     public SortDoc() {
+
     }
 
     public void setNextReader(LeafReaderContext context) throws IOException {
@@ -553,24 +560,319 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
       return docId+docBase < sd.docId+sd.docBase;
     }
 
-    public int compareTo(Object o) {
-      SortDoc sd = (SortDoc)o;
-      for(int i=0; i<sortValues.length; i++) {
-        int comp = sortValues[i].compareTo(sd.sortValues[i]);
-        if (comp != 0) {
-          return comp;
-        }
-      }
-      return 0;
+    public String toString() {
+      return "";
+    }
+  }
+
+  class SingleValueSortDoc extends SortDoc {
+
+    protected SortValue value1;
+
+    public void setNextReader(LeafReaderContext context) throws IOException {
+      this.ord = context.ord;
+      value1.setNextReader(context);
     }
 
+    public void reset() {
+      this.docId = -1;
+      this.value1.reset();
+    }
+
+    public void setValues(int docId) throws IOException {
+      this.docId = docId;
+      value1.setCurrentValue(docId);
+    }
+
+    public void setValues(SortDoc sortDoc) throws IOException {
+      this.docId = sortDoc.docId;
+      this.ord = sortDoc.ord;
+      value1.setCurrentValue(((SingleValueSortDoc)sortDoc).value1);
+    }
+
+    public SingleValueSortDoc(SortValue value1) {
+      super();
+      this.value1 = value1;
+    }
+
+    public SortDoc copy() {
+      return new SingleValueSortDoc(value1.copy());
+    }
+
+    public boolean lessThan(Object o) {
+      SingleValueSortDoc sd = (SingleValueSortDoc)o;
+      int comp = value1.compareTo(sd.value1);
+      if(comp == -1) {
+        return true;
+      } else if (comp == 1) {
+        return false;
+      } else {
+        return docId+docBase > sd.docId+sd.docBase;
+      }
+    }
+
+    public int compareTo(Object o) {
+      SingleValueSortDoc sd = (SingleValueSortDoc)o;
+      return value1.compareTo(sd.value1);
+    }
 
     public String toString() {
-      String toString = "docId: " + docId + " ";
-      for (int i=0; i < sortValues.length; i++) {
-        toString = "value" + i + ": " + sortValues[i];
+      return docId+":"+value1.toString();
+    }
+  }
+
+  class DoubleValueSortDoc extends SingleValueSortDoc {
+
+    protected SortValue value2;
+
+    public void setNextReader(LeafReaderContext context) throws IOException {
+      this.ord = context.ord;
+      value1.setNextReader(context);
+      value2.setNextReader(context);
+    }
+
+    public void reset() {
+      this.docId = -1;
+      value1.reset();
+      value2.reset();
+    }
+
+    public void setValues(int docId) throws IOException {
+      this.docId = docId;
+      value1.setCurrentValue(docId);
+      value2.setCurrentValue(docId);
+    }
+
+    public void setValues(SortDoc sortDoc) throws IOException {
+      this.docId = sortDoc.docId;
+      this.ord = sortDoc.ord;
+      value1.setCurrentValue(((DoubleValueSortDoc)sortDoc).value1);
+      value2.setCurrentValue(((DoubleValueSortDoc)sortDoc).value2);
+    }
+
+    public DoubleValueSortDoc(SortValue value1, SortValue value2) {
+      super(value1);
+      this.value2 = value2;
+    }
+
+    public SortDoc copy() {
+      return new DoubleValueSortDoc(value1.copy(), value2.copy());
+    }
+
+    public boolean lessThan(Object o) {
+      DoubleValueSortDoc sd = (DoubleValueSortDoc)o;
+      int comp = value1.compareTo(sd.value1);
+      if(comp == -1) {
+        return true;
+      } else if (comp == 1) {
+        return false;
+      } else {
+        comp = value2.compareTo(sd.value2);
+        if(comp == -1) {
+          return true;
+        } else if (comp == 1) {
+          return false;
+        } else {
+          return docId+docBase > sd.docId+sd.docBase;
+        }
       }
-      return toString;
+    }
+
+    public int compareTo(Object o) {
+      DoubleValueSortDoc sd = (DoubleValueSortDoc)o;
+      int comp = value1.compareTo(sd.value1);
+      if(comp == 0) {
+        return value2.compareTo(sd.value2);
+      } else {
+        return comp;
+      }
+    }
+  }
+
+  class TripleValueSortDoc extends DoubleValueSortDoc {
+
+    protected SortValue value3;
+
+    public void setNextReader(LeafReaderContext context) throws IOException {
+      this.ord = context.ord;
+      value1.setNextReader(context);
+      value2.setNextReader(context);
+      value3.setNextReader(context);
+    }
+
+    public void reset() {
+      this.docId = -1;
+      value1.reset();
+      value2.reset();
+      value3.reset();
+    }
+
+    public void setValues(int docId) throws IOException {
+      this.docId = docId;
+      value1.setCurrentValue(docId);
+      value2.setCurrentValue(docId);
+      value3.setCurrentValue(docId);
+    }
+
+    public void setValues(SortDoc sortDoc) throws IOException {
+      this.docId = sortDoc.docId;
+      this.ord = sortDoc.ord;
+      value1.setCurrentValue(((TripleValueSortDoc)sortDoc).value1);
+      value2.setCurrentValue(((TripleValueSortDoc)sortDoc).value2);
+      value3.setCurrentValue(((TripleValueSortDoc)sortDoc).value3);
+    }
+
+    public TripleValueSortDoc(SortValue value1, SortValue value2, SortValue value3) {
+      super(value1, value2);
+      this.value3 = value3;
+    }
+
+    public SortDoc copy() {
+      return new TripleValueSortDoc(value1.copy(), value2.copy(), value3.copy());
+    }
+
+    public boolean lessThan(Object o) {
+
+      TripleValueSortDoc sd = (TripleValueSortDoc)o;
+      int comp = value1.compareTo(sd.value1);
+      if(comp == -1) {
+        return true;
+      } else if (comp == 1) {
+        return false;
+      } else {
+        comp = value2.compareTo(sd.value2);
+        if(comp == -1) {
+          return true;
+        } else if (comp == 1) {
+          return false;
+        } else {
+          comp = value3.compareTo(sd.value3);
+          if(comp == -1) {
+            return true;
+          } else if (comp == 1) {
+            return false;
+          } else {
+            return docId+docBase > sd.docId+sd.docBase;
+          }
+        }
+      }
+    }
+
+    public int compareTo(Object o) {
+
+      TripleValueSortDoc sd = (TripleValueSortDoc)o;
+      int comp = value1.compareTo(sd.value1);
+      if(comp == 0) {
+        comp = value2.compareTo(sd.value2);
+        if(comp == 0) {
+          return value3.compareTo(sd.value3);
+        } else {
+          return comp;
+        }
+      } else {
+        return comp;
+      }
+    }
+  }
+
+  class QuadValueSortDoc extends TripleValueSortDoc {
+
+    protected SortValue value4;
+
+    public void setNextReader(LeafReaderContext context) throws IOException {
+      this.ord = context.ord;
+      value1.setNextReader(context);
+      value2.setNextReader(context);
+      value3.setNextReader(context);
+      value4.setNextReader(context);
+    }
+
+    public void reset() {
+      this.docId = -1;
+      value1.reset();
+      value2.reset();
+      value3.reset();
+      value4.reset();
+    }
+
+    public void setValues(int docId) throws IOException {
+      this.docId = docId;
+      value1.setCurrentValue(docId);
+      value2.setCurrentValue(docId);
+      value3.setCurrentValue(docId);
+      value4.setCurrentValue(docId);
+    }
+
+    public void setValues(SortDoc sortDoc) throws IOException {
+      this.docId = sortDoc.docId;
+      this.ord = sortDoc.ord;
+      value1.setCurrentValue(((QuadValueSortDoc)sortDoc).value1);
+      value2.setCurrentValue(((QuadValueSortDoc)sortDoc).value2);
+      value3.setCurrentValue(((QuadValueSortDoc)sortDoc).value3);
+      value4.setCurrentValue(((QuadValueSortDoc)sortDoc).value4);
+    }
+
+    public QuadValueSortDoc(SortValue value1, SortValue value2, SortValue value3, SortValue value4) {
+      super(value1, value2, value3);
+      this.value4 = value4;
+    }
+
+    public SortDoc copy() {
+      return new QuadValueSortDoc(value1.copy(), value2.copy(), value3.copy(), value4.copy());
+    }
+
+    public boolean lessThan(Object o) {
+
+      QuadValueSortDoc sd = (QuadValueSortDoc)o;
+      int comp = value1.compareTo(sd.value1);
+      if(comp == -1) {
+        return true;
+      } else if (comp == 1) {
+        return false;
+      } else {
+        comp = value2.compareTo(sd.value2);
+        if(comp == -1) {
+          return true;
+        } else if (comp == 1) {
+          return false;
+        } else {
+          comp = value3.compareTo(sd.value3);
+          if(comp == -1) {
+            return true;
+          } else if (comp == 1) {
+            return false;
+          } else {
+            comp = value4.compareTo(sd.value4);
+            if(comp == -1) {
+              return true;
+            } else if (comp == 1) {
+              return false;
+            } else {
+              return docId+docBase > sd.docId+sd.docBase;
+            }
+          }
+        }
+      }
+    }
+
+    public int compareTo(Object o) {
+      QuadValueSortDoc sd = (QuadValueSortDoc)o;
+      int comp = value1.compareTo(sd.value1);
+      if(comp == 0) {
+        comp = value2.compareTo(sd.value2);
+        if(comp == 0) {
+          comp = value3.compareTo(sd.value3);
+          if(comp == 0) {
+            return value4.compareTo(sd.value4);
+          } else {
+            return comp;
+          }
+        } else {
+          return comp;
+        }
+      } else {
+        return comp;
+      }
     }
   }
 
