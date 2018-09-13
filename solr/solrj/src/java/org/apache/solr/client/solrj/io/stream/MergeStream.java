@@ -20,6 +20,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 
 import org.apache.solr.client.solrj.io.Tuple;
 import org.apache.solr.client.solrj.io.comp.FieldComparator;
@@ -32,6 +35,8 @@ import org.apache.solr.client.solrj.io.stream.expr.StreamExpression;
 import org.apache.solr.client.solrj.io.stream.expr.StreamExpressionNamedParameter;
 import org.apache.solr.client.solrj.io.stream.expr.StreamExpressionValue;
 import org.apache.solr.client.solrj.io.stream.expr.StreamFactory;
+import org.apache.solr.common.util.ExecutorUtil;
+import org.apache.solr.common.util.SolrjNamedThreadFactory;
 
 /**
 * Merges two or more streams together ordering the Tuples based on a Comparator.
@@ -111,8 +116,7 @@ public class MergeStream extends TupleStream implements Expressible {
     for(PushBackStream stream : streams){
       if(includeStreams){
         expression.addParameter(stream.toExpression(factory));
-      }
-      else{
+      } else {
         expression.addParameter("<stream>");
       }
     }
@@ -155,8 +159,62 @@ public class MergeStream extends TupleStream implements Expressible {
   }
 
   public void open() throws IOException {
-    for(PushBackStream stream : streams){
-      stream.open();
+    openStreams();
+  }
+
+  private void openStreams() throws IOException {
+    ExecutorService service = ExecutorUtil.newMDCAwareCachedThreadPool(new SolrjNamedThreadFactory("MergeStream"));
+    try {
+      List<Future<StreamIndex>> futures = new ArrayList();
+      int i=0;
+      for (PushBackStream pushBackStream : streams) {
+        StreamOpener so = new StreamOpener(new StreamIndex(pushBackStream, i++));
+        Future<StreamIndex> future = service.submit(so);
+        futures.add(future);
+      }
+
+      try {
+        for (Future<StreamIndex> f : futures) {
+          StreamIndex streamIndex = f.get();
+          this.streams[streamIndex.getIndex()] = streamIndex.getPushBackStream();
+        }
+      } catch (Exception e) {
+        throw new IOException(e);
+      }
+    } finally {
+      service.shutdown();
+    }
+  }
+
+  protected class StreamOpener implements Callable<StreamIndex> {
+
+    private StreamIndex streamIndex;
+
+    public StreamOpener(StreamIndex streamIndex) {
+      this.streamIndex = streamIndex;
+    }
+
+    public StreamIndex call() throws Exception {
+      streamIndex.getPushBackStream().open();
+      return streamIndex;
+    }
+  }
+
+  protected class StreamIndex {
+    private PushBackStream pushBackStream;
+    private int index;
+
+    public StreamIndex(PushBackStream pushBackStream, int index) {
+      this.pushBackStream = pushBackStream;
+      this.index = index;
+    }
+
+    public int getIndex() {
+      return this.index;
+    }
+
+    public PushBackStream getPushBackStream() {
+      return this.pushBackStream;
     }
   }
 
@@ -196,8 +254,7 @@ public class MergeStream extends TupleStream implements Expressible {
         minimum = current;
         minimumStream = stream;
         continue;
-      }
-      else{
+      } else {
         stream.pushBack(current);
       }
     }

@@ -67,6 +67,8 @@ public class FacetStream extends TupleStream implements Expressible  {
   private List<Tuple> tuples = new ArrayList<Tuple>();
   private int index;
   private String zkHost;
+  private boolean branchMetrics = true;
+  private boolean finalSort = true;
   private ModifiableSolrParams params;
   private String collection;
   protected transient SolrClientCache cache;
@@ -139,6 +141,8 @@ public class FacetStream extends TupleStream implements Expressible  {
         bucketSorts = parseBucketSorts(((StreamExpressionValue)bucketSortExpression.getParameter()).getValue());
       }
     }
+
+
     if(null == bucketSorts || 0 == bucketSorts.length){      
       throw new IOException(String.format(Locale.ROOT,"invalid expression %s - at least one bucket sort expected. eg. 'bucketSorts=\"name asc\"'",expression,collectionName));
     }
@@ -215,7 +219,13 @@ public class FacetStream extends TupleStream implements Expressible  {
     return comps;
   }
 
-  private void init(String collection, SolrParams params, Bucket[] buckets, FieldComparator[] bucketSorts, Metric[] metrics, int bucketSizeLimit, String zkHost) throws IOException {
+  private void init(String collection,
+                    SolrParams params,
+                    Bucket[] buckets,
+                    FieldComparator[] bucketSorts,
+                    Metric[] metrics,
+                    int bucketSizeLimit,
+                    String zkHost) throws IOException {
     this.zkHost  = zkHost;
     this.params = new ModifiableSolrParams(params);
     this.buckets = buckets;
@@ -226,7 +236,28 @@ public class FacetStream extends TupleStream implements Expressible  {
     }
     this.collection = collection;
     this.bucketSorts = bucketSorts;
-    
+
+    boolean metricSort = false;
+    //If any of the sorts contain a metric then compute the branch metrics
+    for(FieldComparator bucketSort : bucketSorts) {
+      if(bucketSort.getLeftFieldName().contains("(") && !bucketSort.getLeftFieldName().contains("count")) {
+        metricSort = true;
+        break;
+      }
+    }
+    this.branchMetrics = metricSort;
+
+    boolean allIndexSort = true;
+
+    for(FieldComparator bucketSort : bucketSorts) {
+      if(!bucketSort.getLeftFieldName().equals("index")) {
+        allIndexSort = false;
+        break;
+      }
+    }
+
+    this.finalSort = !allIndexSort;
+
     // In a facet world it only makes sense to have the same field name in all of the sorters
     // Because FieldComparator allows for left and right field names we will need to validate
     // that they are the same
@@ -342,7 +373,9 @@ public class FacetStream extends TupleStream implements Expressible  {
     try {
       NamedList response = cloudSolrClient.request(request, collection);
       getTuples(response, buckets, metrics);
-      Collections.sort(tuples, getStreamSort());
+      if(this.finalSort) {
+        Collections.sort(tuples, getStreamSort());
+      }
 
     } catch (Exception e) {
       throw new IOException(e);
@@ -413,16 +446,20 @@ public class FacetStream extends TupleStream implements Expressible  {
 
     buf.append(",\"facet\":{");
     int metricCount = 0;
-    for(Metric metric : _metrics) {
-      String identifier = metric.getIdentifier();
-      if(!identifier.startsWith("count(")) {
-        if(metricCount>0) {
-          buf.append(",");
+
+    if(branchMetrics || level == _buckets.length-1) {
+      for (Metric metric : _metrics) {
+        String identifier = metric.getIdentifier();
+        if (!identifier.startsWith("count(")) {
+          if (metricCount > 0) {
+            buf.append(",");
+          }
+          buf.append("\"facet_" + metricCount + "\":\"" + identifier + "\"");
+          ++metricCount;
         }
-        buf.append("\"facet_" + metricCount + "\":\"" +identifier+"\"");
-        ++metricCount;
       }
     }
+
     ++level;
     if(level < _buckets.length) {
       if(metricCount>0) {
