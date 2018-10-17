@@ -697,7 +697,7 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
   public void testNPEAfterInvalidReindex1() throws Exception {
     Directory dir = new RAMDirectory();
 
-    IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(new MockAnalyzer(random())));
+    IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(new MockAnalyzer(random())).setMergePolicy(NoMergePolicy.INSTANCE));
     Document doc = new Document();
     doc.add(newStringField("id", "id", Field.Store.NO));
     w.addDocument(doc);
@@ -747,7 +747,7 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
   public void testNPEAfterInvalidReindex2() throws Exception {
     Directory dir = new RAMDirectory();
 
-    IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(new MockAnalyzer(random())));
+    IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(new MockAnalyzer(random())).setMergePolicy(NoMergePolicy.INSTANCE));
     Document doc = new Document();
     doc.add(newStringField("id", "id", Field.Store.NO));
     w.addDocument(doc);

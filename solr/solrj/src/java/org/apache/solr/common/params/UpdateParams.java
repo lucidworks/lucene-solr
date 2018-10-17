@@ -59,9 +59,9 @@ public interface UpdateParams
 
   /** Override the content type used for UpdateLoader **/
   public static final String ASSUME_CONTENT_TYPE = "update.contentType";
-  
+
   /**
-   * If optimizing, set the maximum number of segments left in the index after optimization.  1 is the default (and is equivalent to calling IndexWriter.optimize() in Lucene).
+   * If optimizing, set the maximum number of segments left in the index after optimization.  Integer.MAX_INT is the default to respect maxMergeSegmentsMB
    */
   public static final String MAX_OPTIMIZE_SEGMENTS = "maxSegments";
 

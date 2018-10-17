@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MergeInfo;
@@ -290,6 +292,15 @@ public abstract class MergePolicy {
     }
   }
 
+  /**
+   * Builds a String representation of the given SegmentCommitInfo instances
+   */
+  protected final String segString(Iterable<SegmentCommitInfo> infos) {
+    return StreamSupport.stream(infos.spliterator(), false)
+        .map(info -> info.toString(info.getDelCount()))
+        .collect(Collectors.joining(" "));
+  }
+
   /** Exception thrown if there are any problems while
    *  executing a merge. */
   public static class MergeException extends RuntimeException {
@@ -501,4 +512,14 @@ public abstract class MergePolicy {
     v *= 1024 * 1024;
     this.maxCFSSegmentSize = v > Long.MAX_VALUE ? Long.MAX_VALUE : (long) v;
   }
+  /**
+   * Asserts that the delCount for this SegmentCommitInfo is valid
+   */
+  protected final boolean assertDelCount(int delCount, SegmentCommitInfo info) {
+    assert delCount >= 0: "delCount must be positive: " + delCount;
+    assert delCount <= info.info.maxDoc() : "delCount: " + delCount
+        + " must be leq than maxDoc: " + info.info.maxDoc();
+    return true;
+  }
+
 }
