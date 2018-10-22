@@ -2009,7 +2009,7 @@ ${ant.project.name}.test.dependencies=${test.classpath.list}
   </target>
   
   <target name="-ecj-resolve" unless="ecj.loaded" depends="ivy-availability-check,ivy-configure" if="ecj-javadoc-lint.supported">
-    <ivy:cachepath organisation="org.eclipse.jdt.core.compiler" module="ecj" revision="4.4.1"
+    <ivy:cachepath organisation="org.eclipse.jdt.core.compiler" module="ecj" revision="4.6.1"
      inline="true" conf="master" type="jar" pathid="ecj.classpath" />
     <componentdef classname="org.eclipse.jdt.core.JDTCompilerAdapter"
      classpathref="ecj.classpath" name="ecj-component"/>
@@ -2112,23 +2112,9 @@ ${ant.project.name}.test.dependencies=${test.classpath.list}
         <link offline="true" href="${javadoc.link}" packagelistLoc="${javadoc.packagelist.dir}/java7"/>
         <bottom><![CDATA[
           <i>Copyright &copy; ${year} Apache Software Foundation.  All Rights Reserved.</i>
-          <script src='{@docRoot}/prettify.js' type='text/javascript'></script>
-          <script type='text/javascript'>
-            (function(){
-              var oldonload = window.onload;
-              if (typeof oldonload != 'function') {
-                window.onload = prettyPrint;
-              } else {
-                window.onload = function() {
-                  oldonload();
-                  prettyPrint();
-                }
-              }
-            })();
-          </script>
         ]]></bottom>
-      	
-      	<sources />
+
+        <sources />
       	      	
         <classpath refid="javadoc.classpath"/>
         <arg line="${-javadoc.doclint.args}"/>
