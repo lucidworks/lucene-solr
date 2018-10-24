@@ -296,9 +296,14 @@ public abstract class MergePolicy {
    * Builds a String representation of the given SegmentCommitInfo instances
    */
   protected final String segString(Iterable<SegmentCommitInfo> infos) {
-    return StreamSupport.stream(infos.spliterator(), false)
-        .map(info -> info.toString(info.getDelCount()))
-        .collect(Collectors.joining(" "));
+    final StringBuilder buffer = new StringBuilder();
+    for (final SegmentCommitInfo info : infos) {
+      if (buffer.length() > 0) {
+        buffer.append(' ');
+      }
+      buffer.append(info.toString(info.getDelCount()));
+    }
+    return buffer.toString();
   }
 
   /** Exception thrown if there are any problems while
