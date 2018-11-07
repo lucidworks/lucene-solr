@@ -51,8 +51,9 @@ public interface CollectionParams
     DELETEREPLICAPROP(true),
     BALANCESHARDUNIQUE(true),
     REBALANCELEADERS(true),
-    MODIFYCOLLECTION(true);
-    
+    MODIFYCOLLECTION(true),
+    COLSTATUS(false);
+
     public final boolean isWrite;
 
     CollectionAction(boolean isWrite) {

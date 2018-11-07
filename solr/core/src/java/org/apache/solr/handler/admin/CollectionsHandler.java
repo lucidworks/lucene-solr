@@ -599,6 +599,22 @@ public class CollectionsHandler extends RequestHandlerBase {
         return null;
       }
     },
+    COLSTATUS_OP(COLSTATUS) {
+      @Override
+      Map<String, Object> call(SolrQueryRequest req, SolrQueryResponse rsp, CollectionsHandler handler)
+          throws KeeperException, InterruptedException {
+        Map<String, Object> all = req.getParams().getAll(null,
+            CoreAdminParams.NAME, COLLECTION_PROP);
+        // make sure we can get the name if there's "name" but not "collection"
+        if (all.containsKey(CoreAdminParams.NAME) && !all.containsKey(COLLECTION_PROP)) {
+          all.put(COLLECTION_PROP, all.get(CoreAdminParams.NAME));
+        }
+        new ColStatus(handler.coreContainer.getUpdateShardHandler().getHttpClient(),
+            handler.coreContainer.getZkController().getZkStateReader(), new ZkNodeProps(all))
+            .getColStatus(rsp.getValues());
+        return null;
+      }
+    },
     /**
      * Handle cluster status request.
      * Can return status per specific collection/shard or per all collections.

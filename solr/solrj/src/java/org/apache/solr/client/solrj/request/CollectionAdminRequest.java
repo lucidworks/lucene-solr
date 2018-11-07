@@ -314,6 +314,20 @@ public abstract class CollectionAdminRequest <Q extends CollectionAdminRequest<Q
     }
   }
 
+  // DELETE request
+  public static class ColStatus extends CollectionSpecificAdminRequest<ColStatus> {
+    protected String collection = null;
+
+    public ColStatus() {
+      action = CollectionAction.COLSTATUS;
+    }
+
+    @Override
+    protected ColStatus getThis() {
+      return this;
+    }
+  }
+
   // CREATESHARD request
   public static class CreateShard extends CollectionShardAdminRequest<CreateShard> {
     protected String nodeSet;

@@ -24,8 +24,10 @@ import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.CoreAdminRequest;
+import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.response.CollectionAdminResponse;
 import org.apache.solr.client.solrj.response.CoreAdminResponse;
+import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.Replica;
@@ -66,6 +68,7 @@ public class CollectionsAPISolrJTests extends AbstractFullDistribZkTestBase {
     testList();
     testAddAndDeleteReplicaProp();
     testBalanceShardUnique();
+    testColStatus();
   }
 
   protected void testCreateAndDeleteCollection() throws Exception {
@@ -412,7 +415,29 @@ public class CollectionsAPISolrJTests extends AbstractFullDistribZkTestBase {
     assertEquals(0, response.getStatus());
     assertNotNull("collection list should not be null", response.getResponse().get("collections"));
   }
-  
+
+  private void testColStatus() throws Exception {
+    String collectionName = "solrj_colstatustests";
+    createCollection(collectionName, cloudClient, 1, 2);
+    UpdateRequest ureq = new UpdateRequest();
+    for (int i = 0; i < 100; i++) {
+      SolrInputDocument doc = new SolrInputDocument();
+      doc.addField("id", i);
+      ureq.add(doc);
+    }
+    ureq.process(cloudClient, collectionName);
+    cloudClient.commit(collectionName);
+    CollectionAdminRequest.ColStatus req = new CollectionAdminRequest.ColStatus();
+    req.setCollectionName(collectionName);
+    CollectionAdminResponse response = req.process(cloudClient);
+    assertEquals(0, response.getStatus());
+    NamedList<Object> details = (NamedList<Object>)response.getResponse().get(collectionName);
+    assertNotNull("collection details should not be null: " + response, details);
+    assertNotNull(details.toString(), details.findRecursive("slices"));
+    assertNotNull(details.toString(), details.findRecursive("slices", "shard1", "leader", "segInfos", "info"));
+    assertNotNull(details.toString(), details.findRecursive("slices", "shard1", "leader", "segInfos", "segments", "_0"));
+  }
+
   private void testAddAndDeleteReplicaProp() throws InterruptedException, IOException, SolrServerException {
     Replica replica = cloudClient.getZkStateReader().getLeaderRetry(DEFAULT_COLLECTION, SHARD1);
     CollectionAdminResponse response = new CollectionAdminRequest.AddReplicaProp()

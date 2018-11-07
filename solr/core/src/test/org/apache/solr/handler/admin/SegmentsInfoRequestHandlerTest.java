@@ -57,7 +57,7 @@ public class SegmentsInfoRequestHandlerTest extends AbstractSolrTestCase {
   @Test
   public void testSegmentInfosData() {   
     assertQ("No segments mentioned in result",
-        req("qt","/admin/segments"),
+        req("qt","/admin/segments", "fieldInfos", "true"),
           //#Document
           DOC_COUNT+"=sum(//lst[@name='segments']/lst[*]/int[@name='size'])",
           //#Deletes

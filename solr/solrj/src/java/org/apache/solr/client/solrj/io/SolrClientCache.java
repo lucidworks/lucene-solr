@@ -22,6 +22,8 @@ import java.io.Serializable;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Iterator;
+
+import org.apache.http.client.HttpClient;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
@@ -39,12 +41,26 @@ public class SolrClientCache implements Serializable {
 
   private Map<String, SolrClient> solrClients = new HashMap();
 
+  private HttpClient httpClient;
+
+  public SolrClientCache() {
+
+  }
+
+  public SolrClientCache(HttpClient httpClient) {
+    this.httpClient = httpClient;
+  }
+
   public synchronized CloudSolrClient getCloudSolrClient(String zkHost) {
     CloudSolrClient client = null;
     if (solrClients.containsKey(zkHost)) {
       client = (CloudSolrClient) solrClients.get(zkHost);
     } else {
-      client = new CloudSolrClient(zkHost);
+      if (httpClient != null) {
+        client = new CloudSolrClient(zkHost, httpClient);
+      } else {
+        client = new CloudSolrClient(zkHost);
+      }
       client.connect();
       solrClients.put(zkHost, client);
     }
@@ -57,7 +73,11 @@ public class SolrClientCache implements Serializable {
     if (solrClients.containsKey(host)) {
       client = (HttpSolrClient) solrClients.get(host);
     } else {
-      client = new HttpSolrClient(host);
+      if (httpClient != null) {
+        client = new HttpSolrClient(host, httpClient);
+      } else {
+        client = new HttpSolrClient(host);
+      }
       solrClients.put(host, client);
     }
     return client;
