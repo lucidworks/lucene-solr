@@ -64,8 +64,8 @@ public abstract class DocValuesProducer implements Closeable, Accountable {
    *  The returned instance need not be thread-safe: it will only be
    *  used by a single thread. */
   public abstract SortedSetDocValues getSortedSet(FieldInfo field) throws IOException;
-  
-  /** Returns a {@link Bits} at the size of <code>reader.maxDoc()</code>, 
+
+  /** Returns a {@link Bits} at the size of <code>reader.maxDoc()</code>,
    *  with turned on bits for each docid that does have a value for this field.
    *  The returned instance need not be thread-safe: it will only be
    *  used by a single thread. */

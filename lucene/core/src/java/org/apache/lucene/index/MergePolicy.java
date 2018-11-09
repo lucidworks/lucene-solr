@@ -22,8 +22,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MergeInfo;
@@ -140,6 +138,11 @@ public abstract class MergePolicy {
 
     /** Called by {@link IndexWriter} after the merge is done and all readers have been closed. */
     public void mergeFinished() throws IOException {
+    }
+
+    /** Wrap the reader in order to add/remove information to the merged segment. */
+    public CodecReader wrapForMerge(CodecReader reader) throws IOException {
+      return reader;
     }
 
     /** Expert: Get the list of readers to merge. Note that this list does not
@@ -484,7 +487,7 @@ public abstract class MergePolicy {
   /** Returns current {@code noCFSRatio}.
    *
    *  @see #setNoCFSRatio */
-  public final double getNoCFSRatio() {
+  public double getNoCFSRatio() {
     return noCFSRatio;
   }
 
@@ -493,7 +496,7 @@ public abstract class MergePolicy {
    *  non-compound file even if compound file is enabled.
    *  Set to 1.0 to always use CFS regardless of merge
    *  size. */
-  public final void setNoCFSRatio(double noCFSRatio) {
+  public void setNoCFSRatio(double noCFSRatio) {
     if (noCFSRatio < 0.0 || noCFSRatio > 1.0) {
       throw new IllegalArgumentException("noCFSRatio must be 0.0 to 1.0 inclusive; got " + noCFSRatio);
     }
@@ -501,7 +504,7 @@ public abstract class MergePolicy {
   }
 
   /** Returns the largest size allowed for a compound file segment */
-  public final double getMaxCFSSegmentSizeMB() {
+  public double getMaxCFSSegmentSizeMB() {
     return maxCFSSegmentSize/1024/1024.;
   }
 
@@ -510,7 +513,7 @@ public abstract class MergePolicy {
    *  non-compound file even if compound file is enabled.
    *  Set this to Double.POSITIVE_INFINITY (default) and noCFSRatio to 1.0
    *  to always use CFS regardless of merge size. */
-  public final void setMaxCFSSegmentSizeMB(double v) {
+  public void setMaxCFSSegmentSizeMB(double v) {
     if (v < 0.0) {
       throw new IllegalArgumentException("maxCFSSegmentSizeMB must be >=0 (got " + v + ")");
     }
