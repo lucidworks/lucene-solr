@@ -94,15 +94,4 @@ public class FilterMergePolicy extends MergePolicy {
   public String toString() {
     return getClass().getSimpleName() + "(" + in + ")";
   }
-//
-//  @Override
-//  public boolean keepFullyDeletedSegment(IOSupplier<CodecReader> readerIOSupplier) throws IOException {
-//    return in.keepFullyDeletedSegment(readerIOSupplier);
-//  }
-//
-//  @Override
-//  public int numDeletesToMerge(SegmentCommitInfo info, int delCount,
-//                               IOSupplier<CodecReader> readerSupplier) throws IOException {
-//    return in.numDeletesToMerge(info, delCount, readerSupplier);
-//  }
 }

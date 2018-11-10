@@ -266,7 +266,25 @@ public final class SortingMergePolicy extends MergePolicy {
   protected long size(SegmentCommitInfo info, IndexWriter writer) throws IOException {
     return in.size(info, writer);
   }
+  @Override
+  public double getNoCFSRatio() {
+    return super.getNoCFSRatio();
+  }
 
+  @Override
+  public double getMaxCFSSegmentSizeMB() {
+    return super.getMaxCFSSegmentSizeMB();
+  }
+
+  @Override
+  public void setMaxCFSSegmentSizeMB(double v) {
+    super.setMaxCFSSegmentSizeMB(v);
+  }
+
+  @Override
+  public void setNoCFSRatio(double noCFSRatio) {
+    super.setNoCFSRatio(noCFSRatio);
+  }
   @Override
   public String toString() {
     return "SortingMergePolicy(" + in + ", sorter=" + sorter + ")";

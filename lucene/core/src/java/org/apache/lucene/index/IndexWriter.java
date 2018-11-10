@@ -4847,14 +4847,6 @@ public class IndexWriter implements Closeable, TwoPhaseCommit, Accountable {
       }
     };
   }
-
-  /**
-   * Checks if the provided segment exists in the current segmentInfos
-   */
-  final synchronized boolean segmentCommitInfoExist(SegmentCommitInfo sci) {
-    return segmentInfos.contains(sci);
-  }
-
   /**
    * Returns an unmodifiable view of the list of all segments of the current segmentInfos
    */
@@ -4867,24 +4859,6 @@ public class IndexWriter implements Closeable, TwoPhaseCommit, Accountable {
    */
   final synchronized SegmentInfos cloneSegmentInfos() {
     return segmentInfos.clone();
-  }
-
-  /**
-   * Returns the number of deletes a merge would claim back if the given segment is merged.
-   *
-   * @param info the segment to get the number of deletes for
-   * @lucene.experimental
-   */
-
-  private void validate(SegmentCommitInfo info) {
-    if (info.info.dir != directoryOrig) {
-      throw new IllegalArgumentException("SegmentCommitInfo must be from the same directory");
-    }
-  }
-
-  ReadersAndUpdates getPooledInstance(SegmentCommitInfo info, boolean create) {
-    ensureOpen(false);
-    return readerPool.get(info, create);
   }
 
 
