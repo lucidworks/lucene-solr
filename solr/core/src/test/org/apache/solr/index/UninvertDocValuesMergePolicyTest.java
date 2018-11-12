@@ -136,19 +136,14 @@ public class UninvertDocValuesMergePolicyTest extends SolrTestCaseJ4 {
         for(int i = 0; i < r.numDocs(); ++i) {
           Document doc = r.document(i);
           String v = doc.getField(TEST_FIELD).stringValue();
-          String id = doc.getField(ID_FIELD).stringValue();
           assertEquals(DocValuesType.SORTED, r.getFieldInfos().fieldInfo(TEST_FIELD).getDocValuesType());
           assertEquals(DocValuesType.NONE, r.getFieldInfos().fieldInfo(ID_FIELD).getDocValuesType());
-          assertEquals(v, id);
-
-          //nocommit
-//          docvalues.nextDoc();
-//          assertEquals(v, docvalues.binaryValue().utf8ToString());
+          //nocommit. Should pass when we have fully ported the UDVMP
+          assertEquals("docValues should have been added to merged segment", v, docvalues.get(i).utf8ToString());
         }
       }
     });
   }
-
 
   // When an non-indexed field gets merged, it exhibit the old behavior
   // The field will be merged, docvalues headers updated, but no docvalues for this field
@@ -186,14 +181,11 @@ public class UninvertDocValuesMergePolicyTest extends SolrTestCaseJ4 {
           assertEquals(DocValuesType.SORTED, r.getFieldInfos().fieldInfo(TEST_FIELD).getDocValuesType());
           assertEquals(DocValuesType.NONE, r.getFieldInfos().fieldInfo(ID_FIELD).getDocValuesType());
 
-          //nocommit
-//          if(id.equals("2")) {
-//            assertTrue(docvalues.advanceExact(i));
-//            assertEquals(v, docvalues.binaryValue().utf8ToString());
-//          } else {
-//            assertFalse(docvalues.advanceExact(i));
-//          }
-
+          if (id.equals("1")) {
+            assertEquals("doc values should match, empty since field not indexed", "", docvalues.get(i).utf8ToString());
+          } else {
+            assertEquals("doc values should match", v, docvalues.get(i).utf8ToString());
+          }
         }
       }
     });
