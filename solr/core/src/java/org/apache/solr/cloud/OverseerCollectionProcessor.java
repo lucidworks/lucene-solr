@@ -2663,7 +2663,6 @@ public class OverseerCollectionProcessor implements Runnable, Closeable {
     ShardHandler shardHandler = shardHandlerFactory.getShardHandler();
     
     DocCollection coll = clusterState.getCollection(collectionName);
-    
     for (Map.Entry<String,Slice> entry : coll.getSlicesMap().entrySet()) {
       Slice slice = entry.getValue();
       sliceCmd(clusterState, params, stateMatcher, slice, shardHandler);

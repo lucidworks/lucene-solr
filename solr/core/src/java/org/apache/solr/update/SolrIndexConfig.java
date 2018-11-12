@@ -32,8 +32,13 @@ import org.apache.solr.core.MapSerializable;
 import org.apache.solr.core.PluginInfo;
 import org.apache.solr.core.SolrConfig;
 import org.apache.solr.core.SolrCore;
+import org.apache.solr.core.SolrResourceLoader;
+import org.apache.solr.index.DefaultMergePolicyFactory;
+import org.apache.solr.index.MergePolicyFactory;
+import org.apache.solr.index.MergePolicyFactoryArgs;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.util.SolrPluginUtils;
+import org.apache.solr.util.plugin.SolrCoreAware;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +50,10 @@ import static org.apache.solr.core.Config.assertWarnOrFail;
  */
 public class SolrIndexConfig implements MapSerializable {
   public static final Logger log = LoggerFactory.getLogger(SolrIndexConfig.class);
-  
+
+  private static final String NO_SUB_PACKAGES[] = new String[0];
+
+  private static final String DEFAULT_MERGE_POLICY_FACTORY_CLASSNAME = DefaultMergePolicyFactory.class.getName();
   final String defaultMergePolicyClassName;
   public static final String DEFAULT_MERGE_SCHEDULER_CLASSNAME = ConcurrentMergeScheduler.class.getName();
   public final Version luceneVersion;
@@ -60,7 +68,9 @@ public class SolrIndexConfig implements MapSerializable {
 
   public final int writeLockTimeout;
   public final String lockType;
+  // nocommit preserve back-compat here and allow specifying either MergePolicy or MergePolicyFactory?
   public final PluginInfo mergePolicyInfo;
+  public final PluginInfo mergePolicyFactoryInfo;
   public final PluginInfo mergeSchedulerInfo;
   
   public final PluginInfo mergedSegmentWarmerInfo;
@@ -87,6 +97,7 @@ public class SolrIndexConfig implements MapSerializable {
     writeLockTimeout = -1;
     lockType = LOCK_TYPE_NATIVE;
     mergePolicyInfo = null;
+    mergePolicyFactoryInfo = null;
     mergeSchedulerInfo = null;
     defaultMergePolicyClassName = TieredMergePolicy.class.getName();
     mergedSegmentWarmerInfo = null;
@@ -139,7 +150,8 @@ public class SolrIndexConfig implements MapSerializable {
 
     mergeSchedulerInfo = getPluginInfo(prefix + "/mergeScheduler", solrConfig, def.mergeSchedulerInfo);
     mergePolicyInfo = getPluginInfo(prefix + "/mergePolicy", solrConfig, def.mergePolicyInfo);
-    
+    mergePolicyFactoryInfo = getPluginInfo(prefix + "/mergePolicyFactory", solrConfig, def.mergePolicyFactoryInfo);
+
     String val = solrConfig.get(prefix + "/termIndexInterval", null);
     if (val != null) {
       throw new IllegalArgumentException("Illegal parameter 'termIndexInterval'");
@@ -173,6 +185,7 @@ public class SolrIndexConfig implements MapSerializable {
         "infoStreamEnabled", infoStream != InfoStream.NO_OUTPUT);
     if(mergeSchedulerInfo != null) m.put("mergeScheduler",mergeSchedulerInfo.toMap());
     if(mergePolicyInfo != null) m.put("mergePolicy",mergePolicyInfo.toMap());
+    if(mergePolicyFactoryInfo != null) m.put("mergePolicyFactory",mergePolicyFactoryInfo.toMap());
     if(mergedSegmentWarmerInfo != null) m.put("mergedSegmentWarmer",mergedSegmentWarmerInfo.toMap());
     return m;
   }
@@ -209,7 +222,7 @@ public class SolrIndexConfig implements MapSerializable {
       iwc.setWriteLockTimeout(writeLockTimeout);
 
     iwc.setSimilarity(schema.getSimilarity());
-    iwc.setMergePolicy(buildMergePolicy(schema));
+    iwc.setMergePolicy(buildMergePolicy(core, schema));
     iwc.setMergeScheduler(buildMergeScheduler(schema));
     iwc.setInfoStream(infoStream);
 
@@ -239,6 +252,37 @@ public class SolrIndexConfig implements MapSerializable {
    * @see #fixUseCFMergePolicyInitArg
    * @see #getUseCompoundFile
    */
+  private MergePolicy buildMergePolicy(SolrCore core, IndexSchema schema) {
+    // use back-commpat "mergePolicy" config IFF it's not null AND the new "mergePolicyFactory" is null
+    if (mergePolicyFactoryInfo == null && mergePolicyInfo != null) {
+      // use back-compat mergePolicy
+      return buildMergePolicy(schema);
+    }
+    final String mpfClassName;
+    final MergePolicyFactoryArgs mpfArgs;
+    if (mergePolicyFactoryInfo == null) {
+      mpfClassName = DEFAULT_MERGE_POLICY_FACTORY_CLASSNAME;
+      mpfArgs = new MergePolicyFactoryArgs();
+    } else {
+      mpfClassName = mergePolicyFactoryInfo.className;
+      mpfArgs = new MergePolicyFactoryArgs(mergePolicyFactoryInfo.initArgs);
+    }
+
+    final SolrResourceLoader resourceLoader = schema.getResourceLoader();
+    final MergePolicyFactory mpf = resourceLoader.newInstance(
+        mpfClassName,
+        MergePolicyFactory.class,
+        NO_SUB_PACKAGES,
+        new Class[] { SolrResourceLoader.class, MergePolicyFactoryArgs.class, IndexSchema.class },
+        new Object[] { resourceLoader, mpfArgs, schema });
+
+    if (mpf instanceof SolrCoreAware) {
+      ((SolrCoreAware)mpf).inform(core);
+    }
+
+    return mpf.getMergePolicy();
+  }
+
   private MergePolicy buildMergePolicy(IndexSchema schema) {
     String mpClassName = mergePolicyInfo == null ? defaultMergePolicyClassName : mergePolicyInfo.className;
 
@@ -257,7 +301,7 @@ public class SolrIndexConfig implements MapSerializable {
     } else if (policy instanceof TieredMergePolicy) {
       TieredMergePolicy tieredMergePolicy = (TieredMergePolicy) policy;
       fixUseCFMergePolicyInitArg(TieredMergePolicy.class);
-      
+
       if (mergeFactor != -1) {
         tieredMergePolicy.setMaxMergeAtOnce(mergeFactor);
         tieredMergePolicy.setSegmentsPerTier(mergeFactor);

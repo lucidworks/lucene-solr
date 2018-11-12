@@ -79,6 +79,7 @@ public class ZkStateReader implements Closeable {
   public static final String ALIASES = "/aliases.json";
   public static final String CLUSTER_STATE = "/clusterstate.json";
   public static final String CLUSTER_PROPS = "/clusterprops.json";
+  public static final String EXT_PROPERTY_PREFIX = "ext.";
   public static final String REJOIN_AT_HEAD_PROP = "rejoinAtHead";
   public static final String SOLR_SECURITY_CONF_PATH = "/security.json";
 
@@ -740,7 +741,7 @@ public class ZkStateReader implements Closeable {
    * @param propertyValue The value of the property.
    */
   public void setClusterProperty(String propertyName, String propertyValue) {
-    if (!KNOWN_CLUSTER_PROPS.contains(propertyName)) {
+    if (!KNOWN_CLUSTER_PROPS.contains(propertyName) && !propertyName.startsWith(EXT_PROPERTY_PREFIX)) {
       throw new SolrException(ErrorCode.BAD_REQUEST, "Not a known cluster property " + propertyName);
     }
 

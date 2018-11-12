@@ -81,6 +81,7 @@ public class SolrIndexWriter extends IndexWriter {
           setIndexDeletionPolicy(delPolicy).setCodec(codec)
           );
     log.debug("Opened Writer " + name);
+    log.info("Writer " + name + ", path=" + path + ", mergePolicy=" + getConfig().getMergePolicy().getClass().getName());
     this.name = name;
     infoStream = getConfig().getInfoStream();
     this.directory = directory;

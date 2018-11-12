@@ -17,15 +17,13 @@
 
 package org.apache.solr.index;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.lucene.index.MergePolicy;
 import org.apache.solr.cloud.CloudDescriptor;
-import org.apache.solr.cloud.ZkController;
 import org.apache.solr.cloud.ZkSolrResourceLoader;
-import org.apache.solr.common.cloud.DocCollection;
-import org.apache.solr.common.params.CoreAdminParams;
+import org.apache.solr.common.cloud.ZkStateReader;
+import org.apache.solr.common.util.Utils;
 import org.apache.solr.core.PluginInfo;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SolrResourceLoader;
@@ -42,7 +40,7 @@ import org.slf4j.LoggerFactory;
 public class PluggableMergePolicyFactory extends SimpleMergePolicyFactory implements SolrCoreAware {
   public static Logger log = LoggerFactory.getLogger(PluggableMergePolicyFactory.class);
 
-  public static final String MERGE_POLICY_PROP = "mergePolicyFactory";
+  public static final String MERGE_POLICY_PROP = "ext.mergePolicyFactory.";
   private final MergePolicyFactory defaultMergePolicyFactory;
   private PluginInfo pluginInfo;
 
@@ -59,40 +57,44 @@ public class PluggableMergePolicyFactory extends SimpleMergePolicyFactory implem
       return;
     }
     // we can safely assume here that our loader is ZK enabled
-    ZkController zkController = ((ZkSolrResourceLoader)resourceLoader).getZkController();
-    DocCollection coll = zkController.getClusterState().getCollectionOrNull(cd.getCollectionName());
-    if (coll == null) {
-      log.warn("Can't find collection " + cd.getCollectionName() + " in cluster state");
-      return;
-    }
-    Object o = coll.getProperties().get(MERGE_POLICY_PROP);
+    ZkStateReader zkStateReader = ((ZkSolrResourceLoader)resourceLoader).getZkController().getZkStateReader();
+    Map<String, Object> clusterProps = zkStateReader.getClusterProps();
+    String propName = MERGE_POLICY_PROP + cd.getCollectionName();
+    Object o = clusterProps.get(propName);
     if (o == null) {
-      // XXX nocommit add cluster-level override
+      log.info("No configuration in cluster properties - using default MergePolicy.");
       return;
     }
+    Map<String, Object> props = null;
     if (o instanceof String) {
-      // simple class name, no args
-      Map<String, Object> props = new HashMap<>();
-      props.put(CoreAdminParams.NAME, MERGE_POLICY_PROP);
-      props.put(FieldType.CLASS_NAME, String.valueOf(o));
-      pluginInfo = new PluginInfo(MERGE_POLICY_PROP, props);
+      // JSON string
+      props = (Map<String, Object>)Utils.fromJSONString(String.valueOf(o));
     } else if (o instanceof Map) {
-      Map props = (Map)o;
-      if (!props.containsKey(FieldType.CLASS_NAME)) {
-        log.error("MergePolicy plugin info missing class name, using default: " + props);
-        return;
-      }
-      pluginInfo = new PluginInfo(MERGE_POLICY_PROP, props);
+      props = (Map)o;
     }
+    if (!props.containsKey(FieldType.CLASS_NAME)) {
+      log.error("MergePolicy plugin info missing class name, using default: " + props);
+      return;
+    }
+    pluginInfo = new PluginInfo("mergePolicyFactory", props);
   }
+
+  private static final String NO_SUB_PACKAGES[] = new String[0];
 
   @Override
   protected MergePolicy getMergePolicyInstance() {
     if (pluginInfo != null) {
-      String mpClassName = pluginInfo.className;
-      MergePolicy policy = resourceLoader.newInstance(mpClassName, MergePolicy.class);
-      SolrPluginUtils.invokeSetters(policy, pluginInfo.initArgs);
-      return policy;
+      String mpfClassName = pluginInfo.className;
+      MergePolicyFactoryArgs mpfArgs = pluginInfo.initArgs != null ?
+          new MergePolicyFactoryArgs(pluginInfo.initArgs) : new MergePolicyFactoryArgs();
+      MergePolicyFactory policyFactory = resourceLoader.newInstance(
+          mpfClassName,
+          MergePolicyFactory.class,
+          NO_SUB_PACKAGES,
+          new Class[] { SolrResourceLoader.class, MergePolicyFactoryArgs.class, IndexSchema.class },
+          new Object[] { resourceLoader, mpfArgs, schema });
+
+      return policyFactory.getMergePolicy();
     } else {
       return defaultMergePolicyFactory.getMergePolicy();
     }
