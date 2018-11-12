@@ -1617,11 +1617,17 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
         params.set(DISTRIB_UPDATE_PARAM, DistribPhase.FROMLEADER.toString());
         params.set(DISTRIB_FROM, ZkCoreNodeProps.getCoreUrl(
             zkController.getBaseUrl(), req.getCore().getName()));
+        //nocommit here's where we pass this on? params.set();
+        // rewriteAllSegmentdsOnForceMerge should be a constant somewhere.....
+        //nocommit, is this even right?
+        params.set("rewriteAllSegmentsOnForceMerge", cmd.getReq().getParams().getBool("rewriteAllSegmentsOnForceMerge", false));
+
         if (nodes != null) {
           cmdDistrib.distribCommit(cmd, nodes, params);
           finish();
         }
       }
+
     }
   }
 

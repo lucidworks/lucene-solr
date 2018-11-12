@@ -22,8 +22,10 @@ import org.apache.lucene.index.CodecReader;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.MergePolicy;
 import org.apache.lucene.index.SlowCodecReaderWrapper;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.index.TieredMergePolicy;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanClause.Occur;
@@ -564,6 +566,12 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
       try {
         IndexWriter writer = iw.get();
         if (cmd.optimize) {
+          MergePolicy mp = writer.getConfig().getMergePolicy();
+          if (mp instanceof TieredMergePolicy) {
+            //nocommit. This is hacky, what can we do here?
+            ((TieredMergePolicy)mp).setRewriteAllSegmentsOnForceMerge(
+                cmd.getReq().getParams().getBool("rewriteAllSegmentsOnForceMerge"));
+          }
           writer.forceMerge(cmd.maxOptimizeSegments);
         } else if (cmd.expungeDeletes) {
           writer.forceMergeDeletes();

@@ -269,7 +269,7 @@ public class TestTieredMergePolicy extends BaseMergePolicyTestCase {
     assertEquals("The segment should have no deleted documents", w.numDocs(), w.maxDoc());
 
 
-    // sanity check, at this point we should have an over`-large segment, we know we have exactly one.
+    // sanity check, at this point we should have an over-large segment, we know we have exactly one.
     assertTrue("Our single segment should have quite a few docs", w.numDocs() > 1_000);
 
     // Delete 60% of the documents and then add a few more docs and commit. This should "singleton merge" the large segment
@@ -502,6 +502,87 @@ public class TestTieredMergePolicy extends BaseMergePolicyTestCase {
     }
     r.close();
     w.close();
+    dir.close();
+  }
+
+  public void testRewriteAllSegments() throws Exception {
+    final Directory dir = newDirectory();
+    final IndexWriterConfig confBefore = newIndexWriterConfig(new MockAnalyzer(random()));
+    final TieredMergePolicy tmp = new TieredMergePolicy();
+
+    // Empirically, 100 docs the size below give us segments of 3,330 bytes. It's not all that reliable in terms
+    // of how big a segment _can_ get, so set it to prevent merges on commit.
+    double mbSize = 0.004;
+    long maxSegBytes = (long) ((1024.0 * 1024.0)); // fudge it up, we're trying to catch egregious errors and segbytes don't really reflect the number for original merges.
+    tmp.setMaxMergedSegmentMB(mbSize);
+    confBefore.setMaxBufferedDocs(100);
+    confBefore.setMergePolicy(tmp);
+
+    final IndexWriter iwNoRewrite = new IndexWriter(dir, confBefore);
+
+    final int numDocs = atLeast(400);
+    for (int i = 0; i < numDocs; i++) {
+      Document doc = new Document();
+      doc.add(newStringField("id", "" + i, Field.Store.NO));
+      doc.add(newTextField("content", "aaa " + i, Field.Store.NO));
+      iwNoRewrite.addDocument(doc);
+    }
+
+    iwNoRewrite.commit();
+    // At this point we should have some segments. Test several things:
+    // 1> if we forceMerge _without_ rewriting, we still have more than one segment
+    // 2> if we forceMerge again, nothing changes
+    // 3> if we specify rewrite, none of the segments we had when we started are still there.
+    // 4> if we forceMerge down to one segment, there's only one
+    // 5> if we forceMerge _again_, that one segment gets rewritten.
+
+    // 1> if we forceMerge _without_ rewriting, we still have more than one segment
+    iwNoRewrite.forceMerge(Integer.MAX_VALUE);
+    List<String> segNamesBefore = getSegmentNames(iwNoRewrite);
+    assertTrue("Should have more than one segment", segNamesBefore.size() > 1);
+
+
+    // 2> if we forceMerge again, nothing changes
+    iwNoRewrite.forceMerge(Integer.MAX_VALUE);
+    List<String> segNamesAfter = getSegmentNames(iwNoRewrite);
+    assertEquals("Segments should be unchanged", segNamesBefore.size(), segNamesAfter.size());
+    assertTrue("Segment should be identical before and  after", segNamesAfter.containsAll(segNamesBefore));
+    iwNoRewrite.close();
+
+    // 3> if we specify rewrite, none of the segments we had when we started are still there.
+    //    Segments could possibly have been merged however, so the sizes aren't necessarily the same.
+    final IndexWriterConfig confRewrite = newIndexWriterConfig(new MockAnalyzer(random()));
+    tmp.setMaxMergedSegmentMB(mbSize);
+    confRewrite.setMaxBufferedDocs(100);
+    confRewrite.setMergePolicy(tmp);
+
+    tmp.setRewriteAllSegmentsOnForceMerge(true);
+    confRewrite.setMergePolicy(tmp);
+    final IndexWriter iwRewrite = new IndexWriter(dir, confRewrite);
+    iwRewrite.forceMerge(Integer.MAX_VALUE);
+    segNamesAfter = getSegmentNames(iwRewrite);
+    int sizeAfter = segNamesAfter.size();
+    segNamesAfter.removeAll(segNamesBefore);
+    assertEquals("All segments should have been rewritten", segNamesAfter.size(), sizeAfter);
+
+    // 4> if we forceMerge down to one segment, there's only one
+    segNamesBefore = getSegmentNames(iwRewrite);
+    iwRewrite.forceMerge(1);
+    segNamesAfter = getSegmentNames(iwRewrite);
+    sizeAfter = segNamesAfter.size();
+    segNamesAfter.removeAll(segNamesBefore);
+    assertEquals("Should now be exactly one segment", segNamesAfter.size(), 1);
+    assertEquals("The single segment should not have the same name as any before it", segNamesAfter.size(), sizeAfter);
+
+    // 5> if we forceMerge _again_, that one segment gets rewritten.
+    segNamesBefore = getSegmentNames(iwRewrite);
+    iwRewrite.forceMerge(1);
+    segNamesAfter = getSegmentNames(iwRewrite);
+    segNamesAfter.removeAll(segNamesBefore);
+    assertEquals("Should now be exactly one segment", segNamesAfter.size(), 1);
+
+    iwRewrite.close();
+
     dir.close();
   }
 }
