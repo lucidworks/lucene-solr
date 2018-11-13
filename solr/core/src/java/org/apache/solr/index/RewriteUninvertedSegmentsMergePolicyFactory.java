@@ -42,9 +42,9 @@ import org.apache.solr.schema.SchemaField;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class RewriteUninvergedSegmentsMergePolicyFactory extends MergePolicyFactory {
+public class RewriteUninvertedSegmentsMergePolicyFactory extends MergePolicyFactory {
 
-  public RewriteUninvergedSegmentsMergePolicyFactory(SolrResourceLoader resourceLoader, MergePolicyFactoryArgs args, IndexSchema schema) {
+  public RewriteUninvertedSegmentsMergePolicyFactory(SolrResourceLoader resourceLoader, MergePolicyFactoryArgs args, IndexSchema schema) {
     super(resourceLoader, args, schema);
     //nocommit parse any arguments here.
     if (!args.keys().isEmpty()) {
