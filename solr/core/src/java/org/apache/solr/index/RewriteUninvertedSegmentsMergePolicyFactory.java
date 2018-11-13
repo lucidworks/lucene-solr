@@ -23,6 +23,7 @@ import java.lang.invoke.MethodHandles;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -43,6 +44,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class RewriteUninvertedSegmentsMergePolicyFactory extends MergePolicyFactory {
+
+  public static final String REWRITE_INFO_PROP = "rewriteInfo";
 
   public RewriteUninvertedSegmentsMergePolicyFactory(SolrResourceLoader resourceLoader, MergePolicyFactoryArgs args, IndexSchema schema) {
     super(resourceLoader, args, schema);
@@ -65,6 +68,8 @@ class RewriteUninvertedSegmentsMergePolicy extends TieredMergePolicy implements 
   private IndexSchema schema;
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
+  private String rewriteInfo;
+
   RewriteUninvertedSegmentsMergePolicy(IndexSchema schema) {
     this.schema = schema;
   }
@@ -74,6 +79,8 @@ class RewriteUninvertedSegmentsMergePolicy extends TieredMergePolicy implements 
     //nocommit
     // Need to get a reader for this segment
     try (SegmentReader reader = new SegmentReader(info, IOContext.DEFAULT)) {
+      StringBuilder fieldsToRewrite = new StringBuilder();
+      boolean shouldRewrite = false;
       for (Map.Entry<String, SchemaField> ent : schema.getFields().entrySet()) {
         SchemaField sf = ent.getValue();
         FieldInfo fi = reader.getFieldInfos().fieldInfo(ent.getKey());
@@ -81,15 +88,26 @@ class RewriteUninvertedSegmentsMergePolicy extends TieredMergePolicy implements 
             sf.hasDocValues() &&
             fi.getDocValuesType() == DocValuesType.NONE &&
             fi.getIndexOptions() != IndexOptions.NONE) {
-          return true;
+          shouldRewrite = true;
+          if (fieldsToRewrite.length() > 0) {
+            fieldsToRewrite.append(' ');
+          }
+          fieldsToRewrite.append(fi.name);
         }
       }
+      if (shouldRewrite) {
+        // nocommit not sure about the concurrency here
+        rewriteInfo = fieldsToRewrite.toString();
+      } else {
+        rewriteInfo = null;
+      }
+      return shouldRewrite;
     } catch (IOException e) {
       //nocommit, this may lead to a lot of work.
       log.warn("Could not get a reader for field {}, will rewrite segment", info.toString());
+
       return true;
     }
-    return false;
   }
 
   @Override
@@ -105,11 +123,33 @@ class RewriteUninvertedSegmentsMergePolicy extends TieredMergePolicy implements 
       if (isOriginal == null || isOriginal == false || merging.contains(info)) {
       } else {
         if (shouldRewrite(info)) {
-          spec.add(new OneMerge(Collections.singletonList(info)));
+          spec.add(new RewriteInfoOneMerge(Collections.singletonList(info), rewriteInfo));
         }
       }
     }
     return (spec.merges.size() == 0) ? null : spec;
+  }
+}
+
+class RewriteInfoOneMerge extends MergePolicy.OneMerge {
+
+  private final String rewriteInfo;
+  /**
+   * Sole constructor.
+   *
+   * @param segments List of {@link SegmentCommitInfo}s
+   *                 to be merged.
+   * @param rewriteInfo diagnostic information about the reason for rewrite
+   */
+  public RewriteInfoOneMerge(List<SegmentCommitInfo> segments, String rewriteInfo) {
+    super(segments);
+    this.rewriteInfo = rewriteInfo;
+  }
+
+  @Override
+  public void setMergeInfo(SegmentCommitInfo info) {
+    info.info.getDiagnostics().put(RewriteUninvertedSegmentsMergePolicyFactory.REWRITE_INFO_PROP, rewriteInfo);
+    super.setMergeInfo(info);
   }
 }
 
