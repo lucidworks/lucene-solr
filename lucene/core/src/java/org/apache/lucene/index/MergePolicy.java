@@ -158,7 +158,7 @@ public abstract class MergePolicy {
       final List<CodecReader> readers = new ArrayList<>(this.readers.size());
       for (SegmentReader reader : this.readers) {
         if (reader.numDocs() > 0) {
-          readers.add(reader);
+          readers.add(wrapForMerge(reader));
         }
       }
       return Collections.unmodifiableList(readers);

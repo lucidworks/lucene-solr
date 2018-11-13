@@ -104,9 +104,9 @@ public class UninvertDocValuesMergePolicyFactory extends WrapperMergePolicyFacto
       // Schema says there should be
 
 
-      Map<String,UninvertingReader.Type> uninversionMap = null;
+      Map<String, UninvertingReader.Type> uninversionMap = null;
 
-      for(FieldInfo fi: reader.getFieldInfos()) {
+      for (FieldInfo fi: reader.getFieldInfos()) {
         final UninvertingReader.Type type = getUninversionType(fi);
         if (type != null) {
           if (uninversionMap == null) {
@@ -189,10 +189,9 @@ public class UninvertDocValuesMergePolicyFactory extends WrapperMergePolicyFacto
           return 0;
         }
 
-        //nocommit I'm _really_ unsure about this
         @Override
         public Bits getDocsWithField(FieldInfo field) throws IOException {
-          return in.getDocsWithField(field.name);
+          return uninvertingReader.getDocsWithField(field.name);
         }
 
 
@@ -216,16 +215,15 @@ public class UninvertDocValuesMergePolicyFactory extends WrapperMergePolicyFacto
       return uninvertingReader.getFieldInfos();
     }
 
-    // nocommit safe to remove?
-//    @Override
-//    public CacheHelper getCoreCacheHelper() {
-//      return in.getCoreCacheHelper();
-//    }
-//
-//    @Override
-//    public CacheHelper getReaderCacheHelper() {
-//      return in.getReaderCacheHelper();
-//    }
+    @Override
+    public Object getCoreCacheKey() {
+      return in.getCoreCacheKey();
+    }
+
+    @Override
+    public Object getCombinedCoreAndDeletesKey() {
+      return in.getCombinedCoreAndDeletesKey();
+    }
 
   }
 
