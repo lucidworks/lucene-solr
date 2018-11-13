@@ -18,6 +18,7 @@ package org.apache.solr.index;
  */
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -122,9 +123,17 @@ public class UninvertDocValuesMergePolicyFactory extends WrapperMergePolicyFacto
       } else {
         return new UninvertingFilterCodecReader(reader, uninversionMap);
       }
-
     }
 
+    @Override
+    public List<CodecReader> getMergeReaders() throws IOException {
+      List<CodecReader> mergeReaders = super.getMergeReaders();
+      List<CodecReader> newMergeReaders = new ArrayList<>(mergeReaders.size());
+      for (CodecReader r : mergeReaders) {
+        newMergeReaders.add(wrapForMerge(r));
+      }
+      return newMergeReaders;
+    }
   }
 
 
