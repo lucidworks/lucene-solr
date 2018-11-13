@@ -91,8 +91,6 @@ public class TieredMergePolicy extends MergePolicy {
 
   private double deletesPctAllowed = 33.0;
 
-  private boolean rewriteAllSegmentsOnForceMerge = false;
-
   /** Sole constructor, setting all settings to their
    *  defaults. */
   public TieredMergePolicy() {
@@ -176,23 +174,6 @@ public class TieredMergePolicy extends MergePolicy {
     }
     reclaimDeletesWeight = v;
     return this;
-  }
-
-  /**
-   * Expert: Force all segments to be rewritten on optimize even if they are already max size and have no deletes
-   * Primarily used to transform all segments, say when wrapping TMP in UpgradeIndexMergePolicy or
-   * UninvertDocValuesMergePolicyFactory
-   * <p>
-   * This should be used only when, say, adding docValues to an existing index or other situations where it's
-   * required that all segments are rewritten (and perhaps modified).
-   */
-  public TieredMergePolicy setRewriteAllSegmentsOnForceMerge(boolean v) {
-    rewriteAllSegmentsOnForceMerge = v;
-    return this;
-  }
-
-  public boolean getRewriteAllSegmentsOnForceMerge() {
-    return rewriteAllSegmentsOnForceMerge;
   }
 
   /** See {@link #setReclaimDeletesWeight}. */
@@ -541,7 +522,7 @@ public class TieredMergePolicy extends MergePolicy {
         assert candidate.size() > 0;
 
         // A singleton merge with no deletes makes no sense. We can get here when forceMerge is looping around...
-        if (candidate.size() == 1 && rewriteAllSegmentsOnForceMerge == false) {
+        if (candidate.size() == 1) {
           SegmentSizeAndDocs segSizeDocs = segInfosSizes.get(candidate.get(0));
           if (segSizeDocs.delCount == 0) {
             continue;
@@ -711,18 +692,14 @@ public class TieredMergePolicy extends MergePolicy {
         if (isOriginal != null && isOriginal) {
           foundDeletes = true;
         }
-        if (rewriteAllSegmentsOnForceMerge == false) {
-          continue;
-        }
+        continue;
       }
       // Let the scoring handle whether to merge large segments.
       if (maxSegmentCount == Integer.MAX_VALUE && isOriginal != null && isOriginal == false) {
         iter.remove();
       }
       // Don't try to merge a segment with no deleted docs that's over the max size.
-      if (maxSegmentCount != Integer.MAX_VALUE &&
-          segSizeDocs.sizeInBytes >= maxMergeBytes &&
-          rewriteAllSegmentsOnForceMerge == false) {
+      if (maxSegmentCount != Integer.MAX_VALUE && segSizeDocs.sizeInBytes >= maxMergeBytes) {
         iter.remove();
       }
     }
@@ -735,21 +712,13 @@ public class TieredMergePolicy extends MergePolicy {
     // We should never bail if there are segments that have deleted documents, all deleted docs should be purged.
     if (foundDeletes == false) {
       SegmentCommitInfo infoZero = sortedSizeAndDocs.get(0).segInfo;
-      // Handle the special case of forced rewrites
-      if (rewriteAllSegmentsOnForceMerge) {
-        Boolean isOriginal = segmentsToMerge.get(infoZero);
-        if (isOriginal == null || isOriginal == false) {
-          return null;
+      if ((maxSegmentCount != Integer.MAX_VALUE && maxSegmentCount > 1 && sortedSizeAndDocs.size() <= maxSegmentCount) ||
+          (maxSegmentCount == 1 && sortedSizeAndDocs.size() == 1 &&
+              (segmentsToMerge.get(infoZero) != null || isMerged(infos, infoZero, writer)))) {
+        if (verbose(writer)) {
+          message("already merged", writer);
         }
-      } else {
-        if ((maxSegmentCount != Integer.MAX_VALUE && maxSegmentCount > 1 && sortedSizeAndDocs.size() <= maxSegmentCount) ||
-            (maxSegmentCount == 1 && sortedSizeAndDocs.size() == 1 &&
-                (segmentsToMerge.get(infoZero) != null || isMerged(infos, infoZero, writer)))) {
-          if (verbose(writer)) {
-            message("already merged", writer);
-          }
-          return null;
-        }
+        return null;
       }
     }
 
@@ -841,7 +810,6 @@ public class TieredMergePolicy extends MergePolicy {
     sb.append("segmentsPerTier=").append(segsPerTier).append(", ");
     sb.append("maxCFSSegmentSizeMB=").append(getMaxCFSSegmentSizeMB()).append(", ");
     sb.append("noCFSRatio=").append(noCFSRatio);
-    sb.append("rewriteAllSegmentsOnForceMerge=").append(rewriteAllSegmentsOnForceMerge);
     return sb.toString();
   }
 }
