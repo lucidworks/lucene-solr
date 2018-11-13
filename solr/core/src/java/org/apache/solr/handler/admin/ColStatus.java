@@ -21,6 +21,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.apache.http.client.HttpClient;
 import org.apache.solr.client.solrj.SolrClient;
@@ -87,8 +89,9 @@ public class ColStatus {
       colMap.add("inactiveSlices", coll.getSlices().size() - coll.getActiveSlices().size());
       results.add(collection, colMap);
 
+      Set<String> nonCompliant = new TreeSet<>();
+
       SimpleOrderedMap<Object> slices = new SimpleOrderedMap<>();
-      colMap.add("slices", slices);
       for (Slice s : coll.getSlices()) {
         SimpleOrderedMap<Object> sliceMap = new SimpleOrderedMap<>();
         slices.add(s.getName(), sliceMap);
@@ -146,11 +149,24 @@ public class ColStatus {
           NamedList<Object> rsp = client.request(req);
           rsp.remove("responseHeader");
           leaderMap.add("segInfos", rsp);
+          NamedList<Object> segs = (NamedList<Object>)rsp.get("segments");
+          for (Map.Entry<String, Object> entry : segs) {
+            NamedList<Object> fields = (NamedList<Object>)((NamedList<Object>)entry.getValue()).get("fields");
+            for (Map.Entry<String, Object> fEntry : fields) {
+              Object nc = ((NamedList<Object>)fEntry.getValue()).get("nonCompliant");
+              if (nc != null) {
+                nonCompliant.add(fEntry.getKey());
+              }
+            }
+          }
         } catch (SolrServerException | IOException e) {
           log.warn("Error getting details of replica segments from " + url, e);
         }
       }
+      if (!nonCompliant.isEmpty()) {
+        colMap.add("schemaNonCompliant", nonCompliant);
+      }
+      colMap.add("slices", slices);
     }
-
   }
 }

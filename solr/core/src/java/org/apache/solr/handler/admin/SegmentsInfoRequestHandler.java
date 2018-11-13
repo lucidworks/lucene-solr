@@ -29,6 +29,8 @@ import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.handler.RequestHandlerBase;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
+import org.apache.solr.schema.IndexSchema;
+import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.apache.solr.util.RefCounted;
 import org.slf4j.Logger;
@@ -72,6 +74,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
   private void getSegmentsInfo(SolrQueryRequest req, SolrQueryResponse rsp)
       throws Exception {
     SolrIndexSearcher searcher = req.getSearcher();
+    IndexSchema schema = req.getSchema();
 
     SegmentInfos infos =
         SegmentInfos.readLatestCommit(searcher.getIndexReader().directory());
@@ -96,7 +99,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
 
     List<LeafReaderContext> leafContexts = searcher.getIndexReader().leaves();
     for (SegmentCommitInfo segmentCommitInfo : infos) {
-      segmentInfo = getSegmentInfo(segmentCommitInfo, withFieldInfos, leafContexts);
+      segmentInfo = getSegmentInfo(segmentCommitInfo, withFieldInfos, leafContexts, schema);
       if (mergeCandidates.contains(segmentCommitInfo.info.name)) {
         segmentInfo.add("mergeCandidate", true);
       }
@@ -108,7 +111,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
   }
 
   private SimpleOrderedMap<Object> getSegmentInfo(
-      SegmentCommitInfo segmentCommitInfo, boolean withFieldInfos, List<LeafReaderContext> leafContexts) throws IOException {
+      SegmentCommitInfo segmentCommitInfo, boolean withFieldInfos, List<LeafReaderContext> leafContexts, IndexSchema schema) throws IOException {
     SimpleOrderedMap<Object> segmentInfoMap = new SimpleOrderedMap<>();
 
     segmentInfoMap.add(NAME, segmentCommitInfo.info.name);
@@ -149,7 +152,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
         FieldInfos fis = seg.getFieldInfos();
         SimpleOrderedMap<Object> fields = new SimpleOrderedMap<>();
         for (FieldInfo fi : fis) {
-          fields.add(fi.name, getFieldFlags(fi));
+          fields.add(fi.name, getFieldFlags(fi, schema));
         }
         segmentInfoMap.add("fields", fields);
       }
@@ -158,7 +161,9 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
     return segmentInfoMap;
   }
 
-  private String getFieldFlags(FieldInfo fi) {
+  private SimpleOrderedMap<Object> getFieldFlags(FieldInfo fi, IndexSchema schema) {
+
+    SimpleOrderedMap<Object> fieldFlags = new SimpleOrderedMap<>();
     StringBuilder flags = new StringBuilder();
 
     IndexOptions opts = fi.getIndexOptions();
@@ -198,12 +203,46 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
     flags.append((DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS == opts) ?
         FieldFlag.STORE_OFFSETS_WITH_POSITIONS.getAbbreviation() : '-');
 
+    fieldFlags.add("flags", flags.toString());
+
+    // probably too much detail?
 //    Map<String, String> attributes = fi.attributes();
 //    if (!attributes.isEmpty()) {
-//      flags.append(attributes.toString());
+//      fieldFlags.add("attributes", attributes);
 //    }
-    return flags.toString();
+    // check compliance with the current schema
+    SchemaField sf = schema.getFieldOrNull(fi.name);
 
+    if (sf != null) {
+      SimpleOrderedMap<Object> nonCompliant = new SimpleOrderedMap<>();
+      if (sf.hasDocValues() &&
+          fi.getDocValuesType() == DocValuesType.NONE &&
+          fi.getIndexOptions() != IndexOptions.NONE) {
+        nonCompliant.add("docValues", "schema=" + sf.getType().getUninversionType(sf) + ", segment=false");
+      }
+      if (!sf.hasDocValues() &&
+          fi.getDocValuesType() != DocValuesType.NONE &&
+          fi.getIndexOptions() != IndexOptions.NONE) {
+        nonCompliant.add("docValues", "schema=false, segment=" + fi.getDocValuesType().toString());
+      }
+      if (sf.indexed() != (fi.getIndexOptions() != IndexOptions.NONE)) {
+        nonCompliant.add("indexed", "schema=" + sf.indexed() + ", segment=" + fi.getIndexOptions());
+      }
+      if (sf.omitNorms() != fi.omitsNorms()) {
+        nonCompliant.add("omitNorms", "schema=" + sf.omitNorms() + ", segment=" + fi.omitsNorms());
+      }
+      if (sf.storeTermVector() != fi.hasVectors()) {
+        nonCompliant.add("termVectors", "schema=" + sf.storeTermVector() + ", segment=" + fi.hasVectors());
+      }
+      if (sf.storeOffsetsWithPositions() != (fi.getIndexOptions() == IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS)) {
+        nonCompliant.add("storeOffsetsWithPositions", "schema=" + sf.storeOffsetsWithPositions() + ", segment=" + fi.getIndexOptions());
+      }
+
+      if (nonCompliant.size() > 0) {
+        fieldFlags.add("nonCompliant", nonCompliant);
+      }
+    }
+    return fieldFlags;
   }
 
   private List<String> getMergeCandidatesNames(SolrQueryRequest req, SegmentInfos infos) throws IOException {
