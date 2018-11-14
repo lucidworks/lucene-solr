@@ -81,10 +81,13 @@ class AddDocValuesMergePolicy extends TieredMergePolicy implements RewriteSegmen
     try (SegmentReader reader = new SegmentReader(info, IOContext.DEFAULT)) {
       StringBuilder fieldsToRewrite = new StringBuilder();
       boolean shouldRewrite = false;
+      // nocommit should this iterate over the reader's fields instead?
+      // maybe not - iterating over schema fields makes it easier in the future
+      // to synthesize other missing reader's fields
       for (Map.Entry<String, SchemaField> ent : schema.getFields().entrySet()) {
         SchemaField sf = ent.getValue();
         FieldInfo fi = reader.getFieldInfos().fieldInfo(ent.getKey());
-        if (null != sf &&
+        if (null != sf && fi != null &&
             sf.hasDocValues() &&
             fi.getDocValuesType() == DocValuesType.NONE &&
             fi.getIndexOptions() != IndexOptions.NONE) {

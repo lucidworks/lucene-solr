@@ -756,18 +756,21 @@ public class ZkStateReader implements Closeable {
             if (properties.get(propertyName) != null) {
               properties.remove(propertyName);
               getZkClient().setData(CLUSTER_PROPS, Utils.toJSON(properties), s.getVersion(), true);
+              log.info("-- updated clusterprops: " + properties);
             }
           } else {
             //Don't update ZK unless absolutely necessary.
             if (!propertyValue.equals(properties.get(propertyName))) {
               properties.put(propertyName, propertyValue);
               getZkClient().setData(CLUSTER_PROPS, Utils.toJSON(properties), s.getVersion(), true);
+              log.info("-- updated clusterprops: " + properties);
             }
           }
         } else {
           Map properties = new LinkedHashMap();
           properties.put(propertyName, propertyValue);
           getZkClient().create(CLUSTER_PROPS, Utils.toJSON(properties), CreateMode.PERSISTENT, true);
+          log.info("-- created clusterprops: " + properties);
         }
       } catch (KeeperException.BadVersionException bve) {
         log.warn("Race condition while trying to set a new cluster prop on current version " + s.getVersion());

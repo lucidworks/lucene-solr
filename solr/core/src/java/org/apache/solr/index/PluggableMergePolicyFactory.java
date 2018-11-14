@@ -58,6 +58,7 @@ public class PluggableMergePolicyFactory extends SimpleMergePolicyFactory implem
     // we can safely assume here that our loader is ZK enabled
     ZkStateReader zkStateReader = ((ZkSolrResourceLoader)resourceLoader).getZkController().getZkStateReader();
     Map<String, Object> clusterProps = zkStateReader.getClusterProps();
+    log.info("-- clusterprops: " + clusterProps);
     String propName = MERGE_POLICY_PROP + cd.getCollectionName();
     Object o = clusterProps.get(propName);
     if (o == null) {

@@ -28,6 +28,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -46,9 +47,11 @@ import org.apache.solr.client.solrj.embedded.JettySolrRunner;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
+import org.apache.solr.client.solrj.request.CoreAdminRequest;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.response.CollectionAdminResponse;
+import org.apache.solr.client.solrj.response.CoreAdminResponse;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
@@ -832,6 +835,67 @@ public abstract class AbstractFullDistribZkTestBase extends AbstractDistribZkTes
       throws Exception {
     ZkStateReader zkStateReader = cloudClient.getZkStateReader();
     super.waitForRecoveriesToFinish(DEFAULT_COLLECTION, zkStateReader, verbose, true, timeoutSeconds);
+  }
+
+  protected boolean waitForReloads(String collectionName, CloudSolrClient cloudClient, Map<String,Long> urlToTimeBefore) throws SolrServerException, IOException {
+
+
+    long timeoutAt = System.currentTimeMillis() + 45000;
+
+    boolean allTimesAreCorrect = false;
+    while (System.currentTimeMillis() < timeoutAt) {
+      Map<String,Long> urlToTimeAfter = new HashMap<>();
+      collectStartTimes(collectionName, cloudClient, urlToTimeAfter);
+
+      boolean retry = false;
+      Set<Entry<String,Long>> entries = urlToTimeBefore.entrySet();
+      for (Entry<String,Long> entry : entries) {
+        Long beforeTime = entry.getValue();
+        Long afterTime = urlToTimeAfter.get(entry.getKey());
+        assertNotNull(afterTime);
+        if (afterTime <= beforeTime) {
+          retry = true;
+          break;
+        }
+
+      }
+      if (!retry) {
+        allTimesAreCorrect = true;
+        break;
+      }
+    }
+    return allTimesAreCorrect;
+  }
+
+  protected void collectStartTimes(String collectionName, CloudSolrClient cloudClient,
+                                       Map<String,Long> urlToTime) throws SolrServerException, IOException {
+    ClusterState clusterState = cloudClient.getZkStateReader()
+        .getClusterState();
+//    Map<String,DocCollection> collections = clusterState.getCollectionStates();
+    if (clusterState.hasCollection(collectionName)) {
+      Map<String,Slice> slices = clusterState.getSlicesMap(collectionName);
+
+      Iterator<Entry<String,Slice>> it = slices.entrySet().iterator();
+      while (it.hasNext()) {
+        Entry<String,Slice> sliceEntry = it.next();
+        Map<String,Replica> sliceShards = sliceEntry.getValue().getReplicasMap();
+        Iterator<Entry<String,Replica>> shardIt = sliceShards.entrySet()
+            .iterator();
+        while (shardIt.hasNext()) {
+          Entry<String,Replica> shardEntry = shardIt.next();
+          ZkCoreNodeProps coreProps = new ZkCoreNodeProps(shardEntry.getValue());
+          CoreAdminResponse mcr;
+          try (HttpSolrClient server = new HttpSolrClient(coreProps.getBaseUrl())) {
+            mcr = CoreAdminRequest.getStatus(coreProps.getCoreName(), server);
+          }
+          long before = mcr.getStartTime(coreProps.getCoreName()).getTime();
+          urlToTime.put(coreProps.getCoreUrl(), before);
+        }
+      }
+    } else {
+      throw new IllegalArgumentException("Could not find collection in :"
+          + clusterState.getCollections());
+    }
   }
 
   protected void checkQueries() throws Exception {

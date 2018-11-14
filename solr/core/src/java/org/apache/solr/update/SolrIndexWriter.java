@@ -103,6 +103,7 @@ public class SolrIndexWriter extends IndexWriter {
   @Override
   public void merge(MergePolicy.OneMerge merge) throws IOException {
     String segString = merge.segString();
+    log.info("-- merge: " + segString);
     int numDocs = merge.totalNumDocs();
     runningMerges.put(segString, numDocs);
     try {

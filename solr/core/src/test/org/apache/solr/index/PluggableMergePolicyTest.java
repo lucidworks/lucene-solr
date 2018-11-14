@@ -32,7 +32,7 @@ public class PluggableMergePolicyTest extends AbstractFullDistribZkTestBase {
   }
 
   @Test
-  public void test() throws Exception {
+  public void testConfigChange() throws Exception {
     String collectionName = "pluggableMPF_test";
     CollectionAdminRequest.Create createCollectionRequest = new CollectionAdminRequest.Create()
         .setCollectionName(collectionName)
@@ -87,16 +87,19 @@ public class PluggableMergePolicyTest extends AbstractFullDistribZkTestBase {
 
     // reloaded cores will be more recent that this time
     long startTime = System.currentTimeMillis();
+    Map<String, Long> urlToTimeBefore = new HashMap<>();
+    collectStartTimes(collectionName, cloudClient, urlToTimeBefore);
 
     // reload the collection
     CollectionAdminRequest<CollectionAdminRequest.Reload> reload = new CollectionAdminRequest.Reload()
         .setCollectionName(collectionName);
     reload.process(cloudClient);
 
-    Thread.sleep(5000);
+    boolean reloaded = waitForReloads(collectionName, cloudClient, urlToTimeBefore);
+    assertTrue("not reloaded in time", reloaded);
 
     UpdateRequest ureq = new UpdateRequest();
-    for (int i = 0; i < 100; i++) {
+    for (int i = 100; i < 200; i++) {
       SolrInputDocument doc = new SolrInputDocument();
       doc.addField("id", i);
       ureq.add(doc);
@@ -106,21 +109,17 @@ public class PluggableMergePolicyTest extends AbstractFullDistribZkTestBase {
 
 
     core = null;
-    int count = 10;
-OUTER:    while (count-- > 0) {
-      Thread.sleep(5000);
-      for (JettySolrRunner jetty : jettys) {
-        CoreContainer cores = ((SolrDispatchFilter)jetty.getDispatchFilter().getFilter()).getCores();
-        Iterator<SolrCore> solrCores = cores.getCores().iterator();
-        while (solrCores.hasNext()) {
-          SolrCore c = solrCores.next();
-          if (c.getCoreDescriptor().getCloudDescriptor() != null &&
-              c.getCoreDescriptor().getCloudDescriptor().getCollectionName().equals(collectionName)) {
-            // consider only a core that was already reloaded
-            if (c.getStartTime() > startTime) {
-              core = c;
-              break OUTER;
-            }
+    OUTER: for (JettySolrRunner jetty : jettys) {
+      CoreContainer cores = ((SolrDispatchFilter)jetty.getDispatchFilter().getFilter()).getCores();
+      Iterator<SolrCore> solrCores = cores.getCores().iterator();
+      while (solrCores.hasNext()) {
+        SolrCore c = solrCores.next();
+        if (c.getCoreDescriptor().getCloudDescriptor() != null &&
+            c.getCoreDescriptor().getCloudDescriptor().getCollectionName().equals(collectionName)) {
+          // consider only a core that was already reloaded
+          if (c.getStartTime() > startTime) {
+            core = c;
+            break OUTER;
           }
         }
       }
@@ -137,4 +136,5 @@ OUTER:    while (count-- > 0) {
       writerRef.decref();
     }
   }
+
 }

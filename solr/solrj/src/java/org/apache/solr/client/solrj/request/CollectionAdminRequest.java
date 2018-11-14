@@ -317,6 +317,8 @@ public abstract class CollectionAdminRequest <Q extends CollectionAdminRequest<Q
   // DELETE request
   public static class ColStatus extends CollectionSpecificAdminRequest<ColStatus> {
     protected String collection = null;
+    protected Boolean withSegments = null;
+    protected Boolean withFieldInfos = null;
 
     public ColStatus() {
       action = CollectionAction.COLSTATUS;
@@ -325,6 +327,28 @@ public abstract class CollectionAdminRequest <Q extends CollectionAdminRequest<Q
     @Override
     protected ColStatus getThis() {
       return this;
+    }
+
+    public ColStatus setWithSegments(boolean withSegments) {
+      this.withSegments = withSegments;
+      return this;
+    }
+
+    public ColStatus setWithFieldInfos(boolean withFieldInfos) {
+      this.withFieldInfos = withFieldInfos;
+      return this;
+    }
+
+    @Override
+    public SolrParams getParams() {
+      ModifiableSolrParams params = (ModifiableSolrParams)super.getParams();
+      if (withSegments != null) {
+        params.add("segments", withSegments.toString());
+      }
+      if (withFieldInfos != null) {
+        params.add("fieldInfos", withFieldInfos.toString());
+      }
+      return params;
     }
   }
 

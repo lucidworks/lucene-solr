@@ -31,7 +31,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -731,7 +730,7 @@ public class CollectionsAPIDistributedZkTest extends AbstractFullDistribZkTestBa
     
     // get core open times
     Map<String,Long> urlToTimeBefore = new HashMap<>();
-    collectStartTimes(collectionName, urlToTimeBefore);
+    collectStartTimes(collectionName, getCommonCloudSolrClient(), urlToTimeBefore);
     assertTrue(urlToTimeBefore.size() > 0);
     ModifiableSolrParams params = new ModifiableSolrParams();
     params.set("action", CollectionAction.RELOAD.toString());
@@ -745,7 +744,7 @@ public class CollectionsAPIDistributedZkTest extends AbstractFullDistribZkTestBa
     makeRequest(baseUrl, request);
 
     // reloads make take a short while
-    boolean allTimesAreCorrect = waitForReloads(collectionName, urlToTimeBefore);
+    boolean allTimesAreCorrect = waitForReloads(collectionName, getCommonCloudSolrClient(), urlToTimeBefore);
     assertTrue("some core start times did not change on reload", allTimesAreCorrect);
     
     
@@ -930,67 +929,6 @@ public class CollectionsAPIDistributedZkTest extends AbstractFullDistribZkTestBa
 
       assertTrue("Expected: " + expected + "\nFrom core stats: " + reported, Files.isSameFile(expected, reported));
 
-    }
-  }
-
-  private boolean waitForReloads(String collectionName, Map<String,Long> urlToTimeBefore) throws SolrServerException, IOException {
-    
-    
-    long timeoutAt = System.currentTimeMillis() + 45000;
-
-    boolean allTimesAreCorrect = false;
-    while (System.currentTimeMillis() < timeoutAt) {
-      Map<String,Long> urlToTimeAfter = new HashMap<>();
-      collectStartTimes(collectionName, urlToTimeAfter);
-      
-      boolean retry = false;
-      Set<Entry<String,Long>> entries = urlToTimeBefore.entrySet();
-      for (Entry<String,Long> entry : entries) {
-        Long beforeTime = entry.getValue();
-        Long afterTime = urlToTimeAfter.get(entry.getKey());
-        assertNotNull(afterTime);
-        if (afterTime <= beforeTime) {
-          retry = true;
-          break;
-        }
-
-      }
-      if (!retry) {
-        allTimesAreCorrect = true;
-        break;
-      }
-    }
-    return allTimesAreCorrect;
-  }
-
-  private void collectStartTimes(String collectionName,
-      Map<String,Long> urlToTime) throws SolrServerException, IOException {
-    ClusterState clusterState = getCommonCloudSolrClient().getZkStateReader()
-        .getClusterState();
-//    Map<String,DocCollection> collections = clusterState.getCollectionStates();
-    if (clusterState.hasCollection(collectionName)) {
-      Map<String,Slice> slices = clusterState.getSlicesMap(collectionName);
-
-      Iterator<Entry<String,Slice>> it = slices.entrySet().iterator();
-      while (it.hasNext()) {
-        Entry<String,Slice> sliceEntry = it.next();
-        Map<String,Replica> sliceShards = sliceEntry.getValue().getReplicasMap();
-        Iterator<Entry<String,Replica>> shardIt = sliceShards.entrySet()
-            .iterator();
-        while (shardIt.hasNext()) {
-          Entry<String,Replica> shardEntry = shardIt.next();
-          ZkCoreNodeProps coreProps = new ZkCoreNodeProps(shardEntry.getValue());
-          CoreAdminResponse mcr;
-          try (HttpSolrClient server = new HttpSolrClient(coreProps.getBaseUrl())) {
-            mcr = CoreAdminRequest.getStatus(coreProps.getCoreName(), server);
-          }
-          long before = mcr.getStartTime(coreProps.getCoreName()).getTime();
-          urlToTime.put(coreProps.getCoreUrl(), before);
-        }
-      }
-    } else {
-      throw new IllegalArgumentException("Could not find collection in :"
-          + clusterState.getCollections());
     }
   }
 

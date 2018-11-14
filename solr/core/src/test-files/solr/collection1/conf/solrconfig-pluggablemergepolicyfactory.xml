@@ -20,7 +20,10 @@
 <config>
   <luceneMatchVersion>${tests.luceneMatchVersion:LATEST}</luceneMatchVersion>
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
+  <!-- allow editable schema -->
+  <schemaFactory class="ManagedIndexSchemaFactory">
+    <bool name="mutable">true</bool>
+  </schemaFactory>
 
   <indexConfig>
     <useCompoundFile>${useCompoundFile:false}</useCompoundFile>
