@@ -99,10 +99,13 @@ public class NRTCachingDirectory extends FilterDirectory implements Accountable 
       files.add(f);
     }
     for(String f : in.listAll()) {
-      if (!files.add(f)) {
-        throw new IllegalStateException("file: " + in + " appears both in delegate and in cache: " +
-                                        "cache=" + Arrays.toString(cache.listAll()) + ",delegate=" + Arrays.toString(in.listAll()));
-      }
+      files.add(f);
+
+      // see LUCENE-7188
+//      if (!files.add(f)) {
+//        throw new IllegalStateException("file: " + in + " appears both in delegate and in cache: " +
+//                                        "cache=" + Arrays.toString(cache.listAll()) + ",delegate=" + Arrays.toString(in.listAll()));
+//      }
     }
     return files.toArray(new String[files.size()]);
   }
