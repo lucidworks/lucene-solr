@@ -18,12 +18,16 @@
 package org.apache.solr.update;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.index.IndexDeletionPolicy;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.MergePolicy;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.InfoStream;
 import org.apache.solr.common.util.IOUtils;
@@ -56,6 +60,10 @@ public class SolrIndexWriter extends IndexWriter {
   private DirectoryFactory directoryFactory;
   private InfoStream infoStream;
   private Directory directory;
+
+  // merge diagnostics.
+  // XXX should use Long to avoid overflows
+  private final Map<String, Integer> runningMerges = new ConcurrentHashMap<>();
 
   public static SolrIndexWriter create(SolrCore core, String name, String path, DirectoryFactory directoryFactory, boolean create, IndexSchema schema, SolrIndexConfig config, IndexDeletionPolicy delPolicy, Codec codec) throws IOException {
 
@@ -90,6 +98,22 @@ public class SolrIndexWriter extends IndexWriter {
   
   private void setDirectoryFactory(DirectoryFactory factory) {
     this.directoryFactory = factory;
+  }
+
+  @Override
+  public void merge(MergePolicy.OneMerge merge) throws IOException {
+    String segString = merge.segString();
+    int numDocs = merge.totalNumDocs();
+    runningMerges.put(segString, numDocs);
+    try {
+      super.merge(merge);
+    } finally {
+      runningMerges.remove(segString);
+    }
+  }
+
+  public Map<String, Integer> getRunningMerges() {
+    return Collections.unmodifiableMap(runningMerges);
   }
 
   /**

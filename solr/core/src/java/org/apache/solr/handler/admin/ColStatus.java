@@ -150,12 +150,16 @@ public class ColStatus {
           rsp.remove("responseHeader");
           leaderMap.add("segInfos", rsp);
           NamedList<Object> segs = (NamedList<Object>)rsp.get("segments");
-          for (Map.Entry<String, Object> entry : segs) {
-            NamedList<Object> fields = (NamedList<Object>)((NamedList<Object>)entry.getValue()).get("fields");
-            for (Map.Entry<String, Object> fEntry : fields) {
-              Object nc = ((NamedList<Object>)fEntry.getValue()).get("nonCompliant");
-              if (nc != null) {
-                nonCompliant.add(fEntry.getKey());
+          if (segs != null) {
+            for (Map.Entry<String, Object> entry : segs) {
+              NamedList<Object> fields = (NamedList<Object>)((NamedList<Object>)entry.getValue()).get("fields");
+              if (fields != null) {
+                for (Map.Entry<String, Object> fEntry : fields) {
+                  Object nc = ((NamedList<Object>)fEntry.getValue()).get("nonCompliant");
+                  if (nc != null) {
+                    nonCompliant.add(fEntry.getKey());
+                  }
+                }
               }
             }
           }
@@ -163,9 +167,10 @@ public class ColStatus {
           log.warn("Error getting details of replica segments from " + url, e);
         }
       }
-      if (!nonCompliant.isEmpty()) {
-        colMap.add("schemaNonCompliant", nonCompliant);
+      if (nonCompliant.isEmpty()) {
+        nonCompliant.add("(NONE)");
       }
+      colMap.add("schemaNonCompliant", nonCompliant);
       colMap.add("slices", slices);
     }
   }

@@ -32,6 +32,7 @@ import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.SolrIndexSearcher;
+import org.apache.solr.update.SolrIndexWriter;
 import org.apache.solr.util.RefCounted;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,7 +92,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
     infosInfo.add("segmentsFileName", infos.getSegmentsFileName());
     infosInfo.add("userData", infos.userData);
 
-    List<String> mergeCandidates = getMergeCandidatesNames(req, infos);
+    List<String> mergeCandidates = getMergeInformation(req, rsp, infos);
 
     SimpleOrderedMap<Object> segmentInfos = new SimpleOrderedMap<>();
     SimpleOrderedMap<Object> segmentInfo = null;
@@ -205,7 +206,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
 
     fieldFlags.add("flags", flags.toString());
 
-    // probably too much detail?
+    // nocommit probably too much detail?
 //    Map<String, String> attributes = fi.attributes();
 //    if (!attributes.isEmpty()) {
 //      fieldFlags.add("attributes", attributes);
@@ -225,8 +226,10 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
           fi.getIndexOptions() != IndexOptions.NONE) {
         nonCompliant.add("docValues", "schema=false, segment=" + fi.getDocValuesType().toString());
       }
-      if (sf.indexed() != (fi.getIndexOptions() != IndexOptions.NONE)) {
-        nonCompliant.add("indexed", "schema=" + sf.indexed() + ", segment=" + fi.getIndexOptions());
+      if (!sf.isPolyField()) { // difficult to find all sub-fields in a general way
+        if (sf.indexed() != (fi.getIndexOptions() != IndexOptions.NONE)) {
+          nonCompliant.add("indexed", "schema=" + sf.indexed() + ", segment=" + fi.getIndexOptions());
+        }
       }
       if (sf.omitNorms() != fi.omitsNorms()) {
         nonCompliant.add("omitNorms", "schema=" + sf.omitNorms() + ", segment=" + fi.omitsNorms());
@@ -245,11 +248,18 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
     return fieldFlags;
   }
 
-  private List<String> getMergeCandidatesNames(SolrQueryRequest req, SegmentInfos infos) throws IOException {
+  // returns a list of candidate segment for merge, and adds a map of currently running merges
+  private List<String> getMergeInformation(SolrQueryRequest req, SolrQueryResponse rsp, SegmentInfos infos) throws IOException {
     List<String> result = new ArrayList<String>();
     RefCounted<IndexWriter> refCounted = req.getCore().getSolrCoreState().getIndexWriter(req.getCore());
     try {
       IndexWriter indexWriter = refCounted.get();
+      if (indexWriter instanceof SolrIndexWriter) {
+        Map<String, Integer> runningMerges = ((SolrIndexWriter)indexWriter).getRunningMerges();
+        if (!runningMerges.isEmpty()) {
+          rsp.add("runningMerges", runningMerges);
+        }
+      }
       //get chosen merge policy
       MergePolicy mp = indexWriter.getConfig().getMergePolicy();
       //Find merges
