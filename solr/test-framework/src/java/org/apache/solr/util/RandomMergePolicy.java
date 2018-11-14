@@ -58,6 +58,26 @@ public final class RandomMergePolicy extends MergePolicy {
   }
 
   @Override
+  public double getNoCFSRatio() {
+    return inner.getNoCFSRatio();
+  }
+
+  @Override
+  public void setNoCFSRatio(double noCFSRatio) {
+    inner.setNoCFSRatio(noCFSRatio);
+  }
+
+  @Override
+  public double getMaxCFSSegmentSizeMB() {
+    return inner.getMaxCFSSegmentSizeMB();
+  }
+
+  @Override
+  public void setMaxCFSSegmentSizeMB(double v) {
+    inner.setMaxCFSSegmentSizeMB(v);
+  }
+
+  @Override
   public MergeSpecification findForcedDeletesMerges(SegmentInfos segmentInfos, IndexWriter writer) 
     throws IOException {
 

@@ -43,11 +43,11 @@ import org.apache.solr.schema.SchemaField;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class RewriteUninvertedSegmentsMergePolicyFactory extends MergePolicyFactory {
+public class AddDocValuesMergePolicyFactory extends MergePolicyFactory {
 
   public static final String REWRITE_INFO_PROP = "rewriteInfo";
 
-  public RewriteUninvertedSegmentsMergePolicyFactory(SolrResourceLoader resourceLoader, MergePolicyFactoryArgs args, IndexSchema schema) {
+  public AddDocValuesMergePolicyFactory(SolrResourceLoader resourceLoader, MergePolicyFactoryArgs args, IndexSchema schema) {
     super(resourceLoader, args, schema);
     //nocommit parse any arguments here.
     if (!args.keys().isEmpty()) {
@@ -57,20 +57,20 @@ public class RewriteUninvertedSegmentsMergePolicyFactory extends MergePolicyFact
 
   @Override
   public MergePolicy getMergePolicy() {
-    return new RewriteUninvertedSegmentsMergePolicy(schema);
+    return new AddDocValuesMergePolicy(schema);
   }
 }
 
 // Let all the usual functions work through the (default) TieredMergePolicy, only overriding the optimize step.
 // nocommit would a different merge policy be better?
-class RewriteUninvertedSegmentsMergePolicy extends TieredMergePolicy implements RewriteSegments {
+class AddDocValuesMergePolicy extends TieredMergePolicy implements RewriteSegments {
 
   private IndexSchema schema;
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   private String rewriteInfo;
 
-  RewriteUninvertedSegmentsMergePolicy(IndexSchema schema) {
+  AddDocValuesMergePolicy(IndexSchema schema) {
     this.schema = schema;
   }
 
@@ -148,7 +148,7 @@ class RewriteInfoOneMerge extends MergePolicy.OneMerge {
 
   @Override
   public void setMergeInfo(SegmentCommitInfo info) {
-    info.info.getDiagnostics().put(RewriteUninvertedSegmentsMergePolicyFactory.REWRITE_INFO_PROP, rewriteInfo);
+    info.info.getDiagnostics().put(AddDocValuesMergePolicyFactory.REWRITE_INFO_PROP, rewriteInfo);
     super.setMergeInfo(info);
   }
 }
