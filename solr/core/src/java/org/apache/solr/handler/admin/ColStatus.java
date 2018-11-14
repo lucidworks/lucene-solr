@@ -55,6 +55,9 @@ public class ColStatus {
   private final ZkNodeProps props;
   private final SolrClientCache solrClientCache;
 
+  public static final String FIELD_INFOS_PROP = "fieldInfos";
+  public static final String SEGMENTS_PROP = "segments";
+
   public ColStatus(HttpClient httpClient, ZkStateReader zkStateReader, ZkNodeProps props) {
     this.props = props;
     this.solrClientCache = new SolrClientCache(httpClient);
@@ -72,6 +75,8 @@ public class ColStatus {
     } else {
       collections = Collections.singleton(col);
     }
+    boolean withFieldInfos = props.getBool(FIELD_INFOS_PROP, false);
+    boolean withSegments = props.getBool(SEGMENTS_PROP, false);
     for (String collection : collections) {
       DocCollection coll = clusterState.getCollectionOrNull(collection);
       if (coll == null) {
@@ -161,7 +166,13 @@ public class ColStatus {
                   }
                 }
               }
+              if (!withFieldInfos) {
+                ((NamedList<Object>)entry.getValue()).remove("fields");
+              }
             }
+          }
+          if (!withSegments) {
+            rsp.remove("segments");
           }
         } catch (SolrServerException | IOException e) {
           log.warn("Error getting details of replica segments from " + url, e);

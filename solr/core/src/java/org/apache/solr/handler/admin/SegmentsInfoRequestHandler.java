@@ -92,7 +92,8 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
     infosInfo.add("segmentsFileName", infos.getSegmentsFileName());
     infosInfo.add("userData", infos.userData);
 
-    List<String> mergeCandidates = getMergeInformation(req, rsp, infos);
+    List<String> mergeCandidates = new ArrayList<>();
+    SimpleOrderedMap<Object> runningMerges = getMergeInformation(req, infos, mergeCandidates);
 
     SimpleOrderedMap<Object> segmentInfos = new SimpleOrderedMap<>();
     SimpleOrderedMap<Object> segmentInfo = null;
@@ -108,6 +109,9 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
     }
 
     rsp.add("info", infosInfo);
+    if (runningMerges.size() > 0) {
+      rsp.add("runningMerges", runningMerges);
+    }
     rsp.add("segments", segmentInfos);
   }
 
@@ -248,17 +252,14 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
     return fieldFlags;
   }
 
-  // returns a list of candidate segment for merge, and adds a map of currently running merges
-  private List<String> getMergeInformation(SolrQueryRequest req, SolrQueryResponse rsp, SegmentInfos infos) throws IOException {
-    List<String> result = new ArrayList<String>();
+  // returns a map of currently running merges, and populate a list of candidate segment for merge
+  private SimpleOrderedMap<Object> getMergeInformation(SolrQueryRequest req, SegmentInfos infos, List<String> mergeCandidates) throws IOException {
+    SimpleOrderedMap<Object> result = new SimpleOrderedMap<>();
     RefCounted<IndexWriter> refCounted = req.getCore().getSolrCoreState().getIndexWriter(req.getCore());
     try {
       IndexWriter indexWriter = refCounted.get();
       if (indexWriter instanceof SolrIndexWriter) {
-        Map<String, Integer> runningMerges = ((SolrIndexWriter)indexWriter).getRunningMerges();
-        if (!runningMerges.isEmpty()) {
-          rsp.add("runningMerges", runningMerges);
-        }
+        result.addAll(((SolrIndexWriter)indexWriter).getRunningMerges());
       }
       //get chosen merge policy
       MergePolicy mp = indexWriter.getConfig().getMergePolicy();
@@ -268,7 +269,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
         for (OneMerge merge : findMerges.merges) {
           //TODO: add merge grouping
           for (SegmentCommitInfo mergeSegmentInfo : merge.segments) {
-            result.add(mergeSegmentInfo.info.name);
+            mergeCandidates.add(mergeSegmentInfo.info.name);
           }
         }
       }

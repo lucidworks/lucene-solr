@@ -112,7 +112,7 @@ public class SolrIndexWriter extends IndexWriter {
     }
   }
 
-  public Map<String, Integer> getRunningMerges() {
+  public Map<String, Object> getRunningMerges() {
     return Collections.unmodifiableMap(runningMerges);
   }
 
