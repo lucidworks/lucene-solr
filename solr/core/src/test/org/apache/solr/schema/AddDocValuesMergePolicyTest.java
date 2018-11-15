@@ -66,7 +66,7 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
     //nocommit useFactory(null); // I require FS-based indexes for this test.
     System.setProperty("managed.schema.mutable", "true");
     System.setProperty("managed.schema.resource.name", "schema-tiny.xml");
-    System.setProperty("solr.tests.mergePolicy", "org.apache.lucene.index.NoMergePolicy");
+    System.setProperty("solr.tests.mergePolicy", NoMergePolicy.class.getName());
     initCore("solrconfig-managed-schema.xml", "schema-tiny.xml");
     setupAllFields();
   }
