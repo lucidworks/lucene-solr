@@ -138,7 +138,6 @@ public class UninvertDocValuesMergePolicyTest extends SolrTestCaseJ4 {
           String v = doc.getField(TEST_FIELD).stringValue();
           assertEquals(DocValuesType.SORTED, r.getFieldInfos().fieldInfo(TEST_FIELD).getDocValuesType());
           assertEquals(DocValuesType.NONE, r.getFieldInfos().fieldInfo(ID_FIELD).getDocValuesType());
-          //nocommit. Should pass when we have fully ported the UDVMP
           assertEquals("docValues should have been added to merged segment", v, docvalues.get(i).utf8ToString());
         }
       }

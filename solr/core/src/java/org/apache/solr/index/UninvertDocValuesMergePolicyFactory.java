@@ -76,7 +76,7 @@ public class UninvertDocValuesMergePolicyFactory extends WrapperMergePolicyFacto
   }
 
   @Override
-  protected MergePolicy getMergePolicyInstance(MergePolicy wrappedMP) {
+  public MergePolicy getMergePolicyInstance(MergePolicy wrappedMP) {
     return new OneMergeWrappingMergePolicy(wrappedMP, (merge) -> new UninvertDocValuesOneMerge(merge.segments));
   }
 
@@ -151,8 +151,6 @@ public class UninvertDocValuesMergePolicyFactory extends WrapperMergePolicyFacto
     public UninvertingFilterCodecReader(CodecReader in, Map<String,UninvertingReader.Type> uninversionMap) {
       super(in);
 
-      //nocommit Is this OK?
-      //this.uninvertingReader = UninvertingReader.wrap(in, uninversionMap);
       this.uninvertingReader = new UninvertingReader(in, uninversionMap);
 
       this.docValuesProducer = new DocValuesProducer() {

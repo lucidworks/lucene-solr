@@ -43,13 +43,32 @@ import org.apache.solr.schema.SchemaField;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * A merge policy to add docValues to existing indexes where fields have docValues added to the schema after some
+ * documents have already been indexed.
+ * <p>
+ * When this merge policy is in effect, calling optimize/forceMerge will rewrite all segments (singleton merges) and
+ * add docValues to the new segment. All operations except optimize/forceMerge are handled by the superclass
+ * (TieredMergePolicy), see the AddDocValuesMergePolicy below.
+ * <p>
+ * No segments are merged during the optimize/forceMerge.
+ * <p>
+ * This merge policy can be configured in solrconfig.xml or used to temporarily override the merge policy on a
+ * per-collection basis to add docValues one collection at a time.
+ * <p>
+ * This factory can be used when indexing is active.
+ */
+
+//nocommit. ab: Can we put a better example in here and maybe a little example of how to use the pluggable bits in
+// SolrCloud?
+
 public class AddDocValuesMergePolicyFactory extends MergePolicyFactory {
 
   public static final String REWRITE_INFO_PROP = "rewriteInfo";
 
   public AddDocValuesMergePolicyFactory(SolrResourceLoader resourceLoader, MergePolicyFactoryArgs args, IndexSchema schema) {
     super(resourceLoader, args, schema);
-    //nocommit parse any arguments here.
+    // parse any arguments here if there are any.
     if (!args.keys().isEmpty()) {
       throw new IllegalArgumentException("Arguments were " + args + " but " + getClass().getSimpleName() + " takes no arguments.");
     }
@@ -61,8 +80,17 @@ public class AddDocValuesMergePolicyFactory extends MergePolicyFactory {
   }
 }
 
-// Let all the usual functions work through the (default) TieredMergePolicy, only overriding the optimize step.
-// nocommit would a different merge policy be better?
+/**
+ * The actual implementation that drives rewriting all segments and adding docValues when necessary. When
+ * optimize/forceMerge is called using this policy, every segment in which the schema has docValues defined for some
+ * field but the segment does _not_ have docvalues currently will be rewritten with the docValues structures added to
+ * the index on disk.
+ *
+ * Segments are not merged. Every segment that is rewritten is rewritten into a single segment (singleton merges)
+ *
+ * To be effective, the field(s) in question must have their values indexed. If the values are _not_ indexed, then
+ * the docValues for that document/field combination will be empty.
+ */
 class AddDocValuesMergePolicy extends TieredMergePolicy implements RewriteSegments {
 
   private IndexSchema schema;
@@ -74,9 +102,18 @@ class AddDocValuesMergePolicy extends TieredMergePolicy implements RewriteSegmen
     this.schema = schema;
   }
 
+
+  /**
+   *
+   * @param info The segment to be examined
+   * @return true - the schema has docValues=true for at least one field and the segment does _not_ have docValues
+   *                information for that field, therefore it should be rewritten
+   *         false - the schema and segment information agree, i.e. all fields with docValues=true in the schema
+   *                 have the corresponding information already in the segment.
+   */
+
   @Override
   public boolean shouldRewrite(SegmentCommitInfo info) {
-    //nocommit
     // Need to get a reader for this segment
     try (SegmentReader reader = new SegmentReader(info, IOContext.DEFAULT)) {
       StringBuilder fieldsToRewrite = new StringBuilder();
@@ -106,13 +143,14 @@ class AddDocValuesMergePolicy extends TieredMergePolicy implements RewriteSegmen
       }
       return shouldRewrite;
     } catch (IOException e) {
-      //nocommit, this may lead to a lot of work.
+      // It's safer to rewrite the segment if there's an error, although it may lead to a lot of work.
       log.warn("Could not get a reader for field {}, will rewrite segment", info.toString());
 
       return true;
     }
   }
 
+  // See superclass javadocs.
   @Override
   public MergeSpecification findForcedMerges(SegmentInfos infos, int maxSegmentCount, Map<SegmentCommitInfo, Boolean> segmentsToMerge, IndexWriter writer) throws IOException {
     MergeSpecification spec = new MergeSpecification();
@@ -126,7 +164,7 @@ class AddDocValuesMergePolicy extends TieredMergePolicy implements RewriteSegmen
       if (isOriginal == null || isOriginal == false || merging.contains(info)) {
       } else {
         if (shouldRewrite(info)) {
-          spec.add(new RewriteInfoOneMerge(Collections.singletonList(info), rewriteInfo));
+          spec.add(new AddDocValuesOneMerge(Collections.singletonList(info), rewriteInfo));
         }
       }
     }
@@ -134,7 +172,7 @@ class AddDocValuesMergePolicy extends TieredMergePolicy implements RewriteSegmen
   }
 }
 
-class RewriteInfoOneMerge extends MergePolicy.OneMerge {
+class AddDocValuesOneMerge extends MergePolicy.OneMerge {
 
   private final String rewriteInfo;
   /**
@@ -144,7 +182,7 @@ class RewriteInfoOneMerge extends MergePolicy.OneMerge {
    *                 to be merged.
    * @param rewriteInfo diagnostic information about the reason for rewrite
    */
-  public RewriteInfoOneMerge(List<SegmentCommitInfo> segments, String rewriteInfo) {
+  public AddDocValuesOneMerge(List<SegmentCommitInfo> segments, String rewriteInfo) {
     super(segments);
     this.rewriteInfo = rewriteInfo;
   }

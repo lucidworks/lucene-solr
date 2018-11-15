@@ -30,7 +30,7 @@ public final class NoMergePolicy extends MergePolicy {
   /** Singleton instance. */
   public static final MergePolicy INSTANCE = new NoMergePolicy();
 
-  private NoMergePolicy() {
+  public NoMergePolicy() {
     super();
   }
 
