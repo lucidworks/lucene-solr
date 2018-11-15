@@ -48,8 +48,6 @@ import org.junit.Test;
 import org.junit.rules.RuleChain;
 import org.junit.rules.TestRule;
 
-import static org.junit.Assert.fail;
-
 public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
 
   @Rule
@@ -61,12 +59,8 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
   //TODO if this is moved upstream, deal with points based fields.
   @BeforeClass
   public static void beforeClass() throws Exception {
-    // we need consistent segments that aren't re-ordered on merge because we're
-    // asserting inplace updates happen by checking the internal [docid]
-    //nocommit useFactory(null); // I require FS-based indexes for this test.
     System.setProperty("managed.schema.mutable", "true");
     System.setProperty("managed.schema.resource.name", "schema-tiny.xml");
-    System.setProperty("solr.tests.mergePolicy", NoMergePolicy.class.getName());
     initCore("solrconfig-managed-schema.xml", "schema-tiny.xml");
     setupAllFields();
   }
@@ -82,15 +76,13 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
       {"long_mv", "tlong"},
       {"float_sv", "tfloat"},
       {"float_mv", "tfloat"},
-      {"_version_", "tlong"} //nocommit add id in?
+      {"_version_", "tlong"},
+      {"id", "string"}
   });
 
   private static int MV_INCREMENT = 1_000_000;
 
   private static void setupAllFields() throws IOException {
-    IndexWriterConfig iwc = solrConfig.indexConfig.toIndexWriterConfig(h.getCore());
-    assertTrue("Must be noMergePolicy", iwc.getMergePolicy() instanceof NoMergePolicy);
-
     assertTrue("Must have a mutable schema", h.getCore().getLatestSchema() instanceof ManagedIndexSchema);
     ManagedIndexSchema schema = (ManagedIndexSchema) h.getCore().getLatestSchema();
 
@@ -121,9 +113,13 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
 
     schema = schema.deleteDynamicFields(new ArrayList<>(Arrays.asList("*_t", "*")));
     h.getCore().setLatestSchema(schema);
-    //nocommit
+
     List<SchemaField> fieldsToAdd = new ArrayList<>();
     for (Map.Entry<String, String> ent : fieldMap.entrySet()) {
+      if (ent.getKey().equals("id")) {
+        schema = schema.replaceField(ent.getKey(), schema.getFieldTypeByName(ent.getValue()), svOpts);
+        continue;
+      }
       if (ent.getKey().endsWith("_sv") || ent.getKey().equals("_version_")) {
         fieldsToAdd.add(schema.newField(ent.getKey(), ent.getValue(), svOpts));
       } else {
@@ -139,7 +135,7 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
     String idVal = String.valueOf(id);
     String idVal1M = String.valueOf(id + MV_INCREMENT);
     SolrInputDocument doc = new SolrInputDocument();
-    doc.addField("id", id); //nocommit change when you add id to fields?
+
     for (String field : fieldMap.keySet()) {
       if (field.equals("_version_")) {
         continue;
@@ -147,16 +143,26 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
       doc.addField(field, idVal);
       if (field.endsWith("_mv")) {
         doc.addField(field, idVal1M);
-      } else if (field.endsWith("_sv") == false) {
+      } else if (field.endsWith("_sv") == false && field.equals("id") == false) {
         fail("Did not recognize field " + field);
       }
     }
     assertU(adoc(doc));
   }
 
+  // The general outline here is:
+  // Index a bunch of docs without docValues, we don't care about merging here
+  // Change the schema to add docValues to the fields
+  // Add some more documents with docValues
+  // Verify that every new segment has docValues for every field for every document. This might include newly-merged segments
+  // optimize
+  // verify that _all_ the original segments written without docValues are gone
+  // verify that none of the segments that already had docValues entries were merged away
+  // verify that there are the exact number of segments before and after, all merges should be singletons
+  // verify that all the segments have docValues for every field in every document
   @Test
   public void testRewriteAllSegments() throws Exception {
-    //add docs with no docValues.
+    // Index a bunch of docs without docValues, we don't care about merging here
     final int numDocs = atLeast(100);
     int counter = 0;
     while (counter++ < numDocs) {
@@ -170,6 +176,10 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
     assertU(commit());
 
     SegmentInfos segInfosWithoutDV = getSegmentInfos();
+    verifySegmentsDVStatus(segInfosWithoutDV, false);
+
+    // Change the schema to add docValues to the fields
+
 
     Map<String, ?> svOpts = MapUtils.putAll(new HashMap<>(), new Object[][]{
         {"indexed", true},
@@ -186,7 +196,7 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
 
     ManagedIndexSchema schema = (ManagedIndexSchema) h.getCore().getLatestSchema();
     for (Map.Entry<String, String> ent : fieldMap.entrySet()) {
-      if (ent.getKey().endsWith("_sv") || ent.getKey().equals("_version_")) {
+      if (ent.getKey().endsWith("_sv") || ent.getKey().equals("_version_") || ent.getKey().equals("id")) {
         schema = schema.replaceField(ent.getKey(), schema.getFieldTypeByName(ent.getValue()), svOpts);
       } else if (ent.getKey().endsWith("_mv")) {
         schema = schema.replaceField(ent.getKey(), schema.getFieldTypeByName(ent.getValue()), mvOpts);
@@ -198,7 +208,8 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
     h.getCore().setLatestSchema(schema);
     schema = (ManagedIndexSchema) h.getCore().getLatestSchema();
 
-    // Add some docs with docValues in new segments.
+    // Add some more documents with docValues
+
     final int lim = counter + atLeast(100);
     while (counter++ < lim) {
       addDoc(counter);
@@ -208,41 +219,49 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
       }
     }
     assertU(commit());
-    SegmentInfos allSegs = getSegmentInfos();
-    int allSegsOldSize = allSegs.size();
 
-    assertTrue("All the original segments should still be there",
-        getSegmentNames(allSegs).containsAll(getSegmentNames(segInfosWithoutDV)));
+    // Verify that every new segment has docValues for every field for every document
 
+    SegmentInfos segInfosBeforeOptimize = getSegmentInfos();
+    SegmentInfos segOriginalDV = removeSegs(segInfosBeforeOptimize, segInfosWithoutDV);
 
-    SegmentInfos segInfosWithDV = new SegmentInfos();
+    assertTrue("We should have at least some segments with docValues", segOriginalDV.size() > 0);
 
-    Set<String> withoutNames = getSegmentNames(segInfosWithoutDV);
+    // Verify that every new segment has docValues for every field for every document. This might include newly-merged segments
+    verifySegmentsDVStatus(segOriginalDV, true);
 
-    allSegs.asList().stream().filter(seg -> withoutNames.contains(seg.info.name) == false)
-        .forEach(seg -> segInfosWithDV.add(seg));
-
-    assertTrue("We should have at least some segments with docValues", segInfosWithDV.size() > 0);
-
-    //Verify that the new segments in tmp have docValues set
-    verifySegmentsDVStatus(segInfosWithoutDV, false);
-    verifySegmentsDVStatus(segInfosWithDV, true);
-
+    // optimize
     rewriteSegmentsWithDV();
 
-    allSegs = getSegmentInfos();
-    assertEquals("All merges should be singleton merges, so counts should match", allSegsOldSize, allSegs.size());
+    // verify that _all_ the original segments written without docValues are gone
+    SegmentInfos segInfosAfterOptimize = getSegmentInfos();
+    SegmentInfos testSegs = removeSegs(segInfosWithoutDV, segInfosAfterOptimize);
+    assertEquals("There should be no original segments left", testSegs.size(), segInfosWithoutDV.size());
 
-    Set<String> allSegNames = getSegmentNames(allSegs);
-    int withoutSizeBefore = withoutNames.size();
-    withoutNames.removeAll(allSegNames);
-    assertEquals("None of the original segments should be present", withoutSizeBefore, withoutNames.size());
+    // verify that none of the segments that already had docValues entries were merged away
+    testSegs = removeSegs(segOriginalDV, segInfosAfterOptimize);
+    assertEquals("Segments originally written with docValues should NOT have been merged", testSegs.size(), 0);
 
-    Set<String> oldWithNames = getSegmentNames(segInfosWithDV);
-    oldWithNames.removeAll(allSegNames);
-    assertEquals("All the segments originally written  with DV should still be present", 0, oldWithNames.size());
+    // verify that there are the exact number of segments before and after, all merges should be singletons
+    assertEquals("All merges should be singleton merges, so counts should match",
+        segInfosAfterOptimize.size(), segInfosAfterOptimize.size());
 
-    verifySegmentsDVStatus(allSegs, true);
+    // verify that all the new segments have docValues for every field in every document
+    verifySegmentsDVStatus(segInfosAfterOptimize, true);
+
+  }
+
+  private SegmentInfos removeSegs(SegmentInfos removeFrom, SegmentInfos removeThese) {
+    SegmentInfos ret = new SegmentInfos();
+
+    Set<String> removeNames = new HashSet<>();
+    removeThese.asList().stream()
+        .forEach(seg -> removeNames.add(seg.info.name));
+
+    removeFrom.asList().stream().filter(seg -> removeNames.contains(seg.info.name) == false)
+        .forEach(seg -> ret.add(seg));
+
+    return ret;
   }
 
   private void rewriteSegmentsWithDV() throws IOException {
@@ -293,6 +312,7 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
         fi = reader.getFieldInfos().fieldInfo(field);
         switch (field) {
           case "str_sv":
+          case "id":
             sVal = dvp.getSorted(fi).get(idx).utf8ToString();
             assertEquals("Found unexpected value ", sVal, Long.toString(key));
             break;
@@ -392,14 +412,6 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
     } finally {
       writerRef.decref();
     }
-  }
-
-  private Set<String> getSegmentNames(SegmentInfos infos) {
-    Set<String> segs = new HashSet<>();
-    for (SegmentCommitInfo info : infos) {
-      segs.add(info.info.name);
-    }
-    return segs;
   }
 
   private static Map<String, String> stringProps =
