@@ -41,6 +41,8 @@ import org.apache.solr.index.AddDocValuesMergePolicyFactory;
 import org.apache.solr.index.MergePolicyFactory;
 import org.apache.solr.index.MergePolicyFactoryArgs;
 import org.apache.solr.index.UninvertDocValuesMergePolicyFactory;
+import org.apache.solr.update.DocumentBuilder;
+import org.apache.solr.util.RandomMergePolicy;
 import org.apache.solr.util.RefCounted;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -80,7 +82,35 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
       {"id", "string"}
   });
 
+  private static Map<String, ?> svOptsBefore = MapUtils.putAll(new HashMap<>(), new Object[][]{
+      {"indexed", true},
+      {"stored", false},
+      {"docValues", false},
+  });
+
+  private static Map<String, ?> mvOptsBefore = MapUtils.putAll(new HashMap<>(), new Object[][]{
+      {"indexed", true},
+      {"stored", false},
+      {"multiValued", true},
+      {"docValues", false},
+  });
+
+  private static Map<String, ?> svOptsAfter = MapUtils.putAll(new HashMap<>(), new Object[][]{
+      {"indexed", true},
+      {"stored", false},
+      {"docValues", true}
+  });
+
+  private static Map<String, ?> mvOptsAfter = MapUtils.putAll(new HashMap<>(), new Object[][]{
+      {"indexed", true},
+      {"stored", false},
+      {"multiValued", true},
+      {"docValues", true}
+  });
+
+
   private static int MV_INCREMENT = 1_000_000;
+
 
   private static void setupAllFields() throws IOException {
     assertTrue("Must have a mutable schema", h.getCore().getLatestSchema() instanceof ManagedIndexSchema);
@@ -97,33 +127,19 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
     schema = schema.addFieldTypes(ftList, false);
     h.getCore().setLatestSchema(schema);
 
-    Map<String, ?> svOpts = MapUtils.putAll(new HashMap<>(), new Object[][]{
-        {"indexed", true},
-        {"stored", false},
-        {"docValues", false},
-    });
-
-    Map<String, ?> mvOpts = MapUtils.putAll(new HashMap<>(), new Object[][]{
-        {"indexed", true},
-        {"stored", false},
-        {"multiValued", true},
-        {"docValues", false},
-    });
-
-
     schema = schema.deleteDynamicFields(new ArrayList<>(Arrays.asList("*_t", "*")));
     h.getCore().setLatestSchema(schema);
 
     List<SchemaField> fieldsToAdd = new ArrayList<>();
     for (Map.Entry<String, String> ent : fieldMap.entrySet()) {
       if (ent.getKey().equals("id")) {
-        schema = schema.replaceField(ent.getKey(), schema.getFieldTypeByName(ent.getValue()), svOpts);
+        schema = schema.replaceField(ent.getKey(), schema.getFieldTypeByName(ent.getValue()), svOptsBefore);
         continue;
       }
       if (ent.getKey().endsWith("_sv") || ent.getKey().equals("_version_")) {
-        fieldsToAdd.add(schema.newField(ent.getKey(), ent.getValue(), svOpts));
+        fieldsToAdd.add(schema.newField(ent.getKey(), ent.getValue(), svOptsBefore));
       } else {
-        fieldsToAdd.add(schema.newField(ent.getKey(), ent.getValue(), mvOpts));
+        fieldsToAdd.add(schema.newField(ent.getKey(), ent.getValue(), mvOptsBefore));
       }
     }
 
@@ -131,23 +147,20 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
     h.getCore().setLatestSchema(schema);
   }
 
-  private void addDoc(int id) {
+  private void addDoc(int id, IndexWriter writer, IndexSchema schema) throws IOException {
     String idVal = String.valueOf(id);
     String idVal1M = String.valueOf(id + MV_INCREMENT);
     SolrInputDocument doc = new SolrInputDocument();
 
     for (String field : fieldMap.keySet()) {
-      if (field.equals("_version_")) {
-        continue;
-      }
       doc.addField(field, idVal);
       if (field.endsWith("_mv")) {
         doc.addField(field, idVal1M);
-      } else if (field.endsWith("_sv") == false && field.equals("id") == false) {
+      } else if (field.endsWith("_sv") == false && field.equals("id") == false && field.equals("_version_") == false) {
         fail("Did not recognize field " + field);
       }
     }
-    assertU(adoc(doc));
+    writer.addDocument(DocumentBuilder.toDocument(doc, schema));
   }
 
   // The general outline here is:
@@ -165,15 +178,20 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
     // Index a bunch of docs without docValues, we don't care about merging here
     final int numDocs = atLeast(100);
     int counter = 0;
-    while (counter++ < numDocs) {
-      addDoc(counter);
-      // Insure at least some runs have multiple segments.
-      if ((random().nextInt(100) % 20) == 0) {
-        assertU(commit());
-      }
-    }
+    Path iPath = Paths.get(h.getCore().getIndexDir());
+    IndexWriterConfig iwc = solrConfig.indexConfig.toIndexWriterConfig(h.getCore());
+    ManagedIndexSchema schema = (ManagedIndexSchema) h.getCore().getLatestSchema();
 
-    assertU(commit());
+    try (Directory dir = newFSDirectory(iPath); IndexWriter writer = new IndexWriter(dir, iwc)) {
+      while (counter++ < numDocs) {
+        addDoc(counter, writer, schema);
+        // Insure at least some runs have multiple segments.
+        if ((random().nextInt(100) % 20) == 0) {
+          writer.commit();
+        }
+      }
+      writer.commit();
+    }
 
     SegmentInfos segInfosWithoutDV = getSegmentInfos();
     verifySegmentsDVStatus(segInfosWithoutDV, false);
@@ -181,25 +199,12 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
     // Change the schema to add docValues to the fields
 
 
-    Map<String, ?> svOpts = MapUtils.putAll(new HashMap<>(), new Object[][]{
-        {"indexed", true},
-        {"stored", false},
-        {"docValues", true}
-    });
-
-    Map<String, ?> mvOpts = MapUtils.putAll(new HashMap<>(), new Object[][]{
-        {"indexed", true},
-        {"stored", false},
-        {"multiValued", true},
-        {"docValues", true}
-    });
-
-    ManagedIndexSchema schema = (ManagedIndexSchema) h.getCore().getLatestSchema();
+    schema = (ManagedIndexSchema) h.getCore().getLatestSchema();
     for (Map.Entry<String, String> ent : fieldMap.entrySet()) {
       if (ent.getKey().endsWith("_sv") || ent.getKey().equals("_version_") || ent.getKey().equals("id")) {
-        schema = schema.replaceField(ent.getKey(), schema.getFieldTypeByName(ent.getValue()), svOpts);
+        schema = schema.replaceField(ent.getKey(), schema.getFieldTypeByName(ent.getValue()), svOptsAfter);
       } else if (ent.getKey().endsWith("_mv")) {
-        schema = schema.replaceField(ent.getKey(), schema.getFieldTypeByName(ent.getValue()), mvOpts);
+        schema = schema.replaceField(ent.getKey(), schema.getFieldTypeByName(ent.getValue()), mvOptsAfter);
       } else {
         fail("Unrecognized field");
       }
@@ -207,18 +212,24 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
 
     h.getCore().setLatestSchema(schema);
     schema = (ManagedIndexSchema) h.getCore().getLatestSchema();
+    iwc = solrConfig.indexConfig.toIndexWriterConfig(h.getCore());
 
+    UninvertDocValuesMergePolicyFactory mpfU = new UninvertDocValuesMergePolicyFactory(h.getCore().getResourceLoader(),
+        new MergePolicyFactoryArgs(), h.getCore().getLatestSchema());
+
+    iwc.setMergePolicy(mpfU.getMergePolicyInstance(new RandomMergePolicy()));
     // Add some more documents with docValues
-
-    final int lim = counter + atLeast(100);
-    while (counter++ < lim) {
-      addDoc(counter);
-      // Insure at least some runs have multiple segments.
-      if ((random().nextInt(100) % 20) == 0) {
-        assertU(commit());
+    try (Directory dir = newFSDirectory(iPath); IndexWriter writer = new IndexWriter(dir, iwc)) {
+      final int lim = counter + atLeast(100);
+      while (counter++ < lim) {
+        addDoc(counter, writer, schema);
+        // Ensure at least some runs have multiple segments.
+        if ((random().nextInt(100) % 20) == 0) {
+          writer.commit();
+        }
       }
+      writer.commit();
     }
-    assertU(commit());
 
     // Verify that every new segment has docValues for every field for every document
 
