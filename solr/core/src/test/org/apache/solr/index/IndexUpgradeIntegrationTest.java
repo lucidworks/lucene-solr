@@ -80,7 +80,7 @@ public class IndexUpgradeIntegrationTest extends AbstractFullDistribZkTestBase {
     // retrieve current schema
     SchemaRequest schemaRequest = new SchemaRequest();
     SchemaResponse schemaResponse = schemaRequest.process(cloudClient);
-    Map<String, Object> field = getField(TEST_FIELD, schemaResponse);
+    Map<String, Object> field = getSchemaField(TEST_FIELD, schemaResponse);
     assertNotNull("missing " + TEST_FIELD + " field", field);
     assertEquals("wrong flags: " + field, Boolean.FALSE, field.get("docValues"));
 
@@ -128,7 +128,7 @@ public class IndexUpgradeIntegrationTest extends AbstractFullDistribZkTestBase {
     assertEquals("nonCompliant: " + nonCompliant, "(NONE)", nonCompliant.get(0));
   }
 
-  private Map<String, Object> getField(String name, SchemaResponse schemaResponse) {
+  private Map<String, Object> getSchemaField(String name, SchemaResponse schemaResponse) {
     List<Map<String, Object>> fields = schemaResponse.getSchemaRepresentation().getFields();
     for (Map<String, Object> field : fields) {
       if (name.equals(field.get("name"))) {

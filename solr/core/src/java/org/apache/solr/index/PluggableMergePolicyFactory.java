@@ -39,7 +39,8 @@ import org.slf4j.LoggerFactory;
 public class PluggableMergePolicyFactory extends SimpleMergePolicyFactory implements SolrCoreAware {
   public static Logger log = LoggerFactory.getLogger(PluggableMergePolicyFactory.class);
 
-  public static final String MERGE_POLICY_PROP = "ext.mergePolicyFactory.";
+  public static final String MERGE_POLICY_PROP = "ext.mergePolicyFactory.collections.";
+  public static final String DEFAULT_POLICY_PROP = "ext.mergePolicyFactory.default";
   private final MergePolicyFactory defaultMergePolicyFactory;
   private PluginInfo pluginInfo;
 
@@ -58,9 +59,18 @@ public class PluggableMergePolicyFactory extends SimpleMergePolicyFactory implem
     // we can safely assume here that our loader is ZK enabled
     ZkStateReader zkStateReader = ((ZkSolrResourceLoader)resourceLoader).getZkController().getZkStateReader();
     Map<String, Object> clusterProps = zkStateReader.getClusterProps();
-    log.info("-- clusterprops: " + clusterProps);
+    log.debug("-- clusterprops: {}", clusterProps);
     String propName = MERGE_POLICY_PROP + cd.getCollectionName();
     Object o = clusterProps.get(propName);
+    if (o == null) {
+      // try getting the default one
+      o = clusterProps.get(DEFAULT_POLICY_PROP);
+      if (o != null) {
+        log.debug("Using default MergePolicy configured in cluster properties.");
+      }
+    } else {
+      log.debug("Using collection-specific MergePolicy configured in cluster properties.");
+    }
     if (o == null) {
       log.info("No configuration in cluster properties - using default MergePolicy.");
       return;
@@ -76,6 +86,7 @@ public class PluggableMergePolicyFactory extends SimpleMergePolicyFactory implem
       log.error("MergePolicy plugin info missing class name, using default: " + props);
       return;
     }
+    log.info("Using pluggable MergePolicy: {}", props.get(FieldType.CLASS_NAME));
     pluginInfo = new PluginInfo("mergePolicyFactory", props);
   }
 
@@ -87,14 +98,19 @@ public class PluggableMergePolicyFactory extends SimpleMergePolicyFactory implem
       String mpfClassName = pluginInfo.className;
       MergePolicyFactoryArgs mpfArgs = pluginInfo.initArgs != null ?
           new MergePolicyFactoryArgs(pluginInfo.initArgs) : new MergePolicyFactoryArgs();
-      MergePolicyFactory policyFactory = resourceLoader.newInstance(
-          mpfClassName,
-          MergePolicyFactory.class,
-          NO_SUB_PACKAGES,
-          new Class[] { SolrResourceLoader.class, MergePolicyFactoryArgs.class, IndexSchema.class },
-          new Object[] { resourceLoader, mpfArgs, schema });
+      try {
+        MergePolicyFactory policyFactory = resourceLoader.newInstance(
+            mpfClassName,
+            MergePolicyFactory.class,
+            NO_SUB_PACKAGES,
+            new Class[] { SolrResourceLoader.class, MergePolicyFactoryArgs.class, IndexSchema.class },
+            new Object[] { resourceLoader, mpfArgs, schema });
 
-      return policyFactory.getMergePolicy();
+        return policyFactory.getMergePolicy();
+      } catch (Exception e) {
+        log.error("Error instantiating pluggable MergePolicy, using default instead", e);
+        return defaultMergePolicyFactory.getMergePolicy();
+      }
     } else {
       return defaultMergePolicyFactory.getMergePolicy();
     }
