@@ -89,7 +89,7 @@ public class SolrIndexWriter extends IndexWriter {
           setIndexDeletionPolicy(delPolicy).setCodec(codec)
           );
     log.debug("Opened Writer " + name);
-    log.info("Writer " + name + ", path=" + path + ", mergePolicy=" + getConfig().getMergePolicy().getClass().getName());
+    log.debug("Writer " + name + ", path=" + path + ", mergePolicy=" + getConfig().getMergePolicy().getClass().getName());
     this.name = name;
     infoStream = getConfig().getInfoStream();
     this.directory = directory;
@@ -103,7 +103,6 @@ public class SolrIndexWriter extends IndexWriter {
   @Override
   public void merge(MergePolicy.OneMerge merge) throws IOException {
     String segString = merge.segString();
-    log.info("-- merge: " + segString);
     int numDocs = merge.totalNumDocs();
     runningMerges.put(segString, numDocs);
     try {
