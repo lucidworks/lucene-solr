@@ -121,7 +121,7 @@ public class UninvertDocValuesMergePolicyFactory extends WrapperMergePolicyFacto
       if(uninversionMap == null) {
         return reader; // Default to normal reader if nothing to uninvert
       } else {
-        return new UninvertingFilterCodecReader(reader, uninversionMap);
+        return new UninvertingFilterCodecReader(reader, uninversionMap, skipIntegrityCheck);
       }
     }
 
@@ -135,103 +135,4 @@ public class UninvertDocValuesMergePolicyFactory extends WrapperMergePolicyFacto
       return newMergeReaders;
     }
   }
-
-
-  /**
-   * Delegates to an Uninverting for fields with docvalues
-   *
-   * This is going to blow up FieldCache, look into an alternative implementation that uninverts without
-   * fieldcache
-   */
-  private class UninvertingFilterCodecReader extends FilterCodecReader {
-
-    private final LeafReader uninvertingReader;
-    private final DocValuesProducer docValuesProducer;
-
-    public UninvertingFilterCodecReader(CodecReader in, Map<String,UninvertingReader.Type> uninversionMap) {
-      super(in);
-
-      this.uninvertingReader = new UninvertingReader(in, uninversionMap);
-
-      this.docValuesProducer = new DocValuesProducer() {
-
-        @Override
-        public NumericDocValues getNumeric(FieldInfo field) throws IOException {
-          return uninvertingReader.getNumericDocValues(field.name);
-        }
-
-        @Override
-        public BinaryDocValues getBinary(FieldInfo field) throws IOException {
-          return uninvertingReader.getBinaryDocValues(field.name);
-        }
-
-        @Override
-        public SortedDocValues getSorted(FieldInfo field) throws IOException {
-          return uninvertingReader.getSortedDocValues(field.name);
-        }
-
-        @Override
-        public SortedNumericDocValues getSortedNumeric(FieldInfo field) throws IOException {
-          return uninvertingReader.getSortedNumericDocValues(field.name);
-        }
-
-        @Override
-        public SortedSetDocValues getSortedSet(FieldInfo field) throws IOException {
-          return uninvertingReader.getSortedSetDocValues(field.name);
-        }
-
-        @Override
-        public void checkIntegrity() throws IOException {
-          if (!skipIntegrityCheck) {
-            uninvertingReader.checkIntegrity();
-          }
-        }
-
-        @Override
-        public void close() throws IOException {
-        }
-
-        @Override
-        public long ramBytesUsed() {
-          return 0;
-        }
-
-        @Override
-        public Bits getDocsWithField(FieldInfo field) throws IOException {
-          return uninvertingReader.getDocsWithField(field.name);
-        }
-
-
-      };
-    }
-
-    @Override
-    protected void doClose() throws IOException {
-      docValuesProducer.close();
-      uninvertingReader.close();
-      super.doClose();
-    }
-
-    @Override
-    public DocValuesProducer getDocValuesReader() {
-      return docValuesProducer;
-    }
-
-    @Override
-    public FieldInfos getFieldInfos() {
-      return uninvertingReader.getFieldInfos();
-    }
-
-    @Override
-    public Object getCoreCacheKey() {
-      return in.getCoreCacheKey();
-    }
-
-    @Override
-    public Object getCombinedCoreAndDeletesKey() {
-      return in.getCombinedCoreAndDeletesKey();
-    }
-
-  }
-
 }

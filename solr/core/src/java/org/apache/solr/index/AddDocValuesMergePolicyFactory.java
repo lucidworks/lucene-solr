@@ -17,26 +17,30 @@ package org.apache.solr.index;
  * limitations under the License.
  */
 
-
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.lucene.index.CodecReader;
 import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.MergePolicy;
+import org.apache.lucene.index.MergeTrigger;
 import org.apache.lucene.index.SegmentCommitInfo;
 import org.apache.lucene.index.SegmentInfos;
 import org.apache.lucene.index.SegmentReader;
 import org.apache.lucene.index.TieredMergePolicy;
 import org.apache.lucene.store.IOContext;
+import org.apache.lucene.uninverting.UninvertingReader;
 import org.apache.solr.core.SolrResourceLoader;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.SchemaField;
@@ -44,153 +48,231 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A merge policy to add docValues to existing indexes where fields have docValues added to the schema after some
- * documents have already been indexed.
- * <p>
- * When this merge policy is in effect, calling optimize/forceMerge will rewrite all segments (singleton merges) and
- * add docValues to the new segment. All operations except optimize/forceMerge are handled by the superclass
- * (TieredMergePolicy), see the AddDocValuesMergePolicy below.
- * <p>
- * No segments are merged during the optimize/forceMerge.
- * <p>
- * This merge policy can be configured in solrconfig.xml or used to temporarily override the merge policy on a
- * per-collection basis to add docValues one collection at a time.
- * <p>
- * This factory can be used when indexing is active.
+ * A merge policy that can detect schema changes and  write docvalues into merging segments when a field has docvalues enabled
+ * Using UninvertingReader.
+ *
+ * This merge policy uses TieredMergePolicy for selecting regular merge segments
+ *
  */
+public class AddDocValuesMergePolicyFactory extends SimpleMergePolicyFactory {
 
-//nocommit. ab: Can we put a better example in here and maybe a little example of how to use the pluggable bits in
-// SolrCloud?
+  final private boolean skipIntegrityCheck;
+  final private String marker;
 
-public class AddDocValuesMergePolicyFactory extends MergePolicyFactory {
-
-  public static final String REWRITE_INFO_PROP = "rewriteInfo";
+  public static final String MARKER_PROP = "__addDVMarker__";
 
   public AddDocValuesMergePolicyFactory(SolrResourceLoader resourceLoader, MergePolicyFactoryArgs args, IndexSchema schema) {
     super(resourceLoader, args, schema);
-    // parse any arguments here if there are any.
+    final Boolean sic = (Boolean)args.remove("skipIntegrityCheck");
+    if (sic != null) {
+      this.skipIntegrityCheck = sic.booleanValue();
+    } else {
+      this.skipIntegrityCheck = false;
+    }
+    Object m = args.remove("marker");
+    if (m != null) {
+      this.marker = String.valueOf(m);
+    } else {
+      this.marker = null;
+    }
     if (!args.keys().isEmpty()) {
-      throw new IllegalArgumentException("Arguments were " + args + " but " + getClass().getSimpleName() + " takes no arguments.");
+      throw new IllegalArgumentException("Arguments were "+args+" but "+getClass().getSimpleName()+" takes no arguments.");
     }
   }
 
-  @Override
-  public MergePolicy getMergePolicy() {
-    return new AddDocValuesMergePolicy(schema);
+  /**
+   * Whether or not the wrapped docValues producer should check consistency
+   */
+  public boolean getSkipIntegrityCheck() {
+    return skipIntegrityCheck;
   }
-}
-
-/**
- * The actual implementation that drives rewriting all segments and adding docValues when necessary. When
- * optimize/forceMerge is called using this policy, every segment in which the schema has docValues defined for some
- * field but the segment does _not_ have docvalues currently will be rewritten with the docValues structures added to
- * the index on disk.
- *
- * Segments are not merged. Every segment that is rewritten is rewritten into a single segment (singleton merges)
- *
- * To be effective, the field(s) in question must have their values indexed. If the values are _not_ indexed, then
- * the docValues for that document/field combination will be empty.
- */
-class AddDocValuesMergePolicy extends TieredMergePolicy implements RewriteSegments {
-
-  private IndexSchema schema;
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-
-  private String rewriteInfo;
-
-  AddDocValuesMergePolicy(IndexSchema schema) {
-    this.schema = schema;
-  }
-
 
   /**
-   *
-   * @param info The segment to be examined
-   * @return true - the schema has docValues=true for at least one field and the segment does _not_ have docValues
-   *                information for that field, therefore it should be rewritten
-   *         false - the schema and segment information agree, i.e. all fields with docValues=true in the schema
-   *                 have the corresponding information already in the segment.
+   * Marker to use for marking already converted segments.
+   * If not null then only segments that don't contain this marker value will be rewritten.
+   * If null then only segments without any marker value will be rewritten.
    */
+  public String getMarker() {
+    return marker;
+  }
 
   @Override
-  public boolean shouldRewrite(SegmentCommitInfo info) {
-    // Need to get a reader for this segment
-    try (SegmentReader reader = new SegmentReader(info, IOContext.DEFAULT)) {
-      StringBuilder fieldsToRewrite = new StringBuilder();
-      boolean shouldRewrite = false;
-      // nocommit should this iterate over the reader's fields instead?
-      // maybe not - iterating over schema fields makes it easier in the future
-      // to synthesize other missing reader's fields
-      for (Map.Entry<String, SchemaField> ent : schema.getFields().entrySet()) {
-        SchemaField sf = ent.getValue();
-        FieldInfo fi = reader.getFieldInfos().fieldInfo(ent.getKey());
-        if (null != sf && fi != null &&
-            sf.hasDocValues() &&
-            fi.getDocValuesType() == DocValuesType.NONE &&
-            fi.getIndexOptions() != IndexOptions.NONE) {
-          shouldRewrite = true;
-          if (fieldsToRewrite.length() > 0) {
-            fieldsToRewrite.append(' ');
+  public MergePolicy getMergePolicyInstance() {
+    return new AddDVMergePolicy(schema, marker, skipIntegrityCheck);
+  }
+
+  private static UninvertingReader.Type getUninversionType(IndexSchema schema, FieldInfo fi) {
+    SchemaField sf = schema.getFieldOrNull(fi.name);
+
+    if (sf != null &&
+        sf.hasDocValues() &&
+        fi.getIndexOptions() != IndexOptions.NONE) {
+      return sf.getType().getUninversionType(sf);
+    } else {
+      return null;
+    }
+  }
+
+
+  public static class AddDVMergePolicy extends TieredMergePolicy {
+    private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+
+    private final IndexSchema schema;
+    private final String marker;
+    private final boolean skipIntegrityCheck;
+
+    AddDVMergePolicy(IndexSchema schema, String marker, boolean skipIntegrityCheck) {
+      this.schema = schema;
+      this.marker = marker;
+      this.skipIntegrityCheck = skipIntegrityCheck;
+    }
+
+    @Override
+    public MergeSpecification findMerges(MergeTrigger mergeTrigger, SegmentInfos segmentInfos, IndexWriter writer) throws IOException {
+      MergeSpecification spec = super.findMerges(mergeTrigger, segmentInfos, writer);
+      if (spec == null || spec.merges.isEmpty()) {
+        return spec;
+      }
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < spec.merges.size(); i++) {
+        OneMerge oneMerge = spec.merges.get(i);
+        int needWrapping = 0;
+        sb.setLength(0);
+        for (SegmentCommitInfo info : oneMerge.segments) {
+          String segmentMarker = info.info.getDiagnostics().get(MARKER_PROP);
+          String source = info.info.getDiagnostics().get("source");
+          if (segmentMarker == null || (marker != null && !marker.equals(segmentMarker))) {
+            needWrapping++;
+            if (sb.length() > 0) {
+              sb.append(' ');
+            }
+            sb.append(info.toString() + "(" + source + ")");
           }
-          fieldsToRewrite.append(fi.name);
+        }
+        if (needWrapping > 0) {
+          log.info("-- OneMerge needs wrapping (" + needWrapping + "/" + oneMerge.segments.size() +
+              "): " + sb.toString());
+          OneMerge wrappedOneMerge = new AddDVOneMerge(oneMerge.segments, schema, marker, skipIntegrityCheck);
+          spec.merges.set(i, wrappedOneMerge);
         }
       }
-      if (shouldRewrite) {
-        // nocommit not sure about the concurrency here
-        rewriteInfo = fieldsToRewrite.toString();
-      } else {
-        rewriteInfo = null;
-      }
-      return shouldRewrite;
-    } catch (IOException e) {
-      // It's safer to rewrite the segment if there's an error, although it may lead to a lot of work.
-      log.warn("Could not get a reader for field {}, will rewrite segment", info.toString());
+      return spec;
+    }
 
-      return true;
+    /**
+     *
+     * @param info The segment to be examined
+     * @return true - the schema has docValues=true for at least one field and the segment does _not_ have docValues
+     *                information for that field, therefore it should be rewritten
+     *         false - the schema and segment information agree, i.e. all fields with docValues=true in the schema
+     *                 have the corresponding information already in the segment.
+     */
+
+    public boolean shouldRewrite(SegmentCommitInfo info) {
+      // Need to get a reader for this segment
+      try (SegmentReader reader = new SegmentReader(info, IOContext.DEFAULT)) {
+        // check the marker, if defined
+        String existingMarker = info.info.getDiagnostics().get(MARKER_PROP);
+        if (existingMarker != null) {
+          if (marker == null || marker.equals(existingMarker)) {
+            return false;
+          }
+        }
+        // iterating over schema fields makes it easier in the future
+        // to synthesize other missing reader's fields
+        boolean shouldRewrite = false;
+        for (Map.Entry<String, SchemaField> ent : schema.getFields().entrySet()) {
+          FieldInfo fi = reader.getFieldInfos().fieldInfo(ent.getKey());
+          if (fi != null && getUninversionType(schema, fi) != null) {
+            shouldRewrite = true;
+          }
+        }
+        return shouldRewrite;
+      } catch (IOException e) {
+        // It's safer to rewrite the segment if there's an error, although it may lead to a lot of work.
+        log.warn("Could not get a reader for field {}, will rewrite segment", info.toString());
+
+        return true;
+      }
+    }
+    @Override
+    public MergeSpecification findForcedMerges(SegmentInfos infos, int maxSegmentCount, Map<SegmentCommitInfo, Boolean> segmentsToMerge, IndexWriter writer) throws IOException {
+      MergeSpecification spec = new MergeSpecification();
+
+      final Set<SegmentCommitInfo> merging = new HashSet<>(writer.getMergingSegments());
+
+      Iterator<SegmentCommitInfo> iter = infos.iterator();
+      while (iter.hasNext()) {
+        SegmentCommitInfo info = iter.next();
+        final Boolean isOriginal = segmentsToMerge.get(info);
+        if (isOriginal == null || isOriginal == false || merging.contains(info)) {
+        } else {
+          if (shouldRewrite(info)) {
+            spec.add(new AddDVOneMerge(Collections.singletonList(info), schema, marker, skipIntegrityCheck));
+          }
+        }
+      }
+      return (spec.merges.size() == 0) ? null : spec;
     }
   }
 
-  // See superclass javadocs.
-  @Override
-  public MergeSpecification findForcedMerges(SegmentInfos infos, int maxSegmentCount, Map<SegmentCommitInfo, Boolean> segmentsToMerge, IndexWriter writer) throws IOException {
-    MergeSpecification spec = new MergeSpecification();
+  private static class AddDVOneMerge extends MergePolicy.OneMerge {
 
-    final Set<SegmentCommitInfo> merging = new HashSet<>(writer.getMergingSegments());
+    private final String marker;
+    private final IndexSchema schema;
+    private final boolean skipIntegrityCheck;
 
-    Iterator<SegmentCommitInfo> iter = infos.iterator();
-    while (iter.hasNext()) {
-      SegmentCommitInfo info = iter.next();
-      final Boolean isOriginal = segmentsToMerge.get(info);
-      if (isOriginal == null || isOriginal == false || merging.contains(info)) {
-      } else {
-        if (shouldRewrite(info)) {
-          spec.add(new AddDocValuesOneMerge(Collections.singletonList(info), rewriteInfo));
+    public AddDVOneMerge(List<SegmentCommitInfo> segments, IndexSchema schema, String marker,
+                         final boolean skipIntegrityCheck) {
+      super(segments);
+      this.schema = schema;
+      this.marker = marker != null ? marker : this.getClass().getSimpleName();
+      this.skipIntegrityCheck = skipIntegrityCheck;
+    }
+
+    @Override
+    public CodecReader wrapForMerge(CodecReader reader) throws IOException {
+      // Wrap the reader with an uninverting reader if
+      // Schema says there should be
+      // NOTE: this converts also fields that already have docValues to
+      // update their values to the current schema type
+
+
+      Map<String, UninvertingReader.Type> uninversionMap = null;
+
+      for (FieldInfo fi : reader.getFieldInfos()) {
+        final UninvertingReader.Type type = getUninversionType(schema, fi);
+        if (type != null) {
+          if (uninversionMap == null) {
+            uninversionMap = new HashMap<>();
+          }
+          uninversionMap.put(fi.name, type);
         }
+
+      }
+
+      if (uninversionMap == null) {
+        // should not happen - we already check that we need to uninvert some fields
+        return reader; // Default to normal reader if nothing to uninvert
+      } else {
+        return new UninvertingFilterCodecReader(reader, uninversionMap, skipIntegrityCheck);
       }
     }
-    return (spec.merges.size() == 0) ? null : spec;
+
+    @Override
+    public List<CodecReader> getMergeReaders() throws IOException {
+      List<CodecReader> mergeReaders = super.getMergeReaders();
+      List<CodecReader> newMergeReaders = new ArrayList<>(mergeReaders.size());
+      for (CodecReader r : mergeReaders) {
+        newMergeReaders.add(wrapForMerge(r));
+      }
+      return newMergeReaders;
+    }
+
+    @Override
+    public void setMergeInfo(SegmentCommitInfo info) {
+      info.info.getDiagnostics().put(MARKER_PROP, marker);
+      super.setMergeInfo(info);
+    }
   }
 }
-
-class AddDocValuesOneMerge extends MergePolicy.OneMerge {
-
-  private final String rewriteInfo;
-  /**
-   * Sole constructor.
-   *
-   * @param segments List of {@link SegmentCommitInfo}s
-   *                 to be merged.
-   * @param rewriteInfo diagnostic information about the reason for rewrite
-   */
-  public AddDocValuesOneMerge(List<SegmentCommitInfo> segments, String rewriteInfo) {
-    super(segments);
-    this.rewriteInfo = rewriteInfo;
-  }
-
-  @Override
-  public void setMergeInfo(SegmentCommitInfo info) {
-    info.info.getDiagnostics().put(AddDocValuesMergePolicyFactory.REWRITE_INFO_PROP, rewriteInfo);
-    super.setMergeInfo(info);
-  }
-}
-

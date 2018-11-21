@@ -3,8 +3,10 @@ package org.apache.solr.index;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
+import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.request.schema.SchemaRequest;
 import org.apache.solr.client.solrj.response.CollectionAdminResponse;
 import org.apache.solr.client.solrj.response.schema.SchemaResponse;
@@ -12,6 +14,9 @@ import org.apache.solr.cloud.AbstractFullDistribZkTestBase;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.util.Utils;
 import org.apache.solr.schema.FieldType;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,14 +24,26 @@ import org.slf4j.LoggerFactory;
 /**
  *
  */
-public class IndexUpgradeIntegrationTest extends AbstractFullDistribZkTestBase {
-  private static final Logger log = LoggerFactory.getLogger(IndexUpgradeIntegrationTest.class);
+public class ConcurrentIndexUpgradeTest extends AbstractFullDistribZkTestBase {
+  private static final Logger log = LoggerFactory.getLogger(ConcurrentIndexUpgradeTest.class);
 
   private static String ID_FIELD = "id";
   private static String TEST_FIELD = "string_add_dv_later";
 
-  public IndexUpgradeIntegrationTest() {
+  private AtomicBoolean runIndexer = new AtomicBoolean(true);
+
+  public ConcurrentIndexUpgradeTest() {
     schemaString = "schema-docValues.xml";
+  }
+
+  @BeforeClass
+  public static void setupTest() {
+    System.setProperty("solr.directoryFactory", "solr.StandardDirectoryFactory");
+  }
+
+  @AfterClass
+  public static void teardownTest() {
+    System.clearProperty("solr.directoryFactory");
   }
 
   @Override
@@ -35,9 +52,14 @@ public class IndexUpgradeIntegrationTest extends AbstractFullDistribZkTestBase {
   }
 
 
+  @After
+  public void afterTest() throws Exception {
+    runIndexer.set(false);
+  }
+
   @Test
-  public void testIndexUpgrade() throws Exception {
-    String collectionName = "indexUpgrade_test";
+  public void testConcurrentIndexUpgrade() throws Exception {
+    String collectionName = "concurrentUpgrade_test";
     CollectionAdminRequest.Create createCollectionRequest = new CollectionAdminRequest.Create()
         .setCollectionName(collectionName)
         .setNumShards(2)
@@ -47,6 +69,49 @@ public class IndexUpgradeIntegrationTest extends AbstractFullDistribZkTestBase {
     assertEquals(0, response.getStatus());
     assertTrue(response.isSuccess());
     Thread.sleep(5000);
+
+    cloudClient.setDefaultCollection(collectionName);
+
+    Thread indexerThread = new Thread() {
+      @Override
+      public void run() {
+        try {
+          int docId = 0;
+          while (runIndexer.get()) {
+            UpdateRequest ureq = new UpdateRequest();
+            for (int i = 0; i < 100; i++) {
+              if (!runIndexer.get()) {
+                return;
+              }
+              SolrInputDocument doc = new SolrInputDocument();
+              doc.addField(ID_FIELD, docId);
+              doc.addField(TEST_FIELD, String.valueOf(docId));
+              ureq.add(doc);
+              docId++;
+            }
+            ureq.process(cloudClient);
+            cloudClient.commit();
+            Thread.sleep(100);
+          }
+        } catch (Exception e) {
+          fail("Can't index new documents: " + e.toString());
+        }
+      }
+    };
+
+    indexerThread.start();
+    // make sure we've indexed some documents
+    Thread.sleep(5000);
+
+    CollectionAdminRequest<CollectionAdminRequest.ColStatus> status = new CollectionAdminRequest.ColStatus()
+        .setCollectionName(collectionName)
+        .setWithFieldInfos(true)
+        .setWithSegments(true);
+    CollectionAdminResponse rsp = status.process(cloudClient);
+    List<String> nonCompliant = (List<String>)rsp.getResponse().findRecursive(collectionName, "schemaNonCompliant");
+    assertNotNull("nonCompliant missing: " + rsp, nonCompliant);
+    assertEquals("nonCompliant: " + nonCompliant, 1, nonCompliant.size());
+    assertEquals("nonCompliant: " + nonCompliant, "(NONE)", nonCompliant.get(0));
 
     // set plugin configuration
     Map<String, Object> pluginProps = new HashMap<>();
@@ -58,22 +123,6 @@ public class IndexUpgradeIntegrationTest extends AbstractFullDistribZkTestBase {
     clusterProp.process(cloudClient);
 
     log.info("-- completed set cluster props");
-
-
-    cloudClient.setDefaultCollection(collectionName);
-    // this indexes still without DV because plugin props haven't taken effect yet
-
-    // create several segments
-    for (int i = 0; i < 1000; i++) {
-      SolrInputDocument doc = new SolrInputDocument();
-      doc.addField(ID_FIELD, i);
-      doc.addField(TEST_FIELD, String.valueOf(i));
-      cloudClient.add(doc);
-      if (i > 0 && i % 200 == 0) {
-        cloudClient.commit();
-      }
-    }
-    cloudClient.commit();
 
     // retrieve current schema
     SchemaRequest schemaRequest = new SchemaRequest();
@@ -88,13 +137,14 @@ public class IndexUpgradeIntegrationTest extends AbstractFullDistribZkTestBase {
     SchemaResponse.UpdateResponse replaceResponse = replaceRequest.process(cloudClient);
 
     log.info("-- completed schema update");
+    Thread.sleep(5000);
 
     // bounce the collection
     Map<String, Long> urlToTimeBefore = new HashMap<>();
     collectStartTimes(collectionName, cloudClient, urlToTimeBefore);
     CollectionAdminRequest<CollectionAdminRequest.Reload> reload = new CollectionAdminRequest.Reload()
         .setCollectionName(collectionName);
-    reload.process(cloudClient);
+    rsp = reload.process(cloudClient);
 
     boolean reloaded = waitForReloads(collectionName, cloudClient, urlToTimeBefore);
     assertTrue("could not reload collection in time", reloaded);
@@ -102,15 +152,19 @@ public class IndexUpgradeIntegrationTest extends AbstractFullDistribZkTestBase {
     log.info("-- completed collection reload");
 
     // verify that schema doesn't match the actual fields anymore
-    CollectionAdminRequest<CollectionAdminRequest.ColStatus> status = new CollectionAdminRequest.ColStatus()
-        .setCollectionName(collectionName)
-        .setWithFieldInfos(true)
-        .setWithSegments(true);
-    CollectionAdminResponse rsp = status.process(cloudClient);
-    List<String> nonCompliant = (List<String>)rsp.getResponse().findRecursive(collectionName, "schemaNonCompliant");
+    rsp = status.process(cloudClient);
+    String rspString = Utils.toJSONString(rsp.getResponse());
+    nonCompliant = (List<String>)rsp.getResponse().findRecursive(collectionName, "schemaNonCompliant");
     assertNotNull("nonCompliant missing: " + rsp, nonCompliant);
     assertEquals("nonCompliant: " + nonCompliant, 1, nonCompliant.size());
     assertEquals("nonCompliant: " + nonCompliant, TEST_FIELD, nonCompliant.get(0));
+
+
+    urlToTimeBefore = new HashMap<>();
+    collectStartTimes(collectionName, cloudClient, urlToTimeBefore);
+    rsp = reload.process(cloudClient);
+    reloaded = waitForReloads(collectionName, cloudClient, urlToTimeBefore);
+    assertTrue("could not reload collection in time", reloaded);
 
     log.info("-- start optimize");
     // request optimize to make sure all segments are rewritten

@@ -82,7 +82,7 @@ public class PluggableMergePolicyTest extends AbstractFullDistribZkTestBase {
 
     cloudClient.setDefaultCollection(collectionName);
     Map<String, Object> pluginProps = new HashMap<>();
-    pluginProps.put(FieldType.CLASS_NAME, UninvertDocValuesMergePolicyFactory.class.getName());
+    pluginProps.put(FieldType.CLASS_NAME, AddDocValuesMergePolicyFactory.class.getName());
     String propValue = Utils.toJSONString(pluginProps);
     CollectionAdminRequest.ClusterProp clusterProp = new CollectionAdminRequest.ClusterProp()
         .setPropertyName(PluggableMergePolicyFactory.DEFAULT_POLICY_PROP)
@@ -136,7 +136,7 @@ public class PluggableMergePolicyTest extends AbstractFullDistribZkTestBase {
     try {
       IndexWriter iw = writerRef.get();
       MergePolicy mp = iw.getConfig().getMergePolicy();
-      assertEquals("custom merge policy", OneMergeWrappingMergePolicy.class.getName(), mp.getClass().getName());
+      assertEquals("custom merge policy", AddDocValuesMergePolicyFactory.AddDVMergePolicy.class.getName(), mp.getClass().getName());
     } finally {
       writerRef.decref();
     }

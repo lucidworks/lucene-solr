@@ -37,7 +37,7 @@ import org.apache.lucene.store.IOContext;
 import org.apache.lucene.util.NumericUtils;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrInputDocument;
-import org.apache.solr.index.AddDocValuesMergePolicyFactory;
+import org.apache.solr.index.AddDVOneSegmentMergePolicyFactory;
 import org.apache.solr.index.MergePolicyFactory;
 import org.apache.solr.index.MergePolicyFactoryArgs;
 import org.apache.solr.index.UninvertDocValuesMergePolicyFactory;
@@ -50,7 +50,7 @@ import org.junit.Test;
 import org.junit.rules.RuleChain;
 import org.junit.rules.TestRule;
 
-public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
+public class AddDVOneMergeMergePolicyTest extends SolrTestCaseJ4 {
 
   @Rule
   public TestRule solrTestRules = RuleChain.outerRule(new SystemPropertiesRestoreRule());
@@ -280,7 +280,7 @@ public class AddDocValuesMergePolicyTest extends SolrTestCaseJ4 {
     UninvertDocValuesMergePolicyFactory mpfU = new UninvertDocValuesMergePolicyFactory(h.getCore().getResourceLoader(),
         new MergePolicyFactoryArgs(), h.getCore().getLatestSchema());
 
-    MergePolicyFactory mpfR = new AddDocValuesMergePolicyFactory(h.getCore().getResourceLoader(),
+    MergePolicyFactory mpfR = new AddDVOneSegmentMergePolicyFactory(h.getCore().getResourceLoader(),
         new MergePolicyFactoryArgs(), h.getCore().getLatestSchema());
     iwc.setMergePolicy(mpfU.getMergePolicyInstance(mpfR.getMergePolicy()));
 

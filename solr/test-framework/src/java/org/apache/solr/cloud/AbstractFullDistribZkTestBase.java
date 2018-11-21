@@ -843,26 +843,36 @@ public abstract class AbstractFullDistribZkTestBase extends AbstractDistribZkTes
     long timeoutAt = System.currentTimeMillis() + 45000;
 
     boolean allTimesAreCorrect = false;
+    Set<String> retry = new HashSet<>();
+    Map<String,Long> urlToTimeAfter = new HashMap<>();
     while (System.currentTimeMillis() < timeoutAt) {
-      Map<String,Long> urlToTimeAfter = new HashMap<>();
+      retry.clear();
+      urlToTimeAfter.clear();
       collectStartTimes(collectionName, cloudClient, urlToTimeAfter);
 
-      boolean retry = false;
       Set<Entry<String,Long>> entries = urlToTimeBefore.entrySet();
       for (Entry<String,Long> entry : entries) {
         Long beforeTime = entry.getValue();
         Long afterTime = urlToTimeAfter.get(entry.getKey());
         assertNotNull(afterTime);
         if (afterTime <= beforeTime) {
-          retry = true;
-          break;
+          retry.add(entry.getKey());
         }
-
       }
-      if (!retry) {
+      if (retry.isEmpty()) {
         allTimesAreCorrect = true;
         break;
       }
+      try {
+        Thread.sleep(1000);
+      } catch (InterruptedException e) {
+        break;
+      }
+    }
+    if (!retry.isEmpty()) {
+      log.warn("Reload time out for cores: " + retry);
+      log.warn("Times before: " + urlToTimeBefore);
+      log.warn("Times after: " + urlToTimeAfter);
     }
     return allTimesAreCorrect;
   }

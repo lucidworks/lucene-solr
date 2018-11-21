@@ -731,7 +731,8 @@ public final class SolrCore implements SolrInfoMBean, Closeable {
     this.dataDir = initDataDir(dataDir, config, coreDescriptor);
     this.ulogDir = initUpdateLogDir(coreDescriptor);
 
-    log.info("[{}] Opening new SolrCore at [{}], dataDir=[{}]", logid, resourceLoader.getInstanceDir(), dataDir);
+    this.startTime = System.currentTimeMillis();
+    log.info("[{}] Opening new SolrCore at [{}], dataDir=[{}], startTime={}", logid, resourceLoader.getInstanceDir(), dataDir, getStartTime());
 
     checkVersionFieldExistsInSchema(schema, coreDescriptor);
 
@@ -741,7 +742,6 @@ public final class SolrCore implements SolrInfoMBean, Closeable {
 
     this.schema = initSchema(config, schema);
 
-    this.startTime = System.currentTimeMillis();
     this.maxWarmingSearchers = config.maxWarmingSearchers;
     this.slowQueryThresholdMillis = config.slowQueryThresholdMillis;
 
