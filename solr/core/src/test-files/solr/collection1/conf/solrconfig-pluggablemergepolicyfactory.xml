@@ -27,6 +27,7 @@
 
   <indexConfig>
     <useCompoundFile>${useCompoundFile:false}</useCompoundFile>
+    <!--<infoStream>true</infoStream>-->
     <mergePolicyFactory class="org.apache.solr.index.PluggableMergePolicyFactory">
     </mergePolicyFactory>
      

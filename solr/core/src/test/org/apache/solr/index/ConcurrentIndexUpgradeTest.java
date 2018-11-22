@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.request.schema.SchemaRequest;
@@ -24,6 +25,7 @@ import org.slf4j.LoggerFactory;
 /**
  *
  */
+@LuceneTestCase.SuppressCodecs({"Memory", "Direct"})
 public class ConcurrentIndexUpgradeTest extends AbstractFullDistribZkTestBase {
   private static final Logger log = LoggerFactory.getLogger(ConcurrentIndexUpgradeTest.class);
 
@@ -89,12 +91,12 @@ public class ConcurrentIndexUpgradeTest extends AbstractFullDistribZkTestBase {
               ureq.add(doc);
               docId++;
             }
-            ureq.process(cloudClient);
-            cloudClient.commit();
-            Thread.sleep(100);
+            ureq.process(cloudClient, collectionName);
+            cloudClient.commit(collectionName);
+            Thread.sleep(500);
           }
         } catch (Exception e) {
-          fail("Can't index new documents: " + e.toString());
+          log.warn("Can't index documents", e);
         }
       }
     };
@@ -116,6 +118,8 @@ public class ConcurrentIndexUpgradeTest extends AbstractFullDistribZkTestBase {
     // set plugin configuration
     Map<String, Object> pluginProps = new HashMap<>();
     pluginProps.put(FieldType.CLASS_NAME, AddDocValuesMergePolicyFactory.class.getName());
+    // prevent merging
+    pluginProps.put(AddDocValuesMergePolicyFactory.NO_MERGE_PROP, true);
     String propValue = Utils.toJSONString(pluginProps);
     CollectionAdminRequest.ClusterProp clusterProp = new CollectionAdminRequest.ClusterProp()
         .setPropertyName(PluggableMergePolicyFactory.MERGE_POLICY_PROP + collectionName)
@@ -123,6 +127,7 @@ public class ConcurrentIndexUpgradeTest extends AbstractFullDistribZkTestBase {
     clusterProp.process(cloudClient);
 
     log.info("-- completed set cluster props");
+    Thread.sleep(5000);
 
     // retrieve current schema
     SchemaRequest schemaRequest = new SchemaRequest();
@@ -137,7 +142,6 @@ public class ConcurrentIndexUpgradeTest extends AbstractFullDistribZkTestBase {
     SchemaResponse.UpdateResponse replaceResponse = replaceRequest.process(cloudClient);
 
     log.info("-- completed schema update");
-    Thread.sleep(5000);
 
     // bounce the collection
     Map<String, Long> urlToTimeBefore = new HashMap<>();
@@ -153,18 +157,36 @@ public class ConcurrentIndexUpgradeTest extends AbstractFullDistribZkTestBase {
 
     // verify that schema doesn't match the actual fields anymore
     rsp = status.process(cloudClient);
-    String rspString = Utils.toJSONString(rsp.getResponse());
+    log.info("--rsp: {}", rsp);
     nonCompliant = (List<String>)rsp.getResponse().findRecursive(collectionName, "schemaNonCompliant");
     assertNotNull("nonCompliant missing: " + rsp, nonCompliant);
     assertEquals("nonCompliant: " + nonCompliant, 1, nonCompliant.size());
     assertEquals("nonCompliant: " + nonCompliant, TEST_FIELD, nonCompliant.get(0));
 
 
+    // update plugin props to allow merging
+    pluginProps.put(AddDocValuesMergePolicyFactory.NO_MERGE_PROP, false);
+    propValue = Utils.toJSONString(pluginProps);
+    clusterProp = new CollectionAdminRequest.ClusterProp()
+        .setPropertyName(PluggableMergePolicyFactory.MERGE_POLICY_PROP + collectionName)
+        .setPropertyValue(propValue);
+    clusterProp.process(cloudClient);
+
+    log.info("-- completed set cluster props 2");
+
     urlToTimeBefore = new HashMap<>();
     collectStartTimes(collectionName, cloudClient, urlToTimeBefore);
     rsp = reload.process(cloudClient);
     reloaded = waitForReloads(collectionName, cloudClient, urlToTimeBefore);
     assertTrue("could not reload collection in time", reloaded);
+
+    // verify that schema doesn't match the actual fields anymore
+    rsp = status.process(cloudClient);
+    nonCompliant = (List<String>)rsp.getResponse().findRecursive(collectionName, "schemaNonCompliant");
+    assertNotNull("nonCompliant missing: " + rsp, nonCompliant);
+    assertEquals("nonCompliant: " + nonCompliant, 1, nonCompliant.size());
+    assertEquals("nonCompliant: " + nonCompliant, TEST_FIELD, nonCompliant.get(0));
+
 
     log.info("-- start optimize");
     // request optimize to make sure all segments are rewritten
