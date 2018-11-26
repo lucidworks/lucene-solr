@@ -5,7 +5,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.lucene.document.Document;
+import org.apache.lucene.index.LeafReader;
+import org.apache.lucene.index.SortedDocValues;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
+import org.apache.solr.client.solrj.embedded.JettySolrRunner;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.request.schema.SchemaRequest;
@@ -14,7 +19,12 @@ import org.apache.solr.client.solrj.response.schema.SchemaResponse;
 import org.apache.solr.cloud.AbstractFullDistribZkTestBase;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.util.Utils;
+import org.apache.solr.core.CoreContainer;
+import org.apache.solr.core.SolrCore;
 import org.apache.solr.schema.FieldType;
+import org.apache.solr.search.SolrIndexSearcher;
+import org.apache.solr.servlet.SolrDispatchFilter;
+import org.apache.solr.util.RefCounted;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -200,6 +210,29 @@ public class ConcurrentIndexUpgradeTest extends AbstractFullDistribZkTestBase {
     assertNotNull("nonCompliant missing: " + rsp, nonCompliant);
     assertEquals("nonCompliant: " + nonCompliant, 1, nonCompliant.size());
     assertEquals("nonCompliant: " + nonCompliant, "(NONE)", nonCompliant.get(0));
+
+    // verify that all docs have docValues
+    for (JettySolrRunner jetty : jettys) {
+      CoreContainer cores = ((SolrDispatchFilter)jetty.getDispatchFilter().getFilter()).getCores();
+      for (SolrCore core : cores.getCores()) {
+        RefCounted<SolrIndexSearcher> searcherRef = core.getSearcher();
+        SolrIndexSearcher searcher = searcherRef.get();
+        try {
+          LeafReader reader = searcher.getLeafReader();
+          int maxDoc = reader.maxDoc();
+          SortedDocValues dvs = reader.getSortedDocValues(TEST_FIELD);
+          for (int i = 0; i < maxDoc; i++) {
+            Document d = reader.document(i);
+            BytesRef bytes = dvs.get(i);
+            assertNotNull(bytes);
+            String dvString = bytes.utf8ToString();
+            assertEquals(d.get("id"), dvString);
+          }
+        } finally {
+          searcherRef.decref();
+        }
+      }
+    }
   }
 
   private Map<String, Object> getSchemaField(String name, SchemaResponse schemaResponse) {
