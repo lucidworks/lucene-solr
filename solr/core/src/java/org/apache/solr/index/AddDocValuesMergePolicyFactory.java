@@ -67,6 +67,7 @@ public class AddDocValuesMergePolicyFactory extends SimpleMergePolicyFactory {
   public static final String NO_MERGE_PROP = "noMerge";
 
   public static final String DIAGNOSTICS_MARKER_PROP = "__addDVMarker__";
+  public static final String DEFAULT_MARKER = AddDVOneMerge.class.getSimpleName();
 
   public AddDocValuesMergePolicyFactory(SolrResourceLoader resourceLoader, MergePolicyFactoryArgs args, IndexSchema schema) {
     super(resourceLoader, args, schema);
@@ -290,7 +291,7 @@ public class AddDocValuesMergePolicyFactory extends SimpleMergePolicyFactory {
                          final boolean skipIntegrityCheck) {
       super(segments);
       this.schema = schema;
-      this.marker = marker != null ? marker : this.getClass().getSimpleName();
+      this.marker = marker != null ? marker : DEFAULT_MARKER;
       this.skipIntegrityCheck = skipIntegrityCheck;
     }
 

@@ -6,7 +6,12 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.lucene.document.Document;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.FilterLeafReader;
+import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReader;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.SegmentReader;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
@@ -210,6 +215,7 @@ public class ConcurrentIndexUpgradeTest extends AbstractFullDistribZkTestBase {
     assertNotNull("nonCompliant missing: " + rsp, nonCompliant);
     assertEquals("nonCompliant: " + nonCompliant, 1, nonCompliant.size());
     assertEquals("nonCompliant: " + nonCompliant, "(NONE)", nonCompliant.get(0));
+    runIndexer.set(false);
 
     // verify that all docs have docValues
     for (JettySolrRunner jetty : jettys) {
@@ -227,6 +233,21 @@ public class ConcurrentIndexUpgradeTest extends AbstractFullDistribZkTestBase {
             assertNotNull(bytes);
             String dvString = bytes.utf8ToString();
             assertEquals(d.get("id"), dvString);
+          }
+          DirectoryReader directoryReader = searcher.getIndexReader();
+          for (LeafReaderContext leafCtx : directoryReader.leaves()) {
+            LeafReader leaf = leafCtx.reader();
+            while (leaf instanceof FilterLeafReader) {
+              leaf = ((FilterLeafReader)leaf).getDelegate();
+            }
+            assertTrue(leaf instanceof SegmentReader);
+            SegmentReader segmentReader = (SegmentReader)leaf;
+            String marker = segmentReader.getSegmentInfo().info.getDiagnostics().get(AddDocValuesMergePolicyFactory.DIAGNOSTICS_MARKER_PROP);
+            // new flush segments that are fully compliant won't have
+            // the marker because they were not wrapped
+            if (marker != null) {
+              assertEquals(AddDocValuesMergePolicyFactory.DEFAULT_MARKER, marker);
+            }
           }
         } finally {
           searcherRef.decref();
