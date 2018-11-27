@@ -17,6 +17,11 @@ package org.apache.solr.index;
  * limitations under the License.
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.util.Random;
 import java.util.function.IntUnaryOperator;
 
@@ -29,6 +34,9 @@ import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.client.solrj.impl.XMLResponseParser;
+import org.apache.solr.client.solrj.response.FacetField;
+import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.SchemaField;
@@ -112,6 +120,25 @@ public class UninvertDocValuesMergePolicyTest extends SolrTestCaseJ4 {
       assertEquals(DocValuesType.SORTED, infos.fieldInfo(TEST_FIELD).getDocValuesType());
     });
 
+    // Check that faceting gives the correct output.
+    String response = h.query(req("q", "*:*"
+        ,"facet", "true", "facet.field", TEST_FIELD
+        ,"facet.limit", "-1"
+    ));
+
+    XMLResponseParser parser = new XMLResponseParser();
+    try (InputStream is = new ByteArrayInputStream(response.getBytes())) {
+      assertNotNull(is);
+      try (Reader in = new InputStreamReader(is, StandardCharsets.UTF_8)) {
+        QueryResponse qr = new QueryResponse(parser.processResponse(in), null);
+        FacetField ff = qr.getFacetField(TEST_FIELD);
+        int total = 0;
+        for (FacetField.Count count : ff.getValues()) {
+          total += count.getCount();
+        }
+        assertEquals("Should have exactly as many facets as docs", qr.getResults().getNumFound(), total);
+      }
+    }
     int optimizeSegments = 1;
     assertU(optimize("maxSegments", String.valueOf(optimizeSegments)));
 
