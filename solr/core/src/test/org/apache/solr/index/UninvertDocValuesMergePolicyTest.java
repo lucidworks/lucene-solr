@@ -22,6 +22,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Random;
 import java.util.function.IntUnaryOperator;
 
@@ -37,6 +40,7 @@ import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.impl.XMLResponseParser;
 import org.apache.solr.client.solrj.response.FacetField;
 import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.common.SolrDocument;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.SchemaField;
@@ -97,9 +101,7 @@ public class UninvertDocValuesMergePolicyTest extends SolrTestCaseJ4 {
       assertEquals(DocValuesType.NONE, infos.fieldInfo(TEST_FIELD).getDocValuesType());
     });
 
-
     addDocValuesTo(h, TEST_FIELD);
-
 
     // Add some more documents with doc values turned on including updating some
     for(int i=90; i < 110; i++) {
@@ -120,25 +122,9 @@ public class UninvertDocValuesMergePolicyTest extends SolrTestCaseJ4 {
       assertEquals(DocValuesType.SORTED, infos.fieldInfo(TEST_FIELD).getDocValuesType());
     });
 
-    // Check that faceting gives the correct output.
-    String response = h.query(req("q", "*:*"
-        ,"facet", "true", "facet.field", TEST_FIELD
-        ,"facet.limit", "-1"
-    ));
+    // Check that faceting, sorting and grouping give the correct output.
+    checkFacetingGroupingSorting();
 
-    XMLResponseParser parser = new XMLResponseParser();
-    try (InputStream is = new ByteArrayInputStream(response.getBytes())) {
-      assertNotNull(is);
-      try (Reader in = new InputStreamReader(is, StandardCharsets.UTF_8)) {
-        QueryResponse qr = new QueryResponse(parser.processResponse(in), null);
-        FacetField ff = qr.getFacetField(TEST_FIELD);
-        int total = 0;
-        for (FacetField.Count count : ff.getValues()) {
-          total += count.getCount();
-        }
-        assertEquals("Should have exactly as many facets as docs", qr.getResults().getNumFound(), total);
-      }
-    }
     int optimizeSegments = 1;
     assertU(optimize("maxSegments", String.valueOf(optimizeSegments)));
 
@@ -171,6 +157,64 @@ public class UninvertDocValuesMergePolicyTest extends SolrTestCaseJ4 {
     });
   }
 
+  private void checkFacetingGroupingSorting() throws Exception {
+    String response = h.query(req("q", "*:*"
+        ,"facet", "true", "facet.field", TEST_FIELD
+        ,"facet.limit", "-1"
+        ,"sort", TEST_FIELD + " desc"
+        ,"rows", "1000"
+    ));
+
+    long numDocs = 0;
+    XMLResponseParser parser = new XMLResponseParser();
+    try (InputStream is = new ByteArrayInputStream(response.getBytes())) {
+      assertNotNull(is);
+      try (Reader in = new InputStreamReader(is, StandardCharsets.UTF_8)) {
+        QueryResponse qr = new QueryResponse(parser.processResponse(in), null);
+        // Preserve for grouping later
+        numDocs = qr.getResults().getNumFound();
+        FacetField ff = qr.getFacetField(TEST_FIELD);
+        int total = 0;
+        for (FacetField.Count count : ff.getValues()) {
+          total += count.getCount();
+        }
+        assertEquals("Should have exactly as many facets as docs", qr.getResults().getNumFound(), total);
+        // Man, this is clumsy
+        List<String> sorts = new ArrayList<>();
+        for (int idx = 0; idx < qr.getResults().getNumFound(); ++idx) {
+          sorts.add(String.valueOf(idx));
+        }
+        sorts.sort(Collections.reverseOrder());
+        int idx = 0;
+        for (SolrDocument doc : qr.getResults()) {
+          assertEquals("Sort order should match document ID",
+              doc.getFieldValue("id"), sorts.get(idx));
+          ++idx;
+        }
+      }
+    }
+
+    // Now check grouping, it's...different.
+
+    response = h.query(req("q", "*:*"
+        ,"group", "true"
+        ,"group.field", TEST_FIELD
+        ,"rows", "1000"
+    ));
+
+    try (InputStream is = new ByteArrayInputStream(response.getBytes())) {
+      assertNotNull(is);
+      try (Reader in = new InputStreamReader(is, StandardCharsets.UTF_8)) {
+        QueryResponse qr = new QueryResponse(parser.processResponse(in), null);
+        assertEquals("A bit of a weak test, but it works as long as group values are unique",
+            qr.getGroupResponse().getValues().get(0).getValues().size(),
+            numDocs);
+      }
+    }
+
+
+
+  }
   // When an non-indexed field gets merged, it exhibit the old behavior
   // The field will be merged, docvalues headers updated, but no docvalues for this field
   public void testNonIndexedFieldDoesNonFail() throws Exception {
