@@ -34,6 +34,7 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 
 import javax.xml.xpath.XPath;
@@ -366,20 +367,15 @@ public class IndexSchema {
     queryAnalyzer = new SolrQueryAnalyzer();
   }
   
-  public Map<String,UninvertingReader.Type> getUninversionMap(IndexReader reader) {
-    Map<String,UninvertingReader.Type> map = new HashMap<>();
-    for (FieldInfo f : MultiFields.getMergedFieldInfos(reader)) {
-      if (f.getDocValuesType() == DocValuesType.NONE && f.getIndexOptions() != IndexOptions.NONE) {
-        SchemaField sf = getFieldOrNull(f.name);
-        if (sf != null) {
-          UninvertingReader.Type type = sf.getType().getUninversionType(sf);
-          if (type != null) {
-            map.put(f.name, type);
-          }
-        }
+  public Function<String,UninvertingReader.Type> getUninversionMapper() {
+    return name -> {
+      SchemaField sf = getFieldOrNull(name);
+      if (sf == null) {
+        return null;
       }
-    }
-    return map;
+
+      return sf.getType().getUninversionType(sf);
+    };
   }
 
   /**

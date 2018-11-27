@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.index.CodecReader;
 import org.apache.lucene.index.FieldInfo;
+import org.apache.lucene.index.FilterMergePolicy;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.MergePolicy;
@@ -39,7 +41,6 @@ import org.apache.lucene.index.MergeTrigger;
 import org.apache.lucene.index.SegmentCommitInfo;
 import org.apache.lucene.index.SegmentInfos;
 import org.apache.lucene.index.SegmentReader;
-import org.apache.lucene.index.TieredMergePolicy;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.uninverting.UninvertingReader;
 import org.apache.solr.core.SolrResourceLoader;
@@ -52,10 +53,10 @@ import org.slf4j.LoggerFactory;
  * A merge policy that can detect schema changes and  write docvalues into merging segments when a field has docvalues enabled
  * Using UninvertingReader.
  *
- * This merge policy uses TieredMergePolicy for selecting regular merge segments
+ * This merge policy uses wrapped MergePolicy (default is TieredMergePolicy) for selecting regular merge segments
  *
  */
-public class AddDocValuesMergePolicyFactory extends SimpleMergePolicyFactory {
+public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   private final boolean skipIntegrityCheck;
@@ -68,6 +69,7 @@ public class AddDocValuesMergePolicyFactory extends SimpleMergePolicyFactory {
 
   public static final String DIAGNOSTICS_MARKER_PROP = "__addDVMarker__";
   public static final String DEFAULT_MARKER = AddDVOneMerge.class.getSimpleName();
+
 
   public AddDocValuesMergePolicyFactory(SolrResourceLoader resourceLoader, MergePolicyFactoryArgs args, IndexSchema schema) {
     super(resourceLoader, args, schema);
@@ -92,6 +94,7 @@ public class AddDocValuesMergePolicyFactory extends SimpleMergePolicyFactory {
     if (!args.keys().isEmpty()) {
       throw new IllegalArgumentException("Arguments were "+args+" but "+getClass().getSimpleName()+" takes no such arguments.");
     }
+
     log.info("Using args: marker={}, noMerge={}, skipIntegrityCheck={}", marker, noMerge, skipIntegrityCheck);
   }
 
@@ -112,8 +115,8 @@ public class AddDocValuesMergePolicyFactory extends SimpleMergePolicyFactory {
   }
 
   @Override
-  public MergePolicy getMergePolicyInstance() {
-    return new AddDVMergePolicy(schema, marker, noMerge, skipIntegrityCheck);
+  public MergePolicy getMergePolicyInstance(MergePolicy wrappedMP) {
+    return new AddDVMergePolicy(wrappedMP, schema, marker, noMerge, skipIntegrityCheck);
   }
 
   private static UninvertingReader.Type getUninversionType(IndexSchema schema, FieldInfo fi) {
@@ -129,7 +132,7 @@ public class AddDocValuesMergePolicyFactory extends SimpleMergePolicyFactory {
   }
 
 
-  public static class AddDVMergePolicy extends TieredMergePolicy {
+  public static class AddDVMergePolicy extends FilterMergePolicy {
     private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
     private final IndexSchema schema;
@@ -138,7 +141,8 @@ public class AddDocValuesMergePolicyFactory extends SimpleMergePolicyFactory {
     private final boolean noMerge;
     private final Map<String, Object> stats = new ConcurrentHashMap<>();
 
-    AddDVMergePolicy(IndexSchema schema, String marker, boolean noMerge, boolean skipIntegrityCheck) {
+    AddDVMergePolicy(MergePolicy in, IndexSchema schema, String marker, boolean noMerge, boolean skipIntegrityCheck) {
+      super(in);
       this.schema = schema;
       this.marker = marker;
       this.noMerge = noMerge;
@@ -158,23 +162,19 @@ public class AddDocValuesMergePolicyFactory extends SimpleMergePolicyFactory {
       counter.addAndGet(delta);
     }
 
-    @Override
-    public MergeSpecification findMerges(MergeTrigger mergeTrigger, SegmentInfos segmentInfos, IndexWriter writer) throws IOException {
-      if (noMerge) {
-        count("noMerge");
-        log.debug("findMerges: skipping, noMerge set");
-        return null;
-      }
-      MergeSpecification spec = super.findMerges(mergeTrigger, segmentInfos, writer);
+    private MergeSpecification wrapMergeSpecification(String mergeType, MergeSpecification spec) throws IOException {
       if (spec == null || spec.merges.isEmpty()) {
-        log.debug("findMerges: empty merge spec");
         count("emptyMerge");
         return spec;
       }
       StringBuilder sb = new StringBuilder();
       count("mergesTotal", spec.merges.size());
+      count(mergeType);
       for (int i = 0; i < spec.merges.size(); i++) {
         OneMerge oneMerge = spec.merges.get(i);
+        if (oneMerge instanceof AddDVOneMerge) { // already wrapping
+          continue;
+        }
         int needWrapping = 0;
         sb.setLength(0);
         for (SegmentCommitInfo info : oneMerge.segments) {
@@ -207,6 +207,17 @@ public class AddDocValuesMergePolicyFactory extends SimpleMergePolicyFactory {
         }
       }
       return spec;
+    }
+
+    @Override
+    public MergeSpecification findMerges(MergeTrigger mergeTrigger, SegmentInfos segmentInfos, IndexWriter writer) throws IOException {
+      if (noMerge) {
+        count("noMerge");
+        log.debug("findMerges: skipping, noMerge set");
+        return null;
+      }
+      MergeSpecification spec = super.findMerges(mergeTrigger, segmentInfos, writer);
+      return wrapMergeSpecification("findMerges", spec);
     }
 
     /**
@@ -246,29 +257,45 @@ public class AddDocValuesMergePolicyFactory extends SimpleMergePolicyFactory {
         return true;
       }
     }
+
     @Override
     public MergeSpecification findForcedMerges(SegmentInfos infos, int maxSegmentCount, Map<SegmentCommitInfo, Boolean> segmentsToMerge, IndexWriter writer) throws IOException {
       if (noMerge) {
         log.debug("findForcedMerges: skipping, noMerge set");
         return null;
       }
-      MergeSpecification spec = new MergeSpecification();
+      MergeSpecification spec = super.findForcedMerges(infos, maxSegmentCount, segmentsToMerge, writer);
+      if (spec == null) {
+        spec = new MergeSpecification();
+      }
 
+      // now find the stragglers and add them individually to the merge
+
+      // don't take into account segments that are already being merged
       final Set<SegmentCommitInfo> merging = new HashSet<>(writer.getMergingSegments());
+      // nor the ones already to be wrapped
+      for (OneMerge om : spec.merges) {
+        merging.addAll(om.segments);
+      }
 
       Iterator<SegmentCommitInfo> iter = infos.iterator();
       while (iter.hasNext()) {
         SegmentCommitInfo info = iter.next();
         final Boolean isOriginal = segmentsToMerge.get(info);
-        if (isOriginal == null || isOriginal == false || merging.contains(info)) {
+        if (isOriginal == null || isOriginal == Boolean.FALSE || merging.contains(info)) {
         } else {
           if (shouldRewrite(info)) {
             count("forcedMergeWrapped");
+            log.info("--forceMerging {}", info.toString());
             spec.add(new AddDVOneMerge(Collections.singletonList(info), schema, marker, skipIntegrityCheck));
           }
         }
       }
-      return (spec.merges.size() == 0) ? null : spec;
+      if (spec.merges.isEmpty()) {
+        spec = null;
+      }
+
+      return wrapMergeSpecification("findForcedMerges", spec);
     }
 
     @Override
@@ -277,7 +304,8 @@ public class AddDocValuesMergePolicyFactory extends SimpleMergePolicyFactory {
         log.debug("findForcedDeletesMerges: skipping, noMerge set");
         return null;
       }
-      return super.findForcedDeletesMerges(infos, writer);
+      MergeSpecification spec = super.findForcedDeletesMerges(infos, writer);
+      return wrapMergeSpecification("findForcedDeletesMerges", spec);
     }
   }
 
@@ -317,7 +345,6 @@ public class AddDocValuesMergePolicyFactory extends SimpleMergePolicyFactory {
       }
 
       if (uninversionMap == null) {
-        // should not happen - we already check that we need to uninvert some fields
         return reader; // Default to normal reader if nothing to uninvert
       } else {
         return new UninvertingFilterCodecReader(reader, uninversionMap, skipIntegrityCheck);

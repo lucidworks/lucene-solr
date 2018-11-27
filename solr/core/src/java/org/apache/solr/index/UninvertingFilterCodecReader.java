@@ -48,7 +48,7 @@ public class UninvertingFilterCodecReader extends FilterCodecReader {
                                       final boolean skipIntegrityCheck) {
     super(in);
 
-    this.uninvertingReader = new UninvertingReader(in, uninversionMap);
+    this.uninvertingReader = UninvertingReader.wrap(in, name -> uninversionMap.get(name));
     this.docValuesProducer = new DocValuesProducer() {
 
       @Override

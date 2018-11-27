@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
+import java.util.function.Function;
 
 import org.apache.lucene.document.BinaryDocValuesField; // javadocs
 import org.apache.lucene.document.DoubleField; // javadocs
@@ -147,48 +148,47 @@ public class UninvertingReader extends FilterLeafReader {
    * can be used normally (e.g. passed to {@link DirectoryReader#openIfChanged(DirectoryReader)})
    * and so on. 
    */
-  public static DirectoryReader wrap(DirectoryReader in, final Map<String,Type> mapping) throws IOException {
-    return new UninvertingDirectoryReader(in, mapping);
+  public static DirectoryReader wrap(DirectoryReader in, Function<String, Type> mapper) throws IOException {
+    return new UninvertingDirectoryReader(in, mapper);
   }
-  
+
   static class UninvertingDirectoryReader extends FilterDirectoryReader {
-    final Map<String,Type> mapping;
-    
-    public UninvertingDirectoryReader(DirectoryReader in, final Map<String,Type> mapping) throws IOException {
+    final Function<String, Type> mapper;
+
+    public UninvertingDirectoryReader(DirectoryReader in, final Function<String, Type> mapper) throws IOException {
       super(in, new FilterDirectoryReader.SubReaderWrapper() {
         @Override
         public LeafReader wrap(LeafReader reader) {
-          return new UninvertingReader(reader, mapping);
+          return UninvertingReader.wrap(reader, mapper);
         }
       });
-      this.mapping = mapping;
+      this.mapper = mapper;
     }
 
     @Override
     protected DirectoryReader doWrapDirectoryReader(DirectoryReader in) throws IOException {
-      return new UninvertingDirectoryReader(in, mapping);
+      return new UninvertingDirectoryReader(in, mapper);
     }
   }
-  
-  final Map<String,Type> mapping;
+
+  final Function<String, Type> mapping;
   final FieldInfos fieldInfos;
   
-  /** 
-   * Create a new UninvertingReader with the specified mapping 
-   * <p>
-   * Expert: This should almost never be used. Use {@link #wrap(DirectoryReader, Map)}
-   * instead.
-   *  
-   * @lucene.internal
-   */
-  public UninvertingReader(LeafReader in, Map<String,Type> mapping) {
+  public UninvertingReader(LeafReader in, Function<String, Type> mapping, FieldInfos fieldInfos) {
     super(in);
     this.mapping = mapping;
+    this.fieldInfos = fieldInfos;
+  }
+
+
+  public static LeafReader wrap(LeafReader in, Function<String, Type> mapping) {
+    boolean wrap = false;
+
     ArrayList<FieldInfo> filteredInfos = new ArrayList<>();
     for (FieldInfo fi : in.getFieldInfos()) {
       DocValuesType type = fi.getDocValuesType();
       if (fi.getIndexOptions() != IndexOptions.NONE && fi.getDocValuesType() == DocValuesType.NONE) {
-        Type t = mapping.get(fi.name);
+        Type t = mapping.apply(fi.name);
         if (t != null) {
           switch(t) {
             case INTEGER:
@@ -215,10 +215,20 @@ public class UninvertingReader extends FilterLeafReader {
           }
         }
       }
-      filteredInfos.add(new FieldInfo(fi.name, fi.number, fi.hasVectors(), fi.omitsNorms(),
-                                      fi.hasPayloads(), fi.getIndexOptions(), type, -1, Collections.<String,String>emptyMap()));
+      if (type != fi.getDocValuesType()) { // we changed it
+        wrap = true;
+        filteredInfos.add(new FieldInfo(fi.name, fi.number, fi.hasVectors(), fi.omitsNorms(),
+            fi.hasPayloads(), fi.getIndexOptions(), type, -1, Collections.<String,String>emptyMap()));
+      } else {
+        filteredInfos.add(fi);
+      }
     }
-    fieldInfos = new FieldInfos(filteredInfos.toArray(new FieldInfo[filteredInfos.size()]));
+    if (!wrap) {
+      return in;
+    } else {
+      FieldInfos fieldInfos = new FieldInfos(filteredInfos.toArray(new FieldInfo[filteredInfos.size()]));
+      return new UninvertingReader(in, mapping, fieldInfos);
+    }
   }
 
   @Override
@@ -291,12 +301,12 @@ public class UninvertingReader extends FilterLeafReader {
    * Returns the field's uninversion type, or null 
    * if the field doesn't exist or doesn't have a mapping.
    */
+  /**
+   * Returns the field's uninversion type, or null
+   * if the field doesn't exist or doesn't have a mapping.
+   */
   private Type getType(String field) {
-    FieldInfo info = fieldInfos.fieldInfo(field);
-    if (info == null || info.getDocValuesType() == DocValuesType.NONE) {
-      return null;
-    }
-    return mapping.get(field);
+    return mapping.apply(field);
   }
 
   @Override

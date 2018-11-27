@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.Function;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -131,9 +132,14 @@ public class TestFieldCacheSortRandom extends LuceneTestCase {
       }
     }
 
-    Map<String,UninvertingReader.Type> mapping = new HashMap<>();
-    mapping.put("stringdv", Type.SORTED);
-    mapping.put("id", Type.INTEGER);
+    Function<String, Type> mapping = (name) -> {
+      if (name.equals("stringdv")) {
+        return Type.SORTED;
+      } else if (name.equals("id")) {
+        return Type.INTEGER;
+      }
+      return null;
+    };
     final IndexReader r = UninvertingReader.wrap(writer.getReader(), mapping);
     writer.close();
     if (VERBOSE) {

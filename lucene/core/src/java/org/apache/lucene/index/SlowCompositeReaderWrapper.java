@@ -133,7 +133,8 @@ public final class SlowCompositeReaderWrapper extends LeafReader {
       }
     }
     // cached ordinal map
-    if (getFieldInfos().fieldInfo(field).getDocValuesType() != DocValuesType.SORTED) {
+    final FieldInfo fieldInfo = getFieldInfos().fieldInfo(field);
+    if (fieldInfo != null && fieldInfo.getDocValuesType() != DocValuesType.SORTED) {
       return null;
     }
     int size = in.leaves().size();
@@ -171,7 +172,8 @@ public final class SlowCompositeReaderWrapper extends LeafReader {
       }
     }
     // cached ordinal map
-    if (getFieldInfos().fieldInfo(field).getDocValuesType() != DocValuesType.SORTED_SET) {
+    final FieldInfo fieldInfo = getFieldInfos().fieldInfo(field);
+    if (fieldInfo != null && fieldInfo.getDocValuesType() != DocValuesType.SORTED_SET) {
       return null;
     }
     assert map != null;

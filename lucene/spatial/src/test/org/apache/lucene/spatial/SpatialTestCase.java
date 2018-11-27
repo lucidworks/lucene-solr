@@ -81,7 +81,7 @@ public abstract class SpatialTestCase extends LuceneTestCase {
     final Random random = random();
     analyzer = new MockAnalyzer(random);
     indexWriter = new RandomIndexWriter(random,directory, newIWConfig(random, analyzer));
-    indexReader = UninvertingReader.wrap(indexWriter.getReader(), uninvertMap);
+    indexReader = UninvertingReader.wrap(indexWriter.getReader(), uninvertMap::get);
     indexSearcher = newSearcher(indexReader);
   }
 

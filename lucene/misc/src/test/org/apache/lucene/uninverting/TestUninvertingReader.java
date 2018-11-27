@@ -62,8 +62,8 @@ public class TestUninvertingReader extends LuceneTestCase {
     iw.forceMerge(1);
     iw.close();
     
-    DirectoryReader ir = UninvertingReader.wrap(DirectoryReader.open(dir), 
-                         Collections.singletonMap("foo", Type.SORTED_SET_INTEGER));
+    DirectoryReader ir = UninvertingReader.wrap(DirectoryReader.open(dir),
+                         name -> name.equals("foo") ? Type.SORTED_SET_INTEGER : null);
     LeafReader ar = ir.leaves().get(0).reader();
     SortedSetDocValues v = ar.getSortedSetDocValues("foo");
     assertEquals(2, v.getValueCount());
@@ -103,8 +103,8 @@ public class TestUninvertingReader extends LuceneTestCase {
     iw.forceMerge(1);
     iw.close();
     
-    DirectoryReader ir = UninvertingReader.wrap(DirectoryReader.open(dir), 
-                         Collections.singletonMap("foo", Type.SORTED_SET_FLOAT));
+    DirectoryReader ir = UninvertingReader.wrap(DirectoryReader.open(dir),
+                         name -> name.equals("foo") ? Type.SORTED_SET_FLOAT : null);
     LeafReader ar = ir.leaves().get(0).reader();
     
     SortedSetDocValues v = ar.getSortedSetDocValues("foo");
@@ -145,8 +145,8 @@ public class TestUninvertingReader extends LuceneTestCase {
     iw.forceMerge(1);
     iw.close();
     
-    DirectoryReader ir = UninvertingReader.wrap(DirectoryReader.open(dir), 
-        Collections.singletonMap("foo", Type.SORTED_SET_LONG));
+    DirectoryReader ir = UninvertingReader.wrap(DirectoryReader.open(dir),
+        name -> name.equals("foo") ? Type.SORTED_SET_LONG : null);
     LeafReader ar = ir.leaves().get(0).reader();
     SortedSetDocValues v = ar.getSortedSetDocValues("foo");
     assertEquals(2, v.getValueCount());
@@ -186,8 +186,8 @@ public class TestUninvertingReader extends LuceneTestCase {
     iw.forceMerge(1);
     iw.close();
     
-    DirectoryReader ir = UninvertingReader.wrap(DirectoryReader.open(dir), 
-        Collections.singletonMap("foo", Type.SORTED_SET_DOUBLE));
+    DirectoryReader ir = UninvertingReader.wrap(DirectoryReader.open(dir),
+        name -> name.equals("foo") ? Type.SORTED_SET_DOUBLE : null);
     LeafReader ar = ir.leaves().get(0).reader();
     SortedSetDocValues v = ar.getSortedSetDocValues("foo");
     assertEquals(2, v.getValueCount());
@@ -265,7 +265,8 @@ public class TestUninvertingReader extends LuceneTestCase {
 
     iw.close();
     
-    final DirectoryReader ir = UninvertingReader.wrap(DirectoryReader.open(dir), UNINVERT_MAP);
+    final DirectoryReader ir = UninvertingReader.wrap(DirectoryReader.open(dir),
+        name -> UNINVERT_MAP.get(name));
     TestUtil.checkReader(ir);
     
     final int NUM_LEAVES = ir.leaves().size();
@@ -313,7 +314,8 @@ public class TestUninvertingReader extends LuceneTestCase {
       UNINVERT_MAP.put(t.name(), t);
     }
 
-    final DirectoryReader ir = UninvertingReader.wrap(DirectoryReader.open(dir), UNINVERT_MAP);
+    final DirectoryReader ir = UninvertingReader.wrap(DirectoryReader.open(dir),
+        name -> UNINVERT_MAP.get(name));
     TestUtil.checkReader(ir);
     
     final LeafReader composite = SlowCompositeReaderWrapper.wrap(ir);

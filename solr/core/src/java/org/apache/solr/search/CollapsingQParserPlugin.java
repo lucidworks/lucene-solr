@@ -1111,7 +1111,8 @@ public class CollapsingQParserPlugin extends QParserPlugin {
 
           Map<String, UninvertingReader.Type> mapping = new HashMap();
           mapping.put(collapseField, UninvertingReader.Type.SORTED);
-          UninvertingReader uninvertingReader = new UninvertingReader(new ReaderWrapper(searcher.getLeafReader(), collapseField), mapping);
+          UninvertingReader uninvertingReader = (UninvertingReader)UninvertingReader.wrap(new ReaderWrapper(searcher.getLeafReader(), collapseField),
+              name -> mapping.get(name));
           docValues = uninvertingReader.getSortedDocValues(collapseField);
         } else {
           docValues = DocValues.getSorted(searcher.getLeafReader(), collapseField);

@@ -270,7 +270,7 @@ public class TestEarlyTerminatingSortingCollector extends LuceneTestCase {
     case 1:
       assertTrue(r+" is not a DirectoryReader", (r instanceof DirectoryReader));
       final DirectoryReader directoryReader = ExitableDirectoryReader.wrap(
-          UninvertingReader.wrap((DirectoryReader) r, new HashMap<String,Type>()),
+          UninvertingReader.wrap((DirectoryReader) r, name -> null),
           new TestEarlyTerminatingSortingcollectorQueryTimeout(false));
       return new IndexSearcher(directoryReader);
     }
