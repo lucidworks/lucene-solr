@@ -47,9 +47,6 @@ import org.apache.lucene.util.MapOfSets;
  * usages of the FieldCache.
  * </p>
  * @lucene.experimental
- * @see FieldCache
- * @see FieldCacheSanityChecker.Insanity
- * @see FieldCacheSanityChecker.InsanityType
  */
 final class FieldCacheSanityChecker {
 

@@ -48,7 +48,6 @@ import org.apache.lucene.util.RamUsageEstimator;
  * <p>Created: May 19, 2004 11:13:14 AM
  *
  * @since   lucene 1.4
- * @see FieldCacheSanityChecker
  *
  * @lucene.internal
  */
@@ -381,7 +380,6 @@ public interface FieldCache {
   /**
    * If non-null, FieldCacheImpl will warn whenever
    * entries are created that are not sane according to
-   * {@link FieldCacheSanityChecker}.
    */
   public void setInfoStream(PrintStream stream);
 
