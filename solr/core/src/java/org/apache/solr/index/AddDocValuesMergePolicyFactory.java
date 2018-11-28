@@ -283,6 +283,7 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
         SegmentCommitInfo info = iter.next();
         final Boolean isOriginal = segmentsToMerge.get(info);
         if (isOriginal == null || isOriginal == Boolean.FALSE || merging.contains(info)) {
+          continue;
         } else {
           if (shouldRewrite(info)) {
             count("forcedMergeWrapped");

@@ -236,6 +236,8 @@ public class UninvertingReader extends FilterLeafReader {
     return fieldInfos;
   }
 
+  // (ab) NOTE: these methods differ from Solr 7x/8x because they give preference to the FieldCache
+  // over existing docValues.
   @Override
   public NumericDocValues getNumericDocValues(String field) throws IOException {
     Type v = getType(field);

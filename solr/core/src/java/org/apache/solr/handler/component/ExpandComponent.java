@@ -220,7 +220,7 @@ public class ExpandComponent extends SearchComponent implements PluginInfoInitia
         Map<String, UninvertingReader.Type> mapping = new HashMap();
         mapping.put(field, UninvertingReader.Type.SORTED);
         UninvertingReader uninvertingReader = (UninvertingReader)UninvertingReader.wrap(new ReaderWrapper(searcher.getLeafReader(), field),
-            name -> mapping.get(name));
+            mapping::get);
         values = uninvertingReader.getSortedDocValues(field);
       } else {
         values = DocValues.getSorted(reader, field);
