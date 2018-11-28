@@ -59,8 +59,6 @@ import org.slf4j.LoggerFactory;
  * This factory can be used when indexing is active.
  */
 
-//nocommit. ab: Can we put a better example in here and maybe a little example of how to use the pluggable bits in
-// SolrCloud?
 
 public class AddDVOneSegmentMergePolicyFactory extends MergePolicyFactory {
 
@@ -135,7 +133,6 @@ class AddDVOneSegmentMergePolicy extends TieredMergePolicy implements RewriteSeg
         }
       }
       if (shouldRewrite) {
-        // nocommit not sure about the concurrency here
         rewriteInfo = fieldsToRewrite.toString();
       } else {
         rewriteInfo = null;

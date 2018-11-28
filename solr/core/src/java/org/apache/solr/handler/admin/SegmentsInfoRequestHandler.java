@@ -210,7 +210,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
 
     fieldFlags.add("flags", flags.toString());
 
-    // nocommit probably too much detail?
+    // probably too much detail?
 //    Map<String, String> attributes = fi.attributes();
 //    if (!attributes.isEmpty()) {
 //      fieldFlags.add("attributes", attributes);

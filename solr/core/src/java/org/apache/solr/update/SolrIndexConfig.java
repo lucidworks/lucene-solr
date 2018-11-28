@@ -68,7 +68,7 @@ public class SolrIndexConfig implements MapSerializable {
 
   public final int writeLockTimeout;
   public final String lockType;
-  // nocommit preserve back-compat here and allow specifying either MergePolicy or MergePolicyFactory?
+  // preserve back-compat here and allow specifying either MergePolicy or MergePolicyFactory
   public final PluginInfo mergePolicyInfo;
   public final PluginInfo mergePolicyFactoryInfo;
   public final PluginInfo mergeSchedulerInfo;

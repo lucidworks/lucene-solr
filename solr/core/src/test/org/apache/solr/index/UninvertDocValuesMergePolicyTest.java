@@ -167,7 +167,7 @@ public class UninvertDocValuesMergePolicyTest extends SolrTestCaseJ4 {
 
     long numDocs = 0;
     XMLResponseParser parser = new XMLResponseParser();
-    try (InputStream is = new ByteArrayInputStream(response.getBytes())) {
+    try (InputStream is = new ByteArrayInputStream(response.getBytes("UTF-8"))) {
       assertNotNull(is);
       try (Reader in = new InputStreamReader(is, StandardCharsets.UTF_8)) {
         QueryResponse qr = new QueryResponse(parser.processResponse(in), null);
@@ -202,7 +202,7 @@ public class UninvertDocValuesMergePolicyTest extends SolrTestCaseJ4 {
         ,"rows", "1000"
     ));
 
-    try (InputStream is = new ByteArrayInputStream(response.getBytes())) {
+    try (InputStream is = new ByteArrayInputStream(response.getBytes("UTF-8"))) {
       assertNotNull(is);
       try (Reader in = new InputStreamReader(is, StandardCharsets.UTF_8)) {
         QueryResponse qr = new QueryResponse(parser.processResponse(in), null);
