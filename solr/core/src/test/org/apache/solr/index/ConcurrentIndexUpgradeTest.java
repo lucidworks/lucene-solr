@@ -61,6 +61,7 @@ public class ConcurrentIndexUpgradeTest extends AbstractFullDistribZkTestBase {
 
   private static String ID_FIELD = "id";
   private static String TEST_FIELD = "string_add_dv_later";
+  private static final int NUM_DOCS = 1000;
 
   private AtomicBoolean runIndexer = new AtomicBoolean(true);
 
@@ -111,7 +112,7 @@ public class ConcurrentIndexUpgradeTest extends AbstractFullDistribZkTestBase {
           int docId = 0;
           while (runIndexer.get()) {
             UpdateRequest ureq = new UpdateRequest();
-            for (int i = 0; i < 100; i++) {
+            for (int i = 0; i < NUM_DOCS; i++) {
               if (!runIndexer.get()) {
                 return;
               }
@@ -123,7 +124,7 @@ public class ConcurrentIndexUpgradeTest extends AbstractFullDistribZkTestBase {
             }
             ureq.process(cloudClient, collectionName);
             cloudClient.commit(collectionName);
-            Thread.sleep(500);
+            Thread.sleep(200);
           }
         } catch (Exception e) {
           log.warn("Can't index documents", e);

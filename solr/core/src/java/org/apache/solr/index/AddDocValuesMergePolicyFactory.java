@@ -25,11 +25,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 import org.apache.lucene.index.CodecReader;
 import org.apache.lucene.index.FieldInfo;
@@ -83,7 +83,7 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
     if (m != null) {
       this.marker = String.valueOf(m);
     } else {
-      this.marker = null;
+      this.marker = DEFAULT_MARKER;
     }
     final Boolean nm = (Boolean)args.remove(NO_MERGE_PROP);
     if (nm != null) {
@@ -116,34 +116,36 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
 
   @Override
   public MergePolicy getMergePolicyInstance(MergePolicy wrappedMP) {
-    return new AddDVMergePolicy(wrappedMP, schema, marker, noMerge, skipIntegrityCheck);
+    return new AddDVMergePolicy(wrappedMP, getUninversionMapper(), marker, noMerge, skipIntegrityCheck);
   }
 
-  private static UninvertingReader.Type getUninversionType(IndexSchema schema, FieldInfo fi) {
-    SchemaField sf = schema.getFieldOrNull(fi.name);
+  private Function<FieldInfo, UninvertingReader.Type> getUninversionMapper() {
+    return fi -> {
+      SchemaField sf = schema.getFieldOrNull(fi.name);
 
-    if (sf != null &&
-        sf.hasDocValues() &&
-        fi.getIndexOptions() != IndexOptions.NONE) {
-      return sf.getType().getUninversionType(sf);
-    } else {
-      return null;
-    }
+      if (sf != null &&
+          sf.hasDocValues() &&
+          fi.getIndexOptions() != IndexOptions.NONE) {
+        return sf.getType().getUninversionType(sf);
+      } else {
+        return null;
+      }
+    };
   }
 
 
   public static class AddDVMergePolicy extends FilterMergePolicy {
     private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-    private final IndexSchema schema;
+    private final Function<FieldInfo, UninvertingReader.Type> mapping;
     private final String marker;
     private final boolean skipIntegrityCheck;
     private final boolean noMerge;
     private final Map<String, Object> stats = new ConcurrentHashMap<>();
 
-    AddDVMergePolicy(MergePolicy in, IndexSchema schema, String marker, boolean noMerge, boolean skipIntegrityCheck) {
+    AddDVMergePolicy(MergePolicy in, Function<FieldInfo, UninvertingReader.Type> mapping, String marker, boolean noMerge, boolean skipIntegrityCheck) {
       super(in);
-      this.schema = schema;
+      this.mapping = mapping;
       this.marker = marker;
       this.noMerge = noMerge;
       this.skipIntegrityCheck = skipIntegrityCheck;
@@ -178,32 +180,38 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
         int needWrapping = 0;
         sb.setLength(0);
         for (SegmentCommitInfo info : oneMerge.segments) {
-          String segmentMarker = info.info.getDiagnostics().get(DIAGNOSTICS_MARKER_PROP);
           String source = info.info.getDiagnostics().get("source");
-          if (segmentMarker == null || (marker != null && !marker.equals(segmentMarker))) {
+          String shouldRewrite = shouldRewrite(info);
+          if (shouldRewrite != null) {
             needWrapping++;
             if (sb.length() > 0) {
               sb.append(' ');
             }
-            sb.append(info.toString() + "(" + source + ")");
+            sb.append(info.toString() + "(" + source + "," + shouldRewrite + ")");
           }
         }
         if (needWrapping > 0) {
-          log.debug("-- OneMerge needs wrapping ({}/{}): {}", needWrapping, oneMerge.segments.size(), sb.toString());
-          OneMerge wrappedOneMerge = new AddDVOneMerge(oneMerge.segments, schema, marker, skipIntegrityCheck);
+          log.info("-- OneMerge needs wrapping ({}/{}): {}", needWrapping, oneMerge.segments.size(), sb.toString());
+          OneMerge wrappedOneMerge = new AddDVOneMerge(oneMerge.segments, mapping, marker, skipIntegrityCheck,
+              "mergeType", mergeType, "needWrapping", String.valueOf(needWrapping));
           spec.merges.set(i, wrappedOneMerge);
-          count("mergesWrapped", needWrapping);
+          count("segmentsWrapped", needWrapping);
+          count("mergesWrapped");
         } else {
-          if (log.isDebugEnabled()) {
-            OneMerge nonWrappedOneMerge = new OneMerge(oneMerge.segments) {
-              @Override
-              public void setMergeInfo(SegmentCommitInfo info) {
-                super.setMergeInfo(info);
-                info.info.getDiagnostics().put("class", "AddDocValuesMergePolicy(nonWrapped)");
+          log.info("-- OneMerge doesn't need wrapping {}", oneMerge.segments);
+          OneMerge nonWrappedOneMerge = new OneMerge(oneMerge.segments) {
+            @Override
+            public void setMergeInfo(SegmentCommitInfo info) {
+              super.setMergeInfo(info);
+              if (marker != null) {
+                info.info.getDiagnostics().put(DIAGNOSTICS_MARKER_PROP, marker);
               }
-            };
-            spec.merges.set(i, nonWrappedOneMerge);
-          }
+              info.info.getDiagnostics().put("class", oneMerge.getClass().getSimpleName() + " (nonWrapped)");
+              info.info.getDiagnostics().put("mergeType", mergeType);
+            }
+          };
+          spec.merges.set(i, nonWrappedOneMerge);
+          count("mergesUnwrapped");
         }
       }
       return spec;
@@ -223,38 +231,36 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
     /**
      *
      * @param info The segment to be examined
-     * @return true - the schema has docValues=true for at least one field and the segment does _not_ have docValues
-     *                information for that field, therefore it should be rewritten
-     *         false - the schema and segment information agree, i.e. all fields with docValues=true in the schema
-     *                 have the corresponding information already in the segment.
+     * @return non-null string indicating the reason for rewriting. Eg. if the schema has docValues=true
+     *        for at least one field and the segment does _not_ have docValues information for that field,
+     *        therefore it should be rewritten. This will also return non-null if there's a marker mismatch.
      */
 
-    public boolean shouldRewrite(SegmentCommitInfo info) {
+    private String shouldRewrite(SegmentCommitInfo info) {
       // Need to get a reader for this segment
       try (SegmentReader reader = new SegmentReader(info, IOContext.DEFAULT)) {
         // check the marker, if defined
         String existingMarker = info.info.getDiagnostics().get(DIAGNOSTICS_MARKER_PROP);
-        if (existingMarker != null) {
-          if (marker == null || marker.equals(existingMarker)) {
-            return false;
-          }
+        // always rewrite if markers don't match
+        if (marker != null && !marker.equals(existingMarker)) {
+          return "markerMismatch";
         }
-        // iterating over schema fields makes it easier in the future
-        // to synthesize other missing reader's fields
-        boolean shouldRewrite = false;
-        for (Map.Entry<String, SchemaField> ent : schema.getFields().entrySet()) {
-          FieldInfo fi = reader.getFieldInfos().fieldInfo(ent.getKey());
-          if (fi != null && getUninversionType(schema, fi) != null) {
-            shouldRewrite = true;
+        StringBuilder sb = new StringBuilder();
+        for (FieldInfo fi : reader.getFieldInfos()) {
+          if (mapping.apply(fi) != null) {
+            if (sb.length() > 0) {
+              sb.append(',');
+            }
+            sb.append(fi.name);
             break;
           }
         }
-        return shouldRewrite;
+        return sb.length() > 0 ? sb.toString() : null;
       } catch (IOException e) {
         // It's safer to rewrite the segment if there's an error, although it may lead to a lot of work.
         log.warn("Error opening a reader for segment {}, will rewrite segment", info.toString());
         count("shouldRewriteError");
-        return true;
+        return "error " + e.getMessage();
       }
     }
 
@@ -285,10 +291,12 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
         if (isOriginal == null || isOriginal == Boolean.FALSE || merging.contains(info)) {
           continue;
         } else {
-          if (shouldRewrite(info)) {
+          String shouldRewrite = shouldRewrite(info);
+          if (shouldRewrite != null) {
             count("forcedMergeWrapped");
-            log.info("--forceMerging {}", info.toString());
-            spec.add(new AddDVOneMerge(Collections.singletonList(info), schema, marker, skipIntegrityCheck));
+            log.info("--straggler {}", info.toString());
+            spec.add(new AddDVOneMerge(Collections.singletonList(info), mapping, marker, skipIntegrityCheck,
+                "mergeType", "straggler:" + shouldRewrite));
           }
         }
       }
@@ -313,15 +321,17 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
   private static class AddDVOneMerge extends MergePolicy.OneMerge {
 
     private final String marker;
-    private final IndexSchema schema;
+    private final Function<FieldInfo, UninvertingReader.Type> mapping;
     private final boolean skipIntegrityCheck;
+    private final String[] metaPairs;
 
-    public AddDVOneMerge(List<SegmentCommitInfo> segments, IndexSchema schema, String marker,
-                         final boolean skipIntegrityCheck) {
+    public AddDVOneMerge(List<SegmentCommitInfo> segments, Function<FieldInfo, UninvertingReader.Type> mapping, String marker,
+                         final boolean skipIntegrityCheck, String... metaPairs) {
       super(segments);
-      this.schema = schema;
-      this.marker = marker != null ? marker : DEFAULT_MARKER;
+      this.mapping = mapping;
+      this.marker = marker;
       this.skipIntegrityCheck = skipIntegrityCheck;
+      this.metaPairs = metaPairs;
     }
 
     @Override
@@ -335,19 +345,20 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
       Map<String, UninvertingReader.Type> uninversionMap = null;
 
       for (FieldInfo fi : reader.getFieldInfos()) {
-        final UninvertingReader.Type type = getUninversionType(schema, fi);
+        final UninvertingReader.Type type = mapping.apply(fi);
         if (type != null) {
           if (uninversionMap == null) {
             uninversionMap = new HashMap<>();
           }
           uninversionMap.put(fi.name, type);
         }
-
       }
 
       if (uninversionMap == null) {
+        log.info("-- reader unwrapped: " + reader);
         return reader; // Default to normal reader if nothing to uninvert
       } else {
+        log.info("-- reader wrapped " + reader);
         return new UninvertingFilterCodecReader(reader, uninversionMap, skipIntegrityCheck);
       }
     }
@@ -364,8 +375,18 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
 
     @Override
     public void setMergeInfo(SegmentCommitInfo info) {
-      info.info.getDiagnostics().put(DIAGNOSTICS_MARKER_PROP, marker);
       super.setMergeInfo(info);
+      info.info.getDiagnostics().put(DIAGNOSTICS_MARKER_PROP, marker);
+      info.info.getDiagnostics().put("class", getClass().getSimpleName());
+      if (metaPairs != null && metaPairs.length > 1) {
+        int len = metaPairs.length;
+        if ((metaPairs.length % 2) != 0) {
+          len--;
+        }
+        for (int i = 0; i < len; i += 2) {
+          info.info.getDiagnostics().put(metaPairs[i], metaPairs[i + 1]);
+        }
+      }
     }
   }
 }

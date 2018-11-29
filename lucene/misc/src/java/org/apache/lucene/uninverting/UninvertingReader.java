@@ -57,6 +57,9 @@ import org.apache.lucene.util.Bits;
  * field's docvalues (e.g. via {@link org.apache.lucene.index.LeafReader#getNumericDocValues(String)} 
  * or similar), it will create the docvalues on-the-fly if needed and cache it,
  * based on the core cache key of the wrapped LeafReader.
+ *
+ * <p><b>NOTE: this version differs from stock Solr implementation by preferring the
+ * field cache when a mapping exists, even if doc values already exist for that field.</b></p>
  */
 public class UninvertingReader extends FilterLeafReader {
   
@@ -184,10 +187,11 @@ public class UninvertingReader extends FilterLeafReader {
   public static LeafReader wrap(LeafReader in, Function<String, Type> mapping) {
     boolean wrap = false;
 
-    ArrayList<FieldInfo> filteredInfos = new ArrayList<>();
+    ArrayList<FieldInfo> filteredInfos = new ArrayList<>(in.getFieldInfos().size());
     for (FieldInfo fi : in.getFieldInfos()) {
-      DocValuesType type = fi.getDocValuesType();
-      if (fi.getIndexOptions() != IndexOptions.NONE && fi.getDocValuesType() == DocValuesType.NONE) {
+      // unlike the version in Solr 7x we check the type even if docValues already exist
+      DocValuesType type = null;
+      if (fi.getIndexOptions() != IndexOptions.NONE) {
         Type t = mapping.apply(fi.name);
         if (t != null) {
           switch(t) {
@@ -215,10 +219,10 @@ public class UninvertingReader extends FilterLeafReader {
           }
         }
       }
-      if (type != fi.getDocValuesType()) { // we changed it
+      if (type != null) { // we changed it
         wrap = true;
         filteredInfos.add(new FieldInfo(fi.name, fi.number, fi.hasVectors(), fi.omitsNorms(),
-            fi.hasPayloads(), fi.getIndexOptions(), type, -1, Collections.<String,String>emptyMap()));
+            fi.hasPayloads(), fi.getIndexOptions(), type, -1, fi.attributes()));
       } else {
         filteredInfos.add(fi);
       }
@@ -236,8 +240,8 @@ public class UninvertingReader extends FilterLeafReader {
     return fieldInfos;
   }
 
-  // (ab) NOTE: these methods differ from Solr 7x/8x because they give preference to the FieldCache
-  // over existing docValues.
+  // unlike the version in Solr 7x we always first return uninverted values if available in mapping
+  // also, if the mapping if Type.NONE it drops existing doc values
   @Override
   public NumericDocValues getNumericDocValues(String field) throws IOException {
     Type v = getType(field);
@@ -248,15 +252,21 @@ public class UninvertingReader extends FilterLeafReader {
         case LONG: return FieldCache.DEFAULT.getNumerics(in, field, FieldCache.NUMERIC_UTILS_LONG_PARSER, true);
         case DOUBLE: return FieldCache.DEFAULT.getNumerics(in, field, FieldCache.NUMERIC_UTILS_DOUBLE_PARSER, true);
       }
+      return null;
+    } else {
+      return in.getNumericDocValues(field);
     }
-    return super.getNumericDocValues(field);
   }
 
   @Override
   public BinaryDocValues getBinaryDocValues(String field) throws IOException {
     Type v = getType(field);
-    if (v == Type.BINARY) {
-      return FieldCache.DEFAULT.getTerms(in, field, true);
+    if (v != null) {
+      if (v == Type.BINARY) {
+        return FieldCache.DEFAULT.getTerms(in, field, true);
+      } else {
+        return null;
+      }
     } else {
       return in.getBinaryDocValues(field);
     }
@@ -265,8 +275,12 @@ public class UninvertingReader extends FilterLeafReader {
   @Override
   public SortedDocValues getSortedDocValues(String field) throws IOException {
     Type v = getType(field);
-    if (v == Type.SORTED) {
-      return FieldCache.DEFAULT.getTermsIndex(in, field);
+    if (v != null) {
+      if (v == Type.SORTED) {
+        return FieldCache.DEFAULT.getTermsIndex(in, field);
+      } else {
+        return null;
+      }
     } else {
       return in.getSortedDocValues(field);
     }
@@ -286,8 +300,10 @@ public class UninvertingReader extends FilterLeafReader {
         case SORTED_SET_BINARY:
           return FieldCache.DEFAULT.getDocTermOrds(in, field, null);
       }
+      return null;
+    } else {
+      return in.getSortedSetDocValues(field);
     }
-    return in.getSortedSetDocValues(field);
   }
 
   @Override
