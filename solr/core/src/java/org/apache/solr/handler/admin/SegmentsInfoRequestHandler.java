@@ -87,6 +87,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
     SimpleOrderedMap<Object> coreInfo = new SimpleOrderedMap<>();
     infosInfo.add("core", coreInfo);
     coreInfo.add("startTime", core.getStartTime() + "(" + new Date(core.getStartTime()) + ")");
+    coreInfo.add("reader", searcher.getIndexReader().toString());
 
     if (iwRef != null) {
       try {

@@ -176,6 +176,7 @@ public class UninvertingReader extends FilterLeafReader {
 
   final Function<String, Type> mapping;
   final FieldInfos fieldInfos;
+  String diagnostics;
   
   public UninvertingReader(LeafReader in, Function<String, Type> mapping, FieldInfos fieldInfos) {
     super(in);
@@ -183,15 +184,24 @@ public class UninvertingReader extends FilterLeafReader {
     this.fieldInfos = fieldInfos;
   }
 
+  public void setDiagnostics(String diagnostics) {
+    this.diagnostics = diagnostics;
+  }
+
 
   public static LeafReader wrap(LeafReader in, Function<String, Type> mapping) {
     boolean wrap = false;
 
     ArrayList<FieldInfo> filteredInfos = new ArrayList<>(in.getFieldInfos().size());
+    StringBuilder sb = new StringBuilder();
     for (FieldInfo fi : in.getFieldInfos()) {
       DocValuesType type = shouldWrap(fi, mapping);
       if (type != null) { // we changed it
         wrap = true;
+        if (sb.length() > 0) {
+          sb.append(',');
+        }
+        sb.append(fi.name);
         filteredInfos.add(new FieldInfo(fi.name, fi.number, fi.hasVectors(), fi.omitsNorms(),
             fi.hasPayloads(), fi.getIndexOptions(), type, -1, fi.attributes()));
       } else {
@@ -202,7 +212,9 @@ public class UninvertingReader extends FilterLeafReader {
       return in;
     } else {
       FieldInfos fieldInfos = new FieldInfos(filteredInfos.toArray(new FieldInfo[filteredInfos.size()]));
-      return new UninvertingReader(in, mapping, fieldInfos);
+      UninvertingReader uninvertingReader = new UninvertingReader(in, mapping, fieldInfos);
+      uninvertingReader.setDiagnostics(sb.toString());
+      return uninvertingReader;
     }
   }
 
@@ -343,7 +355,8 @@ public class UninvertingReader extends FilterLeafReader {
 
   @Override
   public String toString() {
-    return "Uninverting(" + in.toString() + ")";
+    return "Uninverting(" + in.toString() +
+        (diagnostics != null ? "," + diagnostics : "") + ")";
   }
   
   /** 
