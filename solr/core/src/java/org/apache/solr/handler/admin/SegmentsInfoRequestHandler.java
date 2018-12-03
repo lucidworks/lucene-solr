@@ -84,12 +84,15 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
     SolrCore core = req.getCore();
     RefCounted<IndexWriter> iwRef = core.getSolrCoreState().getIndexWriter(core);
     SimpleOrderedMap<Object> infosInfo = new SimpleOrderedMap<>();
+    SimpleOrderedMap<Object> coreInfo = new SimpleOrderedMap<>();
+    infosInfo.add("core", coreInfo);
+    coreInfo.add("startTime", core.getStartTime() + "(" + new Date(core.getStartTime()) + ")");
 
     if (iwRef != null) {
       try {
         IndexWriter iw = iwRef.get();
         MergePolicy mp = iw.getConfig().getMergePolicy();
-        infosInfo.add("mergePolicy", mp.getClass().getName());
+        coreInfo.add("mergePolicy", mp.getClass().getName());
       } finally {
         iwRef.decref();
       }
@@ -284,7 +287,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
         case NUMERIC:
           NumericDocValues ndv = reader.getNumericDocValues(fi.name);
           for (int i = 0; i < reader.maxDoc(); i++) {
-            if (liveDocs != null && liveDocs.get(i)) {
+            if (liveDocs != null && !liveDocs.get(i)) {
               continue;
             }
             long num = ndv.get(i);
@@ -294,7 +297,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
         case BINARY:
           BinaryDocValues bdv = reader.getBinaryDocValues(fi.name);
           for (int i = 0; i < reader.maxDoc(); i++) {
-            if (liveDocs != null && liveDocs.get(i)) {
+            if (liveDocs != null && !liveDocs.get(i)) {
               continue;
             }
             BytesRef bytes = bdv.get(i);
@@ -304,7 +307,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
         case SORTED:
           SortedDocValues sdv = reader.getSortedDocValues(fi.name);
           for (int i = 0; i < reader.maxDoc(); i++) {
-            if (liveDocs != null && liveDocs.get(i)) {
+            if (liveDocs != null && !liveDocs.get(i)) {
               continue;
             }
             BytesRef bytes = sdv.get(i);
@@ -314,7 +317,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
         case SORTED_NUMERIC:
           SortedNumericDocValues sndv = reader.getSortedNumericDocValues(fi.name);
           for (int i = 0; i < reader.maxDoc(); i++) {
-            if (liveDocs != null && liveDocs.get(i)) {
+            if (liveDocs != null && !liveDocs.get(i)) {
               continue;
             }
             sndv.setDocument(i);
@@ -329,7 +332,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
         case SORTED_SET:
           SortedSetDocValues ssdv = reader.getSortedSetDocValues(fi.name);
           for (int i = 0; i < reader.maxDoc(); i++) {
-            if (liveDocs != null && liveDocs.get(i)) {
+            if (liveDocs != null && !liveDocs.get(i)) {
               continue;
             }
             ssdv.setDocument(i);
