@@ -3,10 +3,7 @@ package org.apache.solr.handler.admin;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 import org.apache.lucene.index.BinaryDocValues;
 import org.apache.lucene.index.DocValuesType;
@@ -33,6 +30,7 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Version;
 import org.apache.solr.common.luke.FieldFlag;
 import org.apache.solr.common.util.SimpleOrderedMap;
+import org.apache.solr.core.SolrCore;
 import org.apache.solr.handler.RequestHandlerBase;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
@@ -83,10 +81,22 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
       throws Exception {
     SolrIndexSearcher searcher = req.getSearcher();
     IndexSchema schema = req.getSchema();
+    SolrCore core = req.getCore();
+    RefCounted<IndexWriter> iwRef = core.getSolrCoreState().getIndexWriter(core);
+    SimpleOrderedMap<Object> infosInfo = new SimpleOrderedMap<>();
+
+    if (iwRef != null) {
+      try {
+        IndexWriter iw = iwRef.get();
+        MergePolicy mp = iw.getConfig().getMergePolicy();
+        infosInfo.add("mergePolicy", mp.getClass().getName());
+      } finally {
+        iwRef.decref();
+      }
+    }
 
     SegmentInfos infos =
         SegmentInfos.readLatestCommit(searcher.getIndexReader().directory());
-    SimpleOrderedMap<Object> infosInfo = new SimpleOrderedMap<>();
     Version minVersion = infos.getMinSegmentLuceneVersion();
     if (minVersion != null) {
       infosInfo.add("minSegmentLuceneVersion", minVersion.toString());
