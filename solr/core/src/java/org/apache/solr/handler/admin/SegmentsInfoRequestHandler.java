@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.lucene.index.BinaryDocValues;
 import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfos;
@@ -20,9 +21,15 @@ import org.apache.lucene.index.MergePolicy;
 import org.apache.lucene.index.MergePolicy.MergeSpecification;
 import org.apache.lucene.index.MergePolicy.OneMerge;
 import org.apache.lucene.index.MergeTrigger;
+import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.index.SegmentCommitInfo;
 import org.apache.lucene.index.SegmentInfos;
 import org.apache.lucene.index.SegmentReader;
+import org.apache.lucene.index.SortedDocValues;
+import org.apache.lucene.index.SortedNumericDocValues;
+import org.apache.lucene.index.SortedSetDocValues;
+import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Version;
 import org.apache.solr.common.luke.FieldFlag;
 import org.apache.solr.common.util.SimpleOrderedMap;
@@ -98,10 +105,11 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
     SimpleOrderedMap<Object> segmentInfos = new SimpleOrderedMap<>();
     SimpleOrderedMap<Object> segmentInfo = null;
     boolean withFieldInfos = req.getParams().getBool("fieldInfos", false);
+    boolean withDVStats = req.getParams().getBool("dvStats", false);
 
     List<LeafReaderContext> leafContexts = searcher.getIndexReader().leaves();
     for (SegmentCommitInfo segmentCommitInfo : infos) {
-      segmentInfo = getSegmentInfo(segmentCommitInfo, withFieldInfos, leafContexts, schema);
+      segmentInfo = getSegmentInfo(segmentCommitInfo, withFieldInfos, withDVStats, leafContexts, schema);
       if (mergeCandidates.contains(segmentCommitInfo.info.name)) {
         segmentInfo.add("mergeCandidate", true);
       }
@@ -116,7 +124,8 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
   }
 
   private SimpleOrderedMap<Object> getSegmentInfo(
-      SegmentCommitInfo segmentCommitInfo, boolean withFieldInfos, List<LeafReaderContext> leafContexts, IndexSchema schema) throws IOException {
+      SegmentCommitInfo segmentCommitInfo, boolean withFieldInfos, boolean withDVStats,
+      List<LeafReaderContext> leafContexts, IndexSchema schema) throws IOException {
     SimpleOrderedMap<Object> segmentInfoMap = new SimpleOrderedMap<>();
 
     segmentInfoMap.add(NAME, segmentCommitInfo.info.name);
@@ -157,7 +166,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
         FieldInfos fis = seg.getFieldInfos();
         SimpleOrderedMap<Object> fields = new SimpleOrderedMap<>();
         for (FieldInfo fi : fis) {
-          fields.add(fi.name, getFieldFlags(fi, schema));
+          fields.add(fi.name, getFieldFlags(seg, fi, withDVStats, schema));
         }
         segmentInfoMap.add("fields", fields);
       }
@@ -166,7 +175,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
     return segmentInfoMap;
   }
 
-  private SimpleOrderedMap<Object> getFieldFlags(FieldInfo fi, IndexSchema schema) {
+  private SimpleOrderedMap<Object> getFieldFlags(SegmentReader reader, FieldInfo fi, boolean withDVStats, IndexSchema schema) {
 
     SimpleOrderedMap<Object> fieldFlags = new SimpleOrderedMap<>();
     StringBuilder flags = new StringBuilder();
@@ -192,6 +201,10 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
         case SORTED_SET:
           flags.append("srs");
           break;
+      }
+      if (withDVStats) {
+        String stats = getDVStats(reader, dvt, fi);
+        fieldFlags.add("dvStats", stats);
       }
     } else {
       flags.append("----");
@@ -250,6 +263,80 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
       }
     }
     return fieldFlags;
+  }
+
+  private String getDVStats(SegmentReader reader, DocValuesType type, FieldInfo fi) {
+    try {
+      int present = 0;
+      Bits liveDocs = reader.getLiveDocs();
+      int expected = reader.numDocs();
+      switch (type) {
+        case NUMERIC:
+          NumericDocValues ndv = reader.getNumericDocValues(fi.name);
+          for (int i = 0; i < reader.maxDoc(); i++) {
+            if (liveDocs != null && liveDocs.get(i)) {
+              continue;
+            }
+            long num = ndv.get(i);
+            present++;
+          }
+          break;
+        case BINARY:
+          BinaryDocValues bdv = reader.getBinaryDocValues(fi.name);
+          for (int i = 0; i < reader.maxDoc(); i++) {
+            if (liveDocs != null && liveDocs.get(i)) {
+              continue;
+            }
+            BytesRef bytes = bdv.get(i);
+            present++;
+          }
+          break;
+        case SORTED:
+          SortedDocValues sdv = reader.getSortedDocValues(fi.name);
+          for (int i = 0; i < reader.maxDoc(); i++) {
+            if (liveDocs != null && liveDocs.get(i)) {
+              continue;
+            }
+            BytesRef bytes = sdv.get(i);
+            present++;
+          }
+          break;
+        case SORTED_NUMERIC:
+          SortedNumericDocValues sndv = reader.getSortedNumericDocValues(fi.name);
+          for (int i = 0; i < reader.maxDoc(); i++) {
+            if (liveDocs != null && liveDocs.get(i)) {
+              continue;
+            }
+            sndv.setDocument(i);
+            if (sndv.count() > 0) {
+              for (int j = 0; j < sndv.count(); j++) {
+                long val = sndv.valueAt(j);
+              }
+              present++;
+            }
+          }
+          break;
+        case SORTED_SET:
+          SortedSetDocValues ssdv = reader.getSortedSetDocValues(fi.name);
+          for (int i = 0; i < reader.maxDoc(); i++) {
+            if (liveDocs != null && liveDocs.get(i)) {
+              continue;
+            }
+            ssdv.setDocument(i);
+            if (ssdv.getValueCount() > 0) {
+              long ord;
+              while ((ord = ssdv.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
+                BytesRef term = ssdv.lookupOrd(ord);
+              }
+              present++;
+            }
+          }
+          break;
+      }
+      return expected + "/" + present;
+    } catch (IOException e) {
+      return "error: " + e.getMessage();
+    }
   }
 
   // returns a map of currently running merges, and populate a list of candidate segment for merge

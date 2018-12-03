@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -55,19 +56,19 @@ public class CollectionsAPISolrJTests extends AbstractFullDistribZkTestBase {
 
   @Test
   public void test() throws Exception {
-    testCreateAndDeleteCollection();
-    testCreateAndDeleteShard();
-    testReloadCollection();
-    testCreateAndDeleteAlias();
-    testSplitShard();
-    testCreateCollectionWithPropertyParam();
-    testAddAndDeleteReplica();
-    testClusterProp();
-    testAddAndRemoveRole();
-    testOverseerStatus();
-    testList();
-    testAddAndDeleteReplicaProp();
-    testBalanceShardUnique();
+//    testCreateAndDeleteCollection();
+//    testCreateAndDeleteShard();
+//    testReloadCollection();
+//    testCreateAndDeleteAlias();
+//    testSplitShard();
+//    testCreateCollectionWithPropertyParam();
+//    testAddAndDeleteReplica();
+//    testClusterProp();
+//    testAddAndRemoveRole();
+//    testOverseerStatus();
+//    testList();
+//    testAddAndDeleteReplicaProp();
+//    testBalanceShardUnique();
     testColStatus();
   }
 
@@ -423,12 +424,16 @@ public class CollectionsAPISolrJTests extends AbstractFullDistribZkTestBase {
     for (int i = 0; i < 100; i++) {
       SolrInputDocument doc = new SolrInputDocument();
       doc.addField("id", i);
+      doc.addField("timestamp", new Date());
       ureq.add(doc);
     }
     ureq.process(cloudClient, collectionName);
     cloudClient.commit(collectionName);
-    CollectionAdminRequest.ColStatus req = new CollectionAdminRequest.ColStatus();
-    req.setCollectionName(collectionName);
+    CollectionAdminRequest.ColStatus req = new CollectionAdminRequest.ColStatus()
+        .setCollectionName(collectionName)
+        .setWithFieldInfos(true)
+        .setWithSegments(true)
+        .setWithDVStats(true);
     CollectionAdminResponse response = req.process(cloudClient);
     assertEquals(0, response.getStatus());
     NamedList<Object> details = (NamedList<Object>)response.getResponse().get(collectionName);

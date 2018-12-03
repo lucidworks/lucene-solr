@@ -62,6 +62,7 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
   private final boolean skipIntegrityCheck;
   private final boolean noMerge;
   private final String marker;
+  private final Function<String, UninvertingReader.Type> schemaUninversionMapper;
 
   public static final String SKIP_INTEGRITY_CKECK_PROP = "skipIntegrityCheck";
   public static final String MARKER_PROP = "marker";
@@ -73,6 +74,17 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
 
   public AddDocValuesMergePolicyFactory(SolrResourceLoader resourceLoader, MergePolicyFactoryArgs args, IndexSchema schema) {
     super(resourceLoader, args, schema);
+    schemaUninversionMapper = name -> {
+      SchemaField sf = schema.getFieldOrNull(name);
+      if (sf == null) {
+        return null;
+      }
+      if (sf.hasDocValues()) {
+        return sf.getType().getUninversionType(sf);
+      } else {
+        return null;
+      }
+    };
     final Boolean sic = (Boolean)args.remove(SKIP_INTEGRITY_CKECK_PROP);
     if (sic != null) {
       this.skipIntegrityCheck = sic.booleanValue();
@@ -121,12 +133,8 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
 
   private Function<FieldInfo, UninvertingReader.Type> getUninversionMapper() {
     return fi -> {
-      SchemaField sf = schema.getFieldOrNull(fi.name);
-
-      if (sf != null &&
-          sf.hasDocValues() &&
-          fi.getIndexOptions() != IndexOptions.NONE) {
-        return sf.getType().getUninversionType(sf);
+      if (UninvertingReader.shouldWrap(fi, schemaUninversionMapper) != null) {
+        return schemaUninversionMapper.apply(fi.name);
       } else {
         return null;
       }
@@ -181,19 +189,23 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
         sb.setLength(0);
         for (SegmentCommitInfo info : oneMerge.segments) {
           String source = info.info.getDiagnostics().get("source");
+          String clazz = info.info.getDiagnostics().get("class");
+          if (clazz == null) {
+            clazz = "?";
+          }
           String shouldRewrite = shouldRewrite(info);
           if (shouldRewrite != null) {
             needWrapping++;
             if (sb.length() > 0) {
               sb.append(' ');
             }
-            sb.append(info.toString() + "(" + source + "," + shouldRewrite + ")");
+            sb.append(info.toString() + "(" + source + "," + shouldRewrite + "," + clazz + ")");
           }
         }
         if (needWrapping > 0) {
           log.info("-- OneMerge needs wrapping ({}/{}): {}", needWrapping, oneMerge.segments.size(), sb.toString());
           OneMerge wrappedOneMerge = new AddDVOneMerge(oneMerge.segments, mapping, marker, skipIntegrityCheck,
-              "mergeType", mergeType, "needWrapping", String.valueOf(needWrapping));
+              "mergeType", mergeType, "needWrapping", String.valueOf(needWrapping), "wrapping", sb.toString());
           spec.merges.set(i, wrappedOneMerge);
           count("segmentsWrapped", needWrapping);
           count("mergesWrapped");
@@ -241,9 +253,10 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
       try (SegmentReader reader = new SegmentReader(info, IOContext.DEFAULT)) {
         // check the marker, if defined
         String existingMarker = info.info.getDiagnostics().get(DIAGNOSTICS_MARKER_PROP);
-        // always rewrite if markers don't match
-        if (marker != null && !marker.equals(existingMarker)) {
-          return "markerMismatch";
+        String source = info.info.getDiagnostics().get("source");
+        // always rewrite if markers don't match?
+        if (!"flush".equals(source) && marker != null && !marker.equals(existingMarker)) {
+          return "marker";
         }
         StringBuilder sb = new StringBuilder();
         for (FieldInfo fi : reader.getFieldInfos()) {

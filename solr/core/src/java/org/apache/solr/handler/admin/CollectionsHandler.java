@@ -605,7 +605,7 @@ public class CollectionsHandler extends RequestHandlerBase {
           throws KeeperException, InterruptedException {
         Map<String, Object> all = req.getParams().getAll(null,
             CoreAdminParams.NAME, COLLECTION_PROP,
-            ColStatus.FIELD_INFOS_PROP, ColStatus.SEGMENTS_PROP);
+            ColStatus.FIELD_INFOS_PROP, ColStatus.SEGMENTS_PROP, ColStatus.DV_STATS_PROP);
         // make sure we can get the name if there's "name" but not "collection"
         if (all.containsKey(CoreAdminParams.NAME) && !all.containsKey(COLLECTION_PROP)) {
           all.put(COLLECTION_PROP, all.get(CoreAdminParams.NAME));

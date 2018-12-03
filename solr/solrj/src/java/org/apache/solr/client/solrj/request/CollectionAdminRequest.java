@@ -319,6 +319,7 @@ public abstract class CollectionAdminRequest <Q extends CollectionAdminRequest<Q
     protected String collection = null;
     protected Boolean withSegments = null;
     protected Boolean withFieldInfos = null;
+    protected Boolean withDVStats = null;
 
     public ColStatus() {
       action = CollectionAction.COLSTATUS;
@@ -339,6 +340,11 @@ public abstract class CollectionAdminRequest <Q extends CollectionAdminRequest<Q
       return this;
     }
 
+    public ColStatus setWithDVStats(boolean withDVStats) {
+      this.withDVStats = withDVStats;
+      return this;
+    }
+
     @Override
     public SolrParams getParams() {
       ModifiableSolrParams params = (ModifiableSolrParams)super.getParams();
@@ -347,6 +353,9 @@ public abstract class CollectionAdminRequest <Q extends CollectionAdminRequest<Q
       }
       if (withFieldInfos != null) {
         params.add("fieldInfos", withFieldInfos.toString());
+      }
+      if (withDVStats != null) {
+        params.add("dvStats", withDVStats.toString());
       }
       return params;
     }

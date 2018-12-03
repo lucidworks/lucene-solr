@@ -57,6 +57,7 @@ public class ColStatus {
 
   public static final String FIELD_INFOS_PROP = "fieldInfos";
   public static final String SEGMENTS_PROP = "segments";
+  public static final String DV_STATS_PROP = "dvStats";
 
   public ColStatus(HttpClient httpClient, ZkStateReader zkStateReader, ZkNodeProps props) {
     this.props = props;
@@ -77,6 +78,7 @@ public class ColStatus {
     }
     boolean withFieldInfos = props.getBool(FIELD_INFOS_PROP, false);
     boolean withSegments = props.getBool(SEGMENTS_PROP, false);
+    boolean withDVStats = props.getBool(DV_STATS_PROP, false);
     for (String collection : collections) {
       DocCollection coll = clusterState.getCollectionOrNull(collection);
       if (coll == null) {
@@ -150,6 +152,7 @@ public class ColStatus {
           ModifiableSolrParams params = new ModifiableSolrParams();
           params.add(CommonParams.QT, "/admin/segments");
           params.add("fieldInfos", "true");
+          params.add(DV_STATS_PROP, String.valueOf(withDVStats));
           QueryRequest req = new QueryRequest(params);
           NamedList<Object> rsp = client.request(req);
           rsp.remove("responseHeader");

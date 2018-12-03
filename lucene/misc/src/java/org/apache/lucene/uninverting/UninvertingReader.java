@@ -189,36 +189,7 @@ public class UninvertingReader extends FilterLeafReader {
 
     ArrayList<FieldInfo> filteredInfos = new ArrayList<>(in.getFieldInfos().size());
     for (FieldInfo fi : in.getFieldInfos()) {
-      // unlike the version in Solr 7x we check the type even if docValues already exist
-      DocValuesType type = null;
-      if (fi.getIndexOptions() != IndexOptions.NONE) {
-        Type t = mapping.apply(fi.name);
-        if (t != null) {
-          switch(t) {
-            case INTEGER:
-            case LONG:
-            case FLOAT:
-            case DOUBLE:
-              type = DocValuesType.NUMERIC;
-              break;
-            case BINARY:
-              type = DocValuesType.BINARY;
-              break;
-            case SORTED:
-              type = DocValuesType.SORTED;
-              break;
-            case SORTED_SET_BINARY:
-            case SORTED_SET_INTEGER:
-            case SORTED_SET_FLOAT:
-            case SORTED_SET_LONG:
-            case SORTED_SET_DOUBLE:
-              type = DocValuesType.SORTED_SET;
-              break;
-            default:
-              throw new AssertionError();
-          }
-        }
-      }
+      DocValuesType type = shouldWrap(fi, mapping);
       if (type != null) { // we changed it
         wrap = true;
         filteredInfos.add(new FieldInfo(fi.name, fi.number, fi.hasVectors(), fi.omitsNorms(),
@@ -233,6 +204,39 @@ public class UninvertingReader extends FilterLeafReader {
       FieldInfos fieldInfos = new FieldInfos(filteredInfos.toArray(new FieldInfo[filteredInfos.size()]));
       return new UninvertingReader(in, mapping, fieldInfos);
     }
+  }
+
+  public static DocValuesType shouldWrap(FieldInfo fi, Function<String, Type> mapping) {
+    DocValuesType type = fi.getDocValuesType();
+    if (fi.getIndexOptions() != IndexOptions.NONE) {
+      Type t = mapping.apply(fi.name);
+      if (t != null) {
+        switch(t) {
+          case INTEGER:
+          case LONG:
+          case FLOAT:
+          case DOUBLE:
+            type = DocValuesType.NUMERIC;
+            break;
+          case BINARY:
+            type = DocValuesType.BINARY;
+            break;
+          case SORTED:
+            type = DocValuesType.SORTED;
+            break;
+          case SORTED_SET_BINARY:
+          case SORTED_SET_INTEGER:
+          case SORTED_SET_FLOAT:
+          case SORTED_SET_LONG:
+          case SORTED_SET_DOUBLE:
+            type = DocValuesType.SORTED_SET;
+            break;
+          default:
+            throw new AssertionError();
+        }
+      }
+    }
+    return type != fi.getDocValuesType() ? type : null;
   }
 
   @Override
