@@ -32,9 +32,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 import org.apache.lucene.index.CodecReader;
+import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FilterMergePolicy;
-import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.MergePolicy;
 import org.apache.lucene.index.MergeTrigger;
@@ -218,8 +218,9 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
               if (marker != null) {
                 info.info.getDiagnostics().put(DIAGNOSTICS_MARKER_PROP, marker);
               }
-              info.info.getDiagnostics().put("class", oneMerge.getClass().getSimpleName() + " (nonWrapped)");
+              info.info.getDiagnostics().put("class", oneMerge.getClass().getSimpleName() + "-nonWrapped");
               info.info.getDiagnostics().put("mergeType", mergeType);
+              info.info.getDiagnostics().put("segString", AddDVMergePolicy.segString(oneMerge));
             }
           };
           spec.merges.set(i, nonWrappedOneMerge);
@@ -227,6 +228,30 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
         }
       }
       return spec;
+    }
+
+    private static String segString(OneMerge oneMerge) {
+      StringBuilder b = new StringBuilder();
+      final int numSegments = oneMerge.segments.size();
+      for(int i=0;i<numSegments;i++) {
+        if (i > 0) {
+          b.append('\n');
+        }
+        b.append(oneMerge.segments.get(i).toString());
+        b.append('#');
+        Map<String, String> diag = oneMerge.segments.get(i).info.getDiagnostics();
+        b.append(diag.get("source"));
+        if (diag.get("class") != null) {
+          b.append('#');
+          b.append(diag.get("class"));
+          if (diag.get("segString") != null) {
+            b.append("#ss=");
+            b.append(diag.get("segString"));
+          }
+        }
+      }
+      return b.toString();
+
     }
 
     @Override
@@ -255,19 +280,25 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
         String existingMarker = info.info.getDiagnostics().get(DIAGNOSTICS_MARKER_PROP);
         String source = info.info.getDiagnostics().get("source");
         // always rewrite if markers don't match?
-        if (!"flush".equals(source) && marker != null && !marker.equals(existingMarker)) {
-          return "marker";
-        }
+//        if (!"flush".equals(source) && marker != null && !marker.equals(existingMarker)) {
+//          return "marker";
+//        }
         StringBuilder sb = new StringBuilder();
         for (FieldInfo fi : reader.getFieldInfos()) {
+          if (fi.getDocValuesType() != DocValuesType.NONE) {
+            Map<String, Object> dvStats = UninvertingReader.getDVStats(reader, fi);
+            if (!((Integer)dvStats.get("numDocs")).equals((Integer)dvStats.get("present"))) {
+              throw new RuntimeException("segment: " + info.toString() + " " + fi.name + ", dvStats: " + dvStats + " diag: " + info.info.getDiagnostics());
+            }
+          }
           if (mapping.apply(fi) != null) {
             if (sb.length() > 0) {
               sb.append(',');
             }
             sb.append(fi.name);
-            break;
           }
         }
+//        return sb.toString();
         return sb.length() > 0 ? sb.toString() : null;
       } catch (IOException e) {
         // It's safer to rewrite the segment if there's an error, although it may lead to a lot of work.
@@ -391,6 +422,7 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
       super.setMergeInfo(info);
       info.info.getDiagnostics().put(DIAGNOSTICS_MARKER_PROP, marker);
       info.info.getDiagnostics().put("class", getClass().getSimpleName());
+      info.info.getDiagnostics().put("segString", AddDVMergePolicy.segString(this));
       if (metaPairs != null && metaPairs.length > 1) {
         int len = metaPairs.length;
         if ((metaPairs.length % 2) != 0) {

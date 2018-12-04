@@ -20,9 +20,11 @@ package org.apache.lucene.uninverting;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
+import org.apache.lucene.codecs.DocValuesProducer;
 import org.apache.lucene.document.BinaryDocValuesField; // javadocs
 import org.apache.lucene.document.DoubleField; // javadocs
 import org.apache.lucene.document.FloatField; // javadocs
@@ -33,6 +35,7 @@ import org.apache.lucene.document.SortedDocValuesField; // javadocs
 import org.apache.lucene.document.SortedSetDocValuesField; // javadocs
 import org.apache.lucene.document.StringField; // javadocs
 import org.apache.lucene.index.BinaryDocValues;
+import org.apache.lucene.index.CodecReader;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.FieldInfo;
@@ -42,10 +45,13 @@ import org.apache.lucene.index.FilterLeafReader;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.NumericDocValues;
+import org.apache.lucene.index.SegmentReader;
 import org.apache.lucene.index.SortedDocValues;
+import org.apache.lucene.index.SortedNumericDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.uninverting.FieldCache.CacheEntry;
 import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.BytesRef;
 
 /**
  * A FilterReader that exposes <i>indexed</i> values as if they also had
@@ -201,7 +207,7 @@ public class UninvertingReader extends FilterLeafReader {
         if (sb.length() > 0) {
           sb.append(',');
         }
-        sb.append(fi.name);
+        sb.append(fi.name + ":" + fi.getDocValuesType() + "/" + type);
         filteredInfos.add(new FieldInfo(fi.name, fi.number, fi.hasVectors(), fi.omitsNorms(),
             fi.hasPayloads(), fi.getIndexOptions(), type, -1, fi.attributes()));
       } else {
@@ -256,8 +262,137 @@ public class UninvertingReader extends FilterLeafReader {
     return fieldInfos;
   }
 
+  public static Map<String, Object> getDVStats(CodecReader reader, FieldInfo fi) {
+    DocValuesType type = fi.getDocValuesType();
+    try {
+      int present = 0;
+      int zeroOrNull = 0;
+      Bits liveDocs = reader.getLiveDocs();
+      DocValuesProducer producer = reader.getDocValuesReader();
+      Bits docsWithField = producer.getDocsWithField(fi);
+      int expected = 0;
+      switch (type) {
+        case NUMERIC:
+          NumericDocValues ndv = reader.getNumericDocValues(fi.name);
+          for (int i = 0; i < reader.maxDoc(); i++) {
+            if (liveDocs != null && !liveDocs.get(i)) {
+              continue;
+            }
+            if (docsWithField.get(i)) {
+              expected++;
+            } else {
+              continue;
+            }
+            long num = ndv.get(i);
+            if (num == 0) {
+              zeroOrNull++;
+            }
+            present++;
+          }
+          break;
+        case BINARY:
+          BinaryDocValues bdv = reader.getBinaryDocValues(fi.name);
+          for (int i = 0; i < reader.maxDoc(); i++) {
+            if (liveDocs != null && !liveDocs.get(i)) {
+              continue;
+            }
+            if (docsWithField.get(i)) {
+              expected++;
+            } else {
+              continue;
+            }
+            BytesRef bytes = bdv.get(i);
+            if (bytes == null || bytes.length == 0) {
+              zeroOrNull++;
+            }
+            present++;
+          }
+          break;
+        case SORTED:
+          SortedDocValues sdv = reader.getSortedDocValues(fi.name);
+          for (int i = 0; i < reader.maxDoc(); i++) {
+            if (liveDocs != null && !liveDocs.get(i)) {
+              continue;
+            }
+            if (docsWithField.get(i)) {
+              expected++;
+            } else {
+              continue;
+            }
+            BytesRef bytes = sdv.get(i);
+            if (bytes == null || bytes.length == 0) {
+              zeroOrNull++;
+            }
+            present++;
+          }
+          break;
+        case SORTED_NUMERIC:
+          SortedNumericDocValues sndv = reader.getSortedNumericDocValues(fi.name);
+          for (int i = 0; i < reader.maxDoc(); i++) {
+            if (liveDocs != null && !liveDocs.get(i)) {
+              continue;
+            }
+            if (docsWithField.get(i)) {
+              expected++;
+            } else {
+              continue;
+            }
+            sndv.setDocument(i);
+            if (sndv.count() > 0) {
+              for (int j = 0; j < sndv.count(); j++) {
+                long val = sndv.valueAt(j);
+              }
+              present++;
+            } else {
+              zeroOrNull++;
+            }
+          }
+          break;
+        case SORTED_SET:
+          SortedSetDocValues ssdv = reader.getSortedSetDocValues(fi.name);
+          for (int i = 0; i < reader.maxDoc(); i++) {
+            if (liveDocs != null && !liveDocs.get(i)) {
+              continue;
+            }
+            if (docsWithField.get(i)) {
+              expected++;
+            } else {
+              continue;
+            }
+            ssdv.setDocument(i);
+            if (ssdv.getValueCount() > 0) {
+              long ord;
+              boolean allPresent = true;
+              while ((ord = ssdv.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
+                BytesRef term = ssdv.lookupOrd(ord);
+                if (term == null || term.length == 0) {
+                  allPresent = false;
+                }
+              }
+              if (!allPresent) {
+                zeroOrNull++;
+              }
+              present++;
+            } else {
+              zeroOrNull++;
+            }
+          }
+          break;
+      }
+      Map<String, Object> result = new HashMap<>();
+      result.put("numDocs", reader.numDocs());
+      result.put("expected", expected);
+      result.put("present", present);
+      result.put("nullOrZero", zeroOrNull);
+      return result;
+    } catch (IOException e) {
+      return Collections.singletonMap("error", e.getMessage());
+    }
+  }
+
+
   // unlike the version in Solr 7x we always first return uninverted values if available in mapping
-  // also, if the mapping if Type.NONE it drops existing doc values
+  // also, if the mapping is Type.NONE it drops existing doc values
   @Override
   public NumericDocValues getNumericDocValues(String field) throws IOException {
     Type v = getType(field);
@@ -324,7 +459,8 @@ public class UninvertingReader extends FilterLeafReader {
 
   @Override
   public Bits getDocsWithField(String field) throws IOException {
-    if (getType(field) != null) {
+//    if (getType(field) != null) {
+    if (shouldWrap(fieldInfos.fieldInfo(field), mapping) != null) {
       return FieldCache.DEFAULT.getDocsWithField(in, field);
     } else {
       return in.getDocsWithField(field);
@@ -356,7 +492,7 @@ public class UninvertingReader extends FilterLeafReader {
   @Override
   public String toString() {
     return "Uninverting(" + in.toString() +
-        (diagnostics != null ? "," + diagnostics : "") + ")";
+        (diagnostics != null ? " " + diagnostics : "") + ")";
   }
   
   /** 

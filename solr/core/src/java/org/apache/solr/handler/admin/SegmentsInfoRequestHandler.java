@@ -2,9 +2,13 @@ package org.apache.solr.handler.admin;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import org.apache.lucene.codecs.DocValuesProducer;
 import org.apache.lucene.index.BinaryDocValues;
 import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.FieldInfo;
@@ -25,6 +29,7 @@ import org.apache.lucene.index.SegmentReader;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.index.SortedNumericDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
+import org.apache.lucene.uninverting.UninvertingReader;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Version;
@@ -217,8 +222,7 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
           break;
       }
       if (withDVStats) {
-        String stats = getDVStats(reader, dvt, fi);
-        fieldFlags.add("dvStats", stats);
+        fieldFlags.add("dvStats", UninvertingReader.getDVStats(reader, fi));
       }
     } else {
       flags.append("----");
@@ -277,80 +281,6 @@ public class SegmentsInfoRequestHandler extends RequestHandlerBase {
       }
     }
     return fieldFlags;
-  }
-
-  private String getDVStats(SegmentReader reader, DocValuesType type, FieldInfo fi) {
-    try {
-      int present = 0;
-      Bits liveDocs = reader.getLiveDocs();
-      int expected = reader.numDocs();
-      switch (type) {
-        case NUMERIC:
-          NumericDocValues ndv = reader.getNumericDocValues(fi.name);
-          for (int i = 0; i < reader.maxDoc(); i++) {
-            if (liveDocs != null && !liveDocs.get(i)) {
-              continue;
-            }
-            long num = ndv.get(i);
-            present++;
-          }
-          break;
-        case BINARY:
-          BinaryDocValues bdv = reader.getBinaryDocValues(fi.name);
-          for (int i = 0; i < reader.maxDoc(); i++) {
-            if (liveDocs != null && !liveDocs.get(i)) {
-              continue;
-            }
-            BytesRef bytes = bdv.get(i);
-            present++;
-          }
-          break;
-        case SORTED:
-          SortedDocValues sdv = reader.getSortedDocValues(fi.name);
-          for (int i = 0; i < reader.maxDoc(); i++) {
-            if (liveDocs != null && !liveDocs.get(i)) {
-              continue;
-            }
-            BytesRef bytes = sdv.get(i);
-            present++;
-          }
-          break;
-        case SORTED_NUMERIC:
-          SortedNumericDocValues sndv = reader.getSortedNumericDocValues(fi.name);
-          for (int i = 0; i < reader.maxDoc(); i++) {
-            if (liveDocs != null && !liveDocs.get(i)) {
-              continue;
-            }
-            sndv.setDocument(i);
-            if (sndv.count() > 0) {
-              for (int j = 0; j < sndv.count(); j++) {
-                long val = sndv.valueAt(j);
-              }
-              present++;
-            }
-          }
-          break;
-        case SORTED_SET:
-          SortedSetDocValues ssdv = reader.getSortedSetDocValues(fi.name);
-          for (int i = 0; i < reader.maxDoc(); i++) {
-            if (liveDocs != null && !liveDocs.get(i)) {
-              continue;
-            }
-            ssdv.setDocument(i);
-            if (ssdv.getValueCount() > 0) {
-              long ord;
-              while ((ord = ssdv.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
-                BytesRef term = ssdv.lookupOrd(ord);
-              }
-              present++;
-            }
-          }
-          break;
-      }
-      return expected + "/" + present;
-    } catch (IOException e) {
-      return "error: " + e.getMessage();
-    }
   }
 
   // returns a map of currently running merges, and populate a list of candidate segment for merge
