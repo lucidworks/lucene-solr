@@ -25,6 +25,8 @@ import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.NumericDocValues;
+import org.apache.lucene.index.SegmentCommitInfo;
+import org.apache.lucene.index.SegmentReader;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.TieredMergePolicy;
 import org.apache.lucene.index.UpgradeIndexMergePolicy;
@@ -74,20 +76,22 @@ public class AddDVMPLuceneTest2 {
     cleanup();
     Directory d = FSDirectory.open(testPath);
     IndexWriterConfig cfg = new IndexWriterConfig(new WhitespaceAnalyzer());
+    cfg.setUseCompoundFile(false);
     TieredMergePolicy tmp = new TieredMergePolicy();
     tmp.setMaxMergeAtOnce(2);
     tmp.setSegmentsPerTier(2.0);
     tmp.setNoCFSRatio(0.0);
-//    cfg.setMergePolicy(new AddDocValuesMergePolicyFactory.AddDVMergePolicy(tmp, mapping::get, null, false, true));
-    cfg.setMergePolicy(tmp);
+    cfg.setMergePolicy(new AddDocValuesMergePolicyFactory.AddDVMergePolicy(tmp, mapping::get, null, false, true));
+//    cfg.setMergePolicy(tmp);
     cfg.setInfoStream(System.out);
-    cfg.setMaxBufferedDocs(10);
+    cfg.setMaxBufferedDocs(100);
     ExtIndexWriter iw = new ExtIndexWriter(d, cfg);
     IndexingThread indexingThread = new IndexingThread("t", iw);
     indexingThread.start();
     QueryThread qt = new QueryThread(iw);
     qt.start();
     Thread.sleep(5000);
+    // simulate a schema change
     mapping.put(TEST_NUM_FIELD, UninvertingReader.Type.LONG);
     mapping.put(TEST_STR_FIELD, UninvertingReader.Type.SORTED);
   }
@@ -187,6 +191,10 @@ public class AddDVMPLuceneTest2 {
         if (r instanceof CodecReader) {
           dvStats = UninvertingReader.getDVStats((CodecReader)r, reader.getFieldInfos().fieldInfo(TEST_NUM_FIELD)).toString();
         }
+        if (r instanceof SegmentReader) {
+          SegmentCommitInfo info = ((SegmentReader)r).getSegmentInfo();
+          dvStats += ", segString=" + AddDocValuesMergePolicyFactory.AddDVMergePolicy.segString(info);
+        }
         throw new IOException("count mismatch: numDocs=" + reader.numDocs() + ", present=" + present + ", reader=" + reader
              + "\ndvStats=" + dvStats);
       }
@@ -209,10 +217,13 @@ public class AddDVMPLuceneTest2 {
         Document d = new Document();
         Field f = new Field("id", id + "-" + threadId, TextField.TYPE_STORED);
         d.add(f);
+        // simulate schema change in the middle of a segment flush
         UninvertingReader.Type type = mapping.get(TEST_NUM_FIELD);
         if (type != null) {
+          // add docValue field
           f = new NumericDocValuesField(TEST_NUM_FIELD, id);
         } else {
+          // or add a regular numeric field
           f = new LongField(TEST_NUM_FIELD, id, LongField.TYPE_STORED);
         }
         d.add(f);
@@ -229,9 +240,9 @@ public class AddDVMPLuceneTest2 {
           if (id > 0 && (id % 20 == 0)) {
             System.err.println("- added " + id);
             // delete first 500
-            for (int j = id - 20; j < id - 20 + 10; j++) {
-              writer.deleteDocuments(new Term("id", j + "-" + threadId));
-            }
+//            for (int j = id - 20; j < id - 20 + 10; j++) {
+//              writer.deleteDocuments(new Term("id", j + "-" + threadId));
+//            }
             writer.commit();
             try {
               Thread.sleep(50);

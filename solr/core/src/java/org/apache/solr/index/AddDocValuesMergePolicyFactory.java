@@ -38,6 +38,7 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.MergePolicy;
 import org.apache.lucene.index.MergeTrigger;
 import org.apache.lucene.index.SegmentCommitInfo;
+import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.index.SegmentInfos;
 import org.apache.lucene.index.SegmentReader;
 import org.apache.lucene.store.IOContext;
@@ -152,6 +153,8 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
 
     public AddDVMergePolicy(MergePolicy in, Function<FieldInfo, UninvertingReader.Type> mapping, String marker, boolean noMerge, boolean skipIntegrityCheck) {
       super(in);
+      setNoCFSRatio(0.0);
+      setMaxCFSSegmentSizeMB(0.0);
       this.mapping = mapping;
       this.marker = marker;
       this.noMerge = noMerge;
@@ -181,9 +184,9 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
       count(mergeType);
       for (int i = 0; i < spec.merges.size(); i++) {
         OneMerge oneMerge = spec.merges.get(i);
-        if (oneMerge instanceof AddDVOneMerge) { // already wrapping
-          continue;
-        }
+//        if (oneMerge instanceof AddDVOneMerge) { // already wrapping
+//          continue;
+//        }
         int needWrapping = 0;
         sb.setLength(0);
         for (SegmentCommitInfo info : oneMerge.segments) {
@@ -229,31 +232,36 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
       return spec;
     }
 
-    private static String segString(OneMerge oneMerge) {
+    public static String segString(OneMerge oneMerge) {
       StringBuilder b = new StringBuilder();
       final int numSegments = oneMerge.segments.size();
       for(int i=0;i<numSegments;i++) {
-        b.append("\n* ");
-        b.append(oneMerge.segments.get(i).info.name);
-        b.append(":");
-        b.append("\n\tsource: ");
-        Map<String, String> diag = oneMerge.segments.get(i).info.getDiagnostics();
-        b.append(diag.get("source"));
-        if (diag.get("class") != null) {
-          b.append("\n\tclass: ");
-          b.append(diag.get("class"));
-        }
-        if (diag.get("wrapping") != null) {
-          b.append("\n\twrapping: ");
-          b.append(diag.get("wrapping"));
-        }
-        if (diag.get("segString") != null) {
-          b.append("\n\tsegString: ");
-          b.append(diag.get("segString").replaceAll("\n", "\n\t| "));
-        }
+        b.append(segString(oneMerge.segments.get(i)));
       }
       return b.toString();
+    }
 
+    public static String segString(SegmentCommitInfo info) {
+      StringBuilder b = new StringBuilder();
+      b.append("\n");
+      b.append(info.info.name);
+      b.append(":");
+      b.append("\n source: ");
+      Map<String, String> diag = info.info.getDiagnostics();
+      b.append(diag.get("source"));
+      if (diag.get("class") != null) {
+        b.append("\n class: ");
+        b.append(diag.get("class"));
+      }
+      if (diag.get("wrapping") != null) {
+        b.append("\n wrapping: ");
+        b.append(diag.get("wrapping"));
+      }
+      if (diag.get("segString") != null) {
+        b.append("\n segString: ");
+        b.append(diag.get("segString").replaceAll("\n", "\n |"));
+      }
+      return b.toString();
     }
 
     @Override
@@ -415,11 +423,10 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
     public CodecReader wrapForMerge(CodecReader reader) throws IOException {
       // Wrap the reader with an uninverting reader if
       // Schema says there should be
-      // NOTE: this converts also fields that already have docValues to
-      // update their values to the current schema type
+      // NOTE: this converts also fields that already have docValues
 
 
-      Map<String, UninvertingReader.Type> uninversionMap = new HashMap<>();
+      Map<String, UninvertingReader.Type> uninversionMap = null;
 
       for (FieldInfo fi : reader.getFieldInfos()) {
         final UninvertingReader.Type type = mapping.apply(fi);
