@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.function.Function;
 
 import org.apache.lucene.codecs.DocValuesProducer;
@@ -254,7 +255,8 @@ public class UninvertingReader extends FilterLeafReader {
         }
       }
     }
-    return type != fi.getDocValuesType() ? type : null;
+//    return type != fi.getDocValuesType() ? type : null;
+    return type;
   }
 
   @Override
@@ -271,6 +273,7 @@ public class UninvertingReader extends FilterLeafReader {
       DocValuesProducer producer = reader.getDocValuesReader();
       Bits docsWithField = producer.getDocsWithField(fi);
       int expected = 0;
+      int delButPresent = 0;
       switch (type) {
         case NUMERIC:
           NumericDocValues ndv = reader.getNumericDocValues(fi.name);
@@ -379,7 +382,7 @@ public class UninvertingReader extends FilterLeafReader {
           }
           break;
       }
-      Map<String, Object> result = new HashMap<>();
+      Map<String, Object> result = new TreeMap<>();
       result.put("numDocs", reader.numDocs());
       result.put("expected", expected);
       result.put("present", present);

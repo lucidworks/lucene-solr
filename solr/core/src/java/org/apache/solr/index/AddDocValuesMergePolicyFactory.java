@@ -32,7 +32,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 import org.apache.lucene.index.CodecReader;
-import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FilterMergePolicy;
 import org.apache.lucene.index.IndexWriter;
@@ -133,11 +132,11 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
 
   private Function<FieldInfo, UninvertingReader.Type> getUninversionMapper() {
     return fi -> {
-      if (UninvertingReader.shouldWrap(fi, schemaUninversionMapper) != null) {
+      //if (UninvertingReader.shouldWrap(fi, schemaUninversionMapper) != null) {
         return schemaUninversionMapper.apply(fi.name);
-      } else {
-        return null;
-      }
+//      } else {
+//        return null;
+//      }
     };
   }
 
@@ -151,7 +150,7 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
     private final boolean noMerge;
     private final Map<String, Object> stats = new ConcurrentHashMap<>();
 
-    AddDVMergePolicy(MergePolicy in, Function<FieldInfo, UninvertingReader.Type> mapping, String marker, boolean noMerge, boolean skipIntegrityCheck) {
+    public AddDVMergePolicy(MergePolicy in, Function<FieldInfo, UninvertingReader.Type> mapping, String marker, boolean noMerge, boolean skipIntegrityCheck) {
       super(in);
       this.mapping = mapping;
       this.marker = marker;
@@ -234,20 +233,23 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
       StringBuilder b = new StringBuilder();
       final int numSegments = oneMerge.segments.size();
       for(int i=0;i<numSegments;i++) {
-        if (i > 0) {
-          b.append('\n');
-        }
-        b.append(oneMerge.segments.get(i).toString());
-        b.append('#');
+        b.append("\n* ");
+        b.append(oneMerge.segments.get(i).info.name);
+        b.append(":");
+        b.append("\n\tsource: ");
         Map<String, String> diag = oneMerge.segments.get(i).info.getDiagnostics();
         b.append(diag.get("source"));
         if (diag.get("class") != null) {
-          b.append('#');
+          b.append("\n\tclass: ");
           b.append(diag.get("class"));
-          if (diag.get("segString") != null) {
-            b.append("#ss=");
-            b.append(diag.get("segString"));
-          }
+        }
+        if (diag.get("wrapping") != null) {
+          b.append("\n\twrapping: ");
+          b.append(diag.get("wrapping"));
+        }
+        if (diag.get("segString") != null) {
+          b.append("\n\tsegString: ");
+          b.append(diag.get("segString").replaceAll("\n", "\n\t| "));
         }
       }
       return b.toString();
@@ -274,6 +276,37 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
      */
 
     private String shouldRewrite(SegmentCommitInfo info) {
+      String rewriteReason = null;
+      // Need to get a reader for this segment
+      try (SegmentReader reader = new SegmentReader(info, IOContext.DEFAULT)) {
+        // check the marker, if defined
+        String existingMarker = info.info.getDiagnostics().get(DIAGNOSTICS_MARKER_PROP);
+        String source = info.info.getDiagnostics().get("source");
+        // always rewrite if markers don't match?
+//        if (!"flush".equals(source) && marker != null && !marker.equals(existingMarker)) {
+//          return "marker";
+//        }
+        StringBuilder sb = new StringBuilder();
+        for (FieldInfo fi : reader.getFieldInfos()) {
+          if (mapping.apply(fi) != null) {
+            if (sb.length() > 0) {
+              sb.append(' ');
+            }
+            sb.append(fi.name);
+            sb.append(UninvertingReader.getDVStats(reader, fi).toString());
+          }
+        }
+//        return sb.toString();
+        rewriteReason = sb.length() > 0 ? sb.toString() : null;
+      } catch (IOException e) {
+        // It's safer to rewrite the segment if there's an error, although it may lead to a lot of work.
+        log.warn("Error opening a reader for segment {}, will rewrite segment", info.toString());
+        count("shouldRewriteError");
+        rewriteReason = "error " + e.getMessage();
+      }
+      if (rewriteReason == null) rewriteReason = "forced";
+      return rewriteReason;
+      /*
       // Need to get a reader for this segment
       try (SegmentReader reader = new SegmentReader(info, IOContext.DEFAULT)) {
         // check the marker, if defined
@@ -305,7 +338,7 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
         log.warn("Error opening a reader for segment {}, will rewrite segment", info.toString());
         count("shouldRewriteError");
         return "error " + e.getMessage();
-      }
+      }*/
     }
 
     @Override
@@ -386,7 +419,7 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
       // update their values to the current schema type
 
 
-      Map<String, UninvertingReader.Type> uninversionMap = null;
+      Map<String, UninvertingReader.Type> uninversionMap = new HashMap<>();
 
       for (FieldInfo fi : reader.getFieldInfos()) {
         final UninvertingReader.Type type = mapping.apply(fi);
@@ -420,7 +453,9 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
     @Override
     public void setMergeInfo(SegmentCommitInfo info) {
       super.setMergeInfo(info);
-      info.info.getDiagnostics().put(DIAGNOSTICS_MARKER_PROP, marker);
+      if (marker != null) {
+        info.info.getDiagnostics().put(DIAGNOSTICS_MARKER_PROP, marker);
+      }
       info.info.getDiagnostics().put("class", getClass().getSimpleName());
       info.info.getDiagnostics().put("segString", AddDVMergePolicy.segString(this));
       if (metaPairs != null && metaPairs.length > 1) {
