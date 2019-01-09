@@ -92,9 +92,9 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
     this.nodeNameLeaderReplicas = new HashMap<>();
     this.nodeNameReplicas = new HashMap<>();
     this.replicationFactor = (Integer) verifyProp(props, REPLICATION_FACTOR);
-    this.numNrtReplicas = (Integer) verifyProp(props, NRT_REPLICAS);
-    this.numTlogReplicas = (Integer) verifyProp(props, TLOG_REPLICAS);
-    this.numPullReplicas = (Integer) verifyProp(props, PULL_REPLICAS);
+    this.numNrtReplicas = (Integer) verifyProp(props, NRT_REPLICAS, 0);
+    this.numTlogReplicas = (Integer) verifyProp(props, TLOG_REPLICAS, 0);
+    this.numPullReplicas = (Integer) verifyProp(props, PULL_REPLICAS, 0);
     this.maxShardsPerNode = (Integer) verifyProp(props, MAX_SHARDS_PER_NODE);
     Boolean autoAddReplicas = (Boolean) verifyProp(props, AUTO_ADD_REPLICAS);
     this.policy = (String) props.get(Policy.POLICY);
@@ -138,8 +138,12 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
   }
 
   public static Object verifyProp(Map<String, Object> props, String propName) {
+    return verifyProp(props, propName, null);
+  }
+
+  public static Object verifyProp(Map<String, Object> props, String propName, Object def) {
     Object o = props.get(propName);
-    if (o == null) return null;
+    if (o == null) return def;
     switch (propName) {
       case MAX_SHARDS_PER_NODE:
       case REPLICATION_FACTOR:
@@ -405,5 +409,14 @@ public class DocCollection extends ZkNodeProps implements Iterable<Slice> {
    */
   public String getPolicyName() {
     return policy;
+  }
+
+  public int getExpectedReplicaCount(Replica.Type type, int def) {
+    Integer result = null;
+    if (type == Replica.Type.NRT) result = numNrtReplicas;
+    if (type == Replica.Type.PULL) result = numPullReplicas;
+    if (type == Replica.Type.TLOG) result = numTlogReplicas;
+    return result == null ? def : result;
+
   }
 }
