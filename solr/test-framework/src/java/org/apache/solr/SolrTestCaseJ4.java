@@ -2648,6 +2648,17 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
     waitForWarming(h.getCore());
   }
 
+  protected String getSaferTestName() {
+    // test names can hold additional info, like the test seed
+    // only take to first space
+    String testName = getTestName();
+    int index = testName.indexOf(' ');
+    if (index > 0) {
+      testName = testName.substring(0, index);
+    }
+    return testName;
+  }
+
   @BeforeClass
   public static void assertNonBlockingRandomGeneratorAvailable() throws InterruptedException {
     final String EGD = "java.security.egd";

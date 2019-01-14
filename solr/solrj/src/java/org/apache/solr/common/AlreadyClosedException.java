@@ -14,27 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.solr.common.cloud;
-
-import java.util.SortedSet;
+package org.apache.solr.common;
 
 /**
- * Listener that can be used with {@link ZkStateReader#registerLiveNodesListener(LiveNodesListener)}
- * and called whenever the live nodes set changes.
+ *
  */
-public interface LiveNodesListener {
+public class AlreadyClosedException extends IllegalStateException {
 
-  /**
-   * Called when a change in the live nodes set occurs.
-   *
-   * Note that, due to the way Zookeeper watchers are implemented, a single call may be
-   * the result of several state changes
-   *
-   * @param oldLiveNodes set of live nodes before the change
-   * @param newLiveNodes set of live nodes after the change
-   *
-   * @return true if the listener should be removed
-   */
-  boolean onChange(SortedSet<String> oldLiveNodes, SortedSet<String> newLiveNodes);
+  public AlreadyClosedException() {
+    super();
+  }
+  
+  public AlreadyClosedException(String msg) {
+    super(msg);
+  }
+  
+  public AlreadyClosedException(Throwable th) {
+    super(th);
+  }
+  
+  public AlreadyClosedException(String msg, Throwable th) {
+    super(msg, th);
+  }
+
 }

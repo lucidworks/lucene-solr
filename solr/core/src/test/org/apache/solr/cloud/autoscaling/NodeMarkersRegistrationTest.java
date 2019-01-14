@@ -230,7 +230,7 @@ public class NodeMarkersRegistrationTest extends SolrCloudTestCase {
     }
 
     @Override
-    public void onChange(SortedSet<String> oldLiveNodes, SortedSet<String> newLiveNodes) {
+    public boolean onChange(SortedSet<String> oldLiveNodes, SortedSet<String> newLiveNodes) {
       onChangeLatch.countDown();
       Set<String> old = new HashSet<>(oldLiveNodes);
       old.removeAll(newLiveNodes);
@@ -241,6 +241,7 @@ public class NodeMarkersRegistrationTest extends SolrCloudTestCase {
       if (!newLiveNodes.isEmpty()) {
         addedNodes.addAll(newLiveNodes);
       }
+      return false;
     }
   }
 

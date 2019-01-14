@@ -129,7 +129,7 @@ public class Utils {
       try {
         m.writeMap(new MapWriter.EntryWriter() {
           @Override
-          public MapWriter.EntryWriter put(String k, Object v) {
+          public MapWriter.EntryWriter put(CharSequence k, Object v) {
             fun.accept(k, v);
             return this;
           }
@@ -508,7 +508,7 @@ public class Utils {
         ((MapWriter) obj).writeMap(new MapWriter.EntryWriter() {
           int count = -1;
           @Override
-          public MapWriter.EntryWriter put(String k, Object v) {
+          public MapWriter.EntryWriter put(CharSequence k, Object v) {
             if (result[0] != null) return this;
             if (idx < 0) {
               if (k.equals(key)) result[0] = v;
