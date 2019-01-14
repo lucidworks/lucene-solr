@@ -269,10 +269,19 @@ public class UninvertingReader extends FilterLeafReader {
     try {
       int present = 0;
       int zeroOrNull = 0;
+      int expected = 0;
       Bits liveDocs = reader.getLiveDocs();
       DocValuesProducer producer = reader.getDocValuesReader();
+      if (producer == null) {
+        // segment has no doc values in any field
+        Map<String, Object> result = new TreeMap<>();
+        result.put("numDocs", reader.numDocs());
+        result.put("expected", expected);
+        result.put("present", present);
+        result.put("nullOrZero", zeroOrNull);
+        return result;
+      }
       Bits docsWithField = producer.getDocsWithField(fi);
-      int expected = 0;
       int delButPresent = 0;
       switch (type) {
         case NUMERIC:
