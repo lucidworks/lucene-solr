@@ -244,6 +244,9 @@ public class Utils {
     CharArr chars = new CharArr();
     ByteUtils.UTF8toUTF16(utf8, 0, utf8.length, chars);
     JSONParser parser = new JSONParser(chars.getArray(), chars.getStart(), chars.length());
+    parser.setFlags(parser.getFlags() |
+        JSONParser.ALLOW_MISSING_COLON_COMMA_BEFORE_OBJECT |
+        JSONParser.OPTIONAL_OUTER_BRACES);
     try {
       return STANDARDOBJBUILDER.apply(parser).getVal(parser);
     } catch (IOException e) {
@@ -331,6 +334,9 @@ public class Utils {
   }
   public static JSONParser getJSONParser(Reader reader){
     JSONParser parser = new JSONParser(reader);
+    parser.setFlags(parser.getFlags() |
+        JSONParser.ALLOW_MISSING_COLON_COMMA_BEFORE_OBJECT |
+        JSONParser.OPTIONAL_OUTER_BRACES);
     return parser;
   }
 
@@ -523,6 +529,8 @@ public class Utils {
       }
       return result[0];
     }
+
+    if (obj instanceof NamedList) return ((NamedList) obj).get(key);
     else if (obj instanceof Map) return ((Map) obj).get(key);
     else throw new RuntimeException("must be a NamedList or Map");
   }

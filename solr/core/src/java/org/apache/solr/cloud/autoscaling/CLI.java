@@ -23,6 +23,10 @@ public class CLI {
 
 
   public static void main(String[] args) throws Exception {
+    if (args.length < 2) {
+      System.err.println("Usage: CLI <zkHost> <autoscaling.json.file>");
+      System.exit(-1);
+    }
     System.err.println("- Creating CloudSolrClient to zkHost " + args[0]);
     CloudSolrClient client = new CloudSolrClient.Builder(
         Collections.singletonList(args[0]), Optional.empty()).build();

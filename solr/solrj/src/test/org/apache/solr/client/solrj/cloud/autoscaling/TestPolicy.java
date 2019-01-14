@@ -185,7 +185,7 @@ public class TestPolicy extends SolrTestCaseJ4 {
         "    { 'maximize': 'freedisk', 'precision': 50}" +
         "  ]," +
         "  'cluster-policy': [" +
-        "    { 'replica': 0, 'nodeRole': 'overseer'}" +
+        "    { 'replica': 0, 'nodeRole': 'overseer'}," +
         "    { 'replica': '<2', 'shard': '#EACH', 'node': '#ANY'}," +
         "  ]" +
         "}");
@@ -277,7 +277,7 @@ public class TestPolicy extends SolrTestCaseJ4 {
         "    { 'minimize': 'cores'}" +
         "  ]," +
         "  'cluster-policy': [" +
-        "    { 'replica': 0, 'nodeRole': 'overseer'}" +
+        "    { 'replica': 0, 'nodeRole': 'overseer'}," +
         "    { 'replica': '<2', 'shard': '#EACH', 'node': '#ANY'}," +
         "  ]" +
         "}");
@@ -370,7 +370,7 @@ public class TestPolicy extends SolrTestCaseJ4 {
         "    { 'minimize': 'cores'}" +
         "  ]," +
         "  'cluster-policy': [" +
-        "    { 'replica': 0, 'nodeRole': 'overseer'}" +
+        "    { 'replica': 0, 'nodeRole': 'overseer'}," +
         "    { 'replica': '<2', 'shard': '#EACH', 'node': '#ANY'}," +
         "  ]" +
         "}");
@@ -476,7 +476,7 @@ public class TestPolicy extends SolrTestCaseJ4 {
         "    { 'maximize': 'freedisk', 'precision': 50}" +
         "  ]," +
         "  'cluster-policy': [" +
-        "    { 'replica': 0, 'nodeRole': 'overseer'}" +
+        "    { 'replica': 0, 'nodeRole': 'overseer'}," +
         "    { 'replica': '<2', 'shard': '#EACH', 'node': '#ANY'}," +
         "  ]" +
         "}");
@@ -971,7 +971,7 @@ public class TestPolicy extends SolrTestCaseJ4 {
         "    { 'minimize': 'cores', 'precision': 50}" +
         "  ]," +
         "  'cluster-policy': [" +
-        "    { 'replica': 0, 'nodeRole': 'overseer'}" +
+        "    { 'replica': 0, 'nodeRole': 'overseer'}," +
         "    { 'replica': '<2', 'shard': '#EACH', 'node': '#ANY'}," +
         "  ]" +
         "}");
@@ -1006,7 +1006,7 @@ public class TestPolicy extends SolrTestCaseJ4 {
         "    { 'minimize': 'cores', 'precision': 50}" +
         "  ]," +
         "  'cluster-policy': [" +
-        "    { 'replica': 0, 'nodeRole': 'overseer'}" +
+        "    { 'replica': 0, 'nodeRole': 'overseer'}," +
         "    { 'replica': '<3', 'shard': '#EACH', 'node': '#ANY'}," +
         "  ]" +
         "}");
@@ -1049,7 +1049,7 @@ public class TestPolicy extends SolrTestCaseJ4 {
         "    { 'minimize': 'cores', 'precision': 50}" +
         "  ]," +
         "  'cluster-policy': [" +
-        "    { 'replica': 0, 'nodeRole': 'overseer'}" +
+        "    { 'replica': 0, 'nodeRole': 'overseer'}," +
         "    { 'replica': '<2', 'shard': 'shard1', 'node': '#ANY'}," +
         "    { 'replica': '<3', 'shard': 'shard2', 'node': '#ANY'}," +
         "  ]" +
@@ -1160,9 +1160,9 @@ public class TestPolicy extends SolrTestCaseJ4 {
         "    { 'minimize': 'cores', 'precision': 50}" +
         "  ]," +
         "  'cluster-policy': [" +
-        "    { 'replica': 0, 'nodeRole': 'overseer'}" +
+        "    { 'replica': 0, 'nodeRole': 'overseer'}," +
         "    { 'replica': '<2', 'shard': '#EACH', 'node': '#ANY'}," +
-        "    { 'replica': 0, 'shard': '#EACH', sysprop.fs : '!ssd',  type : TLOG }" +
+        "    { 'replica': 0, 'shard': '#EACH', sysprop.fs : '!ssd',  type : TLOG }," +
         "    { 'replica': 0, 'shard': '#EACH', sysprop.fs : '!slowdisk' ,  type : PULL }" +
         "  ]" +
         "}");
@@ -1267,11 +1267,11 @@ public class TestPolicy extends SolrTestCaseJ4 {
         "    { 'minimize': 'cores', 'precision': 1}" +
         "  ]," +
         "  'cluster-policy': [" +
-        "    { 'replica': 0, 'nodeRole': 'overseer'}" +
+        "    { 'replica': 0, 'nodeRole': 'overseer'}," +
         "    { 'replica': '<2', 'shard': '#EACH', 'node': '#ANY', 'collection':'newColl'}," +
         "    { 'replica': '<2', 'shard': '#EACH', 'node': '#ANY', 'collection':'newColl2', type : PULL}," +
         "    { 'replica': '<3', 'shard': '#EACH', 'node': '#ANY', 'collection':'newColl2'}," +
-        "    { 'replica': 0, 'shard': '#EACH', sysprop.fs : '!ssd',  type : TLOG }" +
+        "    { 'replica': 0, 'shard': '#EACH', sysprop.fs : '!ssd',  type : TLOG }," +
         "    { 'replica': 0, 'shard': '#EACH', sysprop.fs : '!slowdisk' ,  type : PULL }" +
         "  ]" +
         "}");
@@ -1483,7 +1483,7 @@ public class TestPolicy extends SolrTestCaseJ4 {
   @Test
   public void testSessionCaching() throws IOException, InterruptedException {
 //    PolicyHelper.SessionRef ref1 = new PolicyHelper.SessionRef();
-    String autoScalingjson = "  '{cluster-policy':[" +
+    String autoScalingjson = "  {'cluster-policy':[" +
         "    {      'cores':'<10',      'node':'#ANY'}," +
         "    {      'replica':'<2',      'shard':'#EACH',      'node':'#ANY'}," +
         "    {      'nodeRole':'overseer','replica':0}]," +
@@ -1512,7 +1512,7 @@ public class TestPolicy extends SolrTestCaseJ4 {
         "    { 'minimize': 'cores', 'precision': 50}" +
         "  ]," +
         "  'cluster-policy': [" +
-        "    { 'replica': 0, 'nodeRole': 'overseer'}" +
+        "    { 'replica': 0, 'nodeRole': 'overseer'}," +
         "    { 'replica': '<2', 'shard': '#EACH', 'node': '#ANY'}," +
         "  ]" +
         "}");
@@ -1971,7 +1971,7 @@ public class TestPolicy extends SolrTestCaseJ4 {
   }
 
   public void testMoveReplicaSuggester() {
-    String autoScalingjson = "  '{cluster-policy':[" +
+    String autoScalingjson = "  {'cluster-policy':[" +
         "{'cores':'<10', 'node':'#ANY'}," +
         "{'replica':'<2', 'shard':'#EACH','node':'#ANY'}]," +
         "'cluster-preferences':[{'minimize':'cores'}]}";
@@ -1996,12 +1996,12 @@ public class TestPolicy extends SolrTestCaseJ4 {
   }
 
   public void testComputePlanAfterNodeAdded() {
-    String autoScalingjson = "cluster-preferences:[" +
-        "       {minimize : cores}," +
-        "       {'maximize':freedisk , precision:100}],    " +
-        " cluster-policy:[{cores:'<10',node:'#ANY'}," +
-        "       {replica:'<2', shard:'#EACH',node:'#ANY'}," +
-        "       { nodeRole:overseer,replica:0}]}";
+    String autoScalingjson = "{'cluster-preferences':[" +
+        "       {'minimize' : 'cores'}," +
+        "       {'maximize':'freedisk' , 'precision':100}],    " +
+        " 'cluster-policy':[{'cores':'<10','node':'#ANY'}," +
+        "       {'replica':'<2', 'shard':'#EACH','node':'#ANY'}," +
+        "       { 'nodeRole':'overseer','replica':0}]}";
     Policy policy = new Policy((Map<String, Object>) Utils.fromJSONString(autoScalingjson));
     Policy.Session session = policy.createSession(cloudManagerWithData((Map) loadFromResource("testComputePlanAfterNodeAdded.json")));
     Suggester suggester = session.getSuggester(CollectionParams.CollectionAction.MOVEREPLICA)
@@ -2012,11 +2012,11 @@ public class TestPolicy extends SolrTestCaseJ4 {
   }
 
   public void testReplicaCountSuggestions() {
-    String autoScalingjson = "  { cluster-policy:[" +
-        "    { cores :'<10', node :'#ANY'}," +
-        "    { replica :'<2',  node:'#ANY'}," +
-        "    { nodeRole : overseer, replica :0}]," +
-        "  cluster-preferences :[{ minimize : cores }]}";
+    String autoScalingjson = "  { 'cluster-policy':[" +
+        "    { 'cores' :'<10', 'node' :'#ANY'}," +
+        "    { 'replica' :'<2',  'node':'#ANY'}," +
+        "    { 'nodeRole' : 'overseer', 'replica' :0}]," +
+        "  'cluster-preferences' :[{ 'minimize' : 'cores' }]}";
     List<Suggester.SuggestionInfo> l = PolicyHelper.getSuggestions(new AutoScalingConfig((Map<String, Object>) Utils.fromJSONString(autoScalingjson)),
         cloudManagerWithData((Map) loadFromResource("testReplicaCountSuggestions.json")));
     assertFalse(l.isEmpty());
@@ -2180,10 +2180,10 @@ public class TestPolicy extends SolrTestCaseJ4 {
     assertEquals("node1", l.get(2)._get("operation/command/move-replica/targetNode", null));
 
 
-    autoScalingjson = "  { cluster-policy:[" +
-        "    { replica :'#ALL', freedisk:'>1000'}," +
-        "    { nodeRole : overseer, replica :0}]," +
-        "  cluster-preferences :[{ minimize : cores, precision : 2 }]}";
+    autoScalingjson = "  { 'cluster-policy':[" +
+        "    { 'replica' :'#ALL', 'freedisk':'>1000'}," +
+        "    { 'nodeRole' : 'overseer', 'replica' :0}]," +
+        "  'cluster-preferences' :[{ 'minimize' : 'cores', 'precision' : 2 }]}";
     cfg = new AutoScalingConfig((Map<String, Object>) Utils.fromJSONString(autoScalingjson));
     violations = cfg.getPolicy().createSession(cloudManagerWithData((Map) loadFromResource("testFreeDiskSuggestions.json"))).getViolations();
     assertEquals(1, violations.size());
@@ -2270,11 +2270,11 @@ public class TestPolicy extends SolrTestCaseJ4 {
   }
 
   public void testDiskSpaceHint() {
-    String autoScalingjson = "cluster-preferences:[" +
-        "       {minimize : cores}]" +
-        " cluster-policy:[{cores:'<10',node:'#ANY'}," +
-        "       {replica:'<2', shard:'#EACH',node:'#ANY'}," +
-        "       { nodeRole:overseer,replica:0}]}";
+    String autoScalingjson = "{'cluster-preferences':[" +
+        "       {minimize : cores}]," +
+        " 'cluster-policy':[{'cores':'<10','node':'#ANY'}," +
+        "       {'replica':'<2', 'shard':'#EACH','node':'#ANY'}," +
+        "       { 'nodeRole':'overseer','replica':0}]}}";
     Policy policy = new Policy((Map<String, Object>) Utils.fromJSONString(autoScalingjson));
     Policy.Session session = policy.createSession(cloudManagerWithData((Map) loadFromResource("testDiskSpaceHint.json")));
     Suggester suggester = session.getSuggester(CollectionAction.ADDREPLICA)
