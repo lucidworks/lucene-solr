@@ -153,8 +153,6 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
 
     public AddDVMergePolicy(MergePolicy in, Function<FieldInfo, UninvertingReader.Type> mapping, String marker, boolean noMerge, boolean skipIntegrityCheck) {
       super(in);
-      setNoCFSRatio(0.0);
-      setMaxCFSSegmentSizeMB(0.0);
       this.mapping = mapping;
       this.marker = marker;
       this.noMerge = noMerge;
@@ -205,14 +203,14 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
           }
         }
         if (needWrapping > 0) {
-          log.info("-- OneMerge needs wrapping ({}/{}): {}", needWrapping, oneMerge.segments.size(), sb.toString());
+          log.debug("-- OneMerge needs wrapping ({}/{}): {}", needWrapping, oneMerge.segments.size(), sb.toString());
           OneMerge wrappedOneMerge = new AddDVOneMerge(oneMerge.segments, mapping, marker, skipIntegrityCheck,
               "mergeType", mergeType, "needWrapping", String.valueOf(needWrapping), "wrapping", sb.toString());
           spec.merges.set(i, wrappedOneMerge);
           count("segmentsWrapped", needWrapping);
           count("mergesWrapped");
         } else {
-          log.info("-- OneMerge doesn't need wrapping {}", oneMerge.segments);
+          log.debug("-- OneMerge doesn't need wrapping {}", oneMerge.segments);
           OneMerge nonWrappedOneMerge = new OneMerge(oneMerge.segments) {
             @Override
             public void setMergeInfo(SegmentCommitInfo info) {
@@ -222,7 +220,9 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
               }
               info.info.getDiagnostics().put("class", oneMerge.getClass().getSimpleName() + "-nonWrapped");
               info.info.getDiagnostics().put("mergeType", mergeType);
-              info.info.getDiagnostics().put("segString", AddDVMergePolicy.segString(oneMerge));
+              if (log.isDebugEnabled()) {
+                info.info.getDiagnostics().put("segString", AddDVMergePolicy.segString(oneMerge));
+              }
             }
           };
           spec.merges.set(i, nonWrappedOneMerge);
@@ -304,7 +304,6 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
             sb.append(UninvertingReader.getDVStats(reader, fi).toString());
           }
         }
-//        return sb.toString();
         rewriteReason = sb.length() > 0 ? sb.toString() : null;
       } catch (IOException e) {
         // It's safer to rewrite the segment if there's an error, although it may lead to a lot of work.
@@ -312,41 +311,8 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
         count("shouldRewriteError");
         rewriteReason = "error " + e.getMessage();
       }
-      if (rewriteReason == null) rewriteReason = "forced";
+      //if (rewriteReason == null) rewriteReason = "forced";
       return rewriteReason;
-      /*
-      // Need to get a reader for this segment
-      try (SegmentReader reader = new SegmentReader(info, IOContext.DEFAULT)) {
-        // check the marker, if defined
-        String existingMarker = info.info.getDiagnostics().get(DIAGNOSTICS_MARKER_PROP);
-        String source = info.info.getDiagnostics().get("source");
-        // always rewrite if markers don't match?
-//        if (!"flush".equals(source) && marker != null && !marker.equals(existingMarker)) {
-//          return "marker";
-//        }
-        StringBuilder sb = new StringBuilder();
-        for (FieldInfo fi : reader.getFieldInfos()) {
-          if (fi.getDocValuesType() != DocValuesType.NONE) {
-            Map<String, Object> dvStats = UninvertingReader.getDVStats(reader, fi);
-            if (!((Integer)dvStats.get("numDocs")).equals((Integer)dvStats.get("present"))) {
-              throw new RuntimeException("segment: " + info.toString() + " " + fi.name + ", dvStats: " + dvStats + " diag: " + info.info.getDiagnostics());
-            }
-          }
-          if (mapping.apply(fi) != null) {
-            if (sb.length() > 0) {
-              sb.append(',');
-            }
-            sb.append(fi.name);
-          }
-        }
-//        return sb.toString();
-        return sb.length() > 0 ? sb.toString() : null;
-      } catch (IOException e) {
-        // It's safer to rewrite the segment if there's an error, although it may lead to a lot of work.
-        log.warn("Error opening a reader for segment {}, will rewrite segment", info.toString());
-        count("shouldRewriteError");
-        return "error " + e.getMessage();
-      }*/
     }
 
     @Override
@@ -379,7 +345,7 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
           String shouldRewrite = shouldRewrite(info);
           if (shouldRewrite != null) {
             count("forcedMergeWrapped");
-            log.info("--straggler {}", info.toString());
+            log.debug("--straggler {}", info.toString());
             spec.add(new AddDVOneMerge(Collections.singletonList(info), mapping, marker, skipIntegrityCheck,
                 "mergeType", "straggler:" + shouldRewrite));
           }
@@ -439,10 +405,10 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
       }
 
       if (uninversionMap == null) {
-        log.info("-- reader unwrapped: " + reader);
+        log.debug("-- reader unwrapped: " + reader);
         return reader; // Default to normal reader if nothing to uninvert
       } else {
-        log.info("-- reader wrapped " + reader);
+        log.debug("-- reader wrapped " + reader);
         return new UninvertingFilterCodecReader(reader, uninversionMap, skipIntegrityCheck);
       }
     }
@@ -464,7 +430,9 @@ public class AddDocValuesMergePolicyFactory extends WrapperMergePolicyFactory {
         info.info.getDiagnostics().put(DIAGNOSTICS_MARKER_PROP, marker);
       }
       info.info.getDiagnostics().put("class", getClass().getSimpleName());
-      info.info.getDiagnostics().put("segString", AddDVMergePolicy.segString(this));
+      if (log.isDebugEnabled()) {
+        info.info.getDiagnostics().put("segString", AddDVMergePolicy.segString(this));
+      }
       if (metaPairs != null && metaPairs.length > 1) {
         int len = metaPairs.length;
         if ((metaPairs.length % 2) != 0) {
