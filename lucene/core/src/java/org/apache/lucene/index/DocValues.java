@@ -203,15 +203,20 @@ public final class DocValues {
   // helper method: to give a nice error when LeafReader.getXXXDocValues returns null.
   private static void checkField(LeafReader in, String field, DocValuesType... expected) {
     FieldInfo fi = in.getFieldInfos().fieldInfo(field);
-    if (fi != null) {
-      DocValuesType actual = fi.getDocValuesType();
-      throw new IllegalStateException("unexpected docvalues type " + actual + 
-                                        " for field '" + field + "' " +
-                                        (expected.length == 1 
-                                        ? "(expected=" + expected[0]
-                                        : "(expected one of " + Arrays.toString(expected)) + "). " +
-                                        "Use UninvertingReader or index with docvalues.");
+    //nocommit AB please check
+    if (fi == null) {
+      return;
     }
+    DocValuesType actual = fi.getDocValuesType();
+    if (expected.length == 1 && expected[0].equals(actual)) {
+      return;
+    }
+    throw new IllegalStateException("unexpected docvalues type " + actual +
+        " for field '" + field + "' " +
+        (expected.length == 1
+            ? "(expected=" + expected[0]
+            : "(expected one of " + Arrays.toString(expected)) + "). " +
+        "Use UninvertingReader or index with docvalues.");
   }
   
   /**

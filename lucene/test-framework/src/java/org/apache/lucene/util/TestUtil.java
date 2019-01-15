@@ -354,8 +354,8 @@ public final class TestUtil {
           if (reader.getBinaryDocValues(info.name) != null ||
               reader.getNumericDocValues(info.name) != null ||
               reader.getSortedDocValues(info.name) != null || 
-              reader.getSortedSetDocValues(info.name) != null || 
-              reader.getDocsWithField(info.name) != null) {
+              reader.getSortedSetDocValues(info.name) != null ||
+              reader.getFieldInfos().fieldInfo(info.name).getDocValuesType() != DocValuesType.NONE) {
             throw new RuntimeException("field: " + info.name + " has docvalues but should omit them!");
           }
           break;

@@ -226,6 +226,9 @@ public class UninvertingReader extends FilterLeafReader {
   }
 
   public static DocValuesType shouldWrap(FieldInfo fi, Function<String, Type> mapping) {
+    if (fi == null) {
+      return null;
+    }
     DocValuesType type = fi.getDocValuesType();
     if (fi.getIndexOptions() != IndexOptions.NONE) {
       Type t = mapping.apply(fi.name);
@@ -437,6 +440,11 @@ public class UninvertingReader extends FilterLeafReader {
 
   @Override
   public SortedDocValues getSortedDocValues(String field) throws IOException {
+    //nocommit AB check please
+    DocValuesType dt = shouldWrap(fieldInfos.fieldInfo(field), mapping);
+    if (dt == DocValuesType.SORTED) {
+      return in.getSortedDocValues(field);
+    }
     Type v = getType(field);
     if (v != null) {
       if (v == Type.SORTED) {
@@ -451,6 +459,12 @@ public class UninvertingReader extends FilterLeafReader {
   
   @Override
   public SortedSetDocValues getSortedSetDocValues(String field) throws IOException {
+    //nocommit AB check please
+    DocValuesType dt = shouldWrap(fieldInfos.fieldInfo(field), mapping);
+    if (dt == DocValuesType.SORTED) {
+      return in.getSortedSetDocValues(field);
+    }
+
     Type v = getType(field);
     if (v != null) {
       switch (v) {

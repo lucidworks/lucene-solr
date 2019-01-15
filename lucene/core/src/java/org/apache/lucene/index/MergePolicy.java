@@ -170,8 +170,6 @@ public abstract class MergePolicy {
      */
     public void setMergeInfo(SegmentCommitInfo info) {
       this.info = info;
-      // nocommit remove this debugging
-      this.info.info.getDiagnostics().put("class", this.getClass().getSimpleName());
     }
 
     /**

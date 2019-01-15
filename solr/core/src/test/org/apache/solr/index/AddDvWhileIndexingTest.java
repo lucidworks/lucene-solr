@@ -28,6 +28,7 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
@@ -51,9 +52,10 @@ import org.slf4j.LoggerFactory;
 
 import static junit.framework.Assert.assertTrue;
 import static junit.framework.Assert.fail;
+import static org.apache.lucene.util.LuceneTestCase.*;
 import static org.junit.Assert.assertEquals;
 
-//TODO EOE put this back @LuceneTestCase.Slow
+@Slow
 public class AddDvWhileIndexingTest extends AbstractFullDistribZkTestBase {
 
   public static Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -184,21 +186,8 @@ public class AddDvWhileIndexingTest extends AbstractFullDistribZkTestBase {
       updateResponse = addFieldRequest.process(cloudClient);
     }
 
-    //TODO EOE
-    try {
-      TimeUnit.SECONDS.sleep(5);
-    } catch (InterruptedException e) {
-      e.printStackTrace();
-    }
-
     reloadCollection(cloudClient);
 
-    //TODO EOE
-    try {
-      TimeUnit.SECONDS.sleep(5);
-    } catch (InterruptedException e) {
-      e.printStackTrace();
-    }
 
     waitForRecoveriesToFinish(COLLECTION_NAME, false);
 
