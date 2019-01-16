@@ -258,8 +258,8 @@ public class UninvertingReader extends FilterLeafReader {
         }
       }
     }
-//    return type != fi.getDocValuesType() ? type : null;
-    return type;
+    return type != fi.getDocValuesType() ? type : null;
+//    return type;
   }
 
   @Override
@@ -410,6 +410,10 @@ public class UninvertingReader extends FilterLeafReader {
   // also, if the mapping is Type.NONE it drops existing doc values
   @Override
   public NumericDocValues getNumericDocValues(String field) throws IOException {
+    NumericDocValues values = super.getNumericDocValues(field);
+    if (values != null) {
+      return values;
+    }
     Type v = getType(field);
     if (v != null) {
       switch (v) {
@@ -418,14 +422,16 @@ public class UninvertingReader extends FilterLeafReader {
         case LONG: return FieldCache.DEFAULT.getNumerics(in, field, FieldCache.NUMERIC_UTILS_LONG_PARSER, true);
         case DOUBLE: return FieldCache.DEFAULT.getNumerics(in, field, FieldCache.NUMERIC_UTILS_DOUBLE_PARSER, true);
       }
-      return null;
-    } else {
-      return in.getNumericDocValues(field);
     }
+    return null;
   }
 
   @Override
   public BinaryDocValues getBinaryDocValues(String field) throws IOException {
+    BinaryDocValues values = in.getBinaryDocValues(field);
+    if (values != null) {
+      return values;
+    }
     Type v = getType(field);
     if (v != null) {
       if (v == Type.BINARY) {
@@ -434,16 +440,15 @@ public class UninvertingReader extends FilterLeafReader {
         return null;
       }
     } else {
-      return in.getBinaryDocValues(field);
+      return null;
     }
   }
 
   @Override
   public SortedDocValues getSortedDocValues(String field) throws IOException {
-    //nocommit AB check please
-    DocValuesType dt = shouldWrap(fieldInfos.fieldInfo(field), mapping);
-    if (dt == DocValuesType.SORTED) {
-      return in.getSortedDocValues(field);
+    SortedDocValues values = in.getSortedDocValues(field);
+    if (values != null) {
+      return values;
     }
     Type v = getType(field);
     if (v != null) {
@@ -453,16 +458,15 @@ public class UninvertingReader extends FilterLeafReader {
         return null;
       }
     } else {
-      return in.getSortedDocValues(field);
+      return null;
     }
   }
   
   @Override
   public SortedSetDocValues getSortedSetDocValues(String field) throws IOException {
-    //nocommit AB check please
-    DocValuesType dt = shouldWrap(fieldInfos.fieldInfo(field), mapping);
-    if (dt == DocValuesType.SORTED) {
-      return in.getSortedSetDocValues(field);
+    SortedSetDocValues values = in.getSortedSetDocValues(field);
+    if (values != null) {
+      return values;
     }
 
     Type v = getType(field);
@@ -477,16 +481,14 @@ public class UninvertingReader extends FilterLeafReader {
         case SORTED_SET_BINARY:
           return FieldCache.DEFAULT.getDocTermOrds(in, field, null);
       }
-      return null;
-    } else {
-      return in.getSortedSetDocValues(field);
     }
+    return null;
   }
 
   @Override
   public Bits getDocsWithField(String field) throws IOException {
-//    if (getType(field) != null) {
-    if (shouldWrap(fieldInfos.fieldInfo(field), mapping) != null) {
+    if (getType(field) != null) {
+//    if (shouldWrap(fieldInfos.fieldInfo(field), mapping) != null) {
       return FieldCache.DEFAULT.getDocsWithField(in, field);
     } else {
       return in.getDocsWithField(field);
