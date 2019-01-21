@@ -404,6 +404,7 @@
   <target name="clean" description="Cleans compiled files and other temporary artifacts.">
     <delete dir="build" />
     <delete dir="dist" />
+    <delete dir="cli" />
     <delete dir="package" />
     <delete dir="server/solr/lib" />
     <delete dir="example/solr/lib" />
@@ -849,6 +850,19 @@
     <ant dir="solrj" target="-append-module-dependencies-properties" inheritAll="false"/>
     <ant dir="test-framework" target="-append-module-dependencies-properties" inheritAll="false"/>
     <contrib-crawl target="-append-module-dependencies-properties"/>
+  </target>
+
+  <target name="dist-cli" depends="dist-solrj">
+    <mkdir dir="${dist}/../cli"/>
+    <copy todir="${dist}/../cli">
+      <fileset dir="${dist}">
+        <include name="solrj-lib/*.jar"/>
+        <include name="solr-solrj*.jar"/>
+      </fileset>
+    </copy>
+    <copy todir="${dist}/../cli" file="${dist}/../bin/ascli.sh"/>
+    <chmod file="${dist}/../cli/ascli.sh" perm="ugo+rx"/>
+   
   </target>
 
 </project>

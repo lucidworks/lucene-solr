@@ -22,5 +22,5 @@ fi
 #  -DzkDigestReadonlyUsername=readonly-user -DzkDigestReadonlyPassword=CHANGEME-READONLY-PASSWORD"
 
 PATH=$JAVA_HOME/bin:$PATH $JVM $SOLR_ZK_CREDS_AND_ACLS $ZKCLI_JVM_FLAGS -Dlog4j.configurationFile=$log4j_config \
--classpath "$sdir/../server/solr-webapp/webapp/WEB-INF/lib/*:$sdir/../server/lib/ext/*:$sdir/../server/lib/*" org.apache.solr.client.solrj.cloud.autoscaling.CLI ${1+"$@"}
+-classpath "$sdir/*:$sdir/solrj-lib/*:$sdir/../server/solr-webapp/webapp/WEB-INF/lib/*:$sdir/../server/lib/ext/*:$sdir/../server/lib/*" org.apache.solr.client.solrj.cloud.autoscaling.CLI ${1+"$@"}
 

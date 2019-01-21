@@ -58,6 +58,9 @@ public class CLI {
             withDiagnostics = true;
           } else if (arg.equals("--sortedNodes")) {
             withSortedNodes = true;
+          } else {
+            System.err.println("Unrecognized option: " + arg);
+            System.exit(-1);
           }
         } else {
           System.err.println("- Reading autoscaling config from " + arg);
