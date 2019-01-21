@@ -865,4 +865,9 @@
    
   </target>
 
+  <target name="tar-cli" depends="dist-cli">
+    <tar destfile="${dist}/cli.tar.gz" compression="gzip" longfile="gnu">
+      <tarfileset dir="${dist}/../cli"/>
+    </tar>
+  </target>
 </project>
