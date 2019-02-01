@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -32,9 +33,10 @@ public class CLI {
 
   public static void main(String[] args) throws Exception {
     if (args.length == 0) {
-      System.err.println("Usage: CLI <zkHost> [<autoscaling.json.file>] ([--full] | [--stats] [--suggestions] [--diagnostics] [--sortedNodes])");
-      System.err.println("\t--full\treturn all available information");
-      System.err.println("\t--stats\tsummarized collection & node stats");
+      System.err.println("Usage: CLI <zkHost> [<autoscaling.json.file>] ([--full] | [--stats] [--clusterState] [--suggestions] [--diagnostics] [--sortedNodes])");
+      System.err.println("\t--full\t\treturn all available information");
+      System.err.println("\t--stats\t\tsummarized collection & node stats");
+      System.err.println("\t--clusterState\treturn ClusterState");
       System.err.println("\t--suggestions\treturn suggestions");
       System.err.println("\t--diagnostics\treturn diagnostics (without the 'sortedNodes' section");
       System.err.println("\t--sortedNodes\treturn diagnostics with the 'sortedNodes' section");
@@ -44,6 +46,7 @@ public class CLI {
     boolean withSuggestions = false;
     boolean withDiagnostics = false;
     boolean withStats = false;
+    boolean withClusterState = false;
     System.err.println("- Creating CloudSolrClient to " + args[0]);
     CloudSolrClient client = new CloudSolrClient.Builder(
         Collections.singletonList(args[0]), Optional.empty()).build();
@@ -72,11 +75,14 @@ public class CLI {
             withSortedNodes = true;
           } else if (arg.equals("--stats")) {
             withStats = true;
+          } else if (arg.equals("--clusterState")) {
+            withClusterState = true;
           } else if (arg.equals("--full")) {
             withDiagnostics = true;
             withSortedNodes = true;
             withSuggestions = true;
             withStats = true;
+            withClusterState = true;
           } else {
             System.err.println("Unrecognized option: " + arg);
             System.exit(-1);
@@ -95,6 +101,14 @@ public class CLI {
       withDiagnostics = true;
     }
     ClusterState clusterState = clientCloudManager.getClusterStateProvider().getClusterState();
+    if (withClusterState) {
+      System.out.println("\n============= CLUSTER STATE ===========");
+      Map<String, Object> map = new LinkedHashMap<>();
+      map.put("znodeVersion", clusterState.getZNodeVersion());
+      map.put("liveNodes", new TreeSet<>(clusterState.getLiveNodes()));
+      map.put("collections", clusterState.getCollectionsMap());
+      System.out.println(Utils.toJSONString(map));
+    }
     Map<String, Map<String, Number>> collStats = new TreeMap<>();
     clusterState.forEachCollection(coll -> {
       Map<String, Number> perColl = collStats.computeIfAbsent(coll.getName(), n -> new LinkedHashMap<>());
