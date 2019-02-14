@@ -180,12 +180,15 @@ public class CLI {
     Map<String, Object> diagnostics = new LinkedHashMap<>();
     mw.toMap(diagnostics);
     Map<String, Map<String, Object>> nodeStats = new TreeMap<>();
+    Map<Integer, AtomicInteger> coreStats = new TreeMap<>();
     for (Row row : session.getSortedNodes()) {
       Map<String, Object> nodeStat = nodeStats.computeIfAbsent(row.node, n -> new LinkedHashMap<>());
       nodeStat.put("isLive", row.isLive);
       nodeStat.put("freedisk", row.getVal("freedisk"));
       nodeStat.put("totaldisk", row.getVal("totaldisk"));
-      nodeStat.put("cores", row.getVal("cores"));
+      int cores = ((Number)row.getVal("cores", 0)).intValue();
+      nodeStat.put("cores", cores);
+      coreStats.computeIfAbsent(cores, num -> new AtomicInteger()).incrementAndGet();
       Map<String, Map<String, Map<String, Object>>> collReplicas = new TreeMap<>();
       row.forEachReplica(ri -> {
         Map<String, Object> perReplica = collReplicas.computeIfAbsent(ri.getCollection(), c -> new TreeMap<>())
@@ -228,6 +231,8 @@ public class CLI {
     end = TimeSource.NANO_TIME.getTimeNs();
     System.err.println("  (took " + TimeUnit.NANOSECONDS.toMillis(end - start) + " ms)");
     if (withStats) {
+      System.out.println("\n============= CORE COUNTS vs NUMBER OF NODES ===========");
+      System.out.println(Utils.toJSONString(coreStats));
       System.out.println("\n============= NODE STATISTICS ===========");
       System.out.println(Utils.toJSONString(nodeStats));
       System.out.println("\n============= COLLECTION STATISTICS ===========");
