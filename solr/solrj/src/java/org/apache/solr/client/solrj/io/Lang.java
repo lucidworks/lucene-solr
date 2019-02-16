@@ -36,7 +36,7 @@ public class Lang {
   public static void register(StreamFactory streamFactory) {
     streamFactory
         // source streams
-        .withFunctionName("search", CloudSolrStream.class)
+        .withFunctionName("search", SearchFacadeStream.class)
         .withFunctionName("facet", FacetStream.class)
         .withFunctionName("update", UpdateStream.class)
         .withFunctionName("jdbc", JDBCStream.class)

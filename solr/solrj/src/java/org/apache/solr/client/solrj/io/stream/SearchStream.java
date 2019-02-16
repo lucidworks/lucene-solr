@@ -20,19 +20,20 @@ package org.apache.solr.client.solrj.io.stream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.Random;
-import java.util.stream.Collectors;
 
-import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.io.SolrClientCache;
 import org.apache.solr.client.solrj.io.Tuple;
+import org.apache.solr.client.solrj.io.comp.ComparatorOrder;
+import org.apache.solr.client.solrj.io.comp.FieldComparator;
+import org.apache.solr.client.solrj.io.comp.MultipleFieldComparator;
 import org.apache.solr.client.solrj.io.comp.StreamComparator;
 import org.apache.solr.client.solrj.io.stream.expr.Explanation;
 import org.apache.solr.client.solrj.io.stream.expr.Explanation.ExpressionType;
@@ -47,32 +48,23 @@ import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
+import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
 
-import static org.apache.solr.common.params.CommonParams.SORT;
-
-/**
- *  The RandomStream emits a stream of psuedo random Tuples that match the query parameters. Sample expression syntax:
- *  random(collection, q="Hello word", rows="50", fl="title, body")
- * @since 6.1.0
- **/
-
-public class RandomStream extends TupleStream implements Expressible  {
+public class SearchStream extends TupleStream implements Expressible  {
 
   private String zkHost;
-  private Map<String, String> props;
+  private ModifiableSolrParams params;
   private String collection;
   protected transient SolrClientCache cache;
   protected transient CloudSolrClient cloudSolrClient;
   private Iterator<SolrDocument> documentIterator;
+  protected StreamComparator comp;
 
-  public RandomStream(String zkHost,
-                      String collection,
-                     Map<String, String> props) throws IOException {
-    init(zkHost, collection, props);
-  }
+  public SearchStream() {}
 
-  public RandomStream(StreamExpression expression, StreamFactory factory) throws IOException{
+
+  public SearchStream(StreamExpression expression, StreamFactory factory) throws IOException{
     // grab all parameters out
     String collectionName = factory.getValueOperand(expression, 0);
     List<StreamExpressionNamedParameter> namedParams = factory.getNamedOperands(expression);
@@ -90,10 +82,10 @@ public class RandomStream extends TupleStream implements Expressible  {
     }
 
     // pull out known named params
-    Map<String,String> params = new HashMap<String,String>();
+    ModifiableSolrParams params = new ModifiableSolrParams();
     for(StreamExpressionNamedParameter namedParam : namedParams){
       if(!namedParam.getName().equals("zkHost") && !namedParam.getName().equals("buckets") && !namedParam.getName().equals("bucketSorts") && !namedParam.getName().equals("limit")){
-        params.put(namedParam.getName(), namedParam.getParameter().toString().trim());
+        params.add(namedParam.getName(), namedParam.getParameter().toString().trim());
       }
     }
 
@@ -116,23 +108,39 @@ public class RandomStream extends TupleStream implements Expressible  {
     init(zkHost, collectionName, params);
   }
 
-  private void init(String zkHost, String collection, Map<String, String> props) throws IOException {
+  void init(String zkHost, String collection, ModifiableSolrParams params) throws IOException {
     this.zkHost  = zkHost;
-    this.props   = props;
+    this.params   = params;
+
+    if(this.params.get(CommonParams.Q) == null) {
+      this.params.add(CommonParams.Q, "*:*");
+    }
     this.collection = collection;
+    if(params.get(CommonParams.SORT) != null) {
+      this.comp = parseComp(params.get(CommonParams.SORT), params.get(CommonParams.FL));
+    }
   }
 
   @Override
   public StreamExpressionParameter toExpression(StreamFactory factory) throws IOException {
     // function name
-    StreamExpression expression = new StreamExpression(factory.getFunctionName(this.getClass()));
+    StreamExpression expression = new StreamExpression("search");
 
     // collection
-    expression.addParameter(collection);
+    if(collection.indexOf(',') > -1) {
+      expression.addParameter("\""+collection+"\"");
+    } else {
+      expression.addParameter(collection);
+    }
 
-    // parameters
-    for(Entry<String,String> param : props.entrySet()){
-      expression.addParameter(new StreamExpressionNamedParameter(param.getKey(), param.getValue()));
+    for (Entry<String, String[]> param : params.getMap().entrySet()) {
+      for (String val : param.getValue()) {
+        // SOLR-8409: Escaping the " is a special case.
+        // Do note that in any other BASE streams with parameters where a " might come into play
+        // that this same replacement needs to take place.
+        expression.addParameter(new StreamExpressionNamedParameter(param.getKey(),
+            val.replace("\"", "\\\"")));
+      }
     }
 
     // zkHost
@@ -145,22 +153,20 @@ public class RandomStream extends TupleStream implements Expressible  {
   public Explanation toExplanation(StreamFactory factory) throws IOException {
 
     StreamExplanation explanation = new StreamExplanation(getStreamNodeId().toString());
-    
-    explanation.setFunctionName(factory.getFunctionName(this.getClass()));
+
+    explanation.setFunctionName("search");
     explanation.setImplementingClass(this.getClass().getName());
     explanation.setExpressionType(ExpressionType.STREAM_SOURCE);
     explanation.setExpression(toExpression(factory).toString());
-    
+
     // child is a datastore so add it at this point
     StreamExplanation child = new StreamExplanation(getStreamNodeId() + "-datastore");
     child.setFunctionName(String.format(Locale.ROOT, "solr (%s)", collection));
     child.setImplementingClass("Solr/Lucene");
     child.setExpressionType(ExpressionType.DATASTORE);
-    if(null != props){
-      child.setExpression(props.entrySet().stream().map(e -> String.format(Locale.ROOT, "%s=%s", e.getKey(), e.getValue())).collect(Collectors.joining(",")));
-    }
+
     explanation.addChild(child);
-    
+
     return explanation;
   }
 
@@ -182,17 +188,8 @@ public class RandomStream extends TupleStream implements Expressible  {
       cloudSolrClient = new CloudSolrClient.Builder(hosts, Optional.empty()).build();
     }
 
-    ModifiableSolrParams params = getParams(this.props);
 
-    params.remove(SORT); //Override any sort.
-
-    Random rand = new Random();
-    int seed = rand.nextInt();
-
-    String sortField = "random_"+seed;
-    params.add(SORT, sortField+" asc");
-
-    QueryRequest request = new QueryRequest(params, SolrRequest.METHOD.POST);
+    QueryRequest request = new QueryRequest(params);
     try {
       QueryResponse response = request.process(cloudSolrClient, collection);
       SolrDocumentList docs = response.getResults();
@@ -224,14 +221,6 @@ public class RandomStream extends TupleStream implements Expressible  {
     }
   }
 
-  private ModifiableSolrParams getParams(Map<String, String> props) {
-    ModifiableSolrParams params = new ModifiableSolrParams();
-    for(String key : props.keySet()) {
-      String value = props.get(key);
-      params.add(key, value);
-    }
-    return params;
-  }
 
   public int getCost() {
     return 0;
@@ -239,6 +228,46 @@ public class RandomStream extends TupleStream implements Expressible  {
 
   @Override
   public StreamComparator getStreamSort() {
-    return null;
+    return comp;
+  }
+
+  private StreamComparator parseComp(String sort, String fl) throws IOException {
+
+    HashSet fieldSet = null;
+
+    if(fl != null) {
+      fieldSet = new HashSet();
+      String[] fls = fl.split(",");
+      for (String f : fls) {
+        fieldSet.add(f.trim()); //Handle spaces in the field list.
+      }
+    }
+
+    String[] sorts = sort.split(",");
+    StreamComparator[] comps = new StreamComparator[sorts.length];
+    for(int i=0; i<sorts.length; i++) {
+      String s = sorts[i];
+
+      String[] spec = s.trim().split("\\s+"); //This should take into account spaces in the sort spec.
+
+      if (spec.length != 2) {
+        throw new IOException("Invalid sort spec:" + s);
+      }
+
+      String fieldName = spec[0].trim();
+      String order = spec[1].trim();
+
+      if(fieldSet != null && !fieldSet.contains(spec[0])) {
+        throw new IOException("Fields in the sort spec must be included in the field list:"+spec[0]);
+      }
+
+      comps[i] = new FieldComparator(fieldName, order.equalsIgnoreCase("asc") ? ComparatorOrder.ASCENDING : ComparatorOrder.DESCENDING);
+    }
+
+    if(comps.length > 1) {
+      return new MultipleFieldComparator(comps);
+    } else {
+      return comps[0];
+    }
   }
 }

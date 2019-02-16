@@ -193,6 +193,8 @@ used with DVHASH method in json.facet. (Tim Underwood via Mikhail Khludnev)
 
 * SOLR-12978: In autoscaling NPE thrown for nodes where value is absent (noble)
 
+* SOLR-13014: URI Too Long with large streaming expressions in SolrJ (janhoy) 
+
 Improvements
 ----------------------
 

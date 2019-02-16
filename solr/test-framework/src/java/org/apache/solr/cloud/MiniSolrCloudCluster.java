@@ -24,19 +24,24 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.solr.client.solrj.embedded.JettyConfig;
 import org.apache.solr.client.solrj.embedded.JettySolrRunner;
@@ -45,7 +50,10 @@ import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.CloudSolrClient.Builder;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.common.cloud.Aliases;
+import org.apache.solr.common.cloud.CollectionStatePredicate;
+import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.Replica;
+import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.common.cloud.ZkConfigManager;
 import org.apache.solr.common.cloud.ZkStateReader;
@@ -588,4 +596,52 @@ public class MiniSolrCloudCluster {
       ChaosMonkey.causeConnectionLoss(jetty);
     }
   }
+
+  public void waitForActiveCollection(String collection, int shards, int totalReplicas) {
+    waitForActiveCollection(collection,  30, TimeUnit.SECONDS, shards, totalReplicas);
+  }
+
+  public void waitForActiveCollection(String collection, long wait, TimeUnit unit, int shards, int totalReplicas) {
+    CollectionStatePredicate predicate = expectedShardsAndActiveReplicas(shards, totalReplicas);
+
+    AtomicReference<DocCollection> state = new AtomicReference<>();
+    AtomicReference<Set<String>> liveNodesLastSeen = new AtomicReference<>();
+    try {
+      getSolrClient().waitForState(collection, wait, unit, (n, c) -> {
+        state.set(c);
+        liveNodesLastSeen.set(n);
+
+        return predicate.matches(n, c);
+      });
+    } catch (TimeoutException | InterruptedException e) {
+      throw new RuntimeException("Failed while waiting for active collection" + "\n" + e.getMessage() + "\nLive Nodes: " + Arrays.toString(liveNodesLastSeen.get().toArray())
+          + "\nLast available state: " + state.get());
+    }
+
+  }
+
+  public static CollectionStatePredicate expectedShardsAndActiveReplicas(int expectedShards, int expectedReplicas) {
+    return (liveNodes, collectionState) -> {
+      if (collectionState == null)
+        return false;
+      if (collectionState.getSlices().size() != expectedShards) {
+        return false;
+      }
+
+      int activeReplicas = 0;
+      for (Slice slice : collectionState) {
+        for (Replica replica : slice) {
+          if (replica.isActive(liveNodes)) {
+            activeReplicas++;
+          }
+        }
+      }
+      if (activeReplicas == expectedReplicas) {
+        return true;
+      }
+
+      return false;
+    };
+  }
+
 }
