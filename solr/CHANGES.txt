@@ -82,7 +82,17 @@ Bug fixes
 
 * SOLR-12833: Avoid unnecessary memory cost when DistributedUpdateProcessor timed-out lock is not used. (ab)
 
+<<<<<<< HEAD
 * SOLR-13449: SolrClientNodeStateProvider always retries on requesting metrics from other nodes (Cao Manh Dat)
+=======
+* SOLR-9882: 500 error code on breaching timeAllowed by core and distributed (fsv) search, 
+  old and json facets (Mikhail Khludnev)
+
+Improvements
+----------------------
+* SOLR-12999: Index replication could delete segments before downloading segments from master if there is not enough
+  disk space (noble)
+>>>>>>> b8d569aff0c... SOLR-9882: reporting timeAllowed breach as partialResults instead of 500 error
 
 * SOLR-13112: Upgrade jackson to 2.9.8 (Kevin Risden)
 

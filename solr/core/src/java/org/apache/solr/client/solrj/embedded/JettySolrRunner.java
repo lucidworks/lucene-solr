@@ -60,6 +60,7 @@ import org.eclipse.jetty.server.SecureRequestCustomizer;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.SslConnectionFactory;
+import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.eclipse.jetty.server.handler.gzip.GzipHandler;
 import org.eclipse.jetty.server.session.DefaultSessionIdManager;
 import org.eclipse.jetty.servlet.FilterHolder;
@@ -299,6 +300,8 @@ public class JettySolrRunner {
       server.setConnectors(new Connector[] {connector});
     }
 
+    HandlerWrapper chain;
+    {
     // Initialize the servlets
     final ServletContextHandler root = new ServletContextHandler(server, config.context, ServletContextHandler.SESSIONS);
 
@@ -357,11 +360,15 @@ public class JettySolrRunner {
         System.clearProperty("hostPort");
       }
     });
-
     // for some reason, there must be a servlet for this to get applied
     root.addServlet(Servlet404.class, "/*");
+    chain = root;
+    }
+
+    chain = injectJettyHandlers(chain);
+    
     GzipHandler gzipHandler = new GzipHandler();
-    gzipHandler.setHandler(root);
+    gzipHandler.setHandler(chain);
 
     gzipHandler.setMinGzipSize(0);
     gzipHandler.setCheckGzExists(false);
@@ -371,6 +378,13 @@ public class JettySolrRunner {
 
     server.setHandler(gzipHandler);
   }
+
+  /** descendants may inject own handler chaining it to the given root 
+   * and then returning that own one*/
+  protected HandlerWrapper injectJettyHandlers(HandlerWrapper chain) {
+    return chain;
+  }
+
 
   /**
    * @return the {@link SolrDispatchFilter} for this node

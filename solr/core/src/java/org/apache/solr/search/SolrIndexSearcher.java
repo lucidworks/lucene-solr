@@ -1702,7 +1702,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
       set = DocSetUtil.getDocSet(setCollector, this);
 
       totalHits = topCollector.getTotalHits();
-      assert (totalHits == set.size());
+      assert (totalHits == set.size()) || qr.isPartialResults();
 
       TopDocs topDocs = topCollector.topDocs(0, len);
       populateNextCursorMarkFromTopDocs(qr, cmd, topDocs);
