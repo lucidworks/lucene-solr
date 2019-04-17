@@ -16,6 +16,12 @@ In this release, there is an example Solr server including a bundled
 servlet container in the directory named "example".
 See the Solr tutorial at https://lucene.apache.org/solr/guide/solr-tutorial.html
 
+==================  lucenesolr75_backports ==================
+
+this version of Solr contains everything in Solr 7.5.1 plus the following:
+
+* SOLR-12774: IndexOutOfBoundsException on logging startupVersions
+
 ==================  7.5.1 ==================
 
 Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.
