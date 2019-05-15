@@ -356,7 +356,10 @@ public class ClusterState implements JSONWriter.Writable {
   public void forEachCollection(Consumer<DocCollection> consumer) {
     collectionStates.forEach((s, collectionRef) -> {
       try {
-        consumer.accept(collectionRef.get());
+        DocCollection collection = collectionRef.get();
+        if (collection != null) {
+          consumer.accept(collection);
+        }
       } catch (SolrException e) {
         if (e.getCause() instanceof KeeperException.NoNodeException) {
           //don't do anything. This collection does not exist
