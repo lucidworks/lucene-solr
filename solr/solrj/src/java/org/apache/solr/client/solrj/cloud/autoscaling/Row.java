@@ -80,6 +80,10 @@ public class Row implements MapWriter {
     isAlreadyCopied = true;
   }
 
+  public boolean isLive() {
+    return isLive;
+  }
+
 
   public static final Map<String, CacheEntry> cacheStats = new HashMap<>();
 

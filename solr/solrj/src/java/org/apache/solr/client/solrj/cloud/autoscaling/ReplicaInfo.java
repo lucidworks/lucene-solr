@@ -72,7 +72,7 @@ public class ReplicaInfo implements MapWriter {
     this.node = node;
   }
 
-  ReplicaInfo(Map<String, Object> map) {
+  public ReplicaInfo(Map<String, Object> map) {
     this.name = map.keySet().iterator().next();
     Map details = (Map) map.get(name);
     details = Utils.getDeepCopy(details, 4);
