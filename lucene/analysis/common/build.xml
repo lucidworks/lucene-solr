@@ -96,8 +96,8 @@
     <groovy classpathref="icu4j.classpath" src="src/tools/groovy/generate-unicode-data.groovy"/>
     <fixcrlf file="${unicode-props-file}" encoding="UTF-8"/>
   </target>
-  
-  <property name="tld.zones" value="http://www.internic.net/zones/root.zone"/>
+
+  <property name="tld.zones" value="https://www.internic.net/zones/root.zone"/>
   <property name="tld.output" location="src/java/org/apache/lucene/analysis/standard/ASCIITLD.jflex-macro"/>
 
   <target name="gen-tlds" depends="compile-tools">
