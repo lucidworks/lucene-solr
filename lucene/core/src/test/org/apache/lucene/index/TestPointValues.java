@@ -392,11 +392,11 @@ public class TestPointValues extends LuceneTestCase {
     dir.close();
   }
 
-  // Write point values, one segment with Lucene70, another with SimpleText, then forceMerge with SimpleText
+  // Write point values, one segment with Lucene80, another with SimpleText, then forceMerge with SimpleText
   public void testDifferentCodecs1() throws Exception {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random()));
-    iwc.setCodec(Codec.forName("Lucene70"));
+    iwc.setCodec(Codec.forName("Lucene80"));
     IndexWriter w = new IndexWriter(dir, iwc);
     Document doc = new Document();
     doc.add(new IntPoint("int", 1));
@@ -415,7 +415,7 @@ public class TestPointValues extends LuceneTestCase {
     dir.close();
   }
 
-  // Write point values, one segment with Lucene70, another with SimpleText, then forceMerge with Lucene70
+  // Write point values, one segment with Lucene80, another with SimpleText, then forceMerge with Lucene80
   public void testDifferentCodecs2() throws Exception {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random()));
@@ -427,7 +427,7 @@ public class TestPointValues extends LuceneTestCase {
     w.close();
     
     iwc = new IndexWriterConfig(new MockAnalyzer(random()));
-    iwc.setCodec(Codec.forName("Lucene70"));
+    iwc.setCodec(Codec.forName("Lucene80"));
     w = new IndexWriter(dir, iwc);
     doc = new Document();
     doc.add(new IntPoint("int", 1));

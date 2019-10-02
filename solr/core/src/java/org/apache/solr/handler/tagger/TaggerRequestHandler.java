@@ -264,25 +264,12 @@ public class TaggerRequestHandler extends RequestHandlerBase {
     if (!xmlOffsetAdjust) {
       return null;
     }
-
-    // Just return null as if xmlOffsetAdjust=false or not passed. See below.
-    return null;
-
-    /*
-       Commented to remove dependency on woodstox-core-asl-4.4.1.jar as it is not Open JDK 11/12 compatible.
-       Just return null. xmlOffsetAdjust=true will not work in text tagger
-       Rakesh Sharma. 07/24/2019. Lucidworks Inc.
-       JDK Internal API                         Suggested Replacement
-       ----------------                         ---------------------
-       sun.misc.Unsafe                          See http://openjdk.java.net/jeps/260
-       woodstox-core-asl-4.4.1.jar -> JDK removed internal API
-        com.ctc.wstx.msv.GenericMsvValidator               -> org.relaxng.datatype.Datatype                      JDK internal API (JDK removed internal API)
     try {
       return new XmlOffsetCorrector(inputStringProvider.call());
     } catch (XMLStreamException e) {
       throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
           "Expecting XML but wasn't: " + e, e);
-    }*/
+    }
   }
 
   private DocList getDocList(int rows, FixedBitSet matchDocIdsBS) throws IOException {

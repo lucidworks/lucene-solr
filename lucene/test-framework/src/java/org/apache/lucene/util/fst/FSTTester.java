@@ -301,7 +301,7 @@ public class FSTTester<T> {
       out.close();
       IndexInput in = dir.openInput("fst.bin", context);
       try {
-        fst = new FST<>(in, outputs);
+        fst = new FST<T>(in, outputs);
       } finally {
         in.close();
         dir.deleteFile("fst.bin");
@@ -812,3 +812,4 @@ public class FSTTester<T> {
     }
   }
 }
+

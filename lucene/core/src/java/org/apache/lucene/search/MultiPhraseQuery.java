@@ -33,12 +33,14 @@ import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.SlowImpactsEnum;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.TermState;
+import org.apache.lucene.index.TermStates;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.similarities.Similarity;
+import org.apache.lucene.search.similarities.Similarity.SimScorer;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.PriorityQueue;
@@ -204,23 +206,36 @@ public class MultiPhraseQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
-    final Map<Term, TermContext> termStates = new HashMap<>();
-    return new PhraseWeight(this, field, searcher, needsScores) {
+  public void visit(QueryVisitor visitor) {
+    if (visitor.acceptField(field) == false) {
+      return;
+    }
+    QueryVisitor v = visitor.getSubVisitor(BooleanClause.Occur.MUST, this);
+    for (Term[] terms : termArrays) {
+      QueryVisitor sv = v.getSubVisitor(BooleanClause.Occur.SHOULD, this);
+      sv.consumeTerms(this, terms);
+    }
+  }
+
+  @Override
+  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+    final Map<Term,TermStates> termStates = new HashMap<>();
+    return new PhraseWeight(this, field, searcher, scoreMode) {
+
       @Override
-      protected Similarity.SimWeight getStats(IndexSearcher searcher) throws IOException {
+      protected Similarity.SimScorer getStats(IndexSearcher searcher) throws IOException {
         final IndexReaderContext context = searcher.getTopReaderContext();
 
         // compute idf
         ArrayList<TermStatistics> allTermStats = new ArrayList<>();
         for(final Term[] terms: termArrays) {
           for (Term term: terms) {
-            TermContext ts = termStates.get(term);
+            TermStates ts = termStates.get(term);
             if (ts == null) {
-              ts = TermContext.build(context, term);
+              ts = TermStates.build(context, term, scoreMode.needsScores());
               termStates.put(term, ts);
             }
-            if (needsScores) {
+            if (scoreMode.needsScores()) {
               TermStatistics termStatistics = searcher.termStatistics(term, ts);
               if (termStatistics != null) {
                 allTermStats.add(termStatistics);
@@ -231,7 +246,7 @@ public class MultiPhraseQuery extends Query {
         if (allTermStats.isEmpty()) {
           return null; // none of the terms were found, we won't use sim at all
         } else {
-          return similarity.computeWeight(
+          return similarity.scorer(
               boost,
               searcher.collectionStatistics(field),
               allTermStats.toArray(new TermStatistics[allTermStats.size()]));
@@ -239,7 +254,7 @@ public class MultiPhraseQuery extends Query {
       }
 
       @Override
-      protected PhraseMatcher getPhraseMatcher(LeafReaderContext context, boolean exposeOffsets) throws IOException {
+      protected PhraseMatcher getPhraseMatcher(LeafReaderContext context, SimScorer scorer, boolean exposeOffsets) throws IOException {
         assert termArrays.length != 0;
         final LeafReader reader = context.reader();
 
@@ -265,7 +280,7 @@ public class MultiPhraseQuery extends Query {
           List<PostingsEnum> postings = new ArrayList<>();
 
           for (Term term : terms) {
-            TermState termState = termStates.get(term).get(context.ord);
+            TermState termState = termStates.get(term).get(context);
             if (termState != null) {
               termsEnum.seekExact(term.bytes(), termState);
               postings.add(termsEnum.postings(null, exposeOffsets ? PostingsEnum.ALL : PostingsEnum.POSITIONS));
@@ -284,16 +299,16 @@ public class MultiPhraseQuery extends Query {
             postingsEnum = exposeOffsets ? new UnionFullPostingsEnum(postings) : new UnionPostingsEnum(postings);
           }
 
-          postingsFreqs[pos] = new PhraseQuery.PostingsAndFreq(postingsEnum, positions[pos], terms);
+          postingsFreqs[pos] = new PhraseQuery.PostingsAndFreq(postingsEnum, new SlowImpactsEnum(postingsEnum), positions[pos], terms);
         }
 
         // sort by increasing docFreq order
         if (slop == 0) {
           ArrayUtil.timSort(postingsFreqs);
-          return new ExactPhraseMatcher(postingsFreqs, totalMatchCost);
+          return new ExactPhraseMatcher(postingsFreqs, scoreMode, scorer, totalMatchCost);
         }
         else {
-          return new SloppyPhraseMatcher(postingsFreqs, slop, totalMatchCost, exposeOffsets);
+          return new SloppyPhraseMatcher(postingsFreqs, slop, scoreMode, scorer, totalMatchCost, exposeOffsets);
         }
 
       }

@@ -45,7 +45,7 @@ public class TestCustomNorms extends LuceneTestCase {
 
     Directory dir = newDirectory();
     MockAnalyzer analyzer = new MockAnalyzer(random());
-    analyzer.setMaxTokenLength(TestUtil.nextInt(random(), 1, IndexWriter.MAX_TERM_LENGTH));
+    analyzer.setMaxTokenLength(TestUtil.nextInt(random(), 2, IndexWriter.MAX_TERM_LENGTH));
 
     IndexWriterConfig config = newIndexWriterConfig(analyzer);
     Similarity provider = new MySimProvider();
@@ -103,12 +103,7 @@ public class TestCustomNorms extends LuceneTestCase {
     }
     
     @Override
-    public SimWeight computeWeight(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public SimScorer simScorer(SimWeight weight, LeafReaderContext context) throws IOException {
+    public SimScorer scorer(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
       throw new UnsupportedOperationException();
     }
   }

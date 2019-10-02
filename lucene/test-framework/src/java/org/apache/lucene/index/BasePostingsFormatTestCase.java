@@ -32,6 +32,7 @@ import org.apache.lucene.analysis.Token;
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.FilterCodec;
+import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -398,8 +399,8 @@ public abstract class BasePostingsFormatTestCase extends BaseIndexFileFormatTest
 
               return new FieldsConsumer() {
                 @Override
-                public void write(Fields fields) throws IOException {
-                  fieldsConsumer.write(fields);
+                public void write(Fields fields, NormsProducer norms) throws IOException {
+                  fieldsConsumer.write(fields, norms);
 
                   boolean isMerge = state.context.context == IOContext.Context.MERGE;
 
@@ -550,7 +551,7 @@ public abstract class BasePostingsFormatTestCase extends BaseIndexFileFormatTest
     IndexReader r = w.getReader();
     w.close();
 
-    Terms terms = MultiFields.getTerms(r, "body");
+    Terms terms = MultiTerms.getTerms(r, "body");
     assertEquals(sumDocFreq.get(), terms.getSumDocFreq());
     assertEquals(sumTotalTermFreq.get(), terms.getSumTotalTermFreq());
 

@@ -24,7 +24,9 @@ import java.util.List;
 import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.CollectionTerminatedException;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.SimpleCollector;
+import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.search.suggest.Lookup;
 
 import static org.apache.lucene.search.suggest.document.TopSuggestDocs.SuggestScoreDoc;
@@ -42,7 +44,7 @@ import static org.apache.lucene.search.suggest.document.TopSuggestDocs.SuggestSc
  * Subclasses should only override
  * {@link TopSuggestDocsCollector#collect(int, CharSequence, CharSequence, float)}.
  * <p>
- * NOTE: {@link #setScorer(org.apache.lucene.search.Scorer)} and
+ * NOTE: {@link #setScorer(org.apache.lucene.search.Scorable)} and
  * {@link #collect(int)} is not used
  *
  * @lucene.experimental
@@ -177,7 +179,7 @@ public class TopSuggestDocsCollector extends SimpleCollector {
     }
 
     if (suggestScoreDocs.length > 0) {
-      return new TopSuggestDocs(suggestScoreDocs.length, suggestScoreDocs, suggestScoreDocs[0].score);
+      return new TopSuggestDocs(new TotalHits(suggestScoreDocs.length, TotalHits.Relation.EQUAL_TO), suggestScoreDocs);
     } else {
       return TopSuggestDocs.EMPTY;
     }
@@ -196,7 +198,7 @@ public class TopSuggestDocsCollector extends SimpleCollector {
    * Ignored
    */
   @Override
-  public boolean needsScores() {
-    return true;
+  public ScoreMode scoreMode() {
+    return ScoreMode.COMPLETE;
   }
 }

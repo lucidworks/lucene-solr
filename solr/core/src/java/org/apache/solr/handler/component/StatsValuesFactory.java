@@ -19,8 +19,8 @@ package org.apache.solr.handler.component;
 import java.io.IOException;
 import java.util.*;
 import java.nio.ByteBuffer;
-import org.apache.lucene.index.LeafReaderContext;
 import java.nio.charset.StandardCharsets;
+import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.util.BytesRef;
@@ -32,7 +32,6 @@ import org.apache.solr.handler.component.StatsField.Stat;
 import org.apache.solr.schema.*;
 
 import com.tdunning.math.stats.AVLTreeDigest;
-import com.google.common.base.Charsets;
 import com.google.common.hash.HashFunction;
 
 import org.apache.solr.util.hll.HLL;

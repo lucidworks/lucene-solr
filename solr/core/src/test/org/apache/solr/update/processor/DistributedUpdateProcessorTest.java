@@ -51,7 +51,7 @@ import static org.mockito.Mockito.doReturn;
 
 public class DistributedUpdateProcessorTest extends SolrTestCaseJ4 {
 
-  @Rule
+  @Rule 
   public MockitoRule rule = MockitoJUnit.rule();
   private static ExecutorService executor;
 
@@ -72,22 +72,22 @@ public class DistributedUpdateProcessorTest extends SolrTestCaseJ4 {
   }
 
   @Test
-  public void testShouldBufferUpdate() {
+  public void testShouldBufferUpdateZk() throws IOException {
     SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), new ModifiableSolrParams());
-    DistributedUpdateProcessor processor = new DistributedUpdateProcessor(
-        req, null, null, null);
-
-    AddUpdateCommand cmd = new AddUpdateCommand(req);
-    // applying buffer updates, isReplayOrPeerSync flag doesn't matter
-    assertFalse(processor.shouldBufferUpdate(cmd, false, UpdateLog.State.APPLYING_BUFFERED));
-    assertFalse(processor.shouldBufferUpdate(cmd, true, UpdateLog.State.APPLYING_BUFFERED));
-
-    assertTrue(processor.shouldBufferUpdate(cmd, false, UpdateLog.State.BUFFERING));
-    // this is not an buffer updates and it depend on other updates
-    cmd.prevVersion = 10;
-    assertTrue(processor.shouldBufferUpdate(cmd, false, UpdateLog.State.APPLYING_BUFFERED));
+    try (DistributedUpdateProcessor processor = new DistributedUpdateProcessor(
+        req, null, null, null)) {
+      AddUpdateCommand cmd = new AddUpdateCommand(req);
+      // applying buffer updates, isReplayOrPeerSync flag doesn't matter
+      assertFalse(processor.shouldBufferUpdate(cmd, false, UpdateLog.State.APPLYING_BUFFERED));
+      assertFalse(processor.shouldBufferUpdate(cmd, true, UpdateLog.State.APPLYING_BUFFERED));
+  
+      assertTrue(processor.shouldBufferUpdate(cmd, false, UpdateLog.State.BUFFERING));
+      // this is not an buffer updates and it depend on other updates
+      cmd.prevVersion = 10;
+      assertTrue(processor.shouldBufferUpdate(cmd, false, UpdateLog.State.APPLYING_BUFFERED));
+    }
   }
-
+  
   @Test
   public void testVersionAdd() throws IOException {
     SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), new ModifiableSolrParams());
@@ -134,7 +134,7 @@ public class DistributedUpdateProcessorTest extends SolrTestCaseJ4 {
     // all should succeed
     assertThat(succeeded, is(threads));
   }
-
+  
   /**
    * @return how many requests succeeded
    */
@@ -151,7 +151,7 @@ public class DistributedUpdateProcessorTest extends SolrTestCaseJ4 {
         doReturn(new TimedVersionBucket() {
           /**
            * simulate the case: it takes 5 seconds to add the doc
-           *
+           * 
            */
           @Override
           protected boolean tryLock(int lockTimeoutMs) {

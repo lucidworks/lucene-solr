@@ -17,17 +17,18 @@
 
 package org.apache.lucene.geo;
 
-import java.util.Arrays;
-
 import org.apache.lucene.index.PointValues;
 import org.apache.lucene.util.FutureArrays;
+
+import java.util.Arrays;
+import java.util.Objects;
+
+import org.apache.lucene.index.PointValues.Relation;
 import org.apache.lucene.util.NumericUtils;
 
 import static java.lang.Integer.BYTES;
 import static org.apache.lucene.geo.GeoEncodingUtils.MAX_LON_ENCODED;
 import static org.apache.lucene.geo.GeoEncodingUtils.MIN_LON_ENCODED;
-import static org.apache.lucene.geo.GeoEncodingUtils.decodeLatitude;
-import static org.apache.lucene.geo.GeoEncodingUtils.decodeLongitude;
 import static org.apache.lucene.geo.GeoEncodingUtils.encodeLatitude;
 import static org.apache.lucene.geo.GeoEncodingUtils.encodeLatitudeCeil;
 import static org.apache.lucene.geo.GeoEncodingUtils.encodeLongitude;
@@ -35,19 +36,19 @@ import static org.apache.lucene.geo.GeoEncodingUtils.encodeLongitudeCeil;
 import static org.apache.lucene.geo.GeoUtils.orient;
 
 /**
- * 2D rectangle implementation containing spatial logic.
+ * 2D rectangle implementation containing geo spatial logic.
  *
  * @lucene.internal
  */
 public class Rectangle2D {
-  final byte[] bbox;
-  final byte[] west;
-  final int minX;
-  final int maxX;
-  final int minY;
-  final int maxY;
+  protected final byte[] bbox;
+  private final byte[] west;
+  protected final int minX;
+  protected final int maxX;
+  protected final int minY;
+  protected final int maxY;
 
-  private Rectangle2D(double minLat, double maxLat, double minLon, double maxLon) {
+  protected Rectangle2D(double minLat, double maxLat, double minLon, double maxLon) {
     this.bbox = new byte[4 * BYTES];
     int minXenc = encodeLongitudeCeil(minLon);
     int maxXenc = encodeLongitude(maxLon);
@@ -79,6 +80,16 @@ public class Rectangle2D {
     }
   }
 
+  protected Rectangle2D(int minX, int maxX, int minY, int maxY) {
+    this.bbox = new byte[4 * BYTES];
+    this.west = null;
+    this.minX = minX;
+    this.maxX = maxX;
+    this.minY = minY;
+    this.maxY = maxY;
+    encode(this.minX, this.maxX, this.minY, this.maxY, bbox);
+  }
+
   /** Builds a Rectangle2D from rectangle */
   public static Rectangle2D create(Rectangle rectangle) {
     return new Rectangle2D(rectangle.minLat, rectangle.maxLat, rectangle.minLon, rectangle.maxLon);
@@ -98,10 +109,10 @@ public class Rectangle2D {
   }
 
   /** compare this to a provided rangle bounding box **/
-  public PointValues.Relation relateRangeBBox(int minXOffset, int minYOffset, byte[] minTriangle,
-                                              int maxXOffset, int maxYOffset, byte[] maxTriangle) {
-    PointValues.Relation eastRelation = compareBBoxToRangeBBox(this.bbox, minXOffset, minYOffset, minTriangle, maxXOffset, maxYOffset, maxTriangle);
-    if (this.crossesDateline() && eastRelation == PointValues.Relation.CELL_OUTSIDE_QUERY) {
+  public Relation relateRangeBBox(int minXOffset, int minYOffset, byte[] minTriangle,
+                                  int maxXOffset, int maxYOffset, byte[] maxTriangle) {
+    Relation eastRelation = compareBBoxToRangeBBox(this.bbox, minXOffset, minYOffset, minTriangle, maxXOffset, maxYOffset, maxTriangle);
+    if (this.crossesDateline() && eastRelation == Relation.CELL_OUTSIDE_QUERY) {
       return compareBBoxToRangeBBox(this.west, minXOffset, minYOffset, minTriangle, maxXOffset, maxYOffset, maxTriangle);
     }
     return eastRelation;
@@ -158,9 +169,9 @@ public class Rectangle2D {
   }
 
   /** static utility method to compare a bbox with a range of triangles (just the bbox of the triangle collection) */
-  private static PointValues.Relation compareBBoxToRangeBBox(final byte[] bbox,
-                                                            int minXOffset, int minYOffset, byte[] minTriangle,
-                                                            int maxXOffset, int maxYOffset, byte[] maxTriangle) {
+  private static Relation compareBBoxToRangeBBox(final byte[] bbox,
+                                                 int minXOffset, int minYOffset, byte[] minTriangle,
+                                                 int maxXOffset, int maxYOffset, byte[] maxTriangle) {
     // check bounding box (DISJOINT)
     if (FutureArrays.compareUnsigned(minTriangle, minXOffset, minXOffset + BYTES, bbox, 3 * BYTES, 4 * BYTES) > 0 ||
         FutureArrays.compareUnsigned(maxTriangle, maxXOffset, maxXOffset + BYTES, bbox, BYTES, 2 * BYTES) < 0 ||
@@ -175,7 +186,7 @@ public class Rectangle2D {
         FutureArrays.compareUnsigned(maxTriangle, maxYOffset, maxYOffset + BYTES, bbox, 2 * BYTES, 3 * BYTES) <= 0) {
       return PointValues.Relation.CELL_INSIDE_QUERY;
     }
-    return PointValues.Relation.CELL_CROSSES_QUERY;
+    return Relation.CELL_CROSSES_QUERY;
   }
 
   /**
@@ -233,19 +244,14 @@ public class Rectangle2D {
     }
 
     // shortcut: check if either of the end points fall inside the box
-    if (bboxContainsPoint(ax, ay, minX, maxX, minY, maxY)
-        || bboxContainsPoint(bx, by, minX, maxX, minY, maxY)) {
+    if (bboxContainsPoint(ax, ay, minX, maxX, minY, maxY) ||
+        bboxContainsPoint(bx, by, minX, maxX, minY, maxY)) {
       return true;
     }
 
     // shortcut: check bboxes of edges are disjoint
     if (boxesAreDisjoint(Math.min(ax, bx), Math.max(ax, bx), Math.min(ay, by), Math.max(ay, by),
         minX, maxX, minY, maxY)) {
-      return false;
-    }
-
-    // shortcut: edge is a point
-    if (ax == bx && ay == by) {
       return false;
     }
 
@@ -283,33 +289,22 @@ public class Rectangle2D {
 
   @Override
   public boolean equals(Object o) {
-    return Arrays.equals(bbox, ((Rectangle2D)o).bbox)
-        && Arrays.equals(west, ((Rectangle2D)o).west);
+    if (this == o) return true;
+    if (!(o instanceof Rectangle2D)) return false;
+    Rectangle2D that = (Rectangle2D) o;
+    return minX == that.minX &&
+        maxX == that.maxX &&
+        minY == that.minY &&
+        maxY == that.maxY &&
+        Arrays.equals(bbox, that.bbox) &&
+        Arrays.equals(west, that.west);
   }
 
   @Override
   public int hashCode() {
-    int hash = super.hashCode();
-    hash = 31 * hash + Arrays.hashCode(bbox);
-    hash = 31 * hash + Arrays.hashCode(west);
-    return hash;
-  }
-
-  @Override
-  public String toString() {
-    final StringBuilder sb = new StringBuilder();
-    sb.append("Rectangle(lat=");
-    sb.append(decodeLatitude(minY));
-    sb.append(" TO ");
-    sb.append(decodeLatitude(maxY));
-    sb.append(" lon=");
-    sb.append(decodeLongitude(minX));
-    sb.append(" TO ");
-    sb.append(decodeLongitude(maxX));
-    if (maxX < minX) {
-      sb.append(" [crosses dateline!]");
-    }
-    sb.append(")");
-    return sb.toString();
+    int result = Objects.hash(minX, maxX, minY, maxY);
+    result = 31 * result + Arrays.hashCode(bbox);
+    result = 31 * result + Arrays.hashCode(west);
+    return result;
   }
 }

@@ -19,7 +19,6 @@ package org.apache.lucene.index;
 
 import java.io.IOException;
 
-import org.apache.lucene.codecs.blocktree.BlockTreeTermsWriter;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.automaton.CompiledAutomaton;
@@ -55,12 +54,7 @@ public abstract class Terms {
    *  {@link CompiledAutomaton#getTermsEnum} instead.
    *
    *  <p><b>NOTE</b>: the returned TermsEnum cannot seek</p>.
-   *
-   *  <p><b>NOTE</b>: the terms dictionary is free to
-   *  return arbitrary terms as long as the resulted visited
-   *  docs is the same.  E.g., {@link BlockTreeTermsWriter}
-   *  creates auto-prefix terms during indexing to reduce the
-   *  number of terms visited. */
+   */
   public TermsEnum intersect(CompiledAutomaton compiled, final BytesRef startTerm) throws IOException {
     
     // TODO: could we factor out a common interface b/w
@@ -99,25 +93,21 @@ public abstract class Terms {
    *  other term measures, this measure does not take deleted 
    *  documents into account. */
   public abstract long size() throws IOException;
-  
+
   /** Returns the sum of {@link TermsEnum#totalTermFreq} for
-   *  all terms in this field, or -1 if this measure isn't
-   *  stored by the codec (or if this fields omits term freq
-   *  and positions).  Note that, just like other term
+   *  all terms in this field. Note that, just like other term
    *  measures, this measure does not take deleted documents
    *  into account. */
   public abstract long getSumTotalTermFreq() throws IOException;
 
   /** Returns the sum of {@link TermsEnum#docFreq()} for
-   *  all terms in this field, or -1 if this measure isn't
-   *  stored by the codec.  Note that, just like other term
+   *  all terms in this field.  Note that, just like other term
    *  measures, this measure does not take deleted documents
    *  into account. */
   public abstract long getSumDocFreq() throws IOException;
 
   /** Returns the number of documents that have at least one
-   *  term for this field, or -1 if this measure isn't
-   *  stored by the codec.  Note that, just like other term
+   *  term for this field.  Note that, just like other term
    *  measures, this measure does not take deleted documents
    *  into account. */
   public abstract int getDocCount() throws IOException;
@@ -219,11 +209,11 @@ public abstract class Terms {
    */
   public Object getStats() throws IOException {
     StringBuilder sb = new StringBuilder();
-    sb.append("impl=" + getClass().getSimpleName());
-    sb.append(",size=" + size());
-    sb.append(",docCount=" + getDocCount());
-    sb.append(",sumTotalTermFreq=" + getSumTotalTermFreq());
-    sb.append(",sumDocFreq=" + getSumDocFreq());
+    sb.append("impl=").append(getClass().getSimpleName());
+    sb.append(",size=").append(size());
+    sb.append(",docCount=").append(getDocCount());
+    sb.append(",sumTotalTermFreq=").append(getSumTotalTermFreq());
+    sb.append(",sumDocFreq=").append(getSumDocFreq());
     return sb.toString();
   }
 }

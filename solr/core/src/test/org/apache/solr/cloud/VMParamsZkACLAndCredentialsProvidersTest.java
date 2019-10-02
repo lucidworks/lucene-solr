@@ -42,7 +42,7 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
   protected ZkTestServer zkServer;
   
   protected Path zkDir;
-
+  
   @BeforeClass
   public static void beforeClass() {
     System.setProperty("solrcloud.skip.autorecovery", "true");

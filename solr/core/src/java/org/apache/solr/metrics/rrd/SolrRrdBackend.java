@@ -56,7 +56,7 @@ public class SolrRrdBackend extends RrdByteArrayBackend implements Closeable {
     try {
       SyncData syncData = factory.getData(path);
       if (syncData != null) {
-	setBuffer(syncData.data);
+        setBuffer(syncData.data);
         this.lastModifiedTime = syncData.timestamp;
       }
     } catch (IOException e) {
@@ -85,13 +85,13 @@ public class SolrRrdBackend extends RrdByteArrayBackend implements Closeable {
     return readOnly;
   }
 
+  public long getLastModifiedTime() {
+    return lastModifiedTime;
+  }
+
   private void markDirty() {
     lastModifiedTime = TimeUnit.MILLISECONDS.convert(factory.getTimeSource().getEpochTimeNs(), TimeUnit.NANOSECONDS);
     dirty = true;
-  }
-
-  public long getLastModifiedTime() {
-    return lastModifiedTime;
   }
 
   @Override
@@ -164,7 +164,6 @@ public class SolrRrdBackend extends RrdByteArrayBackend implements Closeable {
     }
   }
 
-
   @Override
   protected void writeDouble(long offset, double value, int count) throws IOException {
     if (readOnly || closed) {
@@ -178,25 +177,6 @@ public class SolrRrdBackend extends RrdByteArrayBackend implements Closeable {
       lock.unlock();
     }
   }
-
-
-  /*public SyncData getSyncData() {
-    if (readOnly || closed) {
-      return null;
-    }
-    if (!dirty) {
-      return null;
-    }
-    lock.lock();
-    try {
-      byte[] bufferCopy = new byte[buffer.length];
-      System.arraycopy(buffer, 0, bufferCopy, 0, buffer.length);
-      return new SyncData(bufferCopy, lastModifiedTime);
-    } finally {
-      lock.unlock();
-    }
-  }*/
-
 
   @Override
   protected void writeDouble(long offset, double[] values) throws IOException {
@@ -230,10 +210,6 @@ public class SolrRrdBackend extends RrdByteArrayBackend implements Closeable {
   protected boolean isDirty() {
     return dirty;
   }
-
-  /*public void markClean() {
-    dirty = false;
-  }*/
 
   @Override
   protected void setBuffer(byte[] buffer) {

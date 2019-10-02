@@ -62,7 +62,7 @@ public class DateFieldTest extends SolrTestCaseJ4 {
     assertEquals(820454699990L, ((Date) f.toObject( out )).getTime() );
   }
 
- public void testToNativeType() {
+  public void testToNativeType() {
     FieldType ft = new TrieDateField();
     ByteArrayUtf8CharSequence charSequence = new ByteArrayUtf8CharSequence("1995-12-31T23:59:59Z");
 

@@ -69,27 +69,6 @@ public class DocBasedVersionConstraintsProcessor extends UpdateRequestProcessor 
   private final boolean useFieldCache;
 
   private long oldSolrVersion;  // current _version_ of the doc in the index/update log
-  
-  /**
-   * @deprecated Use {@link #DocBasedVersionConstraintsProcessor(List, boolean, List, boolean, boolean, NamedList, SolrQueryRequest, UpdateRequestProcessor)}
-   */
-  @Deprecated
-  public DocBasedVersionConstraintsProcessor(List<String> versionFields,
-      boolean ignoreOldUpdates,
-      List<String> deleteVersionParamNames,
-      boolean supportMissingVersionOnOldDocs,
-      boolean useFieldCache,
-      SolrQueryRequest req,
-      UpdateRequestProcessor next ) {
-    this(versionFields,
-        ignoreOldUpdates,
-        deleteVersionParamNames,
-        supportMissingVersionOnOldDocs,
-        useFieldCache,
-        null,
-        req,
-        next);
-  }
 
   public DocBasedVersionConstraintsProcessor(List<String> versionFields,
                                              boolean ignoreOldUpdates,
@@ -239,7 +218,7 @@ public class DocBasedVersionConstraintsProcessor extends UpdateRequestProcessor 
 
   private DocFoundAndOldUserAndSolrVersions getOldUserVersionsFromStored(BytesRef indexedDocId) throws IOException {
     // stored fields only...
-    SolrInputDocument oldDoc = RealTimeGetComponent.getInputDocument(core, indexedDocId);
+    SolrInputDocument oldDoc = RealTimeGetComponent.getInputDocument(core, indexedDocId, RealTimeGetComponent.Resolution.DOC);
     if (null == oldDoc) {
       return DocFoundAndOldUserAndSolrVersions.NOT_FOUND;
     } else {
@@ -389,7 +368,8 @@ public class DocBasedVersionConstraintsProcessor extends UpdateRequestProcessor 
       return true;
     }
     // if phase==TOLEADER, we can't just assume we are the leader... let the normal logic check.
-    return !distribProc.isLeader(cmd);
+    distribProc.setupRequest(cmd);
+    return !distribProc.isLeader();
   }
 
   @Override

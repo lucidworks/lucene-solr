@@ -16,12 +16,14 @@
  */
 package org.apache.lucene.search.spans;
 
+import java.io.IOException;
+import java.util.Objects;
+
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-
-import java.io.IOException;
-import java.util.Objects;
+import org.apache.lucene.search.QueryVisitor;
+import org.apache.lucene.search.ScoreMode;
 
 /** Wraps a span query with asserts */
 public class AssertingSpanQuery extends SpanQuery {
@@ -42,8 +44,8 @@ public class AssertingSpanQuery extends SpanQuery {
   }
 
   @Override
-  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
-    SpanWeight weight = in.createWeight(searcher, needsScores, boost);
+  public SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+    SpanWeight weight = in.createWeight(searcher, scoreMode, boost);
     return new AssertingSpanWeight(searcher, weight);
   }
 
@@ -57,6 +59,11 @@ public class AssertingSpanQuery extends SpanQuery {
     } else {
       return q;
     }
+  }
+
+  @Override
+  public void visit(QueryVisitor visitor) {
+    in.visit(visitor);
   }
 
   @Override

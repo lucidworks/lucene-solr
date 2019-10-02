@@ -33,8 +33,8 @@ import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.PrefixCodedTerms;
 import org.apache.lucene.index.PrefixCodedTerms.TermIterator;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.TermState;
+import org.apache.lucene.index.TermStates;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.BooleanClause.Occur;
@@ -120,6 +120,20 @@ public class TermInSetQuery extends Query implements Accountable {
       return new ConstantScoreQuery(bq.build());
     }
     return super.rewrite(reader);
+  }
+
+  @Override
+  public void visit(QueryVisitor visitor) {
+    if (visitor.acceptField(field) == false) {
+      return;
+    }
+    QueryVisitor v = visitor.getSubVisitor(Occur.SHOULD, this);
+    List<Term> terms = new ArrayList<>();
+    TermIterator iterator = termData.iterator();
+    for (BytesRef term = iterator.next(); term != null; term = iterator.next()) {
+      terms.add(new Term(field, BytesRef.deepCopyOf(term)));
+    }
+    v.consumeTerms(this, terms.toArray(new Term[0]));
   }
 
   @Override
@@ -209,7 +223,7 @@ public class TermInSetQuery extends Query implements Accountable {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
     return new ConstantScoreWeight(this, boost) {
 
       @Override
@@ -277,12 +291,12 @@ public class TermInSetQuery extends Query implements Accountable {
           assert builder == null;
           BooleanQuery.Builder bq = new BooleanQuery.Builder();
           for (TermAndState t : matchingTerms) {
-            final TermContext termContext = new TermContext(searcher.getTopReaderContext());
-            termContext.register(t.state, context.ord, t.docFreq, t.totalTermFreq);
-            bq.add(new TermQuery(new Term(t.field, t.term), termContext), Occur.SHOULD);
+            final TermStates termStates = new TermStates(searcher.getTopReaderContext());
+            termStates.register(t.state, context.ord, t.docFreq, t.totalTermFreq);
+            bq.add(new TermQuery(new Term(t.field, t.term), termStates), Occur.SHOULD);
           }
           Query q = new ConstantScoreQuery(bq.build());
-          final Weight weight = searcher.rewrite(q).createWeight(searcher, needsScores, score());
+          final Weight weight = searcher.rewrite(q).createWeight(searcher, scoreMode, score());
           return new WeightOrDocIdSet(weight);
         } else {
           assert builder != null;
@@ -298,7 +312,7 @@ public class TermInSetQuery extends Query implements Accountable {
         if (disi == null) {
           return null;
         }
-        return new ConstantScoreScorer(this, score(), disi);
+        return new ConstantScoreScorer(this, score(), scoreMode, disi);
       }
 
       @Override
@@ -333,7 +347,7 @@ public class TermInSetQuery extends Query implements Accountable {
       public boolean isCacheable(LeafReaderContext ctx) {
         // Only cache instances that have a reasonable size. Otherwise it might cause memory issues
         // with the query cache if most memory ends up being spent on queries rather than doc id sets.
-        return ramBytesUsed() <= LRUQueryCache.QUERY_DEFAULT_RAM_BYTES_USED;
+        return ramBytesUsed() <= RamUsageEstimator.QUERY_DEFAULT_RAM_BYTES_USED;
       }
 
     };

@@ -48,10 +48,13 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.search.PrefixQuery;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
 import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.search.Weight;
 import org.apache.lucene.search.uhighlight.UnifiedHighlighter.HighlightFlag;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
@@ -144,7 +147,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     UnifiedHighlighter highlighter = randomUnifiedHighlighter(searcher, indexAnalyzer);
     Query query = new TermQuery(new Term("body", "highlighting"));
     TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-    assertEquals(2, topDocs.totalHits);
+    assertEquals(2, topDocs.totalHits.value);
     String snippets[] = highlighter.highlight("body", query, topDocs);
     assertEquals(2, snippets.length);
     assertEquals("Just a test <b>highlighting</b> from postings. ", snippets[0]);
@@ -205,7 +208,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     Query query = new TermQuery(new Term("body", "test"));
 
     TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-    assertEquals(1, topDocs.totalHits);
+    assertEquals(1, topDocs.totalHits.value);
 
     UnifiedHighlighter highlighter = randomUnifiedHighlighter(searcher, indexAnalyzer);
     highlighter.setMaxLength(maxLength);
@@ -234,7 +237,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     UnifiedHighlighter highlighter = randomUnifiedHighlighter(searcher, indexAnalyzer);
     Query query = new TermQuery(new Term("body", "test"));
     TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-    assertEquals(1, topDocs.totalHits);
+    assertEquals(1, topDocs.totalHits.value);
     String snippets[] = highlighter.highlight("body", query, topDocs);
     assertEquals(1, snippets.length);
     assertEquals("This is a <b>test</b>", snippets[0]);
@@ -262,7 +265,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     UnifiedHighlighter highlighter = randomUnifiedHighlighter(searcher, indexAnalyzer);
     Query query = new TermQuery(new Term("body", "test"));
     TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-    assertEquals(2, topDocs.totalHits);
+    assertEquals(2, topDocs.totalHits.value);
     String snippets[] = highlighter.highlight("body", query, topDocs);
     assertEquals(2, snippets.length);
     assertEquals("This is a <b>test</b>.", snippets[0]);
@@ -292,7 +295,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     highlighter.setMaxLength(value.length() * 2 + 1);
     Query query = new TermQuery(new Term("body", "field"));
     TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-    assertEquals(1, topDocs.totalHits);
+    assertEquals(1, topDocs.totalHits.value);
     String snippets[] = highlighter.highlight("body", query, topDocs, 10);
     assertEquals(1, snippets.length);
     String highlightedValue = "This is a multivalued <b>field</b>. Sentencetwo <b>field</b>.";
@@ -327,7 +330,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
         .add(new TermQuery(new Term("title", "best")), BooleanClause.Occur.SHOULD)
         .build();
     TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-    assertEquals(2, topDocs.totalHits);
+    assertEquals(2, topDocs.totalHits.value);
     Map<String, String[]> snippets = highlighter.highlightFields(new String[]{"body", "title"}, query, topDocs);
     assertEquals(2, snippets.size());
     assertEquals("Just a test <b>highlighting</b> from postings. ", snippets.get("body")[0]);
@@ -360,7 +363,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
         .add(new TermQuery(new Term("body", "first")), BooleanClause.Occur.SHOULD)
         .build();
     TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-    assertEquals(2, topDocs.totalHits);
+    assertEquals(2, topDocs.totalHits.value);
     String snippets[] = highlighter.highlight("body", query, topDocs);
     assertEquals(2, snippets.length);
     assertEquals("<b>Just</b> a test <b>highlighting</b> from postings. ", snippets[0]);
@@ -388,7 +391,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     UnifiedHighlighter highlighter = randomUnifiedHighlighter(searcher, indexAnalyzer);
     Query query = new TermQuery(new Term("body", "test"));
     TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-    assertEquals(2, topDocs.totalHits);
+    assertEquals(2, topDocs.totalHits.value);
     String snippets[] = highlighter.highlight("body", query, topDocs, 2);
     assertEquals(2, snippets.length);
     assertEquals("This is a <b>test</b>. Just a <b>test</b> highlighting from postings. ", snippets[0]);
@@ -421,7 +424,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
         .add(new Term("body", "origins"))
         .build();
     TopDocs topDocs = searcher.search(query, 10);
-    assertEquals(1, topDocs.totalHits);
+    assertEquals(1, topDocs.totalHits.value);
     UnifiedHighlighter highlighter = randomUnifiedHighlighter(searcher, indexAnalyzer);
     highlighter.setHighlightPhrasesStrictly(false);
     String snippets[] = highlighter.highlight("body", query, topDocs, 2);
@@ -453,7 +456,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
         .add(new Term("body", "george"))
         .build();
     TopDocs topDocs = searcher.search(query, 10);
-    assertEquals(1, topDocs.totalHits);
+    assertEquals(1, topDocs.totalHits.value);
     UnifiedHighlighter highlighter = randomUnifiedHighlighter(searcher, indexAnalyzer);
     highlighter.setHighlightPhrasesStrictly(false);
     String snippets[] = highlighter.highlight("body", query, topDocs, 2);
@@ -481,7 +484,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
         .add(new TermQuery(new Term("body", "massachusetts")), BooleanClause.Occur.SHOULD)
         .build();
     TopDocs topDocs = searcher.search(query, 10);
-    assertEquals(1, topDocs.totalHits);
+    assertEquals(1, topDocs.totalHits.value);
     UnifiedHighlighter highlighter = randomUnifiedHighlighter(searcher, indexAnalyzer);
     highlighter.setMaxLength(Integer.MAX_VALUE - 1);
     String snippets[] = highlighter.highlight("body", query, topDocs, 2);
@@ -508,7 +511,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     UnifiedHighlighter highlighter = randomUnifiedHighlighter(searcher, indexAnalyzer);
     Query query = new TermQuery(new Term("body", "test"));
     TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-    assertEquals(1, topDocs.totalHits);
+    assertEquals(1, topDocs.totalHits.value);
     String snippets[] = highlighter.highlight("body", query, topDocs, 2);
     assertEquals(1, snippets.length);
     assertEquals("This is a <b>test</b>.  ... Feel free to <b>test</b> <b>test</b> <b>test</b> <b>test</b> <b>test</b> <b>test</b> <b>test</b>.", snippets[0]);
@@ -537,7 +540,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
         .build();
 
     TopDocs topDocs = searcher.search(query, 10);
-    assertEquals(1, topDocs.totalHits);
+    assertEquals(1, topDocs.totalHits.value);
     UnifiedHighlighter highlighter = randomUnifiedHighlighter(searcher, indexAnalyzer);
     highlighter.setMaxLength(Integer.MAX_VALUE - 1);
     String snippets[] = highlighter.highlight("body", query, topDocs, 2);
@@ -569,7 +572,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     highlighter.setMaxLength(10000);
     Query query = new TermQuery(new Term("body", "test"));
     TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-    assertEquals(1, topDocs.totalHits);
+    assertEquals(1, topDocs.totalHits.value);
     String snippets[] = highlighter.highlight("body", query, topDocs, 2);
     assertEquals(1, snippets.length);
     assertEquals("This is a <b>test</b>.  Just highlighting from postings. This is also a much sillier <b>test</b>.  Feel free to <b>test</b> <b>test</b> <b>test</b> <b>test</b> <b>test</b> <b>test</b> <b>test</b>.", snippets[0]);
@@ -596,7 +599,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     UnifiedHighlighter highlighter = randomUnifiedHighlighter(searcher, indexAnalyzer);
     Query query = new TermQuery(new Term("body", "highlighting"));
     TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-    assertEquals(2, topDocs.totalHits);
+    assertEquals(2, topDocs.totalHits.value);
     ScoreDoc[] hits = topDocs.scoreDocs;
     int[] docIDs = new int[2];
     docIDs[0] = hits[0].doc;
@@ -642,7 +645,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
 
     Query query = new TermQuery(new Term("body", "test"));
     TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-    assertEquals(1, topDocs.totalHits);
+    assertEquals(1, topDocs.totalHits.value);
     String snippets[] = highlighter.highlight("body", query, topDocs, 2);
     assertEquals(1, snippets.length);
     assertEquals("This is a <b>test</b>.  Just highlighting from postings. This is also a much sillier <b>test</b>.  Feel free to <b>test</b> <b>test</b> <b>test</b> <b>test</b> <b>test</b> <b>test</b> <b>test</b>.", snippets[0]);
@@ -882,7 +885,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     highlighter.setCacheFieldValCharsThreshold(random().nextInt(10) * 10);// 0 thru 90 intervals of 10
     Query query = new TermQuery(new Term("body", "answer"));
     TopDocs hits = searcher.search(query, numDocs);
-    assertEquals(numDocs, hits.totalHits);
+    assertEquals(numDocs, hits.totalHits.value);
 
     String snippets[] = highlighter.highlight("body", query, hits);
     assertEquals(numDocs, snippets.length);
@@ -951,7 +954,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     };
     Query query = new TermQuery(new Term("body", "highlighting"));
     TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-    assertEquals(1, topDocs.totalHits);
+    assertEquals(1, topDocs.totalHits.value);
     String snippets[] = highlighter.highlight("body", query, topDocs);
     assertEquals(1, snippets.length);
     assertEquals("Just&#32;a&#32;test&#32;<b>highlighting</b>&#32;from&#32;&lt;i&gt;postings&lt;&#x2F;i&gt;&#46;&#32;", snippets[0]);
@@ -992,7 +995,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
 
     Query query = new TermQuery(new Term("body", "highlighting"));
     TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-    assertEquals(1, topDocs.totalHits);
+    assertEquals(1, topDocs.totalHits.value);
     int[] docIDs = new int[1];
     docIDs[0] = topDocs.scoreDocs[0].doc;
     Map<String, Object[]> snippets = highlighter.highlightFieldsAsObjects(new String[]{"body"}, query, docIDs, new int[]{1});
@@ -1056,7 +1059,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     // title
     {
       TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-      assertEquals(1, topDocs.totalHits);
+      assertEquals(1, topDocs.totalHits.value);
       String[] snippets = highlighterNoFieldMatch.highlight("title", query, topDocs, 10);
       assertEquals(1, snippets.length);
       assertEquals("<b>This</b> <b>is</b> the title <b>field</b>.", snippets[0]);
@@ -1075,7 +1078,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     // text
     {
       TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-      assertEquals(1, topDocs.totalHits);
+      assertEquals(1, topDocs.totalHits.value);
       String[] snippets = highlighterNoFieldMatch.highlight("text", query, topDocs, 10);
       assertEquals(1, snippets.length);
       assertEquals("<b>This</b> <b>is</b> the text <b>field</b>. You can put <b>some</b> text if you want.", snippets[0]);
@@ -1094,7 +1097,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     // category
     {
       TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-      assertEquals(1, topDocs.totalHits);
+      assertEquals(1, topDocs.totalHits.value);
       String[] snippets = highlighterNoFieldMatch.highlight("category", query, topDocs, 10);
       assertEquals(1, snippets.length);
       assertEquals("<b>This</b> <b>is</b> the <b>category</b> <b>field</b>.", snippets[0]);
@@ -1140,7 +1143,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     // title
     {
       TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-      assertEquals(1, topDocs.totalHits);
+      assertEquals(1, topDocs.totalHits.value);
       String[] snippets = highlighterNoFieldMatch.highlight("title", query, topDocs, 10);
       assertEquals(1, snippets.length);
       assertEquals("<b>This</b> <b>is</b> the title <b>field</b>.", snippets[0]);
@@ -1159,7 +1162,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     // text
     {
       TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-      assertEquals(1, topDocs.totalHits);
+      assertEquals(1, topDocs.totalHits.value);
       String[] snippets = highlighterNoFieldMatch.highlight("text", query, topDocs, 10);
       assertEquals(1, snippets.length);
       assertEquals("<b>This</b> <b>is</b> the text <b>field</b>. You can put <b>some</b> text if you want.", snippets[0]);
@@ -1178,7 +1181,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     // category
     {
       TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-      assertEquals(1, topDocs.totalHits);
+      assertEquals(1, topDocs.totalHits.value);
       String[] snippets = highlighterNoFieldMatch.highlight("category", query, topDocs, 10);
       assertEquals(1, snippets.length);
       assertEquals("<b>This</b> <b>is</b> the <b>category</b> <b>field</b>.", snippets[0]);
@@ -1203,7 +1206,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     UnifiedHighlighter highlighter = new UnifiedHighlighter(searcher, indexAnalyzer);
     Query query = new PhraseQuery(2, "title", "this", "is", "the", "field");
     TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-    assertEquals(1, topDocs.totalHits);
+    assertEquals(1, topDocs.totalHits.value);
     String[] snippets = highlighter.highlight("title", query, topDocs, 10);
     assertEquals(1, snippets.length);
     if (highlighter.getFlags("title").contains(HighlightFlag.WEIGHT_MATCHES)) {
@@ -1238,7 +1241,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     // title
     {
       TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-      assertEquals(1, topDocs.totalHits);
+      assertEquals(1, topDocs.totalHits.value);
       String[] snippets = highlighterNoFieldMatch.highlight("title", query, topDocs, 10);
       assertEquals(1, snippets.length);
       if (highlighterNoFieldMatch.getFlags("title").contains(HighlightFlag.WEIGHT_MATCHES)) {
@@ -1269,7 +1272,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     // text
     {
       TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-      assertEquals(1, topDocs.totalHits);
+      assertEquals(1, topDocs.totalHits.value);
       String[] snippets = highlighterNoFieldMatch.highlight("text", query, topDocs, 10);
       assertEquals(1, snippets.length);
       if (highlighterNoFieldMatch.getFlags("text").contains(HighlightFlag.WEIGHT_MATCHES)) {
@@ -1298,7 +1301,7 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     // category
     {
       TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
-      assertEquals(1, topDocs.totalHits);
+      assertEquals(1, topDocs.totalHits.value);
       String[] snippets = highlighterNoFieldMatch.highlight("category", query, topDocs, 10);
       assertEquals(1, snippets.length);
       if (highlighterNoFieldMatch.getFlags("category").contains(HighlightFlag.WEIGHT_MATCHES)) {
@@ -1354,6 +1357,106 @@ public class TestUnifiedHighlighter extends LuceneTestCase {
     // no highlights, not of "category" since "nonexistent" wasn't there
     snippets = highlighter.highlight("category", query, topDocs);
     assertArrayEquals(new String[]{"This is the category field."}, snippets);
+
+    ir.close();
+  }
+
+  public void testNotReanalyzed() throws Exception {
+    if (fieldType == UHTestHelper.reanalysisType) {
+      return; // we're testing the *other* cases
+    }
+
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, indexAnalyzer);
+
+    Field body = new Field("body", "", fieldType);
+    Document doc = new Document();
+    doc.add(body);
+
+    body.setStringValue("This is a test. Just a test highlighting from postings. Feel free to ignore.");
+    iw.addDocument(doc);
+
+    IndexReader ir = iw.getReader();
+    iw.close();
+
+    IndexSearcher searcher = newSearcher(ir);
+    UnifiedHighlighter highlighter = randomUnifiedHighlighter(searcher, new Analyzer() {
+      @Override
+      protected TokenStreamComponents createComponents(String fieldName) {
+        throw new AssertionError("shouldn't be called");
+      }
+    });
+    Query query = new TermQuery(new Term("body", "highlighting"));
+    TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
+    assertEquals(1, topDocs.totalHits.value);
+    String snippets[] = highlighter.highlight("body", query, topDocs);
+    assertEquals(1, snippets.length);
+    assertEquals("Just a test <b>highlighting</b> from postings. ", snippets[0]);
+
+    ir.close();
+  }
+
+  public void testUnknownQueryWithWeightMatches() throws IOException {
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, indexAnalyzer);
+
+    Field body = new Field("body", "", fieldType);
+    Document doc = new Document();
+    doc.add(body);
+
+    body.setStringValue("Test a one sentence document.");
+    iw.addDocument(doc);
+
+    IndexReader ir = iw.getReader();
+    iw.close();
+
+    IndexSearcher searcher = newSearcher(ir);
+    UnifiedHighlighter highlighter = randomUnifiedHighlighter(searcher, indexAnalyzer,
+        EnumSet.of(HighlightFlag.WEIGHT_MATCHES), null);
+    Query query = new BooleanQuery.Builder()
+        // simple term query body:one
+        .add(new TermQuery(new Term(body.name(), "one")), BooleanClause.Occur.MUST)
+        // a custom query, a leaf, that which matches body:sentence
+        //    Note this isn't even an MTQ.  What matters is that Weight.matches works.
+        .add(new Query() {
+          @Override
+          public String toString(String field) {
+            return "bogus";
+          }
+
+          @Override
+          public Query rewrite(IndexReader reader) {
+            return this;
+          }
+
+          // we don't visit terms, and we don't expose an automata.  Thus this appears as some unknown leaf.
+          @Override
+          public void visit(QueryVisitor visitor) {
+            if (visitor.acceptField(body.name())) {
+              visitor.visitLeaf(this);
+            }
+          }
+
+          @Override
+          public boolean equals(Object obj) {
+            return this == obj;
+          }
+
+          @Override
+          public int hashCode() {
+            return System.identityHashCode(this);
+          }
+
+          @Override
+          public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+            //TODO maybe should loop through index terms to show we can see other terms
+            return new TermQuery(new Term(body.name(), "sentence")).createWeight(searcher, scoreMode, boost);
+          }
+        }, BooleanClause.Occur.MUST)
+        .build();
+    TopDocs topDocs = searcher.search(query, 10, Sort.INDEXORDER);
+    assertEquals(1, topDocs.totalHits.value);
+    String[] snippets = highlighter.highlight("body", query, topDocs);
+    assertEquals(1, snippets.length);
+    assertEquals("Test a <b>one</b> <b>sentence</b> document.", snippets[0]);
 
     ir.close();
   }

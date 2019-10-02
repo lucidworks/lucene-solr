@@ -21,7 +21,7 @@ import java.util.Collections;
 import java.util.List;
 
 import net.thisptr.jackson.jq.exception.JsonQueryException;
-import org.apache.solr.core.Config;
+import org.apache.solr.core.XmlConfigFile;
 import org.w3c.dom.Node;
 
 public class MetricsConfiguration {
@@ -66,7 +66,7 @@ public class MetricsConfiguration {
     return searchConfiguration;
   }
 
-  public static MetricsConfiguration from(Config config) throws Exception {
+  public static MetricsConfiguration from(XmlConfigFile config) throws Exception {
     Node settings = config.getNode("/config/settings", false);
 
     Node pingConfig = config.getNode("/config/rules/ping", false);

@@ -42,6 +42,7 @@ import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.store.AlreadyClosedException;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefHash;
 import org.apache.solr.cloud.ZkController;
 import org.apache.solr.common.SolrException;
@@ -319,9 +320,9 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
     RefCounted<IndexWriter> iw = solrCoreState.getIndexWriter(core);
     try {
       IndexWriter writer = iw.get();
-      Iterable<Document> blockDocs = cmd.getLuceneDocsIfNested();
-      if (blockDocs != null) {
-        writer.addDocuments(blockDocs);
+      Iterable<Document> nestedDocs = cmd.getLuceneDocsIfNested();
+      if (nestedDocs != null) {
+        writer.addDocuments(nestedDocs);
       } else {
         writer.addDocument(cmd.getLuceneDocument());
       }
@@ -425,7 +426,7 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
       return;
     }
 
-    Term deleteTerm = new Term(idField.getName(), cmd.getIndexedId());
+    Term deleteTerm = getIdTerm(cmd.getIndexedId(), false);
     // SolrCore.verbose("deleteDocuments",deleteTerm,writer);
     RefCounted<IndexWriter> iw = solrCoreState.getIndexWriter(core);
     try {
@@ -651,14 +652,8 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
       try {
         IndexWriter writer = iw.get();
         if (cmd.optimize) {
-          if (cmd.maxOptimizeSegments == 1) {
-            log.warn("Starting optimize... Reading and rewriting the entire index! Use with care.");
-          } else {
-            log.warn("Starting optimize... Reading and rewriting a potentially large percent of the entire index, reducing to " + cmd.maxOptimizeSegments + " segments");
-          }
           writer.forceMerge(cmd.maxOptimizeSegments);
         } else if (cmd.expungeDeletes) {
-          log.warn("Starting expungeDeletes... Reading and rewriting segments with enough deletes, potentially the entire index");
           writer.forceMergeDeletes();
         }
         
@@ -805,7 +800,7 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
   @Override
   public void close() throws IOException {
     log.debug("closing " + this);
-    
+
     commitTracker.close();
     softCommitTracker.close();
 
@@ -956,13 +951,13 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
 
     } else { // more normal path
 
-      Iterable<Document> blockDocs = cmd.getLuceneDocsIfNested();
-      boolean isBlock = blockDocs != null; // AKA nested child docs
-      Term idTerm = new Term(isBlock ? IndexSchema.ROOT_FIELD_NAME : idField.getName(), cmd.getIndexedId());
+      Iterable<Document> nestedDocs = cmd.getLuceneDocsIfNested();
+      boolean isNested = nestedDocs != null; // AKA nested child docs
+      Term idTerm = getIdTerm(isNested? new BytesRef(cmd.getRootIdUsingRouteParam()): cmd.getIndexedId(), isNested);
       Term updateTerm = hasUpdateTerm ? cmd.updateTerm : idTerm;
-      if (isBlock) {
+      if (isNested) {
         log.debug("updateDocuments({})", cmd);
-        writer.updateDocuments(updateTerm, blockDocs);
+        writer.updateDocuments(updateTerm, nestedDocs);
       } else {
         Document luceneDocument = cmd.getLuceneDocument();
         log.debug("updateDocument({})", cmd);
@@ -980,6 +975,10 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
     }
   }
 
+  private Term getIdTerm(BytesRef termVal, boolean isNested) {
+    boolean useRootId = isNested || core.getLatestSchema().isUsableForChildDocs();
+    return new Term(useRootId ? IndexSchema.ROOT_FIELD_NAME : idField.getName(), termVal);
+  }
 
   /////////////////////////////////////////////////////////////////////
   // SolrInfoBean stuff: Statistics and Module Info

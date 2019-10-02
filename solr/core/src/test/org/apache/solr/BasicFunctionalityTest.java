@@ -357,42 +357,39 @@ public class BasicFunctionalityTest extends SolrTestCaseJ4 {
 
     // test that malformed numerics cause client error not server error
     for (String field : FIELDS) {
-      try {
-        h.update(add( doc("id","100", field, BAD_VALUE)));
-        fail("Didn't encounter an error trying to add a bad date: " + field);
-      } catch (SolrException e) {
-        String msg = e.toString();
-        assertTrue("not an (update) client error on field: " + field +" : "+ msg,
-                   400 <= e.code() && e.code() < 500);
-        assertTrue("(update) client error does not mention bad value: " + msg,
-                   msg.contains(BAD_VALUE));
-        assertTrue("client error does not mention document id: " + msg,
-                   msg.contains("[doc=100]"));
-      }
-      SchemaField sf = h.getCore().getLatestSchema().getField(field); 
+      SolrException e1 = expectThrows(SolrException.class,
+          "Didn't encounter an error trying to add a bad date: " + field,
+          () -> h.update(add( doc("id","100", field, BAD_VALUE))));
+      String msg1 = e1.getMessage();
+      assertTrue("not an (update) client error on field: " + field +" : "+ msg1,
+          400 <= e1.code() && e1.code() < 500);
+      assertTrue("(update) client error does not mention bad value: " + msg1,
+          msg1.contains(BAD_VALUE));
+      assertTrue("client error does not mention document id: " + msg1,
+          msg1.contains("[doc=100]"));
+      SchemaField sf = h.getCore().getLatestSchema().getField(field);
       if (!sf.hasDocValues() && !sf.indexed()) {
         continue;
       }
-      try {
-        h.query(req("q",field + ":" + BAD_VALUE));
-        fail("Didn't encounter an error trying to query a bad date: " + field);
-      } catch (SolrException e) {
-        String msg = e.toString();
-        assertTrue("not a (search) client error on field: " + field +" : "+ msg,
-                   400 <= e.code() && e.code() < 500);
-        assertTrue("(search) client error does not mention bad value: " + msg,
-                   msg.contains(BAD_VALUE));
-      }
-      try {
-        h.query(req("q",field + ":[NOW TO " + BAD_VALUE + "]"));
-        fail("Didn't encounter an error trying to query a bad date: " + field);
-      } catch (SolrException e) {
-        String msg = e.toString();
-        assertTrue("not a (search) client error on field: " + field +" : "+ msg,
-                   400 <= e.code() && e.code() < 500);
-        assertTrue("(search) client error does not mention bad value: " + msg,
-                   msg.contains(BAD_VALUE));
-      }
+      SolrException e2 = expectThrows(SolrException.class,
+          "Didn't encounter an error trying to add a bad date: " + field,
+          () -> h.query(req("q",field + ":" + BAD_VALUE))
+      );
+      String msg2 = e2.toString();
+      assertTrue("not a (search) client error on field: " + field +" : "+ msg2,
+          400 <= e2.code() && e2.code() < 500);
+      assertTrue("(search) client error does not mention bad value: " + msg2,
+          msg2.contains(BAD_VALUE));
+
+      SolrException e3 = expectThrows(SolrException.class,
+          "Didn't encounter an error trying to add a bad date: " + field,
+          () -> h.query(req("q",field + ":[NOW TO " + BAD_VALUE + "]"))
+      );
+      String msg3 = e3.toString();
+      assertTrue("not a (search) client error on field: " + field +" : "+ msg3,
+          400 <= e3.code() && e3.code() < 500);
+      assertTrue("(search) client error does not mention bad value: " + msg3,
+          msg3.contains(BAD_VALUE));
     }
   }
 
@@ -415,42 +412,40 @@ public class BasicFunctionalityTest extends SolrTestCaseJ4 {
 
     // test that malformed numerics cause client error not server error
     for (String field : FIELDS) {
-      try {
-        h.update(add( doc("id","100", field, BAD_VALUE)));
-        fail("Didn't encounter an error trying to add a non-number: " + field);
-      } catch (SolrException e) {
-        String msg = e.toString();
-        assertTrue("not an (update) client error on field: " + field +" : "+ msg,
-                   400 <= e.code() && e.code() < 500);
-        assertTrue("(update) client error does not mention bad value: " + msg,
-                   msg.contains(BAD_VALUE));
-        assertTrue("client error does not mention document id",
-                   msg.contains("[doc=100]"));
-      }
+      SolrException e1 = expectThrows(SolrException.class,
+          "Didn't encounter an error trying to add a non-number: " + field,
+          () -> h.update(add( doc("id","100", field, BAD_VALUE))));
+      String msg1 = e1.toString();
+      assertTrue("not an (update) client error on field: " + field +" : "+ msg1,
+          400 <= e1.code() && e1.code() < 500);
+      assertTrue("(update) client error does not mention bad value: " + msg1,
+          msg1.contains(BAD_VALUE));
+      assertTrue("client error does not mention document id",
+          msg1.contains("[doc=100]"));
       SchemaField sf = h.getCore().getLatestSchema().getField(field); 
       if (!sf.hasDocValues() && !sf.indexed()) {
         continue;
       }
-      try {
-        h.query(req("q",field + ":" + BAD_VALUE));
-        fail("Didn't encounter an error trying to query a non-number: " + field);
-      } catch (SolrException e) {
-        String msg = e.toString();
-        assertTrue("not a (search) client error on field: " + field +" : "+ msg,
-                   400 <= e.code() && e.code() < 500);
-        assertTrue("(search) client error does not mention bad value: " + msg,
-                   msg.contains(BAD_VALUE));
-      }
-      try {
-        h.query(req("q",field + ":[10 TO " + BAD_VALUE + "]"));
-        fail("Didn't encounter an error trying to query a non-number: " + field);
-      } catch (SolrException e) {
-        String msg = e.toString();
-        assertTrue("not a (search) client error on field: " + field +" : "+ msg,
-                   400 <= e.code() && e.code() < 500);
-        assertTrue("(search) client error does not mention bad value: " + msg,
-                   msg.contains(BAD_VALUE));
-      }
+
+      SolrException e2 = expectThrows(SolrException.class,
+          "Didn't encounter an error trying to add a non-number: " + field,
+          () -> h.query(req("q",field + ":" + BAD_VALUE))
+      );
+      String msg2 = e2.toString();
+      assertTrue("not a (search) client error on field: " + field +" : "+ msg2,
+          400 <= e2.code() && e2.code() < 500);
+      assertTrue("(search) client error does not mention bad value: " + msg2,
+          msg2.contains(BAD_VALUE));
+
+      SolrException e3 = expectThrows(SolrException.class,
+          "Didn't encounter an error trying to add a non-number: " + field,
+          () -> h.query(req("q",field + ":[10 TO " + BAD_VALUE + "]"))
+      );
+      String msg3 = e3.toString();
+      assertTrue("not a (search) client error on field: " + field +" : "+ msg3,
+          400 <= e3.code() && e3.code() < 500);
+      assertTrue("(search) client error does not mention bad value: " + msg3,
+          msg3.contains(BAD_VALUE));
     }
   }
   

@@ -115,10 +115,14 @@ public class TestReplicationHandlerBackup extends SolrJettyTestBase {
   @After
   public void tearDown() throws Exception {
     super.tearDown();
-    masterClient.close();
-    masterClient  = null;
-    masterJetty.stop();
-    masterJetty = null;
+    if (null != masterClient) {
+      masterClient.close();
+      masterClient  = null;
+    }
+    if (null != masterJetty) {
+      masterJetty.stop();
+      masterJetty = null;
+    }
     master = null;
   }
 
@@ -146,7 +150,7 @@ public class TestReplicationHandlerBackup extends SolrJettyTestBase {
         IndexReader reader = DirectoryReader.open(dir)) {
       IndexSearcher searcher = new IndexSearcher(reader);
       TopDocs hits = searcher.search(new MatchAllDocsQuery(), 1);
-      assertEquals(nDocs, hits.totalHits);
+      assertEquals(nDocs, hits.totalHits.value);
     }
   }
 

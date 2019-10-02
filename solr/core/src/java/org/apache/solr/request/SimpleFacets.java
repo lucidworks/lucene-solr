@@ -38,10 +38,11 @@ import java.util.concurrent.Semaphore;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
+import org.apache.lucene.index.ExitableDirectoryReader;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.MultiPostingsEnum;
+import org.apache.lucene.index.MultiTerms;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
@@ -260,7 +261,7 @@ public class SimpleFacets {
     DocSet base = searcher.getDocSet(qlist);
     if (rb.grouping() && rb.getGroupingSpec().isTruncateGroups()) {
       Grouping grouping = new Grouping(searcher, null, rb.createQueryCommand(), false, 0, false);
-      grouping.setWithinGroupSort(rb.getGroupingSpec().getSortWithinGroup());
+      grouping.setWithinGroupSort(rb.getGroupingSpec().getWithinGroupSortSpec().getSort());
       if (rb.getGroupingSpec().getFields().length > 0) {
         grouping.addFieldCommand(rb.getGroupingSpec().getFields()[0], req);
       } else if (rb.getGroupingSpec().getFunctions().length > 0) {
@@ -828,7 +829,11 @@ public class SimpleFacets {
             return result;
           } catch (SolrException se) {
             throw se;
-          } catch (Exception e) {
+          } 
+          catch(ExitableDirectoryReader.ExitingReaderException timeout) {
+            throw timeout;
+          }
+          catch (Exception e) {
             throw new SolrException(ErrorCode.SERVER_ERROR,
                                     "Exception during facet.field: " + facetValue, e);
           } finally {
@@ -971,7 +976,7 @@ public class SimpleFacets {
       prefixTermBytes = new BytesRef(indexedPrefix);
     }
 
-    Terms terms = MultiFields.getTerms(searcher.getIndexReader(), field);
+    Terms terms = MultiTerms.getTerms(searcher.getIndexReader(), field);
     TermsEnum termsEnum = null;
     SolrIndexSearcher.DocsEnumState deState = null;
     BytesRef term = null;

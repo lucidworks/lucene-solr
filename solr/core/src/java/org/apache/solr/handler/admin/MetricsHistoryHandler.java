@@ -25,6 +25,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -50,8 +51,6 @@ import java.util.concurrent.atomic.DoubleAdder;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.net.URI;
-import java.net.URL;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.solr.api.Api;
@@ -62,6 +61,7 @@ import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.cloud.NodeStateProvider;
 import org.apache.solr.client.solrj.cloud.SolrCloudManager;
 import org.apache.solr.client.solrj.cloud.autoscaling.ReplicaInfo;
+import org.apache.solr.client.solrj.cloud.autoscaling.Variable;
 import org.apache.solr.client.solrj.cloud.autoscaling.VersionedData;
 import org.apache.solr.client.solrj.impl.HttpClientUtil;
 import org.apache.solr.cloud.LeaderElector;
@@ -137,7 +137,7 @@ public class MetricsHistoryHandler extends RequestHandlerBase implements Permiss
 
     DEFAULT_NODE_GAUGES.add("CONTAINER.fs.coreRoot.usableSpace");
 
-    DEFAULT_CORE_GAUGES.add("INDEX.sizeInBytes");
+    DEFAULT_CORE_GAUGES.add(Variable.Type.CORE_IDX.metricsAttribute);
 
     DEFAULT_CORE_COUNTERS.add("QUERY./select.requests");
     DEFAULT_CORE_COUNTERS.add("UPDATE./update.requests");
@@ -301,7 +301,7 @@ public class MetricsHistoryHandler extends RequestHandlerBase implements Permiss
   }
 
   public void removeHistory(String registry) throws IOException {
-    registry = SolrMetricManager.overridableRegistryName(registry);
+    registry = SolrMetricManager.enforcePrefix(registry);
     knownDbs.remove(registry);
     factory.remove(registry);
   }
@@ -442,7 +442,7 @@ public class MetricsHistoryHandler extends RequestHandlerBase implements Permiss
           }
         }
       } catch (Exception e) {
-        e.printStackTrace();
+        log.warn("Exception retrieving local metrics for group {}: {}", group, e);
       }
     }
   }
@@ -588,13 +588,14 @@ public class MetricsHistoryHandler extends RequestHandlerBase implements Permiss
             s.update();
           }
         } catch (Exception e) {
+          log.warn("Exception storing sample in RrdDb for group {}: {}", group, e);
         }
       });
     });
   }
 
   private RrdDef createDef(String registry, Group group) {
-    registry = SolrMetricManager.overridableRegistryName(registry);
+    registry = SolrMetricManager.enforcePrefix(registry);
 
     // base sampling period is collectPeriod - samples more frequent than
     // that will be dropped, samples less frequent will be interpolated
@@ -640,6 +641,7 @@ public class MetricsHistoryHandler extends RequestHandlerBase implements Permiss
         RrdDb newDb = new RrdDb(def, factory);
         return newDb;
       } catch (IOException e) {
+        log.warn("Can't create RrdDb for registry {}, group {}: {}", registry, group, e);
         return null;
       }
     });

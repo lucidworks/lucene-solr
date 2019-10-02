@@ -20,6 +20,8 @@ import java.io.IOException;
 
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.QueryVisitor;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.search.suggest.BitsProducer;
 import org.apache.lucene.util.automaton.Automata;
@@ -90,7 +92,7 @@ public class RegexCompletionQuery extends CompletionQuery {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
     // If an empty regex is provided, we return an automaton that matches nothing. This ensures
     // consistency with PrefixCompletionQuery, which returns no results for an empty term.
     Automaton automaton = getTerm().text().isEmpty()
@@ -121,5 +123,10 @@ public class RegexCompletionQuery extends CompletionQuery {
   @Override
   public int hashCode() {
     throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public void visit(QueryVisitor visitor) {
+    visitor.visitLeaf(this);
   }
 }

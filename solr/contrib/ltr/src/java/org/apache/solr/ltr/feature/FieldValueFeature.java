@@ -58,7 +58,7 @@ public class FieldValueFeature extends Feature {
 
   @Override
   public LinkedHashMap<String,Object> paramsToMap() {
-    final LinkedHashMap<String,Object> params = new LinkedHashMap<>(1, 1.0f);
+    final LinkedHashMap<String,Object> params = defaultParamsToMap();
     params.put("field", field);
     return params;
   }
@@ -139,6 +139,11 @@ public class FieldValueFeature extends Feature {
                   + name, e);
         }
         return getDefaultValue();
+      }
+
+      @Override
+      public float getMaxScore(int upTo) throws IOException {
+        return Float.POSITIVE_INFINITY;
       }
     }
   }

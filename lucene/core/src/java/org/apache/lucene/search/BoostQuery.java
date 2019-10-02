@@ -40,6 +40,9 @@ public final class BoostQuery extends Query {
    *  scores will be boosted by {@code boost}. */
   public BoostQuery(Query query, float boost) {
     this.query = Objects.requireNonNull(query);
+    if (Float.isFinite(boost) == false || Float.compare(boost, 0f) < 0) {
+      throw new IllegalArgumentException("boost must be a positive float, got " + boost);
+    }
     this.boost = boost;
   }
 
@@ -102,6 +105,11 @@ public final class BoostQuery extends Query {
   }
 
   @Override
+  public void visit(QueryVisitor visitor) {
+    query.visit(visitor.getSubVisitor(BooleanClause.Occur.MUST, this));
+  }
+
+  @Override
   public String toString(String field) {
     StringBuilder builder = new StringBuilder();
     builder.append("(");
@@ -113,8 +121,8 @@ public final class BoostQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
-    return query.createWeight(searcher, needsScores, BoostQuery.this.boost * boost);
+  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+    return query.createWeight(searcher, scoreMode, BoostQuery.this.boost * boost);
   }
 
 }

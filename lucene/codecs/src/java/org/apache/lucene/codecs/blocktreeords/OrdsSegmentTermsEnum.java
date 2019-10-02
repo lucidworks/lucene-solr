@@ -25,9 +25,10 @@ import java.io.PrintStream;
 
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.blocktreeords.FSTOrdsOutputs.Output;
+import org.apache.lucene.index.BaseTermsEnum;
+import org.apache.lucene.index.ImpactsEnum;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.TermState;
-import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.ArrayUtil;
@@ -40,7 +41,7 @@ import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.Util;
 
 /** Iterates through terms in this field. */
-public final class OrdsSegmentTermsEnum extends TermsEnum {
+public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
 
   // Lazy init:
   IndexInput in;
@@ -934,6 +935,19 @@ public final class OrdsSegmentTermsEnum extends TermsEnum {
   }
 
   @Override
+  public ImpactsEnum impacts(int flags) throws IOException {
+    assert !eof;
+    //if (DEBUG) {
+    //System.out.println("BTTR.docs seg=" + segment);
+    //}
+    currentFrame.decodeMetaData();
+    //if (DEBUG) {
+    //System.out.println("  state=" + currentFrame.state);
+    //}
+    return fr.parent.postingsReader.impacts(fr.fieldInfo, currentFrame.state, flags);
+  }
+
+  @Override
   public void seekExact(BytesRef target, TermState otherState) {
     // if (DEBUG) {
     //   System.out.println("BTTR.seekExact termState seg=" + segment + " target=" + target.utf8ToString() + " " + target + " state=" + otherState);
@@ -1068,12 +1082,10 @@ public final class OrdsSegmentTermsEnum extends TermsEnum {
       if (FST.targetHasArcs(arc)) {
         // System.out.println("  targetHasArcs");
         result.grow(1+upto);
-        
         fr.index.readFirstRealTargetArc(arc.target, arc, fstReader);
 
-        if (arc.bytesPerArc != 0) {
+        if (arc.bytesPerArc != 0 && arc.arcIdx > Integer.MIN_VALUE) {
           // System.out.println("  array arcs");
-
           int low = 0;
           int high = arc.numArcs-1;
           int mid = 0;

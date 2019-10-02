@@ -42,8 +42,11 @@ import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Accountables;
 import org.apache.lucene.util.BitDocIdSet;
 import org.apache.lucene.util.FixedBitSet;
-import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.RoaringDocIdSet;
+
+import static org.apache.lucene.util.RamUsageEstimator.HASHTABLE_RAM_BYTES_PER_ENTRY;
+import static org.apache.lucene.util.RamUsageEstimator.LINKED_HASHTABLE_RAM_BYTES_PER_ENTRY;
+import static org.apache.lucene.util.RamUsageEstimator.QUERY_DEFAULT_RAM_BYTES_USED;
 
 /**
  * A {@link QueryCache} that evicts queries using a LRU (least-recently-used)
@@ -87,18 +90,6 @@ import org.apache.lucene.util.RoaringDocIdSet;
  */
 public class LRUQueryCache implements QueryCache, Accountable {
 
-  // approximate memory usage that we assign to all queries
-  // this maps roughly to a BooleanQuery with a couple term clauses
-  static final long QUERY_DEFAULT_RAM_BYTES_USED = 1024;
-
-  static final long HASHTABLE_RAM_BYTES_PER_ENTRY =
-      2 * RamUsageEstimator.NUM_BYTES_OBJECT_REF // key + value
-      * 2; // hash tables need to be oversized to avoid collisions, assume 2x capacity
-
-  static final long LINKED_HASHTABLE_RAM_BYTES_PER_ENTRY =
-      HASHTABLE_RAM_BYTES_PER_ENTRY
-      + 2 * RamUsageEstimator.NUM_BYTES_OBJECT_REF; // previous & next references
-
   private final int maxSize;
   private final long maxRamBytesUsed;
   private final Predicate<LeafReaderContext> leavesToCache;
@@ -123,7 +114,7 @@ public class LRUQueryCache implements QueryCache, Accountable {
   /**
    * Expert: Create a new instance that will cache at most <code>maxSize</code>
    * queries with at most <code>maxRamBytesUsed</code> bytes of memory, only on
-   * leaves that satisfy {@code leavesToCache};
+   * leaves that satisfy {@code leavesToCache}.
    */
   public LRUQueryCache(int maxSize, long maxRamBytesUsed,
       Predicate<LeafReaderContext> leavesToCache) {
@@ -147,6 +138,8 @@ public class LRUQueryCache implements QueryCache, Accountable {
    * <tt>33</tt> leaves can make it to the cache (very likely less than 10 in
    * practice), which is useful for this implementation since some operations
    * perform in linear time with the number of cached leaves.
+   * Only clauses whose cost is at most 100x the cost of the top-level query will
+   * be cached in order to not hurt latency too much because of caching.
    */
   public LRUQueryCache(int maxSize, long maxRamBytesUsed) {
     this(maxSize, maxRamBytesUsed, new MinSegmentSizePredicate(10000, .03f));
@@ -501,7 +494,7 @@ public class LRUQueryCache implements QueryCache, Accountable {
     scorer.score(new LeafCollector() {
 
       @Override
-      public void setScorer(Scorer scorer) throws IOException {}
+      public void setScorer(Scorable scorer) throws IOException {}
 
       @Override
       public void collect(int doc) throws IOException {
@@ -518,7 +511,7 @@ public class LRUQueryCache implements QueryCache, Accountable {
     scorer.score(new LeafCollector() {
 
       @Override
-      public void setScorer(Scorer scorer) throws IOException {}
+      public void setScorer(Scorable scorer) throws IOException {}
 
       @Override
       public void collect(int doc) throws IOException {
@@ -764,7 +757,7 @@ public class LRUQueryCache implements QueryCache, Accountable {
       return new ScorerSupplier() {
         @Override
         public Scorer get(long LeadCost) throws IOException {
-          return new ConstantScoreScorer(CachingWrapperWeight.this, 0f, disi);
+          return new ConstantScoreScorer(CachingWrapperWeight.this, 0f, ScoreMode.COMPLETE_NO_SCORES, disi);
         }
         
         @Override
@@ -842,7 +835,7 @@ public class LRUQueryCache implements QueryCache, Accountable {
         return null;
       }
 
-      return new DefaultBulkScorer(new ConstantScoreScorer(this, 0f, disi));
+      return new DefaultBulkScorer(new ConstantScoreScorer(this, 0f, ScoreMode.COMPLETE_NO_SCORES, disi));
     }
 
   }

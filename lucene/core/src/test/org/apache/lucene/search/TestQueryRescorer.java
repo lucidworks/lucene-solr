@@ -79,7 +79,7 @@ public class TestQueryRescorer extends LuceneTestCase {
     searcher.setSimilarity(new ClassicSimilarity());
 
     TopDocs hits = searcher.search(bq.build(), 10);
-    assertEquals(2, hits.totalHits);
+    assertEquals(2, hits.totalHits.value);
     assertEquals("0", searcher.doc(hits.scoreDocs[0].doc).get("id"));
     assertEquals("1", searcher.doc(hits.scoreDocs[1].doc).get("id"));
 
@@ -89,7 +89,7 @@ public class TestQueryRescorer extends LuceneTestCase {
     TopDocs hits2 = QueryRescorer.rescore(searcher, hits, pq, 2.0, 10);
 
     // Resorting changed the order:
-    assertEquals(2, hits2.totalHits);
+    assertEquals(2, hits2.totalHits.value);
     assertEquals("1", searcher.doc(hits2.scoreDocs[0].doc).get("id"));
     assertEquals("0", searcher.doc(hits2.scoreDocs[1].doc).get("id"));
 
@@ -101,7 +101,7 @@ public class TestQueryRescorer extends LuceneTestCase {
     TopDocs hits3 = QueryRescorer.rescore(searcher, hits, snq, 2.0, 10);
 
     // Resorting changed the order:
-    assertEquals(2, hits3.totalHits);
+    assertEquals(2, hits3.totalHits.value);
     assertEquals("1", searcher.doc(hits3.scoreDocs[0].doc).get("id"));
     assertEquals("0", searcher.doc(hits3.scoreDocs[1].doc).get("id"));
 
@@ -134,7 +134,7 @@ public class TestQueryRescorer extends LuceneTestCase {
     searcher.setSimilarity(new ClassicSimilarity());
 
     TopDocs hits = searcher.search(bq.build(), 10);
-    assertEquals(2, hits.totalHits);
+    assertEquals(2, hits.totalHits.value);
     assertEquals("0", searcher.doc(hits.scoreDocs[0].doc).get("id"));
     assertEquals("1", searcher.doc(hits.scoreDocs[1].doc).get("id"));
 
@@ -143,7 +143,7 @@ public class TestQueryRescorer extends LuceneTestCase {
     TopDocs hits2 = QueryRescorer.rescore(searcher, hits, tq, 2.0, 10);
 
     // Just testing that null scorer is handled.
-    assertEquals(2, hits2.totalHits);
+    assertEquals(2, hits2.totalHits.value);
 
     r.close();
     dir.close();
@@ -172,7 +172,7 @@ public class TestQueryRescorer extends LuceneTestCase {
     IndexSearcher searcher = getSearcher(r);
 
     TopDocs hits = searcher.search(bq.build(), 10);
-    assertEquals(2, hits.totalHits);
+    assertEquals(2, hits.totalHits.value);
     assertEquals("0", searcher.doc(hits.scoreDocs[0].doc).get("id"));
     assertEquals("1", searcher.doc(hits.scoreDocs[1].doc).get("id"));
 
@@ -192,7 +192,7 @@ public class TestQueryRescorer extends LuceneTestCase {
       }.rescore(searcher, hits, 10);
 
     // Resorting didn't change the order:
-    assertEquals(2, hits2.totalHits);
+    assertEquals(2, hits2.totalHits.value);
     assertEquals("0", searcher.doc(hits2.scoreDocs[0].doc).get("id"));
     assertEquals("1", searcher.doc(hits2.scoreDocs[1].doc).get("id"));
 
@@ -223,7 +223,7 @@ public class TestQueryRescorer extends LuceneTestCase {
     IndexSearcher searcher = getSearcher(r);
 
     TopDocs hits = searcher.search(bq.build(), 10);
-    assertEquals(2, hits.totalHits);
+    assertEquals(2, hits.totalHits.value);
     assertEquals("0", searcher.doc(hits.scoreDocs[0].doc).get("id"));
     assertEquals("1", searcher.doc(hits.scoreDocs[1].doc).get("id"));
 
@@ -244,7 +244,7 @@ public class TestQueryRescorer extends LuceneTestCase {
     TopDocs hits2 = rescorer.rescore(searcher, hits, 10);
 
     // Resorting changed the order:
-    assertEquals(2, hits2.totalHits);
+    assertEquals(2, hits2.totalHits.value);
     assertEquals("1", searcher.doc(hits2.scoreDocs[0].doc).get("id"));
     assertEquals("0", searcher.doc(hits2.scoreDocs[1].doc).get("id"));
 
@@ -257,7 +257,7 @@ public class TestQueryRescorer extends LuceneTestCase {
     assertTrue(s.contains("combined first and second pass score"));
     assertTrue(s.contains("first pass score"));
     assertTrue(s.contains("= second pass score"));
-    assertEquals(hits2.scoreDocs[0].score, explain.getValue(), 0.0f);
+    assertEquals(hits2.scoreDocs[0].score, explain.getValue().doubleValue(), 0.0f);
 
     docID = hits2.scoreDocs[1].doc;
     explain = rescorer.explain(searcher,
@@ -269,7 +269,7 @@ public class TestQueryRescorer extends LuceneTestCase {
     assertTrue(s.contains("first pass score"));
     assertTrue(s.contains("no second pass score"));
     assertFalse(s.contains("= second pass score"));
-    assertEquals(hits2.scoreDocs[1].score, explain.getValue(), 0.0f);
+    assertEquals(hits2.scoreDocs[1].score, explain.getValue().doubleValue(), 0.0f);
 
     r.close();
     dir.close();
@@ -298,7 +298,7 @@ public class TestQueryRescorer extends LuceneTestCase {
     IndexSearcher searcher = getSearcher(r);
 
     TopDocs hits = searcher.search(bq.build(), 10);
-    assertEquals(2, hits.totalHits);
+    assertEquals(2, hits.totalHits.value);
     assertEquals("0", searcher.doc(hits.scoreDocs[0].doc).get("id"));
     assertEquals("1", searcher.doc(hits.scoreDocs[1].doc).get("id"));
 
@@ -308,7 +308,7 @@ public class TestQueryRescorer extends LuceneTestCase {
     TopDocs hits2 = QueryRescorer.rescore(searcher, hits, pq, 2.0, 10);
 
     // Resorting changed the order:
-    assertEquals(2, hits2.totalHits);
+    assertEquals(2, hits2.totalHits.value);
     assertEquals("1", searcher.doc(hits2.scoreDocs[0].doc).get("id"));
     assertEquals("0", searcher.doc(hits2.scoreDocs[1].doc).get("id"));
 
@@ -320,7 +320,7 @@ public class TestQueryRescorer extends LuceneTestCase {
     TopDocs hits3 = QueryRescorer.rescore(searcher, hits, snq, 2.0, 10);
 
     // Resorting changed the order:
-    assertEquals(2, hits3.totalHits);
+    assertEquals(2, hits3.totalHits.value);
     assertEquals("1", searcher.doc(hits3.scoreDocs[0].doc).get("id"));
     assertEquals("0", searcher.doc(hits3.scoreDocs[1].doc).get("id"));
 
@@ -418,7 +418,7 @@ public class TestQueryRescorer extends LuceneTestCase {
     }
 
     @Override
-    public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
 
       return new Weight(FixedScoreQuery.this) {
 
@@ -429,7 +429,7 @@ public class TestQueryRescorer extends LuceneTestCase {
         @Override
         public Scorer scorer(final LeafReaderContext context) throws IOException {
 
-          return new Scorer(null) {
+          return new Scorer(this) {
             int docID = -1;
 
             @Override
@@ -476,8 +476,13 @@ public class TestQueryRescorer extends LuceneTestCase {
                 return num;
               } else {
                 //System.out.println("score doc=" + docID + " num=" + -num);
-                return -num;
+                return 1f / (1 + num);
               }
+            }
+
+            @Override
+            public float getMaxScore(int upTo) throws IOException {
+              return Float.POSITIVE_INFINITY;
             }
           };
         }
@@ -492,6 +497,11 @@ public class TestQueryRescorer extends LuceneTestCase {
           return null;
         }
       };
+    }
+
+    @Override
+    public void visit(QueryVisitor visitor) {
+
     }
 
     @Override

@@ -27,7 +27,9 @@ import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Rescorer;
 import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.search.Weight;
 import org.apache.solr.search.SolrIndexSearcher;
 
@@ -99,7 +101,7 @@ public class LTRRescorer extends Rescorer {
   @Override
   public TopDocs rescore(IndexSearcher searcher, TopDocs firstPassTopDocs,
       int topN) throws IOException {
-    if ((topN == 0) || (firstPassTopDocs.totalHits == 0)) {
+    if ((topN == 0) || (firstPassTopDocs.scoreDocs.length == 0)) {
       return firstPassTopDocs;
     }
     final ScoreDoc[] hits = firstPassTopDocs.scoreDocs;
@@ -110,11 +112,12 @@ public class LTRRescorer extends Rescorer {
       }
     });
 
-    topN = Math.toIntExact(Math.min(topN, firstPassTopDocs.totalHits));
+    assert firstPassTopDocs.totalHits.relation == TotalHits.Relation.EQUAL_TO;
+    topN = Math.toIntExact(Math.min(topN, firstPassTopDocs.totalHits.value));
     final ScoreDoc[] reranked = new ScoreDoc[topN];
     final List<LeafReaderContext> leaves = searcher.getIndexReader().leaves();
     final LTRScoringQuery.ModelWeight modelWeight = (LTRScoringQuery.ModelWeight) searcher
-        .createWeight(searcher.rewrite(scoringQuery), true, 1);
+        .createWeight(searcher.rewrite(scoringQuery), ScoreMode.COMPLETE, 1);
 
     scoreFeatures(searcher, firstPassTopDocs,topN, modelWeight, hits, leaves, reranked);
     // Must sort all documents that we reranked, and then select the top
@@ -134,7 +137,7 @@ public class LTRRescorer extends Rescorer {
       }
     });
 
-    return new TopDocs(firstPassTopDocs.totalHits, reranked, reranked[0].score);
+    return new TopDocs(firstPassTopDocs.totalHits, reranked);
   }
 
   public void scoreFeatures(IndexSearcher indexSearcher, TopDocs firstPassTopDocs,
@@ -219,7 +222,7 @@ public class LTRRescorer extends Rescorer {
     final LeafReaderContext context = leafContexts.get(n);
     final int deBasedDoc = docID - context.docBase;
     final Weight modelWeight = searcher.createWeight(searcher.rewrite(scoringQuery),
-        true, 1);
+        ScoreMode.COMPLETE, 1);
     return modelWeight.explain(context, deBasedDoc);
   }
 

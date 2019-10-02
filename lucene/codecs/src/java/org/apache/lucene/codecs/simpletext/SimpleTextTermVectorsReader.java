@@ -25,10 +25,13 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 import org.apache.lucene.codecs.TermVectorsReader;
-import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.BaseTermsEnum;
 import org.apache.lucene.index.Fields;
+import org.apache.lucene.index.ImpactsEnum;
 import org.apache.lucene.index.IndexFileNames;
+import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.SegmentInfo;
+import org.apache.lucene.index.SlowImpactsEnum;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.AlreadyClosedException;
@@ -288,7 +291,13 @@ public class SimpleTextTermVectorsReader extends TermVectorsReader {
 
     @Override
     public long getSumTotalTermFreq() throws IOException {
-      return -1;
+      // TODO: make it constant-time
+      long ttf = 0;
+      TermsEnum iterator = iterator();
+      for (BytesRef b = iterator.next(); b != null; b = iterator.next()) {
+        ttf += iterator.totalTermFreq();
+      }
+      return ttf;
     }
 
     @Override
@@ -330,7 +339,7 @@ public class SimpleTextTermVectorsReader extends TermVectorsReader {
     private BytesRef payloads[];
   }
 
-  private static class SimpleTVTermsEnum extends TermsEnum {
+  private static class SimpleTVTermsEnum extends BaseTermsEnum {
     SortedMap<BytesRef,SimpleTVPostings> terms;
     Iterator<Map.Entry<BytesRef,SimpleTextTermVectorsReader.SimpleTVPostings>> iterator;
     Map.Entry<BytesRef,SimpleTextTermVectorsReader.SimpleTVPostings> current;
@@ -404,6 +413,10 @@ public class SimpleTextTermVectorsReader extends TermVectorsReader {
       return e;
     }
 
+    @Override
+    public ImpactsEnum impacts(int flags) throws IOException {
+      return new SlowImpactsEnum(postings(null, PostingsEnum.FREQS));
+    }
   }
 
   // note: these two enum classes are exactly like the Default impl...

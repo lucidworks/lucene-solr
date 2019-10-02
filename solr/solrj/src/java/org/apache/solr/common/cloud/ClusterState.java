@@ -40,7 +40,7 @@ import org.noggit.JSONWriter;
  * @lucene.experimental
  */
 public class ClusterState implements JSONWriter.Writable {
-
+  
   private final Integer znodeVersion;
 
   private final Map<String, CollectionRef> collectionStates, immutableCollectionStates;
@@ -203,9 +203,9 @@ public class ClusterState implements JSONWriter.Writable {
     }
     return null;
   }
-
+  
   /**
-   * Check if node is alive.
+   * Check if node is alive. 
    */
   public boolean liveNodesContain(String name) {
     return liveNodes.contains(name);
@@ -214,11 +214,11 @@ public class ClusterState implements JSONWriter.Writable {
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append("znodeVersion: " + znodeVersion);
+    sb.append("znodeVersion: ").append(znodeVersion);
     sb.append("\n");
-    sb.append("live nodes:" + liveNodes);
+    sb.append("live nodes:").append(liveNodes);
     sb.append("\n");
-    sb.append("collections:" + collectionStates);
+    sb.append("collections:").append(collectionStates);
     return sb.toString();
   }
 
@@ -227,7 +227,7 @@ public class ClusterState implements JSONWriter.Writable {
   }
   /**
    * Create ClusterState from json string that is typically stored in zookeeper.
-   *
+   * 
    * @param version zk version of the clusterstate.json file (bytes)
    * @param bytes clusterstate.json as a byte array
    * @param liveNodes list of live nodes
@@ -302,7 +302,7 @@ public class ClusterState implements JSONWriter.Writable {
 
   /**
    * The version of clusterstate.json in ZooKeeper.
-   *
+   * 
    * @return null if ClusterState was created for publication, not consumption
    * @deprecated true cluster state spans many ZK nodes, stop depending on the version number of the shared node!
    * will be removed in 8.0
@@ -353,10 +353,19 @@ public class ClusterState implements JSONWriter.Writable {
   public Map<String, CollectionRef> getCollectionStates() {
     return immutableCollectionStates;
   }
+
+  /**
+   * Iterate over collections. Unlike {@link #getCollectionStates()} collections passed to the
+   * consumer are guaranteed to exist.
+   * @param consumer collection consumer.
+   */
   public void forEachCollection(Consumer<DocCollection> consumer) {
     collectionStates.forEach((s, collectionRef) -> {
       try {
-        consumer.accept(collectionRef.get());
+        DocCollection collection = collectionRef.get();
+        if (collection != null) {
+          consumer.accept(collection);
+        }
       } catch (SolrException e) {
         if (e.getCause() instanceof KeeperException.NoNodeException) {
           //don't do anything. This collection does not exist

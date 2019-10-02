@@ -405,7 +405,7 @@ public abstract class AbstractFullDistribZkTestBase extends AbstractDistribZkTes
         .setCreateNodeSet("")
         .process(cloudClient).getStatus());
     
-    cloudClient.waitForState(DEFAULT_COLLECTION, 30, TimeUnit.SECONDS, (l,c) -> c != null && c.getSlices().size() == sliceCount);
+    cloudClient.waitForState(DEFAULT_COLLECTION, 30, TimeUnit.SECONDS, (c) -> c != null && c.getSlices().size() == sliceCount);
     
     ExecutorService customThreadPool = ExecutorUtil.newMDCAwareCachedThreadPool(new SolrjNamedThreadFactory("closeThreadPool"));
 
@@ -585,7 +585,7 @@ public abstract class AbstractFullDistribZkTestBase extends AbstractDistribZkTes
   protected void waitForActiveReplicaCount(CloudSolrClient client, String collection, int expectedNumReplicas) throws TimeoutException, NotInClusterStateException {
     AtomicInteger nReplicas = new AtomicInteger();
     try {
-      client.getZkStateReader().waitForState(collection, 30, TimeUnit.SECONDS, (n, c) -> {
+      client.getZkStateReader().waitForState(collection, 30, TimeUnit.SECONDS, (c) -> {
         if (c == null)
           return false;
         int numReplicas = getTotalReplicas(c, c.getName());
@@ -620,6 +620,30 @@ public abstract class AbstractFullDistribZkTestBase extends AbstractDistribZkTes
     return cnt;
   }
 
+  public JettySolrRunner createJetty(String dataDir, String ulogDir, String shardList,
+      String solrConfigOverride) throws Exception {
+
+    JettyConfig jettyconfig = JettyConfig.builder()
+        .setContext(context)
+        .stopAtShutdown(false)
+        .withServlets(getExtraServlets())
+        .withFilters(getExtraRequestFilters())
+        .withSSLConfig(sslConfig.buildServerSSLConfig())
+        .build();
+
+    Properties props = new Properties();
+    props.setProperty("solr.data.dir", getDataDir(dataDir));
+    props.setProperty("shards", shardList);
+    props.setProperty("solr.ulog.dir", ulogDir);
+    props.setProperty("solrconfig", solrConfigOverride);
+    
+    JettySolrRunner jetty = new JettySolrRunner(getSolrHome(), props, jettyconfig);
+
+    jetty.start();
+
+    return jetty;
+  }
+
   public final JettySolrRunner createJetty(File solrHome, String dataDir, String shardList, String solrConfigOverride, String schemaOverride) throws Exception {
     return createJetty(solrHome, dataDir, shardList, solrConfigOverride, schemaOverride, null);
   }
@@ -635,7 +659,7 @@ public abstract class AbstractFullDistribZkTestBase extends AbstractDistribZkTes
         .stopAtShutdown(false)
         .withServlets(getExtraServlets())
         .withFilters(getExtraRequestFilters())
-        .withSSLConfig(sslConfig)
+        .withSSLConfig(sslConfig.buildServerSSLConfig())
         .build();
 
     Properties props = new Properties();
@@ -673,7 +697,7 @@ public abstract class AbstractFullDistribZkTestBase extends AbstractDistribZkTes
         .stopAtShutdown(false)
         .withServlets(getExtraServlets())
         .withFilters(getExtraRequestFilters())
-        .withSSLConfig(sslConfig)
+        .withSSLConfig(sslConfig.buildServerSSLConfig())
         .build();
 
     Properties props = new Properties();
@@ -875,7 +899,7 @@ public abstract class AbstractFullDistribZkTestBase extends AbstractDistribZkTes
       StringBuilder sb = new StringBuilder();
       for (int i = 0; i < sliceCount; i++) {
         if (i > 0) sb.append(',');
-        sb.append("shard" + (i + 1));
+        sb.append("shard").append(i + 1);
       }
       params.set("shards", sb.toString());
     }
@@ -2317,7 +2341,7 @@ public abstract class AbstractFullDistribZkTestBase extends AbstractDistribZkTes
     }
   }
 
-  static RequestStatusState getRequestStateAfterCompletion(String requestId, int waitForSeconds, SolrClient client)
+  public static RequestStatusState getRequestStateAfterCompletion(String requestId, int waitForSeconds, SolrClient client)
       throws IOException, SolrServerException {
     RequestStatusState state = null;
     final TimeOut timeout = new TimeOut(waitForSeconds, TimeUnit.SECONDS, TimeSource.NANO_TIME);

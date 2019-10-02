@@ -24,7 +24,6 @@ import org.apache.lucene.expressions.js.VariableContext;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.search.CheckHits;
 import org.apache.lucene.search.DoubleValuesSource;
 import org.apache.lucene.search.FieldDoc;
 import org.apache.lucene.search.IndexSearcher;
@@ -115,12 +114,12 @@ public class  TestDemoExpressions extends LuceneTestCase {
     
     Sort sort = new Sort(expr.getSortField(bindings, true));
     Query query = new TermQuery(new Term("body", "contents"));
-    TopFieldDocs td = searcher.search(query, 3, sort, true, true);
+    TopFieldDocs td = searcher.search(query, 3, sort, true);
     for (int i = 0; i < 3; i++) {
       FieldDoc d = (FieldDoc) td.scoreDocs[i];
       float expected = (float) Math.sqrt(d.score);
       float actual = ((Double)d.fields[0]).floatValue();
-      assertEquals(expected, actual, CheckHits.explainToleranceDelta(expected, actual));
+      assertEquals(expected, actual, 0d);
     }
   }
   
@@ -133,12 +132,12 @@ public class  TestDemoExpressions extends LuceneTestCase {
     
     Sort sort = new Sort(expr.getSortField(bindings, true));
     Query query = new TermQuery(new Term("body", "contents"));
-    TopFieldDocs td = searcher.search(query, 3, sort, true, true);
+    TopFieldDocs td = searcher.search(query, 3, sort, true);
     for (int i = 0; i < 3; i++) {
       FieldDoc d = (FieldDoc) td.scoreDocs[i];
       float expected = 2*d.score;
       float actual = ((Double)d.fields[0]).floatValue();
-      assertEquals(expected, actual, CheckHits.explainToleranceDelta(expected, actual));
+      assertEquals(expected, actual, 0d);
     }
   }
   
@@ -152,12 +151,12 @@ public class  TestDemoExpressions extends LuceneTestCase {
     
     Sort sort = new Sort(expr.getSortField(bindings, true));
     Query query = new TermQuery(new Term("body", "contents"));
-    TopFieldDocs td = searcher.search(query, 3, sort, true, true);
+    TopFieldDocs td = searcher.search(query, 3, sort, true);
     for (int i = 0; i < 3; i++) {
       FieldDoc d = (FieldDoc) td.scoreDocs[i];
       float expected = 2*d.score;
       float actual = ((Double)d.fields[0]).floatValue();
-      assertEquals(expected, actual, CheckHits.explainToleranceDelta(expected, actual));
+      assertEquals(expected, actual, 0d);
     }
   }
   
@@ -172,12 +171,12 @@ public class  TestDemoExpressions extends LuceneTestCase {
     
     Sort sort = new Sort(expr2.getSortField(bindings, true));
     Query query = new TermQuery(new Term("body", "contents"));
-    TopFieldDocs td = searcher.search(query, 3, sort, true, true);
+    TopFieldDocs td = searcher.search(query, 3, sort, true);
     for (int i = 0; i < 3; i++) {
       FieldDoc d = (FieldDoc) td.scoreDocs[i];
       float expected = 2*d.score;
       float actual = ((Double)d.fields[0]).floatValue();
-      assertEquals(expected, actual, CheckHits.explainToleranceDelta(expected, actual));
+      assertEquals(expected, actual, 0d);
     }
   }
   
@@ -204,12 +203,12 @@ public class  TestDemoExpressions extends LuceneTestCase {
     Expression expr = JavascriptCompiler.compile(sb.toString());
     Sort sort = new Sort(expr.getSortField(bindings, true));
     Query query = new TermQuery(new Term("body", "contents"));
-    TopFieldDocs td = searcher.search(query, 3, sort, true, true);
+    TopFieldDocs td = searcher.search(query, 3, sort, true);
     for (int i = 0; i < 3; i++) {
       FieldDoc d = (FieldDoc) td.scoreDocs[i];
       float expected = n*d.score;
       float actual = ((Double)d.fields[0]).floatValue();
-      assertEquals(expected, actual, CheckHits.explainToleranceDelta(expected, actual));
+      assertEquals(expected, actual, 0d);
     }
   }
   

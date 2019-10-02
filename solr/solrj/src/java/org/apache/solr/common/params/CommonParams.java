@@ -177,6 +177,7 @@ public interface CommonParams {
   String CORES_HANDLER_PATH = "/admin/cores";
   String COLLECTIONS_HANDLER_PATH = "/admin/collections";
   String INFO_HANDLER_PATH = "/admin/info";
+  String HEALTH_CHECK_HANDLER_PATH = INFO_HANDLER_PATH + "/health";
   String CONFIGSETS_HANDLER_PATH = "/admin/configs";
   String AUTHZ_PATH = "/admin/authorization";
   String AUTHC_PATH = "/admin/authentication";
@@ -190,9 +191,15 @@ public interface CommonParams {
   String AUTOSCALING_DIAGNOSTICS_PATH = "/admin/autoscaling/diagnostics";
   String AUTOSCALING_SUGGESTIONS_PATH = "/admin/autoscaling/suggestions";
 
+  String STATUS = "status";
+
+  String OK = "OK";
+  String FAILURE = "FAILURE";
+
   Set<String> ADMIN_PATHS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
       CORES_HANDLER_PATH,
       COLLECTIONS_HANDLER_PATH,
+      HEALTH_CHECK_HANDLER_PATH,
       CONFIGSETS_HANDLER_PATH,
       SYSTEM_INFO_PATH,
       AUTHC_PATH,
@@ -282,15 +289,12 @@ public interface CommonParams {
 
   String VERSION_FIELD="_version_";
 
+  String FAIL_ON_VERSION_CONFLICTS ="failOnVersionConflicts";
+
   String ID = "id";
   String JSON_MIME = "application/json";
 
   String JAVABIN_MIME = "application/javabin";
 
-  /**
-   * If set to true, child documents will be added as anonymous children into the _childDocuments list,
-   * else, child documents will be added to SolrInputDocument as field values according to their key name.
-   */
-  String ANONYMOUS_CHILD_DOCS = "anonChildDocs";
 }
 

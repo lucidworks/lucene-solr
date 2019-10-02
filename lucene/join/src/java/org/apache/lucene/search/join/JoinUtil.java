@@ -44,7 +44,7 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.PointInSetQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.Scorer;
+import org.apache.lucene.search.Scorable;
 import org.apache.lucene.search.SimpleCollector;
 import org.apache.lucene.search.join.DocValuesTermsCollector.Function;
 import org.apache.lucene.util.BytesRef;
@@ -195,12 +195,12 @@ public final class JoinUtil {
       collector = new SimpleCollector() {
 
         SortedNumericDocValues sortedNumericDocValues;
-        Scorer scorer;
+        Scorable scorer;
 
         @Override
         public void collect(int doc) throws IOException {
           if (sortedNumericDocValues.advanceExact(doc)) {
-            for (int i = 0; i < sortedNumericDocValues.docValueCount(); i++) {
+            for (int i = 0, count = sortedNumericDocValues.docValueCount(); i < count; i++) {
               long value = sortedNumericDocValues.nextValue();
               joinValues.add(value);
               if (needsScore) {
@@ -216,20 +216,20 @@ public final class JoinUtil {
         }
 
         @Override
-        public void setScorer(Scorer scorer) throws IOException {
+        public void setScorer(Scorable scorer) throws IOException {
           this.scorer = scorer;
         }
 
         @Override
-        public boolean needsScores() {
-          return needsScore;
+        public org.apache.lucene.search.ScoreMode scoreMode() {
+          return needsScore ? org.apache.lucene.search.ScoreMode.COMPLETE : org.apache.lucene.search.ScoreMode.COMPLETE_NO_SCORES;
         }
       };
     } else {
       collector = new SimpleCollector() {
 
         NumericDocValues numericDocValues;
-        Scorer scorer;
+        Scorable scorer;
         private int lastDocID = -1;
 
         private boolean docsInOrder(int docID) {
@@ -260,13 +260,13 @@ public final class JoinUtil {
         }
 
         @Override
-        public void setScorer(Scorer scorer) throws IOException {
+        public void setScorer(Scorable scorer) throws IOException {
           this.scorer = scorer;
         }
 
         @Override
-        public boolean needsScores() {
-          return needsScore;
+        public org.apache.lucene.search.ScoreMode scoreMode() {
+          return needsScore ? org.apache.lucene.search.ScoreMode.COMPLETE : org.apache.lucene.search.ScoreMode.COMPLETE_NO_SCORES;
         }
       };
     }

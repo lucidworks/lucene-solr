@@ -17,7 +17,6 @@
 package org.apache.lucene.search.join;
 
 import java.io.IOException;
-import java.util.Set;
 
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.LeafReaderContext;
@@ -29,13 +28,17 @@ import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.FilterWeight;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TwoPhaseIterator;
 import org.apache.lucene.search.Weight;
+import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LongValues;
+import org.apache.lucene.util.RamUsageEstimator;
 
-final class GlobalOrdinalsWithScoreQuery extends Query {
+final class GlobalOrdinalsWithScoreQuery extends Query implements Accountable {
+  private static final long BASE_RAM_BYTES = RamUsageEstimator.shallowSizeOfInstance(GlobalOrdinalsWithScoreQuery.class);
 
   private final GlobalOrdinalsWithScoreCollector collector;
   private final String joinField;
@@ -51,6 +54,8 @@ final class GlobalOrdinalsWithScoreQuery extends Query {
   // id of the context rather than the context itself in order not to hold references to index readers
   private final Object indexReaderContextId;
 
+  private final long ramBytesUsed; // cache
+
   GlobalOrdinalsWithScoreQuery(GlobalOrdinalsWithScoreCollector collector, ScoreMode scoreMode, String joinField,
                                OrdinalMap globalOrds, Query toQuery, Query fromQuery, int min, int max,
                                Object indexReaderContextId) {
@@ -63,21 +68,32 @@ final class GlobalOrdinalsWithScoreQuery extends Query {
     this.min = min;
     this.max = max;
     this.indexReaderContextId = indexReaderContextId;
+
+    this.ramBytesUsed = BASE_RAM_BYTES +
+        RamUsageEstimator.sizeOfObject(this.fromQuery, RamUsageEstimator.QUERY_DEFAULT_RAM_BYTES_USED) +
+        RamUsageEstimator.sizeOfObject(this.globalOrds) +
+        RamUsageEstimator.sizeOfObject(this.joinField) +
+        RamUsageEstimator.sizeOfObject(this.toQuery, RamUsageEstimator.QUERY_DEFAULT_RAM_BYTES_USED);
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  public void visit(QueryVisitor visitor) {
+    visitor.visitLeaf(this);
+  }
+
+  @Override
+  public Weight createWeight(IndexSearcher searcher, org.apache.lucene.search.ScoreMode scoreMode, float boost) throws IOException {
     if (searcher.getTopReaderContext().id() != indexReaderContextId) {
       throw new IllegalStateException("Creating the weight against a different index reader than this query has been built for.");
     }
     boolean doNoMinMax = min <= 0 && max == Integer.MAX_VALUE;
-    if (needsScores == false && doNoMinMax) {
+    if (scoreMode.needsScores() == false && doNoMinMax) {
       // We don't need scores then quickly change the query to not uses the scores:
       GlobalOrdinalsQuery globalOrdinalsQuery = new GlobalOrdinalsQuery(collector.collectedOrds, joinField, globalOrds,
           toQuery, fromQuery, indexReaderContextId);
-      return globalOrdinalsQuery.createWeight(searcher, false, boost);
+      return globalOrdinalsQuery.createWeight(searcher, org.apache.lucene.search.ScoreMode.COMPLETE_NO_SCORES, boost);
     }
-    return new W(this, toQuery.createWeight(searcher, false, 1f));
+    return new W(this, toQuery.createWeight(searcher, org.apache.lucene.search.ScoreMode.COMPLETE_NO_SCORES, 1f));
   }
 
   @Override
@@ -119,14 +135,16 @@ final class GlobalOrdinalsWithScoreQuery extends Query {
         '}';
   }
 
+  @Override
+  public long ramBytesUsed() {
+    return ramBytesUsed;
+  }
+
   final class W extends FilterWeight {
 
     W(Query query, Weight approximationWeight) {
       super(query, approximationWeight);
     }
-
-    @Override
-    public void extractTerms(Set<Term> terms) {}
 
     @Override
     public Explanation explain(LeafReaderContext context, int doc) throws IOException {

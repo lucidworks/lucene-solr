@@ -32,7 +32,15 @@ solrAdminApp.config([
         templateUrl: 'partials/index.html',
         controller: 'IndexController'
       }).
+      when('/unknown', {
+        templateUrl: 'partials/unknown.html',
+        controller: 'UnknownController'
+      }).
       when('/login', {
+        templateUrl: 'partials/login.html',
+        controller: 'LoginController'
+      }).
+      when('/login/:route', {
         templateUrl: 'partials/login.html',
         controller: 'LoginController'
       }).
@@ -143,7 +151,8 @@ solrAdminApp.config([
         controller: 'SegmentsController'
       }).
       otherwise({
-        redirectTo: '/'
+        templateUrl: 'partials/unknown.html',
+        controller: 'UnknownController'
       });
 }])
 .constant('Constants', {
@@ -351,7 +360,7 @@ solrAdminApp.config([
         $rootScope.$broadcast('connectionStatusInactive');
       },2000);
     }
-    if (!$location.path().startsWith('/login')) {
+    if (!$location.path().startsWith('/login') && !$location.path().startsWith('/unknown')) {
       sessionStorage.removeItem("http401");
       sessionStorage.removeItem("auth.state");
       sessionStorage.removeItem("auth.statusText");
@@ -379,6 +388,7 @@ solrAdminApp.config([
       var headers = rejection.headers();
       var wwwAuthHeader = headers['www-authenticate'];
       sessionStorage.setItem("auth.wwwAuthHeader", wwwAuthHeader);
+      sessionStorage.setItem("auth.authDataHeader", headers['x-solr-authdata']);
       sessionStorage.setItem("auth.statusText", rejection.statusText);
       sessionStorage.setItem("http401", "true");
       sessionStorage.removeItem("auth.scheme");
@@ -471,6 +481,18 @@ solrAdminApp.controller('MainController', function($scope, $route, $rootScope, $
         })
       }
 
+      $scope.showEnvironment = data.environment !== undefined;
+      if (data.environment) {
+        $scope.environment = data.environment;
+        var env_labels = {'prod': 'Production', 'stage': 'Staging', 'test': 'Test', 'dev': 'Development'};
+        $scope.environment_label = env_labels[data.environment];
+        if (data.environment_label) {
+          $scope.environment_label = data.environment_label;
+        }
+        if (data.environment_color) {
+          $scope.environment_color = data.environment_color;
+        }
+      }
     });
 
     $scope.showingLogging = page.lastIndexOf("logging", 0) === 0;

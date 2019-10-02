@@ -36,7 +36,7 @@ public class DocValuesStatsCollector implements Collector {
     if (!shouldProcess) {
       // Stats cannot be computed for this segment, therefore consider all matching documents as a 'miss'. 
       return new LeafCollector() {
-        @Override public void setScorer(Scorer scorer) throws IOException {}
+        @Override public void setScorer(Scorable scorer) throws IOException {}
 
         @Override
         public void collect(int doc) throws IOException {
@@ -47,7 +47,7 @@ public class DocValuesStatsCollector implements Collector {
     }
 
     return new LeafCollector() {
-      @Override public void setScorer(Scorer scorer) throws IOException {}
+      @Override public void setScorer(Scorable scorer) throws IOException {}
 
       @Override
       public void collect(int doc) throws IOException {
@@ -57,8 +57,8 @@ public class DocValuesStatsCollector implements Collector {
   }
 
   @Override
-  public boolean needsScores() {
-    return false;
+  public ScoreMode scoreMode() {
+    return ScoreMode.COMPLETE_NO_SCORES;
   }
 
 }

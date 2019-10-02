@@ -27,6 +27,8 @@ import org.apache.lucene.search.ConstantScoreScorer;
 import org.apache.lucene.search.ConstantScoreWeight;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TwoPhaseIterator;
 import org.apache.lucene.search.Weight;
@@ -51,6 +53,13 @@ final class LatLonDocValuesDistanceQuery extends Query {
     this.latitude = latitude;
     this.longitude = longitude;
     this.radiusMeters = radiusMeters;
+  }
+
+  @Override
+  public void visit(QueryVisitor visitor) {
+    if (visitor.acceptField(field)) {
+      visitor.visitLeaf(this);
+    }
   }
 
   @Override
@@ -92,7 +101,7 @@ final class LatLonDocValuesDistanceQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
     return new ConstantScoreWeight(this, boost) {
 
       private final GeoEncodingUtils.DistancePredicate distancePredicate = GeoEncodingUtils.createDistancePredicate(latitude, longitude, radiusMeters);
@@ -125,7 +134,7 @@ final class LatLonDocValuesDistanceQuery extends Query {
           }
 
         };
-        return new ConstantScoreScorer(this, boost, iterator);
+        return new ConstantScoreScorer(this, boost, scoreMode, iterator);
       }
 
       @Override

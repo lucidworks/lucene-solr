@@ -16,18 +16,19 @@
  */
 package org.apache.solr.handler.component;
 
-import static org.apache.solr.util.stats.InstrumentedHttpRequestExecutor.KNOWN_METRIC_NAME_STRATEGIES;
+import static org.apache.solr.util.stats.InstrumentedHttpListenerFactory.KNOWN_METRIC_NAME_STRATEGIES;
 
 import com.google.common.annotations.VisibleForTesting;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -38,24 +39,30 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.http.client.HttpClient;
-import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.solr.client.solrj.SolrClient;
+import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.impl.Http2SolrClient;
 import org.apache.solr.client.solrj.impl.HttpClientUtil;
-import org.apache.solr.client.solrj.impl.LBHttpSolrClient;
-import org.apache.solr.client.solrj.impl.LBHttpSolrClient.Builder;
+import org.apache.solr.client.solrj.impl.HttpSolrClient;
+import org.apache.solr.client.solrj.impl.LBHttp2SolrClient;
+import org.apache.solr.client.solrj.impl.LBSolrClient;
+import org.apache.solr.client.solrj.impl.PreferenceRule;
 import org.apache.solr.client.solrj.request.QueryRequest;
+import org.apache.solr.cloud.NodesSysPropsCacher;
 import org.apache.solr.cloud.ZkController;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.Replica;
+import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.CommonParams;
-import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.ShardParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.ExecutorUtil;
+import org.apache.solr.common.util.IOUtils;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.common.util.URLUtil;
@@ -64,15 +71,13 @@ import org.apache.solr.core.SolrInfoBean;
 import org.apache.solr.metrics.SolrMetricManager;
 import org.apache.solr.metrics.SolrMetricProducer;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.security.HttpClientBuilderPlugin;
 import org.apache.solr.update.UpdateShardHandlerConfig;
 import org.apache.solr.util.DefaultSolrThreadFactory;
-import org.apache.solr.util.stats.HttpClientMetricNameStrategy;
-import org.apache.solr.util.stats.InstrumentedHttpRequestExecutor;
-import org.apache.solr.util.stats.InstrumentedPoolingHttpClientConnectionManager;
+import org.apache.solr.util.stats.InstrumentedHttpListenerFactory;
 import org.apache.solr.util.stats.MetricUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 
 public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.apache.solr.util.plugin.PluginInfoInitialized, SolrMetricProducer {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -95,15 +100,10 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
       false
   );
 
-  protected InstrumentedPoolingHttpClientConnectionManager clientConnectionManager;
-  protected CloseableHttpClient defaultClient;
-  protected InstrumentedHttpRequestExecutor httpRequestExecutor;
-  private LBHttpSolrClient loadbalancer;
-  //default values:
-  int soTimeout = HttpClientUtil.DEFAULT_SO_TIMEOUT;
-  int connectionTimeout = HttpClientUtil.DEFAULT_CONNECT_TIMEOUT;
-  int maxConnectionsPerHost = HttpClientUtil.DEFAULT_MAXCONNECTIONSPERHOST;
-  int maxConnections = HttpClientUtil.DEFAULT_MAXCONNECTIONS;
+  protected volatile Http2SolrClient defaultClient;
+  protected InstrumentedHttpListenerFactory httpListenerFactory;
+  private LBHttp2SolrClient loadbalancer;
+
   int corePoolSize = 0;
   int maximumPoolSize = Integer.MAX_VALUE;
   int keepAliveTime = 5;
@@ -115,9 +115,7 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
 
   private String scheme = null;
 
-  private HttpClientMetricNameStrategy metricNameStrategy;
-
-  private String metricTag;
+  private InstrumentedHttpListenerFactory.NameStrategy metricNameStrategy;
 
   protected final Random r = new Random();
 
@@ -164,8 +162,21 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
   /**
    * Get {@link ShardHandler} that uses custom http client.
    */
-  public ShardHandler getShardHandler(final HttpClient httpClient){
+  public ShardHandler getShardHandler(final Http2SolrClient httpClient){
     return new HttpShardHandler(this, httpClient);
+  }
+
+  @Deprecated
+  public ShardHandler getShardHandler(final HttpClient httpClient) {
+    // a little hack for backward-compatibility when we are moving from apache http client to jetty client
+    return new HttpShardHandler(this, null) {
+      @Override
+      protected NamedList<Object> request(String url, SolrRequest req) throws IOException, SolrServerException {
+        try (SolrClient client = new HttpSolrClient.Builder(url).withHttpClient(httpClient).build()) {
+          return client.request(req);
+        }
+      }
+    };
   }
 
   /**
@@ -190,7 +201,6 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
   public void init(PluginInfo info) {
     StringBuilder sb = new StringBuilder();
     NamedList args = info.initArgs;
-    this.soTimeout = getParameter(args, HttpClientUtil.PROP_SO_TIMEOUT, soTimeout,sb);
     this.scheme = getParameter(args, INIT_URL_SCHEME, null,sb);
     if(StringUtils.endsWith(this.scheme, "://")) {
       this.scheme = StringUtils.removeEnd(this.scheme, "://");
@@ -203,9 +213,6 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
           "Unknown metricNameStrategy: " + strategy + " found. Must be one of: " + KNOWN_METRIC_NAME_STRATEGIES.keySet());
     }
 
-    this.connectionTimeout = getParameter(args, HttpClientUtil.PROP_CONNECTION_TIMEOUT, connectionTimeout, sb);
-    this.maxConnectionsPerHost = getParameter(args, HttpClientUtil.PROP_MAX_CONNECTIONS_PER_HOST, maxConnectionsPerHost,sb);
-    this.maxConnections = getParameter(args, HttpClientUtil.PROP_MAX_CONNECTIONS, maxConnections,sb);
     this.corePoolSize = getParameter(args, INIT_CORE_POOL_SIZE, corePoolSize,sb);
     this.maximumPoolSize = getParameter(args, INIT_MAX_POOL_SIZE, maximumPoolSize,sb);
     this.keepAliveTime = getParameter(args, MAX_THREAD_IDLE_TIME, keepAliveTime,sb);
@@ -244,31 +251,25 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
         new DefaultSolrThreadFactory("httpShardExecutor")
     );
 
-    ModifiableSolrParams clientParams = getClientParams();
-    httpRequestExecutor = new InstrumentedHttpRequestExecutor(this.metricNameStrategy);
-    clientConnectionManager = new InstrumentedPoolingHttpClientConnectionManager(HttpClientUtil.getSchemaRegisteryProvider().getSchemaRegistry());
-    this.defaultClient = HttpClientUtil.createClient(clientParams, clientConnectionManager, false, httpRequestExecutor);
-    this.loadbalancer = createLoadbalancer(defaultClient);
+    this.httpListenerFactory = new InstrumentedHttpListenerFactory(this.metricNameStrategy);
+    int connectionTimeout = getParameter(args, HttpClientUtil.PROP_CONNECTION_TIMEOUT,
+        HttpClientUtil.DEFAULT_CONNECT_TIMEOUT, sb);
+    int maxConnectionsPerHost = getParameter(args, HttpClientUtil.PROP_MAX_CONNECTIONS_PER_HOST,
+        HttpClientUtil.DEFAULT_MAXCONNECTIONSPERHOST, sb);
+    int soTimeout = getParameter(args, HttpClientUtil.PROP_SO_TIMEOUT,
+        HttpClientUtil.DEFAULT_SO_TIMEOUT, sb);
+
+    this.defaultClient = new Http2SolrClient.Builder()
+        .connectionTimeout(connectionTimeout)
+        .idleTimeout(soTimeout)
+        .maxConnectionsPerHost(maxConnectionsPerHost).build();
+    this.defaultClient.addListenerFactory(this.httpListenerFactory);
+    this.loadbalancer = new LBHttp2SolrClient(defaultClient);
   }
 
-  protected ModifiableSolrParams getClientParams() {
-    ModifiableSolrParams clientParams = new ModifiableSolrParams();
-    clientParams.set(HttpClientUtil.PROP_MAX_CONNECTIONS_PER_HOST, maxConnectionsPerHost);
-    clientParams.set(HttpClientUtil.PROP_MAX_CONNECTIONS, maxConnections);
-    return clientParams;
-  }
-
-  protected ExecutorService getThreadPoolExecutor(){
-    return this.commExecutor;
-  }
-
-  protected LBHttpSolrClient createLoadbalancer(HttpClient httpClient){
-    LBHttpSolrClient client = new Builder()
-        .withHttpClient(httpClient)
-        .withConnectionTimeout(connectionTimeout)
-        .withSocketTimeout(soTimeout)
-        .build();
-    return client;
+  @Override
+  public void setSecurityBuilder(HttpClientBuilderPlugin clientBuilderPlugin) {
+    clientBuilderPlugin.setup(defaultClient);
   }
 
   protected <T> T getParameter(NamedList initArgs, String configKey, T defaultValue, StringBuilder sb) {
@@ -293,10 +294,7 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
         }
       } finally { 
         if (defaultClient != null) {
-          HttpClientUtil.close(defaultClient);
-        }
-        if (clientConnectionManager != null)  {
-          clientConnectionManager.close();
+          IOUtils.closeQuietly(defaultClient);
         }
       }
     }
@@ -309,17 +307,17 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
    * @param urls The list of solr server urls to load balance across
    * @return The response from the request
    */
-  public LBHttpSolrClient.Rsp makeLoadBalancedRequest(final QueryRequest req, List<String> urls)
+  public LBSolrClient.Rsp makeLoadBalancedRequest(final QueryRequest req, List<String> urls)
     throws SolrServerException, IOException {
     return loadbalancer.request(newLBHttpSolrClientReq(req, urls));
   }
 
-  protected LBHttpSolrClient.Req newLBHttpSolrClientReq(final QueryRequest req, List<String> urls) {
+  protected LBSolrClient.Req newLBHttpSolrClientReq(final QueryRequest req, List<String> urls) {
     int numServersToTry = (int)Math.floor(urls.size() * this.permittedLoadBalancerRequestsMaximumFraction);
     if (numServersToTry < this.permittedLoadBalancerRequestsMinimumAbsolute) {
       numServersToTry = this.permittedLoadBalancerRequestsMinimumAbsolute;
     }
-    return new LBHttpSolrClient.Req(req, urls, numServersToTry);
+    return new LBSolrClient.Req(req, urls, numServersToTry);
   }
 
   /**
@@ -340,7 +338,7 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
   }
 
   /**
-   * A distributed request is made via {@link LBHttpSolrClient} to the first live server in the URL list.
+   * A distributed request is made via {@link LBSolrClient} to the first live server in the URL list.
    * This means it is just as likely to choose current host as any of the other hosts.
    * This function makes sure that the cores are sorted according to the given list of preferences.
    * E.g. If all nodes prefer local cores then a bad/heavily-loaded node will receive less requests from 
@@ -348,31 +346,26 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
    * to one bad node.
    */
   static class NodePreferenceRulesComparator implements Comparator<Object> {
-    private static class PreferenceRule {
-      public final String name;
-      public final String value;
-
-      public PreferenceRule(String name, String value) {
-        this.name = name;
-        this.value = value;
-      }
-    }
 
     private final SolrQueryRequest request;
+    private final NodesSysPropsCacher sysPropsCache;
+    private final String nodeName;
     private List<PreferenceRule> preferenceRules;
     private String localHostAddress = null;
 
-    public NodePreferenceRulesComparator(final List<String> sortRules, final SolrQueryRequest request) {
+    public NodePreferenceRulesComparator(final List<PreferenceRule> sortRules, final SolrQueryRequest request) {
       this.request = request;
-      this.preferenceRules = new ArrayList<PreferenceRule>(sortRules.size());
-      sortRules.forEach(rule -> {
-        String[] parts = rule.split(":", 2);
-        if (parts.length != 2) {
-          throw new IllegalArgumentException("Invalid " + ShardParams.SHARDS_PREFERENCE + " rule: " + rule);
-        }
-        this.preferenceRules.add(new PreferenceRule(parts[0], parts[1])); 
-      });
+      if (request != null && request.getCore().getCoreContainer().getZkController() != null) {
+        ZkController zkController = request.getCore().getCoreContainer().getZkController();
+        sysPropsCache = zkController.getSysPropsCacher();
+        nodeName = zkController.getNodeName();
+      } else {
+        sysPropsCache = null;
+        nodeName = null;
+      }
+      this.preferenceRules = sortRules;
     }
+
     @Override
     public int compare(Object left, Object right) {
       for (PreferenceRule preferenceRule: this.preferenceRules) {
@@ -387,6 +380,14 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
             lhs = hasCoreUrlPrefix(left, preferenceRule.value);
             rhs = hasCoreUrlPrefix(right, preferenceRule.value);
             break;
+          case ShardParams.SHARDS_PREFERENCE_NODE_WITH_SAME_SYSPROP:
+            if (sysPropsCache == null) {
+              throw new IllegalArgumentException("Unable to get the NodesSysPropsCacher" +
+                  " on sorting replicas by preference:"+ preferenceRule.value);
+            }
+            lhs = hasSameMetric(left, preferenceRule.value);
+            rhs = hasSameMetric(right, preferenceRule.value);
+            break;
           default:
             throw new IllegalArgumentException("Invalid " + ShardParams.SHARDS_PREFERENCE + " type: " + preferenceRule.name);
         }
@@ -396,6 +397,19 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
       }
       return 0;
     }
+
+    private boolean hasSameMetric(Object o, String metricTag) {
+      if (!(o instanceof Replica)) {
+        return false;
+      }
+
+      Collection<String> tags = Collections.singletonList(metricTag);
+      String otherNodeName = ((Replica) o).getNodeName();
+      Map<String, Object> currentNodeMetric = sysPropsCache.getSysProps(nodeName, tags);
+      Map<String, Object> otherNodeMetric = sysPropsCache.getSysProps(otherNodeName, tags);
+      return currentNodeMetric.equals(otherNodeMetric);
+    }
+
     private boolean hasCoreUrlPrefix(Object o, String prefix) {
       final String s;
       if (o instanceof String) {
@@ -437,9 +451,18 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
 
   protected ReplicaListTransformer getReplicaListTransformer(final SolrQueryRequest req) {
     final SolrParams params = req.getParams();
+    ZkController zkController = req.getCore().getCoreContainer().getZkController();
+    String defaultShardPreference = "";
+    if (zkController != null) {
+      defaultShardPreference = zkController.getZkStateReader().getClusterProperties()
+          .getOrDefault(ZkStateReader.DEFAULT_SHARD_PREFERENCES, "")
+          .toString();
+    }
+
+
     @SuppressWarnings("deprecation")
     final boolean preferLocalShards = params.getBool(CommonParams.PREFER_LOCAL_SHARDS, false);
-    final String shardsPreferenceSpec = params.get(ShardParams.SHARDS_PREFERENCE, "");
+    final String shardsPreferenceSpec = params.get(ShardParams.SHARDS_PREFERENCE, defaultShardPreference);
 
     if (preferLocalShards || !shardsPreferenceSpec.isEmpty()) {
       if (preferLocalShards && !shardsPreferenceSpec.isEmpty()) {
@@ -448,9 +471,9 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
           "preferLocalShards is deprecated and must not be used with shards.preference" 
         );
       }
-      List<String> preferenceRules = StrUtils.splitSmart(shardsPreferenceSpec, ',');
+      List<PreferenceRule> preferenceRules = PreferenceRule.from(shardsPreferenceSpec);
       if (preferLocalShards) {
-        preferenceRules.add(ShardParams.SHARDS_PREFERENCE_REPLICA_LOCATION + ":" + ShardParams.REPLICA_LOCAL);
+        preferenceRules.add(new PreferenceRule(ShardParams.SHARDS_PREFERENCE_REPLICA_LOCATION, ShardParams.REPLICA_LOCAL));
       }
 
       return new ShufflingReplicaListTransformer(r) {
@@ -507,10 +530,8 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
 
   @Override
   public void initializeMetrics(SolrMetricManager manager, String registry, String tag, String scope) {
-    this.metricTag = tag;
     String expandedScope = SolrMetricManager.mkName(scope, SolrInfoBean.Category.QUERY.name());
-    clientConnectionManager.initializeMetrics(manager, registry, tag, expandedScope);
-    httpRequestExecutor.initializeMetrics(manager, registry, tag, expandedScope);
+    httpListenerFactory.initializeMetrics(manager, registry, tag, expandedScope);
     commExecutor = MetricUtils.instrumentedExecutorService(commExecutor, null,
         manager.registry(registry),
         SolrMetricManager.mkName("httpShardExecutor", expandedScope, "threadPool"));

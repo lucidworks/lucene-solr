@@ -28,6 +28,8 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.LongValues;
 import org.apache.lucene.search.LongValuesSource;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TwoPhaseIterator;
 import org.apache.lucene.search.Weight;
@@ -133,6 +135,11 @@ public final class LongRange extends Range {
     }
 
     @Override
+    public void visit(QueryVisitor visitor) {
+      visitor.visitLeaf(this);
+    }
+
+    @Override
     public Query rewrite(IndexReader reader) throws IOException {
       if (fastMatchQuery != null) {
         final Query fastMatchRewritten = fastMatchQuery.rewrite(reader);
@@ -144,10 +151,10 @@ public final class LongRange extends Range {
     }
 
     @Override
-    public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
       final Weight fastMatchWeight = fastMatchQuery == null
           ? null
-          : searcher.createWeight(fastMatchQuery, false, 1f);
+          : searcher.createWeight(fastMatchQuery, ScoreMode.COMPLETE_NO_SCORES, 1f);
 
       return new ConstantScoreWeight(this, boost) {
         @Override
@@ -177,7 +184,7 @@ public final class LongRange extends Range {
               return 100; // TODO: use cost of range.accept()
             }
           };
-          return new ConstantScoreScorer(this, score(), twoPhase);
+          return new ConstantScoreScorer(this, score(), scoreMode, twoPhase);
         }
 
         @Override

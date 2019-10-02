@@ -29,12 +29,15 @@ import java.util.Map.Entry;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.FieldsProducer;
+import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.bloom.FuzzySet.ContainsResult;
-import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.BaseTermsEnum;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.Fields;
+import org.apache.lucene.index.ImpactsEnum;
 import org.apache.lucene.index.IndexFileNames;
+import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Terms;
@@ -289,7 +292,7 @@ public final class BloomFilteringPostingsFormat extends PostingsFormat {
       }
     }
 
-    static final class BloomFilteredTermsEnum extends TermsEnum {
+    static final class BloomFilteredTermsEnum extends BaseTermsEnum {
       private Terms delegateTerms;
       private TermsEnum delegateTermsEnum;
       private final FuzzySet filter;
@@ -371,6 +374,10 @@ public final class BloomFilteringPostingsFormat extends PostingsFormat {
         return delegate().postings(reuse, flags);
       }
 
+      @Override
+      public ImpactsEnum impacts(int flags) throws IOException {
+        return delegate().impacts(flags);
+      }
     }
 
     @Override
@@ -416,7 +423,7 @@ public final class BloomFilteringPostingsFormat extends PostingsFormat {
     }
 
     @Override
-    public void write(Fields fields) throws IOException {
+    public void write(Fields fields, NormsProducer norms) throws IOException {
 
       // Delegate must write first: it may have opened files
       // on creating the class
@@ -424,7 +431,7 @@ public final class BloomFilteringPostingsFormat extends PostingsFormat {
       // close them; alternatively, if we delayed pulling
       // the fields consumer until here, we could do it
       // afterwards:
-      delegateFieldsConsumer.write(fields);
+      delegateFieldsConsumer.write(fields, norms);
 
       for(String field : fields) {
         Terms terms = fields.terms(field);

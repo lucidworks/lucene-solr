@@ -19,16 +19,19 @@ package org.apache.lucene.index;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockAnalyzer;
@@ -129,9 +132,15 @@ abstract class BaseIndexFileFormatTestCase extends LuceneTestCase {
         queue.addAll(map.values());
         v = 2L * map.size() * RamUsageEstimator.NUM_BYTES_OBJECT_REF;
       } else {
-        v = super.accumulateObject(o, shallowSize, fieldValues, queue);
+        List<Object> references = new ArrayList<>();
+        v = super.accumulateObject(o, shallowSize, fieldValues, references);
+        for (Object r : references) {
+          // AssertingCodec adds Thread references to make sure objects are consumed in the right thread
+          if (r instanceof Thread == false) {
+            queue.add(r);
+          }
+        }
       }
-      // System.out.println(o.getClass() + "=" + v);
       return v;
     }
 
@@ -334,7 +343,7 @@ abstract class BaseIndexFileFormatTestCase extends LuceneTestCase {
     Directory dir = newFSDirectory(createTempDir("justSoYouGetSomeChannelErrors"));
     Codec codec = getCodec();
     
-    SegmentInfo segmentInfo = new SegmentInfo(dir, Version.LATEST, Version.LATEST, "_0", 1, false, codec, Collections.emptyMap(), StringHelper.randomId(), new HashMap<>(), null);
+    SegmentInfo segmentInfo = new SegmentInfo(dir, Version.LATEST, Version.LATEST, "_0", 1, false, codec, Collections.emptyMap(), StringHelper.randomId(), Collections.emptyMap(), null);
     FieldInfo proto = oneDocReader.getFieldInfos().fieldInfo("field");
     FieldInfo field = new FieldInfo(proto.name, proto.number, proto.hasVectors(), proto.omitsNorms(), proto.hasPayloads(), 
                                     proto.getIndexOptions(), proto.getDocValuesType(), proto.getDocValuesGen(), new HashMap<>(),
@@ -346,11 +355,51 @@ abstract class BaseIndexFileFormatTestCase extends LuceneTestCase {
                                                          segmentInfo, fieldInfos,
                                                          null, new IOContext(new FlushInfo(1, 20)));
     
-    SegmentReadState readState = new SegmentReadState(dir, segmentInfo, fieldInfos, IOContext.READ);
+    SegmentReadState readState = new SegmentReadState(dir, segmentInfo, fieldInfos, false, IOContext.READ, Collections.emptyMap());
 
     // PostingsFormat
+    NormsProducer fakeNorms = new NormsProducer() {
+
+      @Override
+      public void close() throws IOException {}
+
+      @Override
+      public long ramBytesUsed() {
+        return 0;
+      }
+
+      @Override
+      public NumericDocValues getNorms(FieldInfo field) throws IOException {
+        if (field.hasNorms() == false) {
+          return null;
+        }
+        return oneDocReader.getNormValues(field.name);
+      }
+
+      @Override
+      public void checkIntegrity() throws IOException {}
+      
+    };
     try (FieldsConsumer consumer = codec.postingsFormat().fieldsConsumer(writeState)) {
-      consumer.write(MultiFields.getFields(oneDocReader));
+      final Fields fields = new Fields() {
+        TreeSet<String> indexedFields = new TreeSet<>(FieldInfos.getIndexedFields(oneDocReader));
+
+        @Override
+        public Iterator<String> iterator() {
+          return indexedFields.iterator();
+        }
+
+        @Override
+        public Terms terms(String field) throws IOException {
+          return oneDocReader.terms(field);
+        }
+
+        @Override
+        public int size() {
+          return indexedFields.size();
+        }
+      };
+      consumer.write(fields, fakeNorms);
       IOUtils.close(consumer);
       IOUtils.close(consumer);
     }
@@ -655,5 +704,20 @@ abstract class BaseIndexFileFormatTestCase extends LuceneTestCase {
     }
     
     Rethrow.rethrow(e);
+  }
+
+  /**
+   * Returns {@code false} if only the regular fields reader should be tested,
+   * and {@code true} if only the merge instance should be tested.
+   */
+  protected boolean shouldTestMergeInstance() {
+    return false;
+  }
+
+  protected final DirectoryReader maybeWrapWithMergingReader(DirectoryReader r) throws IOException {
+    if (shouldTestMergeInstance()) {
+      r = new MergingDirectoryReaderWrapper(r);
+    }
+    return r;
   }
 }

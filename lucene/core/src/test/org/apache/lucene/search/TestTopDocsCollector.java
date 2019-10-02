@@ -18,10 +18,14 @@ package org.apache.lucene.search;
 
 
 import java.io.IOException;
+import java.util.Arrays;
 
 import org.apache.lucene.document.Document;
-import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.NoMergePolicy;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
@@ -42,15 +46,7 @@ public class TestTopDocsCollector extends LuceneTestCase {
         return EMPTY_TOPDOCS;
       }
       
-      float maxScore = Float.NaN;
-      if (start == 0) {
-        maxScore = results[0].score;
-      } else {
-        for (int i = pq.size(); i > 1; i--) { pq.pop(); }
-        maxScore = pq.pop().score;
-      }
-      
-      return new TopDocs(totalHits, results, maxScore);
+      return new TopDocs(new TotalHits(totalHits, totalHitsRelation), results);
     }
     
     @Override
@@ -65,15 +61,15 @@ public class TestTopDocsCollector extends LuceneTestCase {
         }
 
         @Override
-        public void setScorer(Scorer scorer) {
+        public void setScorer(Scorable scorer) {
           // Don't do anything. Assign scores in random
         }
       };
     }
     
     @Override
-    public boolean needsScores() {
-      return false;
+    public ScoreMode scoreMode() {
+      return ScoreMode.COMPLETE_NO_SCORES;
     }
 
   }
@@ -184,18 +180,6 @@ public class TestTopDocsCollector extends LuceneTestCase {
     assertEquals(5, tdc.topDocs(10).scoreDocs.length);
   }
   
-  public void testMaxScore() throws Exception {
-    // ask for all results
-    TopDocsCollector<ScoreDoc> tdc = doSearch(15);
-    TopDocs td = tdc.topDocs();
-    assertEquals(MAX_SCORE, td.getMaxScore(), 0f);
-    
-    // ask for 5 last results
-    tdc = doSearch(15);
-    td = tdc.topDocs(10);
-    assertEquals(MAX_SCORE, td.getMaxScore(), 0f);
-  }
-  
   // This does not test the PQ's correctness, but whether topDocs()
   // implementations return the results in decreasing score order.
   public void testResultsOrder() throws Exception {
@@ -207,5 +191,135 @@ public class TestTopDocsCollector extends LuceneTestCase {
       assertTrue(sd[i - 1].score >= sd[i].score);
     }
   }
-  
+
+  private static class ScoreAndDoc extends Scorable {
+    int doc = -1;
+    float score;
+    Float minCompetitiveScore = null;
+
+    @Override
+    public void setMinCompetitiveScore(float minCompetitiveScore) {
+      this.minCompetitiveScore = minCompetitiveScore;
+    }
+
+    @Override
+    public int docID() {
+      return doc;
+    }
+
+    @Override
+    public float score() throws IOException {
+      return score;
+    }
+  }
+
+  public void testSetMinCompetitiveScore() throws Exception {
+    Directory dir = newDirectory();
+    IndexWriter w = new IndexWriter(dir, newIndexWriterConfig().setMergePolicy(NoMergePolicy.INSTANCE));
+    Document doc = new Document();
+    w.addDocuments(Arrays.asList(doc, doc, doc, doc));
+    w.flush();
+    w.addDocuments(Arrays.asList(doc, doc));
+    w.flush();
+    IndexReader reader = DirectoryReader.open(w);
+    assertEquals(2, reader.leaves().size());
+    w.close();
+
+    TopScoreDocCollector collector = TopScoreDocCollector.create(2, null, 1);
+    ScoreAndDoc scorer = new ScoreAndDoc();
+
+    LeafCollector leafCollector = collector.getLeafCollector(reader.leaves().get(0));
+    leafCollector.setScorer(scorer);
+    assertNull(scorer.minCompetitiveScore);
+
+    scorer.doc = 0;
+    scorer.score = 1;
+    leafCollector.collect(0);
+    assertNull(scorer.minCompetitiveScore);
+
+    scorer.doc = 1;
+    scorer.score = 2;
+    leafCollector.collect(1);
+    assertEquals(Math.nextUp(1f), scorer.minCompetitiveScore, 0f);
+
+    scorer.doc = 2;
+    scorer.score = 0.5f;
+    // Make sure we do not call setMinCompetitiveScore for non-competitive hits
+    scorer.minCompetitiveScore = Float.NaN;
+    leafCollector.collect(2);
+    assertTrue(Float.isNaN(scorer.minCompetitiveScore));
+
+    scorer.doc = 3;
+    scorer.score = 4;
+    leafCollector.collect(3);
+    assertEquals(Math.nextUp(2f), scorer.minCompetitiveScore, 0f);
+
+    // Make sure the min score is set on scorers on new segments
+    scorer = new ScoreAndDoc();
+    leafCollector = collector.getLeafCollector(reader.leaves().get(1));
+    leafCollector.setScorer(scorer);
+    assertEquals(Math.nextUp(2f), scorer.minCompetitiveScore, 0f);
+
+    scorer.doc = 0;
+    scorer.score = 1;
+    leafCollector.collect(0);
+    assertEquals(Math.nextUp(2f), scorer.minCompetitiveScore, 0f);
+
+    scorer.doc = 1;
+    scorer.score = 3;
+    leafCollector.collect(1);
+    assertEquals(Math.nextUp(3f), scorer.minCompetitiveScore, 0f);
+
+    reader.close();
+    dir.close();
+  }
+
+  public void testTotalHits() throws Exception {
+    Directory dir = newDirectory();
+    IndexWriter w = new IndexWriter(dir, newIndexWriterConfig().setMergePolicy(NoMergePolicy.INSTANCE));
+    Document doc = new Document();
+    w.addDocuments(Arrays.asList(doc, doc, doc, doc));
+    w.flush();
+    w.addDocuments(Arrays.asList(doc, doc, doc, doc, doc, doc));
+    w.flush();
+    IndexReader reader = DirectoryReader.open(w);
+    assertEquals(2, reader.leaves().size());
+    w.close();
+
+    for (int totalHitsThreshold = 0; totalHitsThreshold < 20; ++ totalHitsThreshold) {
+      TopScoreDocCollector collector = TopScoreDocCollector.create(2, null, totalHitsThreshold);
+      ScoreAndDoc scorer = new ScoreAndDoc();
+
+      LeafCollector leafCollector = collector.getLeafCollector(reader.leaves().get(0));
+      leafCollector.setScorer(scorer);
+
+      scorer.doc = 0;
+      scorer.score = 3;
+      leafCollector.collect(0);
+
+      scorer.doc = 1;
+      scorer.score = 3;
+      leafCollector.collect(1);
+
+      leafCollector = collector.getLeafCollector(reader.leaves().get(1));
+      leafCollector.setScorer(scorer);
+
+      scorer.doc = 1;
+      scorer.score = 3;
+      leafCollector.collect(1);
+
+      scorer.doc = 5;
+      scorer.score = 4;
+      leafCollector.collect(1);
+
+      TopDocs topDocs = collector.topDocs();
+      assertEquals(4, topDocs.totalHits.value);
+      assertEquals(totalHitsThreshold < 4, scorer.minCompetitiveScore != null);
+      assertEquals(totalHitsThreshold < 4 ? TotalHits.Relation.GREATER_THAN_OR_EQUAL_TO : TotalHits.Relation.EQUAL_TO, topDocs.totalHits.relation);
+    }
+
+    reader.close();
+    dir.close();
+  }
+
 }

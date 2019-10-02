@@ -31,15 +31,19 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.FieldsProducer;
+import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.TermStats;
+import org.apache.lucene.index.BaseTermsEnum;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.Fields;
+import org.apache.lucene.index.ImpactsEnum;
 import org.apache.lucene.index.IndexFileNames;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.SegmentWriteState;
+import org.apache.lucene.index.SlowImpactsEnum;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.IndexInput;
@@ -227,7 +231,7 @@ public final class RAMOnlyPostingsFormat extends PostingsFormat {
     }
 
     @Override
-    public void write(Fields fields) throws IOException {
+    public void write(Fields fields, NormsProducer norms) throws IOException {
       for(String field : fields) {
 
         Terms terms = fields.terms(field);
@@ -400,7 +404,7 @@ public final class RAMOnlyPostingsFormat extends PostingsFormat {
     }
   }
 
-  static class RAMTermsEnum extends TermsEnum {
+  static class RAMTermsEnum extends BaseTermsEnum {
     Iterator<String> it;
     String current;
     private final RAMField ramField;
@@ -440,7 +444,7 @@ public final class RAMOnlyPostingsFormat extends PostingsFormat {
         }
       }
     }
-
+    
     @Override
     public void seekExact(long ord) {
       throw new UnsupportedOperationException();
@@ -472,6 +476,10 @@ public final class RAMOnlyPostingsFormat extends PostingsFormat {
       return new RAMDocsEnum(ramField.termToDocs.get(current));
     }
 
+    @Override
+    public ImpactsEnum impacts(int flags) throws IOException {
+      return new SlowImpactsEnum(postings(null, PostingsEnum.FREQS));
+    }
   }
 
   private static class RAMDocsEnum extends PostingsEnum {

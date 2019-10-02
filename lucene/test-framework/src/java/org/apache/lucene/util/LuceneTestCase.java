@@ -87,9 +87,11 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.QueryCache;
 import org.apache.lucene.search.QueryCachingPolicy;
 import org.apache.lucene.store.BaseDirectoryWrapper;
+import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.store.FSLockFactory;
+import org.apache.lucene.store.FileSwitchDirectory;
 import org.apache.lucene.store.FlushInfo;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.LockFactory;
@@ -211,7 +213,9 @@ import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
 @ThreadLeakFilters(defaultFilters = true, filters = {
     QuickPatchThreadsFilter.class
 })
-@TestRuleLimitSysouts.Limit(bytes = TestRuleLimitSysouts.DEFAULT_SYSOUT_BYTES_THRESHOLD)
+@TestRuleLimitSysouts.Limit(
+    bytes = TestRuleLimitSysouts.DEFAULT_LIMIT,
+    hardLimit = TestRuleLimitSysouts.DEFAULT_HARD_LIMIT)
 public abstract class LuceneTestCase extends Assert {
 
   // --------------------------------------------------------------------
@@ -488,6 +492,7 @@ public abstract class LuceneTestCase extends Assert {
   static {
     CORE_DIRECTORIES = new ArrayList<>(FS_DIRECTORIES);
     CORE_DIRECTORIES.add("RAMDirectory");
+    CORE_DIRECTORIES.add(ByteBuffersDirectory.class.getSimpleName());
   }
   
   /** A {@link org.apache.lucene.search.QueryCachingPolicy} that randomly caches. */
@@ -1281,8 +1286,8 @@ public abstract class LuceneTestCase extends Assert {
       if (previousLines.length == currentLines.length) {
         for (int i = 0; i < previousLines.length; i++) {
           if (!previousLines[i].equals(currentLines[i])) {
-            diff.append("- " + previousLines[i] + "\n");
-            diff.append("+ " + currentLines[i] + "\n");
+            diff.append("- ").append(previousLines[i]).append("\n");
+            diff.append("+ ").append(currentLines[i]).append("\n");
           }
         }
       } else {
@@ -1411,12 +1416,23 @@ public abstract class LuceneTestCase extends Assert {
       }
 
       Directory fsdir = newFSDirectoryImpl(clazz, f, lf);
+      if (rarely()) {
+
+      }
       BaseDirectoryWrapper wrapped = wrapDirectory(random(), fsdir, bare);
       return wrapped;
     } catch (Exception e) {
       Rethrow.rethrow(e);
       throw null; // dummy to prevent compiler failure
     }
+  }
+
+  private static Directory newFileSwitchDirectory(Random random, Directory dir1, Directory dir2) {
+    List<String> fileExtensions =
+        Arrays.asList("fdt", "fdx", "tim", "tip", "si", "fnm", "pos", "dii", "dim", "nvm", "nvd", "dvm", "dvd");
+    Collections.shuffle(fileExtensions, random);
+    fileExtensions = fileExtensions.subList(0, 1 + random.nextInt(fileExtensions.size()));
+    return new FileSwitchDirectory(new HashSet<>(fileExtensions), dir1, dir2, true);
   }
 
   /**
@@ -1621,6 +1637,16 @@ public abstract class LuceneTestCase extends Assert {
     if (clazzName.equals("random")) {
       if (rarely(random)) {
         clazzName = RandomPicks.randomFrom(random, CORE_DIRECTORIES);
+      } else if (rarely(random)) {
+        String clazzName1 = rarely(random)
+            ? RandomPicks.randomFrom(random, CORE_DIRECTORIES)
+            : ByteBuffersDirectory.class.getName();
+        String clazzName2 = rarely(random)
+            ? RandomPicks.randomFrom(random, CORE_DIRECTORIES)
+            : ByteBuffersDirectory.class.getName();
+        return newFileSwitchDirectory(random,
+            newDirectoryImpl(random, clazzName1, lf),
+            newDirectoryImpl(random, clazzName2, lf));
       } else {
         clazzName = "RAMDirectory";
       }
@@ -1666,7 +1692,7 @@ public abstract class LuceneTestCase extends Assert {
     Random random = random();
       
     for (int i = 0, c = random.nextInt(6)+1; i < c; i++) {
-      switch(random.nextInt(4)) {
+      switch(random.nextInt(5)) {
       case 0:
         // will create no FC insanity in atomic case, as ParallelLeafReader has own cache key:
         if (VERBOSE) {
@@ -1717,6 +1743,25 @@ public abstract class LuceneTestCase extends Assert {
           r = new MismatchedLeafReader((LeafReader)r, random);
         } else if (r instanceof DirectoryReader) {
           r = new MismatchedDirectoryReader((DirectoryReader)r, random);
+        }
+        break;
+      case 4:
+        if (VERBOSE) {
+          System.out.println("NOTE: LuceneTestCase.wrapReader: wrapping previous reader=" + r + " with MergingCodecReader");
+        }
+        if (r instanceof CodecReader) {
+          r = new MergingCodecReader((CodecReader) r);
+        } else if (r instanceof DirectoryReader) {
+          boolean allLeavesAreCodecReaders = true;
+          for (LeafReaderContext ctx : r.leaves()) {
+            if (ctx.reader() instanceof CodecReader == false) {
+              allLeavesAreCodecReaders = false;
+              break;
+            }
+          }
+          if (allLeavesAreCodecReaders) {
+            r = new MergingDirectoryReaderWrapper((DirectoryReader) r);
+          }
         }
         break;
       default:
@@ -1947,7 +1992,7 @@ public abstract class LuceneTestCase extends Assert {
 
   public void assertReaderEquals(String info, IndexReader leftReader, IndexReader rightReader) throws IOException {
     assertReaderStatisticsEquals(info, leftReader, rightReader);
-    assertFieldsEquals(info, leftReader, MultiFields.getFields(leftReader), MultiFields.getFields(rightReader), true);
+    assertTermsEquals(info, leftReader, rightReader, true);
     assertNormsEquals(info, leftReader, rightReader);
     assertStoredFieldsEquals(info, leftReader, rightReader);
     assertTermVectorsEquals(info, leftReader, rightReader);
@@ -1971,33 +2016,13 @@ public abstract class LuceneTestCase extends Assert {
   /** 
    * Fields api equivalency 
    */
-  public void assertFieldsEquals(String info, IndexReader leftReader, Fields leftFields, Fields rightFields, boolean deep) throws IOException {
-    // Fields could be null if there are no postings,
-    // but then it must be null for both
-    if (leftFields == null || rightFields == null) {
-      assertNull(info, leftFields);
-      assertNull(info, rightFields);
-      return;
-    }
-    assertFieldStatisticsEquals(info, leftFields, rightFields);
-    
-    Iterator<String> leftEnum = leftFields.iterator();
-    Iterator<String> rightEnum = rightFields.iterator();
-    
-    while (leftEnum.hasNext()) {
-      String field = leftEnum.next();
-      assertEquals(info, field, rightEnum.next());
-      assertTermsEquals(info, leftReader, leftFields.terms(field), rightFields.terms(field), deep);
-    }
-    assertFalse(rightEnum.hasNext());
-  }
+  public void assertTermsEquals(String info, IndexReader leftReader, IndexReader rightReader, boolean deep) throws IOException {
+    Set<String> leftFields = new HashSet<>(FieldInfos.getIndexedFields(leftReader));
+    Set<String> rightFields = new HashSet<>(FieldInfos.getIndexedFields(rightReader));
+    assertEquals(info, leftFields, rightFields);
 
-  /** 
-   * checks that top-level statistics on Fields are the same 
-   */
-  public void assertFieldStatisticsEquals(String info, Fields leftFields, Fields rightFields) throws IOException {
-    if (leftFields.size() != -1 && rightFields.size() != -1) {
-      assertEquals(info, leftFields.size(), rightFields.size());
+    for (String field : leftFields) {
+      assertTermsEquals(info, leftReader, MultiTerms.getTerms(leftReader, field), MultiTerms.getTerms(rightReader, field), deep);
     }
   }
 
@@ -2040,15 +2065,9 @@ public abstract class LuceneTestCase extends Assert {
    * checks collection-level statistics on Terms 
    */
   public void assertTermsStatisticsEquals(String info, Terms leftTerms, Terms rightTerms) throws IOException {
-    if (leftTerms.getDocCount() != -1 && rightTerms.getDocCount() != -1) {
-      assertEquals(info, leftTerms.getDocCount(), rightTerms.getDocCount());
-    }
-    if (leftTerms.getSumDocFreq() != -1 && rightTerms.getSumDocFreq() != -1) {
-      assertEquals(info, leftTerms.getSumDocFreq(), rightTerms.getSumDocFreq());
-    }
-    if (leftTerms.getSumTotalTermFreq() != -1 && rightTerms.getSumTotalTermFreq() != -1) {
-      assertEquals(info, leftTerms.getSumTotalTermFreq(), rightTerms.getSumTotalTermFreq());
-    }
+    assertEquals(info, leftTerms.getDocCount(), rightTerms.getDocCount());
+    assertEquals(info, leftTerms.getSumDocFreq(), rightTerms.getSumDocFreq());
+    assertEquals(info, leftTerms.getSumTotalTermFreq(), rightTerms.getSumTotalTermFreq());
     if (leftTerms.size() != -1 && rightTerms.size() != -1) {
       assertEquals(info, leftTerms.size(), rightTerms.size());
     }
@@ -2327,24 +2346,16 @@ public abstract class LuceneTestCase extends Assert {
    */
   public void assertTermStatsEquals(String info, TermsEnum leftTermsEnum, TermsEnum rightTermsEnum) throws IOException {
     assertEquals(info, leftTermsEnum.docFreq(), rightTermsEnum.docFreq());
-    if (leftTermsEnum.totalTermFreq() != -1 && rightTermsEnum.totalTermFreq() != -1) {
-      assertEquals(info, leftTermsEnum.totalTermFreq(), rightTermsEnum.totalTermFreq());
-    }
+    assertEquals(info, leftTermsEnum.totalTermFreq(), rightTermsEnum.totalTermFreq());
   }
   
   /** 
    * checks that norms are the same across all fields 
    */
   public void assertNormsEquals(String info, IndexReader leftReader, IndexReader rightReader) throws IOException {
-    Fields leftFields = MultiFields.getFields(leftReader);
-    Fields rightFields = MultiFields.getFields(rightReader);
-    // Fields could be null if there are no postings,
-    // but then it must be null for both
-    if (leftFields == null || rightFields == null) {
-      assertNull(info, leftFields);
-      assertNull(info, rightFields);
-      return;
-    }
+    Set<String> leftFields = new HashSet<>(FieldInfos.getIndexedFields(leftReader));
+    Set<String> rightFields = new HashSet<>(FieldInfos.getIndexedFields(rightReader));
+    assertEquals(info, leftFields, rightFields);
     
     for (String field : leftFields) {
       NumericDocValues leftNorms = MultiDocValues.getNormValues(leftReader, field);
@@ -2412,13 +2423,32 @@ public abstract class LuceneTestCase extends Assert {
     for (int i = 0; i < leftReader.maxDoc(); i++) {
       Fields leftFields = leftReader.getTermVectors(i);
       Fields rightFields = rightReader.getTermVectors(i);
-      assertFieldsEquals(info, leftReader, leftFields, rightFields, rarely());
+
+      // Fields could be null if there are no postings,
+      // but then it must be null for both
+      if (leftFields == null || rightFields == null) {
+        assertNull(info, leftFields);
+        assertNull(info, rightFields);
+        return;
+      }
+      if (leftFields.size() != -1 && rightFields.size() != -1) {
+        assertEquals(info, leftFields.size(), rightFields.size());
+      }
+
+      Iterator<String> leftEnum = leftFields.iterator();
+      Iterator<String> rightEnum = rightFields.iterator();
+      while (leftEnum.hasNext()) {
+        String field = leftEnum.next();
+        assertEquals(info, field, rightEnum.next());
+        assertTermsEquals(info, leftReader, leftFields.terms(field), rightFields.terms(field), rarely());
+      }
+      assertFalse(rightEnum.hasNext());
     }
   }
 
   private static Set<String> getDVFields(IndexReader reader) {
     Set<String> fields = new HashSet<>();
-    for(FieldInfo fi : MultiFields.getMergedFieldInfos(reader)) {
+    for(FieldInfo fi : FieldInfos.getMergedFieldInfos(reader)) {
       if (fi.getDocValuesType() != DocValuesType.NONE) {
         fields.add(fi.name);
       }
@@ -2563,8 +2593,8 @@ public abstract class LuceneTestCase extends Assert {
   // TODO: this is kinda stupid, we don't delete documents in the test.
   public void assertDeletedDocsEquals(String info, IndexReader leftReader, IndexReader rightReader) throws IOException {
     assert leftReader.numDeletedDocs() == rightReader.numDeletedDocs();
-    Bits leftBits = MultiFields.getLiveDocs(leftReader);
-    Bits rightBits = MultiFields.getLiveDocs(rightReader);
+    Bits leftBits = MultiBits.getLiveDocs(leftReader);
+    Bits rightBits = MultiBits.getLiveDocs(rightReader);
     
     if (leftBits == null || rightBits == null) {
       assertNull(info, leftBits);
@@ -2580,8 +2610,8 @@ public abstract class LuceneTestCase extends Assert {
   }
   
   public void assertFieldInfosEquals(String info, IndexReader leftReader, IndexReader rightReader) throws IOException {
-    FieldInfos leftInfos = MultiFields.getMergedFieldInfos(leftReader);
-    FieldInfos rightInfos = MultiFields.getMergedFieldInfos(rightReader);
+    FieldInfos leftInfos = FieldInfos.getMergedFieldInfos(leftReader);
+    FieldInfos rightInfos = FieldInfos.getMergedFieldInfos(rightReader);
     
     // TODO: would be great to verify more than just the names of the fields!
     TreeSet<String> left = new TreeSet<>();
@@ -2636,8 +2666,8 @@ public abstract class LuceneTestCase extends Assert {
   }
 
   public void assertPointsEquals(String info, IndexReader leftReader, IndexReader rightReader) throws IOException {
-    FieldInfos fieldInfos1 = MultiFields.getMergedFieldInfos(leftReader);
-    FieldInfos fieldInfos2 = MultiFields.getMergedFieldInfos(rightReader);
+    FieldInfos fieldInfos1 = FieldInfos.getMergedFieldInfos(leftReader);
+    FieldInfos fieldInfos2 = FieldInfos.getMergedFieldInfos(rightReader);
     for(FieldInfo fieldInfo1 : fieldInfos1) {
       if (fieldInfo1.getPointDataDimensionCount() != 0) {
         FieldInfo fieldInfo2 = fieldInfos2.fieldInfo(fieldInfo1.name);

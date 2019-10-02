@@ -190,7 +190,7 @@ public class SearchStream extends TupleStream implements Expressible  {
     }
 
 
-    QueryRequest request = new QueryRequest(params,  SolrRequest.METHOD.POST);
+    QueryRequest request = new QueryRequest(params, SolrRequest.METHOD.POST);
     try {
       QueryResponse response = request.process(cloudSolrClient, collection);
       SolrDocumentList docs = response.getResults();

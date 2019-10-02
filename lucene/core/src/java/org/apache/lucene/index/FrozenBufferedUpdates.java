@@ -34,6 +34,7 @@ import java.util.function.IntConsumer;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.ArrayUtil;
@@ -622,7 +623,7 @@ final class FrozenBufferedUpdates {
         final IndexSearcher searcher = new IndexSearcher(readerContext.reader());
         searcher.setQueryCache(null);
         query = searcher.rewrite(query);
-        final Weight weight = searcher.createWeight(query, false, 1);
+        final Weight weight = searcher.createWeight(query, ScoreMode.COMPLETE_NO_SCORES, 1);
         final Scorer scorer = weight.scorer(readerContext);
         if (scorer != null) {
           final DocIdSetIterator it = scorer.iterator();

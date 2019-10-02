@@ -31,8 +31,11 @@ import org.apache.lucene.index.PointValues.IntersectVisitor;
 import org.apache.lucene.index.PointValues.Relation;
 import org.apache.lucene.search.ConstantScoreScorer;
 import org.apache.lucene.search.ConstantScoreWeight;
+import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.DocIdSetBuilder;
@@ -75,7 +78,14 @@ final class LatLonPointInPolygonQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  public void visit(QueryVisitor visitor) {
+    if (visitor.acceptField(field)) {
+      visitor.visitLeaf(this);
+    }
+  }
+
+  @Override
+  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
 
     // I don't use RandomAccessWeight here: it's no good to approximate with "match all docs"; this is an inverted structure and should be
     // used in the first pass:
@@ -134,7 +144,18 @@ final class LatLonPointInPolygonQuery extends Query {
                            public void visit(int docID, byte[] packedValue) {
                              if (polygonPredicate.test(NumericUtils.sortableBytesToInt(packedValue, 0),
                                                        NumericUtils.sortableBytesToInt(packedValue, Integer.BYTES))) {
-                               adder.add(docID);
+                               visit(docID);
+                             }
+                           }
+
+                           @Override
+                           public void visit(DocIdSetIterator iterator, byte[] packedValue) throws IOException {
+                             if (polygonPredicate.test(NumericUtils.sortableBytesToInt(packedValue, 0),
+                                                       NumericUtils.sortableBytesToInt(packedValue, Integer.BYTES))) {
+                               int docID;
+                               while ((docID = iterator.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
+                                 visit(docID);
+                               }
                              }
                            }
 
@@ -157,7 +178,7 @@ final class LatLonPointInPolygonQuery extends Query {
                            }
                          });
 
-        return new ConstantScoreScorer(this, score(), result.build().iterator());
+        return new ConstantScoreScorer(this, score(), scoreMode, result.build().iterator());
       }
 
       @Override

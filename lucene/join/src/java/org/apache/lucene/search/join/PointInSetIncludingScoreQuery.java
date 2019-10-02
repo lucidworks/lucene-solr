@@ -42,15 +42,19 @@ import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.PointInSetQuery;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
+import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.BitSetIterator;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.FixedBitSet;
+import org.apache.lucene.util.RamUsageEstimator;
 
 // A TermsIncludingScoreQuery variant for point values:
-abstract class PointInSetIncludingScoreQuery extends Query {
+abstract class PointInSetIncludingScoreQuery extends Query implements Accountable {
+  protected static final long BASE_RAM_BYTES = RamUsageEstimator.shallowSizeOfInstance(PointInSetIncludingScoreQuery.class);
 
   static BiFunction<byte[], Class<? extends Number>, String> toString = (value, numericType) -> {
     if (Integer.class.equals(numericType)) {
@@ -75,6 +79,8 @@ abstract class PointInSetIncludingScoreQuery extends Query {
   final int bytesPerDim;
 
   final List<Float> aggregatedJoinScores;
+
+  private final long ramBytesUsed; // cache
 
   static abstract class Stream extends PointInSetQuery.Stream {
 
@@ -117,10 +123,22 @@ abstract class PointInSetIncludingScoreQuery extends Query {
     }
     sortedPackedPoints = builder.finish();
     sortedPackedPointsHashCode = sortedPackedPoints.hashCode();
+
+    this.ramBytesUsed = BASE_RAM_BYTES +
+        RamUsageEstimator.sizeOfObject(this.field) +
+        RamUsageEstimator.sizeOfObject(this.originalQuery, RamUsageEstimator.QUERY_DEFAULT_RAM_BYTES_USED) +
+        RamUsageEstimator.sizeOfObject(this.sortedPackedPoints);
   }
 
   @Override
-  public final Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  public void visit(QueryVisitor visitor) {
+    if (visitor.acceptField(field)) {
+      visitor.visitLeaf(this);
+    }
+  }
+
+  @Override
+  public final Weight createWeight(IndexSearcher searcher, org.apache.lucene.search.ScoreMode scoreMode, float boost) throws IOException {
     return new Weight(this) {
 
       @Override
@@ -167,6 +185,11 @@ abstract class PointInSetIncludingScoreQuery extends Query {
           @Override
           public float score() throws IOException {
             return scores[docID()];
+          }
+
+          @Override
+          public float getMaxScore(int upTo) throws IOException {
+            return Float.POSITIVE_INFINITY;
           }
 
           @Override
@@ -328,4 +351,9 @@ abstract class PointInSetIncludingScoreQuery extends Query {
   }
 
   protected abstract String toString(byte[] value);
+
+  @Override
+  public long ramBytesUsed() {
+    return ramBytesUsed;
+  }
 }

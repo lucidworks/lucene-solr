@@ -30,6 +30,8 @@ import org.apache.lucene.search.ConstantScoreWeight;
 import org.apache.lucene.search.DocValuesFieldExistsQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TwoPhaseIterator;
 import org.apache.lucene.search.Weight;
@@ -78,6 +80,13 @@ abstract class SortedSetDocValuesRangeQuery extends Query {
   }
 
   @Override
+  public void visit(QueryVisitor visitor) {
+    if (visitor.acceptField(field)) {
+      visitor.visitLeaf(this);
+    }
+  }
+
+  @Override
   public String toString(String field) {
     StringBuilder b = new StringBuilder();
     if (this.field.equals(field) == false) {
@@ -103,7 +112,7 @@ abstract class SortedSetDocValuesRangeQuery extends Query {
   abstract SortedSetDocValues getValues(LeafReader reader, String field) throws IOException;
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
     return new ConstantScoreWeight(this, boost) {
       @Override
       public Scorer scorer(LeafReaderContext context) throws IOException {
@@ -179,7 +188,7 @@ abstract class SortedSetDocValuesRangeQuery extends Query {
             }
           };
         }
-        return new ConstantScoreScorer(this, score(), iterator);
+        return new ConstantScoreScorer(this, score(), scoreMode, iterator);
       }
 
       @Override

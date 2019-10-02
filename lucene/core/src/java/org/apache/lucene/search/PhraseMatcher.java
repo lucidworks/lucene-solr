@@ -19,8 +19,6 @@ package org.apache.lucene.search;
 
 import java.io.IOException;
 
-import org.apache.lucene.search.similarities.Similarity;
-
 /**
  * Base class for exact and sloppy phrase matching
  *
@@ -30,14 +28,21 @@ import org.apache.lucene.search.similarities.Similarity;
  */
 abstract class PhraseMatcher {
 
-  protected final DocIdSetIterator approximation;
   private final float matchCost;
 
-  PhraseMatcher(DocIdSetIterator approximation, float matchCost) {
-    assert TwoPhaseIterator.unwrap(approximation) == null;
-    this.approximation = approximation;
+  PhraseMatcher(float matchCost) {
     this.matchCost = matchCost;
   }
+
+  /**
+   * Approximation that only matches documents that have all terms.
+   */
+  abstract DocIdSetIterator approximation();
+
+  /**
+   * Approximation that is aware of impacts.
+   */
+  abstract ImpactsDISI impactsApproximation();
 
   /**
    * An upper bound on the number of possible matches on this document
@@ -60,7 +65,7 @@ abstract class PhraseMatcher {
    *
    * The sum of the slop-adjusted weights is used as the freq for scoring
    */
-  abstract float sloppyWeight(Similarity.SimScorer simScorer);
+  abstract float sloppyWeight();
 
   /**
    * The start position of the current match

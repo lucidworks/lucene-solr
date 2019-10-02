@@ -50,12 +50,12 @@ final class JustCompileSearch {
     }
 
     @Override
-    public void setScorer(Scorer scorer) {
+    public void setScorer(Scorable scorer) {
       throw new UnsupportedOperationException(UNSUPPORTED_MSG);
     }
 
     @Override
-    public boolean needsScores() {
+    public ScoreMode scoreMode() {
       throw new UnsupportedOperationException(UNSUPPORTED_MSG);
     }
   }
@@ -154,6 +154,11 @@ final class JustCompileSearch {
     }
 
     @Override
+    public void visit(QueryVisitor visitor) {
+      throw new UnsupportedOperationException(UNSUPPORTED_MSG);
+    }
+
+    @Override
     public boolean equals(Object obj) {
       throw new UnsupportedOperationException(UNSUPPORTED_MSG);
     }
@@ -176,6 +181,11 @@ final class JustCompileSearch {
     }
 
     @Override
+    public float getMaxScore(int upTo) throws IOException {
+      throw new UnsupportedOperationException(UNSUPPORTED_MSG);
+    }
+
+    @Override
     public int docID() {
       throw new UnsupportedOperationException(UNSUPPORTED_MSG);
     }
@@ -189,12 +199,7 @@ final class JustCompileSearch {
   static final class JustCompileSimilarity extends Similarity {
 
     @Override
-    public SimWeight computeWeight(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
-      throw new UnsupportedOperationException(UNSUPPORTED_MSG);
-    }
-
-    @Override
-    public SimScorer simScorer(SimWeight stats, LeafReaderContext context) {
+    public SimScorer scorer(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
       throw new UnsupportedOperationException(UNSUPPORTED_MSG);
     }
 
@@ -231,7 +236,7 @@ final class JustCompileSearch {
     }
 
     @Override
-    public boolean needsScores() {
+    public ScoreMode scoreMode() {
       throw new UnsupportedOperationException( UNSUPPORTED_MSG );
     }
   }

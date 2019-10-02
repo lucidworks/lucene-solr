@@ -21,7 +21,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.EnumSet;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -36,8 +35,8 @@ import org.apache.solr.client.solrj.request.CoreStatus;
 import org.apache.solr.cloud.overseer.OverseerAction;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
-import org.apache.solr.common.cloud.CollectionStateWatcher;
 import org.apache.solr.common.cloud.DocCollection;
+import org.apache.solr.common.cloud.DocCollectionWatcher;
 import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.cloud.ZkNodeProps;
@@ -47,7 +46,6 @@ import org.apache.solr.common.util.TimeSource;
 import org.apache.solr.common.util.Utils;
 import org.apache.solr.core.ZkContainer;
 import org.apache.solr.util.TimeOut;
-import org.apache.zookeeper.KeeperException;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -90,7 +88,7 @@ public class DeleteReplicaTest extends SolrCloudTestCase {
   }
 
   @Test
-  @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // annotated on: 24-Dec-2018
+  // commented out on: 01-Apr-2019   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // annotated on: 24-Dec-2018
   public void deleteLiveReplicaTest() throws Exception {
 
     final String collectionName = "delLiveColl";
@@ -117,7 +115,7 @@ public class DeleteReplicaTest extends SolrCloudTestCase {
 
     JettySolrRunner replicaJetty = cluster.getReplicaJetty(replica);
     ZkStateReaderAccessor accessor = new ZkStateReaderAccessor(replicaJetty.getCoreContainer().getZkController().getZkStateReader());
-    Set<CollectionStateWatcher> watchers = accessor.getStateWatchers(collectionName);
+    Set<DocCollectionWatcher> watchers = accessor.getStateWatchers(collectionName);
     CollectionAdminRequest.deleteReplica(collectionName, shard.getName(), replica.getName())
         .process(cluster.getSolrClient());
     waitForState("Expected replica " + replica.getName() + " to have been removed", collectionName, (n, c) -> {
@@ -167,23 +165,19 @@ public class DeleteReplicaTest extends SolrCloudTestCase {
     CollectionAdminRequest.deleteReplicasFromShard(collectionName, "shard1", 2).process(cluster.getSolrClient());
     waitForState("Expected a single shard with a single replica", collectionName, clusterShape(1, 1));
 
-    try {
-      CollectionAdminRequest.deleteReplicasFromShard(collectionName, "shard1", 1).process(cluster.getSolrClient());
-      fail("Expected Exception, Can't delete the last replica by count");
-    } catch (SolrException e) {
-      // expected
-      assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, e.code());
-      assertTrue(e.getMessage().contains("There is only one replica available"));
-    }
+    SolrException e = expectThrows(SolrException.class,
+        "Can't delete the last replica by count",
+        () -> CollectionAdminRequest.deleteReplicasFromShard(collectionName, "shard1", 1).process(cluster.getSolrClient())
+    );
+    assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, e.code());
+    assertTrue(e.getMessage().contains("There is only one replica available"));
     DocCollection docCollection = getCollectionState(collectionName);
     // We know that since leaders are preserved, PULL replicas should not be left alone in the shard
     assertEquals(0, docCollection.getSlice("shard1").getReplicas(EnumSet.of(Replica.Type.PULL)).size());
-
-
   }
 
   @Test
-  @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // annotated on: 24-Dec-2018
+  // commented out on: 17-Feb-2019   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // annotated on: 24-Dec-2018
   public void deleteReplicaByCountForAllShards() throws Exception {
 
     final String collectionName = "deleteByCountNew";
@@ -227,7 +221,7 @@ public class DeleteReplicaTest extends SolrCloudTestCase {
     Replica replica = getRandomReplica(shard);
     JettySolrRunner replicaJetty = cluster.getReplicaJetty(replica);
     ZkStateReaderAccessor accessor = new ZkStateReaderAccessor(replicaJetty.getCoreContainer().getZkController().getZkStateReader());
-    Set<CollectionStateWatcher> watchers = accessor.getStateWatchers(collectionName);
+    Set<DocCollectionWatcher> watchers = accessor.getStateWatchers(collectionName);
 
     ZkNodeProps m = new ZkNodeProps(
         Overseer.QUEUE_OPERATION, OverseerAction.DELETECORE.toLower(),
@@ -257,7 +251,7 @@ public class DeleteReplicaTest extends SolrCloudTestCase {
 
   @Test
   @Slow
-  @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // annotated on: 24-Dec-2018
+  // commented out on: 17-Feb-2019   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // annotated on: 24-Dec-2018
   public void raceConditionOnDeleteAndRegisterReplica() throws Exception {
     raceConditionOnDeleteAndRegisterReplica("false");
     CollectionAdminRequest.setClusterProperty(ZkStateReader.LEGACY_CLOUD, null).process(cluster.getSolrClient());
@@ -265,13 +259,13 @@ public class DeleteReplicaTest extends SolrCloudTestCase {
   
   @Test
   @Slow
-  @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // annotated on: 24-Dec-2018
+  // commented out on: 17-Feb-2019   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // annotated on: 24-Dec-2018
   public void raceConditionOnDeleteAndRegisterReplicaLegacy() throws Exception {
     raceConditionOnDeleteAndRegisterReplica("true");
     CollectionAdminRequest.setClusterProperty(ZkStateReader.LEGACY_CLOUD, null).process(cluster.getSolrClient());
   }
 
-  @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // annotated on: 24-Dec-2018
+  // commented out on: 17-Feb-2019   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // annotated on: 24-Dec-2018
   public void raceConditionOnDeleteAndRegisterReplica(String legacyCloud) throws Exception {
     
     CollectionAdminRequest.setClusterProperty(ZkStateReader.LEGACY_CLOUD, legacyCloud).process(cluster.getSolrClient());
@@ -445,19 +439,6 @@ public class DeleteReplicaTest extends SolrCloudTestCase {
       log.info("Timeout wait for state {}", getCollectionState(collectionName));
       throw e;
     }
-
-    TimeOut timeOut = new TimeOut(20, TimeUnit.SECONDS, TimeSource.NANO_TIME);
-    timeOut.waitFor("Time out waiting for LIR state get removed", () -> {
-      String lirPath = ZkController.getLeaderInitiatedRecoveryZnodePath(collectionName, "shard1");
-      try {
-        List<String> children = zkClient().getChildren(lirPath, null, true);
-        return children.size() == 0;
-      } catch (KeeperException.NoNodeException e) {
-        return true;
-      } catch (Exception e) {
-        throw new AssertionError(e);
-      }
-    });
   }
 }
 

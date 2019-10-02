@@ -37,8 +37,8 @@ import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.PrefixCodedTerms;
 import org.apache.lucene.index.ReaderUtil;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.TermState;
+import org.apache.lucene.index.TermStates;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.BulkScorer;
@@ -51,8 +51,11 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
+import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BitDocIdSet;
 import org.apache.lucene.util.BytesRef;
@@ -61,6 +64,7 @@ import org.apache.lucene.util.BytesRefIterator;
 import org.apache.lucene.util.DocIdSetBuilder;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.FutureArrays;
+import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.schema.FieldType;
@@ -238,6 +242,11 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
       return builder.toString();
     }
 
+    @Override
+    public void visit(QueryVisitor visitor) {
+      visitor.visitLeaf(this);
+    }
+
     private class WeightOrDocIdSet {
       final Weight weight;
       final DocIdSet set;
@@ -249,17 +258,17 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
     }
 
     @Override
-    public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
 
-      List<TermContext> finalContexts = new ArrayList();
+      List<TermStates> finalContexts = new ArrayList();
       List<Term> finalTerms = new ArrayList();
       List<LeafReaderContext> contexts = searcher.getTopReaderContext().leaves();
-      TermContext[] termContexts = new TermContext[this.queryTerms.length];
-      collectTermContext(searcher.getIndexReader(), contexts, termContexts, this.queryTerms);
-      for(int i=0; i<termContexts.length; i++) {
-        TermContext termContext = termContexts[i];
-        if(termContext != null && termContext.docFreq() <= this.maxDocFreq) {
-          finalContexts.add(termContext);
+      TermStates[] termStates = new TermStates[this.queryTerms.length];
+      collectTermStates(searcher.getIndexReader(), contexts, termStates, this.queryTerms);
+      for(int i=0; i<termStates.length; i++) {
+        TermStates ts = termStates[i];
+        if(ts != null && ts.docFreq() <= this.maxDocFreq) {
+          finalContexts.add(ts);
           finalTerms.add(queryTerms[i]);
         }
       }
@@ -284,11 +293,11 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
           PostingsEnum docs = null;
           DocIdSetBuilder builder = new DocIdSetBuilder(reader.maxDoc(), terms);
           for (int i=0; i<finalContexts.size(); i++) {
-            TermContext termContext = finalContexts.get(i);
-            TermState termState = termContext.get(context.ord);
+            TermStates ts = finalContexts.get(i);
+            TermState termState = ts.get(context);
             if(termState != null) {
               Term term = finalTerms.get(i);
-              termsEnum.seekExact(term.bytes(), termContext.get(context.ord));
+              termsEnum.seekExact(term.bytes(), ts.get(context));
               docs = termsEnum.postings(docs, PostingsEnum.NONE);
               builder.add(docs);
             }
@@ -304,7 +313,7 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
           if (disi == null) {
             return null;
           }
-          return new ConstantScoreScorer(this, score(), disi);
+          return new ConstantScoreScorer(this, score(), scoreMode, disi);
         }
 
         @Override
@@ -339,10 +348,10 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
       };
     }
 
-    private void collectTermContext(IndexReader reader,
-                                    List<LeafReaderContext> leaves,
-                                    TermContext[] contextArray,
-                                    Term[] queryTerms) throws IOException {
+    private void collectTermStates(IndexReader reader,
+                                   List<LeafReaderContext> leaves,
+                                   TermStates[] contextArray,
+                                   Term[] queryTerms) throws IOException {
       TermsEnum termsEnum = null;
       for (LeafReaderContext context : leaves) {
 
@@ -358,15 +367,15 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
 
         for (int i = 0; i < queryTerms.length; i++) {
           Term term = queryTerms[i];
-          TermContext termContext = contextArray[i];
+          TermStates termStates = contextArray[i];
 
           if (termsEnum.seekExact(term.bytes())) {
-            if (termContext == null) {
-              contextArray[i] = new TermContext(reader.getContext(),
+            if (termStates == null) {
+              contextArray[i] = new TermStates(reader.getContext(),
                   termsEnum.termState(), context.ord, termsEnum.docFreq(),
                   termsEnum.totalTermFreq());
             } else {
-              termContext.register(termsEnum.termState(), context.ord,
+              termStates.register(termsEnum.termState(), context.ord,
                   termsEnum.docFreq(), termsEnum.totalTermFreq());
             }
           }
@@ -379,7 +388,9 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
 
 
 // modified version of PointInSetQuery
-abstract class PointSetQuery extends Query implements DocSetProducer {
+abstract class PointSetQuery extends Query implements DocSetProducer, Accountable {
+  protected static final long BASE_RAM_BYTES = RamUsageEstimator.shallowSizeOfInstance(PointSetQuery.class);
+
   // A little bit overkill for us, since all of our "terms" are always in the same field:
   final PrefixCodedTerms sortedPackedPoints;
   final int sortedPackedPointsHashCode;
@@ -387,6 +398,7 @@ abstract class PointSetQuery extends Query implements DocSetProducer {
   final int bytesPerDim;
   final int numDims;
   int maxDocFreq = Integer.MAX_VALUE;
+  final long ramBytesUsed; // cache
 
   /**
    * Iterator of encoded point values.
@@ -544,6 +556,8 @@ abstract class PointSetQuery extends Query implements DocSetProducer {
     }
     sortedPackedPoints = builder.finish();
     sortedPackedPointsHashCode = sortedPackedPoints.hashCode();
+    ramBytesUsed = BASE_RAM_BYTES +
+        RamUsageEstimator.sizeOfObject(sortedPackedPoints);
   }
 
   private FixedBitSet getLiveDocs(IndexSearcher searcher) throws IOException {
@@ -564,6 +578,11 @@ abstract class PointSetQuery extends Query implements DocSetProducer {
   @Override
   public DocSet createDocSet(SolrIndexSearcher searcher) throws IOException {
     return getDocSet(searcher);
+  }
+
+  @Override
+  public long ramBytesUsed() {
+    return ramBytesUsed;
   }
 
   public DocSet getDocSet(IndexSearcher searcher) throws IOException {
@@ -603,7 +622,7 @@ abstract class PointSetQuery extends Query implements DocSetProducer {
 
 
   @Override
-  public final Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  public final Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
     return new ConstantScoreWeight(this, boost) {
       Filter filter;
 
@@ -623,7 +642,7 @@ abstract class PointSetQuery extends Query implements DocSetProducer {
         if (readerSetIterator == null) {
           return null;
         }
-        return new ConstantScoreScorer(this, score(), readerSetIterator);
+        return new ConstantScoreScorer(this, score(), scoreMode, readerSetIterator);
       }
 
       @Override
@@ -778,6 +797,11 @@ abstract class PointSetQuery extends Query implements DocSetProducer {
     }
     sb.append("}");
     return sb.toString();
+  }
+
+  @Override
+  public void visit(QueryVisitor visitor) {
+    visitor.visitLeaf(this);
   }
 
   protected abstract String toString(byte[] value);

@@ -186,9 +186,10 @@
   <property name="javadoc.maxmemory" value="512m" />
   <property name="javadoc.noindex" value="true"/>
 
-  <property name="javadoc.doclint.args" value="-Xdoclint:all -Xdoclint:-missing"/>
+  <!---TODO: Fix accessibility (order of H1/H2/H3 headings), see https://issues.apache.org/jira/browse/LUCENE-8729 -->
+  <property name="javadoc.doclint.args" value="-Xdoclint:all -Xdoclint:-missing -Xdoclint:-accessibility"/>
   <!---proc:none was added because of LOG4J2-1925 / JDK-8186647 -->
-  <property name="javac.doclint.args" value="-Xdoclint:all/protected -Xdoclint:-missing -proc:none"/>
+  <property name="javac.doclint.args" value="-Xdoclint:all/protected -Xdoclint:-missing -Xdoclint:-accessibility -proc:none"/>
   
   <!-- Javadoc classpath -->
   <path id="javadoc.classpath">
@@ -1353,7 +1354,7 @@ ant test "-Dtests.class=*.ClassName"
 ant test -Dtestcase=ClassName
 
 # Run all tests in a package and sub-packages
-ant test "-Dtests.class=org.apache.lucene.package.*"
+ant test "-Dtests.class=org.apache.lucene.package.Test*|org.apache.lucene.package.*Test"
 
 # Run any test methods that contain 'esi' (like: ...r*esi*ze...).
 ant test "-Dtests.method=*esi*"
@@ -2101,7 +2102,7 @@ ${ant.project.name}.test.dependencies=${test.classpath.list}
   </target>
   
   <target name="-ecj-resolve" unless="ecj.loaded" depends="ivy-availability-check,ivy-configure" if="ecj-javadoc-lint.supported">
-    <ivy:cachepath organisation="org.eclipse.jdt.core.compiler" module="ecj" revision="4.6.1"
+    <ivy:cachepath organisation="org.eclipse.jdt" module="ecj" revision="3.18.0"
      inline="true" conf="master" type="jar" pathid="ecj.classpath" />
     <componentdef classname="org.eclipse.jdt.core.JDTCompilerAdapter"
      classpathref="ecj.classpath" name="ecj-component"/>
@@ -2213,6 +2214,8 @@ ${ant.project.name}.test.dependencies=${test.classpath.list}
         <classpath refid="javadoc.classpath"/>
         <arg line="${javadoc.release.args}"/>
         <arg line="${javadoc.doclint.args}"/>
+        <!-- force locale to be "en_US", as Javadoc tool ignores locale parameter (in some cases) -->
+        <arg line="-J-Duser.language=en -J-Duser.country=US"/>
       </javadoc>
       <record name="@{destdir}/log_javadoc.txt" action="stop"/>
       
@@ -2395,7 +2398,7 @@ ${ant.project.name}.test.dependencies=${test.classpath.list}
 
   <!-- GROOVY scripting engine for ANT tasks -->
   <target name="resolve-groovy" unless="groovy.loaded" depends="ivy-availability-check,ivy-configure">
-    <ivy:cachepath organisation="org.codehaus.groovy" module="groovy-all" revision="2.4.15"
+    <ivy:cachepath organisation="org.codehaus.groovy" module="groovy-all" revision="2.4.16"
       inline="true" conf="default" type="jar" transitive="true" pathid="groovy.classpath"/>
     <taskdef name="groovy"
       classname="org.codehaus.groovy.ant.Groovy"
@@ -2472,8 +2475,8 @@ ${ant.project.name}.test.dependencies=${test.classpath.list}
   </target>
 
   <target name="resolve-markdown" unless="markdown.loaded" depends="resolve-groovy">
-    <property name="flexmark.version" value="0.16.1"/>
-    <ivy:cachepath transitive="true" pathid="markdown.classpath">
+    <property name="flexmark.version" value="0.42.6"/>
+    <ivy:cachepath transitive="true" resolveId="flexmark" pathid="markdown.classpath">
       <ivy:dependency org="com.vladsch.flexmark" name="flexmark" rev="${flexmark.version}" conf="default" />
       <ivy:dependency org="com.vladsch.flexmark" name="flexmark-ext-autolink" rev="${flexmark.version}" conf="default" />
       <ivy:dependency org="com.vladsch.flexmark" name="flexmark-ext-abbreviation" rev="${flexmark.version}" conf="default" />

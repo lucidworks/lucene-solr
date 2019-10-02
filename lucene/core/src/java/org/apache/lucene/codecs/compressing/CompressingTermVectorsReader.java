@@ -26,11 +26,14 @@ import java.util.NoSuchElementException;
 
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.TermVectorsReader;
+import org.apache.lucene.index.BaseTermsEnum;
 import org.apache.lucene.index.CorruptIndexException;
+import org.apache.lucene.index.SlowImpactsEnum;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.Fields;
+import org.apache.lucene.index.ImpactsEnum;
 import org.apache.lucene.index.IndexFileNames;
 import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.index.Terms;
@@ -745,6 +748,7 @@ public final class CompressingTermVectorsReader extends TermVectorsReader implem
   private static class TVTerms extends Terms {
 
     private final int numTerms, flags;
+    private final long totalTermFreq;
     private final int[] prefixLengths, suffixLengths, termFreqs, positionIndex, positions, startOffsets, lengths, payloadIndex;
     private final BytesRef termBytes, payloadBytes;
 
@@ -764,6 +768,11 @@ public final class CompressingTermVectorsReader extends TermVectorsReader implem
       this.payloadIndex = payloadIndex;
       this.payloadBytes = payloadBytes;
       this.termBytes = termBytes;
+      long ttf = 0;
+      for (int tf : termFreqs) {
+        ttf += tf;
+      }
+      this.totalTermFreq = ttf;
     }
 
     @Override
@@ -782,7 +791,7 @@ public final class CompressingTermVectorsReader extends TermVectorsReader implem
 
     @Override
     public long getSumTotalTermFreq() throws IOException {
-      return -1L;
+      return totalTermFreq;
     }
 
     @Override
@@ -817,7 +826,7 @@ public final class CompressingTermVectorsReader extends TermVectorsReader implem
 
   }
 
-  private static class TVTermsEnum extends TermsEnum {
+  private static class TVTermsEnum extends BaseTermsEnum {
 
     private int numTerms, startPos, ord;
     private int[] prefixLengths, suffixLengths, termFreqs, positionIndex, positions, startOffsets, lengths, payloadIndex;
@@ -934,6 +943,12 @@ public final class CompressingTermVectorsReader extends TermVectorsReader implem
 
       docsEnum.reset(termFreqs[ord], positionIndex[ord], positions, startOffsets, lengths, payloads, payloadIndex);
       return docsEnum;
+    }
+
+    @Override
+    public ImpactsEnum impacts(int flags) throws IOException {
+      final PostingsEnum delegate = postings(null, PostingsEnum.FREQS);
+      return new SlowImpactsEnum(delegate);
     }
 
   }

@@ -26,6 +26,7 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.solr.ltr.DocInfo;
@@ -48,7 +49,7 @@ public class OriginalScoreFeature extends Feature {
 
   @Override
   public LinkedHashMap<String,Object> paramsToMap() {
-    return null;
+    return defaultParamsToMap();
   }
 
   @Override
@@ -69,7 +70,7 @@ public class OriginalScoreFeature extends Feature {
     public OriginalScoreWeight(IndexSearcher searcher,
         SolrQueryRequest request, Query originalQuery, Map<String,String[]> efi) throws IOException {
       super(OriginalScoreFeature.this, searcher, request, originalQuery, efi);
-      w = searcher.createWeight(searcher.rewrite(originalQuery), true, 1);
+      w = searcher.createWeight(searcher.rewrite(originalQuery), ScoreMode.COMPLETE, 1);
     };
 
 
@@ -105,6 +106,11 @@ public class OriginalScoreFeature extends Feature {
         // we shouldn't need to calc original score again.
         final DocInfo docInfo = getDocInfo();
         return (docInfo != null && docInfo.hasOriginalDocScore() ? docInfo.getOriginalDocScore() : originalScorer.score());
+      }
+
+      @Override
+      public float getMaxScore(int upTo) throws IOException {
+        return Float.POSITIVE_INFINITY;
       }
 
       @Override

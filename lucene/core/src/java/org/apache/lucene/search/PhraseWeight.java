@@ -21,52 +21,62 @@ import java.io.IOException;
 
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.similarities.Similarity;
+import org.apache.lucene.search.similarities.Similarity.SimScorer;
 
 abstract class PhraseWeight extends Weight {
 
-  final boolean needsScores;
-  final Similarity.SimWeight stats;
+  final ScoreMode scoreMode;
+  final Similarity.SimScorer stats;
   final Similarity similarity;
   final String field;
 
-  protected PhraseWeight(Query query, String field, IndexSearcher searcher, boolean needsScores) throws IOException {
+  protected PhraseWeight(Query query, String field, IndexSearcher searcher, ScoreMode scoreMode) throws IOException {
     super(query);
-    this.needsScores = needsScores;
+    this.scoreMode = scoreMode;
     this.field = field;
-    this.similarity = searcher.getSimilarity(needsScores);
-    this.stats = getStats(searcher);
+    this.similarity = searcher.getSimilarity();
+    SimScorer stats = getStats(searcher);
+    if (stats == null) { // Means no terms or scores are not needed
+      stats = new SimScorer() {
+        @Override
+        public float score(float freq, long norm) {
+          return 1;
+        }
+      };
+    }
+    this.stats = stats;
   }
 
-  protected abstract Similarity.SimWeight getStats(IndexSearcher searcher) throws IOException;
+  protected abstract Similarity.SimScorer getStats(IndexSearcher searcher) throws IOException;
 
-  protected abstract PhraseMatcher getPhraseMatcher(LeafReaderContext context, boolean exposeOffsets) throws IOException;
+  protected abstract PhraseMatcher getPhraseMatcher(LeafReaderContext context, SimScorer scorer, boolean exposeOffsets) throws IOException;
 
   @Override
   public Scorer scorer(LeafReaderContext context) throws IOException {
-    PhraseMatcher matcher = getPhraseMatcher(context, false);
+    PhraseMatcher matcher = getPhraseMatcher(context, stats, false);
     if (matcher == null)
       return null;
-    Similarity.SimScorer simScorer = similarity.simScorer(stats, context);
-    return new PhraseScorer(this, matcher, needsScores, simScorer);
+    LeafSimScorer simScorer = new LeafSimScorer(stats, context.reader(), field, scoreMode.needsScores());
+    return new PhraseScorer(this, matcher, scoreMode, simScorer);
   }
 
   @Override
   public Explanation explain(LeafReaderContext context, int doc) throws IOException {
-    PhraseMatcher matcher = getPhraseMatcher(context, false);
-    if (matcher == null || matcher.approximation.advance(doc) != doc) {
+    PhraseMatcher matcher = getPhraseMatcher(context, stats, false);
+    if (matcher == null || matcher.approximation().advance(doc) != doc) {
       return Explanation.noMatch("no matching terms");
     }
     matcher.reset();
     if (matcher.nextMatch() == false) {
       return Explanation.noMatch("no matching phrase");
     }
-    Similarity.SimScorer simScorer = similarity.simScorer(stats, context);
-    float freq = matcher.sloppyWeight(simScorer);
+    float freq = matcher.sloppyWeight();
     while (matcher.nextMatch()) {
-      freq += matcher.sloppyWeight(simScorer);
+      freq += matcher.sloppyWeight();
     }
+    LeafSimScorer docScorer = new LeafSimScorer(stats, context.reader(), field, scoreMode.needsScores());
     Explanation freqExplanation = Explanation.match(freq, "phraseFreq=" + freq);
-    Explanation scoreExplanation = simScorer.explain(doc, freqExplanation);
+    Explanation scoreExplanation = docScorer.explain(doc, freqExplanation);
     return Explanation.match(
         scoreExplanation.getValue(),
         "weight("+getQuery()+" in "+doc+") [" + similarity.getClass().getSimpleName() + "], result of:",
@@ -76,8 +86,8 @@ abstract class PhraseWeight extends Weight {
   @Override
   public Matches matches(LeafReaderContext context, int doc) throws IOException {
     return MatchesUtils.forField(field, () -> {
-      PhraseMatcher matcher = getPhraseMatcher(context, true);
-      if (matcher == null || matcher.approximation.advance(doc) != doc) {
+      PhraseMatcher matcher = getPhraseMatcher(context, stats, true);
+      if (matcher == null || matcher.approximation().advance(doc) != doc) {
         return null;
       }
       matcher.reset();

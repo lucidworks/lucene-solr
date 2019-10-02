@@ -18,6 +18,7 @@ package org.apache.lucene.index;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Objects;
 
 import org.apache.lucene.index.PointValues.IntersectVisitor;
@@ -117,7 +118,7 @@ public class AssertingLeafReader extends FilterLeafReader {
       TermsEnum termsEnum = in.intersect(automaton, bytes);
       assert termsEnum != null;
       assert bytes == null || bytes.isValid();
-      return new AssertingTermsEnum(termsEnum);
+      return new AssertingTermsEnum(termsEnum, hasFreqs());
     }
 
     @Override
@@ -135,10 +136,34 @@ public class AssertingLeafReader extends FilterLeafReader {
     }
 
     @Override
+    public int getDocCount() throws IOException {
+      final int docCount = in.getDocCount();
+      assert docCount > 0;
+      return docCount;
+    }
+
+    @Override
+    public long getSumDocFreq() throws IOException {
+      final long sumDf = in.getSumDocFreq();
+      assert sumDf >= getDocCount();
+      return sumDf;
+    }
+
+    @Override
+    public long getSumTotalTermFreq() throws IOException {
+      final long sumTtf = in.getSumTotalTermFreq();
+      if (hasFreqs() == false) {
+        assert sumTtf == in.getSumDocFreq();
+      }
+      assert sumTtf >= getSumDocFreq();
+      return sumTtf;
+    }
+
+    @Override
     public TermsEnum iterator() throws IOException {
       TermsEnum termsEnum = super.iterator();
       assert termsEnum != null;
-      return new AssertingTermsEnum(termsEnum);
+      return new AssertingTermsEnum(termsEnum, hasFreqs());
     }
 
     @Override
@@ -154,10 +179,12 @@ public class AssertingLeafReader extends FilterLeafReader {
     private enum State {INITIAL, POSITIONED, UNPOSITIONED};
     private State state = State.INITIAL;
     private final boolean delegateOverridesSeekExact;
+    private final boolean hasFreqs;
 
-    public AssertingTermsEnum(TermsEnum in) {
+    public AssertingTermsEnum(TermsEnum in, boolean hasFreqs) {
       super(in);
       delegateOverridesSeekExact = SEEK_EXACT.isOverriddenAsOf(in.getClass());
+      this.hasFreqs = hasFreqs;
     }
 
     @Override
@@ -181,6 +208,15 @@ public class AssertingLeafReader extends FilterLeafReader {
       } else {
         return new AssertingPostingsEnum(docs);
       }
+    }
+
+    @Override
+    public ImpactsEnum impacts(int flags) throws IOException {
+      assertThread("Terms enums", creationThread);
+      assert state == State.POSITIONED: "docs(...) called on unpositioned TermsEnum";
+      assert (flags & PostingsEnum.FREQS) != 0 : "Freqs should be requested on impacts";
+
+      return new AssertingImpactsEnum(super.impacts(flags));
     }
 
     // TODO: we should separately track if we are 'at the end' ?
@@ -210,14 +246,22 @@ public class AssertingLeafReader extends FilterLeafReader {
     public int docFreq() throws IOException {
       assertThread("Terms enums", creationThread);
       assert state == State.POSITIONED : "docFreq() called on unpositioned TermsEnum";
-      return super.docFreq();
+      final int df = super.docFreq();
+      assert df > 0;
+      return df;
     }
 
     @Override
     public long totalTermFreq() throws IOException {
       assertThread("Terms enums", creationThread);
       assert state == State.POSITIONED : "totalTermFreq() called on unpositioned TermsEnum";
-      return super.totalTermFreq();
+      final long ttf = super.totalTermFreq();
+      if (hasFreqs) {
+        assert ttf >= docFreq();
+      } else {
+        assert ttf == docFreq();
+      }
+      return ttf;
     }
 
     @Override
@@ -403,6 +447,115 @@ public class AssertingLeafReader extends FilterLeafReader {
       doc = in.docID();
       positionCount = positionMax = 0;
     }
+  }
+
+  /** Wraps a {@link ImpactsEnum} with additional checks */
+  public static class AssertingImpactsEnum extends ImpactsEnum {
+
+    private final AssertingPostingsEnum assertingPostings;
+    private final ImpactsEnum in;
+    private int lastShallowTarget = -1;
+
+    AssertingImpactsEnum(ImpactsEnum impacts) {
+      in = impacts;
+      // inherit checks from AssertingPostingsEnum
+      assertingPostings = new AssertingPostingsEnum(impacts);
+    }
+
+    @Override
+    public void advanceShallow(int target) throws IOException {
+      assert target >= lastShallowTarget : "called on decreasing targets: target = " + target + " < last target = " + lastShallowTarget;
+      assert target >= docID() : "target = " + target + " < docID = " + docID();
+      lastShallowTarget = target;
+      in.advanceShallow(target);
+    }
+
+    @Override
+    public Impacts getImpacts() throws IOException {
+      assert docID() >= 0 || lastShallowTarget >= 0 : "Cannot get impacts until the iterator is positioned or advanceShallow has been called";
+      Impacts impacts = in.getImpacts();
+      CheckIndex.checkImpacts(impacts, Math.max(docID(), lastShallowTarget));
+      return new AssertingImpacts(impacts, this);
+    }
+
+    @Override
+    public int freq() throws IOException {
+      return assertingPostings.freq();
+    }
+
+    @Override
+    public int nextPosition() throws IOException {
+      return assertingPostings.nextPosition();
+    }
+
+    @Override
+    public int startOffset() throws IOException {
+      return assertingPostings.startOffset();
+    }
+
+    @Override
+    public int endOffset() throws IOException {
+      return assertingPostings.endOffset();
+    }
+
+    @Override
+    public BytesRef getPayload() throws IOException {
+      return assertingPostings.getPayload();
+    }
+
+    @Override
+    public int docID() {
+      return assertingPostings.docID();
+    }
+
+    @Override
+    public int nextDoc() throws IOException {
+      assert docID() + 1 >= lastShallowTarget : "target = " + (docID() + 1) + " < last shallow target = " + lastShallowTarget;
+      return assertingPostings.nextDoc();
+    }
+
+    @Override
+    public int advance(int target) throws IOException {
+      assert target >= lastShallowTarget : "target = " + target + " < last shallow target = " + lastShallowTarget;
+      return assertingPostings.advance(target);
+    }
+
+    @Override
+    public long cost() {
+      return assertingPostings.cost();
+    }
+  }
+
+  static class AssertingImpacts extends Impacts {
+
+    private final Impacts in;
+    private final AssertingImpactsEnum impactsEnum;
+    private final int validFor;
+
+    AssertingImpacts(Impacts in, AssertingImpactsEnum impactsEnum) {
+      this.in = in;
+      this.impactsEnum = impactsEnum;
+      validFor = Math.max(impactsEnum.docID(), impactsEnum.lastShallowTarget);
+    }
+
+    @Override
+    public int numLevels() {
+      assert validFor == Math.max(impactsEnum.docID(), impactsEnum.lastShallowTarget) : "Cannot reuse impacts after advancing the iterator";
+      return in.numLevels();
+    }
+
+    @Override
+    public int getDocIdUpTo(int level) {
+      assert validFor == Math.max(impactsEnum.docID(), impactsEnum.lastShallowTarget) : "Cannot reuse impacts after advancing the iterator";
+      return in.getDocIdUpTo(level);
+    }
+
+    @Override
+    public List<Impact> getImpacts(int level) {
+      assert validFor == Math.max(impactsEnum.docID(), impactsEnum.lastShallowTarget) : "Cannot reuse impacts after advancing the iterator";
+      return in.getImpacts(level);
+    }
+
   }
 
   /** Wraps a NumericDocValues but with additional asserts */
@@ -875,7 +1028,7 @@ public class AssertingLeafReader extends FilterLeafReader {
 
   /** Wraps a SortedSetDocValues but with additional asserts */
   public static class AssertingPointValues extends PointValues {
-
+    private final Thread creationThread = Thread.currentThread();
     private final PointValues in;
 
     /** Sole constructor. */
@@ -895,11 +1048,13 @@ public class AssertingLeafReader extends FilterLeafReader {
 
     @Override
     public void intersect(IntersectVisitor visitor) throws IOException {
+      assertThread("Points", creationThread);
       in.intersect(new AssertingIntersectVisitor(in.getNumDataDimensions(), in.getNumIndexDimensions(), in.getBytesPerDimension(), visitor));
     }
 
     @Override
     public long estimatePointCount(IntersectVisitor visitor) {
+      assertThread("Points", creationThread);
       long cost = in.estimatePointCount(visitor);
       assert cost >= 0;
       return cost;
@@ -907,36 +1062,43 @@ public class AssertingLeafReader extends FilterLeafReader {
 
     @Override
     public byte[] getMinPackedValue() throws IOException {
+      assertThread("Points", creationThread);
       return Objects.requireNonNull(in.getMinPackedValue());
     }
 
     @Override
     public byte[] getMaxPackedValue() throws IOException {
+      assertThread("Points", creationThread);
       return Objects.requireNonNull(in.getMaxPackedValue());
     }
 
     @Override
     public int getNumDataDimensions() throws IOException {
+      assertThread("Points", creationThread);
       return in.getNumDataDimensions();
     }
 
     @Override
     public int getNumIndexDimensions() throws IOException {
+      assertThread("Points", creationThread);
       return in.getNumIndexDimensions();
     }
 
     @Override
     public int getBytesPerDimension() throws IOException {
+      assertThread("Points", creationThread);
       return in.getBytesPerDimension();
     }
 
     @Override
     public long size() {
+      assertThread("Points", creationThread);
       return in.size();
     }
 
     @Override
     public int getDocCount() {
+      assertThread("Points", creationThread);
       return in.getDocCount();
     }
 

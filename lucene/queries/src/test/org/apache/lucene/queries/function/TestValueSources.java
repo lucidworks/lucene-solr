@@ -17,6 +17,7 @@
 package org.apache.lucene.queries.function;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -38,9 +39,11 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.queries.function.docvalues.FloatDocValues;
 import org.apache.lucene.queries.function.valuesource.*;
 import org.apache.lucene.search.CheckHits;
+import org.apache.lucene.search.DoubleValuesSource;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.SortedNumericSelector.Type;
@@ -72,8 +75,8 @@ public class TestValueSources extends LuceneTestCase {
 
   static final List<String[]> documents = Arrays.asList(new String[][] {
       /*             id,  double, float, int,  long,   string, text,                       double MV (x3),             int MV (x3)*/ 
-      new String[] { "0", "3.63", "5.2", "35", "4343", "test", "this is a test test test", "2.13", "3.69",  "-0.11",   "1", "7", "5"},
-      new String[] { "1", "5.65", "9.3", "54", "1954", "bar",  "second test",              "12.79", "123.456", "0.01", "12", "900", "-1" },
+      new String[] { "0", "3.63", "5.2", "35", "4343", "test", "this is a test test test", "2.13", "3.69",  "0.11",   "1", "7", "5"},
+      new String[] { "1", "5.65", "9.3", "54", "1954", "bar",  "second test",              "12.79", "123.456", "0.01", "12", "900", "3" },
   });
   
   @BeforeClass
@@ -168,7 +171,7 @@ public class TestValueSources extends LuceneTestCase {
     assertAllExist(vs);
     
     vs = new MultiValuedDoubleFieldSource("doubleMv", Type.MIN);
-    assertHits(new FunctionQuery(vs), new float[] { -0.11f, 0.01f });
+    assertHits(new FunctionQuery(vs), new float[] { 0.11f, 0.01f });
     assertAllExist(vs);
   }
   
@@ -185,12 +188,12 @@ public class TestValueSources extends LuceneTestCase {
     assertAllExist(vs);
     
     vs = new MultiValuedFloatFieldSource("floatMv", Type.MIN);
-    assertHits(new FunctionQuery(vs), new float[] { -0.11f, 0.01f });
+    assertHits(new FunctionQuery(vs), new float[] { 0.11f, 0.01f });
     assertAllExist(vs);
   }
   
   public void testIDF() throws Exception {
-    Similarity saved = searcher.getSimilarity(true);
+    Similarity saved = searcher.getSimilarity();
     try {
       searcher.setSimilarity(new ClassicSimilarity());
       ValueSource vs = new IDFValueSource("bogus", "bogus", "text", new BytesRef("test"));
@@ -242,7 +245,7 @@ public class TestValueSources extends LuceneTestCase {
     assertAllExist(vs);
     
     vs = new MultiValuedIntFieldSource("intMv", Type.MIN);
-    assertHits(new FunctionQuery(vs), new float[] { 1f, -1f });
+    assertHits(new FunctionQuery(vs), new float[] { 1f, 3f });
     assertAllExist(vs);
   }
   
@@ -274,7 +277,7 @@ public class TestValueSources extends LuceneTestCase {
     assertAllExist(vs);
     
     vs = new MultiValuedLongFieldSource("longMv", Type.MIN);
-    assertHits(new FunctionQuery(vs), new float[] { 1f, -1f });
+    assertHits(new FunctionQuery(vs), new float[] { 1f, 3f });
     assertAllExist(vs);
   }
   
@@ -327,7 +330,7 @@ public class TestValueSources extends LuceneTestCase {
   }
   
   public void testNorm() throws Exception {
-    Similarity saved = searcher.getSimilarity(true);
+    Similarity saved = searcher.getSimilarity();
     try {
       // no norm field (so agnostic to indexed similarity)
       searcher.setSimilarity(new ClassicSimilarity());
@@ -379,7 +382,7 @@ public class TestValueSources extends LuceneTestCase {
   }
 
   public void testQuery() throws Exception {
-    Similarity saved = searcher.getSimilarity(true);
+    Similarity saved = searcher.getSimilarity();
 
     try {
       searcher.setSimilarity(new ClassicSimilarity());
@@ -484,9 +487,34 @@ public class TestValueSources extends LuceneTestCase {
     assertHits(new FunctionQuery(vs), new float[] { 0F, 0F });
     assertAllExist(vs);
   }
+
+  public void testMultiBoolFunction() throws Exception {
+    // verify toString and description
+    List<ValueSource> valueSources = new ArrayList<>(Arrays.asList(
+        new ConstValueSource(4.1f), new ConstValueSource(1.2f), new DoubleFieldSource("some_double")
+    ));
+    ValueSource vs = new MultiBoolFunction(valueSources) {
+      @Override
+      protected String name() {
+        return "test";
+      }
+
+      @Override
+      protected boolean func(int doc, FunctionValues[] vals) throws IOException {
+        return false;
+      }
+    };
+    assertEquals("test(const(4.1),const(1.2),double(some_double))", vs.description());
+
+    final LeafReaderContext leaf = searcher.getIndexReader().leaves().get(0);
+    FunctionValues fv = vs.getValues(ValueSource.newContext(searcher), leaf);
+    // doesn't matter what is the docId, verify toString
+    assertEquals("test(const(4.1),const(1.2),double(some_double)=0.0)", fv.toString(1));
+
+  }
   
   public void testTF() throws Exception {
-    Similarity saved = searcher.getSimilarity(true);
+    Similarity saved = searcher.getSimilarity();
     try {
       // no norm field (so agnostic to indexed similarity)
       searcher.setSimilarity(new ClassicSimilarity());
@@ -571,13 +599,18 @@ public class TestValueSources extends LuceneTestCase {
     FunctionScoreQuery q = FunctionScoreQuery.boostByValue(new TermQuery(new Term("f", "t")),
         new DoubleFieldSource("double").asDoubleValuesSource());
 
-    searcher.createWeight(searcher.rewrite(q), true, 1);
+    searcher.createWeight(searcher.rewrite(q), ScoreMode.COMPLETE, 1);
 
     // assert that the query has not cached a reference to the IndexSearcher
     FunctionScoreQuery.MultiplicativeBoostValuesSource source1 = (FunctionScoreQuery.MultiplicativeBoostValuesSource) q.getSource();
     ValueSource.WrappedDoubleValuesSource source2 = (ValueSource.WrappedDoubleValuesSource) source1.boost;
     assertNull(source2.searcher);
 
+  }
+
+  public void testBuildingFromDoubleValues() throws Exception {
+    DoubleValuesSource dvs = ValueSource.fromDoubleValuesSource(DoubleValuesSource.fromDoubleField("double")).asDoubleValuesSource();
+    assertHits(new FunctionQuery(ValueSource.fromDoubleValuesSource(dvs)), new float[] { 3.63f, 5.65f });
   }
     
   /** 
@@ -627,7 +660,7 @@ public class TestValueSources extends LuceneTestCase {
       expected[i] = new ScoreDoc(i, scores[i]);
     }
     TopDocs docs = searcher.search(q, documents.size(),
-        new Sort(new SortField("id", SortField.Type.STRING)), true, false);
+        new Sort(new SortField("id", SortField.Type.STRING)), true);
     CheckHits.checkHits(random(), q, "", searcher, expectedDocs);
     CheckHits.checkHitsQuery(q, expected, docs.scoreDocs, expectedDocs);
     CheckHits.checkExplanations(q, "", searcher);

@@ -28,6 +28,7 @@ import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Matches;
 import org.apache.lucene.search.MatchesIterator;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CharsRefBuilder;
 import org.apache.lucene.util.automaton.CharacterRunAutomaton;
@@ -133,7 +134,7 @@ public abstract class FieldOffsetStrategy {
     IndexSearcher indexSearcher = new IndexSearcher(leafReader);
     indexSearcher.setQueryCache(null);
     Matches matches = indexSearcher.rewrite(components.getQuery())
-        .createWeight(indexSearcher, false, 1.0f)
+        .createWeight(indexSearcher, ScoreMode.COMPLETE_NO_SCORES, 1.0f)
         .matches(leafReader.getContext(), docId);
     if (matches == null) {
       return; // doc doesn't match

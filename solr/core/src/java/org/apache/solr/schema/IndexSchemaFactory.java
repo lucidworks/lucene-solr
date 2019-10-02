@@ -15,21 +15,21 @@
  * limitations under the License.
  */
 package org.apache.solr.schema;
-import org.apache.lucene.util.Version;
+
+import java.io.File;
+import java.io.InputStream;
+import java.lang.invoke.MethodHandles;
+
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.core.PluginInfo;
-import org.apache.solr.core.SolrConfig;         
+import org.apache.solr.core.SolrConfig;
 import org.apache.solr.core.SolrResourceLoader;
 import org.apache.solr.util.SystemIdResolver;
 import org.apache.solr.util.plugin.NamedListInitializedPlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.InputSource;
-
-import java.io.File;
-import java.io.InputStream;
-import java.lang.invoke.MethodHandles;
 
 /** Base class for factories for IndexSchema implementations */
 public abstract class IndexSchemaFactory implements NamedListInitializedPlugin {
@@ -53,7 +53,7 @@ public abstract class IndexSchemaFactory implements NamedListInitializedPlugin {
     }
     InputSource inputSource = new InputSource(schemaInputStream);
     inputSource.setSystemId(SystemIdResolver.createSystemIdFromResourceName(resourceName));
-    IndexSchema schema = new IndexSchema(config, resourceName, inputSource);
+    IndexSchema schema = new IndexSchema(resourceName, inputSource, config.luceneMatchVersion, loader);
     return schema;
   }
 
@@ -65,12 +65,7 @@ public abstract class IndexSchemaFactory implements NamedListInitializedPlugin {
       factory = config.getResourceLoader().newInstance(info.className, IndexSchemaFactory.class);
       factory.init(info.initArgs);
     } else {
-      if (config.luceneMatchVersion.onOrAfter(Version.LUCENE_6_0_0)) {
-        // ManagedIndexSchemaFactory is SolrCoreAware so we must create using the resource loader
-        factory = config.getResourceLoader().newInstance(ManagedIndexSchemaFactory.class.getName(), IndexSchemaFactory.class);
-      } else {
-        factory = new ClassicIndexSchemaFactory();
-      }
+      factory = config.getResourceLoader().newInstance(ManagedIndexSchemaFactory.class.getName(), IndexSchemaFactory.class);
     }
     IndexSchema schema = factory.create(resourceName, config);
     return schema;
