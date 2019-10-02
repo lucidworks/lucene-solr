@@ -1,6 +1,7 @@
 eDiscovery Solr 7.7.2 fixes.
 
 Fixes:-
+SOLR-13538
 SOLR-13672 
 SOLR-8346
 SOLR-11763
