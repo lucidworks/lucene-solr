@@ -310,25 +310,29 @@ public class TestStressIndexing2 extends LuceneTestCase {
     int[] r2r1 = new int[r2.maxDoc()];   // r2 id to r1 id mapping
 
     // create mapping from id2 space to id2 based on idField
-    if (FieldInfos.getIndexedFields(r1).isEmpty()) {
-      assertTrue(FieldInfos.getIndexedFields(r2).isEmpty());
+    final Fields f1 = MultiFields.getFields(r1);
+    if (f1 == null) {
+      // make sure r2 is empty
+      assertNull(MultiFields.getFields(r2));
       return;
     }
-    final Terms terms1 = MultiTerms.getTerms(r1, idField);
+    final Terms terms1 = f1.terms(idField);
     if (terms1 == null) {
-      assertTrue(MultiTerms.getTerms(r2, idField) == null);
+      assertTrue(MultiFields.getFields(r2) == null ||
+                 MultiFields.getFields(r2).terms(idField) == null);
       return;
     }
     final TermsEnum termsEnum = terms1.iterator();
 
-    final Bits liveDocs1 = MultiBits.getLiveDocs(r1);
-    final Bits liveDocs2 = MultiBits.getLiveDocs(r2);
+    final Bits liveDocs1 = MultiFields.getLiveDocs(r1);
+    final Bits liveDocs2 = MultiFields.getLiveDocs(r2);
     
-    Terms terms2 = MultiTerms.getTerms(r2, idField);
-    if (terms2 == null) {
+    Fields fields = MultiFields.getFields(r2);
+    Terms terms2 = fields.terms(idField);
+    if (fields.size() == 0 || terms2 == null) {
       // make sure r1 is in fact empty (eg has only all
       // deleted docs):
-      Bits liveDocs = MultiBits.getLiveDocs(r1);
+      Bits liveDocs = MultiFields.getLiveDocs(r1);
       PostingsEnum docs = null;
       while(termsEnum.next() != null) {
         docs = TestUtil.docs(random(), termsEnum, docs, PostingsEnum.NONE);
@@ -459,8 +463,10 @@ public class TestStressIndexing2 extends LuceneTestCase {
 
     // Verify postings
     //System.out.println("TEST: create te1");
-    final Iterator<String> fields1Enum = FieldInfos.getIndexedFields(r1).stream().sorted().iterator();
-    final Iterator<String> fields2Enum = FieldInfos.getIndexedFields(r2).stream().sorted().iterator();
+    final Fields fields1 = MultiFields.getFields(r1);
+    final Iterator<String> fields1Enum = fields1.iterator();
+    final Fields fields2 = MultiFields.getFields(r2);
+    final Iterator<String> fields2Enum = fields2.iterator();
 
 
     String field1=null, field2=null;
@@ -484,7 +490,7 @@ public class TestStressIndexing2 extends LuceneTestCase {
             break;
           }
           field1 = fields1Enum.next();
-          Terms terms = MultiTerms.getTerms(r1, field1);
+          Terms terms = fields1.terms(field1);
           if (terms == null) {
             continue;
           }
@@ -520,7 +526,7 @@ public class TestStressIndexing2 extends LuceneTestCase {
             break;
           }
           field2 = fields2Enum.next();
-          Terms terms = MultiTerms.getTerms(r2, field2);
+          Terms terms = fields2.terms(field2);
           if (terms == null) {
             continue;
           }

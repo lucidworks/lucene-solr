@@ -17,10 +17,12 @@
 package org.apache.lucene.analysis.miscellaneous;
 
 
-import java.util.Map;
-
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
+
+import java.util.Map;
 
 /**
  * Factory for {@link org.apache.lucene.analysis.miscellaneous.ScandinavianNormalizationFilter}.
@@ -33,7 +35,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * &lt;/fieldType&gt;</pre>
  * @since 4.4.0
  */
-public class ScandinavianNormalizationFilterFactory extends TokenFilterFactory {
+public class ScandinavianNormalizationFilterFactory extends TokenFilterFactory
+    implements MultiTermAwareComponent {
 
   public ScandinavianNormalizationFilterFactory(Map<String, String> args) {
     super(args);
@@ -48,7 +51,7 @@ public class ScandinavianNormalizationFilterFactory extends TokenFilterFactory {
   }
 
   @Override
-  public TokenStream normalize(TokenStream input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

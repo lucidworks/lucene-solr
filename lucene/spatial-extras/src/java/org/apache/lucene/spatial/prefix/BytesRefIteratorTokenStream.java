@@ -28,7 +28,7 @@ import org.apache.lucene.util.BytesRefIterator;
  *
  * @lucene.internal
  */
-public class BytesRefIteratorTokenStream extends TokenStream {
+class BytesRefIteratorTokenStream extends TokenStream {
 
   public BytesRefIterator getBytesRefIterator() {
     return bytesIter;

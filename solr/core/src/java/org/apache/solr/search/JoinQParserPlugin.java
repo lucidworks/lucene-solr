@@ -36,9 +36,9 @@ import org.apache.lucene.search.DocIdSet;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
+import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.FixedBitSet;
@@ -165,20 +165,19 @@ class JoinQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    return new JoinQueryWeight((SolrIndexSearcher) searcher, scoreMode, boost);
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+    return new JoinQueryWeight((SolrIndexSearcher)searcher, boost);
   }
 
   private class JoinQueryWeight extends ConstantScoreWeight {
     SolrIndexSearcher fromSearcher;
     RefCounted<SolrIndexSearcher> fromRef;
     SolrIndexSearcher toSearcher;
+    private Similarity similarity;
     ResponseBuilder rb;
-    ScoreMode scoreMode;
 
-    public JoinQueryWeight(SolrIndexSearcher searcher, ScoreMode scoreMode, float boost) {
+    public JoinQueryWeight(SolrIndexSearcher searcher, float boost) {
       super(JoinQuery.this, boost);
-      this.scoreMode = scoreMode;
       this.fromSearcher = searcher;
       SolrRequestInfo info = SolrRequestInfo.getRequestInfo();
       if (info != null) {
@@ -280,7 +279,7 @@ class JoinQuery extends Query {
       if (readerSetIterator == null) {
         return null;
       }
-      return new ConstantScoreScorer(this, score(), scoreMode, readerSetIterator);
+      return new ConstantScoreScorer(this, score(), readerSetIterator);
     }
 
     @Override

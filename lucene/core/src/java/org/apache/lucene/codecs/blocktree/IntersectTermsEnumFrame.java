@@ -95,6 +95,17 @@ final class IntersectTermsEnumFrame {
   int startBytePos;
   int suffix;
 
+  // When we are on an auto-prefix term this is the starting lead byte
+  // of the suffix (e.g. 'a' for the foo[a-m]* case):
+  int floorSuffixLeadStart;
+
+  // When we are on an auto-prefix term this is the ending lead byte
+  // of the suffix (e.g. 'm' for the foo[a-m]* case):
+  int floorSuffixLeadEnd;
+
+  // True if the term we are currently on is an auto-prefix term:
+  boolean isAutoPrefixTerm;
+
   private final IntersectTermsEnum ite;
 
   public IntersectTermsEnumFrame(IntersectTermsEnum ite, int ord) throws IOException {
@@ -208,6 +219,10 @@ final class IntersectTermsEnumFrame {
       // written one after another -- tail recurse:
       fpEnd = ite.in.getFilePointer();
     }
+
+    // Necessary in case this ord previously was an auto-prefix
+    // term but now we recurse to a new leaf block
+    isAutoPrefixTerm = false;
   }
 
   // TODO: maybe add scanToLabel; should give perf boost
@@ -273,9 +288,7 @@ final class IntersectTermsEnumFrame {
 
       // stats
       termState.docFreq = statsReader.readVInt();
-      if (ite.fr.fieldInfo.getIndexOptions() == IndexOptions.DOCS) {
-        termState.totalTermFreq = termState.docFreq; // all postings have freq=1
-      } else {
+      if (ite.fr.fieldInfo.getIndexOptions() != IndexOptions.DOCS) {
         termState.totalTermFreq = termState.docFreq + statsReader.readVLong();
       }
       // metadata 

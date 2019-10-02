@@ -24,7 +24,6 @@ import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.ValueSourceScorer;
-import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.CharsRefBuilder;
@@ -116,7 +115,7 @@ public abstract class DocTermsIndexDocValues extends FunctionValues {
   public abstract Object objectVal(int doc) throws IOException;  // force subclasses to override
 
   @Override
-  public ValueSourceScorer getRangeScorer(Weight weight, LeafReaderContext readerContext, String lowerVal, String upperVal, boolean includeLower, boolean includeUpper) throws IOException {
+  public ValueSourceScorer getRangeScorer(LeafReaderContext readerContext, String lowerVal, String upperVal, boolean includeLower, boolean includeUpper) throws IOException {
     // TODO: are lowerVal and upperVal in indexed form or not?
     lowerVal = lowerVal == null ? null : toTerm(lowerVal);
     upperVal = upperVal == null ? null : toTerm(upperVal);
@@ -144,7 +143,7 @@ public abstract class DocTermsIndexDocValues extends FunctionValues {
     final int ll = lower;
     final int uu = upper;
 
-    return new ValueSourceScorer(weight, readerContext, this) {
+    return new ValueSourceScorer(readerContext, this) {
       final SortedDocValues values = readerContext.reader().getSortedDocValues(field);
       private int lastDocID;
       

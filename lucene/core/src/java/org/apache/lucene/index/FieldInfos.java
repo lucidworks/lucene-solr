@@ -24,12 +24,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import org.apache.lucene.util.ArrayUtil;
 
@@ -129,43 +126,7 @@ public class FieldInfos implements Iterable<FieldInfo> {
     }
     values = Collections.unmodifiableCollection(Arrays.asList(valuesTemp.toArray(new FieldInfo[0])));
   }
-
-  /** Call this to get the (merged) FieldInfos for a
-   *  composite reader.
-   *  <p>
-   *  NOTE: the returned field numbers will likely not
-   *  correspond to the actual field numbers in the underlying
-   *  readers, and codec metadata ({@link FieldInfo#getAttribute(String)}
-   *  will be unavailable.
-   */
-  public static FieldInfos getMergedFieldInfos(IndexReader reader) {
-    final List<LeafReaderContext> leaves = reader.leaves();
-    if (leaves.isEmpty()) {
-      return FieldInfos.EMPTY;
-    } else if (leaves.size() == 1) {
-      return leaves.get(0).reader().getFieldInfos();
-    } else {
-      final String softDeletesField = leaves.stream()
-          .map(l -> l.reader().getFieldInfos().getSoftDeletesField())
-          .filter(Objects::nonNull)
-          .findAny().orElse(null);
-      final Builder builder = new Builder(new FieldNumbers(softDeletesField));
-      for (final LeafReaderContext ctx : leaves) {
-        builder.add(ctx.reader().getFieldInfos());
-      }
-      return builder.finish();
-    }
-  }
-
-  /** Returns a set of names of fields that have a terms index.  The order is undefined. */
-  public static Collection<String> getIndexedFields(IndexReader reader) {
-    return reader.leaves().stream()
-        .flatMap(l -> StreamSupport.stream(l.reader().getFieldInfos().spliterator(), false)
-        .filter(fi -> fi.getIndexOptions() != IndexOptions.NONE))
-        .map(fi -> fi.name)
-        .collect(Collectors.toSet());
-  }
-
+  
   /** Returns true if any fields have freqs */
   public boolean hasFreq() {
     return hasFreq;
@@ -268,7 +229,6 @@ public class FieldInfos implements Iterable<FieldInfo> {
     
     private final Map<Integer,String> numberToName;
     private final Map<String,Integer> nameToNumber;
-    private final Map<String, IndexOptions> indexOptions;
     // We use this to enforce that a given field never
     // changes DV type, even across segments / IndexWriter
     // sessions:
@@ -287,7 +247,6 @@ public class FieldInfos implements Iterable<FieldInfo> {
     FieldNumbers(String softDeletesFieldName) {
       this.nameToNumber = new HashMap<>();
       this.numberToName = new HashMap<>();
-      this.indexOptions = new HashMap<>();
       this.docValuesType = new HashMap<>();
       this.dimensions = new HashMap<>();
       this.softDeletesFieldName = softDeletesFieldName;
@@ -299,15 +258,7 @@ public class FieldInfos implements Iterable<FieldInfo> {
      * number assigned if possible otherwise the first unassigned field number
      * is used as the field number.
      */
-    synchronized int addOrGet(String fieldName, int preferredFieldNumber, IndexOptions indexOptions, DocValuesType dvType, int dataDimensionCount, int indexDimensionCount, int dimensionNumBytes, boolean isSoftDeletesField) {
-      if (indexOptions != IndexOptions.NONE) {
-        IndexOptions currentOpts = this.indexOptions.get(fieldName);
-        if (currentOpts == null) {
-          this.indexOptions.put(fieldName, indexOptions);
-        } else if (currentOpts != IndexOptions.NONE && currentOpts != indexOptions) {
-          throw new IllegalArgumentException("cannot change field \"" + fieldName + "\" from index options=" + currentOpts + " to inconsistent index options=" + indexOptions);
-        }
-      }
+    synchronized int addOrGet(String fieldName, int preferredFieldNumber, DocValuesType dvType, int dataDimensionCount, int indexDimensionCount, int dimensionNumBytes, boolean isSoftDeletesField) {
       if (dvType != DocValuesType.NONE) {
         DocValuesType currentDVType = docValuesType.get(fieldName);
         if (currentDVType == null) {
@@ -361,19 +312,6 @@ public class FieldInfos implements Iterable<FieldInfo> {
       }
 
       return fieldNumber.intValue();
-    }
-
-    synchronized void verifyConsistent(Integer number, String name, IndexOptions indexOptions) {
-      if (name.equals(numberToName.get(number)) == false) {
-        throw new IllegalArgumentException("field number " + number + " is already mapped to field name \"" + numberToName.get(number) + "\", not \"" + name + "\"");
-      }
-      if (number.equals(nameToNumber.get(name)) == false) {
-        throw new IllegalArgumentException("field name \"" + name + "\" is already mapped to field number \"" + nameToNumber.get(name) + "\", not \"" + number + "\"");
-      }
-      IndexOptions currentIndexOptions = this.indexOptions.get(name);
-      if (indexOptions != IndexOptions.NONE && currentIndexOptions != null && currentIndexOptions != IndexOptions.NONE && indexOptions != currentIndexOptions) {
-        throw new IllegalArgumentException("cannot change field \"" + name + "\" from index options=" + currentIndexOptions + " to inconsistent index options=" + indexOptions);
-      }
     }
 
     synchronized void verifyConsistent(Integer number, String name, DocValuesType dvType) {
@@ -431,14 +369,8 @@ public class FieldInfos implements Iterable<FieldInfo> {
     synchronized void clear() {
       numberToName.clear();
       nameToNumber.clear();
-      indexOptions.clear();
       docValuesType.clear();
       dimensions.clear();
-    }
-
-    synchronized void setIndexOptions(int number, String name, IndexOptions indexOptions) {
-      verifyConsistent(number, name, indexOptions);
-      this.indexOptions.put(name, indexOptions);
     }
 
     synchronized void setDocValuesType(int number, String name, DocValuesType dvType) {
@@ -492,7 +424,7 @@ public class FieldInfos implements Iterable<FieldInfo> {
         // before then we'll get the same name and number,
         // else we'll allocate a new one:
         final boolean isSoftDeletesField = name.equals(globalFieldNumbers.softDeletesFieldName);
-        final int fieldNumber = globalFieldNumbers.addOrGet(name, -1, IndexOptions.NONE, DocValuesType.NONE, 0, 0, 0, isSoftDeletesField);
+        final int fieldNumber = globalFieldNumbers.addOrGet(name, -1, DocValuesType.NONE, 0, 0, 0, isSoftDeletesField);
         fi = new FieldInfo(name, fieldNumber, false, false, false, IndexOptions.NONE, DocValuesType.NONE, -1, new HashMap<>(), 0, 0, 0, isSoftDeletesField);
         assert !byName.containsKey(fi.name);
         globalFieldNumbers.verifyConsistent(Integer.valueOf(fi.number), fi.name, DocValuesType.NONE);
@@ -525,7 +457,7 @@ public class FieldInfos implements Iterable<FieldInfo> {
         // number for this field.  If the field was seen
         // before then we'll get the same name and number,
         // else we'll allocate a new one:
-        final int fieldNumber = globalFieldNumbers.addOrGet(name, preferredFieldNumber, indexOptions, docValues, dataDimensionCount, indexDimensionCount, dimensionNumBytes, isSoftDeletesField);
+        final int fieldNumber = globalFieldNumbers.addOrGet(name, preferredFieldNumber, docValues, dataDimensionCount, indexDimensionCount, dimensionNumBytes, isSoftDeletesField);
         fi = new FieldInfo(name, fieldNumber, storeTermVector, omitNorms, storePayloads, indexOptions, docValues, dvGen, attributes, dataDimensionCount, indexDimensionCount, dimensionNumBytes, isSoftDeletesField);
         assert !byName.containsKey(fi.name);
         globalFieldNumbers.verifyConsistent(Integer.valueOf(fi.number), fi.name, fi.getDocValuesType());

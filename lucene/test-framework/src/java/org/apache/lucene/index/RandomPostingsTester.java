@@ -16,18 +16,11 @@
  */
 package org.apache.lucene.index;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,14 +32,10 @@ import java.util.Random;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.function.IntToLongFunction;
-import java.util.stream.Collectors;
 
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.FieldsProducer;
-import org.apache.lucene.codecs.NormsProducer;
-import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FlushInfo;
 import org.apache.lucene.store.IOContext;
@@ -62,11 +51,14 @@ import org.apache.lucene.util.automaton.AutomatonTestUtil;
 import org.apache.lucene.util.automaton.AutomatonTestUtil.RandomAcceptedStrings;
 import org.apache.lucene.util.automaton.CompiledAutomaton;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
 /** Helper class extracted from BasePostingsFormatTestCase to exercise a postings format. */
 public class RandomPostingsTester {
-
-  private static final IntToLongFunction DOC_TO_NORM = doc -> 1 + (doc & 0x0f);
-  private static final long MAX_NORM = 0x10;
 
   /** Which features to test. */
   public enum Option {
@@ -519,7 +511,7 @@ public class RandomPostingsTester {
     }
   }
 
-  private static class SeedTermsEnum extends BaseTermsEnum {
+  private static class SeedTermsEnum extends TermsEnum {
     final SortedMap<BytesRef,SeedAndOrd> terms;
     final IndexOptions maxAllowed;
     final boolean allowPayloads;
@@ -607,11 +599,6 @@ public class RandomPostingsTester {
       }
       return getSeedPostings(current.getKey().utf8ToString(), current.getValue().seed, maxAllowed, allowPayloads);
     }
-
-    @Override
-    public ImpactsEnum impacts(int flags) throws IOException {
-      throw new UnsupportedOperationException();
-    }
   }
 
   private static class ThreadState {
@@ -666,70 +653,10 @@ public class RandomPostingsTester {
 
     Fields seedFields = new SeedFields(fields, newFieldInfos, maxAllowed, allowPayloads);
 
-    NormsProducer fakeNorms = new NormsProducer() {
-
-      @Override
-      public void close() throws IOException {}
-
-      @Override
-      public long ramBytesUsed() {
-        return 0;
-      }
-
-      @Override
-      public NumericDocValues getNorms(FieldInfo field) throws IOException {
-        if (newFieldInfos.fieldInfo(field.number).hasNorms()) {
-          return new NumericDocValues() {
-            
-            int doc = -1;
-            
-            @Override
-            public int nextDoc() throws IOException {
-              if (++doc == segmentInfo.maxDoc()) {
-                return doc = NO_MORE_DOCS;
-              }
-              return doc;
-            }
-            
-            @Override
-            public int docID() {
-              return doc;
-            }
-            
-            @Override
-            public long cost() {
-              return segmentInfo.maxDoc();
-            }
-            
-            @Override
-            public int advance(int target) throws IOException {
-              return doc = target >= segmentInfo.maxDoc() ? DocIdSetIterator.NO_MORE_DOCS : target;
-            }
-            
-            @Override
-            public boolean advanceExact(int target) throws IOException {
-              doc = target;
-              return true;
-            }
-            
-            @Override
-            public long longValue() throws IOException {
-              return DOC_TO_NORM.applyAsLong(doc);
-            }
-          };
-        } else {
-          return null;
-        }
-      }
-
-      @Override
-      public void checkIntegrity() throws IOException {}
-      
-    };
     FieldsConsumer consumer = codec.postingsFormat().fieldsConsumer(writeState);
     boolean success = false;
     try {
-      consumer.write(seedFields, fakeNorms);
+      consumer.write(seedFields);
       success = true;
     } finally {
       if (success) {
@@ -1046,156 +973,6 @@ public class RandomPostingsTester {
             assertEquals("endOffset isn't -1", -1, postingsEnum.endOffset());
           }
         }
-      }
-    }
-
-    if (options.contains(Option.SKIPPING)) {
-      final IntToLongFunction docToNorm;
-      if (fieldInfo.hasNorms()) {
-        docToNorm = DOC_TO_NORM;
-      } else {
-        docToNorm = doc -> 1L;
-      }
-
-      // First check impacts and block uptos
-      int max = -1;
-      List<Impact> impactsCopy = null;
-      int flags = PostingsEnum.FREQS;
-      if (doCheckPositions) {
-        flags |= PostingsEnum.POSITIONS;
-        if (doCheckOffsets) {
-          flags |= PostingsEnum.OFFSETS;
-        }
-        if (doCheckPayloads) {
-          flags |= PostingsEnum.PAYLOADS;
-        }
-      }
-
-      ImpactsEnum impactsEnum = termsEnum.impacts(flags);
-      PostingsEnum postings = termsEnum.postings(null, flags);
-      for (int doc = impactsEnum.nextDoc(); ; doc = impactsEnum.nextDoc()) {
-        assertEquals(postings.nextDoc(), doc);
-        if (doc == DocIdSetIterator.NO_MORE_DOCS) {
-          break;
-        }
-        int freq = postings.freq();
-        assertEquals("freq is wrong", freq, impactsEnum.freq());
-        for (int i = 0; i < freq; ++i) {
-          int pos = postings.nextPosition();
-          assertEquals("position is wrong", pos, impactsEnum.nextPosition());
-          if (doCheckOffsets) {
-            assertEquals("startOffset is wrong", postings.startOffset(), impactsEnum.startOffset());
-            assertEquals("endOffset is wrong", postings.endOffset(), impactsEnum.endOffset());
-          }
-          if (doCheckPayloads) {
-            assertEquals("payload is wrong", postings.getPayload(), impactsEnum.getPayload());
-          }
-        }
-        if (doc > max) {
-          impactsEnum.advanceShallow(doc);
-          Impacts impacts = impactsEnum.getImpacts();
-          CheckIndex.checkImpacts(impacts, doc);
-          impactsCopy = impacts.getImpacts(0)
-              .stream()
-              .map(i -> new Impact(i.freq, i.norm))
-              .collect(Collectors.toList());
-        }
-        freq = impactsEnum.freq();
-        long norm = docToNorm.applyAsLong(doc);
-        int idx = Collections.binarySearch(impactsCopy, new Impact(freq, norm), Comparator.comparing(i -> i.freq));
-        if (idx < 0) {
-          idx = -1 - idx;
-        }
-        assertTrue("Got " + new Impact(freq, norm) + " in postings, but no impact triggers equal or better scores in " + impactsCopy,
-            idx <= impactsCopy.size() && impactsCopy.get(idx).norm <= norm);
-      }
-
-      // Now check advancing
-      impactsEnum = termsEnum.impacts(flags);
-      postings = termsEnum.postings(postings, flags);
-
-      max = -1;
-      while (true) {
-        int doc = impactsEnum.docID();
-        boolean advance;
-        int target;
-        if (random.nextBoolean()) {
-          advance = false;
-          target = doc + 1;
-        } else {
-          advance = true;
-          int delta = Math.min(1 + random.nextInt(512), DocIdSetIterator.NO_MORE_DOCS - doc);
-          target = impactsEnum.docID() + delta;
-        }
-
-        if (target > max && random.nextBoolean()) {
-          int delta = Math.min(random.nextInt(512), DocIdSetIterator.NO_MORE_DOCS - target);
-          max = target + delta;
-          
-          impactsEnum.advanceShallow(target);
-          Impacts impacts = impactsEnum.getImpacts();
-          CheckIndex.checkImpacts(impacts, target);
-          impactsCopy = Collections.singletonList(new Impact(Integer.MAX_VALUE, 1L));
-          for (int level = 0; level < impacts.numLevels(); ++level) {
-            if (impacts.getDocIdUpTo(level) >= max) {
-              impactsCopy = impacts.getImpacts(level)
-                  .stream()
-                  .map(i -> new Impact(i.freq, i.norm))
-                  .collect(Collectors.toList());
-              break;
-            }
-          }
-        }
-
-        if (advance) {
-          doc = impactsEnum.advance(target);
-        } else {
-          doc = impactsEnum.nextDoc();
-        }
-
-        assertEquals(postings.advance(target), doc);
-        if (doc == DocIdSetIterator.NO_MORE_DOCS) {
-          break;
-        }
-        int freq = postings.freq();
-        assertEquals("freq is wrong", freq, impactsEnum.freq());
-        for (int i = 0; i < postings.freq(); ++i) {
-          int pos = postings.nextPosition();
-          assertEquals("position is wrong", pos, impactsEnum.nextPosition());
-          if (doCheckOffsets) {
-            assertEquals("startOffset is wrong", postings.startOffset(), impactsEnum.startOffset());
-            assertEquals("endOffset is wrong", postings.endOffset(), impactsEnum.endOffset());
-          }
-          if (doCheckPayloads) {
-            assertEquals("payload is wrong", postings.getPayload(), impactsEnum.getPayload());
-          }
-        }
-
-        if (doc > max) {
-          int delta = Math.min(1 + random.nextInt(512), DocIdSetIterator.NO_MORE_DOCS - doc);
-          max = doc + delta;
-          Impacts impacts = impactsEnum.getImpacts();
-          CheckIndex.checkImpacts(impacts, doc);
-          impactsCopy = Collections.singletonList(new Impact(Integer.MAX_VALUE, 1L));
-          for (int level = 0; level < impacts.numLevels(); ++level) {
-            if (impacts.getDocIdUpTo(level) >= max) {
-              impactsCopy = impacts.getImpacts(level)
-                  .stream()
-                  .map(i -> new Impact(i.freq, i.norm))
-                  .collect(Collectors.toList());
-              break;
-            }
-          }
-        }
-
-        freq = impactsEnum.freq();
-        long norm = docToNorm.applyAsLong(doc);
-        int idx = Collections.binarySearch(impactsCopy, new Impact(freq, norm), Comparator.comparing(i -> i.freq));
-        if (idx < 0) {
-          idx = -1 - idx;
-        }
-        assertTrue("Got " + new Impact(freq, norm) + " in postings, but no impact triggers equal or better scores in " + impactsCopy,
-            idx <= impactsCopy.size() && impactsCopy.get(idx).norm <= norm);
       }
     }
   }

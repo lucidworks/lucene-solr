@@ -16,8 +16,6 @@
  */
 package org.apache.lucene.search.similarities;
 
-import org.apache.lucene.search.Explanation;
-
 /**
  * F2EXP is defined as Sum(tfln(term_doc_freq, docLen)*IDF(term))
  * where IDF(t) = pow((N+1)/df(t), k) N=total num of docs, df=doc freq
@@ -58,23 +56,23 @@ public class AxiomaticF2EXP extends Axiomatic {
    * compute the term frequency component
    */
   @Override
-  protected double tf(BasicStats stats, double freq, double docLen) {
-    return 1.0;
+  protected float tf(BasicStats stats, float freq, float docLen) {
+    return 1f;
   }
 
   /**
    * compute the document length component
    */
   @Override
-  protected double ln(BasicStats stats, double freq, double docLen) {
-    return 1.0;
+  protected float ln(BasicStats stats, float freq, float docLen) {
+    return 1f;
   }
 
   /**
    * compute the mixed term frequency and document length component
    */
   @Override
-  protected double tfln(BasicStats stats, double freq, double docLen) {
+  protected float tfln(BasicStats stats, float freq, float docLen) {
     return freq / (freq + this.s + this.s * docLen / stats.getAvgFieldLength());
   }
 
@@ -82,49 +80,15 @@ public class AxiomaticF2EXP extends Axiomatic {
    * compute the inverted document frequency component
    */
   @Override
-  protected double idf(BasicStats stats, double freq, double docLen) {
-    return Math.pow((stats.getNumberOfDocuments() + 1.0) / stats.getDocFreq(), this.k);
+  protected float idf(BasicStats stats, float freq, float docLen) {
+    return (float) Math.pow((stats.getNumberOfDocuments() + 1.0) / stats.getDocFreq(), this.k);
   }
 
   /**
    * compute the gamma component
    */
   @Override
-  protected double gamma(BasicStats stats, double freq, double docLen) {
-    return 0.0;
+  protected float gamma(BasicStats stats, float freq, float docLen) {
+    return 0f;
   }
-
-  @Override
-  protected Explanation tfExplain(BasicStats stats, double freq, double docLen){
-    return Explanation.match((float) tf(stats, freq, docLen),
-        "tf, term frequency, equals to 1");
-  };
-
-  @Override
-  protected Explanation lnExplain(BasicStats stats, double freq, double docLen){
-    return Explanation.match((float) ln(stats, freq, docLen),
-        "ln, document length, equals to 1");
-  };
-
-  protected Explanation tflnExplain(BasicStats stats, double freq, double docLen){
-    return Explanation.match((float) tfln(stats, freq, docLen),
-        "tfln, mixed term frequency and document length, " +
-        "computed as freq / (freq + s + s * dl / avgdl) from:",
-        Explanation.match((float) freq,
-            "freq, number of occurrences of term in the document"),
-        Explanation.match((float) docLen,
-            "dl, length of field"),
-        Explanation.match((float) stats.getAvgFieldLength(),
-            "avgdl, average length of field across all documents"));
-  };
-
-  protected Explanation idfExplain(BasicStats stats, double freq, double docLen){
-    return Explanation.match((float) idf(stats, freq, docLen),
-        "idf, inverted document frequency computed as " +
-            "Math.pow((N + 1) / n, k) from:",
-        Explanation.match((float) stats.getNumberOfDocuments(),
-            "N, total number of documents with field"),
-        Explanation.match((float) stats.getDocFreq(),
-            "n, number of documents containing term"));
-  };
 }

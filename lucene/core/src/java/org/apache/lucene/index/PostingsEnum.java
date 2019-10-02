@@ -20,6 +20,7 @@ package org.apache.lucene.index;
 import java.io.IOException;
 
 import org.apache.lucene.search.DocIdSetIterator;
+import org.apache.lucene.util.AttributeSource;
 import org.apache.lucene.util.BytesRef;
 
 /** Iterates through the postings.
@@ -62,6 +63,9 @@ public abstract class PostingsEnum extends DocIdSetIterator {
     return (flags & feature) == feature;
   }
 
+  @Deprecated
+  private AttributeSource atts = null;
+
   /** Sole constructor. (For invocation by subclass 
    *  constructors, typically implicit.) */
   protected PostingsEnum() {
@@ -78,6 +82,16 @@ public abstract class PostingsEnum extends DocIdSetIterator {
    * the result of this method is undefined.
    */
   public abstract int freq() throws IOException;
+  
+  /**
+   * Returns the related attributes.
+   * @deprecated this method is unused and will be removed in 7.0
+   */
+  @Deprecated
+  public AttributeSource attributes() {
+    if (atts == null) atts = new AttributeSource();
+    return atts;
+  }
 
   /**
    * Returns the next position, or -1 if positions were not indexed.

@@ -499,9 +499,7 @@ final class OrdsSegmentTermsEnumFrame {
       // stats
       state.docFreq = statsReader.readVInt();
       //if (DEBUG) System.out.println("    dF=" + state.docFreq);
-      if (ste.fr.fieldInfo.getIndexOptions() == IndexOptions.DOCS) {
-        state.totalTermFreq = state.docFreq; // all tf values are 1
-      } else {
+      if (ste.fr.fieldInfo.getIndexOptions() != IndexOptions.DOCS) {
         state.totalTermFreq = state.docFreq + statsReader.readVLong();
         //if (DEBUG) System.out.println("    totTF=" + state.totalTermFreq);
       }

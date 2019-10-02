@@ -37,9 +37,12 @@ import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause.Occur;
+import org.apache.lucene.search.Scorer.ChildScorer;
+import org.apache.lucene.search.similarities.BasicStats;
 import org.apache.lucene.search.similarities.ClassicSimilarity;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 
 // TODO: refactor to a base class, that collects freqs from the scorer tree
@@ -140,7 +143,7 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
     private final Set<Scorer> tqsSet = new HashSet<>();
     
     MyCollector() {
-      super(TopScoreDocCollector.create(10, Integer.MAX_VALUE));
+      super(TopScoreDocCollector.create(10));
     }
 
     public LeafCollector getLeafCollector(LeafReaderContext context)
@@ -149,7 +152,7 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
       return new FilterLeafCollector(super.getLeafCollector(context)) {
         
         @Override
-        public void setScorer(Scorable scorer) throws IOException {
+        public void setScorer(Scorer scorer) throws IOException {
           super.setScorer(scorer);
           tqsSet.clear();
           fillLeaves(scorer, tqsSet);
@@ -170,11 +173,11 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
       };
     }
     
-    private void fillLeaves(Scorable scorer, Set<Scorer> set) throws IOException {
-      if (scorer instanceof TermScorer) {
-        set.add((Scorer)scorer);
+    private void fillLeaves(Scorer scorer, Set<Scorer> set) throws IOException {
+      if (scorer.getWeight().getQuery() instanceof TermQuery) {
+        set.add(scorer);
       } else {
-        for (Scorable.ChildScorable child : scorer.getChildren()) {
+        for (ChildScorer child : scorer.getChildren()) {
           fillLeaves(child.child, set);
         }
       }
@@ -195,7 +198,7 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
     bq1.add(new TermQuery(new Term(F1, "lucene")), Occur.SHOULD);
     bq1.add(new PhraseQuery(F2, "search", "engine"), Occur.SHOULD);
 
-    Weight w1 = scorerSearcher.createWeight(scorerSearcher.rewrite(bq1.build()), ScoreMode.COMPLETE, 1);
+    Weight w1 = scorerSearcher.createWeight(scorerSearcher.rewrite(bq1.build()), true, 1);
     Scorer s1 = w1.scorer(reader.leaves().get(0));
     assertEquals(0, s1.iterator().nextDoc());
     assertEquals(2, s1.getChildren().size());
@@ -204,7 +207,7 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
     bq2.add(new TermQuery(new Term(F1, "lucene")), Occur.SHOULD);
     bq2.add(new PhraseQuery(F2, "search", "library"), Occur.SHOULD);
 
-    Weight w2 = scorerSearcher.createWeight(scorerSearcher.rewrite(bq2.build()), ScoreMode.COMPLETE, 1);
+    Weight w2 = scorerSearcher.createWeight(scorerSearcher.rewrite(bq2.build()), true, 1);
     Scorer s2 = w2.scorer(reader.leaves().get(0));
     assertEquals(0, s2.iterator().nextDoc());
     assertEquals(1, s2.getChildren().size());
@@ -217,7 +220,7 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
     bq.add(new PhraseQuery(F2, "search", "library"), Occur.SHOULD);
     bq.setMinimumNumberShouldMatch(2);
 
-    Weight w = scorerSearcher.createWeight(scorerSearcher.rewrite(bq.build()), ScoreMode.COMPLETE, 1);
+    Weight w = scorerSearcher.createWeight(scorerSearcher.rewrite(bq.build()), true, 1);
     Scorer s = w.scorer(reader.leaves().get(0));
     assertEquals(0, s.iterator().nextDoc());
     assertEquals(2, s.getChildren().size());
@@ -273,8 +276,8 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
     }
     
     @Override
-    public ScoreMode scoreMode() {
-      return ScoreMode.COMPLETE;
+    public boolean needsScores() {
+      return true;
     }
 
     @Override
@@ -282,7 +285,7 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
       return new LeafCollector() {
 
         @Override
-        public void setScorer(Scorable scorer) throws IOException {
+        public void setScorer(Scorer scorer) throws IOException {
           final StringBuilder builder = new StringBuilder();
           summarizeScorer(builder, scorer, 0);
           summaries.add(builder.toString());
@@ -295,13 +298,13 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
       };
     }
 
-    private static void summarizeScorer(final StringBuilder builder, final Scorable scorer, final int indent) throws IOException {
+    private static void summarizeScorer(final StringBuilder builder, final Scorer scorer, final int indent) throws IOException {
       builder.append(scorer.getClass().getSimpleName());
       if (scorer instanceof TermScorer) {
-        TermQuery termQuery = (TermQuery) ((Scorer)scorer).getWeight().getQuery();
+        TermQuery termQuery = (TermQuery) scorer.getWeight().getQuery();
         builder.append(" ").append(termQuery.getTerm().field()).append(":").append(termQuery.getTerm().text());
       }
-      for (final Scorable.ChildScorable childScorer : scorer.getChildren()) {
+      for (final ChildScorer childScorer : scorer.getChildren()) {
         indent(builder, indent + 1).append(childScorer.relationship).append(" ");
         summarizeScorer(builder, childScorer.child, indent + 2);
       }
@@ -327,11 +330,26 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
     }
 
     @Override
-    public SimScorer scorer(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
+    public SimWeight computeWeight(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
+      return new BasicStats("", boost);
+    }
+
+    @Override
+    public SimScorer simScorer(SimWeight weight, LeafReaderContext context) throws IOException {
       return new SimScorer() {
         @Override
-        public float score(float freq, long norm) {
+        public float score(int doc, float freq) throws IOException {
           return freq;
+        }
+
+        @Override
+        public float computeSlopFactor(int distance) {
+          return 1;
+        }
+
+        @Override
+        public float computePayloadFactor(int doc, int start, int end, BytesRef payload) {
+          return 1;
         }
       };
     }

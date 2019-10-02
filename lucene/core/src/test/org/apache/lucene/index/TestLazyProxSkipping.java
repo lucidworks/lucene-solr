@@ -25,11 +25,11 @@ import org.apache.lucene.document.Field;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.search.ScoreDoc;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.MockDirectoryWrapper;
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.TestUtil;
@@ -73,7 +73,7 @@ public class TestLazyProxSkipping extends LuceneTestCase {
             return new TokenStreamComponents(new MockTokenizer(MockTokenizer.WHITESPACE, true));
           }
         };
-        Directory directory = new SeekCountingDirectory(new ByteBuffersDirectory());
+        Directory directory = new SeekCountingDirectory(new RAMDirectory());
         // note: test explicitly disables payloads
         IndexWriter writer = new IndexWriter(
             directory,
@@ -130,6 +130,7 @@ public class TestLazyProxSkipping extends LuceneTestCase {
  
     public void testLazySkipping() throws IOException {
       final String fieldFormat = TestUtil.getPostingsFormat(this.field);
+      assumeFalse("This test cannot run with Memory postings format", fieldFormat.equals("Memory"));
       assumeFalse("This test cannot run with Direct postings format", fieldFormat.equals("Direct"));
       assumeFalse("This test cannot run with SimpleText postings format", fieldFormat.equals("SimpleText"));
 
@@ -151,7 +152,7 @@ public class TestLazyProxSkipping extends LuceneTestCase {
         writer.close();
         IndexReader reader = DirectoryReader.open(directory);
 
-        PostingsEnum tp = MultiTerms.getTermPostingsEnum(reader,
+        PostingsEnum tp = MultiFields.getTermPositionsEnum(reader,
                                                                    this.field,
                                                                    new BytesRef("b"));
 
@@ -161,7 +162,7 @@ public class TestLazyProxSkipping extends LuceneTestCase {
             assertEquals(tp.nextPosition(), 1);
         }
 
-        tp = MultiTerms.getTermPostingsEnum(reader,
+        tp = MultiFields.getTermPositionsEnum(reader,
                                               this.field,
                                               new BytesRef("a"));
 

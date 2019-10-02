@@ -280,10 +280,11 @@ public class TestParallelCompositeReader extends LuceneTestCase {
     assertNull(pr.document(0).get("f3"));
     assertNull(pr.document(0).get("f4"));
     // check that fields are there
-    assertNotNull(MultiTerms.getTerms(pr, "f1"));
-    assertNotNull(MultiTerms.getTerms(pr, "f2"));
-    assertNotNull(MultiTerms.getTerms(pr, "f3"));
-    assertNotNull(MultiTerms.getTerms(pr, "f4"));
+    Fields slow = MultiFields.getFields(pr);
+    assertNotNull(slow.terms("f1"));
+    assertNotNull(slow.terms("f2"));
+    assertNotNull(slow.terms("f3"));
+    assertNotNull(slow.terms("f4"));
     pr.close();
     
     // no stored fields at all
@@ -295,10 +296,11 @@ public class TestParallelCompositeReader extends LuceneTestCase {
     assertNull(pr.document(0).get("f3"));
     assertNull(pr.document(0).get("f4"));
     // check that fields are there
-    assertNull(MultiTerms.getTerms(pr, "f1"));
-    assertNull(MultiTerms.getTerms(pr, "f2"));
-    assertNotNull(MultiTerms.getTerms(pr, "f3"));
-    assertNotNull(MultiTerms.getTerms(pr, "f4"));
+    slow = MultiFields.getFields(pr);
+    assertNull(slow.terms("f1"));
+    assertNull(slow.terms("f2"));
+    assertNotNull(slow.terms("f3"));
+    assertNotNull(slow.terms("f4"));
     pr.close();
     
     // without overlapping
@@ -310,10 +312,11 @@ public class TestParallelCompositeReader extends LuceneTestCase {
     assertNull(pr.document(0).get("f3"));
     assertNull(pr.document(0).get("f4"));
     // check that fields are there
-    assertNull(MultiTerms.getTerms(pr, "f1"));
-    assertNull(MultiTerms.getTerms(pr, "f2"));
-    assertNotNull(MultiTerms.getTerms(pr, "f3"));
-    assertNotNull(MultiTerms.getTerms(pr, "f4"));
+    slow = MultiFields.getFields(pr);
+    assertNull(slow.terms("f1"));
+    assertNull(slow.terms("f2"));
+    assertNotNull(slow.terms("f3"));
+    assertNotNull(slow.terms("f4"));
     pr.close();
     
     // no main readers

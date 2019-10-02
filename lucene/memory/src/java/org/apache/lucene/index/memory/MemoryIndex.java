@@ -38,11 +38,10 @@ import org.apache.lucene.document.FieldType;
 import org.apache.lucene.index.*;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.Scorable;
-import org.apache.lucene.search.ScoreMode;
+import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.SimpleCollector;
 import org.apache.lucene.search.similarities.Similarity;
-import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.ByteBlockPool;
@@ -65,8 +64,8 @@ import org.apache.lucene.util.Version;
  * <p>
  * <b>Overview</b>
  * <p>
- * This class is a replacement/substitute for RAM-resident {@link Directory} implementations.
- * It is designed to
+ * This class is a replacement/substitute for a large subset of
+ * {@link RAMDirectory} functionality. It is designed to
  * enable maximum efficiency for on-the-fly matchmaking combining structured and 
  * fuzzy fulltext search in realtime streaming applications such as Nux XQuery based XML 
  * message queues, publish-subscribe systems for Blogs/newsfeeds, text chat, data acquisition and 
@@ -156,12 +155,11 @@ import org.apache.lucene.util.Version;
  * <p>
  * This class performs very well for very small texts (e.g. 10 chars) 
  * as well as for large texts (e.g. 10 MB) and everything in between. 
- * Typically, it is about 10-100 times faster than RAM-resident directory.
- *
- * Note that other <code>Directory</code> implementations have particularly
+ * Typically, it is about 10-100 times faster than <code>RAMDirectory</code>.
+ * Note that <code>RAMDirectory</code> has particularly 
  * large efficiency overheads for small to medium sized texts, both in time and space.
  * Indexing a field with N tokens takes O(N) in the best case, and O(N logN) in the worst 
- * case.
+ * case. Memory consumption is probably larger than for <code>RAMDirectory</code>.
  * <p>
  * Example throughput of many simple term queries over a single MemoryIndex: 
  * ~500000 queries/sec on a MacBook Pro, jdk 1.5.0_06, server VM. 
@@ -599,7 +597,6 @@ public class MemoryIndex {
           info.sliceArray.start[ord] = postingsWriter.startNewSlice();
         }
         info.sliceArray.freq[ord]++;
-        info.maxTermFrequency = Math.max(info.maxTermFrequency, info.sliceArray.freq[ord]);
         info.sumTotalTermFreq++;
         postingsWriter.writeInt(pos);
         if (storeOffsets) {
@@ -689,7 +686,7 @@ public class MemoryIndex {
     try {
       final float[] scores = new float[1]; // inits to 0.0f (no match)
       searcher.search(query, new SimpleCollector() {
-        private Scorable scorer;
+        private Scorer scorer;
 
         @Override
         public void collect(int doc) throws IOException {
@@ -697,18 +694,18 @@ public class MemoryIndex {
         }
 
         @Override
-        public void setScorer(Scorable scorer) {
+        public void setScorer(Scorer scorer) {
           this.scorer = scorer;
         }
         
         @Override
-        public ScoreMode scoreMode() {
-          return ScoreMode.COMPLETE;
+        public boolean needsScores() {
+          return true;
         }
       });
       float score = scores[0];
       return score;
-    } catch (IOException e) {
+    } catch (IOException e) { // can never happen (RAMDirectory)
       throw new RuntimeException(e);
     }
   }
@@ -809,8 +806,6 @@ public class MemoryIndex {
     private int numOverlapTokens;
 
     private long sumTotalTermFreq;
-    
-    private int maxTermFrequency;
 
     /** the last position encountered in this field for multi field support*/
     private int lastPosition;
@@ -905,8 +900,8 @@ public class MemoryIndex {
 
     NumericDocValues getNormDocValues() {
       if (norm == null) {
-        FieldInvertState invertState = new FieldInvertState(Version.LATEST.major, fieldInfo.name, fieldInfo.getIndexOptions(), lastPosition,
-            numTokens, numOverlapTokens, 0, maxTermFrequency, terms.size());
+        FieldInvertState invertState = new FieldInvertState(Version.LATEST.major, fieldInfo.name, fieldInfo.number,
+            numTokens, numOverlapTokens, 0);
         final long value = normSimilarity.computeNorm(invertState);
         if (DEBUG) System.err.println("MemoryIndexReader.norms: " + fieldInfo.name + ":" + value + ":" + numTokens);
 
@@ -1333,7 +1328,7 @@ public class MemoryIndex {
       }
     }
 
-    private class MemoryTermsEnum extends BaseTermsEnum {
+    private class MemoryTermsEnum extends TermsEnum {
       private final Info info;
       private final BytesRef br = new BytesRef();
       int termUpto = -1;
@@ -1430,11 +1425,6 @@ public class MemoryIndex {
         }
         final int ord = info.sortedTerms[termUpto];
         return ((MemoryPostingsEnum) reuse).reset(info.sliceArray.start[ord], info.sliceArray.end[ord], info.sliceArray.freq[ord]);
-      }
-
-      @Override
-      public ImpactsEnum impacts(int flags) throws IOException {
-        return new SlowImpactsEnum(postings(null, flags));
       }
 
       @Override

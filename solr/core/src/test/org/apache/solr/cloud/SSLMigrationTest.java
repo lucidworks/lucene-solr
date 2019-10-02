@@ -80,7 +80,7 @@ public class SSLMigrationTest extends AbstractFullDistribZkTestBase {
           .stopAtShutdown(false)
           .withServlets(getExtraServlets())
           .withFilters(getExtraRequestFilters())
-          .withSSLConfig(sslConfig.buildServerSSLConfig())
+          .withSSLConfig(sslConfig)
           .build();
 
       Properties props = new Properties();

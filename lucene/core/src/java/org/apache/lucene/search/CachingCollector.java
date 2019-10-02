@@ -47,7 +47,7 @@ public abstract class CachingCollector extends FilterCollector {
 
   private static final int INITIAL_ARRAY_SIZE = 128;
 
-  private static final class CachedScorable extends Scorable {
+  private static final class CachedScorer extends Scorer {
 
     // NOTE: these members are package-private b/c that way accessing them from
     // the outer class does not incur access check by the JVM. The same
@@ -55,6 +55,13 @@ public abstract class CachingCollector extends FilterCollector {
     // members.
     int doc;
     float score;
+
+    private CachedScorer() { super(null); }
+
+    @Override
+    public DocIdSetIterator iterator() {
+      throw new UnsupportedOperationException();
+    }
 
     @Override
     public final float score() { return score; }
@@ -167,8 +174,8 @@ public abstract class CachingCollector extends FilterCollector {
 
     /** Ensure the scores are collected so they can be replayed, even if the wrapped collector doesn't need them. */
     @Override
-    public ScoreMode scoreMode() {
-      return ScoreMode.COMPLETE;
+    public boolean needsScores() {
+      return true;
     }
 
     @Override
@@ -176,7 +183,7 @@ public abstract class CachingCollector extends FilterCollector {
       final int[] docs = this.docs.get(i);
       final float[] scores = this.scores.get(i);
       assert docs.length == scores.length;
-      final CachedScorable scorer = new CachedScorable();
+      final CachedScorer scorer = new CachedScorer();
       collector.setScorer(scorer);
       for (int j = 0; j < docs.length; ++j) {
         scorer.doc = docs[j];
@@ -244,7 +251,7 @@ public abstract class CachingCollector extends FilterCollector {
 
   private class ScoreCachingLeafCollector extends NoScoreCachingLeafCollector {
 
-    Scorable scorer;
+    Scorer scorer;
     float[] scores;
 
     ScoreCachingLeafCollector(LeafCollector in, int maxDocsToCache) {
@@ -253,7 +260,7 @@ public abstract class CachingCollector extends FilterCollector {
     }
 
     @Override
-    public void setScorer(Scorable scorer) throws IOException {
+    public void setScorer(Scorer scorer) throws IOException {
       this.scorer = scorer;
       super.setScorer(scorer);
     }
@@ -293,8 +300,8 @@ public abstract class CachingCollector extends FilterCollector {
       public void collect(int doc) {}
 
       @Override
-      public ScoreMode scoreMode() {
-        return ScoreMode.COMPLETE;
+      public boolean needsScores() {
+        return true;
       }
 
     };

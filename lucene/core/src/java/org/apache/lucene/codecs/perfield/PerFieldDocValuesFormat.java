@@ -196,7 +196,7 @@ public abstract class PerFieldDocValuesFormat extends DocValuesFormat {
 
         if (field.getDocValuesGen() != -1) {
           String suffixAtt = null;
-          if (!ignoreCurrentFormat) {
+          if (ignoreCurrentFormat == false) {
             suffixAtt = field.getAttribute(PER_FIELD_SUFFIX_KEY);
           }
           // even when dvGen is != -1, it can still be a new field, that never

@@ -32,8 +32,8 @@ import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.TermState;
-import org.apache.lucene.index.TermStates;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.similarities.Similarity;
@@ -373,25 +373,25 @@ public class PhraseQuery extends Query {
    *  of processing the occurrences of a term
    *  in a document that contains the term.
    *  This is for use by {@link TwoPhaseIterator#matchCost} implementations.
+   *  <br>This may be inaccurate when {@link TermsEnum#totalTermFreq()} is not available.
    *  @param termsEnum The term is the term at which this TermsEnum is positioned.
    */
   static float termPositionsCost(TermsEnum termsEnum) throws IOException {
     int docFreq = termsEnum.docFreq();
     assert docFreq > 0;
-    long totalTermFreq = termsEnum.totalTermFreq();
-    float expOccurrencesInMatchingDoc = totalTermFreq / (float) docFreq;
+    long totalTermFreq = termsEnum.totalTermFreq(); // -1 when not available
+    float expOccurrencesInMatchingDoc = (totalTermFreq < docFreq) ? 1 : (totalTermFreq / (float) docFreq);
     return TERM_POSNS_SEEK_OPS_PER_DOC + expOccurrencesInMatchingDoc * TERM_OPS_PER_POS;
   }
 
-
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    return new PhraseWeight(this, field, searcher, scoreMode) {
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+    return new PhraseWeight(this, field, searcher, needsScores) {
 
-      private transient TermStates states[];
+      private transient TermContext states[];
 
       @Override
-      protected Similarity.SimScorer getStats(IndexSearcher searcher) throws IOException {
+      protected Similarity.SimWeight getStats(IndexSearcher searcher) throws IOException {
         final int[] positions = PhraseQuery.this.getPositions();
         if (positions.length < 2) {
           throw new IllegalStateException("PhraseWeight does not support less than 2 terms, call rewrite first");
@@ -399,13 +399,13 @@ public class PhraseQuery extends Query {
           throw new IllegalStateException("PhraseWeight requires that the first position is 0, call rewrite first");
         }
         final IndexReaderContext context = searcher.getTopReaderContext();
-        states = new TermStates[terms.length];
+        states = new TermContext[terms.length];
         TermStatistics termStats[] = new TermStatistics[terms.length];
         int termUpTo = 0;
         for (int i = 0; i < terms.length; i++) {
           final Term term = terms[i];
-          states[i] = TermStates.build(context, term, scoreMode.needsScores());
-          if (scoreMode.needsScores()) {
+          states[i] = TermContext.build(context, term);
+          if (needsScores) {
             TermStatistics termStatistics = searcher.termStatistics(term, states[i]);
             if (termStatistics != null) {
               termStats[termUpTo++] = termStatistics;
@@ -413,7 +413,7 @@ public class PhraseQuery extends Query {
           }
         }
         if (termUpTo > 0) {
-          return similarity.scorer(boost, searcher.collectionStatistics(field), ArrayUtil.copyOfSubArray(termStats, 0, termUpTo));
+          return similarity.computeWeight(boost, searcher.collectionStatistics(field), ArrayUtil.copyOfSubArray(termStats, 0, termUpTo));
         } else {
           return null; // no terms at all, we won't use similarity
         }
@@ -440,7 +440,7 @@ public class PhraseQuery extends Query {
 
         for (int i = 0; i < terms.length; i++) {
           final Term t = terms[i];
-          final TermState state = states[i].get(context);
+          final TermState state = states[i].get(context.ord);
           if (state == null) { /* term doesnt exist in this segment */
             assert termNotInReader(reader, t): "no termstate found but term exists in reader";
             return null;

@@ -37,8 +37,8 @@ import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.PrefixCodedTerms;
 import org.apache.lucene.index.ReaderUtil;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.TermState;
-import org.apache.lucene.index.TermStates;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.BulkScorer;
@@ -51,7 +51,6 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.ArrayUtil;
@@ -250,17 +249,17 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
     }
 
     @Override
-    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+    public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
 
-      List<TermStates> finalContexts = new ArrayList();
+      List<TermContext> finalContexts = new ArrayList();
       List<Term> finalTerms = new ArrayList();
       List<LeafReaderContext> contexts = searcher.getTopReaderContext().leaves();
-      TermStates[] termStates = new TermStates[this.queryTerms.length];
-      collectTermStates(searcher.getIndexReader(), contexts, termStates, this.queryTerms);
-      for(int i=0; i<termStates.length; i++) {
-        TermStates ts = termStates[i];
-        if(ts != null && ts.docFreq() <= this.maxDocFreq) {
-          finalContexts.add(ts);
+      TermContext[] termContexts = new TermContext[this.queryTerms.length];
+      collectTermContext(searcher.getIndexReader(), contexts, termContexts, this.queryTerms);
+      for(int i=0; i<termContexts.length; i++) {
+        TermContext termContext = termContexts[i];
+        if(termContext != null && termContext.docFreq() <= this.maxDocFreq) {
+          finalContexts.add(termContext);
           finalTerms.add(queryTerms[i]);
         }
       }
@@ -285,11 +284,11 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
           PostingsEnum docs = null;
           DocIdSetBuilder builder = new DocIdSetBuilder(reader.maxDoc(), terms);
           for (int i=0; i<finalContexts.size(); i++) {
-            TermStates ts = finalContexts.get(i);
-            TermState termState = ts.get(context);
+            TermContext termContext = finalContexts.get(i);
+            TermState termState = termContext.get(context.ord);
             if(termState != null) {
               Term term = finalTerms.get(i);
-              termsEnum.seekExact(term.bytes(), ts.get(context));
+              termsEnum.seekExact(term.bytes(), termContext.get(context.ord));
               docs = termsEnum.postings(docs, PostingsEnum.NONE);
               builder.add(docs);
             }
@@ -305,7 +304,7 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
           if (disi == null) {
             return null;
           }
-          return new ConstantScoreScorer(this, score(), scoreMode, disi);
+          return new ConstantScoreScorer(this, score(), disi);
         }
 
         @Override
@@ -340,10 +339,10 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
       };
     }
 
-    private void collectTermStates(IndexReader reader,
-                                   List<LeafReaderContext> leaves,
-                                   TermStates[] contextArray,
-                                   Term[] queryTerms) throws IOException {
+    private void collectTermContext(IndexReader reader,
+                                    List<LeafReaderContext> leaves,
+                                    TermContext[] contextArray,
+                                    Term[] queryTerms) throws IOException {
       TermsEnum termsEnum = null;
       for (LeafReaderContext context : leaves) {
 
@@ -359,15 +358,15 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
 
         for (int i = 0; i < queryTerms.length; i++) {
           Term term = queryTerms[i];
-          TermStates termStates = contextArray[i];
+          TermContext termContext = contextArray[i];
 
           if (termsEnum.seekExact(term.bytes())) {
-            if (termStates == null) {
-              contextArray[i] = new TermStates(reader.getContext(),
+            if (termContext == null) {
+              contextArray[i] = new TermContext(reader.getContext(),
                   termsEnum.termState(), context.ord, termsEnum.docFreq(),
                   termsEnum.totalTermFreq());
             } else {
-              termStates.register(termsEnum.termState(), context.ord,
+              termContext.register(termsEnum.termState(), context.ord,
                   termsEnum.docFreq(), termsEnum.totalTermFreq());
             }
           }
@@ -604,7 +603,7 @@ abstract class PointSetQuery extends Query implements DocSetProducer {
 
 
   @Override
-  public final Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+  public final Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
     return new ConstantScoreWeight(this, boost) {
       Filter filter;
 
@@ -624,7 +623,7 @@ abstract class PointSetQuery extends Query implements DocSetProducer {
         if (readerSetIterator == null) {
           return null;
         }
-        return new ConstantScoreScorer(this, score(), scoreMode, readerSetIterator);
+        return new ConstantScoreScorer(this, score(), readerSetIterator);
       }
 
       @Override

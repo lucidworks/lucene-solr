@@ -20,6 +20,8 @@ package org.apache.lucene.analysis.hi;
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
@@ -33,7 +35,7 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * &lt;/fieldType&gt;</pre>
  * @since 3.1.0
  */
-public class HindiNormalizationFilterFactory extends TokenFilterFactory {
+public class HindiNormalizationFilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
   
   /** Creates a new HindiNormalizationFilterFactory */
   public HindiNormalizationFilterFactory(Map<String,String> args) {
@@ -47,9 +49,9 @@ public class HindiNormalizationFilterFactory extends TokenFilterFactory {
   public TokenStream create(TokenStream input) {
     return new HindiNormalizationFilter(input);
   }
-
+  
   @Override
-  public TokenStream normalize(TokenStream input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

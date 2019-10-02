@@ -165,7 +165,7 @@ public class DocValuesTermsQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
     return new ConstantScoreWeight(this, boost) {
 
       @Override
@@ -184,7 +184,7 @@ public class DocValuesTermsQuery extends Query {
         if (matchesAtLeastOneTerm == false) {
           return null;
         }
-        return new ConstantScoreScorer(this, score(), scoreMode, new TwoPhaseIterator(values) {
+        return new ConstantScoreScorer(this, score(), new TwoPhaseIterator(values) {
 
           @Override
           public boolean matches() throws IOException {

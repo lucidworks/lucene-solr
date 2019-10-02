@@ -77,7 +77,7 @@ public class TestBooleanScorer extends LuceneTestCase {
     }
 
     @Override
-    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+    public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
       return new Weight(CrazyMustUseBulkScorerQuery.this) {
         @Override
         public void extractTerms(Set<Term> terms) {
@@ -105,7 +105,7 @@ public class TestBooleanScorer extends LuceneTestCase {
             @Override
             public int score(LeafCollector collector, Bits acceptDocs, int min, int max) throws IOException {
               assert min == 0;
-              collector.setScorer(new ScoreAndDoc());
+              collector.setScorer(new FakeScorer());
               collector.collect(0);
               return DocIdSetIterator.NO_MORE_DOCS;
             }
@@ -149,7 +149,7 @@ public class TestBooleanScorer extends LuceneTestCase {
     q2.add(q1.build(), BooleanClause.Occur.SHOULD);
     q2.add(new CrazyMustUseBulkScorerQuery(), BooleanClause.Occur.SHOULD);
 
-    assertEquals(1, s.count(q2.build()));
+    assertEquals(1, s.search(q2.build(), 10).totalHits);
     r.close();
     dir.close();
   }
@@ -172,7 +172,7 @@ public class TestBooleanScorer extends LuceneTestCase {
       .build();
 
     // no scores -> term scorer
-    Weight weight = searcher.createWeight(searcher.rewrite(query), ScoreMode.COMPLETE_NO_SCORES, 1);
+    Weight weight = searcher.createWeight(searcher.rewrite(query), false, 1);
     BulkScorer scorer = ((BooleanWeight) weight).booleanScorer(ctx);
     assertTrue(scorer instanceof DefaultBulkScorer); // term scorer
 
@@ -181,7 +181,7 @@ public class TestBooleanScorer extends LuceneTestCase {
       .add(new TermQuery(new Term("foo", "bar")), Occur.SHOULD) // existing term
       .add(new TermQuery(new Term("foo", "baz")), Occur.SHOULD) // missing term
       .build();
-    weight = searcher.createWeight(searcher.rewrite(query), ScoreMode.COMPLETE, 1);
+    weight = searcher.createWeight(searcher.rewrite(query), true, 1);
     scorer = ((BooleanWeight) weight).booleanScorer(ctx);
     assertTrue(scorer instanceof DefaultBulkScorer); // term scorer
 
@@ -210,7 +210,7 @@ public class TestBooleanScorer extends LuceneTestCase {
       .add(new TermQuery(new Term("foo", "baz")), Occur.SHOULD)
       .add(new TermQuery(new Term("foo", "bar")), Occur.MUST_NOT)
       .build();
-    Weight weight = searcher.createWeight(searcher.rewrite(query), ScoreMode.COMPLETE, 1);
+    Weight weight = searcher.createWeight(searcher.rewrite(query), true, 1);
     BulkScorer scorer = ((BooleanWeight) weight).booleanScorer(ctx);
     assertTrue(scorer instanceof ReqExclBulkScorer);
 
@@ -219,7 +219,7 @@ public class TestBooleanScorer extends LuceneTestCase {
         .add(new MatchAllDocsQuery(), Occur.SHOULD)
         .add(new TermQuery(new Term("foo", "bar")), Occur.MUST_NOT)
         .build();
-    weight = searcher.createWeight(searcher.rewrite(query), ScoreMode.COMPLETE, 1);
+    weight = searcher.createWeight(searcher.rewrite(query), true, 1);
     scorer = ((BooleanWeight) weight).booleanScorer(ctx);
     assertTrue(scorer instanceof ReqExclBulkScorer);
 
@@ -227,7 +227,7 @@ public class TestBooleanScorer extends LuceneTestCase {
         .add(new TermQuery(new Term("foo", "baz")), Occur.MUST)
         .add(new TermQuery(new Term("foo", "bar")), Occur.MUST_NOT)
         .build();
-    weight = searcher.createWeight(searcher.rewrite(query), ScoreMode.COMPLETE, 1);
+    weight = searcher.createWeight(searcher.rewrite(query), true, 1);
     scorer = ((BooleanWeight) weight).booleanScorer(ctx);
     assertTrue(scorer instanceof ReqExclBulkScorer);
 
@@ -235,7 +235,7 @@ public class TestBooleanScorer extends LuceneTestCase {
         .add(new TermQuery(new Term("foo", "baz")), Occur.FILTER)
         .add(new TermQuery(new Term("foo", "bar")), Occur.MUST_NOT)
         .build();
-    weight = searcher.createWeight(searcher.rewrite(query), ScoreMode.COMPLETE, 1);
+    weight = searcher.createWeight(searcher.rewrite(query), true, 1);
     scorer = ((BooleanWeight) weight).booleanScorer(ctx);
     assertTrue(scorer instanceof ReqExclBulkScorer);
 

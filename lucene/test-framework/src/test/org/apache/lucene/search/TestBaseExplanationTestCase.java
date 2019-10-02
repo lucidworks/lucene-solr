@@ -71,9 +71,8 @@ public class TestBaseExplanationTestCase extends BaseExplanationTestCase {
       this.toggleExplainMatch = toggleExplainMatch;
       this.breakExplainScores = breakExplainScores;
     }
-    @Override
-    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-      return new BrokenExplainWeight(this, super.createWeight(searcher,scoreMode, boost));
+    public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+      return new BrokenExplainWeight(this, super.createWeight(searcher,needsScores, boost));
     }
   }
   
@@ -89,7 +88,7 @@ public class TestBaseExplanationTestCase extends BaseExplanationTestCase {
       Explanation result = in.explain(context, doc);
       if (result.isMatch()) {
         if (q.breakExplainScores) {
-          result = Explanation.match(-1F * result.getValue().doubleValue(), "Broken Explanation Score", result);
+          result = Explanation.match(-1F * result.getValue(), "Broken Explanation Score", result);
         }
         if (q.toggleExplainMatch) {
           result = Explanation.noMatch("Broken Explanation Matching", result);

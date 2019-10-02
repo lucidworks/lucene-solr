@@ -35,7 +35,7 @@
        that you fully re-index after changing this setting as it can
        affect both how text is indexed and queried.
   -->
-  <luceneMatchVersion>9.0.0</luceneMatchVersion>
+  <luceneMatchVersion>7.7.2</luceneMatchVersion>
 
   <!-- <lib/> directives can be used to instruct Solr to load any Jars
        identified and use them to resolve any "plugins" specified in
@@ -83,8 +83,6 @@
 
   <lib dir="${solr.install.dir:../../../..}/contrib/velocity/lib" regex=".*\.jar" />
   <lib dir="${solr.install.dir:../../../..}/dist/" regex="solr-velocity-\d.*\.jar" />
-  <lib dir="${solr.install.dir:../../../..}/dist/" regex="solr-ltr-\d.*\.jar" />
-
   <!-- an exact 'path' can be used instead of a 'dir' to specify a
        specific jar file.  This will cause a serious error to be logged
        if it can't be loaded.
@@ -797,6 +795,7 @@
                   class="solr.extraction.ExtractingRequestHandler" >
     <lst name="defaults">
       <str name="lowernames">true</str>
+      <str name="fmap.meta">ignored_</str>
       <str name="fmap.content">_text_</str>
     </lst>
   </requestHandler>
@@ -1140,13 +1139,23 @@
   <updateProcessor class="solr.ParseDoubleFieldUpdateProcessorFactory" name="parse-double"/>
   <updateProcessor class="solr.ParseDateFieldUpdateProcessorFactory" name="parse-date">
     <arr name="format">
-      <str>yyyy-MM-dd['T'[HH:mm[:ss[.SSS]][z</str>
-      <str>yyyy-MM-dd['T'[HH:mm[:ss[,SSS]][z</str>
-      <str>yyyy-MM-dd HH:mm[:ss[.SSS]][z</str>
-      <str>yyyy-MM-dd HH:mm[:ss[,SSS]][z</str>
-      <str>[EEE, ]dd MMM yyyy HH:mm[:ss] z</str>
-      <str>EEEE, dd-MMM-yy HH:mm:ss z</str>
-      <str>EEE MMM ppd HH:mm:ss [z ]yyyy</str>
+      <str>yyyy-MM-dd'T'HH:mm:ss.SSSZ</str>
+      <str>yyyy-MM-dd'T'HH:mm:ss,SSSZ</str>
+      <str>yyyy-MM-dd'T'HH:mm:ss.SSS</str>
+      <str>yyyy-MM-dd'T'HH:mm:ss,SSS</str>
+      <str>yyyy-MM-dd'T'HH:mm:ssZ</str>
+      <str>yyyy-MM-dd'T'HH:mm:ss</str>
+      <str>yyyy-MM-dd'T'HH:mmZ</str>
+      <str>yyyy-MM-dd'T'HH:mm</str>
+      <str>yyyy-MM-dd HH:mm:ss.SSSZ</str>
+      <str>yyyy-MM-dd HH:mm:ss,SSSZ</str>
+      <str>yyyy-MM-dd HH:mm:ss.SSS</str>
+      <str>yyyy-MM-dd HH:mm:ss,SSS</str>
+      <str>yyyy-MM-dd HH:mm:ssZ</str>
+      <str>yyyy-MM-dd HH:mm:ss</str>
+      <str>yyyy-MM-dd HH:mmZ</str>
+      <str>yyyy-MM-dd HH:mm</str>
+      <str>yyyy-MM-dd</str>
     </arr>
   </updateProcessor>
   <updateProcessor class="solr.AddSchemaFieldsUpdateProcessorFactory" name="add-schema-fields">

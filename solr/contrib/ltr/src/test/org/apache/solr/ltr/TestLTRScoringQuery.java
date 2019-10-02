@@ -35,7 +35,6 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
@@ -99,7 +98,7 @@ public class TestLTRScoringQuery extends LuceneTestCase {
     final LeafReaderContext context = leafContexts.get(n);
     final int deBasedDoc = hits.scoreDocs[0].doc - context.docBase;
 
-    final Weight weight = searcher.createWeight(searcher.rewrite(model), ScoreMode.COMPLETE, 1);
+    final Weight weight = searcher.createWeight(searcher.rewrite(model), true, 1);
     final Scorer scorer = weight.scorer(context);
 
     // rerank using the field final-score
@@ -201,7 +200,7 @@ public class TestLTRScoringQuery extends LuceneTestCase {
     final IndexSearcher searcher = getSearcher(r);
     // first run the standard query
     final TopDocs hits = searcher.search(bqBuilder.build(), 10);
-    assertEquals(2, hits.totalHits.value);
+    assertEquals(2, hits.totalHits);
     assertEquals("0", searcher.doc(hits.scoreDocs[0].doc).get("id"));
     assertEquals("1", searcher.doc(hits.scoreDocs[1].doc).get("id"));
 

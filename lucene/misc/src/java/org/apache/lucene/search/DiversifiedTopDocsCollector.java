@@ -82,8 +82,8 @@ public abstract class DiversifiedTopDocsCollector extends
   protected abstract NumericDocValues getKeys(LeafReaderContext context);
 
   @Override
-  public ScoreMode scoreMode() {
-    return ScoreMode.COMPLETE;
+  public boolean needsScores() {
+    return true;
   }
 
   @Override
@@ -92,7 +92,21 @@ public abstract class DiversifiedTopDocsCollector extends
       return EMPTY_TOPDOCS;
     }
 
-    return new TopDocs(new TotalHits(totalHits, TotalHits.Relation.EQUAL_TO), results);
+    // We need to compute maxScore in order to set it in TopDocs. If start == 0,
+    // it means the largest element is already in results, use its score as
+    // maxScore. Otherwise pop everything else, until the largest element is
+    // extracted and use its score as maxScore.
+    float maxScore = Float.NaN;
+    if (start == 0) {
+      maxScore = results[0].score;
+    } else {
+      for (int i = globalQueue.size(); i > 1; i--) {
+        globalQueue.pop();
+      }
+      maxScore = globalQueue.pop().score;
+    }
+
+    return new TopDocs(totalHits, results, maxScore);
   }
 
   protected ScoreDocKey insert(ScoreDocKey addition, int docBase,
@@ -175,10 +189,10 @@ public abstract class DiversifiedTopDocsCollector extends
     final NumericDocValues keySource = getKeys(context);
 
     return new LeafCollector() {
-      Scorable scorer;
+      Scorer scorer;
 
       @Override
-      public void setScorer(Scorable scorer) throws IOException {
+      public void setScorer(Scorer scorer) throws IOException {
         this.scorer = scorer;
       }
 

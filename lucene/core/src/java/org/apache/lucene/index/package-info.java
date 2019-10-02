@@ -110,10 +110,8 @@
  * inverted index, is comprised of "postings." The postings, with their term dictionary, can be
  * thought of as a map that provides efficient lookup given a {@link org.apache.lucene.index.Term}
  * (roughly, a word or token), to (the ordered list of) {@link org.apache.lucene.document.Document}s
- * containing that Term. Codecs may additionally record
- * {@link org.apache.lucene.index.ImpactsEnum#getImpacts impacts} alongside postings in order to be
- * able to skip over low-scoring documents at search time. Postings do not provide any way of
- * retrieving terms given a document, short of scanning the entire index.</p>
+ * containing that Term.  Postings do not provide any way of retrieving terms given a document,
+ * short of scanning the entire index.</p>
  *
  * <a name="stored-fields"></a>
  * <p>Stored fields are essentially the opposite of postings, providing efficient retrieval of field
@@ -246,36 +244,43 @@
  *            deleted documents, when segments are merged the statistic is updated as 
  *            those deleted documents are merged away.
  *        <li>{@link org.apache.lucene.index.TermsEnum#totalTermFreq}: Returns the number 
- *            of occurrences of this term across all documents. Like docFreq(), it will
- *            also count occurrences that appear in deleted documents.
+ *            of occurrences of this term across all documents. Note that this statistic 
+ *            is unavailable (returns <code>-1</code>) if term frequencies were omitted 
+ *            from the index 
+ *            ({@link org.apache.lucene.index.IndexOptions#DOCS DOCS}) 
+ *            for the field. Like docFreq(), it will also count occurrences that appear in 
+ *            deleted documents.
  *     </ul>
  * <a name="fieldstats"></a>
  * <h3>
  *   Field statistics
  * </h3>
- *   <ul>
- *    <li>{@link org.apache.lucene.index.Terms#size}: Returns the number of
- *      unique terms in the field. This statistic may be unavailable
- *      (returns <code>-1</code>) for some Terms implementations such as
- *      {@link org.apache.lucene.index.MultiTerms}, where it cannot be efficiently
- *      computed.  Note that this count also includes terms that appear only
- *      in deleted documents: when segments are merged such terms are also merged
- *      away and the statistic is then updated.
- *    <li>{@link org.apache.lucene.index.Terms#getDocCount}: Returns the number of
- *      documents that contain at least one occurrence of any term for this field.
- *      This can be thought of as a Field-level docFreq(). Like docFreq() it will
- *      also count deleted documents.
- *    <li>{@link org.apache.lucene.index.Terms#getSumDocFreq}: Returns the number of
- *      postings (term-document mappings in the inverted index) for the field. This
- *      can be thought of as the sum of {@link org.apache.lucene.index.TermsEnum#docFreq}
- *      across all terms in the field, and like docFreq() it will also count postings
- *      that appear in deleted documents.
- *    <li>{@link org.apache.lucene.index.Terms#getSumTotalTermFreq}: Returns the number
- *      of tokens for the field. This can be thought of as the sum of
- *      {@link org.apache.lucene.index.TermsEnum#totalTermFreq} across all terms in the
- *      field, and like totalTermFreq() it will also count occurrences that appear in
- *      deleted documents.
- *   </ul>
+ *     <ul>
+ *        <li>{@link org.apache.lucene.index.Terms#size}: Returns the number of 
+ *            unique terms in the field. This statistic may be unavailable 
+ *            (returns <code>-1</code>) for some Terms implementations such as
+ *            {@link org.apache.lucene.index.MultiTerms}, where it cannot be efficiently
+ *            computed.  Note that this count also includes terms that appear only
+ *            in deleted documents: when segments are merged such terms are also merged
+ *            away and the statistic is then updated.
+ *        <li>{@link org.apache.lucene.index.Terms#getDocCount}: Returns the number of
+ *            documents that contain at least one occurrence of any term for this field.
+ *            This can be thought of as a Field-level docFreq(). Like docFreq() it will
+ *            also count deleted documents.
+ *        <li>{@link org.apache.lucene.index.Terms#getSumDocFreq}: Returns the number of
+ *            postings (term-document mappings in the inverted index) for the field. This
+ *            can be thought of as the sum of {@link org.apache.lucene.index.TermsEnum#docFreq}
+ *            across all terms in the field, and like docFreq() it will also count postings
+ *            that appear in deleted documents.
+ *        <li>{@link org.apache.lucene.index.Terms#getSumTotalTermFreq}: Returns the number
+ *            of tokens for the field. This can be thought of as the sum of 
+ *            {@link org.apache.lucene.index.TermsEnum#totalTermFreq} across all terms in the
+ *            field, and like totalTermFreq() it will also count occurrences that appear in
+ *            deleted documents, and will be unavailable (returns <code>-1</code>) if term 
+ *            frequencies were omitted from the index 
+ *            ({@link org.apache.lucene.index.IndexOptions#DOCS DOCS}) 
+ *            for the field.
+ *     </ul>
  * <a name="segmentstats"></a>
  * <h3>
  *   Segment statistics

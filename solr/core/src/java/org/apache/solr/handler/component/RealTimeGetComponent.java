@@ -38,7 +38,6 @@ import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
@@ -82,6 +81,7 @@ import org.apache.solr.update.IndexFingerprint;
 import org.apache.solr.update.PeerSync;
 import org.apache.solr.update.PeerSyncWithLeader;
 import org.apache.solr.update.UpdateLog;
+import org.apache.solr.update.processor.AtomicUpdateDocumentMerger;
 import org.apache.solr.util.RefCounted;
 import org.apache.solr.util.TestInjection;
 import org.slf4j.Logger;
@@ -161,7 +161,7 @@ public class RealTimeGetComponent extends SearchComponent
             log.debug(req.getCore()
                 .getCoreContainer().getZkController().getNodeName()
                 + " min count to sync to (from most recent searcher view) "
-                + searcher.count(new MatchAllDocsQuery()));
+                + searcher.search(new MatchAllDocsQuery(), 1).totalHits);
           } finally {
             searchHolder.decref();
           }
@@ -299,7 +299,7 @@ public class RealTimeGetComponent extends SearchComponent
          if (rb.getFilters() != null) {
            for (Query raw : rb.getFilters()) {
              Query q = raw.rewrite(searcherInfo.getSearcher().getIndexReader());
-             Scorer scorer = searcherInfo.getSearcher().createWeight(q, ScoreMode.COMPLETE_NO_SCORES, 1f).scorer(ctx);
+             Scorer scorer = searcherInfo.getSearcher().createWeight(q, false, 1f).scorer(ctx);
              if (scorer == null || segid != scorer.iterator().advance(segid)) {
                // filter doesn't match.
                docid = -1;
@@ -426,7 +426,15 @@ public class RealTimeGetComponent extends SearchComponent
     } else { // i.e. lastPrevPointer==0
       assert lastPrevPointer == 0;
       // We have successfully resolved the document based off the tlogs
-      return toSolrDoc(partialDoc, core.getLatestSchema());
+
+      // determine whether we can use the in place document, if the caller specified onlyTheseFields
+      // and those fields are all supported for in-place updates
+      IndexSchema schema = core.getLatestSchema();
+      boolean forInPlaceUpdate = onlyTheseFields != null
+          && onlyTheseFields.stream().map(schema::getField)
+          .allMatch(f -> null!=f && AtomicUpdateDocumentMerger.isSupportedFieldForInPlaceUpdate(f));
+
+      return toSolrDoc(partialDoc, schema, forInPlaceUpdate);
     }
   }
 
@@ -773,9 +781,21 @@ public class RealTimeGetComponent extends SearchComponent
    * @lucene.experimental
    */
   public static SolrDocument toSolrDoc(SolrInputDocument sdoc, IndexSchema schema) {
+    return toSolrDoc(sdoc, schema, false);
+  }
+
+  /**
+   * Converts a SolrInputDocument to SolrDocument, using an IndexSchema instance.
+   *
+   * @param sdoc The input document.
+   * @param schema The index schema.
+   * @param forInPlaceUpdate Whether the document is being used for an in place update,
+   *                         see {@link DocumentBuilder#toDocument(SolrInputDocument, IndexSchema, boolean, boolean)}
+   */
+  public static SolrDocument toSolrDoc(SolrInputDocument sdoc, IndexSchema schema, boolean forInPlaceUpdate) {
     // TODO what about child / nested docs?
     // TODO: do something more performant than this double conversion
-    Document doc = DocumentBuilder.toDocument(sdoc, schema);
+    Document doc = DocumentBuilder.toDocument(sdoc, schema, forInPlaceUpdate, true);
 
     // copy the stored fields only
     Document out = new Document();

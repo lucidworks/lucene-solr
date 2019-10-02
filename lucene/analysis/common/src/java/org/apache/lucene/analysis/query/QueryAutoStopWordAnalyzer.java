@@ -17,21 +17,14 @@
 package org.apache.lucene.analysis.query;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.AnalyzerWrapper;
 import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.StopFilter;
-import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
@@ -87,7 +80,7 @@ public final class QueryAutoStopWordAnalyzer extends AnalyzerWrapper {
       Analyzer delegate,
       IndexReader indexReader,
       int maxDocFreq) throws IOException {
-    this(delegate, indexReader, FieldInfos.getIndexedFields(indexReader), maxDocFreq);
+    this(delegate, indexReader, MultiFields.getIndexedFields(indexReader), maxDocFreq);
   }
 
   /**
@@ -105,7 +98,7 @@ public final class QueryAutoStopWordAnalyzer extends AnalyzerWrapper {
       Analyzer delegate,
       IndexReader indexReader,
       float maxPercentDocs) throws IOException {
-    this(delegate, indexReader, FieldInfos.getIndexedFields(indexReader), maxPercentDocs);
+    this(delegate, indexReader, MultiFields.getIndexedFields(indexReader), maxPercentDocs);
   }
 
   /**
@@ -149,7 +142,7 @@ public final class QueryAutoStopWordAnalyzer extends AnalyzerWrapper {
     
     for (String field : fields) {
       Set<String> stopWords = new HashSet<>();
-      Terms terms = MultiTerms.getTerms(indexReader, field);
+      Terms terms = MultiFields.getTerms(indexReader, field);
       CharsRefBuilder spare = new CharsRefBuilder();
       if (terms != null) {
         TermsEnum te = terms.iterator();
@@ -178,7 +171,7 @@ public final class QueryAutoStopWordAnalyzer extends AnalyzerWrapper {
     }
     StopFilter stopFilter = new StopFilter(components.getTokenStream(), 
         new CharArraySet(stopWords, false));
-    return new TokenStreamComponents(components.getSource(), stopFilter);
+    return new TokenStreamComponents(components.getTokenizer(), stopFilter);
   }
 
   /**

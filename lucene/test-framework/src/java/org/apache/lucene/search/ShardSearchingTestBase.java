@@ -30,7 +30,7 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LineFileDocs;
 import org.apache.lucene.util.LuceneTestCase;
@@ -136,13 +136,11 @@ public abstract class ShardSearchingTestBase extends LuceneTestCase {
     // other nodes:
     for(String field : fieldsToShare) {
       final CollectionStatistics stats = newSearcher.collectionStatistics(field);
-      if (stats != null) {
-        for (NodeState node : nodes) {
-          // Don't put my own collection stats into the cache;
-          // we pull locally:
-          if (node.myNodeID != nodeID) {
-            node.collectionStatsCache.put(new FieldAndShardVersion(nodeID, version, field), stats);
-          }
+      for (NodeState node : nodes) {
+        // Don't put my own collection stats into the cache;
+        // we pull locally:
+        if (node.myNodeID != nodeID) {
+          node.collectionStatsCache.put(new FieldAndShardVersion(nodeID, version, field), stats);
         }
       }
     }
@@ -186,8 +184,8 @@ public abstract class ShardSearchingTestBase extends LuceneTestCase {
     }
     try {
       for(Term term : terms) {
-        final TermStates termStates = TermStates.build(s.getIndexReader().getContext(), term, true);
-        stats.put(term, s.termStatistics(term, termStates));
+        final TermContext termContext = TermContext.build(s.getIndexReader().getContext(), term);
+        stats.put(term, s.termStatistics(term, termContext));
       }
     } finally {
       node.searchers.release(s);
@@ -231,7 +229,7 @@ public abstract class ShardSearchingTestBase extends LuceneTestCase {
       public Query rewrite(Query original) throws IOException {
         final IndexSearcher localSearcher = new IndexSearcher(getIndexReader());
         original = localSearcher.rewrite(original);
-        final Weight weight = localSearcher.createWeight(original, ScoreMode.COMPLETE, 1);
+        final Weight weight = localSearcher.createWeight(original, true, 1);
         final Set<Term> terms = new HashSet<>();
         weight.extractTerms(terms);
 
@@ -251,10 +249,8 @@ public abstract class ShardSearchingTestBase extends LuceneTestCase {
           }
           if (missing.size() != 0) {
             for(Map.Entry<Term,TermStatistics> ent : getNodeTermStats(missing, nodeID, nodeVersions[nodeID]).entrySet()) {
-              if (ent.getValue() != null) {
-                final TermAndShardVersion key = new TermAndShardVersion(nodeID, nodeVersions[nodeID], ent.getKey());
-                termStatsCache.put(key, ent.getValue());
-              }
+              final TermAndShardVersion key = new TermAndShardVersion(nodeID, nodeVersions[nodeID], ent.getKey());
+              termStatsCache.put(key, ent.getValue());
             }
           }
         }
@@ -263,7 +259,7 @@ public abstract class ShardSearchingTestBase extends LuceneTestCase {
       }
 
       @Override
-      public TermStatistics termStatistics(Term term, TermStates context) throws IOException {
+      public TermStatistics termStatistics(Term term, TermContext context) throws IOException {
         assert term != null;
         long docFreq = 0;
         long totalTermFreq = 0;
@@ -275,24 +271,27 @@ public abstract class ShardSearchingTestBase extends LuceneTestCase {
           } else {
             final TermAndShardVersion key = new TermAndShardVersion(nodeID, nodeVersions[nodeID], term);
             subStats = termStatsCache.get(key);
-          }
-          
-          if (subStats == null) {
-            continue; // term not found
+            // We pre-cached during rewrite so all terms
+            // better be here...
+            assert subStats != null;
           }
         
           long nodeDocFreq = subStats.docFreq();
-          docFreq += nodeDocFreq;
+          if (docFreq >= 0 && nodeDocFreq >= 0) {
+            docFreq += nodeDocFreq;
+          } else {
+            docFreq = -1;
+          }
           
           long nodeTotalTermFreq = subStats.totalTermFreq();
-          totalTermFreq += nodeTotalTermFreq;
+          if (totalTermFreq >= 0 && nodeTotalTermFreq >= 0) {
+            totalTermFreq += nodeTotalTermFreq;
+          } else {
+            totalTermFreq = -1;
+          }
         }
 
-        if (docFreq == 0) {
-          return null; // term not found in any node whatsoever
-        } else {
-          return new TermStatistics(term.bytes(), docFreq, totalTermFreq);
-        }
+        return new TermStatistics(term.bytes(), docFreq, totalTermFreq);
       }
 
       @Override
@@ -314,27 +313,38 @@ public abstract class ShardSearchingTestBase extends LuceneTestCase {
             nodeStats = collectionStatsCache.get(key);
           }
           if (nodeStats == null) {
-            continue; // field not in sub at all
+            System.out.println("coll stats myNodeID=" + myNodeID + ": " + collectionStatsCache.keySet());
           }
+          // Collection stats are pre-shared on reopen, so,
+          // we better not have a cache miss:
+          assert nodeStats != null: "myNodeID=" + myNodeID + " nodeID=" + nodeID + " version=" + nodeVersions[nodeID] + " field=" + field;
           
           long nodeDocCount = nodeStats.docCount();
-          docCount += nodeDocCount;
+          if (docCount >= 0 && nodeDocCount >= 0) {
+            docCount += nodeDocCount;
+          } else {
+            docCount = -1;
+          }
           
           long nodeSumTotalTermFreq = nodeStats.sumTotalTermFreq();
-          sumTotalTermFreq += nodeSumTotalTermFreq;
+          if (sumTotalTermFreq >= 0 && nodeSumTotalTermFreq >= 0) {
+            sumTotalTermFreq += nodeSumTotalTermFreq;
+          } else {
+            sumTotalTermFreq = -1;
+          }
           
           long nodeSumDocFreq = nodeStats.sumDocFreq();
-          sumDocFreq += nodeSumDocFreq;
+          if (sumDocFreq >= 0 && nodeSumDocFreq >= 0) {
+            sumDocFreq += nodeSumDocFreq;
+          } else {
+            sumDocFreq = -1;
+          }
           
           assert nodeStats.maxDoc() >= 0;
           maxDoc += nodeStats.maxDoc();
         }
 
-        if (maxDoc == 0) {
-          return null; // field not found across any node whatsoever
-        } else {
-          return new CollectionStatistics(field, maxDoc, docCount, sumTotalTermFreq, sumDocFreq);
-        }
+        return new CollectionStatistics(field, maxDoc, docCount, sumTotalTermFreq, sumDocFreq);
       }
 
       @Override

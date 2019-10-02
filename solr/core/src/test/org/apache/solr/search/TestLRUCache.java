@@ -182,8 +182,11 @@ public class TestLRUCache extends LuceneTestCase {
     CacheRegenerator cr = new NoOpRegenerator();
     Object o = cache.init(params, null, cr);
 
-    expectThrows(SolrException.class, "Adding a non-accountable value to a cache configured with maxRamBytes should have failed",
-        () -> cache.put("1", "1")
-    );
+    try {
+      cache.put("1", "1");
+      fail("Adding a non-accountable value to a cache configured with maxRamBytes should have failed");
+    } catch (Exception e) {
+      assertEquals(e.getClass(), SolrException.class);
+    }
   }
 }

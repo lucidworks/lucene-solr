@@ -29,10 +29,9 @@ import java.util.Set;
 import com.google.common.collect.Lists;
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.search.CollectionStatistics;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.TermStatistics;
 import org.apache.solr.client.solrj.SolrResponse;
 import org.apache.solr.common.SolrException;
@@ -157,22 +156,19 @@ public class ExactStatsCache extends StatsCache {
     Query q = rb.getQuery();
     try {
       HashSet<Term> terms = new HashSet<>();
-      searcher.createWeight(searcher.rewrite(q), ScoreMode.COMPLETE, 1).extractTerms(terms);
+      searcher.createWeight(searcher.rewrite(q), true, 1).extractTerms(terms);
       IndexReaderContext context = searcher.getTopReaderContext();
       HashMap<String,TermStats> statsMap = new HashMap<>();
       HashMap<String,CollectionStats> colMap = new HashMap<>();
       for (Term t : terms) {
-        TermStates termStates = TermStates.build(context, t, true);
+        TermContext termContext = TermContext.build(context, t);
 
         if (!colMap.containsKey(t.field())) { // collection stats for this field
-          CollectionStatistics collectionStatistics = searcher.localCollectionStatistics(t.field());
-          if (collectionStatistics != null) {
-            colMap.put(t.field(), new CollectionStats(collectionStatistics));
-          }
+          colMap.put(t.field(), new CollectionStats(searcher.localCollectionStatistics(t.field())));
         }
 
-        TermStatistics tst = searcher.localTermStatistics(t, termStates);
-        if (tst == null) { // skip terms that are not present here
+        TermStatistics tst = searcher.localTermStatistics(t, termContext);
+        if (tst.docFreq() == 0) { // skip terms that are not present here
           continue;
         }
 
@@ -322,7 +318,7 @@ public class ExactStatsCache extends StatsCache {
       this.colStatsCache = colStatsCache;
     }
 
-    public TermStatistics termStatistics(SolrIndexSearcher localSearcher, Term term, TermStates context)
+    public TermStatistics termStatistics(SolrIndexSearcher localSearcher, Term term, TermContext context)
         throws IOException {
       TermStats termStats = termStatsCache.get(term.toString());
       // TermStats == null is also true if term has no docFreq anyway,

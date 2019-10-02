@@ -35,7 +35,7 @@ compound=true
 
 analyzer=org.apache.lucene.analysis.standard.StandardAnalyzer
 directory=FSDirectory
-#directory=ByteBuffersDirectory
+#directory=RamDirectory
 
 doc.stored=true
 doc.tokenized=true

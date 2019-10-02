@@ -17,10 +17,12 @@
 package org.apache.lucene.analysis.bn;
 
 
-import java.util.Map;
-
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
+
+import java.util.Map;
 
 /** 
  * Factory for {@link BengaliNormalizationFilter}. 
@@ -33,7 +35,7 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * &lt;/fieldType&gt;</pre>
  * @since 7.1.0
  */
-public class BengaliNormalizationFilterFactory extends TokenFilterFactory {
+public class BengaliNormalizationFilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
 
   public BengaliNormalizationFilterFactory(Map<String,String> args) {
     super(args);
@@ -46,9 +48,9 @@ public class BengaliNormalizationFilterFactory extends TokenFilterFactory {
   public TokenStream create(TokenStream input) {
     return new BengaliNormalizationFilter(input);
   }
-
+  
   @Override
-  public TokenStream normalize(TokenStream input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

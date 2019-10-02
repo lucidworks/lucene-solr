@@ -22,10 +22,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
 
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.Term;
 import org.apache.lucene.util.BitDocIdSet;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.LuceneTestCase;
@@ -85,33 +82,6 @@ public class TestConjunctionDISI extends LuceneTestCase {
     return scorer(TwoPhaseIterator.asDocIdSetIterator(twoPhaseIterator), twoPhaseIterator);
   }
 
-  private static class FakeWeight extends Weight {
-
-    protected FakeWeight() {
-      super(new MatchNoDocsQuery());
-    }
-
-    @Override
-    public void extractTerms(Set<Term> terms) {
-
-    }
-
-    @Override
-    public Explanation explain(LeafReaderContext context, int doc) throws IOException {
-      return null;
-    }
-
-    @Override
-    public Scorer scorer(LeafReaderContext context) throws IOException {
-      return null;
-    }
-
-    @Override
-    public boolean isCacheable(LeafReaderContext ctx) {
-      return false;
-    }
-  }
-
   /**
    * Create a {@link Scorer} that wraps the given {@link DocIdSetIterator}. It
    * also accepts a {@link TwoPhaseIterator} view, which is exposed in
@@ -121,7 +91,7 @@ public class TestConjunctionDISI extends LuceneTestCase {
    * advantage of the {@link TwoPhaseIterator} view.
    */
   private static Scorer scorer(DocIdSetIterator it, TwoPhaseIterator twoPhaseIterator) {
-    return new Scorer(new FakeWeight()) {
+    return new Scorer(null) {
 
       @Override
       public DocIdSetIterator iterator() {
@@ -176,10 +146,6 @@ public class TestConjunctionDISI extends LuceneTestCase {
         return 0;
       }
 
-      @Override
-      public float getMaxScore(int upTo) throws IOException {
-        return 0;
-      }
     };
   }
 
@@ -234,12 +200,12 @@ public class TestConjunctionDISI extends LuceneTestCase {
           case 0:
             // simple iterator
             sets[i] = set;
-            iterators[i] = new ConstantScoreScorer(new FakeWeight(), 0f, ScoreMode.TOP_SCORES, anonymizeIterator(new BitDocIdSet(set).iterator()));
+            iterators[i] = new ConstantScoreScorer(null, 0f, anonymizeIterator(new BitDocIdSet(set).iterator()));
             break;
           case 1:
             // bitSet iterator
             sets[i] = set;
-            iterators[i] = new ConstantScoreScorer(new FakeWeight(), 0f, ScoreMode.TOP_SCORES, new BitDocIdSet(set).iterator());
+            iterators[i] = new ConstantScoreScorer(null, 0f, new BitDocIdSet(set).iterator());
             break;
           default:
             // scorer with approximation
@@ -270,7 +236,7 @@ public class TestConjunctionDISI extends LuceneTestCase {
         if (random().nextBoolean()) {
           // simple iterator
           sets[i] = set;
-          iterators[i] = new ConstantScoreScorer(new FakeWeight(), 0f, ScoreMode.COMPLETE_NO_SCORES, new BitDocIdSet(set).iterator());
+          iterators[i] = new ConstantScoreScorer(null, 0f, new BitDocIdSet(set).iterator());
         } else {
           // scorer with approximation
           final FixedBitSet confirmed = clearRandomBits(set);
@@ -306,12 +272,12 @@ public class TestConjunctionDISI extends LuceneTestCase {
           case 0:
             // simple iterator
             sets[i] = set;
-            newIterator = new ConstantScoreScorer(new FakeWeight(), 0f, ScoreMode.TOP_SCORES, anonymizeIterator(new BitDocIdSet(set).iterator()));
+            newIterator = new ConstantScoreScorer(null, 0f, anonymizeIterator(new BitDocIdSet(set).iterator()));
             break;
           case 1:
             // bitSet iterator
             sets[i] = set;
-            newIterator = new ConstantScoreScorer(new FakeWeight(), 0f, ScoreMode.TOP_SCORES, new BitDocIdSet(set).iterator());
+            newIterator = new ConstantScoreScorer(null, 0f, new BitDocIdSet(set).iterator());
             break;
           default:
             // scorer with approximation
@@ -352,7 +318,7 @@ public class TestConjunctionDISI extends LuceneTestCase {
         if (random().nextBoolean()) {
           // simple iterator
           sets[i] = set;
-          scorers.add(new ConstantScoreScorer(new FakeWeight(), 0f, ScoreMode.TOP_SCORES, new BitDocIdSet(set).iterator()));
+          scorers.add(new ConstantScoreScorer(null, 0f, new BitDocIdSet(set).iterator()));
         } else {
           // scorer with approximation
           final FixedBitSet confirmed = clearRandomBits(set);
@@ -370,9 +336,9 @@ public class TestConjunctionDISI extends LuceneTestCase {
         List<Scorer> subIterators = scorers.subList(subSeqStart, subSeqEnd);
         Scorer subConjunction;
         if (wrapWithScorer) {
-          subConjunction = new ConjunctionScorer(new FakeWeight(), subIterators, Collections.emptyList());
+          subConjunction = new ConjunctionScorer(null, subIterators, Collections.emptyList());
         } else {
-          subConjunction = new ConstantScoreScorer(new FakeWeight(), 0f, ScoreMode.TOP_SCORES, ConjunctionDISI.intersectScorers(subIterators));
+          subConjunction = new ConstantScoreScorer(null, 0f, ConjunctionDISI.intersectScorers(subIterators));
         }
         scorers.set(subSeqStart, subConjunction);
         int toRemove = subSeqEnd - subSeqStart - 1;
@@ -382,7 +348,7 @@ public class TestConjunctionDISI extends LuceneTestCase {
       }
       if (scorers.size() == 1) {
         // ConjunctionDISI needs two iterators
-        scorers.add(new ConstantScoreScorer(new FakeWeight(), 0f, ScoreMode.TOP_SCORES, DocIdSetIterator.all(maxDoc)));
+        scorers.add(new ConstantScoreScorer(null, 0f, DocIdSetIterator.all(maxDoc)));
       }
 
 

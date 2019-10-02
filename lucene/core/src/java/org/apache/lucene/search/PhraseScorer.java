@@ -19,20 +19,21 @@ package org.apache.lucene.search;
 
 import java.io.IOException;
 
+import org.apache.lucene.search.similarities.Similarity;
+
 class PhraseScorer extends Scorer {
 
   final PhraseMatcher matcher;
-  final ScoreMode scoreMode;
-  private final LeafSimScorer simScorer;
+  final boolean needsScores;
+  private final Similarity.SimScorer simScorer;
   final float matchCost;
 
-  private float minCompetitiveScore = 0;
   private float freq = 0;
 
-  PhraseScorer(Weight weight, PhraseMatcher matcher, ScoreMode scoreMode, LeafSimScorer simScorer) {
+  PhraseScorer(Weight weight, PhraseMatcher matcher, boolean needsScores, Similarity.SimScorer simScorer) {
     super(weight);
     this.matcher = matcher;
-    this.scoreMode = scoreMode;
+    this.needsScores = needsScores;
     this.simScorer = simScorer;
     this.matchCost = matcher.getMatchCost();
   }
@@ -43,13 +44,6 @@ class PhraseScorer extends Scorer {
       @Override
       public boolean matches() throws IOException {
         matcher.reset();
-        if (scoreMode == ScoreMode.TOP_SCORES && minCompetitiveScore > 0) {
-          float maxFreq = matcher.maxFreq();
-          if (simScorer.score(docID(), maxFreq) < minCompetitiveScore) {
-            // The maximum score we could get is less than the min competitive score
-            return false;
-          }
-        }
         freq = 0;
         return matcher.nextMatch();
       }
@@ -69,9 +63,9 @@ class PhraseScorer extends Scorer {
   @Override
   public float score() throws IOException {
     if (freq == 0) {
-      freq = matcher.sloppyWeight();
+      freq = matcher.sloppyWeight(simScorer);
       while (matcher.nextMatch()) {
-        freq += matcher.sloppyWeight();
+        freq += matcher.sloppyWeight(simScorer);
       }
     }
     return simScorer.score(docID(), freq);
@@ -80,17 +74,6 @@ class PhraseScorer extends Scorer {
   @Override
   public DocIdSetIterator iterator() {
     return TwoPhaseIterator.asDocIdSetIterator(twoPhaseIterator());
-  }
-
-  @Override
-  public void setMinCompetitiveScore(float minScore) {
-    this.minCompetitiveScore = minScore;
-  }
-
-  @Override
-  public float getMaxScore(int upTo) throws IOException {
-    // TODO: merge impacts of all clauses to get better score upper bounds
-    return simScorer.getSimScorer().score(Integer.MAX_VALUE, 1L);
   }
 
   @Override

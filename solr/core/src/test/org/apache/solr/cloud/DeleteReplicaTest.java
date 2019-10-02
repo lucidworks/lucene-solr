@@ -21,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -46,6 +47,7 @@ import org.apache.solr.common.util.TimeSource;
 import org.apache.solr.common.util.Utils;
 import org.apache.solr.core.ZkContainer;
 import org.apache.solr.util.TimeOut;
+import org.apache.zookeeper.KeeperException;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -165,15 +167,19 @@ public class DeleteReplicaTest extends SolrCloudTestCase {
     CollectionAdminRequest.deleteReplicasFromShard(collectionName, "shard1", 2).process(cluster.getSolrClient());
     waitForState("Expected a single shard with a single replica", collectionName, clusterShape(1, 1));
 
-    SolrException e = expectThrows(SolrException.class,
-        "Can't delete the last replica by count",
-        () -> CollectionAdminRequest.deleteReplicasFromShard(collectionName, "shard1", 1).process(cluster.getSolrClient())
-    );
-    assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, e.code());
-    assertTrue(e.getMessage().contains("There is only one replica available"));
+    try {
+      CollectionAdminRequest.deleteReplicasFromShard(collectionName, "shard1", 1).process(cluster.getSolrClient());
+      fail("Expected Exception, Can't delete the last replica by count");
+    } catch (SolrException e) {
+      // expected
+      assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, e.code());
+      assertTrue(e.getMessage().contains("There is only one replica available"));
+    }
     DocCollection docCollection = getCollectionState(collectionName);
     // We know that since leaders are preserved, PULL replicas should not be left alone in the shard
     assertEquals(0, docCollection.getSlice("shard1").getReplicas(EnumSet.of(Replica.Type.PULL)).size());
+
+
   }
 
   @Test
@@ -439,6 +445,19 @@ public class DeleteReplicaTest extends SolrCloudTestCase {
       log.info("Timeout wait for state {}", getCollectionState(collectionName));
       throw e;
     }
+
+    TimeOut timeOut = new TimeOut(20, TimeUnit.SECONDS, TimeSource.NANO_TIME);
+    timeOut.waitFor("Time out waiting for LIR state get removed", () -> {
+      String lirPath = ZkController.getLeaderInitiatedRecoveryZnodePath(collectionName, "shard1");
+      try {
+        List<String> children = zkClient().getChildren(lirPath, null, true);
+        return children.size() == 0;
+      } catch (KeeperException.NoNodeException e) {
+        return true;
+      } catch (Exception e) {
+        throw new AssertionError(e);
+      }
+    });
   }
 }
 

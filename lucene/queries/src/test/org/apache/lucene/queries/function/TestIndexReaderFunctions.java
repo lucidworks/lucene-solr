@@ -38,7 +38,6 @@ import org.apache.lucene.search.LongValuesSource;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.TopDocs;
@@ -159,14 +158,14 @@ public class TestIndexReaderFunctions extends LuceneTestCase {
 
   void assertCacheable(DoubleValuesSource vs, boolean expected) throws Exception {
     Query q = new FunctionScoreQuery(new MatchAllDocsQuery(), vs);
-    Weight w = searcher.createWeight(q, ScoreMode.COMPLETE, 1);
+    Weight w = searcher.createWeight(q, true, 1);
     LeafReaderContext ctx = reader.leaves().get(0);
     assertEquals(expected, w.isCacheable(ctx));
   }
 
   void assertCacheable(LongValuesSource vs, boolean expected) throws Exception {
     Query q = new FunctionScoreQuery(new MatchAllDocsQuery(), vs.toDoubleValuesSource());
-    Weight w = searcher.createWeight(q, ScoreMode.COMPLETE, 1);
+    Weight w = searcher.createWeight(q, true, 1);
     LeafReaderContext ctx = reader.leaves().get(0);
     assertEquals(expected, w.isCacheable(ctx));
   }
@@ -180,7 +179,7 @@ public class TestIndexReaderFunctions extends LuceneTestCase {
       expected[i] = new ScoreDoc(i, scores[i]);
     }
     TopDocs docs = searcher.search(q, documents.size(),
-        new Sort(new SortField("id", SortField.Type.STRING)), true);
+        new Sort(new SortField("id", SortField.Type.STRING)), true, false);
     CheckHits.checkHits(random(), q, "", searcher, expectedDocs);
     CheckHits.checkHitsQuery(q, expected, docs.scoreDocs, expectedDocs);
     CheckHits.checkExplanations(q, "", searcher);

@@ -24,7 +24,6 @@ import java.util.Map;
 
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.Explanation;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.SolrParams;
@@ -246,7 +245,7 @@ public class LTRFeatureLoggerTransformerFactory extends TransformerFactory {
       featureLogger = scoringQuery.getFeatureLogger();
 
       try {
-        modelWeight = scoringQuery.createWeight(searcher, ScoreMode.COMPLETE, 1f);
+        modelWeight = scoringQuery.createWeight(searcher, true, 1f);
       } catch (final IOException e) {
         throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, e.getMessage(), e);
       }

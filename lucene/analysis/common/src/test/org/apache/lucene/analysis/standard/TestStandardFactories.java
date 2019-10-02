@@ -126,6 +126,17 @@ public class TestStandardFactories extends BaseTokenStreamFactoryTestCase {
   }
   
   /**
+   * Test LowerCaseTokenizerFactory
+   */
+  public void testLowerCaseTokenizer() throws Exception {
+    Reader reader = new StringReader("What's this thing do?");
+    Tokenizer stream = tokenizerFactory("LowerCase").create(newAttributeFactory());
+    stream.setReader(reader);
+    assertTokenStreamContents(stream, 
+        new String[] { "what", "s", "this", "thing", "do" });
+  }
+  
+  /**
    * Ensure the ASCIIFoldingFilterFactory works
    */
   public void testASCIIFolding() throws Exception {
@@ -154,6 +165,11 @@ public class TestStandardFactories extends BaseTokenStreamFactoryTestCase {
     
     expected = expectThrows(IllegalArgumentException.class, () -> {
       tokenizerFactory("Letter", "bogusArg", "bogusValue");
+    });
+    assertTrue(expected.getMessage().contains("Unknown parameters"));
+    
+    expected = expectThrows(IllegalArgumentException.class, () -> {
+      tokenizerFactory("LowerCase", "bogusArg", "bogusValue");
     });
     assertTrue(expected.getMessage().contains("Unknown parameters"));
     

@@ -27,7 +27,6 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TwoPhaseIterator;
 import org.apache.lucene.search.Weight;
@@ -89,7 +88,7 @@ public abstract class Filter extends Query {
   //
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) {
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
     return new Weight(this) {
 
       @Override
@@ -127,13 +126,13 @@ public abstract class Filter extends Query {
               return 10; // TODO use cost of bits.get()
             }
           };
-          return new ConstantScoreScorer(this, 0f, scoreMode, twoPhase);
+          return new ConstantScoreScorer(this, 0f, twoPhase);
         }
         final DocIdSetIterator iterator = set.iterator();
         if (iterator == null) {
           return null;
         }
-        return new ConstantScoreScorer(this, 0f, scoreMode, iterator);
+        return new ConstantScoreScorer(this, 0f, iterator);
       }
 
       @Override

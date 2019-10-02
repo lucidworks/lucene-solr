@@ -19,7 +19,6 @@ package org.apache.lucene.index;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1739,9 +1738,9 @@ public class TestIndexSorting extends LuceneTestCase {
       TermQuery termQuery = new TermQuery(new Term("id", Integer.toString(i)));
       final TopDocs topDocs = searcher.search(termQuery, 1);
       if (deleted.get(i)) {
-        assertEquals(0, topDocs.totalHits.value);
+        assertEquals(0, topDocs.totalHits);
       } else {
-        assertEquals(1, topDocs.totalHits.value);
+        assertEquals(1, topDocs.totalHits);
         NumericDocValues values = MultiDocValues.getNumericValues(reader, "id");
         assertEquals(topDocs.scoreDocs[0].doc, values.advance(topDocs.scoreDocs[0].doc));
         assertEquals(i, values.longValue());
@@ -1791,9 +1790,9 @@ public class TestIndexSorting extends LuceneTestCase {
       TermQuery termQuery = new TermQuery(new Term("id", Integer.toString(i)));
       final TopDocs topDocs = searcher.search(termQuery, 1);
       if (deleted.get(i)) {
-        assertEquals(0, topDocs.totalHits.value);
+        assertEquals(0, topDocs.totalHits);
       } else {
-        assertEquals(1, topDocs.totalHits.value);
+        assertEquals(1, topDocs.totalHits);
         NumericDocValues values = MultiDocValues.getNumericValues(reader, "id");
         assertEquals(topDocs.scoreDocs[0].doc, values.advance(topDocs.scoreDocs[0].doc));
         assertEquals(i, values.longValue());
@@ -1890,9 +1889,9 @@ public class TestIndexSorting extends LuceneTestCase {
     for (int i = 0; i < numDocs; ++i) {
       final TopDocs topDocs = searcher.search(new TermQuery(new Term("id", Integer.toString(i))), 1);
       if (values.containsKey(i) == false) {
-        assertEquals(0, topDocs.totalHits.value);
+        assertEquals(0, topDocs.totalHits);
       } else {
-        assertEquals(1, topDocs.totalHits.value);
+        assertEquals(1, topDocs.totalHits);
         NumericDocValues dvs = MultiDocValues.getNumericValues(reader, "foo");
         int docID = topDocs.scoreDocs[0].doc;
         assertEquals(docID, dvs.advance(docID));
@@ -2012,7 +2011,7 @@ public class TestIndexSorting extends LuceneTestCase {
     IndexSearcher searcher = newSearcher(reader);
     for (int i = 0; i < numDocs; ++i) {
       final TopDocs topDocs = searcher.search(new TermQuery(new Term("id", Integer.toString(i))), 1);
-      assertEquals(1, topDocs.totalHits.value);
+      assertEquals(1, topDocs.totalHits);
       NumericDocValues dvs = MultiDocValues.getNumericValues(reader, "bar");
       int hitDoc = topDocs.scoreDocs[0].doc;
       assertEquals(hitDoc, dvs.advance(hitDoc));
@@ -2023,52 +2022,19 @@ public class TestIndexSorting extends LuceneTestCase {
     dir.close();
   }
 
-  public void testBadAddIndexes() throws Exception {
+  public void testAddIndexes(boolean withDeletes, boolean useReaders) throws Exception {
     Directory dir = newDirectory();
     Sort indexSort = new Sort(new SortField("foo", SortField.Type.LONG));
     IndexWriterConfig iwc1 = newIndexWriterConfig();
-    iwc1.setIndexSort(indexSort);
-    IndexWriter w = new IndexWriter(dir, iwc1);
-    w.addDocument(new Document());
-    List<Sort> indexSorts = Arrays.asList(null, new Sort(new SortField("bar", SortField.Type.LONG)));
-    for (Sort sort : indexSorts) {
-      Directory dir2 = newDirectory();
-      IndexWriterConfig iwc2 = newIndexWriterConfig();
-      if (sort != null) {
-        iwc2.setIndexSort(sort);
-      }
-      IndexWriter w2 = new IndexWriter(dir2, iwc2);
-      w2.addDocument(new Document());
-      final IndexReader reader = w2.getReader();
-      w2.close();
-      IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> w.addIndexes(dir2));
-      assertThat(expected.getMessage(), containsString("cannot change index sort"));
-      CodecReader[] codecReaders = new CodecReader[reader.leaves().size()];
-      for (int i = 0; i < codecReaders.length; ++i) {
-        codecReaders[i] = (CodecReader) reader.leaves().get(i).reader();
-      }
-      expected = expectThrows(IllegalArgumentException.class, () -> w.addIndexes(codecReaders));
-      assertThat(expected.getMessage(), containsString("cannot change index sort"));
-
-      reader.close();
-      dir2.close();
+    if (random().nextBoolean()) {
+      iwc1.setIndexSort(indexSort);
     }
-    w.close();
-    dir.close();
-  }
-
-  public void testAddIndexes(boolean withDeletes, boolean useReaders) throws Exception {
-    Directory dir = newDirectory();
-    IndexWriterConfig iwc1 = newIndexWriterConfig();
-    Sort indexSort = new Sort(new SortField("foo", SortField.Type.LONG), new SortField("bar", SortField.Type.LONG));
-    iwc1.setIndexSort(indexSort);
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc1);
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
     final int numDocs = atLeast(100);
     for (int i = 0; i < numDocs; ++i) {
       Document doc = new Document();
       doc.add(new StringField("id", Integer.toString(i), Store.NO));
       doc.add(new NumericDocValuesField("foo", random().nextInt(20)));
-      doc.add(new NumericDocValuesField("bar", random().nextInt(20)));
       w.addDocument(doc);
     }
     if (withDeletes) {
@@ -2084,12 +2050,7 @@ public class TestIndexSorting extends LuceneTestCase {
 
     Directory dir2 = newDirectory();
     IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random()));
-    if (indexSort != null && random().nextBoolean()) {
-      // test congruent index sort
-      iwc.setIndexSort(new Sort(new SortField("foo", SortField.Type.LONG)));
-    } else {
-      iwc.setIndexSort(indexSort);
-    }
+    iwc.setIndexSort(indexSort);
     IndexWriter w2 = new IndexWriter(dir2, iwc);
 
     if (useReaders) {
@@ -2108,8 +2069,8 @@ public class TestIndexSorting extends LuceneTestCase {
       Query query = new TermQuery(new Term("id", Integer.toString(i)));
       final TopDocs topDocs = searcher.search(query, 1);
       final TopDocs topDocs2 = searcher2.search(query, 1);
-      assertEquals(topDocs.totalHits.value, topDocs2.totalHits.value);
-      if (topDocs.totalHits.value == 1) {
+      assertEquals(topDocs.totalHits, topDocs2.totalHits);
+      if (topDocs.totalHits == 1) {
         NumericDocValues dvs1 = MultiDocValues.getNumericValues(reader, "foo");
         int hitDoc1 = topDocs.scoreDocs[0].doc;
         assertEquals(hitDoc1, dvs1.advance(hitDoc1));
@@ -2190,8 +2151,13 @@ public class TestIndexSorting extends LuceneTestCase {
     }
 
     @Override
-    public SimScorer scorer(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
-      return in.scorer(boost, collectionStats, termStats);
+    public SimWeight computeWeight(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
+      return in.computeWeight(boost, collectionStats, termStats);
+    }
+
+    @Override
+    public SimScorer simScorer(SimWeight weight, LeafReaderContext context) throws IOException {
+      return in.simScorer(weight, context);
     }
 
   }
@@ -2567,26 +2533,27 @@ public class TestIndexSorting extends LuceneTestCase {
         System.out.println("TEST: iter=" + iter + " numHits=" + numHits);
       }
 
-      TopFieldCollector c1 = TopFieldCollector.create(sort, numHits, Integer.MAX_VALUE);
+      TopFieldCollector c1 = TopFieldCollector.create(sort, numHits, true, true, true, true);
       s1.search(new MatchAllDocsQuery(), c1);
       TopDocs hits1 = c1.topDocs();
 
-      TopFieldCollector c2 = TopFieldCollector.create(sort, numHits, 1);
+      TopFieldCollector c2 = TopFieldCollector.create(sort, numHits, true, true, true, false);
       s2.search(new MatchAllDocsQuery(), c2);
 
       TopDocs hits2 = c2.topDocs();
 
       if (VERBOSE) {
-        System.out.println("  topDocs query-time sort: totalHits=" + hits1.totalHits.value);
+        System.out.println("  topDocs query-time sort: totalHits=" + hits1.totalHits);
         for(ScoreDoc scoreDoc : hits1.scoreDocs) {
           System.out.println("    " + scoreDoc.doc);
         }
-        System.out.println("  topDocs index-time sort: totalHits=" + hits2.totalHits.value);
+        System.out.println("  topDocs index-time sort: totalHits=" + hits2.totalHits);
         for(ScoreDoc scoreDoc : hits2.scoreDocs) {
           System.out.println("    " + scoreDoc.doc);
         }
       }
 
+      assertTrue(hits2.totalHits <= hits1.totalHits);
       assertEquals(hits2.scoreDocs.length, hits1.scoreDocs.length);
       for(int i=0;i<hits2.scoreDocs.length;i++) {
         ScoreDoc hit1 = hits1.scoreDocs[i];

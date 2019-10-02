@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Set;
 
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.SimpleCollector;
 
 /**
@@ -73,8 +72,8 @@ public class DistinctValuesCollector<T, R> extends SecondPassGroupingCollector<T
     }
 
     @Override
-    public ScoreMode scoreMode() {
-      return ScoreMode.COMPLETE_NO_SCORES;
+    public boolean needsScores() {
+      return false;
     }
   }
 

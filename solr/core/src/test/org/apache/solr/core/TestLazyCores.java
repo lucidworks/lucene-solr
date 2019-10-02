@@ -800,7 +800,6 @@ public class TestLazyCores extends SolrTestCaseJ4 {
   @Test
   public void testNoCommit() throws Exception {
     DirectUpdateHandler2.commitOnClose = true;
-
     CoreContainer cc = init();
     String[] coreList = new String[]{
         "collection2",

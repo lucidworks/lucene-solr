@@ -25,10 +25,7 @@ import java.util.List;
 
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.search.Collector;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Sort;
-import org.apache.lucene.search.TopFieldCollector;
 import org.apache.lucene.search.grouping.GroupDocs;
 import org.apache.lucene.search.grouping.SearchGroup;
 import org.apache.lucene.search.grouping.TermGroupSelector;
@@ -48,7 +45,6 @@ public class TopGroupsFieldCommand implements Command<TopGroups<BytesRef>> {
 
   public static class Builder {
 
-    private Query query;
     private SchemaField field;
     private Sort groupSort;
     private Sort withinGroupSort;
@@ -56,11 +52,6 @@ public class TopGroupsFieldCommand implements Command<TopGroups<BytesRef>> {
     private Integer maxDocPerGroup;
     private boolean needScores = false;
     private boolean needMaxScore = false;
-
-    public Builder setQuery(Query query) {
-      this.query = query;
-      return this;
-    }
 
     public Builder setField(SchemaField field) {
       this.field = field;
@@ -98,17 +89,16 @@ public class TopGroupsFieldCommand implements Command<TopGroups<BytesRef>> {
     }
 
     public TopGroupsFieldCommand build() {
-      if (query == null || field == null || groupSort == null ||  withinGroupSort == null || firstPhaseGroups == null ||
+      if (field == null || groupSort == null ||  withinGroupSort == null || firstPhaseGroups == null ||
           maxDocPerGroup == null) {
         throw new IllegalStateException("All required fields must be set");
       }
 
-      return new TopGroupsFieldCommand(query, field, groupSort, withinGroupSort, firstPhaseGroups, maxDocPerGroup, needScores, needMaxScore);
+      return new TopGroupsFieldCommand(field, groupSort, withinGroupSort, firstPhaseGroups, maxDocPerGroup, needScores, needMaxScore);
     }
 
   }
 
-  private final Query query;
   private final SchemaField field;
   private final Sort groupSort;
   private final Sort withinGroupSort;
@@ -117,17 +107,14 @@ public class TopGroupsFieldCommand implements Command<TopGroups<BytesRef>> {
   private final boolean needScores;
   private final boolean needMaxScore;
   private TopGroupsCollector secondPassCollector;
-  private TopGroups<BytesRef> topGroups;
 
-  private TopGroupsFieldCommand(Query query,
-                                SchemaField field,
+  private TopGroupsFieldCommand(SchemaField field,
                                 Sort groupSort,
                                 Sort withinGroupSort,
                                 Collection<SearchGroup<BytesRef>> firstPhaseGroups,
                                 int maxDocPerGroup,
                                 boolean needScores,
                                 boolean needMaxScore) {
-    this.query = query;
     this.field = field;
     this.groupSort = groupSort;
     this.withinGroupSort = withinGroupSort;
@@ -149,11 +136,11 @@ public class TopGroupsFieldCommand implements Command<TopGroups<BytesRef>> {
       ValueSource vs = fieldType.getValueSource(field, null);
       Collection<SearchGroup<MutableValue>> v = GroupConverter.toMutable(field, firstPhaseGroups);
       secondPassCollector = new TopGroupsCollector<>(new ValueSourceGroupSelector(vs, new HashMap<>()),
-          v, groupSort, withinGroupSort, maxDocPerGroup, needMaxScore
+          v, groupSort, withinGroupSort, maxDocPerGroup, needScores, needMaxScore, true
       );
     } else {
       secondPassCollector = new TopGroupsCollector<>(new TermGroupSelector(field.getName()),
-          firstPhaseGroups, groupSort, withinGroupSort, maxDocPerGroup, needMaxScore
+          firstPhaseGroups, groupSort, withinGroupSort, maxDocPerGroup, needScores, needMaxScore, true
       );
     }
     collectors.add(secondPassCollector);
@@ -161,29 +148,18 @@ public class TopGroupsFieldCommand implements Command<TopGroups<BytesRef>> {
   }
 
   @Override
-  public void postCollect(IndexSearcher searcher) throws IOException {
+  @SuppressWarnings("unchecked")
+  public TopGroups<BytesRef> result() {
     if (firstPhaseGroups.isEmpty()) {
-      topGroups = new TopGroups<>(groupSort.getSort(), withinGroupSort.getSort(), 0, 0, new GroupDocs[0], Float.NaN);
-      return;
+      return new TopGroups<>(groupSort.getSort(), withinGroupSort.getSort(), 0, 0, new GroupDocs[0], Float.NaN);
     }
 
     FieldType fieldType = field.getType();
     if (fieldType.getNumberType() != null) {
-      topGroups = GroupConverter.fromMutable(field, secondPassCollector.getTopGroups(0));
+      return GroupConverter.fromMutable(field, secondPassCollector.getTopGroups(0));
     } else {
-      topGroups = secondPassCollector.getTopGroups(0);
+      return secondPassCollector.getTopGroups(0);
     }
-    if (needScores) {
-      for (GroupDocs<?> group : topGroups.groups) {
-        TopFieldCollector.populateScores(group.scoreDocs, searcher, query);
-      }
-    }
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  public TopGroups<BytesRef> result() throws IOException {
-    return topGroups;
   }
 
   @Override

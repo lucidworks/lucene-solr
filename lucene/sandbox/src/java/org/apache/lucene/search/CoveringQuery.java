@@ -110,10 +110,10 @@ public final class CoveringQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
     final List<Weight> weights = new ArrayList<>(queries.size());
     for (Query query : queries) {
-      weights.add(searcher.createWeight(query, scoreMode, boost));
+      weights.add(searcher.createWeight(query, needsScores, boost));
     }
     return new CoveringWeight(this, weights, minimumNumberMatch.rewrite(searcher));
   }
@@ -172,7 +172,7 @@ public final class CoveringQuery extends Query {
         Explanation subExpl = weight.explain(context, doc);
         if (subExpl.isMatch()) {
           freq++;
-          score += subExpl.getValue().doubleValue();
+          score += subExpl.getValue();
         }
         subExpls.add(subExpl);
       }

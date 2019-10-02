@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
-import com.google.common.primitives.Longs;
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
@@ -31,8 +30,7 @@ import org.apache.lucene.search.DocIdSet;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.LeafCollector;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.Scorable;
-import org.apache.lucene.search.ScoreMode;
+import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.BitDocIdSet;
 import org.apache.lucene.util.Bits;
@@ -46,6 +44,8 @@ import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.StrField;
+
+import com.google.common.primitives.Longs;
 
 /**
 * syntax fq={!hash workers=11 worker=4 keys=field1,field2}
@@ -119,8 +119,7 @@ public class HashQParserPlugin extends QParserPlugin {
       this.worker = worker;
     }
 
-    @Override
-    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+    public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
 
       SolrIndexSearcher solrIndexSearcher = (SolrIndexSearcher)searcher;
       IndexReaderContext context = solrIndexSearcher.getTopReaderContext();
@@ -139,7 +138,7 @@ public class HashQParserPlugin extends QParserPlugin {
       }
 
       ConstantScoreQuery constantScoreQuery = new ConstantScoreQuery(new BitsFilter(fixedBitSets));
-      return searcher.rewrite(constantScoreQuery).createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, boost);
+      return searcher.rewrite(constantScoreQuery).createWeight(searcher, false, boost);
     }
 
     public static class BitsFilter extends Filter {
@@ -256,7 +255,7 @@ public class HashQParserPlugin extends QParserPlugin {
       this.worker = worker;
     }
 
-    public void setScorer(Scorable scorer) throws IOException{
+    public void setScorer(Scorer scorer) throws IOException{
       leafCollector.setScorer(scorer);
     }
 

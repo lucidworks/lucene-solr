@@ -19,7 +19,6 @@ package org.apache.lucene.replicator.nrt;
 
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -43,9 +42,7 @@ import org.apache.lucene.search.SearcherFactory;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.BufferedChecksumIndexInput;
-import org.apache.lucene.store.ByteBuffersDataInput;
-import org.apache.lucene.store.ByteBuffersIndexInput;
-import org.apache.lucene.store.ChecksumIndexInput;
+import org.apache.lucene.store.ByteArrayIndexInput;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexOutput;
@@ -245,7 +242,7 @@ public abstract class ReplicaNode extends Node {
         byte[] infosBytes = job.getCopyState().infosBytes;
 
         SegmentInfos syncInfos = SegmentInfos.readCommit(dir,
-                                                         toIndexInput(job.getCopyState().infosBytes),
+                                                         new BufferedChecksumIndexInput(new ByteArrayIndexInput("SegmentInfos", job.getCopyState().infosBytes)),
                                                          job.getCopyState().gen);
 
         // Must always commit to a larger generation than what's currently in the index:
@@ -385,7 +382,7 @@ public abstract class ReplicaNode extends Node {
       // Turn byte[] back to SegmentInfos:
       byte[] infosBytes = copyState.infosBytes;
       SegmentInfos infos = SegmentInfos.readCommit(dir,
-                                                   toIndexInput(copyState.infosBytes),
+                                                   new BufferedChecksumIndexInput(new ByteArrayIndexInput("SegmentInfos", copyState.infosBytes)),
                                                    copyState.gen);
       assert infos.getVersion() == copyState.version;
 
@@ -440,13 +437,6 @@ public abstract class ReplicaNode extends Node {
                           bytesToString(job.getTotalBytesCopied()),
                           copyState.version,
                           markerCount));
-  }
-
-  private ChecksumIndexInput toIndexInput(byte[] input) {
-    return new BufferedChecksumIndexInput(
-        new ByteBuffersIndexInput(
-            new ByteBuffersDataInput(
-                Arrays.asList(ByteBuffer.wrap(input))), "SegmentInfos"));
   }
 
   /** Start a background copying job, to copy the specified files from the current primary node.  If files is null then the latest copy
@@ -730,8 +720,8 @@ public abstract class ReplicaNode extends Node {
   }
 
   /** Carefully determine if the file on the primary, identified by its {@code String fileName} along with the {@link FileMetaData}
-   * "summarizing" its contents, is precisely the same file that we have locally.  If the file does not exist locally, or if its header
-   * (includes the segment id), length, footer (including checksum) differ, then this returns false, else true. */
+   * "summarizing" its contents, is precisely the same file that we have locally.  If the file does not exist locally, or if its its header
+   * (inclues the segment id), length, footer (including checksum) differ, then this returns false, else true. */
   private boolean fileIsIdentical(String fileName, FileMetaData srcMetaData) throws IOException {
 
     FileMetaData destMetaData = readLocalFileMetaData(fileName);

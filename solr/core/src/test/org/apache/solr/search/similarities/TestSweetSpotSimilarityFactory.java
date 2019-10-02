@@ -57,7 +57,7 @@ public class TestSweetSpotSimilarityFactory extends BaseSimilarityTestCase {
     dir.close();
     Explanation norm = findExplanation(expl, "fieldNorm");
     assertNotNull(norm);
-    return norm.getValue().floatValue();
+    return norm.getValue();
   }
 
   private static Explanation findExplanation(Explanation expl, String text) {

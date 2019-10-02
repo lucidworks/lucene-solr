@@ -331,7 +331,7 @@ public abstract class IndexReader implements Closeable {
    * requested document is deleted, and therefore asking for a deleted document
    * may yield unspecified results. Usually this is not required, however you
    * can test if the doc is deleted by checking the {@link
-   * Bits} returned from {@link MultiBits#getLiveDocs}.
+   * Bits} returned from {@link MultiFields#getLiveDocs}.
    *
    * <b>NOTE:</b> only the content of a field is returned,
    * if that field was stored during indexing.  Metadata
@@ -439,25 +439,25 @@ public abstract class IndexReader implements Closeable {
   
   /**
    * Returns the total number of occurrences of {@code term} across all
-   * documents (the sum of the freq() for each doc that has this term).
-   * Note that, like other term measures, this measure does not take
-   * deleted documents into account.
+   * documents (the sum of the freq() for each doc that has this term). This
+   * will be -1 if the codec doesn't support this measure. Note that, like other
+   * term measures, this measure does not take deleted documents into account.
    */
   public abstract long totalTermFreq(Term term) throws IOException;
   
   /**
-   * Returns the sum of {@link TermsEnum#docFreq()} for all terms in this field.
-   * Note that, just like other term measures, this measure does not take deleted
-   * documents into account.
+   * Returns the sum of {@link TermsEnum#docFreq()} for all terms in this field,
+   * or -1 if this measure isn't stored by the codec. Note that, just like other
+   * term measures, this measure does not take deleted documents into account.
    * 
    * @see Terms#getSumDocFreq()
    */
   public abstract long getSumDocFreq(String field) throws IOException;
   
   /**
-   * Returns the number of documents that have at least one term for this field.
-   * Note that, just like other term measures, this measure does not take deleted 
-   * documents into account.
+   * Returns the number of documents that have at least one term for this field,
+   * or -1 if this measure isn't stored by the codec. Note that, just like other
+   * term measures, this measure does not take deleted documents into account.
    * 
    * @see Terms#getDocCount()
    */
@@ -465,8 +465,9 @@ public abstract class IndexReader implements Closeable {
 
   /**
    * Returns the sum of {@link TermsEnum#totalTermFreq} for all terms in this
-   * field. Note that, just like other term measures, this measure does not take
-   * deleted documents into account.
+   * field, or -1 if this measure isn't stored by the codec (or if this fields
+   * omits term freq and positions). Note that, just like other term measures,
+   * this measure does not take deleted documents into account.
    * 
    * @see Terms#getSumTotalTermFreq()
    */

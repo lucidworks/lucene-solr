@@ -40,7 +40,6 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.solr.ltr.feature.Feature;
@@ -188,7 +187,7 @@ public class LTRScoringQuery extends Query {
   }
 
   @Override
-  public ModelWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost)
+  public ModelWeight createWeight(IndexSearcher searcher, boolean needsScores, float boost)
       throws IOException {
     final Collection<Feature> modelFeatures = ltrScoringModel.getFeatures();
     final Collection<Feature> allFeatures = ltrScoringModel.getAllFeatures();
@@ -206,10 +205,10 @@ public class LTRScoringQuery extends Query {
     List<Feature.FeatureWeight > featureWeights = new ArrayList<>(features.size());
 
     if (querySemaphore == null) {
-      createWeights(searcher, scoreMode.needsScores(), featureWeights, features);
+      createWeights(searcher, needsScores, featureWeights, features);
     }
     else{
-      createWeightsParallel(searcher, scoreMode.needsScores(), featureWeights, features);
+      createWeightsParallel(searcher, needsScores, featureWeights, features);
     }
     int i=0, j = 0;
     if (this.extractAllFeatures) {
@@ -508,7 +507,7 @@ public class LTRScoringQuery extends Query {
       }
 
       @Override
-      public Collection<ChildScorable> getChildren() throws IOException {
+      public Collection<ChildScorer> getChildren() throws IOException {
         return featureTraversalScorer.getChildren();
       }
 
@@ -520,11 +519,6 @@ public class LTRScoringQuery extends Query {
       @Override
       public float score() throws IOException {
         return featureTraversalScorer.score();
-      }
-
-      @Override
-      public float getMaxScore(int upTo) throws IOException {
-        return Float.POSITIVE_INFINITY;
       }
 
       @Override
@@ -582,20 +576,15 @@ public class LTRScoringQuery extends Query {
         }
 
         @Override
-        public float getMaxScore(int upTo) throws IOException {
-          return Float.POSITIVE_INFINITY;
-        }
-
-        @Override
         public DocIdSetIterator iterator() {
           return itr;
         }
 
         @Override
-        public final Collection<ChildScorable> getChildren() {
-          final ArrayList<ChildScorable> children = new ArrayList<>();
+        public final Collection<ChildScorer> getChildren() {
+          final ArrayList<ChildScorer> children = new ArrayList<>();
           for (final DisiWrapper scorer : subScorers) {
-            children.add(new ChildScorable(scorer.scorer, "SHOULD"));
+            children.add(new ChildScorer(scorer.scorer, "SHOULD"));
           }
           return children;
         }
@@ -669,15 +658,10 @@ public class LTRScoringQuery extends Query {
         }
 
         @Override
-        public float getMaxScore(int upTo) throws IOException {
-          return Float.POSITIVE_INFINITY;
-        }
-        
-        @Override
-        public final Collection<ChildScorable> getChildren() {
-          final ArrayList<ChildScorable> children = new ArrayList<>();
+        public final Collection<ChildScorer> getChildren() {
+          final ArrayList<ChildScorer> children = new ArrayList<>();
           for (final Scorer scorer : featureScorers) {
-            children.add(new ChildScorable(scorer, "SHOULD"));
+            children.add(new ChildScorer(scorer, "SHOULD"));
           }
           return children;
         }

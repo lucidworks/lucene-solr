@@ -19,7 +19,7 @@ package org.apache.lucene.search.spell;
 /**
  * Levenshtein edit distance class.
  */
-public final class LevenshteinDistance implements StringDistance {
+public class LevenshteinDistance implements StringDistance {
 
     /**
      * Optimized to run a bit faster than the static getDistance().
@@ -33,7 +33,7 @@ public final class LevenshteinDistance implements StringDistance {
     // Compute Levenshtein distance: see org.apache.commons.lang.StringUtils#getLevenshteinDistance(String, String)
     //*****************************
     @Override
-    public float getDistance (String target, String other) {
+    public final float getDistance (String target, String other) {
       char[] sa;
       int n;
       int p[]; //'previous' cost array, horizontally
@@ -107,19 +107,19 @@ public final class LevenshteinDistance implements StringDistance {
     }
 
   @Override
-  public int hashCode() {
+  public final int hashCode() {
     return 163 * getClass().hashCode();
   }
 
   @Override
-  public boolean equals(Object obj) {
+  public final boolean equals(Object obj) {
     if (this == obj) return true;
     if (null == obj) return false;
     return (getClass() == obj.getClass());
   }
 
   @Override
-  public String toString() {
-    return "levenshtein";
+  public final String toString() {
+    return "levensthein";
   }
 }

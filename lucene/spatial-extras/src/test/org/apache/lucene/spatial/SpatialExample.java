@@ -33,16 +33,14 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.search.TotalHits.Relation;
 import org.apache.lucene.spatial.prefix.RecursivePrefixTreeStrategy;
 import org.apache.lucene.spatial.prefix.tree.GeohashPrefixTree;
 import org.apache.lucene.spatial.prefix.tree.SpatialPrefixTree;
 import org.apache.lucene.spatial.query.SpatialArgs;
 import org.apache.lucene.spatial.query.SpatialArgsParser;
 import org.apache.lucene.spatial.query.SpatialOperation;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
-
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.LuceneTestCase;
 import org.locationtech.spatial4j.context.SpatialContext;
 import org.locationtech.spatial4j.distance.DistanceUtils;
@@ -99,7 +97,7 @@ public class SpatialExample extends LuceneTestCase {
 
     this.strategy = new RecursivePrefixTreeStrategy(grid, "myGeoField");
 
-    this.directory = new ByteBuffersDirectory();
+    this.directory = new RAMDirectory();
   }
 
   private void indexPoints() throws Exception {
@@ -192,8 +190,7 @@ public class SpatialExample extends LuceneTestCase {
   }
 
   private void assertDocMatchedIds(IndexSearcher indexSearcher, TopDocs docs, int... ids) throws IOException {
-    assert docs.totalHits.relation == Relation.EQUAL_TO;
-    int[] gotIds = new int[Math.toIntExact(docs.totalHits.value)];
+    int[] gotIds = new int[Math.toIntExact(docs.totalHits)];
     for (int i = 0; i < gotIds.length; i++) {
       gotIds[i] = indexSearcher.doc(docs.scoreDocs[i].doc).getField("id").numericValue().intValue();
     }

@@ -26,13 +26,17 @@ import java.util.List;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.util.CollectionUtil;
 
-/** A conjunction of DocIdSetIterators.
+/**
+ * A conjunction of DocIdSetIterators.
  * This iterates over the doc ids that are present in each given DocIdSetIterator.
+ *
  * @lucene.internal
  */
 final class ConjunctionDISI extends DocIdSetIterator {
 
-  /** Create a conjunction over the provided DocIdSetIterators. */
+  /**
+   * Create a conjunction over the provided DocIdSetIterators.
+   */
   public static DocIdSetIterator intersectIterators(List<? extends DocIdSetIterator> iterators) {
     if (iterators.size() < 2) {
       throw new IllegalArgumentException("Cannot make a ConjunctionDISI of less than 2 iterators");
@@ -72,7 +76,8 @@ final class ConjunctionDISI extends DocIdSetIterator {
   }
 
   private int doNext(int doc) throws IOException {
-    advanceHead: for(;;) {
+    advanceHead:
+    for (; ; ) {
       assert doc == lead1.docID();
 
       // find agreement between the two iterators with the lower costs

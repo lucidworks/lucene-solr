@@ -34,6 +34,7 @@ import org.apache.solr.schema.CurrencyFieldType;
 import org.apache.solr.schema.CurrencyValue;
 import org.apache.solr.schema.ExchangeRateProvider;
 import org.apache.solr.schema.FieldType;
+import org.apache.solr.schema.PointField;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.schema.TrieDateField;
 import org.apache.solr.schema.TrieField;
@@ -176,7 +177,7 @@ class FacetRangeProcessor extends FacetProcessor<FacetRange> {
     Calc calc;
     final FieldType ft = sf.getType();
 
-    if (ft instanceof TrieField || ft.isPointField()) {
+    if (ft instanceof TrieField) {
       switch (ft.getNumberType()) {
         case FLOAT:
           calc = new FloatCalc(sf);
@@ -198,7 +199,31 @@ class FacetRangeProcessor extends FacetProcessor<FacetRange> {
               (SolrException.ErrorCode.BAD_REQUEST,
                   "Expected numeric field type :" + sf);
       }
-    } else {
+    } else if (ft instanceof PointField) {
+      // TODO, this is the same in Trie and Point now
+      switch (ft.getNumberType()) {
+        case FLOAT:
+          calc = new FloatCalc(sf);
+          break;
+        case DOUBLE:
+          calc = new DoubleCalc(sf);
+          break;
+        case INTEGER:
+          calc = new IntCalc(sf);
+          break;
+        case LONG:
+          calc = new LongCalc(sf);
+          break;
+        case DATE:
+          calc = new DateCalc(sf, null);
+          break;
+        default:
+          throw new SolrException
+              (SolrException.ErrorCode.BAD_REQUEST,
+                  "Expected numeric field type :" + sf);
+      }
+    } 
+    else {
       throw new SolrException
           (SolrException.ErrorCode.BAD_REQUEST,
               "Expected numeric field type :" + sf);

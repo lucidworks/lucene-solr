@@ -67,10 +67,10 @@ import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.store.BaseDirectoryWrapper;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.store.NIOFSDirectory;
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.store.SimpleFSDirectory;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
@@ -287,15 +287,100 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
   }
 
   final static String[] oldNames = {
-
+    "6.0.0-cfs",
+    "6.0.0-nocfs",
+    "6.0.1-cfs",
+    "6.0.1-nocfs",
+    "6.1.0-cfs",
+    "6.1.0-nocfs",
+    "6.2.0-cfs",
+    "6.2.0-nocfs",
+    "6.2.1-cfs",
+    "6.2.1-nocfs",
+    "6.3.0-cfs",
+    "6.3.0-nocfs",
+    "6.4.0-cfs",
+    "6.4.0-nocfs",
+    "6.4.1-cfs",
+    "6.4.1-nocfs",
+    "6.4.2-cfs",
+    "6.4.2-nocfs",
+    "6.5.0-cfs",
+    "6.5.0-nocfs",
+    "6.5.1-cfs",
+    "6.5.1-nocfs",
+    "6.6.0-cfs",
+    "6.6.0-nocfs",
+    "6.6.1-cfs",
+    "6.6.1-nocfs",
+    "6.6.2-cfs",
+    "6.6.2-nocfs",
+    "6.6.3-cfs",
+    "6.6.3-nocfs",
+    "6.6.4-cfs",
+    "6.6.4-nocfs",
+    "6.6.5-cfs",
+    "6.6.5-nocfs",
+    "6.6.6-cfs",
+    "6.6.6-nocfs",
+    "7.0.0-cfs",
+    "7.0.0-nocfs",
+    "7.0.1-cfs",
+    "7.0.1-nocfs",
+    "7.1.0-cfs",
+    "7.1.0-nocfs",
+    "7.2.0-cfs",
+    "7.2.0-nocfs",
+    "7.2.1-cfs",
+    "7.2.1-nocfs",
+    "7.3.0-cfs",
+    "7.3.0-nocfs",
+    "7.3.1-cfs",
+    "7.3.1-nocfs",
+    "7.4.0-cfs",
+    "7.4.0-nocfs",
+    "7.5.0-cfs",
+    "7.5.0-nocfs",
+    "7.6.0-cfs",
+    "7.6.0-nocfs",
+    "7.7.0-cfs",
+    "7.7.0-nocfs",
+    "7.7.1-cfs",
+    "7.7.1-nocfs"
   };
 
   public static String[] getOldNames() {
     return oldNames;
   }
-  
-  final static String[] oldSortedNames = {
 
+  final static String[] oldSortedNames = {
+    "sorted.6.2.0",
+    "sorted.6.2.1",
+    "sorted.6.3.0",
+    "sorted.6.4.0",
+    "sorted.6.4.1",
+    "sorted.6.4.2",
+    "sorted.6.5.0",
+    "sorted.6.5.1",
+    "sorted.6.6.0",
+    "sorted.6.6.1",
+    "sorted.6.6.2",
+    "sorted.6.6.3",
+    "sorted.6.6.4",
+    "sorted.6.6.5",
+    "sorted.6.6.6",
+    "sorted.7.0.0",
+    "sorted.7.0.1",
+    "sorted.7.1.0",
+    "sorted.7.2.0",
+    "sorted.7.2.1",
+    "sorted.7.3.0",
+    "sorted.7.3.1",
+    "sorted.7.4.0",
+    "sorted.7.5.0",
+    "sorted.7.6.0",
+    "sorted.7.7.0",
+    "sorted.7.7.1"
   };
 
   public static String[] getOldSortedNames() {
@@ -434,63 +519,7 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
       "5.5.4-cfs",
       "5.5.4-nocfs",
       "5.5.5-cfs",
-      "5.5.5-nocfs",
-      "6.0.0-cfs",
-      "6.0.0-nocfs",
-      "6.0.1-cfs",
-      "6.0.1-nocfs",
-      "6.1.0-cfs",
-      "6.1.0-nocfs",
-      "6.2.0-cfs",
-      "6.2.0-nocfs",
-      "6.2.1-cfs",
-      "6.2.1-nocfs",
-      "6.3.0-cfs",
-      "6.3.0-nocfs",
-      "6.4.0-cfs",
-      "6.4.0-nocfs",
-      "6.4.1-cfs",
-      "6.4.1-nocfs",
-      "6.4.2-cfs",
-      "6.4.2-nocfs",
-      "6.5.0-cfs",
-      "6.5.0-nocfs",
-      "6.5.1-cfs",
-      "6.5.1-nocfs",
-      "6.6.0-cfs",
-      "6.6.0-nocfs",
-      "6.6.1-cfs",
-      "6.6.1-nocfs",
-      "6.6.2-cfs",
-      "6.6.2-nocfs",
-      "6.6.3-cfs",
-      "6.6.3-nocfs",
-      "6.6.4-cfs",
-      "6.6.4-nocfs",
-      "6.6.5-cfs",
-      "6.6.5-nocfs",
-      "7.0.0-cfs",
-      "7.0.0-nocfs",
-      "7.0.1-cfs",
-      "7.0.1-nocfs",
-      "7.1.0-cfs",
-      "7.1.0-nocfs",
-      "7.2.0-cfs",
-      "7.2.0-nocfs",
-      "7.2.1-cfs",
-      "7.2.1-nocfs",
-      "7.3.0-cfs",
-      "7.3.0-nocfs",
-      "7.3.1-cfs",
-      "7.3.1-nocfs",
-      "7.4.0-cfs",
-      "7.4.0-nocfs",
-      "7.5.0-cfs",
-      "7.5.0-nocfs",
-      "7.6.0-cfs",
-      "7.6.0-nocfs",
-      "7.7.0-cfs",
-      "7.7.0-nocfs"
+      "5.5.5-nocfs"
   };
 
   // TODO: on 6.0.0 release, gen the single segment indices and add here:
@@ -574,24 +603,6 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
         expectedVersions.add(v.toString() + "-cfs");
       }
     }
-
-    // BEGIN TRUNK ONLY BLOCK
-    // on trunk, the last release of the prev major release is also untested
-    Version lastPrevMajorVersion = null;
-    for (java.lang.reflect.Field field : Version.class.getDeclaredFields()) {
-      if (Modifier.isStatic(field.getModifiers()) && field.getType() == Version.class) {
-        Version v = (Version)field.get(Version.class);
-        Matcher constant = constantPattern.matcher(field.getName());
-        if (constant.matches() == false) continue;
-        if (v.major == Version.LATEST.major - 1 &&
-            (lastPrevMajorVersion == null || v.onOrAfter(lastPrevMajorVersion))) {
-          lastPrevMajorVersion = v;
-        }
-      }
-    }
-    assertNotNull(lastPrevMajorVersion);
-    expectedVersions.remove(lastPrevMajorVersion.toString() + "-cfs");
-    // END TRUNK ONLY BLOCK
 
     Collections.sort(expectedVersions);
 
@@ -817,7 +828,7 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
         Directory targetDir2 = newDirectory();
         IndexWriter w = new IndexWriter(targetDir2, newIndexWriterConfig(new MockAnalyzer(random())));
         IllegalArgumentException e = expectThrows(IllegalArgumentException.class, () -> TestUtil.addIndexesSlowly(w, reader));
-        assertEquals(e.getMessage(), "Cannot merge a segment that has been created with major version 7 into this index which has been created by major version 8");
+        assertEquals(e.getMessage(), "Cannot merge a segment that has been created with major version 6 into this index which has been created by major version 7");
         w.close();
         targetDir2.close();
 
@@ -878,17 +889,17 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
     TestUtil.checkIndex(dir);
     
     // true if this is a 4.0+ index
-    final boolean is40Index = FieldInfos.getMergedFieldInfos(reader).fieldInfo("content5") != null;
+    final boolean is40Index = MultiFields.getMergedFieldInfos(reader).fieldInfo("content5") != null;
     // true if this is a 4.2+ index
-    final boolean is42Index = FieldInfos.getMergedFieldInfos(reader).fieldInfo("dvSortedSet") != null;
+    final boolean is42Index = MultiFields.getMergedFieldInfos(reader).fieldInfo("dvSortedSet") != null;
     // true if this is a 4.9+ index
-    final boolean is49Index = FieldInfos.getMergedFieldInfos(reader).fieldInfo("dvSortedNumeric") != null;
+    final boolean is49Index = MultiFields.getMergedFieldInfos(reader).fieldInfo("dvSortedNumeric") != null;
     // true if this index has points (>= 6.0)
-    final boolean hasPoints = FieldInfos.getMergedFieldInfos(reader).fieldInfo("intPoint1d") != null;
+    final boolean hasPoints = MultiFields.getMergedFieldInfos(reader).fieldInfo("intPoint1d") != null;
 
     assert is40Index;
 
-    final Bits liveDocs = MultiBits.getLiveDocs(reader);
+    final Bits liveDocs = MultiFields.getLiveDocs(reader);
 
     for(int i=0;i<35;i++) {
       if (liveDocs.get(i)) {
@@ -1254,7 +1265,7 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
     for (String name : oldNames) {
       Directory dir = oldIndexDirs.get(name);
       IndexReader r = DirectoryReader.open(dir);
-      TermsEnum terms = MultiTerms.getTerms(r, "content").iterator();
+      TermsEnum terms = MultiFields.getTerms(r, "content").iterator();
       BytesRef t = terms.next();
       assertNotNull(t);
 
@@ -1452,7 +1463,7 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
 
       // create a bunch of dummy segments
       int id = 40;
-      Directory ramDir = new ByteBuffersDirectory();
+      RAMDirectory ramDir = new RAMDirectory();
       for (int i = 0; i < 3; i++) {
         // only use Log- or TieredMergePolicy, to make document addition predictable and not suddenly merge:
         MergePolicy mp = random().nextBoolean() ? newLogMergePolicy() : newTieredMergePolicy();
@@ -1498,25 +1509,23 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
     }
   }
 
-  public static final String emptyIndex = "empty.8.0.0.zip";
+  public static final String emptyIndex = "empty.6.0.0.zip";
 
   public void testUpgradeEmptyOldIndex() throws Exception {
-    assumeTrue("Reenable when 8.0 is released", false);
     Path oldIndexDir = createTempDir("emptyIndex");
     TestUtil.unzip(getDataInputStream(emptyIndex), oldIndexDir);
     Directory dir = newFSDirectory(oldIndexDir);
 
     newIndexUpgrader(dir).upgrade();
 
-    checkAllSegmentsUpgraded(dir, 7);
+    checkAllSegmentsUpgraded(dir, 6);
     
     dir.close();
   }
 
-  public static final String moreTermsIndex = "moreterms.8.0.0.zip";
+  public static final String moreTermsIndex = "moreterms.6.0.0.zip";
 
   public void testMoreTerms() throws Exception {
-    assumeTrue("Reenable when 8.0 is released", false);
     Path oldIndexDir = createTempDir("moreterms");
     TestUtil.unzip(getDataInputStream(moreTermsIndex), oldIndexDir);
     Directory dir = newFSDirectory(oldIndexDir);
@@ -1526,7 +1535,7 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
     dir.close();
   }
 
-  public static final String dvUpdatesIndex = "dvupdates.8.0.0.zip";
+  public static final String dvUpdatesIndex = "dvupdates.6.0.0.zip";
 
   private void assertNumericDocValues(LeafReader r, String f, String cf) throws IOException {
     NumericDocValues ndvf = r.getNumericDocValues(f);
@@ -1537,7 +1546,7 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
       assertEquals(ndvcf.longValue(), ndvf.longValue()*2);
     }
   }
-
+  
   private void assertBinaryDocValues(LeafReader r, String f, String cf) throws IOException {
     BinaryDocValues bdvf = r.getBinaryDocValues(f);
     BinaryDocValues bdvcf = r.getBinaryDocValues(cf);
@@ -1547,7 +1556,7 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
       assertEquals(getValue(bdvcf), getValue(bdvf)*2);
     }
   }
-
+  
   private void verifyDocValues(Directory dir) throws IOException {
     DirectoryReader reader = DirectoryReader.open(dir);
     for (LeafReaderContext context : reader.leaves()) {
@@ -1559,9 +1568,8 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
     }
     reader.close();
   }
-
+  
   public void testDocValuesUpdates() throws Exception {
-    assumeTrue("Reenable when 8.0 is released", false);
     Path oldIndexDir = createTempDir("dvupdates");
     TestUtil.unzip(getDataInputStream(dvUpdatesIndex), oldIndexDir);
     Directory dir = newFSDirectory(oldIndexDir);
@@ -1576,7 +1584,6 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
     updateNumeric(writer, "1", "ndv2", "ndv2_c", 300L);
     updateBinary(writer, "1", "bdv1", "bdv1_c", 300L);
     updateBinary(writer, "1", "bdv2", "bdv2_c", 300L);
-
     writer.commit();
     verifyDocValues(dir);
     
@@ -1590,7 +1597,6 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
   }
 
   public void testSoftDeletes() throws Exception {
-    assumeTrue("Reenable when 8.0 is released", false);
     Path oldIndexDir = createTempDir("dvupdates");
     TestUtil.unzip(getDataInputStream(dvUpdatesIndex), oldIndexDir);
     Directory dir = newFSDirectory(oldIndexDir);
@@ -1611,7 +1617,6 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
   }
 
   public void testDocValuesUpdatesWithNewField() throws Exception {
-    assumeTrue("Reenable when 8.0 is released", false);
     Path oldIndexDir = createTempDir("dvupdates");
     TestUtil.unzip(getDataInputStream(dvUpdatesIndex), oldIndexDir);
     Directory dir = newFSDirectory(oldIndexDir);
@@ -1661,7 +1666,7 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
     writer.close();
     dir.close();
   }
-  
+
   // LUCENE-5907
   public void testUpgradeWithNRTReader() throws Exception {
     for (String name : oldNames) {
@@ -1698,7 +1703,7 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
   }
 
   public void testSortedIndex() throws Exception {
-    for(String name : oldSortedNames) {
+    for (String name : oldSortedNames) {
       Path path = createTempDir("sorted");
       InputStream resource = TestBackwardsCompatibility.class.getResourceAsStream(name + ".zip");
       assertNotNull("Sorted index index " + name + " not found", resource);
@@ -1725,9 +1730,8 @@ public class TestBackwardsCompatibility extends LuceneTestCase {
    * before https://issues.apache.org/jira/browse/LUCENE-8592.
    */
   public void testSortedIndexWithInvalidSort() throws Exception {
-    assumeTrue("Reenable when 8.0 is released", false);
     Path path = createTempDir("sorted");
-    String name = "sorted-invalid.8.0.0.zip";
+    String name = "sorted-invalid.7.5.0.zip";
     InputStream resource = TestBackwardsCompatibility.class.getResourceAsStream(name);
     assertNotNull("Sorted index index " + name + " not found", resource);
     TestUtil.unzip(resource, path);

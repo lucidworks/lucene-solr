@@ -27,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 import org.apache.lucene.index.Term;
+import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.util.FixedBitSet;
 
 /**
@@ -67,7 +68,7 @@ final class SloppyPhraseMatcher extends PhraseMatcher {
   private boolean checkedRpts; // flag to only check for repetitions in first candidate doc
   private boolean hasMultiTermRpts; //  
   private PhrasePositions[][] rptGroups; // in each group are PPs that repeats each other (i.e. same term), sorted by (query) offset 
-  private PhrasePositions[] rptStack; // temporary stack for switching colliding repeating pps 
+  private PhrasePositions[] rptStack; // temporary stack for switching colliding repeating pps
 
   private boolean positioned;
   private int matchLength;
@@ -112,8 +113,8 @@ final class SloppyPhraseMatcher extends PhraseMatcher {
   }
 
   @Override
-  float sloppyWeight() {
-    return 1f / (1f + matchLength);
+  float sloppyWeight(Similarity.SimScorer simScorer) {
+    return simScorer.computeSlopFactor(matchLength);
   }
 
   @Override

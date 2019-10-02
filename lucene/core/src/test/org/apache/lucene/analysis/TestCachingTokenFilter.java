@@ -26,7 +26,7 @@ import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.search.DocIdSetIterator;
@@ -84,14 +84,14 @@ public class TestCachingTokenFilter extends BaseTokenStreamTestCase {
     writer.addDocument(doc);
     
     IndexReader reader = writer.getReader();
-    PostingsEnum termPositions = MultiTerms.getTermPostingsEnum(reader,
+    PostingsEnum termPositions = MultiFields.getTermPositionsEnum(reader,
                                                                           "preanalyzed",
                                                                           new BytesRef("term1"));
     assertTrue(termPositions.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
     assertEquals(1, termPositions.freq());
     assertEquals(0, termPositions.nextPosition());
 
-    termPositions = MultiTerms.getTermPostingsEnum(reader,
+    termPositions = MultiFields.getTermPositionsEnum(reader,
                                                      "preanalyzed",
                                                      new BytesRef("term2"));
     assertTrue(termPositions.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
@@ -99,7 +99,7 @@ public class TestCachingTokenFilter extends BaseTokenStreamTestCase {
     assertEquals(1, termPositions.nextPosition());
     assertEquals(3, termPositions.nextPosition());
     
-    termPositions = MultiTerms.getTermPostingsEnum(reader,
+    termPositions = MultiFields.getTermPositionsEnum(reader,
                                                      "preanalyzed",
                                                      new BytesRef("term3"));
     assertTrue(termPositions.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);

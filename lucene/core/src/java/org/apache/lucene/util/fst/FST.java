@@ -26,12 +26,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import org.apache.lucene.codecs.CodecUtil;
+import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.store.ByteArrayDataOutput;
-import org.apache.lucene.store.ByteBuffersDataOutput;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.store.InputStreamDataInput;
 import org.apache.lucene.store.OutputStreamDataOutput;
+import org.apache.lucene.store.RAMOutputStream;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.Constants;
@@ -53,7 +54,7 @@ import org.apache.lucene.util.RamUsageEstimator;
 /** Represents an finite state machine (FST), using a
  *  compact byte[] format.
  *  <p> The format is similar to what's used by Morfologik
- *  (https://github.com/morfologik/morfologik-stemming).
+ *  (http://sourceforge.net/projects/morfologik).
  *  
  *  <p> See the {@link org.apache.lucene.util.fst package
  *      documentation} for some simple examples.
@@ -102,8 +103,27 @@ public final class FST<T> implements Accountable {
 
   // Increment version to change it
   private static final String FILE_FORMAT_NAME = "FST";
-  private static final int VERSION_START = 6;
-  private static final int VERSION_CURRENT = VERSION_START;
+  private static final int VERSION_START = 0;
+
+  /** Changed numBytesPerArc for array'd case from byte to int. */
+  private static final int VERSION_INT_NUM_BYTES_PER_ARC = 1;
+
+  /** Write BYTE2 labels as 2-byte short, not vInt. */
+  private static final int VERSION_SHORT_BYTE2_LABELS = 2;
+
+  /** Added optional packed format. */
+  private static final int VERSION_PACKED = 3;
+
+  /** Changed from int to vInt for encoding arc targets. 
+   *  Also changed maxBytesPerArc from int to vInt in the array case. */
+  private static final int VERSION_VINT_TARGET = 4;
+
+  /** Don't store arcWithOutputCount anymore */
+  private static final int VERSION_NO_NODE_ARC_COUNTS = 5;
+
+  private static final int VERSION_PACKED_REMOVED = 6;
+
+  private static final int VERSION_CURRENT = VERSION_PACKED_REMOVED;
 
   // Never serialized; just used to represent the virtual
   // final node w/ no arcs:
@@ -265,7 +285,12 @@ public final class FST<T> implements Accountable {
 
     // NOTE: only reads most recent format; we don't have
     // back-compat promise for FSTs (they are experimental):
-    version = CodecUtil.checkHeader(in, FILE_FORMAT_NAME, VERSION_START, VERSION_CURRENT);
+    version = CodecUtil.checkHeader(in, FILE_FORMAT_NAME, VERSION_PACKED, VERSION_CURRENT);
+    if (version < VERSION_PACKED_REMOVED) {
+      if (in.readByte() == 1) {
+        throw new CorruptIndexException("Cannot read packed FSTs anymore", in);
+      }
+    }
     if (in.readByte() == 1) {
       // accepts empty string
       // 1 KB blocks:
@@ -300,6 +325,11 @@ public final class FST<T> implements Accountable {
       throw new IllegalStateException("invalid input type " + t);
     }
     startNode = in.readVLong();
+    if (version < VERSION_NO_NODE_ARC_COUNTS) {
+      in.readVLong();
+      in.readVLong();
+      in.readVLong();
+    }
 
     long numBytes = in.readVLong();
     if (numBytes > 1 << maxBlockBits) {
@@ -432,14 +462,16 @@ public final class FST<T> implements Accountable {
       out.writeByte((byte) 1);
 
       // Serialize empty-string output:
-      ByteBuffersDataOutput ros = new ByteBuffersDataOutput();
+      RAMOutputStream ros = new RAMOutputStream();
       outputs.writeFinalOutput(emptyOutput, ros);
-      byte[] emptyOutputBytes = ros.toArrayCopy();
+      
+      byte[] emptyOutputBytes = new byte[(int) ros.getFilePointer()];
+      ros.writeTo(emptyOutputBytes, 0);
 
       // reverse
       final int stopAt = emptyOutputBytes.length/2;
       int upto = 0;
-      while (upto < stopAt) {
+      while(upto < stopAt) {
         final byte b = emptyOutputBytes[upto];
         emptyOutputBytes[upto] = emptyOutputBytes[emptyOutputBytes.length-upto-1];
         emptyOutputBytes[emptyOutputBytes.length-upto-1] = b;
@@ -736,7 +768,11 @@ public final class FST<T> implements Accountable {
       if (b == ARCS_AS_FIXED_ARRAY) {
         // array: jump straight to end
         arc.numArcs = in.readVInt();
-        arc.bytesPerArc = in.readVInt();
+        if (version >= VERSION_VINT_TARGET) {
+          arc.bytesPerArc = in.readVInt();
+        } else {
+          arc.bytesPerArc = in.readInt();
+        }
         //System.out.println("  array numArcs=" + arc.numArcs + " bpa=" + arc.bytesPerArc);
         arc.posArcsStart = in.getPosition();
         arc.arcIdx = arc.numArcs - 2;
@@ -772,7 +808,13 @@ public final class FST<T> implements Accountable {
   }
 
   private long readUnpackedNodeTarget(BytesReader in) throws IOException {
-    return in.readVLong();
+    long target;
+    if (version < VERSION_VINT_TARGET) {
+      target = in.readInt();
+    } else {
+      target = in.readVLong();
+    }
+    return target;
   }
 
   /**
@@ -815,7 +857,11 @@ public final class FST<T> implements Accountable {
       //System.out.println("  fixedArray");
       // this is first arc in a fixed-array
       arc.numArcs = in.readVInt();
-      arc.bytesPerArc = in.readVInt();
+      if (version >= VERSION_VINT_TARGET) {
+        arc.bytesPerArc = in.readVInt();
+      } else {
+        arc.bytesPerArc = in.readInt();
+      }
       arc.arcIdx = -1;
       arc.nextArc = arc.posArcsStart = in.getPosition();
       //System.out.println("  bytesPer=" + arc.bytesPerArc + " numArcs=" + arc.numArcs + " arcsStart=" + pos);
@@ -874,7 +920,11 @@ public final class FST<T> implements Accountable {
         in.readVInt();
 
         // Skip bytesPerArc:
-        in.readVInt();
+        if (version >= VERSION_VINT_TARGET) {
+          in.readVInt();
+        } else {
+          in.readInt();
+        }
       } else {
         in.setPosition(pos);
       }
@@ -1042,7 +1092,11 @@ public final class FST<T> implements Accountable {
     if (in.readByte() == ARCS_AS_FIXED_ARRAY) {
       // Arcs are full array; do binary search:
       arc.numArcs = in.readVInt();
-      arc.bytesPerArc = in.readVInt();
+      if (version >= VERSION_VINT_TARGET) {
+        arc.bytesPerArc = in.readVInt();
+      } else {
+        arc.bytesPerArc = in.readInt();
+      }
       arc.posArcsStart = in.getPosition();
       int low = 0;
       int high = arc.numArcs-1;

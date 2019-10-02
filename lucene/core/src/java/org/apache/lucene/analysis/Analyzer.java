@@ -23,7 +23,6 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Consumer;
 
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
@@ -358,16 +357,16 @@ public abstract class Analyzer implements Closeable {
 
   /**
    * This class encapsulates the outer components of a token stream. It provides
-   * access to the source (a {@link Reader} {@link Consumer} and the outer end (sink), an
+   * access to the source ({@link Tokenizer}) and the outer end (sink), an
    * instance of {@link TokenFilter} which also serves as the
    * {@link TokenStream} returned by
    * {@link Analyzer#tokenStream(String, Reader)}.
    */
-  public static final class TokenStreamComponents {
+  public static class TokenStreamComponents {
     /**
      * Original source of the tokens.
      */
-    protected final Consumer<Reader> source;
+    protected final Tokenizer source;
     /**
      * Sink tokenstream, such as the outer tokenfilter decorating
      * the chain. This can be the source if there are no filters.
@@ -381,30 +380,25 @@ public abstract class Analyzer implements Closeable {
      * Creates a new {@link TokenStreamComponents} instance.
      * 
      * @param source
-     *          the source to set the reader on
+     *          the analyzer's tokenizer
      * @param result
      *          the analyzer's resulting token stream
      */
-    public TokenStreamComponents(final Consumer<Reader> source,
+    public TokenStreamComponents(final Tokenizer source,
         final TokenStream result) {
       this.source = source;
       this.sink = result;
     }
-
+    
     /**
-     * Creates a new {@link TokenStreamComponents} instance
-     * @param tokenizer the analyzer's Tokenizer
-     * @param result    the analyzer's resulting token stream
+     * Creates a new {@link TokenStreamComponents} instance.
+     * 
+     * @param source
+     *          the analyzer's tokenizer
      */
-    public TokenStreamComponents(final Tokenizer tokenizer, final TokenStream result) {
-      this(tokenizer::setReader, result);
-    }
-
-    /**
-     * Creates a new {@link TokenStreamComponents} from a Tokenizer
-     */
-    public TokenStreamComponents(final Tokenizer tokenizer) {
-      this(tokenizer::setReader, tokenizer);
+    public TokenStreamComponents(final Tokenizer source) {
+      this.source = source;
+      this.sink = source;
     }
 
     /**
@@ -414,8 +408,8 @@ public abstract class Analyzer implements Closeable {
      * @param reader
      *          a reader to reset the source component
      */
-    private void setReader(final Reader reader) {
-      source.accept(reader);
+    protected void setReader(final Reader reader) {
+      source.setReader(reader);
     }
 
     /**
@@ -428,9 +422,11 @@ public abstract class Analyzer implements Closeable {
     }
 
     /**
-     * Returns the component's source
+     * Returns the component's {@link Tokenizer}
+     *
+     * @return Component's {@link Tokenizer}
      */
-    public Consumer<Reader> getSource() {
+    public Tokenizer getTokenizer() {
       return source;
     }
   }

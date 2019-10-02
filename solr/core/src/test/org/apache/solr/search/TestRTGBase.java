@@ -25,8 +25,7 @@ import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.MultiBits;
-import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.Terms;
@@ -109,7 +108,7 @@ public class TestRTGBase extends SolrTestCaseJ4 {
 
 
   protected int getFirstMatch(IndexReader r, Term t) throws IOException {
-    Terms terms = MultiTerms.getTerms(r, t.field());
+    Terms terms = MultiFields.getTerms(r, t.field());
     if (terms == null) return -1;
     BytesRef termBytes = t.bytes();
     final TermsEnum termsEnum = terms.iterator();
@@ -117,7 +116,7 @@ public class TestRTGBase extends SolrTestCaseJ4 {
       return -1;
     }
     PostingsEnum docs = termsEnum.postings(null, PostingsEnum.NONE);
-    docs = BitsFilteredPostingsEnum.wrap(docs, MultiBits.getLiveDocs(r));
+    docs = BitsFilteredPostingsEnum.wrap(docs, MultiFields.getLiveDocs(r));
     int id = docs.nextDoc();
     if (id != DocIdSetIterator.NO_MORE_DOCS) {
       int next = docs.nextDoc();

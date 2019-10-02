@@ -17,12 +17,15 @@
 package org.apache.lucene.search;
 
 
+import java.io.IOException;
+
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.FieldInvertState;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.MultiDocValues;
 import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.index.RandomIndexWriter;
@@ -30,6 +33,7 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.search.similarities.PerFieldSimilarityWrapper;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 
 public class TestSimilarityProvider extends LuceneTestCase {
@@ -82,9 +86,9 @@ public class TestSimilarityProvider extends LuceneTestCase {
 
     // sanity check of searching
     TopDocs foodocs = searcher.search(new TermQuery(new Term("foo", "brown")), 10);
-    assertTrue(foodocs.totalHits.value > 0);
+    assertTrue(foodocs.totalHits > 0);
     TopDocs bardocs = searcher.search(new TermQuery(new Term("bar", "brown")), 10);
-    assertTrue(bardocs.totalHits.value > 0);
+    assertTrue(bardocs.totalHits > 0);
     assertTrue(foodocs.scoreDocs[0].score < bardocs.scoreDocs[0].score);
   }
 
@@ -110,11 +114,26 @@ public class TestSimilarityProvider extends LuceneTestCase {
     }
 
     @Override
-    public SimScorer scorer(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
+    public SimWeight computeWeight(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
+      return new SimWeight() {};
+    }
+
+    @Override
+    public SimScorer simScorer(SimWeight weight, LeafReaderContext context) throws IOException {
       return new SimScorer() {
 
         @Override
-        public float score(float freq, long norm) {
+        public float score(int doc, float freq) throws IOException {
+          return 1;
+        }
+
+        @Override
+        public float computeSlopFactor(int distance) {
+          return 1;
+        }
+
+        @Override
+        public float computePayloadFactor(int doc, int start, int end, BytesRef payload) {
           return 1;
         }
       };
@@ -130,11 +149,27 @@ public class TestSimilarityProvider extends LuceneTestCase {
     }
 
     @Override
-    public SimScorer scorer(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
+    public SimWeight computeWeight(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
+      return new SimWeight() {};
+    }
+
+    @Override
+    public SimScorer simScorer(SimWeight weight, LeafReaderContext context) throws IOException {
       return new SimScorer() {
+
         @Override
-        public float score(float freq, long norm) {
+        public float score(int doc, float freq) throws IOException {
           return 10;
+        }
+
+        @Override
+        public float computeSlopFactor(int distance) {
+          return 1;
+        }
+
+        @Override
+        public float computePayloadFactor(int doc, int start, int end, BytesRef payload) {
+          return 1;
         }
       };
     }

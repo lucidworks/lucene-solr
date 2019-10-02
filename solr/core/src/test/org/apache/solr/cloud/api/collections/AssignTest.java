@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -92,7 +93,7 @@ public class AssignTest extends SolrTestCaseJ4 {
 
   @Test
   public void testIdIsUnique() throws Exception {
-    String zkDir = createTempDir("zkData").toFile().getAbsolutePath();
+    Path zkDir = createTempDir("zkData");
     ZkTestServer server = new ZkTestServer(zkDir);
     Object fixedValue = new Object();
     String[] collections = new String[]{"c1","c2","c3","c4","c5","c6","c7","c8","c9"};
@@ -139,7 +140,7 @@ public class AssignTest extends SolrTestCaseJ4 {
 
   @Test
   public void testBuildCoreName() throws Exception {
-    String zkDir = createTempDir("zkData").toFile().getAbsolutePath();
+    Path zkDir = createTempDir("zkData");
     ZkTestServer server = new ZkTestServer(zkDir);
     server.run();
     try (SolrZkClient zkClient = new SolrZkClient(server.getZkAddress(), 10000)) {
@@ -158,22 +159,35 @@ public class AssignTest extends SolrTestCaseJ4 {
   }
 
   @Test
-  public void testUsePolicyByDefault() throws Exception {
+  public void testUseLegacyByDefault() throws Exception {
     assumeWorkingMockito();
 
     SolrCloudManager solrCloudManager = mock(SolrCloudManager.class);
     ClusterStateProvider clusterStateProvider = mock(ClusterStateProvider.class);
     when(solrCloudManager.getClusterStateProvider()).thenReturn(clusterStateProvider);
+    DistribStateManager distribStateManager = mock(DistribStateManager.class);
+    when(solrCloudManager.getDistribStateManager()).thenReturn(distribStateManager);
+    when(distribStateManager.getAutoScalingConfig()).thenReturn(new AutoScalingConfig(Collections.emptyMap()));
+
+    // first we don't set any cluster property and assert that legacy assignment is used
+    when(clusterStateProvider.getClusterProperties()).thenReturn(Collections.emptyMap());
+    // verify
+    boolean usePolicyFramework = Assign.usePolicyFramework(solrCloudManager);
+    assertFalse(usePolicyFramework);
+    // another sanity check
+    when(clusterStateProvider.getClusterProperties()).thenReturn(Utils.makeMap("defaults", Collections.emptyMap()));
+    // verify
+    usePolicyFramework = Assign.usePolicyFramework(solrCloudManager);
+    assertFalse(usePolicyFramework);
+
     // first we set useLegacyReplicaAssignment=false, so autoscaling should always be used
     when(clusterStateProvider.getClusterProperties()).thenReturn(Utils.makeMap("defaults", Utils.makeMap("cluster", Utils.makeMap("useLegacyReplicaAssignment", false))));
     // verify
-    boolean usePolicyFramework = Assign.usePolicyFramework(solrCloudManager);
+    usePolicyFramework = Assign.usePolicyFramework(solrCloudManager);
     assertTrue(usePolicyFramework);
 
     // now we set useLegacyReplicaAssignment=true, so autoscaling can only be used if an explicit policy or preference exists
     when(clusterStateProvider.getClusterProperties()).thenReturn(Utils.makeMap("defaults", Utils.makeMap("cluster", Utils.makeMap("useLegacyReplicaAssignment", true))));
-    DistribStateManager distribStateManager = mock(DistribStateManager.class);
-    when(solrCloudManager.getDistribStateManager()).thenReturn(distribStateManager);
     when(distribStateManager.getAutoScalingConfig()).thenReturn(new AutoScalingConfig(Collections.emptyMap()));
     assertFalse(Assign.usePolicyFramework(solrCloudManager));
 

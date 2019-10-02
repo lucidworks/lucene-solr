@@ -25,7 +25,6 @@ import org.apache.lucene.search.DocIdSet;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TwoPhaseIterator;
 import org.apache.lucene.search.Weight;
@@ -81,7 +80,7 @@ public class IntersectsRPTVerifyQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
 
     return new ConstantScoreWeight(this, boost) {
       @Override
@@ -100,7 +99,7 @@ public class IntersectsRPTVerifyQuery extends Query {
         if (result.exactDocIdSet != null) {
           // If both sets are the same, there's nothing to verify; we needn't return a TwoPhaseIterator
           if (result.approxDocIdSet == result.exactDocIdSet) {
-            return new ConstantScoreScorer(this, score(), scoreMode, approxDISI);
+            return new ConstantScoreScorer(this, score(), approxDISI);
           }
           exactIterator = result.exactDocIdSet.iterator();
           assert exactIterator != null;
@@ -132,7 +131,7 @@ public class IntersectsRPTVerifyQuery extends Query {
           }
         };
 
-        return new ConstantScoreScorer(this, score(), scoreMode, twoPhaseIterator);
+        return new ConstantScoreScorer(this, score(), twoPhaseIterator);
       }
 
       @Override

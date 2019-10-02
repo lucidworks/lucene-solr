@@ -24,7 +24,6 @@ import java.util.List;
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
-import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsWriterBase;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfos;
@@ -34,9 +33,9 @@ import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.store.ByteBuffersDataOutput;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.RAMOutputStream;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
@@ -316,7 +315,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
   }
 
   @Override
-  public void write(Fields fields, NormsProducer norms) throws IOException {
+  public void write(Fields fields) throws IOException {
     //if (DEBUG) System.out.println("\nBTTW.write seg=" + segment);
 
     String lastField = null;
@@ -341,7 +340,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
         }
 
         //if (DEBUG) System.out.println("write field=" + fieldInfo.name + " term=" + brToString(term));
-        termsWriter.write(term, termsEnum, norms);
+        termsWriter.write(term, termsEnum);
       }
 
       termsWriter.finish();
@@ -428,12 +427,12 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
       return "BLOCK: prefix=" + brToString(prefix);
     }
 
-    public void compileIndex(List<PendingBlock> blocks, ByteBuffersDataOutput scratchBytes, IntsRefBuilder scratchIntsRef) throws IOException {
+    public void compileIndex(List<PendingBlock> blocks, RAMOutputStream scratchBytes, IntsRefBuilder scratchIntsRef) throws IOException {
 
       assert (isFloor && blocks.size() > 1) || (isFloor == false && blocks.size() == 1): "isFloor=" + isFloor + " blocks=" + blocks;
       assert this == blocks.get(0);
 
-      assert scratchBytes.size() == 0;
+      assert scratchBytes.getFilePointer() == 0;
 
       // TODO: try writing the leading vLong in MSB order
       // (opposite of what Lucene does today), for better
@@ -461,8 +460,9 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
       //  System.out.println("  compile index for prefix=" + prefix);
       //}
       //indexBuilder.DEBUG = false;
-      final byte[] bytes = scratchBytes.toArrayCopy();
+      final byte[] bytes = new byte[(int) scratchBytes.getFilePointer()];
       assert bytes.length > 0;
+      scratchBytes.writeTo(bytes, 0);
       indexBuilder.add(Util.toIntsRef(prefix, scratchIntsRef), new BytesRef(bytes, 0, bytes.length));
       scratchBytes.reset();
 
@@ -503,7 +503,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
     }
   }
 
-  private final ByteBuffersDataOutput scratchBytes = ByteBuffersDataOutput.newResettableInstance();
+  private final RAMOutputStream scratchBytes = new RAMOutputStream();
   private final IntsRefBuilder scratchIntsRef = new IntsRefBuilder();
 
   static final BytesRef EMPTY_BYTES_REF = new BytesRef();
@@ -726,7 +726,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
             assert longs[pos] >= 0;
             metaWriter.writeVLong(longs[pos]);
           }
-          bytesWriter.copyTo(metaWriter);
+          bytesWriter.writeTo(metaWriter);
           bytesWriter.reset();
           absolute = false;
         }
@@ -777,7 +777,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
               assert longs[pos] >= 0;
               metaWriter.writeVLong(longs[pos]);
             }
-            bytesWriter.copyTo(metaWriter);
+            bytesWriter.writeTo(metaWriter);
             bytesWriter.reset();
             absolute = false;
           } else {
@@ -816,18 +816,18 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
       // search on lookup
 
       // Write suffixes byte[] blob to terms dict output:
-      termsOut.writeVInt((int) (suffixWriter.size() << 1) | (isLeafBlock ? 1:0));
-      suffixWriter.copyTo(termsOut);
+      termsOut.writeVInt((int) (suffixWriter.getFilePointer() << 1) | (isLeafBlock ? 1:0));
+      suffixWriter.writeTo(termsOut);
       suffixWriter.reset();
 
       // Write term stats byte[] blob
-      termsOut.writeVInt((int) statsWriter.size());
-      statsWriter.copyTo(termsOut);
+      termsOut.writeVInt((int) statsWriter.getFilePointer());
+      statsWriter.writeTo(termsOut);
       statsWriter.reset();
 
       // Write term meta data byte[] blob
-      termsOut.writeVInt((int) metaWriter.size());
-      metaWriter.copyTo(termsOut);
+      termsOut.writeVInt((int) metaWriter.getFilePointer());
+      metaWriter.writeTo(termsOut);
       metaWriter.reset();
 
       // if (DEBUG) {
@@ -852,7 +852,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
     }
     
     /** Writes one term's worth of postings. */
-    public void write(BytesRef text, TermsEnum termsEnum, NormsProducer norms) throws IOException {
+    public void write(BytesRef text, TermsEnum termsEnum) throws IOException {
       /*
       if (DEBUG) {
         int[] tmp = new int[lastTerm.length];
@@ -861,7 +861,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
       }
       */
 
-      BlockTermState state = postingsWriter.writeTerm(text, termsEnum, docsSeen, norms);
+      BlockTermState state = postingsWriter.writeTerm(text, termsEnum, docsSeen);
       if (state != null) {
 
         assert state.docFreq != 0;
@@ -975,10 +975,10 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
       }
     }
 
-    private final ByteBuffersDataOutput suffixWriter = ByteBuffersDataOutput.newResettableInstance();
-    private final ByteBuffersDataOutput statsWriter = ByteBuffersDataOutput.newResettableInstance();
-    private final ByteBuffersDataOutput metaWriter = ByteBuffersDataOutput.newResettableInstance();
-    private final ByteBuffersDataOutput bytesWriter = ByteBuffersDataOutput.newResettableInstance();
+    private final RAMOutputStream suffixWriter = new RAMOutputStream();
+    private final RAMOutputStream statsWriter = new RAMOutputStream();
+    private final RAMOutputStream metaWriter = new RAMOutputStream();
+    private final RAMOutputStream bytesWriter = new RAMOutputStream();
   }
 
   private boolean closed;

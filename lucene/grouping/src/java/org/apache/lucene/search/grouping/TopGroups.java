@@ -21,8 +21,6 @@ import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.TopFieldDocs;
-import org.apache.lucene.search.TotalHits;
-import org.apache.lucene.search.TotalHits.Relation;
 
 /** Represents result returned by a grouping search.
  *
@@ -163,15 +161,16 @@ public class TopGroups<T> {
 
         if (docSort.equals(Sort.RELEVANCE)) {
           shardTopDocs[shardIDX] = new TopDocs(shardGroupDocs.totalHits,
-                                               shardGroupDocs.scoreDocs);
+                                               shardGroupDocs.scoreDocs,
+                                               shardGroupDocs.maxScore);
         } else {
           shardTopDocs[shardIDX] = new TopFieldDocs(shardGroupDocs.totalHits,
               shardGroupDocs.scoreDocs,
-              docSort.getSort());
+              docSort.getSort(),
+              shardGroupDocs.maxScore);
         }
         maxScore = Math.max(maxScore, shardGroupDocs.maxScore);
-        assert shardGroupDocs.totalHits.relation == Relation.EQUAL_TO;
-        totalHits += shardGroupDocs.totalHits.value;
+        totalHits += shardGroupDocs.totalHits;
         scoreSum += shardGroupDocs.score;
       }
 
@@ -219,7 +218,7 @@ public class TopGroups<T> {
       //System.out.println("SHARDS=" + Arrays.toString(mergedTopDocs.shardIndex));
       mergedGroupDocs[groupIDX] = new GroupDocs<>(groupScore,
                                                    maxScore,
-                                                   new TotalHits(totalHits, TotalHits.Relation.EQUAL_TO),
+                                                   totalHits,
                                                    mergedScoreDocs,
                                                    groupValue,
                                                    shardGroups[0].groups[groupIDX].groupSortValues);

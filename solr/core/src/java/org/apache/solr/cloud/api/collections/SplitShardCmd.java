@@ -26,18 +26,15 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.apache.solr.client.solrj.cloud.DistribStateManager;
 import org.apache.solr.client.solrj.cloud.NodeStateProvider;
 import org.apache.solr.client.solrj.cloud.SolrCloudManager;
 import org.apache.solr.client.solrj.cloud.autoscaling.PolicyHelper;
 import org.apache.solr.client.solrj.cloud.autoscaling.ReplicaInfo;
 import org.apache.solr.client.solrj.cloud.autoscaling.Variable.Type;
-import org.apache.solr.client.solrj.cloud.autoscaling.VersionedData;
 import org.apache.solr.client.solrj.request.CoreAdminRequest;
 import org.apache.solr.cloud.Overseer;
 import org.apache.solr.cloud.overseer.OverseerAction;
@@ -685,13 +682,6 @@ public class SplitShardCmd implements OverseerCollectionMessageHandler.Cmd {
                                   boolean firstReplicaNrt) {
     String splitKey = message.getStr("split.key");
     String rangesStr = message.getStr(CoreAdminParams.RANGES);
-    String fuzzStr = message.getStr(CommonAdminParams.SPLIT_FUZZ, "0");
-    float fuzz = 0.0f;
-    try {
-      fuzz = Float.parseFloat(fuzzStr);
-    } catch (Exception e) {
-      throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Invalid numeric value of 'fuzz': " + fuzzStr);
-    }
 
     DocRouter.Range range = parentSlice.getRange();
     if (range == null) {
@@ -758,7 +748,7 @@ public class SplitShardCmd implements OverseerCollectionMessageHandler.Cmd {
         throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
             "A shard can only be split into "+MIN_NUM_SUB_SHARDS+" to " + MAX_NUM_SUB_SHARDS
             + " subshards in one split request. Provided "+NUM_SUB_SHARDS+"=" + numSubShards);
-      subRanges.addAll(router.partitionRange(numSubShards, range, fuzz));
+      subRanges.addAll(router.partitionRange(numSubShards, range));
     }
 
     for (int i = 0; i < subRanges.size(); i++) {
@@ -773,45 +763,23 @@ public class SplitShardCmd implements OverseerCollectionMessageHandler.Cmd {
 
   public static boolean lockForSplit(SolrCloudManager cloudManager, String collection, String shard) throws Exception {
     String path = ZkStateReader.COLLECTIONS_ZKNODE + "/" + collection + "/" + shard + "-splitting";
-    final DistribStateManager stateManager = cloudManager.getDistribStateManager();
-    synchronized (stateManager) {
-      if (stateManager.hasData(path)) {
-        VersionedData vd = stateManager.getData(path);
-        return false;
-      }
-      Map<String, Object> map = new HashMap<>();
-      map.put(ZkStateReader.STATE_TIMESTAMP_PROP, String.valueOf(cloudManager.getTimeSource().getEpochTimeNs()));
-      byte[] data = Utils.toJSON(map);
-      try {
-        cloudManager.getDistribStateManager().makePath(path, data, CreateMode.EPHEMERAL, true);
-      } catch (Exception e) {
-        throw new SolrException(SolrException.ErrorCode.INVALID_STATE, "Can't lock parent slice for splitting (another split operation running?): " +
-            collection + "/" + shard, e);
-      }
-      return true;
+    if (cloudManager.getDistribStateManager().hasData(path)) {
+      return false;
     }
+    Map<String, Object> map = new HashMap<>();
+    map.put(ZkStateReader.STATE_TIMESTAMP_PROP, String.valueOf(cloudManager.getTimeSource().getEpochTimeNs()));
+    byte[] data = Utils.toJSON(map);
+    try {
+      cloudManager.getDistribStateManager().makePath(path, data, CreateMode.EPHEMERAL, true);
+    } catch (Exception e) {
+      throw new SolrException(SolrException.ErrorCode.INVALID_STATE, "Can't lock parent slice for splitting (another split operation running?): " +
+          collection + "/" + shard, e);
+    }
+    return true;
   }
 
   public static void unlockForSplit(SolrCloudManager cloudManager, String collection, String shard) throws Exception {
-    if (shard != null) {
-      String path = ZkStateReader.COLLECTIONS_ZKNODE + "/" + collection + "/" + shard + "-splitting";
-      cloudManager.getDistribStateManager().removeRecursively(path, true, true);
-    } else {
-      String path = ZkStateReader.COLLECTIONS_ZKNODE + "/" + collection;
-      try {
-        List<String> names = cloudManager.getDistribStateManager().listData(path);
-        for (String name : cloudManager.getDistribStateManager().listData(path)) {
-          if (name.endsWith("-splitting")) {
-            try {
-              cloudManager.getDistribStateManager().removeData(path + "/" + name, -1);
-            } catch (NoSuchElementException nse) {
-              // ignore
-            }
-          }
-        }
-      } catch (NoSuchElementException nse) {
-        // ignore
-      }
-    }
+    String path = ZkStateReader.COLLECTIONS_ZKNODE + "/" + collection + "/" + shard + "-splitting";
+    cloudManager.getDistribStateManager().removeRecursively(path, true, true);
   }
 }

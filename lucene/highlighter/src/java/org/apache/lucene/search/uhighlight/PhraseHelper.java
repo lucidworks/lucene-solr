@@ -40,9 +40,8 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.MultiTermQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
-import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TwoPhaseIterator;
+import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.search.highlight.WeightedSpanTerm;
 import org.apache.lucene.search.highlight.WeightedSpanTermExtractor;
@@ -149,7 +148,7 @@ public class PhraseHelper {
       @Override
       protected void extractWeightedTerms(Map<String, WeightedSpanTerm> terms, Query query, float boost)
           throws IOException {
-        query.createWeight(UnifiedHighlighter.EMPTY_INDEXSEARCHER, ScoreMode.COMPLETE_NO_SCORES, boost)
+        query.createWeight(UnifiedHighlighter.EMPTY_INDEXSEARCHER, false, boost)
             .extractTerms(extractPosInsensitiveTermsTarget);
       }
 
@@ -227,7 +226,7 @@ public class PhraseHelper {
       }
     };
     for (Query query : spanQueries) {
-      Weight weight = searcher.createWeight(searcher.rewrite(query), ScoreMode.COMPLETE_NO_SCORES, 1);
+      Weight weight = searcher.createWeight(searcher.rewrite(query), false, 1);
       Scorer scorer = weight.scorer(leafReader.getContext());
       if (scorer == null) {
         continue;

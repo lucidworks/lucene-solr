@@ -17,29 +17,17 @@
 package org.apache.lucene.codecs.lucene50;
 
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.codecs.Codec;
-import org.apache.lucene.codecs.CompetitiveImpactAccumulator;
 import org.apache.lucene.codecs.blocktree.FieldReader;
 import org.apache.lucene.codecs.blocktree.Stats;
-import org.apache.lucene.codecs.lucene50.Lucene50ScoreSkipReader.MutableImpactList;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.index.BasePostingsFormatTestCase;
 import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.Impact;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.TestUtil;
 
 /**
@@ -89,58 +77,5 @@ public class TestBlockPostingsFormat extends BasePostingsFormatTestCase {
     shouldFail(-1, 10);
     shouldFail(10, -1);
     shouldFail(10, 12);
-  }
-
-  public void testImpactSerialization() throws IOException {
-    // omit norms and omit freqs
-    doTestImpactSerialization(Collections.singletonList(new Impact(1, 1L)));
-
-    // omit freqs
-    doTestImpactSerialization(Collections.singletonList(new Impact(1, 42L)));
-    // omit freqs with very large norms
-    doTestImpactSerialization(Collections.singletonList(new Impact(1, -100L)));
-
-    // omit norms
-    doTestImpactSerialization(Collections.singletonList(new Impact(30, 1L)));
-    // omit norms with large freq
-    doTestImpactSerialization(Collections.singletonList(new Impact(500, 1L)));
-
-    // freqs and norms, basic
-    doTestImpactSerialization(
-        Arrays.asList(
-            new Impact(1, 7L),
-            new Impact(3, 9L),
-            new Impact(7, 10L),
-            new Impact(15, 11L),
-            new Impact(20, 13L),
-            new Impact(28, 14L)));
-
-    // freqs and norms, high values
-    doTestImpactSerialization(
-        Arrays.asList(
-            new Impact(2, 2L),
-            new Impact(10, 10L),
-            new Impact(12, 50L),
-            new Impact(50, -100L),
-            new Impact(1000, -80L),
-            new Impact(1005, -3L)));
-  }
-
-  private void doTestImpactSerialization(List<Impact> impacts) throws IOException {
-    CompetitiveImpactAccumulator acc = new CompetitiveImpactAccumulator();
-    for (Impact impact : impacts) {
-      acc.add(impact.freq, impact.norm);
-    }
-    try(Directory dir = newDirectory()) {
-      try (IndexOutput out = dir.createOutput("foo", IOContext.DEFAULT)) {
-        Lucene50SkipWriter.writeImpacts(acc, out);
-      }
-      try (IndexInput in = dir.openInput("foo", IOContext.DEFAULT)) {
-        byte[] b = new byte[Math.toIntExact(in.length())];
-        in.readBytes(b, 0, b.length);
-        List<Impact> impacts2 = Lucene50ScoreSkipReader.readImpacts(new ByteArrayDataInput(b), new MutableImpactList());
-        assertEquals(impacts, impacts2);
-      }
-    }
   }
 }

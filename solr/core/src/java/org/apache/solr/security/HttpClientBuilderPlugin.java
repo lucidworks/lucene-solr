@@ -16,7 +16,6 @@
  */
 package org.apache.solr.security;
 
-import org.apache.solr.client.solrj.impl.Http2SolrClient;
 import org.apache.solr.client.solrj.impl.SolrHttpClientBuilder;
 
 /**
@@ -35,8 +34,4 @@ public interface HttpClientBuilderPlugin {
    * @lucene.experimental
    */
   public SolrHttpClientBuilder getHttpClientBuilder(SolrHttpClientBuilder builder);
-
-  public default void setup(Http2SolrClient client) {
-
-  }
 }

@@ -24,7 +24,6 @@ import java.util.List;
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
-import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsWriterBase;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfos;
@@ -34,9 +33,9 @@ import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.store.ByteBuffersDataOutput;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.RAMOutputStream;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.IOUtils;
@@ -187,7 +186,7 @@ public class FSTOrdTermsWriter extends FieldsConsumer {
   }
 
   @Override
-  public void write(Fields fields, NormsProducer norms) throws IOException {
+  public void write(Fields fields) throws IOException {
     for(String field : fields) {
       Terms terms = fields.terms(field);
       if (terms == null) {
@@ -206,7 +205,7 @@ public class FSTOrdTermsWriter extends FieldsConsumer {
         if (term == null) {
           break;
         }
-        BlockTermState termState = postingsWriter.writeTerm(term, termsEnum, docsSeen, norms);
+        BlockTermState termState = postingsWriter.writeTerm(term, termsEnum, docsSeen);
         if (termState != null) {
           termsWriter.finishTerm(term, termState);
           sumTotalTermFreq += termState.totalTermFreq;
@@ -236,14 +235,14 @@ public class FSTOrdTermsWriter extends FieldsConsumer {
           blockOut.writeVLong(field.sumDocFreq);
           blockOut.writeVInt(field.docCount);
           blockOut.writeVInt(field.longsSize);
-          blockOut.writeVLong(field.statsOut.size());
-          blockOut.writeVLong(field.metaLongsOut.size());
-          blockOut.writeVLong(field.metaBytesOut.size());
+          blockOut.writeVLong(field.statsOut.getFilePointer());
+          blockOut.writeVLong(field.metaLongsOut.getFilePointer());
+          blockOut.writeVLong(field.metaBytesOut.getFilePointer());
           
-          field.skipOut.copyTo(blockOut);
-          field.statsOut.copyTo(blockOut);
-          field.metaLongsOut.copyTo(blockOut);
-          field.metaBytesOut.copyTo(blockOut);
+          field.skipOut.writeTo(blockOut);
+          field.statsOut.writeTo(blockOut);
+          field.metaLongsOut.writeTo(blockOut);
+          field.metaBytesOut.writeTo(blockOut);
           field.dict.save(indexOut);
         }
         writeTrailer(blockOut, blockDirStart);
@@ -277,13 +276,13 @@ public class FSTOrdTermsWriter extends FieldsConsumer {
     // TODO: block encode each part 
 
     // vint encode next skip point (fully decoded when reading)
-    public ByteBuffersDataOutput skipOut;
+    public RAMOutputStream skipOut;
     // vint encode df, (ttf-df)
-    public ByteBuffersDataOutput statsOut;
+    public RAMOutputStream statsOut;
     // vint encode monotonic long[] and length for corresponding byte[]
-    public ByteBuffersDataOutput metaLongsOut;
+    public RAMOutputStream metaLongsOut;
     // generic byte[]
-    public ByteBuffersDataOutput metaBytesOut;
+    public RAMOutputStream metaBytesOut;
   }
 
   final class TermsWriter {
@@ -294,10 +293,11 @@ public class FSTOrdTermsWriter extends FieldsConsumer {
     private long numTerms;
 
     private final IntsRefBuilder scratchTerm = new IntsRefBuilder();
-    private final ByteBuffersDataOutput statsOut = new ByteBuffersDataOutput();
-    private final ByteBuffersDataOutput metaLongsOut = new ByteBuffersDataOutput();
-    private final ByteBuffersDataOutput metaBytesOut = new ByteBuffersDataOutput();
-    private final ByteBuffersDataOutput skipOut = new ByteBuffersDataOutput();
+    private final RAMOutputStream statsOut = new RAMOutputStream();
+    private final RAMOutputStream metaLongsOut = new RAMOutputStream();
+    private final RAMOutputStream metaBytesOut = new RAMOutputStream();
+
+    private final RAMOutputStream skipOut = new RAMOutputStream();
     private long lastBlockStatsFP;
     private long lastBlockMetaLongsFP;
     private long lastBlockMetaBytesFP;
@@ -344,12 +344,12 @@ public class FSTOrdTermsWriter extends FieldsConsumer {
         metaLongsOut.writeVLong(longs[i] - lastLongs[i]);
         lastLongs[i] = longs[i];
       }
-      metaLongsOut.writeVLong(metaBytesOut.size() - lastMetaBytesFP);
+      metaLongsOut.writeVLong(metaBytesOut.getFilePointer() - lastMetaBytesFP);
 
       builder.add(Util.toIntsRef(text, scratchTerm), numTerms);
       numTerms++;
 
-      lastMetaBytesFP = metaBytesOut.size();
+      lastMetaBytesFP = metaBytesOut.getFilePointer();
     }
 
     public void finish(long sumTotalTermFreq, long sumDocFreq, int docCount) throws IOException {
@@ -371,15 +371,15 @@ public class FSTOrdTermsWriter extends FieldsConsumer {
     }
 
     private void bufferSkip() throws IOException {
-      skipOut.writeVLong(statsOut.size() - lastBlockStatsFP);
-      skipOut.writeVLong(metaLongsOut.size() - lastBlockMetaLongsFP);
-      skipOut.writeVLong(metaBytesOut.size() - lastBlockMetaBytesFP);
+      skipOut.writeVLong(statsOut.getFilePointer() - lastBlockStatsFP);
+      skipOut.writeVLong(metaLongsOut.getFilePointer() - lastBlockMetaLongsFP);
+      skipOut.writeVLong(metaBytesOut.getFilePointer() - lastBlockMetaBytesFP);
       for (int i = 0; i < longsSize; i++) {
         skipOut.writeVLong(lastLongs[i] - lastBlockLongs[i]);
       }
-      lastBlockStatsFP = statsOut.size();
-      lastBlockMetaLongsFP = metaLongsOut.size();
-      lastBlockMetaBytesFP = metaBytesOut.size();
+      lastBlockStatsFP = statsOut.getFilePointer();
+      lastBlockMetaLongsFP = metaLongsOut.getFilePointer();
+      lastBlockMetaBytesFP = metaBytesOut.getFilePointer();
       System.arraycopy(lastLongs, 0, lastBlockLongs, 0, longsSize);
     }
   }

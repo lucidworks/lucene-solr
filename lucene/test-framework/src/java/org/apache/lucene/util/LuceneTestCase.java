@@ -87,7 +87,6 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.QueryCache;
 import org.apache.lucene.search.QueryCachingPolicy;
 import org.apache.lucene.store.BaseDirectoryWrapper;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.store.FSLockFactory;
@@ -212,9 +211,7 @@ import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
 @ThreadLeakFilters(defaultFilters = true, filters = {
     QuickPatchThreadsFilter.class
 })
-@TestRuleLimitSysouts.Limit(
-    bytes = TestRuleLimitSysouts.DEFAULT_LIMIT,
-    hardLimit = TestRuleLimitSysouts.DEFAULT_HARD_LIMIT)
+@TestRuleLimitSysouts.Limit(bytes = TestRuleLimitSysouts.DEFAULT_SYSOUT_BYTES_THRESHOLD)
 public abstract class LuceneTestCase extends Assert {
 
   // --------------------------------------------------------------------
@@ -490,7 +487,7 @@ public abstract class LuceneTestCase extends Assert {
   private static final List<String> CORE_DIRECTORIES;
   static {
     CORE_DIRECTORIES = new ArrayList<>(FS_DIRECTORIES);
-    CORE_DIRECTORIES.add(ByteBuffersDirectory.class.getSimpleName());
+    CORE_DIRECTORIES.add("RAMDirectory");
   }
   
   /** A {@link org.apache.lucene.search.QueryCachingPolicy} that randomly caches. */
@@ -1625,7 +1622,7 @@ public abstract class LuceneTestCase extends Assert {
       if (rarely(random)) {
         clazzName = RandomPicks.randomFrom(random, CORE_DIRECTORIES);
       } else {
-        clazzName = ByteBuffersDirectory.class.getName();
+        clazzName = "RAMDirectory";
       }
     }
 
@@ -1649,7 +1646,7 @@ public abstract class LuceneTestCase extends Assert {
       
       // the remaining dirs are no longer filesystem based, so we must check that the passedLockFactory is not file based:
       if (!(lf instanceof FSLockFactory)) {
-        // try ctor with only LockFactory
+        // try ctor with only LockFactory (e.g. RAMDirectory)
         try {
           return clazz.getConstructor(LockFactory.class).newInstance(lf);
         } catch (NoSuchMethodException nsme) {
@@ -1950,7 +1947,7 @@ public abstract class LuceneTestCase extends Assert {
 
   public void assertReaderEquals(String info, IndexReader leftReader, IndexReader rightReader) throws IOException {
     assertReaderStatisticsEquals(info, leftReader, rightReader);
-    assertTermsEquals(info, leftReader, rightReader, true);
+    assertFieldsEquals(info, leftReader, MultiFields.getFields(leftReader), MultiFields.getFields(rightReader), true);
     assertNormsEquals(info, leftReader, rightReader);
     assertStoredFieldsEquals(info, leftReader, rightReader);
     assertTermVectorsEquals(info, leftReader, rightReader);
@@ -1974,13 +1971,33 @@ public abstract class LuceneTestCase extends Assert {
   /** 
    * Fields api equivalency 
    */
-  public void assertTermsEquals(String info, IndexReader leftReader, IndexReader rightReader, boolean deep) throws IOException {
-    Set<String> leftFields = new HashSet<>(FieldInfos.getIndexedFields(leftReader));
-    Set<String> rightFields = new HashSet<>(FieldInfos.getIndexedFields(rightReader));
-    assertEquals(info, leftFields, rightFields);
+  public void assertFieldsEquals(String info, IndexReader leftReader, Fields leftFields, Fields rightFields, boolean deep) throws IOException {
+    // Fields could be null if there are no postings,
+    // but then it must be null for both
+    if (leftFields == null || rightFields == null) {
+      assertNull(info, leftFields);
+      assertNull(info, rightFields);
+      return;
+    }
+    assertFieldStatisticsEquals(info, leftFields, rightFields);
+    
+    Iterator<String> leftEnum = leftFields.iterator();
+    Iterator<String> rightEnum = rightFields.iterator();
+    
+    while (leftEnum.hasNext()) {
+      String field = leftEnum.next();
+      assertEquals(info, field, rightEnum.next());
+      assertTermsEquals(info, leftReader, leftFields.terms(field), rightFields.terms(field), deep);
+    }
+    assertFalse(rightEnum.hasNext());
+  }
 
-    for (String field : leftFields) {
-      assertTermsEquals(info, leftReader, MultiTerms.getTerms(leftReader, field), MultiTerms.getTerms(rightReader, field), deep);
+  /** 
+   * checks that top-level statistics on Fields are the same 
+   */
+  public void assertFieldStatisticsEquals(String info, Fields leftFields, Fields rightFields) throws IOException {
+    if (leftFields.size() != -1 && rightFields.size() != -1) {
+      assertEquals(info, leftFields.size(), rightFields.size());
     }
   }
 
@@ -2023,9 +2040,15 @@ public abstract class LuceneTestCase extends Assert {
    * checks collection-level statistics on Terms 
    */
   public void assertTermsStatisticsEquals(String info, Terms leftTerms, Terms rightTerms) throws IOException {
-    assertEquals(info, leftTerms.getDocCount(), rightTerms.getDocCount());
-    assertEquals(info, leftTerms.getSumDocFreq(), rightTerms.getSumDocFreq());
-    assertEquals(info, leftTerms.getSumTotalTermFreq(), rightTerms.getSumTotalTermFreq());
+    if (leftTerms.getDocCount() != -1 && rightTerms.getDocCount() != -1) {
+      assertEquals(info, leftTerms.getDocCount(), rightTerms.getDocCount());
+    }
+    if (leftTerms.getSumDocFreq() != -1 && rightTerms.getSumDocFreq() != -1) {
+      assertEquals(info, leftTerms.getSumDocFreq(), rightTerms.getSumDocFreq());
+    }
+    if (leftTerms.getSumTotalTermFreq() != -1 && rightTerms.getSumTotalTermFreq() != -1) {
+      assertEquals(info, leftTerms.getSumTotalTermFreq(), rightTerms.getSumTotalTermFreq());
+    }
     if (leftTerms.size() != -1 && rightTerms.size() != -1) {
       assertEquals(info, leftTerms.size(), rightTerms.size());
     }
@@ -2304,16 +2327,24 @@ public abstract class LuceneTestCase extends Assert {
    */
   public void assertTermStatsEquals(String info, TermsEnum leftTermsEnum, TermsEnum rightTermsEnum) throws IOException {
     assertEquals(info, leftTermsEnum.docFreq(), rightTermsEnum.docFreq());
-    assertEquals(info, leftTermsEnum.totalTermFreq(), rightTermsEnum.totalTermFreq());
+    if (leftTermsEnum.totalTermFreq() != -1 && rightTermsEnum.totalTermFreq() != -1) {
+      assertEquals(info, leftTermsEnum.totalTermFreq(), rightTermsEnum.totalTermFreq());
+    }
   }
   
   /** 
    * checks that norms are the same across all fields 
    */
   public void assertNormsEquals(String info, IndexReader leftReader, IndexReader rightReader) throws IOException {
-    Set<String> leftFields = new HashSet<>(FieldInfos.getIndexedFields(leftReader));
-    Set<String> rightFields = new HashSet<>(FieldInfos.getIndexedFields(rightReader));
-    assertEquals(info, leftFields, rightFields);
+    Fields leftFields = MultiFields.getFields(leftReader);
+    Fields rightFields = MultiFields.getFields(rightReader);
+    // Fields could be null if there are no postings,
+    // but then it must be null for both
+    if (leftFields == null || rightFields == null) {
+      assertNull(info, leftFields);
+      assertNull(info, rightFields);
+      return;
+    }
     
     for (String field : leftFields) {
       NumericDocValues leftNorms = MultiDocValues.getNormValues(leftReader, field);
@@ -2381,32 +2412,13 @@ public abstract class LuceneTestCase extends Assert {
     for (int i = 0; i < leftReader.maxDoc(); i++) {
       Fields leftFields = leftReader.getTermVectors(i);
       Fields rightFields = rightReader.getTermVectors(i);
-
-      // Fields could be null if there are no postings,
-      // but then it must be null for both
-      if (leftFields == null || rightFields == null) {
-        assertNull(info, leftFields);
-        assertNull(info, rightFields);
-        return;
-      }
-      if (leftFields.size() != -1 && rightFields.size() != -1) {
-        assertEquals(info, leftFields.size(), rightFields.size());
-      }
-
-      Iterator<String> leftEnum = leftFields.iterator();
-      Iterator<String> rightEnum = rightFields.iterator();
-      while (leftEnum.hasNext()) {
-        String field = leftEnum.next();
-        assertEquals(info, field, rightEnum.next());
-        assertTermsEquals(info, leftReader, leftFields.terms(field), rightFields.terms(field), rarely());
-      }
-      assertFalse(rightEnum.hasNext());
+      assertFieldsEquals(info, leftReader, leftFields, rightFields, rarely());
     }
   }
 
   private static Set<String> getDVFields(IndexReader reader) {
     Set<String> fields = new HashSet<>();
-    for(FieldInfo fi : FieldInfos.getMergedFieldInfos(reader)) {
+    for(FieldInfo fi : MultiFields.getMergedFieldInfos(reader)) {
       if (fi.getDocValuesType() != DocValuesType.NONE) {
         fields.add(fi.name);
       }
@@ -2551,8 +2563,8 @@ public abstract class LuceneTestCase extends Assert {
   // TODO: this is kinda stupid, we don't delete documents in the test.
   public void assertDeletedDocsEquals(String info, IndexReader leftReader, IndexReader rightReader) throws IOException {
     assert leftReader.numDeletedDocs() == rightReader.numDeletedDocs();
-    Bits leftBits = MultiBits.getLiveDocs(leftReader);
-    Bits rightBits = MultiBits.getLiveDocs(rightReader);
+    Bits leftBits = MultiFields.getLiveDocs(leftReader);
+    Bits rightBits = MultiFields.getLiveDocs(rightReader);
     
     if (leftBits == null || rightBits == null) {
       assertNull(info, leftBits);
@@ -2568,8 +2580,8 @@ public abstract class LuceneTestCase extends Assert {
   }
   
   public void assertFieldInfosEquals(String info, IndexReader leftReader, IndexReader rightReader) throws IOException {
-    FieldInfos leftInfos = FieldInfos.getMergedFieldInfos(leftReader);
-    FieldInfos rightInfos = FieldInfos.getMergedFieldInfos(rightReader);
+    FieldInfos leftInfos = MultiFields.getMergedFieldInfos(leftReader);
+    FieldInfos rightInfos = MultiFields.getMergedFieldInfos(rightReader);
     
     // TODO: would be great to verify more than just the names of the fields!
     TreeSet<String> left = new TreeSet<>();
@@ -2624,8 +2636,8 @@ public abstract class LuceneTestCase extends Assert {
   }
 
   public void assertPointsEquals(String info, IndexReader leftReader, IndexReader rightReader) throws IOException {
-    FieldInfos fieldInfos1 = FieldInfos.getMergedFieldInfos(leftReader);
-    FieldInfos fieldInfos2 = FieldInfos.getMergedFieldInfos(rightReader);
+    FieldInfos fieldInfos1 = MultiFields.getMergedFieldInfos(leftReader);
+    FieldInfos fieldInfos2 = MultiFields.getMergedFieldInfos(rightReader);
     for(FieldInfo fieldInfo1 : fieldInfos1) {
       if (fieldInfo1.getPointDataDimensionCount() != 0) {
         FieldInfo fieldInfo2 = fieldInfos2.fieldInfo(fieldInfo1.name);

@@ -205,7 +205,7 @@ public class TestDocValuesIndexing extends LuceneTestCase {
       writer.addDocument(doc);
     }
     DirectoryReader r = writer.getReader();
-    FieldInfos fi = FieldInfos.getMergedFieldInfos(r);
+    FieldInfos fi = MultiFields.getMergedFieldInfos(r);
     FieldInfo dvInfo = fi.fieldInfo("dv");
     assertTrue(dvInfo.getDocValuesType() != DocValuesType.NONE);
     NumericDocValues dv = MultiDocValues.getNumericValues(r, "dv");

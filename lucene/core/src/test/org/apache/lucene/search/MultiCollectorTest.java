@@ -46,13 +46,13 @@ public class MultiCollectorTest extends LuceneTestCase {
     }
 
     @Override
-    public void setScorer(Scorable scorer) throws IOException {
+    public void setScorer(Scorer scorer) throws IOException {
       setScorerCalled = true;
     }
 
     @Override
-    public ScoreMode scoreMode() {
-      return ScoreMode.COMPLETE;
+    public boolean needsScores() {
+      return true;
     }
   }
 
@@ -70,7 +70,7 @@ public class MultiCollectorTest extends LuceneTestCase {
     final LeafCollector ac = c.getLeafCollector(null);
     ac.collect(1);
     c.getLeafCollector(null);
-    c.getLeafCollector(null).setScorer(new ScoreAndDoc());
+    c.getLeafCollector(null).setScorer(new FakeScorer());
   }
 
   @Test
@@ -92,7 +92,7 @@ public class MultiCollectorTest extends LuceneTestCase {
     LeafCollector ac = c.getLeafCollector(null);
     ac.collect(1);
     ac = c.getLeafCollector(null);
-    ac.setScorer(new ScoreAndDoc());
+    ac.setScorer(new FakeScorer());
 
     for (DummyCollector dc : dcs) {
       assertTrue(dc.collectCalled);
@@ -102,7 +102,7 @@ public class MultiCollectorTest extends LuceneTestCase {
 
   }
 
-  private static Collector collector(ScoreMode scoreMode, Class<?> expectedScorer) {
+  private static Collector collector(boolean needsScores, Class<?> expectedScorer) {
     return new Collector() {
 
       @Override
@@ -110,10 +110,7 @@ public class MultiCollectorTest extends LuceneTestCase {
         return new LeafCollector() {
 
           @Override
-          public void setScorer(Scorable scorer) throws IOException {
-            while (expectedScorer.equals(scorer.getClass()) == false && scorer instanceof FilterScorable) {
-              scorer = ((FilterScorable) scorer).in;
-            }
+          public void setScorer(Scorer scorer) throws IOException {
             assertEquals(expectedScorer, scorer.getClass());
           }
 
@@ -124,8 +121,8 @@ public class MultiCollectorTest extends LuceneTestCase {
       }
 
       @Override
-      public ScoreMode scoreMode() {
-        return scoreMode;
+      public boolean needsScores() {
+        return needsScores;
       }
       
     };
@@ -142,23 +139,23 @@ public class MultiCollectorTest extends LuceneTestCase {
     final LeafReaderContext ctx = reader.leaves().get(0);
 
     expectThrows(AssertionError.class, () -> {
-      collector(ScoreMode.COMPLETE_NO_SCORES, ScoreCachingWrappingScorer.class).getLeafCollector(ctx).setScorer(new ScoreAndDoc());
+      collector(false, ScoreCachingWrappingScorer.class).getLeafCollector(ctx).setScorer(new FakeScorer());
     });
 
     // no collector needs scores => no caching
-    Collector c1 = collector(ScoreMode.COMPLETE_NO_SCORES, ScoreAndDoc.class);
-    Collector c2 = collector(ScoreMode.COMPLETE_NO_SCORES, ScoreAndDoc.class);
-    MultiCollector.wrap(c1, c2).getLeafCollector(ctx).setScorer(new ScoreAndDoc());
+    Collector c1 = collector(false, FakeScorer.class);
+    Collector c2 = collector(false, FakeScorer.class);
+    MultiCollector.wrap(c1, c2).getLeafCollector(ctx).setScorer(new FakeScorer());
 
     // only one collector needs scores => no caching
-    c1 = collector(ScoreMode.COMPLETE, ScoreAndDoc.class);
-    c2 = collector(ScoreMode.COMPLETE_NO_SCORES, ScoreAndDoc.class);
-    MultiCollector.wrap(c1, c2).getLeafCollector(ctx).setScorer(new ScoreAndDoc());
+    c1 = collector(true, FakeScorer.class);
+    c2 = collector(false, FakeScorer.class);
+    MultiCollector.wrap(c1, c2).getLeafCollector(ctx).setScorer(new FakeScorer());
 
     // several collectors need scores => caching
-    c1 = collector(ScoreMode.COMPLETE, ScoreCachingWrappingScorer.class);
-    c2 = collector(ScoreMode.COMPLETE, ScoreCachingWrappingScorer.class);
-    MultiCollector.wrap(c1, c2).getLeafCollector(ctx).setScorer(new ScoreAndDoc());
+    c1 = collector(true, ScoreCachingWrappingScorer.class);
+    c2 = collector(true, ScoreCachingWrappingScorer.class);
+    MultiCollector.wrap(c1, c2).getLeafCollector(ctx).setScorer(new FakeScorer());
 
     reader.close();
     dir.close();

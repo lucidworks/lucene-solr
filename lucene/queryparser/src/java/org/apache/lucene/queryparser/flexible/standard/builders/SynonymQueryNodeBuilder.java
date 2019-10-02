@@ -24,7 +24,7 @@ import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
 
-/** Builder for {@link SynonymQueryNode}. */
+/** Builer for {@link SynonymQueryNode}. */
 public class SynonymQueryNodeBuilder implements StandardQueryBuilder {
 
   /** Sole constructor. */

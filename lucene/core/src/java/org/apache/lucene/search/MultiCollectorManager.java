@@ -16,12 +16,12 @@
  */
 package org.apache.lucene.search;
 
+import org.apache.lucene.index.LeafReaderContext;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-
-import org.apache.lucene.index.LeafReaderContext;
 
 /**
  * A {@link CollectorManager} implements which wrap a set of {@link CollectorManager}
@@ -34,9 +34,6 @@ public class MultiCollectorManager implements CollectorManager<MultiCollectorMan
   @SafeVarargs
   @SuppressWarnings({"varargs", "unchecked"})
   public MultiCollectorManager(final CollectorManager<? extends Collector, ?>... collectorManagers) {
-    if (collectorManagers.length < 1) {
-      throw new IllegalArgumentException("There must be at least one collector");
-    }
     this.collectorManagers = (CollectorManager[]) collectorManagers;
   }
 
@@ -74,16 +71,11 @@ public class MultiCollectorManager implements CollectorManager<MultiCollectorMan
     }
 
     @Override
-    final public ScoreMode scoreMode() {
-      ScoreMode scoreMode = null;
-      for (Collector collector : collectors) {
-        if (scoreMode == null) {
-          scoreMode = collector.scoreMode();
-        } else if (scoreMode != collector.scoreMode()) {
-          return ScoreMode.COMPLETE;
-        }
-      }
-      return scoreMode;
+    final public boolean needsScores() {
+      for (Collector collector : collectors)
+        if (collector.needsScores())
+          return true;
+      return false;
     }
 
     public class LeafCollectors implements LeafCollector {
@@ -97,7 +89,7 @@ public class MultiCollectorManager implements CollectorManager<MultiCollectorMan
       }
 
       @Override
-      final public void setScorer(final Scorable scorer) throws IOException {
+      final public void setScorer(final Scorer scorer) throws IOException {
         for (LeafCollector leafCollector : leafCollectors)
           if (leafCollector != null)
             leafCollector.setScorer(scorer);

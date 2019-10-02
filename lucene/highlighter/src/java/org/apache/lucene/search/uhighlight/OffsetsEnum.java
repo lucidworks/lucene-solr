@@ -30,7 +30,6 @@ import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.MatchesIterator;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.IOUtils;
@@ -251,7 +250,7 @@ public abstract class OffsetsEnum implements Comparable<OffsetsEnum>, Closeable 
         try {
           BytesRefBuilder bytesRefBuilder = new BytesRefBuilder();
           UnifiedHighlighter.EMPTY_INDEXSEARCHER
-              .createWeight(UnifiedHighlighter.EMPTY_INDEXSEARCHER.rewrite(q), ScoreMode.COMPLETE_NO_SCORES, 1f)
+              .createWeight(UnifiedHighlighter.EMPTY_INDEXSEARCHER.rewrite(q), false, 1f)
               .extractTerms(new TreeSet<Term>() {
             @Override
             public boolean add(Term term) {

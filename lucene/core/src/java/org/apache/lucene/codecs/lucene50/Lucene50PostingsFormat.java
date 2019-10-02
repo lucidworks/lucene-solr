@@ -384,8 +384,7 @@ public final class Lucene50PostingsFormat extends PostingsFormat {
 
   // Increment version to change it
   final static int VERSION_START = 0;
-  final static int VERSION_IMPACT_SKIP_DATA = 1;
-  final static int VERSION_CURRENT = VERSION_IMPACT_SKIP_DATA;
+  final static int VERSION_CURRENT = VERSION_START;
 
   private final int minTermBlockSize;
   private final int maxTermBlockSize;

@@ -188,7 +188,6 @@ public class CloneFieldUpdateProcessorFactory
   /** @see #dest */
   private Pattern pattern = null;
 
-  @SuppressWarnings("WeakerAccess")
   protected final FieldNameSelector getSourceSelector() {
     if (null != srcSelector) return srcSelector;
 

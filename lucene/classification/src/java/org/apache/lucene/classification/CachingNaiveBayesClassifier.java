@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
@@ -84,7 +84,8 @@ public class CachingNaiveBayesClassifier extends SimpleNaiveBayesClassifier {
 
     // normalization
     // The values transforms to a 0-1 range
-    return super.normClassificationResults(assignedClasses);
+    ArrayList<ClassificationResult<BytesRef>> asignedClassesNorm = super.normClassificationResults(assignedClasses);
+    return asignedClassesNorm;
   }
 
   private List<ClassificationResult<BytesRef>> calculateLogLikelihood(String[] tokenizedText) throws IOException {
@@ -209,7 +210,7 @@ public class CachingNaiveBayesClassifier extends SimpleNaiveBayesClassifier {
     // build the cache for the word
     Map<String, Long> frequencyMap = new HashMap<>();
     for (String textFieldName : textFieldNames) {
-      TermsEnum termsEnum = MultiTerms.getTerms(indexReader, textFieldName).iterator();
+      TermsEnum termsEnum = MultiFields.getTerms(indexReader, textFieldName).iterator();
       while (termsEnum.next() != null) {
         BytesRef term = termsEnum.term();
         String termText = term.utf8ToString();
@@ -221,12 +222,12 @@ public class CachingNaiveBayesClassifier extends SimpleNaiveBayesClassifier {
     }
     for (Map.Entry<String, Long> entry : frequencyMap.entrySet()) {
       if (entry.getValue() > minTermOccurrenceInCache) {
-        termCClassHitCache.put(entry.getKey(), new ConcurrentHashMap<>());
+        termCClassHitCache.put(entry.getKey(), new ConcurrentHashMap<BytesRef, Integer>());
       }
     }
 
     // fill the class list
-    Terms terms = MultiTerms.getTerms(indexReader, classFieldName);
+    Terms terms = MultiFields.getTerms(indexReader, classFieldName);
     TermsEnum termsEnum = terms.iterator();
     while ((termsEnum.next()) != null) {
       cclasses.add(BytesRef.deepCopyOf(termsEnum.term()));
@@ -235,7 +236,7 @@ public class CachingNaiveBayesClassifier extends SimpleNaiveBayesClassifier {
     for (BytesRef cclass : cclasses) {
       double avgNumberOfUniqueTerms = 0;
       for (String textFieldName : textFieldNames) {
-        terms = MultiTerms.getTerms(indexReader, textFieldName);
+        terms = MultiFields.getTerms(indexReader, textFieldName);
         long numPostings = terms.getSumDocFreq(); // number of term/doc pairs
         avgNumberOfUniqueTerms += numPostings / (double) terms.getDocCount();
       }

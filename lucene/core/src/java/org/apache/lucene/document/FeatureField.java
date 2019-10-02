@@ -26,13 +26,14 @@ import org.apache.lucene.analysis.tokenattributes.TermFrequencyAttribute;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BoostQuery;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.similarities.BM25Similarity;
 import org.apache.lucene.search.similarities.Similarity.SimScorer;
+import org.apache.lucene.util.BytesRef;
 
 /**
  * {@link Field} that can be used to store static scoring factors into
@@ -47,10 +48,10 @@ import org.apache.lucene.search.similarities.Similarity.SimScorer;
  * {@link org.apache.lucene.search.BooleanClause.Occur#SHOULD} clauses of a
  * {@link BooleanQuery} allows to combine query-dependent scores (eg. BM25)
  * with query-independent scores using a linear combination. The fact that
- * feature values are stored as frequencies also allows search logic to
+ * feature values are stored as frequencies will allow search logic to
  * efficiently skip documents that can't be competitive when total hit counts
- * are not requested. This makes it a compelling option compared to storing
- * such factors eg. in a doc-value field.
+ * are not requested in the future. This makes it a compelling option compared
+ * to storing such factors eg. in a doc-value field.
  * <p>
  * This field may only store factors that are positively correlated with the
  * final score, like pagerank. In case of factors that are inversely correlated
@@ -209,8 +210,8 @@ public final class FeatureField extends Field {
   }
 
   static abstract class FeatureFunction {
-    abstract SimScorer scorer(float w);
-    abstract Explanation explain(String field, String feature, float w, int freq);
+    abstract SimScorer scorer(String field, float w);
+    abstract Explanation explain(String field, String feature, float w, int doc, int freq) throws IOException;
     FeatureFunction rewrite(IndexReader reader) throws IOException { return this; }
   }
 
@@ -242,19 +243,29 @@ public final class FeatureField extends Field {
     }
 
     @Override
-    SimScorer scorer(float weight) {
+    SimScorer scorer(String field, float weight) {
       return new SimScorer() {
         @Override
-        public float score(float freq, long norm) {
+        public float score(int doc, float freq) {
           return (float) (weight * Math.log(scalingFactor + decodeFeatureValue(freq)));
+        }
+
+        @Override
+        public float computeSlopFactor(int distance) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public float computePayloadFactor(int doc, int start, int end, BytesRef payload) {
+          throw new UnsupportedOperationException();
         }
       };
     }
 
     @Override
-    Explanation explain(String field, String feature, float w, int freq) {
+    Explanation explain(String field, String feature, float w, int doc, int freq) throws IOException {
       float featureValue = decodeFeatureValue(freq);
-      float score = scorer(w).score(freq, 1L);
+      float score = scorer(field, w).score(doc, freq);
       return Explanation.match(score,
           "Log function on the " + field + " field for the " + feature + " feature, computed as w * log(a + S) from:",
           Explanation.match(w, "w, weight of this function"),
@@ -305,27 +316,37 @@ public final class FeatureField extends Field {
     }
 
     @Override
-    SimScorer scorer(float weight) {
+    SimScorer scorer(String field, float weight) {
       if (pivot == null) {
         throw new IllegalStateException("Rewrite first");
       }
       final float pivot = this.pivot; // unbox
       return new SimScorer() {
         @Override
-        public float score(float freq, long norm) {
+        public float score(int doc, float freq) {
           float f = decodeFeatureValue(freq);
           // should be f / (f + k) but we rewrite it to
           // 1 - k / (f + k) to make sure it doesn't decrease
           // with f in spite of rounding
           return weight * (1 - pivot / (f + pivot));
         }
+
+        @Override
+        public float computeSlopFactor(int distance) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public float computePayloadFactor(int doc, int start, int end, BytesRef payload) {
+          throw new UnsupportedOperationException();
+        }
       };
     }
 
     @Override
-    Explanation explain(String field, String feature, float weight, int freq) {
+    Explanation explain(String field, String feature, float weight, int doc, int freq) throws IOException {
       float featureValue = decodeFeatureValue(freq);
-      float score = scorer(weight).score(freq, 1L);
+      float score = scorer(field, weight).score(doc, freq);
       return Explanation.match(score,
           "Saturation function on the " + field + " field for the " + feature + " feature, computed as w * S / (S + k) from:",
           Explanation.match(weight, "w, weight of this function"),
@@ -368,23 +389,33 @@ public final class FeatureField extends Field {
     }
 
     @Override
-    SimScorer scorer(float weight) {
+    SimScorer scorer(String field, float weight) {
       return new SimScorer() {
         @Override
-        public float score(float freq, long norm) {
+        public float score(int doc, float freq) {
           float f = decodeFeatureValue(freq);
           // should be f^a / (f^a + k^a) but we rewrite it to
           // 1 - k^a / (f + k^a) to make sure it doesn't decrease
           // with f in spite of rounding
           return (float) (weight * (1 - pivotPa / (Math.pow(f, a) + pivotPa)));
         }
+
+        @Override
+        public float computeSlopFactor(int distance) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public float computePayloadFactor(int doc, int start, int end, BytesRef payload) {
+          throw new UnsupportedOperationException();
+        }
       };
     }
 
     @Override
-    Explanation explain(String field, String feature, float weight, int freq) {
+    Explanation explain(String field, String feature, float weight, int doc, int freq) throws IOException {
       float featureValue = decodeFeatureValue(freq);
-      float score = scorer(weight).score(freq, 1L);
+      float score = scorer(field, weight).score(doc, freq);
       return Explanation.match(score,
           "Sigmoid function on the " + field + " field for the " + feature + " feature, computed as w * S^a / (S^a + k^a) from:",
           Explanation.match(weight, "w, weight of this function"),
@@ -507,15 +538,15 @@ public final class FeatureField extends Field {
    */
   static float computePivotFeatureValue(IndexReader reader, String featureField, String featureName) throws IOException {
     Term term = new Term(featureField, featureName);
-    TermStates states = TermStates.build(reader.getContext(), term, true);
-    if (states.docFreq() == 0) {
+    TermContext context = TermContext.build(reader.getContext(), term);
+    if (context.docFreq() == 0) {
       // avoid division by 0
       // The return value doesn't matter much here, the term doesn't exist,
       // it will never be used for scoring. Just Make sure to return a legal
       // value.
       return 1;
     }
-    float avgFreq = (float) ((double) states.totalTermFreq() / states.docFreq());
+    float avgFreq = (float) ((double) context.totalTermFreq() / context.docFreq());
     return decodeFeatureValue(avgFreq);
   }
 }

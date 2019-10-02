@@ -83,7 +83,7 @@ public class TestPrefixQuery extends LuceneTestCase {
     PrefixQuery query = new PrefixQuery(new Term("field", ""));
     IndexSearcher searcher = newSearcher(reader);
 
-    assertEquals(1, searcher.search(query, 1000).totalHits.value);
+    assertEquals(1, searcher.search(query, 1000).totalHits);
     writer.close();
     reader.close();
     directory.close();
@@ -124,7 +124,7 @@ public class TestPrefixQuery extends LuceneTestCase {
           count++;
         }
       }
-      assertEquals(count, s.count(q));
+      assertEquals(count, s.search(q, 1).totalHits);
     }
     r.close();
     w.close();

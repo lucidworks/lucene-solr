@@ -72,7 +72,7 @@ public final class DocValuesRewriteMethod extends MultiTermQuery.RewriteMethod {
     public final String getField() { return query.getField(); }
     
     @Override
-    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+    public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
       return new ConstantScoreWeight(this, boost) {
 
         @Override
@@ -91,17 +91,17 @@ public final class DocValuesRewriteMethod extends MultiTermQuery.RewriteMethod {
 
             @Override
             public long getSumTotalTermFreq() {
-              throw new UnsupportedOperationException();
+              return -1;
             }
 
             @Override
             public long getSumDocFreq() {
-              throw new UnsupportedOperationException();
+              return -1;
             }
 
             @Override
             public int getDocCount() {
-              throw new UnsupportedOperationException();
+              return -1;
             }
 
             @Override
@@ -150,7 +150,7 @@ public final class DocValuesRewriteMethod extends MultiTermQuery.RewriteMethod {
             }
           } while (termsEnum.next() != null);
 
-          return new ConstantScoreScorer(this, score(), scoreMode, new TwoPhaseIterator(fcsi) {
+          return new ConstantScoreScorer(this, score(), new TwoPhaseIterator(fcsi) {
 
             @Override
             public boolean matches() throws IOException {

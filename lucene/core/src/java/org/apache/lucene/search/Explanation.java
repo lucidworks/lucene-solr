@@ -32,7 +32,7 @@ public final class Explanation {
    * @param description how {@code value} was computed
    * @param details     sub explanations that contributed to this explanation
    */
-  public static Explanation match(Number value, String description, Collection<Explanation> details) {
+  public static Explanation match(float value, String description, Collection<Explanation> details) {
     return new Explanation(true, value, description, details);
   }
 
@@ -42,7 +42,7 @@ public final class Explanation {
    * @param description how {@code value} was computed
    * @param details     sub explanations that contributed to this explanation
    */
-  public static Explanation match(Number value, String description, Explanation... details) {
+  public static Explanation match(float value, String description, Explanation... details) {
     return new Explanation(true, value, description, Arrays.asList(details));
   }
 
@@ -61,14 +61,14 @@ public final class Explanation {
   }
 
   private final boolean match;                          // whether the document matched
-  private final Number value;                            // the value of this node
+  private final float value;                            // the value of this node
   private final String description;                     // what it represents
   private final List<Explanation> details;              // sub-explanations
 
   /** Create a new explanation  */
-  private Explanation(boolean match, Number value, String description, Collection<Explanation> details) {
+  private Explanation(boolean match, float value, String description, Collection<Explanation> details) {
     this.match = match;
-    this.value = Objects.requireNonNull(value);
+    this.value = value;
     this.description = Objects.requireNonNull(description);
     this.details = Collections.unmodifiableList(new ArrayList<>(details));
     for (Explanation detail : details) {
@@ -84,7 +84,7 @@ public final class Explanation {
   }
   
   /** The value assigned to this explanation node. */
-  public Number getValue() { return value; }
+  public float getValue() { return value; }
 
   /** A description of this explanation node. */
   public String getDescription() { return description; }
@@ -126,7 +126,7 @@ public final class Explanation {
     if (o == null || getClass() != o.getClass()) return false;
     Explanation that = (Explanation) o;
     return match == that.match &&
-        Objects.equals(value, that.value) &&
+        Float.compare(that.value, value) == 0 &&
         Objects.equals(description, that.description) &&
         Objects.equals(details, that.details);
   }

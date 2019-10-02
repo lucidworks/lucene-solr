@@ -22,7 +22,6 @@ import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.ValueSourceScorer;
-import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.mutable.MutableValue;
 import org.apache.lucene.util.mutable.MutableValueInt;
 
@@ -81,7 +80,7 @@ public abstract class IntDocValues extends FunctionValues {
   }
   
   @Override
-  public ValueSourceScorer getRangeScorer(Weight weight,  LeafReaderContext readerContext, String lowerVal, String upperVal, boolean includeLower, boolean includeUpper) {
+  public ValueSourceScorer getRangeScorer(LeafReaderContext readerContext, String lowerVal, String upperVal, boolean includeLower, boolean includeUpper) {
     int lower,upper;
 
     // instead of using separate comparison functions, adjust the endpoints.
@@ -103,7 +102,7 @@ public abstract class IntDocValues extends FunctionValues {
     final int ll = lower;
     final int uu = upper;
 
-    return new ValueSourceScorer(weight, readerContext, this) {
+    return new ValueSourceScorer(readerContext, this) {
       @Override
       public boolean matches(int doc) throws IOException {
         if (!exists(doc)) return false;

@@ -74,7 +74,9 @@ public interface Collector {
   LeafCollector getLeafCollector(LeafReaderContext context) throws IOException;
   
   /**
-   * Indicates what features are required from the scorer.
+   * Indicates if document scores are needed by this collector.
+   * 
+   * @return {@code true} if scores are needed.
    */
-  ScoreMode scoreMode();
+  boolean needsScores();
 }

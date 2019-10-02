@@ -58,11 +58,13 @@ public class RandomSimilarity extends PerFieldSimilarityWrapper {
   // all the similarities that we rotate through
   /** The DFR basic models to test. */
   static BasicModel[] BASIC_MODELS = {
-    new BasicModelG(), new BasicModelIF(), new BasicModelIn(), new BasicModelIne(),
+    /* TODO: enable new BasicModelBE(), */ /* TODO: enable new BasicModelD(), */ new BasicModelG(),
+    new BasicModelIF(), new BasicModelIn(), new BasicModelIne(),
+    /* TODO: enable new BasicModelP() */
   };
   /** The DFR aftereffects to test. */
   static AfterEffect[] AFTER_EFFECTS = {
-    new AfterEffectB(), new AfterEffectL()
+    new AfterEffectB(), new AfterEffectL(), new AfterEffect.NoAfterEffect()
   };
   /** The DFR normalizations to test. */
   static Normalization[] NORMALIZATIONS = {
@@ -89,12 +91,8 @@ public class RandomSimilarity extends PerFieldSimilarityWrapper {
     allSims = new ArrayList<>();
     allSims.add(new ClassicSimilarity());
     allSims.add(new BM25Similarity());
-    allSims.add(new AxiomaticF1EXP());
-    allSims.add(new AxiomaticF1LOG());
-    allSims.add(new AxiomaticF2EXP());
-    allSims.add(new AxiomaticF2LOG());
-
-    allSims.add(new BooleanSimilarity());
+    // We cannot do this, because this similarity behaves in "non-traditional" ways:
+    // allSims.add(new BooleanSimilarity());
     for (BasicModel basicModel : BASIC_MODELS) {
       for (AfterEffect afterEffect : AFTER_EFFECTS) {
         for (Normalization normalization : NORMALIZATIONS) {
@@ -109,7 +107,8 @@ public class RandomSimilarity extends PerFieldSimilarityWrapper {
         }
       }
     }
-    allSims.add(new LMDirichletSimilarity());
+    /* TODO: enable Dirichlet 
+    allSims.add(new LMDirichletSimilarity()); */
     allSims.add(new LMJelinekMercerSimilarity(0.1f));
     allSims.add(new LMJelinekMercerSimilarity(0.7f));
     for (Independence independence : INDEPENDENCE_MEASURES) {

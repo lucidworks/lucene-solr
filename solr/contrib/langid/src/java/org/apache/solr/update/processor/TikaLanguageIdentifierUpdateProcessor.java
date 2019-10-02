@@ -16,7 +16,6 @@
  */
 package org.apache.solr.update.processor;
 
-import java.io.Reader;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,6 +23,8 @@ import java.util.List;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.tika.language.LanguageIdentifier;
+
+import org.apache.solr.common.SolrInputDocument;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,11 +44,11 @@ public class TikaLanguageIdentifierUpdateProcessor extends LanguageIdentifierUpd
       SolrQueryResponse rsp, UpdateRequestProcessor next) {
     super(req, rsp, next);
   }
-
+  
   @Override
-  protected List<DetectedLanguage> detectLanguage(Reader solrDocReader) {
-    String content = SolrInputDocumentReader.asString(solrDocReader);
+  protected List<DetectedLanguage> detectLanguage(SolrInputDocument doc) {
     List<DetectedLanguage> languages = new ArrayList<>();
+    String content = concatFields(doc);
     if (content.length() != 0) {
       LanguageIdentifier identifier = new LanguageIdentifier(content);
       // FIXME: Hack - we get the distance from toString and calculate our own certainty score

@@ -161,6 +161,6 @@ public final class ShingleAnalyzerWrapper extends AnalyzerWrapper {
     filter.setOutputUnigrams(outputUnigrams);
     filter.setOutputUnigramsIfNoShingles(outputUnigramsIfNoShingles);
     filter.setFillerToken(fillerToken);
-    return new TokenStreamComponents(components.getSource(), filter);
+    return new TokenStreamComponents(components.getTokenizer(), filter);
   }
 }

@@ -87,6 +87,7 @@ import org.apache.solr.util.ExternalPaths;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.noggit.JSONParser;
@@ -629,9 +630,13 @@ public class TestConfigSetsAPI extends SolrTestCaseJ4 {
 
   private void verifyException(SolrClient solrClient, ConfigSetAdminRequest request,
       String errorContains) throws Exception {
-    Exception e = expectThrows(Exception.class, () -> solrClient.request(request));
-    assertTrue("Expected exception message to contain: " + errorContains
-        + " got: " + e.getMessage(), e.getMessage().contains(errorContains));
+    try {
+      solrClient.request(request);
+      Assert.fail("Expected exception");
+    } catch (Exception e) {
+      assertTrue("Expected exception message to contain: " + errorContains
+          + " got: " + e.getMessage(), e.getMessage().contains(errorContains));
+    }
   }
 
   @Test

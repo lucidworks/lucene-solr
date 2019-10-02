@@ -90,16 +90,7 @@ class DisjunctionIntervalsSource extends IntervalsSource {
     }
   }
 
-  @Override
-  public int minExtent() {
-    int minExtent = subSources.get(0).minExtent();
-    for (int i = 1; i < subSources.size(); i++) {
-      minExtent = Math.min(minExtent, subSources.get(i).minExtent());
-    }
-    return minExtent;
-  }
-
-  static class DisjunctionIntervalIterator extends IntervalIterator {
+  private static class DisjunctionIntervalIterator extends IntervalIterator {
 
     final DocIdSetIterator approximation;
     final PriorityQueue<IntervalIterator> intervalQueue;
@@ -142,11 +133,6 @@ class DisjunctionIntervalsSource extends IntervalsSource {
     @Override
     public int end() {
       return current.end();
-    }
-
-    @Override
-    public int gaps() {
-      return current.gaps();
     }
 
     private void reset() throws IOException {
@@ -243,11 +229,6 @@ class DisjunctionIntervalsSource extends IntervalsSource {
     }
 
     @Override
-    public int gaps() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
     public int nextInterval() {
       return NO_MORE_INTERVALS;
     }
@@ -288,11 +269,6 @@ class DisjunctionIntervalsSource extends IntervalsSource {
     @Override
     public int end() {
       return NO_MORE_INTERVALS;
-    }
-
-    @Override
-    public int gaps() {
-      throw new UnsupportedOperationException();
     }
 
     @Override

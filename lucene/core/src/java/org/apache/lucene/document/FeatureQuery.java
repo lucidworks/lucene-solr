@@ -21,7 +21,6 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.apache.lucene.document.FeatureField.FeatureFunction;
-import org.apache.lucene.index.ImpactsEnum;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.PostingsEnum;
@@ -30,10 +29,8 @@ import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
-import org.apache.lucene.search.ImpactsDISI;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.search.similarities.Similarity.SimScorer;
@@ -81,7 +78,7 @@ final class FeatureQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
     return new Weight(this) {
 
       @Override
@@ -91,7 +88,7 @@ final class FeatureQuery extends Query {
 
       @Override
       public void extractTerms(Set<Term> terms) {
-        if (scoreMode.needsScores() == false) {
+        if (needsScores == false) {
           // features are irrelevant to highlighting, skip
         } else {
           // extracting the term here will help get better scoring with
@@ -119,7 +116,7 @@ final class FeatureQuery extends Query {
           return Explanation.noMatch(desc + ". Feature " + featureName + " isn't set.");
         }
 
-        return function.explain(fieldName, featureName, boost, postings.freq());
+        return function.explain(fieldName, featureName, boost, doc, postings.freq());
       }
 
       @Override
@@ -133,41 +130,26 @@ final class FeatureQuery extends Query {
           return null;
         }
 
-        final SimScorer scorer = function.scorer(boost);
-        final ImpactsEnum impacts = termsEnum.impacts(PostingsEnum.FREQS);
-        final ImpactsDISI impactsDisi = new ImpactsDISI(impacts, impacts, scorer);
+        SimScorer scorer = function.scorer(fieldName, boost);
+        PostingsEnum postings = termsEnum.postings(null, PostingsEnum.FREQS);
 
         return new Scorer(this) {
 
           @Override
           public int docID() {
-            return impacts.docID();
+            return postings.docID();
           }
 
           @Override
           public float score() throws IOException {
-            return scorer.score(impacts.freq(), 1L);
+            return scorer.score(postings.docID(), postings.freq());
           }
 
           @Override
           public DocIdSetIterator iterator() {
-            return impactsDisi;
+            return postings;
           }
 
-          @Override
-          public int advanceShallow(int target) throws IOException {
-            return impactsDisi.advanceShallow(target);
-          }
-
-          @Override
-          public float getMaxScore(int upTo) throws IOException {
-            return impactsDisi.getMaxScore(upTo);
-          }
-
-          @Override
-          public void setMinCompetitiveScore(float minScore) {
-            impactsDisi.setMinCompetitiveScore(minScore);
-          }
         };
       }
 

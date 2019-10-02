@@ -620,30 +620,6 @@ public abstract class AbstractFullDistribZkTestBase extends AbstractDistribZkTes
     return cnt;
   }
 
-  public JettySolrRunner createJetty(String dataDir, String ulogDir, String shardList,
-      String solrConfigOverride) throws Exception {
-
-    JettyConfig jettyconfig = JettyConfig.builder()
-        .setContext(context)
-        .stopAtShutdown(false)
-        .withServlets(getExtraServlets())
-        .withFilters(getExtraRequestFilters())
-        .withSSLConfig(sslConfig.buildServerSSLConfig())
-        .build();
-
-    Properties props = new Properties();
-    props.setProperty("solr.data.dir", getDataDir(dataDir));
-    props.setProperty("shards", shardList);
-    props.setProperty("solr.ulog.dir", ulogDir);
-    props.setProperty("solrconfig", solrConfigOverride);
-    
-    JettySolrRunner jetty = new JettySolrRunner(getSolrHome(), props, jettyconfig);
-
-    jetty.start();
-
-    return jetty;
-  }
-
   public final JettySolrRunner createJetty(File solrHome, String dataDir, String shardList, String solrConfigOverride, String schemaOverride) throws Exception {
     return createJetty(solrHome, dataDir, shardList, solrConfigOverride, schemaOverride, null);
   }
@@ -659,7 +635,7 @@ public abstract class AbstractFullDistribZkTestBase extends AbstractDistribZkTes
         .stopAtShutdown(false)
         .withServlets(getExtraServlets())
         .withFilters(getExtraRequestFilters())
-        .withSSLConfig(sslConfig.buildServerSSLConfig())
+        .withSSLConfig(sslConfig)
         .build();
 
     Properties props = new Properties();
@@ -697,7 +673,7 @@ public abstract class AbstractFullDistribZkTestBase extends AbstractDistribZkTes
         .stopAtShutdown(false)
         .withServlets(getExtraServlets())
         .withFilters(getExtraRequestFilters())
-        .withSSLConfig(sslConfig.buildServerSSLConfig())
+        .withSSLConfig(sslConfig)
         .build();
 
     Properties props = new Properties();
@@ -2354,6 +2330,8 @@ public abstract class AbstractFullDistribZkTestBase extends AbstractDistribZkTes
       try {
         Thread.sleep(1000);
       } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new RuntimeException("Interrupted whie waiting for request completion. Last state seen: " + state, e);
       }
     }
 

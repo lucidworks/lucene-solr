@@ -123,7 +123,7 @@ public class LRUQueryCache implements QueryCache, Accountable {
   /**
    * Expert: Create a new instance that will cache at most <code>maxSize</code>
    * queries with at most <code>maxRamBytesUsed</code> bytes of memory, only on
-   * leaves that satisfy {@code leavesToCache}.
+   * leaves that satisfy {@code leavesToCache};
    */
   public LRUQueryCache(int maxSize, long maxRamBytesUsed,
       Predicate<LeafReaderContext> leavesToCache) {
@@ -147,8 +147,6 @@ public class LRUQueryCache implements QueryCache, Accountable {
    * <tt>33</tt> leaves can make it to the cache (very likely less than 10 in
    * practice), which is useful for this implementation since some operations
    * perform in linear time with the number of cached leaves.
-   * Only clauses whose cost is at most 100x the cost of the top-level query will
-   * be cached in order to not hurt latency too much because of caching.
    */
   public LRUQueryCache(int maxSize, long maxRamBytesUsed) {
     this(maxSize, maxRamBytesUsed, new MinSegmentSizePredicate(10000, .03f));
@@ -503,7 +501,7 @@ public class LRUQueryCache implements QueryCache, Accountable {
     scorer.score(new LeafCollector() {
 
       @Override
-      public void setScorer(Scorable scorer) throws IOException {}
+      public void setScorer(Scorer scorer) throws IOException {}
 
       @Override
       public void collect(int doc) throws IOException {
@@ -520,7 +518,7 @@ public class LRUQueryCache implements QueryCache, Accountable {
     scorer.score(new LeafCollector() {
 
       @Override
-      public void setScorer(Scorable scorer) throws IOException {}
+      public void setScorer(Scorer scorer) throws IOException {}
 
       @Override
       public void collect(int doc) throws IOException {
@@ -766,7 +764,7 @@ public class LRUQueryCache implements QueryCache, Accountable {
       return new ScorerSupplier() {
         @Override
         public Scorer get(long LeadCost) throws IOException {
-          return new ConstantScoreScorer(CachingWrapperWeight.this, 0f, ScoreMode.COMPLETE_NO_SCORES, disi);
+          return new ConstantScoreScorer(CachingWrapperWeight.this, 0f, disi);
         }
         
         @Override
@@ -844,7 +842,7 @@ public class LRUQueryCache implements QueryCache, Accountable {
         return null;
       }
 
-      return new DefaultBulkScorer(new ConstantScoreScorer(this, 0f, ScoreMode.COMPLETE_NO_SCORES, disi));
+      return new DefaultBulkScorer(new ConstantScoreScorer(this, 0f, disi));
     }
 
   }

@@ -32,11 +32,10 @@ abstract class DisjunctionScorer extends Scorer {
   private final boolean needsScores;
 
   private final DisiPriorityQueue subScorers;
-  private final DocIdSetIterator approximation;
-  private final BlockMaxDISI blockMaxApprox;
+  private final DisjunctionDISIApproximation approximation;
   private final TwoPhase twoPhase;
 
-  protected DisjunctionScorer(Weight weight, List<Scorer> subScorers, ScoreMode scoreMode) throws IOException {
+  protected DisjunctionScorer(Weight weight, List<Scorer> subScorers, boolean needsScores) {
     super(weight);
     if (subScorers.size() <= 1) {
       throw new IllegalArgumentException("There must be at least 2 subScorers");
@@ -46,17 +45,8 @@ abstract class DisjunctionScorer extends Scorer {
       final DisiWrapper w = new DisiWrapper(scorer);
       this.subScorers.add(w);
     }
-    this.needsScores = scoreMode != ScoreMode.COMPLETE_NO_SCORES;
-    if (scoreMode == ScoreMode.TOP_SCORES) {
-      for (Scorer scorer : subScorers) {
-        scorer.advanceShallow(0);
-      }
-      this.blockMaxApprox = new BlockMaxDISI(new DisjunctionDISIApproximation(this.subScorers), this);
-      this.approximation = blockMaxApprox;
-    } else {
-      this.approximation = new DisjunctionDISIApproximation(this.subScorers);
-      this.blockMaxApprox = null;
-    }
+    this.needsScores = needsScores;
+    this.approximation = new DisjunctionDISIApproximation(this.subScorers);
 
     boolean hasApproximation = false;
     float sumMatchCost = 0;
@@ -177,10 +167,6 @@ abstract class DisjunctionScorer extends Scorer {
    return subScorers.top().doc;
   }
 
-  BlockMaxDISI getBlockMaxApprox() {
-    return blockMaxApprox;
-  }
-
   DisiWrapper getSubMatches() throws IOException {
     if (twoPhase == null) {
       return subScorers.topList();
@@ -198,10 +184,10 @@ abstract class DisjunctionScorer extends Scorer {
   protected abstract float score(DisiWrapper topList) throws IOException;
 
   @Override
-  public final Collection<ChildScorable> getChildren() throws IOException {
-    ArrayList<ChildScorable> children = new ArrayList<>();
+  public final Collection<ChildScorer> getChildren() throws IOException {
+    ArrayList<ChildScorer> children = new ArrayList<>();
     for (DisiWrapper scorer = getSubMatches(); scorer != null; scorer = scorer.next) {
-      children.add(new ChildScorable(scorer.scorer, "SHOULD"));
+      children.add(new ChildScorer(scorer.scorer, "SHOULD"));
     }
     return children;
   }

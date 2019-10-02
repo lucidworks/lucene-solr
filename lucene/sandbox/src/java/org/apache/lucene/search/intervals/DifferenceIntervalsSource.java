@@ -86,9 +86,4 @@ class DifferenceIntervalsSource extends IntervalsSource {
   public void extractTerms(String field, Set<Term> terms) {
     minuend.extractTerms(field, terms);
   }
-
-  @Override
-  public int minExtent() {
-    return minuend.minExtent();
-  }
 }

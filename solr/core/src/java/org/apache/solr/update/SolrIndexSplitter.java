@@ -45,7 +45,6 @@ import org.apache.lucene.search.ConstantScoreWeight;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.store.Directory;
@@ -174,7 +173,7 @@ public class SolrIndexSplitter {
           log.error("Original error closing IndexWriter:", e);
           throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Error reopening IndexWriter after failed close", e1);
         }
-        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Error closing current IndexWriter, aborting 'link' split...", e);
+        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Error closing current IndexWriter, aborting offline split...", e);
       }
     }
     boolean success = false;
@@ -195,7 +194,7 @@ public class SolrIndexSplitter {
         t = timings.sub("parentApplyBufferedUpdates");
         ulog.applyBufferedUpdates();
         t.stop();
-        log.info("Splitting in 'link' mode " + (success? "finished" : "FAILED") +
+        log.info("Splitting in 'offline' mode " + (success? "finished" : "FAILED") +
             ": re-opened parent IndexWriter.");
       }
     }
@@ -451,7 +450,7 @@ public class SolrIndexSplitter {
     }
 
     @Override
-    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+    public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
       return new ConstantScoreWeight(this, boost) {
 
         @Override
@@ -472,7 +471,7 @@ public class SolrIndexSplitter {
               log.error("### INVALID DELS " + dels.cardinality());
             }
           }
-          return new ConstantScoreScorer(this, score(), scoreMode, new BitSetIterator(set, set.length()));
+          return new ConstantScoreScorer(this, score(), new BitSetIterator(set, set.length()));
         }
 
         @Override

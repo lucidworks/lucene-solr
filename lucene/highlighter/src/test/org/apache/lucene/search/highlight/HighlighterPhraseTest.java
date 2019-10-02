@@ -24,11 +24,11 @@ import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.Token;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
+import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DirectoryReader;
@@ -39,8 +39,6 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.Scorable;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.SimpleCollector;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.spans.SpanNearQuery;
@@ -75,7 +73,7 @@ public class HighlighterPhraseTest extends LuceneTestCase {
       final IndexSearcher indexSearcher = newSearcher(indexReader);
       final PhraseQuery phraseQuery = new PhraseQuery(FIELD, "fox", "jumped");
       TopDocs hits = indexSearcher.search(phraseQuery, 1);
-      assertEquals(1, hits.totalHits.value);
+      assertEquals(1, hits.totalHits);
       final Highlighter highlighter = new Highlighter(
           new SimpleHTMLFormatter(), new SimpleHTMLEncoder(),
           new QueryScorer(phraseQuery));
@@ -129,13 +127,13 @@ public class HighlighterPhraseTest extends LuceneTestCase {
         }
 
         @Override
-        public void setScorer(Scorable scorer) {
+        public void setScorer(org.apache.lucene.search.Scorer scorer) {
           // Do Nothing
         }
 
         @Override
-        public ScoreMode scoreMode() {
-          return ScoreMode.COMPLETE_NO_SCORES;
+        public boolean needsScores() {
+          return false;
         }
       });
       assertEquals(1, bitset.cardinality());
@@ -180,7 +178,7 @@ public class HighlighterPhraseTest extends LuceneTestCase {
       final IndexSearcher indexSearcher = newSearcher(indexReader);
       final PhraseQuery phraseQuery = new PhraseQuery(FIELD, "did", "jump");
       TopDocs hits = indexSearcher.search(phraseQuery, 1);
-      assertEquals(0, hits.totalHits.value);
+      assertEquals(0, hits.totalHits);
       final Highlighter highlighter = new Highlighter(
           new SimpleHTMLFormatter(), new SimpleHTMLEncoder(),
           new QueryScorer(phraseQuery));
@@ -217,7 +215,7 @@ public class HighlighterPhraseTest extends LuceneTestCase {
       final IndexSearcher indexSearcher = newSearcher(indexReader);
       final PhraseQuery phraseQuery = new PhraseQuery(1, FIELD, "did", "jump");
       TopDocs hits = indexSearcher.search(phraseQuery, 1);
-      assertEquals(1, hits.totalHits.value);
+      assertEquals(1, hits.totalHits);
       final Highlighter highlighter = new Highlighter(
           new SimpleHTMLFormatter(), new SimpleHTMLEncoder(),
           new QueryScorer(phraseQuery));
@@ -256,7 +254,7 @@ public class HighlighterPhraseTest extends LuceneTestCase {
           new SpanTermQuery(new Term(FIELD, "jump")) }, 0, true);
 
       TopDocs hits = indexSearcher.search(phraseQuery, 1);
-      assertEquals(0, hits.totalHits.value);
+      assertEquals(0, hits.totalHits);
       final Highlighter highlighter = new Highlighter(
           new SimpleHTMLFormatter(), new SimpleHTMLEncoder(),
           new QueryScorer(phraseQuery));
@@ -293,7 +291,7 @@ public class HighlighterPhraseTest extends LuceneTestCase {
           .add(new Term(FIELD, "ef"), 7).build();
 
       TopDocs hits = indexSearcher.search(phraseQuery, 100);
-      assertEquals(1, hits.totalHits.value);
+      assertEquals(1, hits.totalHits);
       final Highlighter highlighter = new Highlighter(
           new SimpleHTMLFormatter(), new SimpleHTMLEncoder(),
           new QueryScorer(phraseQuery));
@@ -325,7 +323,7 @@ public class HighlighterPhraseTest extends LuceneTestCase {
           .add(new Term(FIELD, "cd"), 2).build();
 
       TopDocs hits = indexSearcher.search(phraseQuery, 100);
-      assertEquals(1, hits.totalHits.value);
+      assertEquals(1, hits.totalHits);
 
       final Highlighter highlighter = new Highlighter(
           new SimpleHTMLFormatter(), new SimpleHTMLEncoder(),

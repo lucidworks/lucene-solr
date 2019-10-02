@@ -25,11 +25,10 @@ import java.util.Set;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.TwoPhaseIterator;
 
 /** Removes matches which overlap with another SpanQuery or which are
@@ -98,10 +97,10 @@ public final class SpanNotQuery extends SpanQuery {
 
 
   @Override
-  public SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    SpanWeight includeWeight = include.createWeight(searcher, scoreMode, boost);
-    SpanWeight excludeWeight = exclude.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, boost);
-    return new SpanNotWeight(searcher, scoreMode.needsScores() ? getTermStates(includeWeight) : null,
+  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+    SpanWeight includeWeight = include.createWeight(searcher, false, boost);
+    SpanWeight excludeWeight = exclude.createWeight(searcher, false, boost);
+    return new SpanNotWeight(searcher, needsScores ? getTermContexts(includeWeight, excludeWeight) : null,
                                   includeWeight, excludeWeight, boost);
   }
 
@@ -110,7 +109,7 @@ public final class SpanNotQuery extends SpanQuery {
     final SpanWeight includeWeight;
     final SpanWeight excludeWeight;
 
-    public SpanNotWeight(IndexSearcher searcher, Map<Term, TermStates> terms,
+    public SpanNotWeight(IndexSearcher searcher, Map<Term, TermContext> terms,
                          SpanWeight includeWeight, SpanWeight excludeWeight, float boost) throws IOException {
       super(SpanNotQuery.this, searcher, terms, boost);
       this.includeWeight = includeWeight;
@@ -118,8 +117,8 @@ public final class SpanNotQuery extends SpanQuery {
     }
 
     @Override
-    public void extractTermStates(Map<Term, TermStates> contexts) {
-      includeWeight.extractTermStates(contexts);
+    public void extractTermContexts(Map<Term, TermContext> contexts) {
+      includeWeight.extractTermContexts(contexts);
     }
 
     @Override

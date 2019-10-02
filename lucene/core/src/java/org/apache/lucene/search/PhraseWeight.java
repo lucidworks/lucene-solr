@@ -21,33 +21,23 @@ import java.io.IOException;
 
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.similarities.Similarity;
-import org.apache.lucene.search.similarities.Similarity.SimScorer;
 
 abstract class PhraseWeight extends Weight {
 
-  final ScoreMode scoreMode;
-  final Similarity.SimScorer stats;
+  final boolean needsScores;
+  final Similarity.SimWeight stats;
   final Similarity similarity;
   final String field;
 
-  protected PhraseWeight(Query query, String field, IndexSearcher searcher, ScoreMode scoreMode) throws IOException {
+  protected PhraseWeight(Query query, String field, IndexSearcher searcher, boolean needsScores) throws IOException {
     super(query);
-    this.scoreMode = scoreMode;
+    this.needsScores = needsScores;
     this.field = field;
-    this.similarity = searcher.getSimilarity();
-    SimScorer stats = getStats(searcher);
-    if (stats == null) { // Means no terms or scores are not needed
-      stats = new SimScorer() {
-        @Override
-        public float score(float freq, long norm) {
-          return 1;
-        }
-      };
-    }
-    this.stats = stats;
+    this.similarity = searcher.getSimilarity(needsScores);
+    this.stats = getStats(searcher);
   }
 
-  protected abstract Similarity.SimScorer getStats(IndexSearcher searcher) throws IOException;
+  protected abstract Similarity.SimWeight getStats(IndexSearcher searcher) throws IOException;
 
   protected abstract PhraseMatcher getPhraseMatcher(LeafReaderContext context, boolean exposeOffsets) throws IOException;
 
@@ -56,8 +46,8 @@ abstract class PhraseWeight extends Weight {
     PhraseMatcher matcher = getPhraseMatcher(context, false);
     if (matcher == null)
       return null;
-    LeafSimScorer simScorer = new LeafSimScorer(stats, context.reader(), field, scoreMode.needsScores());
-    return new PhraseScorer(this, matcher, scoreMode, simScorer);
+    Similarity.SimScorer simScorer = similarity.simScorer(stats, context);
+    return new PhraseScorer(this, matcher, needsScores, simScorer);
   }
 
   @Override
@@ -70,13 +60,13 @@ abstract class PhraseWeight extends Weight {
     if (matcher.nextMatch() == false) {
       return Explanation.noMatch("no matching phrase");
     }
-    float freq = matcher.sloppyWeight();
+    Similarity.SimScorer simScorer = similarity.simScorer(stats, context);
+    float freq = matcher.sloppyWeight(simScorer);
     while (matcher.nextMatch()) {
-      freq += matcher.sloppyWeight();
+      freq += matcher.sloppyWeight(simScorer);
     }
-    LeafSimScorer docScorer = new LeafSimScorer(stats, context.reader(), field, scoreMode.needsScores());
     Explanation freqExplanation = Explanation.match(freq, "phraseFreq=" + freq);
-    Explanation scoreExplanation = docScorer.explain(doc, freqExplanation);
+    Explanation scoreExplanation = simScorer.explain(doc, freqExplanation);
     return Explanation.match(
         scoreExplanation.getValue(),
         "weight("+getQuery()+" in "+doc+") [" + similarity.getClass().getSimpleName() + "], result of:",

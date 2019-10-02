@@ -24,22 +24,15 @@ import java.util.List;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.TextField;
-import org.apache.lucene.document.Field.Store;
-import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.FilterLeafReader;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.similarities.ClassicSimilarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util.TestUtil;
 
 public class TestTermScorer extends LuceneTestCase {
   protected Directory directory;
@@ -83,7 +76,7 @@ public class TestTermScorer extends LuceneTestCase {
     Term allTerm = new Term(FIELD, "all");
     TermQuery termQuery = new TermQuery(allTerm);
     
-    Weight weight = indexSearcher.createWeight(termQuery, ScoreMode.COMPLETE, 1);
+    Weight weight = indexSearcher.createWeight(termQuery, true, 1);
     assertTrue(indexSearcher.getTopReaderContext() instanceof LeafReaderContext);
     LeafReaderContext context = (LeafReaderContext)indexSearcher.getTopReaderContext();
     BulkScorer ts = weight.bulkScorer(context);
@@ -94,10 +87,10 @@ public class TestTermScorer extends LuceneTestCase {
     
     ts.score(new SimpleCollector() {
       private int base = 0;
-      private Scorable scorer;
+      private Scorer scorer;
       
       @Override
-      public void setScorer(Scorable scorer) {
+      public void setScorer(Scorer scorer) {
         this.scorer = scorer;
       }
       
@@ -117,8 +110,8 @@ public class TestTermScorer extends LuceneTestCase {
       }
       
       @Override
-      public ScoreMode scoreMode() {
-        return ScoreMode.COMPLETE;
+      public boolean needsScores() {
+        return true;
       }
     }, null);
     assertTrue("docs Size: " + docs.size() + " is not: " + 2, docs.size() == 2);
@@ -134,7 +127,7 @@ public class TestTermScorer extends LuceneTestCase {
     Term allTerm = new Term(FIELD, "all");
     TermQuery termQuery = new TermQuery(allTerm);
     
-    Weight weight = indexSearcher.createWeight(termQuery, ScoreMode.COMPLETE, 1);
+    Weight weight = indexSearcher.createWeight(termQuery, true, 1);
     assertTrue(indexSearcher.getTopReaderContext() instanceof LeafReaderContext);
     LeafReaderContext context = (LeafReaderContext) indexSearcher.getTopReaderContext();
     Scorer ts = weight.scorer(context);
@@ -151,7 +144,7 @@ public class TestTermScorer extends LuceneTestCase {
     Term allTerm = new Term(FIELD, "all");
     TermQuery termQuery = new TermQuery(allTerm);
     
-    Weight weight = indexSearcher.createWeight(termQuery, ScoreMode.COMPLETE, 1);
+    Weight weight = indexSearcher.createWeight(termQuery, true, 1);
     assertTrue(indexSearcher.getTopReaderContext() instanceof LeafReaderContext);
     LeafReaderContext context = (LeafReaderContext) indexSearcher.getTopReaderContext();
     Scorer ts = weight.scorer(context);
@@ -200,60 +193,13 @@ public class TestTermScorer extends LuceneTestCase {
     // We don't use newSearcher because it sometimes runs checkIndex which loads norms
     IndexSearcher indexSearcher = new IndexSearcher(forbiddenNorms);
     
-    Weight weight = indexSearcher.createWeight(termQuery, ScoreMode.COMPLETE, 1);
+    Weight weight = indexSearcher.createWeight(termQuery, true, 1);
     expectThrows(AssertionError.class, () -> {
       weight.scorer(forbiddenNorms.getContext()).iterator().nextDoc();
     });
     
-    Weight weight2 = indexSearcher.createWeight(termQuery, ScoreMode.COMPLETE_NO_SCORES, 1);
+    Weight weight2 = indexSearcher.createWeight(termQuery, false, 1);
     // should not fail this time since norms are not necessary
     weight2.scorer(forbiddenNorms.getContext()).iterator().nextDoc();
   }
-
-  public void testRandomTopDocs() throws IOException {
-    Directory dir = newDirectory();
-    IndexWriter w = new IndexWriter(dir, newIndexWriterConfig());
-    int numDocs = atLeast(128 * 8 * 8 * 3); // make sure some terms have skip data
-    for (int i = 0; i < numDocs; ++i) {
-      Document doc = new Document();
-      int numValues = random().nextInt(1 << random().nextInt(5));
-      int start = random().nextInt(10);
-      for (int j = 0; j < numValues; ++j) {
-        int freq = TestUtil.nextInt(random(), 1, 1 << random().nextInt(3));
-        for (int k = 0; k < freq; ++k) {
-          doc.add(new TextField("foo", Integer.toString(start + j), Store.NO));
-        }
-      }
-      w.addDocument(doc);
-    }
-    IndexReader reader = DirectoryReader.open(w);
-    w.close();
-    IndexSearcher searcher = newSearcher(reader);
-
-    for (int iter = 0; iter < 15; ++iter) {
-      Query query = new TermQuery(new Term("foo", Integer.toString(iter)));
-
-      TopScoreDocCollector collector1 = TopScoreDocCollector.create(10, null, Integer.MAX_VALUE); // COMPLETE
-      TopScoreDocCollector collector2 = TopScoreDocCollector.create(10, null, 1); // TOP_SCORES
-      
-      searcher.search(query, collector1);
-      searcher.search(query, collector2);
-      CheckHits.checkEqual(query, collector1.topDocs().scoreDocs, collector2.topDocs().scoreDocs);
-
-      int filterTerm = random().nextInt(15);
-      Query filteredQuery = new BooleanQuery.Builder()
-          .add(query, Occur.MUST)
-          .add(new TermQuery(new Term("foo", Integer.toString(filterTerm))), Occur.FILTER)
-          .build();
-
-      collector1 = TopScoreDocCollector.create(10, null, Integer.MAX_VALUE); // COMPLETE
-      collector2 = TopScoreDocCollector.create(10, null, 1); // TOP_SCORES
-      searcher.search(filteredQuery, collector1);
-      searcher.search(filteredQuery, collector2);
-      CheckHits.checkEqual(query, collector1.topDocs().scoreDocs, collector2.topDocs().scoreDocs);
-    }
-    reader.close();
-    dir.close();
-  }
-
 }

@@ -42,7 +42,6 @@ import org.apache.lucene.search.MultiCollector;
 import org.apache.lucene.search.MultiCollectorManager;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.TopFieldCollector;
@@ -202,13 +201,13 @@ public class DrillSideways {
     DrillSidewaysQuery dsq =
             new DrillSidewaysQuery(baseQuery, drillDownCollector, drillSidewaysCollectors, drillDownQueries,
                     scoreSubDocsAtOnce());
-    if (hitCollector.scoreMode().needsScores() == false) {
+    if (hitCollector.needsScores() == false) {
       // this is a horrible hack in order to make sure IndexSearcher will not
       // attempt to cache the DrillSidewaysQuery
       hitCollector = new FilterCollector(hitCollector) {
         @Override
-        public ScoreMode scoreMode() {
-          return ScoreMode.COMPLETE;
+        public boolean needsScores() {
+          return true;
         }
       };
     }
@@ -223,7 +222,7 @@ public class DrillSideways {
    * drill down and sideways counts.
    */
   public DrillSidewaysResult search(DrillDownQuery query, Query filter, FieldDoc after, int topN, Sort sort,
-          boolean doDocScores) throws IOException {
+          boolean doDocScores, boolean doMaxScore) throws IOException {
     if (filter != null) {
       query = new DrillDownQuery(config, filter, query);
     }
@@ -241,7 +240,7 @@ public class DrillSideways {
 
                   @Override
                   public TopFieldCollector newCollector() throws IOException {
-                    return TopFieldCollector.create(sort, fTopN, after, Integer.MAX_VALUE);
+                    return TopFieldCollector.create(sort, fTopN, after, true, doDocScores, doMaxScore, true);
                   }
 
                   @Override
@@ -255,22 +254,14 @@ public class DrillSideways {
 
                 };
         ConcurrentDrillSidewaysResult<TopFieldDocs> r = search(query, collectorManager);
-        TopFieldDocs topDocs = r.collectorResult;
-        if (doDocScores) {
-          TopFieldCollector.populateScores(topDocs.scoreDocs, searcher, query);
-        }
-        return new DrillSidewaysResult(r.facets, topDocs);
+        return new DrillSidewaysResult(r.facets, r.collectorResult);
 
       } else {
 
         final TopFieldCollector hitCollector =
-                TopFieldCollector.create(sort, fTopN, after, Integer.MAX_VALUE);
+                TopFieldCollector.create(sort, fTopN, after, true, doDocScores, doMaxScore, true);
         DrillSidewaysResult r = search(query, hitCollector);
-        TopFieldDocs topDocs = hitCollector.topDocs();
-        if (doDocScores) {
-          TopFieldCollector.populateScores(topDocs.scoreDocs, searcher, query);
-        }
-        return new DrillSidewaysResult(r.facets, topDocs);
+        return new DrillSidewaysResult(r.facets, hitCollector.topDocs());
       }
     } else {
       return search(after, query, topN);
@@ -303,7 +294,7 @@ public class DrillSideways {
 
                 @Override
                 public TopScoreDocCollector newCollector() throws IOException {
-                  return TopScoreDocCollector.create(fTopN, after, Integer.MAX_VALUE);
+                  return TopScoreDocCollector.create(fTopN, after);
                 }
 
                 @Override
@@ -321,7 +312,7 @@ public class DrillSideways {
 
     } else {
 
-      TopScoreDocCollector hitCollector = TopScoreDocCollector.create(topN, after, Integer.MAX_VALUE);
+      TopScoreDocCollector hitCollector = TopScoreDocCollector.create(topN, after);
       DrillSidewaysResult r = search(query, hitCollector);
       return new DrillSidewaysResult(r.facets, hitCollector.topDocs());
     }

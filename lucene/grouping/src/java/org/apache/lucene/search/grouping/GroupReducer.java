@@ -25,7 +25,7 @@ import java.util.Map;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.LeafCollector;
-import org.apache.lucene.search.Scorable;
+import org.apache.lucene.search.Scorer;
 
 /**
  * Concrete implementations of this class define what to collect for individual
@@ -84,7 +84,7 @@ public abstract class GroupReducer<T, C extends Collector> {
   /**
    * Set the Scorer on all group collectors
    */
-  public final void setScorer(Scorable scorer) throws IOException {
+  public final void setScorer(Scorer scorer) throws IOException {
     for (GroupCollector<C> collector : groups.values()) {
       collector.leafCollector.setScorer(scorer);
     }

@@ -100,11 +100,15 @@ public class TestIndexSearcher extends LuceneTestCase {
             searcher.searchAfter(after, query, Integer.MAX_VALUE);
             if (sort != null) {
               searcher.search(query, Integer.MAX_VALUE, sort);
-              searcher.search(query, Integer.MAX_VALUE, sort, true);
-              searcher.search(query, Integer.MAX_VALUE, sort, false);
+              searcher.search(query, Integer.MAX_VALUE, sort, true, true);
+              searcher.search(query, Integer.MAX_VALUE, sort, true, false);
+              searcher.search(query, Integer.MAX_VALUE, sort, false, true);
+              searcher.search(query, Integer.MAX_VALUE, sort, false, false);
               searcher.searchAfter(after, query, Integer.MAX_VALUE, sort);
-              searcher.searchAfter(after, query, Integer.MAX_VALUE, sort, true);
-              searcher.searchAfter(after, query, Integer.MAX_VALUE, sort, false);
+              searcher.searchAfter(after, query, Integer.MAX_VALUE, sort, true, true);
+              searcher.searchAfter(after, query, Integer.MAX_VALUE, sort, true, false);
+              searcher.searchAfter(after, query, Integer.MAX_VALUE, sort, false, true);
+              searcher.searchAfter(after, query, Integer.MAX_VALUE, sort, false, false);
             }
           }
         }
@@ -165,7 +169,7 @@ public class TestIndexSearcher extends LuceneTestCase {
             .add(new TermQuery(new Term("foo", "baz")), Occur.SHOULD)
             .build()
           )) {
-        assertEquals(searcher.count(query), searcher.search(query, 1).totalHits.value);
+        assertEquals(searcher.count(query), searcher.search(query, 1).totalHits);
       }
       reader.close();
     }

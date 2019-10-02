@@ -34,8 +34,8 @@ import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.TermState;
-import org.apache.lucene.index.TermStates;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.similarities.Similarity;
@@ -204,24 +204,23 @@ public class MultiPhraseQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    final Map<Term,TermStates> termStates = new HashMap<>();
-    return new PhraseWeight(this, field, searcher, scoreMode) {
-
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+    final Map<Term, TermContext> termStates = new HashMap<>();
+    return new PhraseWeight(this, field, searcher, needsScores) {
       @Override
-      protected Similarity.SimScorer getStats(IndexSearcher searcher) throws IOException {
+      protected Similarity.SimWeight getStats(IndexSearcher searcher) throws IOException {
         final IndexReaderContext context = searcher.getTopReaderContext();
 
         // compute idf
         ArrayList<TermStatistics> allTermStats = new ArrayList<>();
         for(final Term[] terms: termArrays) {
           for (Term term: terms) {
-            TermStates ts = termStates.get(term);
+            TermContext ts = termStates.get(term);
             if (ts == null) {
-              ts = TermStates.build(context, term, scoreMode.needsScores());
+              ts = TermContext.build(context, term);
               termStates.put(term, ts);
             }
-            if (scoreMode.needsScores()) {
+            if (needsScores) {
               TermStatistics termStatistics = searcher.termStatistics(term, ts);
               if (termStatistics != null) {
                 allTermStats.add(termStatistics);
@@ -232,7 +231,7 @@ public class MultiPhraseQuery extends Query {
         if (allTermStats.isEmpty()) {
           return null; // none of the terms were found, we won't use sim at all
         } else {
-          return similarity.scorer(
+          return similarity.computeWeight(
               boost,
               searcher.collectionStatistics(field),
               allTermStats.toArray(new TermStatistics[allTermStats.size()]));
@@ -266,7 +265,7 @@ public class MultiPhraseQuery extends Query {
           List<PostingsEnum> postings = new ArrayList<>();
 
           for (Term term : terms) {
-            TermState termState = termStates.get(term).get(context);
+            TermState termState = termStates.get(term).get(context.ord);
             if (termState != null) {
               termsEnum.seekExact(term.bytes(), termState);
               postings.add(termsEnum.postings(null, exposeOffsets ? PostingsEnum.ALL : PostingsEnum.POSITIONS));

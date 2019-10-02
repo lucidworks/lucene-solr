@@ -135,16 +135,12 @@ Note that this transformer can be used even though the query itself is not a <<o
 
 When using this transformer, the `parentFilter` parameter must be specified, and works the same as in all Block Join Queries. Additional optional parameters are:
 
-`childFilter`::
-A query to filter which child documents should be included. This can be particularly useful when you have multiple levels of hierarchical documents. The default is all children.
-
-`limit`::
-The maximum number of child documents to be returned per parent document. The default is `10`.
-
-`fl`::
-The field list which the transformer is to return. The default is the top level `fl`).
+* `childFilter` - query to filter which child documents should be included, this can be particularly useful when you have multiple levels of hierarchical documents (default: all children)
+* `limit` - the maximum number of child documents to be returned per parent document (default: 10)
+* `fl` - the field list which the transformer is to return. The default is all fields.
 +
-There is a further limitation in which the fields here should be a subset of those specified by the top level `fl` parameter.
+There is a further limitation in which the fields here should be a subset of those specified by the top level `fl`
+parameter.
 
 
 === [shard] - ShardAugmenterFactory

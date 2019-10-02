@@ -942,7 +942,7 @@ public class TestQueryParser extends QueryParserTestBase {
     DirectoryReader ir = DirectoryReader.open(ramDir);
     IndexSearcher is = new IndexSearcher(ir);
       
-    long hits = is.count(q);
+    long hits = is.search(q, 10).totalHits;
     ir.close();
     ramDir.close();
     if (hits == 1){

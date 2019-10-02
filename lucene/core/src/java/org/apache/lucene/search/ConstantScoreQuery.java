@@ -87,11 +87,11 @@ public final class ConstantScoreQuery extends Query {
     private LeafCollector wrapCollector(LeafCollector collector) {
       return new FilterLeafCollector(collector) {
         @Override
-        public void setScorer(Scorable scorer) throws IOException {
+        public void setScorer(Scorer scorer) throws IOException {
           // we must wrap again here, but using the scorer passed in as parameter:
-          in.setScorer(new FilterScorable(scorer) {
+          in.setScorer(new FilterScorer(scorer) {
             @Override
-            public float score() {
+            public float score() throws IOException {
               return theScore;
             }
           });
@@ -106,9 +106,9 @@ public final class ConstantScoreQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    final Weight innerWeight = searcher.createWeight(query, ScoreMode.COMPLETE_NO_SCORES, 1f);
-    if (scoreMode.needsScores()) {
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+    final Weight innerWeight = searcher.createWeight(query, false, 1f);
+    if (needsScores) {
       return new ConstantScoreWeight(this, boost) {
 
         @Override
@@ -137,12 +137,8 @@ public final class ConstantScoreQuery extends Query {
                   return score;
                 }
                 @Override
-                public float getMaxScore(int upTo) throws IOException {
-                  return score;
-                }
-                @Override
-                public Collection<ChildScorable> getChildren() {
-                  return Collections.singleton(new ChildScorable(innerScorer, "constant"));
+                public Collection<ChildScorer> getChildren() {
+                  return Collections.singleton(new ChildScorer(innerScorer, "constant"));
                 }
               };
             }

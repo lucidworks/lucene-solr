@@ -22,7 +22,6 @@ import java.util.Map;
 
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
-import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.Fields;
@@ -45,7 +44,7 @@ import static org.apache.lucene.search.suggest.document.CompletionPostingsFormat
 
 /**
  * <p>
- * Weighted FSTs for any indexed {@link SuggestField} is built on {@link #write(Fields,NormsProducer)}.
+ * Weighted FSTs for any indexed {@link SuggestField} is built on {@link #write(Fields)}.
  * A weighted FST maps the analyzed forms of a field to its
  * surface form and document id. FSTs are stored in the CompletionDictionary (.lkp).
  * </p>
@@ -81,8 +80,8 @@ final class CompletionFieldsConsumer extends FieldsConsumer {
   }
 
   @Override
-  public void write(Fields fields, NormsProducer norms) throws IOException {
-    delegateFieldsConsumer.write(fields, norms);
+  public void write(Fields fields) throws IOException {
+    delegateFieldsConsumer.write(fields);
 
     for (String field : fields) {
       CompletionTermWriter termWriter = new CompletionTermWriter();

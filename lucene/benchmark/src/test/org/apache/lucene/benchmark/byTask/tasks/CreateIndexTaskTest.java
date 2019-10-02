@@ -40,7 +40,7 @@ public class CreateIndexTaskTest extends BenchmarkTestCase {
     Properties props = new Properties();
     props.setProperty("writer.version", Version.LATEST.toString());
     props.setProperty("print.props", "false"); // don't print anything
-    props.setProperty("directory", "ByteBuffersDirectory");
+    props.setProperty("directory", "RAMDirectory");
     if (infoStreamValue != null) {
       props.setProperty("writer.info.stream", infoStreamValue);
     }

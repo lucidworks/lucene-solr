@@ -31,8 +31,6 @@ import org.apache.lucene.search.QueryUtils;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.search.TopFieldCollector;
-import org.apache.lucene.search.TopScoreDocCollector;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.NumericUtils;
@@ -149,22 +147,22 @@ public class TestNumericRangeQuery32 extends LuceneTestCase {
     int lower=(distance*3/2)+startOffset, upper=lower + count*distance + (distance/3);
     LegacyNumericRangeQuery<Integer> q = LegacyNumericRangeQuery.newIntRange(field, precisionStep, lower, upper, true, true);
     for (byte i=0; i<2; i++) {
-      TopFieldCollector collector = TopFieldCollector.create(Sort.INDEXORDER, noDocs, Integer.MAX_VALUE);
+      TopDocs topDocs;
       String type;
       switch (i) {
         case 0:
           type = " (constant score filter rewrite)";
           q.setRewriteMethod(MultiTermQuery.CONSTANT_SCORE_REWRITE);
+          topDocs = searcher.search(q, noDocs, Sort.INDEXORDER);
           break;
         case 1:
           type = " (constant score boolean rewrite)";
           q.setRewriteMethod(MultiTermQuery.CONSTANT_SCORE_BOOLEAN_REWRITE);
+          topDocs = searcher.search(q, noDocs, Sort.INDEXORDER);
           break;
         default:
           return;
       }
-      searcher.search(q, collector);
-      TopDocs topDocs = collector.topDocs();
       ScoreDoc[] sd = topDocs.scoreDocs;
       assertNotNull(sd);
       assertEquals("Score doc count"+type, count, sd.length );
@@ -244,9 +242,7 @@ public class TestNumericRangeQuery32 extends LuceneTestCase {
     int count=3000;
     int lower=(count-1)*distance + (distance/3) +startOffset;
     LegacyNumericRangeQuery<Integer> q= LegacyNumericRangeQuery.newIntRange(field, precisionStep, lower, null, true, true);
-    TopFieldCollector collector = TopFieldCollector.create(Sort.INDEXORDER, noDocs, Integer.MAX_VALUE);
-    searcher.search(q, collector);
-    TopDocs topDocs = collector.topDocs();
+    TopDocs topDocs = searcher.search(q, noDocs, Sort.INDEXORDER);
     ScoreDoc[] sd = topDocs.scoreDocs;
     assertNotNull(sd);
     assertEquals("Score doc count", noDocs-count, sd.length );
@@ -256,9 +252,7 @@ public class TestNumericRangeQuery32 extends LuceneTestCase {
     assertEquals("Last doc", (noDocs-1)*distance+startOffset, doc.getField(field).numericValue().intValue());
 
     q= LegacyNumericRangeQuery.newIntRange(field, precisionStep, lower, null, true, false);
-    collector = TopFieldCollector.create(Sort.INDEXORDER, noDocs, Integer.MAX_VALUE);
-    searcher.search(q, collector);
-    topDocs = collector.topDocs();
+    topDocs = searcher.search(q, noDocs, Sort.INDEXORDER);
     sd = topDocs.scoreDocs;
     assertNotNull(sd);
     assertEquals("Score doc count", noDocs-count, sd.length );
@@ -366,28 +360,20 @@ public class TestNumericRangeQuery32 extends LuceneTestCase {
       }
       // test inclusive range
       Query tq= LegacyNumericRangeQuery.newIntRange(field, precisionStep, lower, upper, true, true);
-      TopScoreDocCollector collector = TopScoreDocCollector.create(1, Integer.MAX_VALUE);
-      searcher.search(tq, collector);
-      TopDocs tTopDocs = collector.topDocs();
-      assertEquals("Returned count of range query must be equal to inclusive range length", upper-lower+1, tTopDocs.totalHits.value );
+      TopDocs tTopDocs = searcher.search(tq, 1);
+      assertEquals("Returned count of range query must be equal to inclusive range length", upper-lower+1, tTopDocs.totalHits );
       // test exclusive range
       tq= LegacyNumericRangeQuery.newIntRange(field, precisionStep, lower, upper, false, false);
-      collector = TopScoreDocCollector.create(1, Integer.MAX_VALUE);
-      searcher.search(tq, collector);
-      tTopDocs = collector.topDocs();
-      assertEquals("Returned count of range query must be equal to exclusive range length", Math.max(upper-lower-1, 0), tTopDocs.totalHits.value );
+      tTopDocs = searcher.search(tq, 1);
+      assertEquals("Returned count of range query must be equal to exclusive range length", Math.max(upper-lower-1, 0), tTopDocs.totalHits );
       // test left exclusive range
       tq= LegacyNumericRangeQuery.newIntRange(field, precisionStep, lower, upper, false, true);
-      collector = TopScoreDocCollector.create(1, Integer.MAX_VALUE);
-      searcher.search(tq, collector);
-      tTopDocs = collector.topDocs();
-      assertEquals("Returned count of range query must be equal to half exclusive range length", upper-lower, tTopDocs.totalHits.value );
+      tTopDocs = searcher.search(tq, 1);
+      assertEquals("Returned count of range query must be equal to half exclusive range length", upper-lower, tTopDocs.totalHits );
       // test right exclusive range
       tq= LegacyNumericRangeQuery.newIntRange(field, precisionStep, lower, upper, true, false);
-      collector = TopScoreDocCollector.create(1, Integer.MAX_VALUE);
-      searcher.search(tq, collector);
-      tTopDocs = collector.topDocs();
-      assertEquals("Returned count of range query must be equal to half exclusive range length", upper-lower, tTopDocs.totalHits.value );
+      tTopDocs = searcher.search(tq, 1);
+      assertEquals("Returned count of range query must be equal to half exclusive range length", upper-lower, tTopDocs.totalHits );
     }
   }
 
@@ -413,10 +399,8 @@ public class TestNumericRangeQuery32 extends LuceneTestCase {
     
     Query tq= LegacyNumericRangeQuery.newFloatRange(field, precisionStep,
         NumericUtils.sortableIntToFloat(lower), NumericUtils.sortableIntToFloat(upper), true, true);
-    TopScoreDocCollector collector = TopScoreDocCollector.create(1, Integer.MAX_VALUE);
-    searcher.search(tq, collector);
-    TopDocs tTopDocs = collector.topDocs();
-    assertEquals("Returned count of range query must be equal to inclusive range length", upper-lower+1, tTopDocs.totalHits.value );
+    TopDocs tTopDocs = searcher.search(tq, 1);
+    assertEquals("Returned count of range query must be equal to inclusive range length", upper-lower+1, tTopDocs.totalHits );
   }
 
   @Test

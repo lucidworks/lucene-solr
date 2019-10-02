@@ -53,12 +53,12 @@ public class TestSpanFirstQuery extends LuceneTestCase {
     
     // user queries on "starts-with quick"
     SpanQuery sfq = spanFirstQuery(spanTermQuery("field", "quick"), 1);
-    assertEquals(1, searcher.search(sfq, 10).totalHits.value);
+    assertEquals(1, searcher.search(sfq, 10).totalHits);
     
     // user queries on "starts-with the quick"
     SpanQuery include = spanFirstQuery(spanTermQuery("field", "quick"), 2);
     sfq = spanNotQuery(include, sfq);
-    assertEquals(1, searcher.search(sfq, 10).totalHits.value);
+    assertEquals(1, searcher.search(sfq, 10).totalHits);
     
     writer.close();
     reader.close();

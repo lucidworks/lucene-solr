@@ -172,11 +172,10 @@ public class TestBlockPostingsFormat3 extends LuceneTestCase {
     
     // NOTE: we don't assert hasOffsets/hasPositions/hasPayloads because they are allowed to be different
 
-    boolean bothHaveFreqs = leftTerms.hasFreqs() && rightTerms.hasFreqs();
     boolean bothHavePositions = leftTerms.hasPositions() && rightTerms.hasPositions();
     TermsEnum leftTermsEnum = leftTerms.iterator();
     TermsEnum rightTermsEnum = rightTerms.iterator();
-    assertTermsEnum(leftTermsEnum, rightTermsEnum, true, bothHaveFreqs, bothHavePositions);
+    assertTermsEnum(leftTermsEnum, rightTermsEnum, true, bothHavePositions);
     
     assertTermsSeeking(leftTerms, rightTerms);
     
@@ -189,7 +188,7 @@ public class TestBlockPostingsFormat3 extends LuceneTestCase {
           // TODO: test start term too
           TermsEnum leftIntersection = leftTerms.intersect(automaton, null);
           TermsEnum rightIntersection = rightTerms.intersect(automaton, null);
-          assertTermsEnum(leftIntersection, rightIntersection, rarely(), bothHaveFreqs, bothHavePositions);
+          assertTermsEnum(leftIntersection, rightIntersection, rarely(), bothHavePositions);
         }
       }
     }
@@ -264,9 +263,13 @@ public class TestBlockPostingsFormat3 extends LuceneTestCase {
    * checks collection-level statistics on Terms 
    */
   public void assertTermsStatistics(Terms leftTerms, Terms rightTerms) throws Exception {
-    assertEquals(leftTerms.getDocCount(), rightTerms.getDocCount());
-    assertEquals(leftTerms.getSumDocFreq(), rightTerms.getSumDocFreq());
-    if (leftTerms.hasFreqs() && rightTerms.hasFreqs()) {
+    if (leftTerms.getDocCount() != -1 && rightTerms.getDocCount() != -1) {
+      assertEquals(leftTerms.getDocCount(), rightTerms.getDocCount());
+    }
+    if (leftTerms.getSumDocFreq() != -1 && rightTerms.getSumDocFreq() != -1) {
+      assertEquals(leftTerms.getSumDocFreq(), rightTerms.getSumDocFreq());
+    }
+    if (leftTerms.getSumTotalTermFreq() != -1 && rightTerms.getSumTotalTermFreq() != -1) {
       assertEquals(leftTerms.getSumTotalTermFreq(), rightTerms.getSumTotalTermFreq());
     }
     if (leftTerms.size() != -1 && rightTerms.size() != -1) {
@@ -278,7 +281,7 @@ public class TestBlockPostingsFormat3 extends LuceneTestCase {
    * checks the terms enum sequentially
    * if deep is false, it does a 'shallow' test that doesnt go down to the docsenums
    */
-  public void assertTermsEnum(TermsEnum leftTermsEnum, TermsEnum rightTermsEnum, boolean deep, boolean hasFreqs, boolean hasPositions) throws Exception {
+  public void assertTermsEnum(TermsEnum leftTermsEnum, TermsEnum rightTermsEnum, boolean deep, boolean hasPositions) throws Exception {
     BytesRef term;
     PostingsEnum leftPositions = null;
     PostingsEnum rightPositions = null;
@@ -287,7 +290,7 @@ public class TestBlockPostingsFormat3 extends LuceneTestCase {
     
     while ((term = leftTermsEnum.next()) != null) {
       assertEquals(term, rightTermsEnum.next());
-      assertTermStats(leftTermsEnum, rightTermsEnum, hasFreqs);
+      assertTermStats(leftTermsEnum, rightTermsEnum);
       if (deep) {
         if (hasPositions) {
           // with payloads + off
@@ -347,9 +350,9 @@ public class TestBlockPostingsFormat3 extends LuceneTestCase {
   /**
    * checks term-level statistics
    */
-  public void assertTermStats(TermsEnum leftTermsEnum, TermsEnum rightTermsEnum, boolean bothHaveFreqs) throws Exception {
+  public void assertTermStats(TermsEnum leftTermsEnum, TermsEnum rightTermsEnum) throws Exception {
     assertEquals(leftTermsEnum.docFreq(), rightTermsEnum.docFreq());
-    if (bothHaveFreqs) {
+    if (leftTermsEnum.totalTermFreq() != -1 && rightTermsEnum.totalTermFreq() != -1) {
       assertEquals(leftTermsEnum.totalTermFreq(), rightTermsEnum.totalTermFreq());
     }
   }

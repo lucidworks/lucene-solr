@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.search.similarities.Similarity;
 
 final class ExactPhraseMatcher extends PhraseMatcher {
 
@@ -40,7 +41,6 @@ final class ExactPhraseMatcher extends PhraseMatcher {
 
   ExactPhraseMatcher(PhraseQuery.PostingsAndFreq[] postings, float matchCost) {
     super(approximation(postings), matchCost);
-
     List<PostingsAndPosition> postingsAndPositions = new ArrayList<>();
     for(PhraseQuery.PostingsAndFreq posting : postings) {
       postingsAndPositions.add(new PostingsAndPosition(posting.postings, posting.position));
@@ -125,7 +125,7 @@ final class ExactPhraseMatcher extends PhraseMatcher {
   }
 
   @Override
-  float sloppyWeight() {
+  float sloppyWeight(Similarity.SimScorer simScorer) {
     return 1;
   }
 

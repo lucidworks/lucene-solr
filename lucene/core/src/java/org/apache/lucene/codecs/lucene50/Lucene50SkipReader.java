@@ -52,8 +52,7 @@ import static org.apache.lucene.codecs.lucene50.Lucene50PostingsFormat.BLOCK_SIZ
  * Therefore, we'll trim df before passing it to the interface. see trim(int)
  *
  */
-class Lucene50SkipReader extends MultiLevelSkipListReader {
-  private final int version;
+final class Lucene50SkipReader extends MultiLevelSkipListReader {
   private long docPointer[];
   private long posPointer[];
   private long payPointer[];
@@ -66,11 +65,8 @@ class Lucene50SkipReader extends MultiLevelSkipListReader {
   private long lastDocPointer;
   private int lastPosBufferUpto;
 
-  public Lucene50SkipReader(int version,
-      IndexInput skipStream, int maxSkipLevels,
-      boolean hasPos, boolean hasOffsets, boolean hasPayloads) {
+  public Lucene50SkipReader(IndexInput skipStream, int maxSkipLevels, boolean hasPos, boolean hasOffsets, boolean hasPayloads) {
     super(skipStream, maxSkipLevels, BLOCK_SIZE, 8);
-    this.version = version;
     docPointer = new long[maxSkipLevels];
     if (hasPos) {
       posPointer = new long[maxSkipLevels];
@@ -196,16 +192,6 @@ class Lucene50SkipReader extends MultiLevelSkipListReader {
         payPointer[level] += skipStream.readVLong();
       }
     }
-    readImpacts(level, skipStream);
     return delta;
   }
-
-  // The default impl skips impacts
-  protected void readImpacts(int level, IndexInput skipStream) throws IOException {
-    if (version >= Lucene50PostingsFormat.VERSION_IMPACT_SKIP_DATA) {
-      // The base implementation skips impacts, they are not used
-      skipStream.skipBytes(skipStream.readVInt());
-    }
-  }
-
 }

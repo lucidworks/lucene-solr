@@ -56,7 +56,7 @@ public class TestGraphTokenizers extends BaseTokenStreamTestCase {
   // you cannot turn on MockCharFilter when random
   // testing...
 
-  public static final class GraphTokenizer extends Tokenizer {
+  private static class GraphTokenizer extends Tokenizer {
     private List<Token> tokens;
     private int upto;
     private int inputLength;

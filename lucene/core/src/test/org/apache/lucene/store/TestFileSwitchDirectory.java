@@ -44,9 +44,9 @@ public class TestFileSwitchDirectory extends BaseDirectoryTestCase {
     fileExtensions.add(CompressingStoredFieldsWriter.FIELDS_EXTENSION);
     fileExtensions.add(CompressingStoredFieldsWriter.FIELDS_INDEX_EXTENSION);
     
-    MockDirectoryWrapper primaryDir = new MockDirectoryWrapper(random(), new ByteBuffersDirectory());
+    MockDirectoryWrapper primaryDir = new MockDirectoryWrapper(random(), new RAMDirectory());
     primaryDir.setCheckIndexOnClose(false); // only part of an index
-    MockDirectoryWrapper secondaryDir = new MockDirectoryWrapper(random(), new ByteBuffersDirectory());
+    MockDirectoryWrapper secondaryDir = new MockDirectoryWrapper(random(), new RAMDirectory());
     secondaryDir.setCheckIndexOnClose(false); // only part of an index
     
     FileSwitchDirectory fsd = new FileSwitchDirectory(fileExtensions, primaryDir, secondaryDir, true);

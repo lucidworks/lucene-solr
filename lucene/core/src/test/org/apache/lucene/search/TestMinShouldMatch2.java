@@ -34,9 +34,10 @@ import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.search.similarities.ClassicSimilarity;
 import org.apache.lucene.search.similarities.Similarity.SimScorer;
+import org.apache.lucene.search.similarities.Similarity.SimWeight;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
@@ -118,8 +119,8 @@ public class TestMinShouldMatch2 extends LuceneTestCase {
     }
     bq.setMinimumNumberShouldMatch(minShouldMatch);
 
-    BooleanWeight weight = (BooleanWeight) searcher.createWeight(searcher.rewrite(bq.build()), ScoreMode.COMPLETE, 1);
-    
+    BooleanWeight weight = (BooleanWeight) searcher.createWeight(searcher.rewrite(bq.build()), true, 1);
+
     switch (mode) {
     case DOC_VALUES:
       return new SlowMinShouldMatchScorer(weight, reader, searcher);
@@ -151,7 +152,7 @@ public class TestMinShouldMatch2 extends LuceneTestCase {
       assertEquals(doc, actualIt.nextDoc());
       float expectedScore = expected.score();
       float actualScore = actual.score();
-      assertEquals(expectedScore, actualScore, 0d);
+      assertEquals(expectedScore, actualScore, CheckHits.explainToleranceDelta(expectedScore, actualScore));
     }
     assertEquals(DocIdSetIterator.NO_MORE_DOCS, actualIt.nextDoc());
   }
@@ -169,7 +170,7 @@ public class TestMinShouldMatch2 extends LuceneTestCase {
       assertEquals(doc, actualIt.advance(prevDoc+amount));
       float expectedScore = expected.score();
       float actualScore = actual.score();
-      assertEquals(expectedScore, actualScore, 0d);
+      assertEquals(expectedScore, actualScore, CheckHits.explainToleranceDelta(expectedScore, actualScore));
       prevDoc = doc;
     }
     assertEquals(DocIdSetIterator.NO_MORE_DOCS, actualIt.advance(prevDoc+amount));
@@ -309,7 +310,7 @@ public class TestMinShouldMatch2 extends LuceneTestCase {
     final int maxDoc;
 
     final Set<Long> ords = new HashSet<>();
-    final LeafSimScorer[] sims;
+    final SimScorer[] sims;
     final int minNrShouldMatch;
     
     double score = Float.NaN;
@@ -320,7 +321,7 @@ public class TestMinShouldMatch2 extends LuceneTestCase {
       this.maxDoc = reader.maxDoc();
       BooleanQuery bq = (BooleanQuery) weight.getQuery();
       this.minNrShouldMatch = bq.getMinimumNumberShouldMatch();
-      this.sims = new LeafSimScorer[(int)dv.getValueCount()];
+      this.sims = new SimScorer[(int)dv.getValueCount()];
       for (BooleanClause clause : bq.clauses()) {
         assert !clause.isProhibited();
         assert !clause.isRequired();
@@ -329,11 +330,11 @@ public class TestMinShouldMatch2 extends LuceneTestCase {
         if (ord >= 0) {
           boolean success = ords.add(ord);
           assert success; // no dups
-          TermStates context = TermStates.build(reader.getContext(), term, true);
-          SimScorer w = weight.similarity.scorer(1f,
+          TermContext context = TermContext.build(reader.getContext(), term);
+          SimWeight w = weight.similarity.computeWeight(1f,
                         searcher.collectionStatistics("field"),
                         searcher.termStatistics(term, context));
-          sims[(int)ord] = new LeafSimScorer(w, reader, "field", true);
+          sims[(int)ord] = weight.similarity.simScorer(w, reader.getContext());
         }
       }
     }
@@ -345,10 +346,6 @@ public class TestMinShouldMatch2 extends LuceneTestCase {
     }
 
     @Override
-    public float getMaxScore(int upTo) throws IOException {
-      return Float.POSITIVE_INFINITY;
-    }
-
     public int docID() {
       return currentDoc;
     }

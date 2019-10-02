@@ -22,7 +22,7 @@ import java.util.Objects;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.DocIdSetIterator;
-import org.apache.lucene.search.LeafSimScorer;
+import org.apache.lucene.search.similarities.Similarity;
 
 /**
  * Expert:
@@ -39,7 +39,7 @@ public class TermSpans extends Spans {
   protected boolean readPayload;
   private final float positionsCost;
 
-  public TermSpans(LeafSimScorer scorer,
+  public TermSpans(Similarity.SimScorer scorer,
                     PostingsEnum postings, Term term, float positionsCost) {
     this.postings = Objects.requireNonNull(postings);
     this.term = Objects.requireNonNull(term);

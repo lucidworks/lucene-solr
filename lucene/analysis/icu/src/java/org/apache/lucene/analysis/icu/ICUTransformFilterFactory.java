@@ -20,9 +20,12 @@ package org.apache.lucene.analysis.icu;
 import java.util.Arrays;
 import java.util.Map;
 
-import com.ibm.icu.text.Transliterator;
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory; // javadocs
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
+
+import com.ibm.icu.text.Transliterator;
 
 /**
  * Factory for {@link ICUTransformFilter}.
@@ -35,7 +38,7 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * @see Transliterator
  * @since 3.1.0
  */
-public class ICUTransformFilterFactory extends TokenFilterFactory {
+public class ICUTransformFilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
   private final Transliterator transliterator;
   
   // TODO: add support for custom rules
@@ -55,9 +58,9 @@ public class ICUTransformFilterFactory extends TokenFilterFactory {
   public TokenStream create(TokenStream input) {
     return new ICUTransformFilter(input, transliterator);
   }
-
+  
   @Override
-  public TokenStream normalize(TokenStream input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

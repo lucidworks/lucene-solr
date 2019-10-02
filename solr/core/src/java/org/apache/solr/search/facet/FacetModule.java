@@ -75,13 +75,7 @@ public class FacetModule extends SearchComponent {
       if (!facetsEnabled) return;
       jsonFacet = new LegacyFacet(rb.req.getParams()).getLegacy();
     } else {
-      Object jsonObj = json.get("facet");
-      if (jsonObj instanceof Map) {
-        jsonFacet = (Map<String, Object>) jsonObj;
-      } else if (jsonObj != null) {
-        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
-            "Expected Map for 'facet', received " + jsonObj.getClass().getSimpleName() + "=" + jsonObj);
-      }
+      jsonFacet = (Map<String, Object>) json.get("facet");
     }
     if (jsonFacet == null) return;
 

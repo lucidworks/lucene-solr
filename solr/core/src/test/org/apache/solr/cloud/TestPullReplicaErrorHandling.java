@@ -156,13 +156,12 @@ public void testCantConnectToPullReplica() throws Exception {
           assertNumDocs(10 + i, leaderClient);
         }
       }
-
-      SolrServerException e = expectThrows(SolrServerException.class, () -> {
-        try(HttpSolrClient pullReplicaClient = getHttpSolrClient(s.getReplicas(EnumSet.of(Replica.Type.PULL)).get(0).getCoreUrl())) {
-          pullReplicaClient.query(new SolrQuery("*:*")).getResults().getNumFound();
-        }
-      });
-      
+      try (HttpSolrClient pullReplicaClient = getHttpSolrClient(s.getReplicas(EnumSet.of(Replica.Type.PULL)).get(0).getCoreUrl())) {
+        pullReplicaClient.query(new SolrQuery("*:*")).getResults().getNumFound();
+        fail("Shouldn't be able to query the pull replica");
+      } catch (SolrServerException e) {
+        //expected
+      }
       assertNumberOfReplicas(numShards, 0, numShards, true, true);// Replica should still be active, since it doesn't disconnect from ZooKeeper
       {
         long numFound = 0;

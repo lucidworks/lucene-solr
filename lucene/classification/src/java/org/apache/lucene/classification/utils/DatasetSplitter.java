@@ -35,7 +35,6 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.Sort;
-import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.search.grouping.GroupDocs;
 import org.apache.lucene.search.grouping.GroupingSearch;
 import org.apache.lucene.search.grouping.TopGroups;
@@ -123,8 +122,7 @@ public class DatasetSplitter {
 
       // iterate over existing documents
       for (GroupDocs<Object> group : topGroups.groups) {
-        assert group.totalHits.relation == TotalHits.Relation.EQUAL_TO;
-        long totalHits = group.totalHits.value;
+        long totalHits = group.totalHits;
         double testSize = totalHits * testRatio;
         int tc = 0;
         double cvSize = totalHits * crossValidationRatio;

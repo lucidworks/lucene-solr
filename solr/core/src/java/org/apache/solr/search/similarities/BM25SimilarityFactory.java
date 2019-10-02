@@ -22,9 +22,7 @@ import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.schema.SimilarityFactory;
 
 /**
- * Factory for BM25Similarity. This is the default similarity since 8.x.
- * If you need the exact same formula as in 6.x and 7.x you should instead look at
- * {@link LegacyBM25SimilarityFactory}
+ * Factory for {@link BM25Similarity}
  * <p>
  * Parameters:
  * <ul>
@@ -40,7 +38,6 @@ import org.apache.solr.schema.SimilarityFactory;
  *       {@link BM25Similarity#setDiscountOverlaps(boolean)}</li>
  * </ul>
  * @lucene.experimental
- * @since 8.0.0
  */
 public class BM25SimilarityFactory extends SimilarityFactory {
   private boolean discountOverlaps;

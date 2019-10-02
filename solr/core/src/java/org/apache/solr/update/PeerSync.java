@@ -692,18 +692,33 @@ public class PeerSync implements SolrMetricProducer {
     }
   }
 
-  static abstract class MissedUpdatesFinderBase {
+  /**
+   * Helper class for doing comparison ourUpdates and other replicas's updates to find the updates that we missed
+   */
+  public static class MissedUpdatesFinder {
+    private List<Long> ourUpdates;
     private Set<Long> ourUpdateSet;
-    private Set<Long> requestedUpdateSet = new HashSet<>();
+    private Set<Long> requestedUpdateSet;
 
-    long ourLowThreshold;  // 20th percentile
-    List<Long> ourUpdates;
+    private long ourLowThreshold;  // 20th percentile
+    private long ourHighThreshold; // 80th percentile
+    private long ourHighest;  // currently just used for logging/debugging purposes
+    private String logPrefix;
+    private long nUpdates;
 
-    MissedUpdatesFinderBase(List<Long> ourUpdates, long ourLowThreshold) {
+    MissedUpdatesFinder(List<Long> ourUpdates, String logPrefix, long nUpdates,
+                        long ourLowThreshold, long ourHighThreshold) {
       assert sorted(ourUpdates);
+
+      this.logPrefix = logPrefix;
       this.ourUpdates = ourUpdates;
-      this.ourUpdateSet = new HashSet<>(ourUpdates);
       this.ourLowThreshold = ourLowThreshold;
+      this.ourHighThreshold = ourHighThreshold;
+      this.ourHighest = ourUpdates.get(0);
+      this.nUpdates = nUpdates;
+
+      this.ourUpdateSet = new HashSet<>(ourUpdates);
+      this.requestedUpdateSet = new HashSet<>();
     }
 
     private boolean sorted(List<Long> list) {
@@ -715,7 +730,61 @@ public class PeerSync implements SolrMetricProducer {
       return true;
     }
 
-    MissedUpdatesRequest handleVersionsWithRanges(List<Long> otherVersions, boolean completeList) {
+    public MissedUpdatesRequest find(List<Long> otherVersions, Object updateFrom, Supplier<Boolean> canHandleVersionRanges) {
+      otherVersions.sort(absComparator);
+      if (debug) {
+        log.debug("{} sorted versions from {} = {}", logPrefix, otherVersions, updateFrom);
+      }
+
+      long otherHigh = percentile(otherVersions, .2f);
+      long otherLow = percentile(otherVersions, .8f);
+      long otherHighest = otherVersions.get(0);
+
+      if (ourHighThreshold < otherLow) {
+        // Small overlap between version windows and ours is older
+        // This means that we might miss updates if we attempted to use this method.
+        // Since there exists just one replica that is so much newer, we must
+        // fail the sync.
+        log.info("{} Our versions are too old. ourHighThreshold={} otherLowThreshold={} ourHighest={} otherHighest={}",
+            logPrefix, ourHighThreshold, otherLow, ourHighest, otherHighest);
+        return MissedUpdatesRequest.UNABLE_TO_SYNC;
+      }
+
+      if (ourLowThreshold > otherHigh) {
+        // Small overlap between windows and ours is newer.
+        // Using this list to sync would result in requesting/replaying results we don't need
+        // and possibly bringing deleted docs back to life.
+        log.info("{} Our versions are newer. ourHighThreshold={} otherLowThreshold={} ourHighest={} otherHighest={}",
+            logPrefix, ourHighThreshold, otherLow, ourHighest, otherHighest);
+
+        // Because our versions are newer, IndexFingerprint with the remote would not match us.
+        // We return true on our side, but the remote peersync with us should fail.
+        return MissedUpdatesRequest.ALREADY_IN_SYNC;
+      }
+
+      boolean completeList = otherVersions.size() < nUpdates;
+
+      MissedUpdatesRequest updatesRequest;
+      if (canHandleVersionRanges.get()) {
+        updatesRequest = handleVersionsWithRanges(otherVersions, completeList);
+      } else {
+        updatesRequest = handleIndividualVersions(otherVersions, completeList);
+      }
+
+      if (updatesRequest.totalRequestedUpdates > nUpdates) {
+        log.info("{} PeerSync will fail because number of missed updates is more than:{}", logPrefix, nUpdates);
+        return MissedUpdatesRequest.UNABLE_TO_SYNC;
+      }
+
+      if (updatesRequest == MissedUpdatesRequest.EMPTY) {
+        log.info("{} No additional versions requested. ourHighThreshold={} otherLowThreshold={} ourHighest={} otherHighest={}",
+            logPrefix, ourHighThreshold, otherLow, ourHighest, otherHighest);
+      }
+
+      return updatesRequest;
+    }
+
+    private MissedUpdatesRequest handleVersionsWithRanges(List<Long> otherVersions, boolean completeList) {
       // we may endup asking for updates for too many versions, causing 2MB post payload limit. Construct a range of
       // versions to request instead of asking individual versions
       List<String> rangesToRequest = new ArrayList<>();
@@ -760,7 +829,7 @@ public class PeerSync implements SolrMetricProducer {
       return MissedUpdatesRequest.of(rangesToRequestStr, totalRequestedVersions);
     }
 
-    MissedUpdatesRequest handleIndividualVersions(List<Long> otherVersions, boolean completeList) {
+    private MissedUpdatesRequest handleIndividualVersions(List<Long> otherVersions, boolean completeList) {
       List<Long> toRequest = new ArrayList<>();
       for (Long otherVersion : otherVersions) {
         // stop when the entries get old enough that reorders may lead us to see updates we don't need
@@ -779,80 +848,7 @@ public class PeerSync implements SolrMetricProducer {
 
       return MissedUpdatesRequest.of(StrUtils.join(toRequest, ','), toRequest.size());
     }
-  }
 
-  /**
-   * Helper class for doing comparison ourUpdates and other replicas's updates to find the updates that we missed
-   */
-  public static class MissedUpdatesFinder extends MissedUpdatesFinderBase {
-    private long ourHighThreshold; // 80th percentile
-    private long ourHighest;  // currently just used for logging/debugging purposes
-    private String logPrefix;
-    private long nUpdates;
-
-    MissedUpdatesFinder(List<Long> ourUpdates, String logPrefix, long nUpdates,
-                        long ourLowThreshold, long ourHighThreshold) {
-      super(ourUpdates, ourLowThreshold);
-
-      this.logPrefix = logPrefix;
-      this.ourHighThreshold = ourHighThreshold;
-      this.ourHighest = ourUpdates.get(0);
-      this.nUpdates = nUpdates;
-    }
-
-    public MissedUpdatesRequest find(List<Long> otherVersions, Object updateFrom, Supplier<Boolean> canHandleVersionRanges) {
-      otherVersions.sort(absComparator);
-      if (debug) {
-        log.debug("{} sorted versions from {} = {}", logPrefix, otherVersions, updateFrom);
-      }
-
-      long otherHigh = percentile(otherVersions, .2f);
-      long otherLow = percentile(otherVersions, .8f);
-      long otherHighest = otherVersions.get(0);
-
-      if (ourHighThreshold < otherLow) {
-        // Small overlap between version windows and ours is older
-        // This means that we might miss updates if we attempted to use this method.
-        // Since there exists just one replica that is so much newer, we must
-        // fail the sync.
-        log.info("{} Our versions are too old. ourHighThreshold={} otherLowThreshold={} ourHighest={} otherHighest={}",
-            logPrefix, ourHighThreshold, otherLow, ourHighest, otherHighest);
-        return MissedUpdatesRequest.UNABLE_TO_SYNC;
-      }
-
-      if (ourLowThreshold > otherHigh && ourHighest >= otherHighest) {
-        // Small overlap between windows and ours is newer.
-        // Using this list to sync would result in requesting/replaying results we don't need
-        // and possibly bringing deleted docs back to life.
-        log.info("{} Our versions are newer. ourHighThreshold={} otherLowThreshold={} ourHighest={} otherHighest={}",
-            logPrefix, ourHighThreshold, otherLow, ourHighest, otherHighest);
-
-        // Because our versions are newer, IndexFingerprint with the remote would not match us.
-        // We return true on our side, but the remote peersync with us should fail.
-        return MissedUpdatesRequest.ALREADY_IN_SYNC;
-      }
-
-      boolean completeList = otherVersions.size() < nUpdates;
-
-      MissedUpdatesRequest updatesRequest;
-      if (canHandleVersionRanges.get()) {
-        updatesRequest = handleVersionsWithRanges(otherVersions, completeList);
-      } else {
-        updatesRequest = handleIndividualVersions(otherVersions, completeList);
-      }
-
-      if (updatesRequest.totalRequestedUpdates > nUpdates) {
-        log.info("{} PeerSync will fail because number of missed updates is more than:{}", logPrefix, nUpdates);
-        return MissedUpdatesRequest.UNABLE_TO_SYNC;
-      }
-
-      if (updatesRequest == MissedUpdatesRequest.EMPTY) {
-        log.info("{} No additional versions requested. ourHighThreshold={} otherLowThreshold={} ourHighest={} otherHighest={}",
-            logPrefix, ourHighThreshold, otherLow, ourHighest, otherHighest);
-      }
-
-      return updatesRequest;
-    }
   }
 
   /**

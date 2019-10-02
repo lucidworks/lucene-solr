@@ -17,8 +17,6 @@
 package org.apache.lucene.index;
 
 
-import java.util.Collection;
-
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.search.DocIdSetIterator;
@@ -59,9 +57,9 @@ public class TestDocCount extends LuceneTestCase {
   }
   
   private void verifyCount(IndexReader ir) throws Exception {
-    final Collection<String> fields = FieldInfos.getIndexedFields(ir);
+    Fields fields = MultiFields.getFields(ir);
     for (String field : fields) {
-      Terms terms = MultiTerms.getTerms(ir, field);
+      Terms terms = fields.terms(field);
       if (terms == null) {
         continue;
       }

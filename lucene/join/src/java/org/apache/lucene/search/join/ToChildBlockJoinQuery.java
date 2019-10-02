@@ -65,8 +65,8 @@ public class ToChildBlockJoinQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, org.apache.lucene.search.ScoreMode scoreMode, float boost) throws IOException {
-    return new ToChildBlockJoinWeight(this, parentQuery.createWeight(searcher, scoreMode, boost), parentsFilter, scoreMode.needsScores());
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+    return new ToChildBlockJoinWeight(this, parentQuery.createWeight(searcher, needsScores, boost), parentsFilter, needsScores);
   }
 
   /** Return our parent query. */
@@ -142,8 +142,8 @@ public class ToChildBlockJoinQuery extends Query {
     }
 
     @Override
-    public Collection<ChildScorable> getChildren() {
-      return Collections.singleton(new ChildScorable(parentScorer, "BLOCK_JOIN"));
+    public Collection<ChildScorer> getChildren() {
+      return Collections.singleton(new ChildScorer(parentScorer, "BLOCK_JOIN"));
     }
 
     @Override
@@ -278,11 +278,6 @@ public class ToChildBlockJoinQuery extends Query {
     @Override
     public float score() throws IOException {
       return parentScore;
-    }
-
-    @Override
-    public float getMaxScore(int upTo) throws IOException {
-      return Float.POSITIVE_INFINITY;
     }
     
     int getParentDoc() {

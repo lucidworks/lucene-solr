@@ -19,11 +19,14 @@ package org.apache.lucene.analysis.icu;
 
 import java.util.Map;
 
+import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory; // javadocs
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
+
 import com.ibm.icu.text.FilteredNormalizer2;
 import com.ibm.icu.text.Normalizer2;
 import com.ibm.icu.text.UnicodeSet;
-import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
  * Factory for {@link ICUFoldingFilter}.
@@ -36,7 +39,7 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * &lt;/fieldType&gt;</pre>
  * @since 3.1.0
  */
-public class ICUFoldingFilterFactory extends TokenFilterFactory {
+public class ICUFoldingFilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
   private final Normalizer2 normalizer;
 
   /** Creates a new ICUFoldingFilterFactory */
@@ -64,7 +67,7 @@ public class ICUFoldingFilterFactory extends TokenFilterFactory {
   }
 
   @Override
-  public TokenStream normalize(TokenStream input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

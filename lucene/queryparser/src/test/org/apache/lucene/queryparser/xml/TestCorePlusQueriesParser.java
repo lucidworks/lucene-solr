@@ -31,4 +31,9 @@ public class TestCorePlusQueriesParser extends TestCoreParser {
     dumpResults("like this", q, 5);
   }
 
+  public void testBoostingQueryXML() throws Exception {
+    Query q = parse("BoostingQuery.xml");
+    dumpResults("boosting ", q, 5);
+  }
+
 }

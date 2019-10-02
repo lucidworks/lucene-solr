@@ -27,9 +27,8 @@ import org.apache.lucene.search.FieldDoc;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MultiCollector;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.Scorable;
 import org.apache.lucene.search.ScoreDoc;
-import org.apache.lucene.search.ScoreMode;
+import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.SimpleCollector;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.TopDocs;
@@ -38,7 +37,6 @@ import org.apache.lucene.search.TopFieldCollector;
 import org.apache.lucene.search.TopFieldDocs;
 import org.apache.lucene.search.TopScoreDocCollector;
 import org.apache.lucene.search.TotalHitCountCollector;
-import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.DocIdSetBuilder;
 
@@ -52,7 +50,7 @@ import org.apache.lucene.util.DocIdSetBuilder;
 public class FacetsCollector extends SimpleCollector implements Collector {
 
   private LeafReaderContext context;
-  private Scorable scorer;
+  private Scorer scorer;
   private int totalHits;
   private float[] scores;
   private final boolean keepScores;
@@ -132,12 +130,12 @@ public class FacetsCollector extends SimpleCollector implements Collector {
   }
 
   @Override
-  public ScoreMode scoreMode() {
-    return ScoreMode.COMPLETE;
+  public boolean needsScores() {
+    return true;
   }
 
   @Override
-  public final void setScorer(Scorable scorer) throws IOException {
+  public final void setScorer(Scorer scorer) throws IOException {
     this.scorer = scorer;
   }
     
@@ -157,7 +155,7 @@ public class FacetsCollector extends SimpleCollector implements Collector {
   /** Utility method, to search and also collect all hits
    *  into the provided {@link Collector}. */
   public static TopDocs search(IndexSearcher searcher, Query q, int n, Collector fc) throws IOException {
-    return doSearch(searcher, null, q, n, null, false, fc);
+    return doSearch(searcher, null, q, n, null, false, false, fc);
   }
 
   /** Utility method, to search and also collect all hits
@@ -166,22 +164,22 @@ public class FacetsCollector extends SimpleCollector implements Collector {
     if (sort == null) {
       throw new IllegalArgumentException("sort must not be null");
     }
-    return (TopFieldDocs) doSearch(searcher, null, q, n, sort, false, fc);
+    return (TopFieldDocs) doSearch(searcher, null, q, n, sort, false, false, fc);
   }
 
   /** Utility method, to search and also collect all hits
    *  into the provided {@link Collector}. */
-  public static TopFieldDocs search(IndexSearcher searcher, Query q, int n, Sort sort, boolean doDocScores, Collector fc) throws IOException {
+  public static TopFieldDocs search(IndexSearcher searcher, Query q, int n, Sort sort, boolean doDocScores, boolean doMaxScore, Collector fc) throws IOException {
     if (sort == null) {
       throw new IllegalArgumentException("sort must not be null");
     }
-    return (TopFieldDocs) doSearch(searcher, null, q, n, sort, doDocScores, fc);
+    return (TopFieldDocs) doSearch(searcher, null, q, n, sort, doDocScores, doMaxScore, fc);
   }
 
   /** Utility method, to search and also collect all hits
    *  into the provided {@link Collector}. */
   public static TopDocs searchAfter(IndexSearcher searcher, ScoreDoc after, Query q, int n, Collector fc) throws IOException {
-    return doSearch(searcher, after, q, n, null, false, fc);
+    return doSearch(searcher, after, q, n, null, false, false, fc);
   }
 
   /** Utility method, to search and also collect all hits
@@ -190,20 +188,20 @@ public class FacetsCollector extends SimpleCollector implements Collector {
     if (sort == null) {
       throw new IllegalArgumentException("sort must not be null");
     }
-    return doSearch(searcher, after, q, n, sort, false, fc);
+    return doSearch(searcher, after, q, n, sort, false, false, fc);
   }
 
   /** Utility method, to search and also collect all hits
    *  into the provided {@link Collector}. */
-  public static TopDocs searchAfter(IndexSearcher searcher, ScoreDoc after, Query q, int n, Sort sort, boolean doDocScores, Collector fc) throws IOException {
+  public static TopDocs searchAfter(IndexSearcher searcher, ScoreDoc after, Query q, int n, Sort sort, boolean doDocScores, boolean doMaxScore, Collector fc) throws IOException {
     if (sort == null) {
       throw new IllegalArgumentException("sort must not be null");
     }
-    return doSearch(searcher, after, q, n, sort, doDocScores, fc);
+    return doSearch(searcher, after, q, n, sort, doDocScores, doMaxScore, fc);
   }
 
   private static TopDocs doSearch(IndexSearcher searcher, ScoreDoc after, Query q, int n, Sort sort,
-                                  boolean doDocScores, Collector fc) throws IOException {
+                                  boolean doDocScores, boolean doMaxScore, Collector fc) throws IOException {
 
     int limit = searcher.getIndexReader().maxDoc();
     if (limit == 0) {
@@ -220,7 +218,7 @@ public class FacetsCollector extends SimpleCollector implements Collector {
     if (n==0) {
       TotalHitCountCollector totalHitCountCollector = new TotalHitCountCollector();
       searcher.search(q, MultiCollector.wrap(totalHitCountCollector, fc));
-      topDocs = new TopDocs(new TotalHits(totalHitCountCollector.getTotalHits(), TotalHits.Relation.EQUAL_TO), new ScoreDoc[0]);
+      topDocs = new TopDocs(totalHitCountCollector.getTotalHits(), new ScoreDoc[0], Float.NaN);
     } else {
       TopDocsCollector<?> hitsCollector;
       if (sort != null) {
@@ -229,18 +227,19 @@ public class FacetsCollector extends SimpleCollector implements Collector {
           // remove this
           throw new IllegalArgumentException("after must be a FieldDoc; got " + after);
         }
+        boolean fillFields = true;
         hitsCollector = TopFieldCollector.create(sort, n,
                                                  (FieldDoc) after,
-                                                 Integer.MAX_VALUE); // TODO: can we disable exact hit counts
+                                                 fillFields,
+                                                 doDocScores,
+                                                 doMaxScore,
+                                                 true); // TODO: can we disable exact hit counts
       } else {
-        hitsCollector = TopScoreDocCollector.create(n, after, Integer.MAX_VALUE);
+        hitsCollector = TopScoreDocCollector.create(n, after);
       }
       searcher.search(q, MultiCollector.wrap(hitsCollector, fc));
     
       topDocs = hitsCollector.topDocs();
-      if (doDocScores) {
-        TopFieldCollector.populateScores(topDocs.scoreDocs, searcher, q);
-      }
     }
     return topDocs;
   }

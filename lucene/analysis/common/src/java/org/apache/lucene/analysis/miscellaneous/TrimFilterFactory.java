@@ -20,6 +20,8 @@ package org.apache.lucene.analysis.miscellaneous;
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
@@ -36,7 +38,7 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  *
  * @since 3.1
  */
-public class TrimFilterFactory extends TokenFilterFactory {
+public class TrimFilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
   
   /** Creates a new TrimFilterFactory */
   public TrimFilterFactory(Map<String,String> args) {
@@ -47,12 +49,12 @@ public class TrimFilterFactory extends TokenFilterFactory {
   }
   
   @Override
-  public TokenStream create(TokenStream input) {
+  public TrimFilter create(TokenStream input) {
     return new TrimFilter(input);
   }
 
   @Override
-  public TokenStream normalize(TokenStream input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

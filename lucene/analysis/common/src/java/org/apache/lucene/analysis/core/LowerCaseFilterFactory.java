@@ -20,6 +20,8 @@ package org.apache.lucene.analysis.core;
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
@@ -34,7 +36,7 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  *
  * @since 3.1
  */
-public class LowerCaseFilterFactory extends TokenFilterFactory {
+public class LowerCaseFilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
   
   /** Creates a new LowerCaseFilterFactory */
   public LowerCaseFilterFactory(Map<String,String> args) {
@@ -45,12 +47,12 @@ public class LowerCaseFilterFactory extends TokenFilterFactory {
   }
 
   @Override
-  public TokenStream create(TokenStream input) {
+  public LowerCaseFilter create(TokenStream input) {
     return new LowerCaseFilter(input);
   }
 
   @Override
-  public TokenStream normalize(TokenStream input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

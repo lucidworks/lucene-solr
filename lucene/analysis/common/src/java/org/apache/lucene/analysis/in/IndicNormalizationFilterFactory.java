@@ -20,6 +20,8 @@ package org.apache.lucene.analysis.in;
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
@@ -33,7 +35,7 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * &lt;/fieldType&gt;</pre>
  * @since 3.1.0
  */
-public class IndicNormalizationFilterFactory extends TokenFilterFactory {
+public class IndicNormalizationFilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
   
   /** Creates a new IndicNormalizationFilterFactory */
   public IndicNormalizationFilterFactory(Map<String,String> args) {
@@ -47,9 +49,9 @@ public class IndicNormalizationFilterFactory extends TokenFilterFactory {
   public TokenStream create(TokenStream input) {
     return new IndicNormalizationFilter(input);
   }
-
+  
   @Override
-  public TokenStream normalize(TokenStream input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

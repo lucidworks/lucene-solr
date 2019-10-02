@@ -24,6 +24,7 @@ import org.apache.lucene.analysis.CannedTokenStream;
 import org.apache.lucene.analysis.Token;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.util.BaseTokenStreamFactoryTestCase;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 public class TestAsciiFoldingFilterFactory extends BaseTokenStreamFactoryTestCase {
@@ -34,8 +35,9 @@ public class TestAsciiFoldingFilterFactory extends BaseTokenStreamFactoryTestCas
     stream = factory.create(stream);
     assertTokenStreamContents(stream, new String[] { "Ete" });
 
+    factory = (TokenFilterFactory) ((MultiTermAwareComponent) factory).getMultiTermComponent();
     stream = new CannedTokenStream(new Token("Été", 0, 3));
-    stream = factory.normalize(stream);
+    stream = factory.create(stream);
     assertTokenStreamContents(stream, new String[] { "Ete" });
 
     factory = new ASCIIFoldingFilterFactory(new HashMap<>(Collections.singletonMap("preserveOriginal", "true")));
@@ -43,8 +45,9 @@ public class TestAsciiFoldingFilterFactory extends BaseTokenStreamFactoryTestCas
     stream = factory.create(stream);
     assertTokenStreamContents(stream, new String[] { "Ete", "Été" });
 
+    factory = (TokenFilterFactory) ((MultiTermAwareComponent) factory).getMultiTermComponent();
     stream = new CannedTokenStream(new Token("Été", 0, 3));
-    stream = factory.normalize(stream);
+    stream = factory.create(stream);
     assertTokenStreamContents(stream, new String[] { "Ete" });
   }
 

@@ -20,7 +20,6 @@ package org.apache.lucene.analysis.core;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.LowerCaseFilter;
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.Tokenizer;
 
 /** An {@link Analyzer} that filters {@link LetterTokenizer} 
  *  with {@link LowerCaseFilter} 
@@ -37,8 +36,7 @@ public final class SimpleAnalyzer extends Analyzer {
   
   @Override
   protected TokenStreamComponents createComponents(final String fieldName) {
-    Tokenizer tokenizer = new LetterTokenizer();
-    return new TokenStreamComponents(tokenizer, new LowerCaseFilter(tokenizer));
+    return new TokenStreamComponents(new LowerCaseTokenizer());
   }
 
   @Override

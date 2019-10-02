@@ -33,7 +33,7 @@ public class IndependenceChiSquared extends Independence {
   public IndependenceChiSquared() {}
 
   @Override
-  public double score(double freq, double expected) {
+  public float score(float freq, float expected) {
     return (freq - expected) * (freq - expected) / expected;
   }
 

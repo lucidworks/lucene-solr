@@ -22,8 +22,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.search.Scorable;
-import org.apache.lucene.search.ScoreMode;
+import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.SimpleCollector;
 
 /**
@@ -70,7 +69,7 @@ public class AllGroupsCollector<T> extends SimpleCollector {
   }
 
   @Override
-  public void setScorer(Scorable scorer) throws IOException {}
+  public void setScorer(Scorer scorer) throws IOException {}
 
   @Override
   protected void doSetNextReader(LeafReaderContext context) throws IOException {
@@ -86,7 +85,7 @@ public class AllGroupsCollector<T> extends SimpleCollector {
   }
 
   @Override
-  public ScoreMode scoreMode() {
-    return ScoreMode.COMPLETE_NO_SCORES; // the result is unaffected by relevancy
+  public boolean needsScores() {
+    return false; // the result is unaffected by relevancy
   }
 }

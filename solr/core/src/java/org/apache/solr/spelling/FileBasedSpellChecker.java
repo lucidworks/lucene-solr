@@ -28,8 +28,6 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.LogByteSizeMergePolicy;
 import org.apache.lucene.index.LogMergePolicy;
-import org.apache.lucene.store.ByteBuffersDirectory;
-import org.apache.lucene.store.Directory;
 import org.apache.solr.schema.IndexSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +36,7 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.search.spell.HighFrequencyDictionary;
 import org.apache.lucene.search.spell.PlainTextDictionary;
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.schema.FieldType;
@@ -91,7 +90,7 @@ public class FileBasedSpellChecker extends AbstractLuceneSpellChecker {
       if (fieldTypeName != null && schema.getFieldTypeNoEx(fieldTypeName) != null) {
         FieldType fieldType = schema.getFieldTypes().get(fieldTypeName);
         // Do index-time analysis using the given fieldType's analyzer
-        Directory ramDir = new ByteBuffersDirectory();
+        RAMDirectory ramDir = new RAMDirectory();
 
         LogMergePolicy mp = new LogByteSizeMergePolicy();
         mp.setMergeFactor(300);

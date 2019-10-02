@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.lucene.codecs.FieldsConsumer;
-import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.util.CollectionUtil;
 import org.apache.lucene.util.FixedBitSet;
@@ -66,9 +65,8 @@ final class FreqProxTermsWriter extends TermsHash {
   }
 
   @Override
-  public void flush(Map<String,TermsHashPerField> fieldsToFlush, final SegmentWriteState state,
-      Sorter.DocMap sortMap, NormsProducer norms) throws IOException {
-    super.flush(fieldsToFlush, state, sortMap, norms);
+  public void flush(Map<String,TermsHashPerField> fieldsToFlush, final SegmentWriteState state, Sorter.DocMap sortMap) throws IOException {
+    super.flush(fieldsToFlush, state, sortMap);
 
     // Gather all fields that saw any postings:
     List<FreqProxTermsWriterPerField> allFields = new ArrayList<>();
@@ -94,7 +92,7 @@ final class FreqProxTermsWriter extends TermsHash {
     FieldsConsumer consumer = state.segmentInfo.getCodec().postingsFormat().fieldsConsumer(state);
     boolean success = false;
     try {
-      consumer.write(fields, norms);
+      consumer.write(fields);
       success = true;
     } finally {
       if (success) {

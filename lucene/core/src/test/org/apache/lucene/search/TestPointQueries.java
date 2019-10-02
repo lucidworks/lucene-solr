@@ -554,8 +554,8 @@ public class TestPointQueries extends LuceneTestCase {
                   private int docBase;
 
                   @Override
-                  public ScoreMode scoreMode() {
-                    return ScoreMode.COMPLETE_NO_SCORES;
+                  public boolean needsScores() {
+                    return false;
                   }
 
                   @Override
@@ -812,8 +812,8 @@ public class TestPointQueries extends LuceneTestCase {
                   private int docBase;
 
                   @Override
-                  public ScoreMode scoreMode() {
-                    return ScoreMode.COMPLETE_NO_SCORES;
+                  public boolean needsScores() {
+                    return false;
                   }
 
                   @Override
@@ -1161,14 +1161,14 @@ public class TestPointQueries extends LuceneTestCase {
   }
 
   private static Codec getCodec() {
-    if (Codec.getDefault().getName().equals("Lucene80")) {
+    if (Codec.getDefault().getName().equals("Lucene70")) {
       int maxPointsInLeafNode = TestUtil.nextInt(random(), 16, 2048);
       double maxMBSortInHeap = 5.0 + (3*random().nextDouble());
       if (VERBOSE) {
         System.out.println("TEST: using Lucene60PointsFormat with maxPointsInLeafNode=" + maxPointsInLeafNode + " and maxMBSortInHeap=" + maxMBSortInHeap);
       }
 
-      return new FilterCodec("Lucene80", Codec.getDefault()) {
+      return new FilterCodec("Lucene70", Codec.getDefault()) {
         @Override
         public PointsFormat pointsFormat() {
           return new PointsFormat() {
@@ -1903,7 +1903,7 @@ public class TestPointQueries extends LuceneTestCase {
       upperBound[i] = value[i] + random().nextInt(1);
     }
     Query query = IntPoint.newRangeQuery("point", lowerBound, upperBound);
-    Weight weight = searcher.createWeight(query, ScoreMode.COMPLETE_NO_SCORES, 1);
+    Weight weight = searcher.createWeight(query, false, 1);
     Scorer scorer = weight.scorer(searcher.getIndexReader().leaves().get(0));
     assertEquals(DocIdSetIterator.all(1).getClass(), scorer.iterator().getClass());
 
@@ -1914,7 +1914,7 @@ public class TestPointQueries extends LuceneTestCase {
     reader = w.getReader();
     searcher = new IndexSearcher(reader);
     searcher.setQueryCache(null);
-    weight = searcher.createWeight(query, ScoreMode.COMPLETE_NO_SCORES, 1);
+    weight = searcher.createWeight(query, false, 1);
     scorer = weight.scorer(searcher.getIndexReader().leaves().get(0));
     assertFalse(DocIdSetIterator.all(1).getClass().equals(scorer.iterator().getClass()));
 

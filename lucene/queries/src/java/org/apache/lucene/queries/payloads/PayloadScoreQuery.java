@@ -25,12 +25,12 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.LeafSimScorer;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
+import org.apache.lucene.search.similarities.Similarity;
+import org.apache.lucene.search.similarities.Similarity.SimScorer;
 import org.apache.lucene.search.spans.FilterSpans;
 import org.apache.lucene.search.spans.SpanCollector;
 import org.apache.lucene.search.spans.SpanQuery;
@@ -59,8 +59,20 @@ public class PayloadScoreQuery extends SpanQuery {
   public PayloadScoreQuery(SpanQuery wrappedQuery, PayloadFunction function, PayloadDecoder decoder, boolean includeSpanScore) {
     this.wrappedQuery = Objects.requireNonNull(wrappedQuery);
     this.function = Objects.requireNonNull(function);
-    this.decoder = Objects.requireNonNull(decoder);
+    this.decoder = decoder;
     this.includeSpanScore = includeSpanScore;
+  }
+
+  /**
+   * Creates a new PayloadScoreQuery
+   * @param wrappedQuery the query to wrap
+   * @param function a PayloadFunction to use to modify the scores
+   * @param includeSpanScore include both span score and payload score in the scoring algorithm
+   * @deprecated Use {@link #PayloadScoreQuery(SpanQuery, PayloadFunction, PayloadDecoder, boolean)}
+   */
+  @Deprecated
+  public PayloadScoreQuery(SpanQuery wrappedQuery, PayloadFunction function, boolean includeSpanScore) {
+    this(wrappedQuery, function, null, includeSpanScore);
   }
 
   /**
@@ -70,6 +82,17 @@ public class PayloadScoreQuery extends SpanQuery {
    */
   public PayloadScoreQuery(SpanQuery wrappedQuery, PayloadFunction function, PayloadDecoder decoder) {
     this(wrappedQuery, function, decoder, true);
+  }
+
+  /**
+   * Creates a new PayloadScoreQuery that includes the underlying span scores
+   * @param wrappedQuery the query to wrap
+   * @param function a PayloadFunction to use to modify the scores
+   * @deprecated Use {@link #PayloadScoreQuery(SpanQuery, PayloadFunction, PayloadDecoder)}
+   */
+  @Deprecated
+  public PayloadScoreQuery(SpanQuery wrappedQuery, PayloadFunction function) {
+    this(wrappedQuery, function, true);
   }
 
   @Override
@@ -101,9 +124,9 @@ public class PayloadScoreQuery extends SpanQuery {
   }
 
   @Override
-  public SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    SpanWeight innerWeight = wrappedQuery.createWeight(searcher, scoreMode, boost);
-    if (!scoreMode.needsScores())
+  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+    SpanWeight innerWeight = wrappedQuery.createWeight(searcher, needsScores, boost);
+    if (!needsScores)
       return innerWeight;
     return new PayloadSpanWeight(searcher, innerWeight, boost);
   }
@@ -135,8 +158,8 @@ public class PayloadScoreQuery extends SpanQuery {
     }
 
     @Override
-    public void extractTermStates(Map<Term, TermStates> contexts) {
-      innerWeight.extractTermStates(contexts);
+    public void extractTermContexts(Map<Term, TermContext> contexts) {
+      innerWeight.extractTermContexts(contexts);
     }
 
     @Override
@@ -149,8 +172,9 @@ public class PayloadScoreQuery extends SpanQuery {
       Spans spans = getSpans(context, Postings.PAYLOADS);
       if (spans == null)
         return null;
-      LeafSimScorer docScorer = innerWeight.getSimScorer(context);
-      PayloadSpans payloadSpans = new PayloadSpans(spans, decoder);
+      SimScorer docScorer = innerWeight.getSimScorer(context);
+      PayloadSpans payloadSpans = new PayloadSpans(spans,
+          decoder == null ? new SimilarityPayloadDecoder(docScorer) : decoder);
       return new PayloadSpanScorer(this, payloadSpans, docScorer);
     }
 
@@ -208,7 +232,7 @@ public class PayloadScoreQuery extends SpanQuery {
     @Override
     public void collectLeaf(PostingsEnum postings, int position, Term term) throws IOException {
       BytesRef payload = postings.getPayload();
-      float payloadFactor = decoder.computePayloadFactor(payload);
+      float payloadFactor = decoder.computePayloadFactor(docID(), in.startPosition(), in.endPosition(), payload);
       payloadScore = function.currentScore(docID(), getField(), in.startPosition(), in.endPosition(),
                                             payloadsSeen, payloadScore, payloadFactor);
       payloadsSeen++;
@@ -227,28 +251,17 @@ public class PayloadScoreQuery extends SpanQuery {
 
     private final PayloadSpans spans;
 
-    private PayloadSpanScorer(SpanWeight weight, PayloadSpans spans, LeafSimScorer docScorer) throws IOException {
+    private PayloadSpanScorer(SpanWeight weight, PayloadSpans spans, Similarity.SimScorer docScorer) throws IOException {
       super(weight, spans, docScorer);
       this.spans = spans;
     }
 
     protected float getPayloadScore() {
-      float score = function.docScore(docID(), getField(), spans.payloadsSeen, spans.payloadScore);
-      if (score >= 0 == false) {
-        return 0;
-      } else {
-        return score;
-      }
+      return function.docScore(docID(), getField(), spans.payloadsSeen, spans.payloadScore);
     }
 
     protected Explanation getPayloadExplanation() {
-      Explanation expl = function.explain(docID(), getField(), spans.payloadsSeen, spans.payloadScore);
-      if (expl.getValue().floatValue() < 0) {
-        expl = Explanation.match(0, "truncated score, max of:", Explanation.match(0f, "minimum score"), expl);
-      } else if (Float.isNaN(expl.getValue().floatValue())) {
-        expl = Explanation.match(0, "payload score, computed as (score == NaN ? 0 : score) since NaN is an illegal score from:", expl);
-      }
-      return expl;
+      return function.explain(docID(), getField(), spans.payloadsSeen, spans.payloadScore);
     }
 
     protected float getSpanScore() throws IOException {
@@ -262,6 +275,28 @@ public class PayloadScoreQuery extends SpanQuery {
       return getPayloadScore();
     }
 
+  }
+
+  @Deprecated
+  private static class SimilarityPayloadDecoder implements PayloadDecoder {
+
+    final Similarity.SimScorer docScorer;
+
+    public SimilarityPayloadDecoder(Similarity.SimScorer docScorer) {
+      this.docScorer = docScorer;
+    }
+
+    @Override
+    public float computePayloadFactor(int docID, int startPosition, int endPosition, BytesRef payload) {
+      if (payload == null)
+        return 0;
+      return docScorer.computePayloadFactor(docID, startPosition, endPosition, payload);
+    }
+
+    @Override
+    public float computePayloadFactor(BytesRef payload) {
+      throw new UnsupportedOperationException();
+    }
   }
 
 }

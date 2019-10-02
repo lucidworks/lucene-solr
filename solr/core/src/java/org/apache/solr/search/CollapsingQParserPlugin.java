@@ -54,8 +54,7 @@ import org.apache.lucene.search.FieldComparator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.LeafFieldComparator;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.Scorable;
-import org.apache.lucene.search.ScoreMode;
+import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.util.ArrayUtil;
@@ -465,17 +464,30 @@ public class CollapsingQParserPlugin extends QParserPlugin {
   }
 
 
-  private static class ScoreAndDoc extends Scorable {
+  private static class DummyScorer extends Scorer {
 
     public float score;
     public int docId;
+
+    public DummyScorer() {
+      super(null);
+    }
 
     public float score() {
       return score;
     }
 
+    public int freq() {
+      return 0;
+    }
+
     public int docID() {
       return docId;
+    }
+
+    @Override
+    public DocIdSetIterator iterator() {
+      throw new UnsupportedOperationException();
     }
   }
 
@@ -549,7 +561,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
       }
     }
 
-    @Override public ScoreMode scoreMode() { return ScoreMode.COMPLETE; }
+    @Override public boolean needsScores() { return true; }
 
     @Override
     protected void doSetNextReader(LeafReaderContext context) throws IOException {
@@ -660,7 +672,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
 
       int nextDocBase = currentContext+1 < contexts.length ? contexts[currentContext+1].docBase : maxDoc;
       leafDelegate = delegate.getLeafCollector(contexts[currentContext]);
-      ScoreAndDoc dummy = new ScoreAndDoc();
+      DummyScorer dummy = new DummyScorer();
       leafDelegate.setScorer(dummy);
       DocIdSetIterator it = new BitSetIterator(collapsedSet, 0L); // cost is not useful here
       int docId = -1;
@@ -772,7 +784,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
 
     }
 
-    @Override public ScoreMode scoreMode() { return ScoreMode.COMPLETE; }
+    @Override public boolean needsScores() { return true; }
 
     @Override
     protected void doSetNextReader(LeafReaderContext context) throws IOException {
@@ -863,7 +875,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
       collapseValues = DocValues.getNumeric(contexts[currentContext].reader(), this.field);
       int nextDocBase = currentContext+1 < contexts.length ? contexts[currentContext+1].docBase : maxDoc;
       leafDelegate = delegate.getLeafCollector(contexts[currentContext]);
-      ScoreAndDoc dummy = new ScoreAndDoc();
+      DummyScorer dummy = new DummyScorer();
       leafDelegate.setScorer(dummy);
       DocIdSetIterator it = new BitSetIterator(collapsedSet, 0L); // cost is not useful here
       int globalDoc = -1;
@@ -980,9 +992,9 @@ public class CollapsingQParserPlugin extends QParserPlugin {
       }
     }
 
-    @Override public ScoreMode scoreMode() { return needsScores ? ScoreMode.COMPLETE : super.scoreMode(); }
+    @Override public boolean needsScores() { return needsScores || super.needsScores(); }
 
-    public void setScorer(Scorable scorer) throws IOException {
+    public void setScorer(Scorer scorer) throws IOException {
       this.collapseStrategy.setScorer(scorer);
     }
 
@@ -1035,7 +1047,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
 
       int nextDocBase = currentContext+1 < contexts.length ? contexts[currentContext+1].docBase : maxDoc;
       leafDelegate = delegate.getLeafCollector(contexts[currentContext]);
-      ScoreAndDoc dummy = new ScoreAndDoc();
+      DummyScorer dummy = new DummyScorer();
       leafDelegate.setScorer(dummy);
       DocIdSetIterator it = new BitSetIterator(collapseStrategy.getCollapsedSet(), 0); // cost is not useful here
       int globalDoc = -1;
@@ -1158,10 +1170,9 @@ public class CollapsingQParserPlugin extends QParserPlugin {
       }
     }
 
-    @Override public ScoreMode scoreMode() { return needsScores ? ScoreMode.COMPLETE : super.scoreMode(); }
+    @Override public boolean needsScores() { return needsScores || super.needsScores(); }
 
-    @Override
-    public void setScorer(Scorable scorer) throws IOException {
+    public void setScorer(Scorer scorer) throws IOException {
       this.collapseStrategy.setScorer(scorer);
     }
 
@@ -1194,7 +1205,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
       this.collapseValues = DocValues.getNumeric(contexts[currentContext].reader(), this.collapseField);
       int nextDocBase = currentContext+1 < contexts.length ? contexts[currentContext+1].docBase : maxDoc;
       leafDelegate = delegate.getLeafCollector(contexts[currentContext]);
-      ScoreAndDoc dummy = new ScoreAndDoc();
+      DummyScorer dummy = new DummyScorer();
       leafDelegate.setScorer(dummy);
       DocIdSetIterator it = new BitSetIterator(collapseStrategy.getCollapsedSet(), 0); // cost is not useful here
       int globalDoc = -1;
@@ -1450,7 +1461,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
   private static abstract class OrdFieldValueStrategy {
     protected int nullPolicy;
     protected int[] ords; 
-    protected Scorable scorer;
+    protected Scorer scorer;
     protected FloatArrayList nullScores;
     protected float nullScore;
     protected float[] scores;
@@ -1527,7 +1538,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
       return collapsedSet;
     }
 
-    public void setScorer(Scorable scorer) throws IOException {
+    public void setScorer(Scorer scorer) throws IOException {
       this.scorer = scorer;
     }
 
@@ -1941,7 +1952,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
     }
 
     @Override
-    public void setScorer(Scorable s) throws IOException {
+    public void setScorer(Scorer s) throws IOException {
       super.setScorer(s);
       this.compareState.setScorer(s);
     }
@@ -2009,7 +2020,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
   private static abstract class IntFieldValueStrategy {
     protected int nullPolicy;
     protected IntIntHashMap cmap;
-    protected Scorable scorer;
+    protected Scorer scorer;
     protected FloatArrayList nullScores;
     protected float nullScore;
     protected float[] scores;
@@ -2089,7 +2100,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
       return collapsedSet;
     }
 
-    public void setScorer(Scorable scorer) throws IOException {
+    public void setScorer(Scorer scorer) throws IOException {
       this.scorer = scorer;
     }
 
@@ -2501,7 +2512,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
     }
 
     @Override
-    public void setScorer(Scorable s) throws IOException {
+    public void setScorer(Scorer s) throws IOException {
       super.setScorer(s);
       this.compareState.setScorer(s);
     }
@@ -2652,7 +2663,7 @@ public class CollapsingQParserPlugin extends QParserPlugin {
         leafFieldComparators[clause] = fieldComparators[clause].getLeafComparator(context);
       }
     }
-    public void setScorer(Scorable s) throws IOException {
+    public void setScorer(Scorer s) throws IOException {
       for (int clause = 0; clause < numClauses; clause++) {
         leafFieldComparators[clause].setScorer(s);
       }

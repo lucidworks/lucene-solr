@@ -505,7 +505,6 @@ public class PolicyHelper {
 
   }
 
-
   static ThreadLocal<SessionWrapper> SESSION_WRAPPPER_REF = new ThreadLocal<>();
 
 

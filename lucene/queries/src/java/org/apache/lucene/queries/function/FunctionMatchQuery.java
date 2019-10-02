@@ -29,7 +29,6 @@ import org.apache.lucene.search.DoubleValues;
 import org.apache.lucene.search.DoubleValuesSource;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TwoPhaseIterator;
 import org.apache.lucene.search.Weight;
@@ -62,7 +61,7 @@ public final class FunctionMatchQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
     DoubleValuesSource vs = source.rewrite(searcher);
     return new ConstantScoreWeight(this, boost) {
       @Override
@@ -80,7 +79,7 @@ public final class FunctionMatchQuery extends Query {
             return 100; // TODO maybe DoubleValuesSource should have a matchCost?
           }
         };
-        return new ConstantScoreScorer(this, score(), scoreMode, twoPhase);
+        return new ConstantScoreScorer(this, score(), twoPhase);
       }
 
       @Override

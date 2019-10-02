@@ -52,9 +52,9 @@ public class AssertingIndexSearcher extends IndexSearcher {
   }
 
   @Override
-  public Weight createWeight(Query query, ScoreMode scoreMode, float boost) throws IOException {
+  public Weight createWeight(Query query, boolean needsScores, float boost) throws IOException {
     // this adds assertions to the inner weights/scorers too
-    return new AssertingWeight(random, super.createWeight(query, scoreMode, boost), scoreMode);
+    return new AssertingWeight(random, super.createWeight(query, needsScores, boost), needsScores);
   }
 
   @Override
@@ -69,7 +69,7 @@ public class AssertingIndexSearcher extends IndexSearcher {
   @Override
   protected void search(List<LeafReaderContext> leaves, Weight weight, Collector collector) throws IOException {
     assert weight instanceof AssertingWeight;
-    super.search(leaves, weight, AssertingCollector.wrap(collector));
+    super.search(leaves, weight, AssertingCollector.wrap(random, collector));
   }
 
   @Override

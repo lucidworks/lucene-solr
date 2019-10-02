@@ -35,9 +35,7 @@ public class MetricsHandlerTest extends SolrTestCaseJ4 {
   @BeforeClass
   public static void beforeClass() throws Exception {
 
-    initCore("solrconfig-minimal.xml", "schema.xml");
-    h.getCoreContainer().waitForLoadingCoresToFinish(30000);
-
+    initCore("solrconfig.xml", "schema.xml");
     // manually register some metrics in solr.jvm and solr.jetty - TestHarness doesn't init them
     Counter c = h.getCoreContainer().getMetricManager().counter(null, "solr.jvm", "foo");
     c.inc();

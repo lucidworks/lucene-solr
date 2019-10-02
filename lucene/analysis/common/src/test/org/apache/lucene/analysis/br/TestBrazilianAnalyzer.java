@@ -25,8 +25,7 @@ import org.apache.lucene.analysis.BaseTokenStreamTestCase;
 import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.core.KeywordTokenizer;
-import org.apache.lucene.analysis.core.LetterTokenizer;
-import org.apache.lucene.analysis.core.LowerCaseFilter;
+import org.apache.lucene.analysis.core.LowerCaseTokenizer;
 import org.apache.lucene.analysis.miscellaneous.SetKeywordMarkerFilter;
 
 /**
@@ -148,9 +147,9 @@ public class TestBrazilianAnalyzer extends BaseTokenStreamTestCase {
   public void testWithKeywordAttribute() throws IOException {
     CharArraySet set = new CharArraySet(1, true);
     set.add("Brasília");
-    Tokenizer tokenizer = new LetterTokenizer();
+    Tokenizer tokenizer = new LowerCaseTokenizer();
     tokenizer.setReader(new StringReader("Brasília Brasilia"));
-    BrazilianStemFilter filter = new BrazilianStemFilter(new SetKeywordMarkerFilter(new LowerCaseFilter(tokenizer), set));
+    BrazilianStemFilter filter = new BrazilianStemFilter(new SetKeywordMarkerFilter(tokenizer, set));
 
     assertTokenStreamContents(filter, new String[] { "brasília", "brasil" });
   }

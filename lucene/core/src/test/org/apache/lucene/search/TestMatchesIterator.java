@@ -109,7 +109,7 @@ public class TestMatchesIterator extends LuceneTestCase {
   };
 
   private void checkMatches(Query q, String field, int[][] expected) throws IOException {
-    Weight w = searcher.createWeight(searcher.rewrite(q), ScoreMode.COMPLETE_NO_SCORES, 1);
+    Weight w = searcher.createWeight(searcher.rewrite(q), false, 1);
     for (int i = 0; i < expected.length; i++) {
       LeafReaderContext ctx = searcher.leafContexts.get(ReaderUtil.subIndex(expected[i][0], searcher.leafContexts));
       int doc = expected[i][0] - ctx.docBase;
@@ -129,7 +129,7 @@ public class TestMatchesIterator extends LuceneTestCase {
   }
 
   private void checkLabelCount(Query q, String field, int[] expected) throws IOException {
-    Weight w = searcher.createWeight(searcher.rewrite(q), ScoreMode.COMPLETE_NO_SCORES, 1);
+    Weight w = searcher.createWeight(searcher.rewrite(q), false, 1);
     for (int i = 0; i < expected.length; i++) {
       LeafReaderContext ctx = searcher.leafContexts.get(ReaderUtil.subIndex(i, searcher.leafContexts));
       int doc = i - ctx.docBase;
@@ -168,7 +168,7 @@ public class TestMatchesIterator extends LuceneTestCase {
   }
 
   private void checkNoPositionsMatches(Query q, String field, boolean[] expected) throws IOException {
-    Weight w = searcher.createWeight(searcher.rewrite(q), ScoreMode.COMPLETE_NO_SCORES, 1);
+    Weight w = searcher.createWeight(searcher.rewrite(q), false, 1);
     for (int i = 0; i < expected.length; i++) {
       LeafReaderContext ctx = searcher.leafContexts.get(ReaderUtil.subIndex(i, searcher.leafContexts));
       int doc = i - ctx.docBase;
@@ -184,7 +184,7 @@ public class TestMatchesIterator extends LuceneTestCase {
   }
 
   private void assertIsLeafMatch(Query q, String field) throws IOException {
-    Weight w = searcher.createWeight(searcher.rewrite(q), ScoreMode.COMPLETE_NO_SCORES, 1);
+    Weight w = searcher.createWeight(searcher.rewrite(q), false, 1);
     for (int i = 0; i < searcher.reader.maxDoc(); i++) {
       LeafReaderContext ctx = searcher.leafContexts.get(ReaderUtil.subIndex(i, searcher.leafContexts));
       int doc = i - ctx.docBase;
@@ -203,7 +203,7 @@ public class TestMatchesIterator extends LuceneTestCase {
   }
 
   private void checkTermMatches(Query q, String field, TermMatch[][][] expected) throws IOException {
-    Weight w = searcher.createWeight(searcher.rewrite(q), ScoreMode.COMPLETE_NO_SCORES, 1);
+    Weight w = searcher.createWeight(searcher.rewrite(q), false, 1);
     for (int i = 0; i < expected.length; i++) {
       LeafReaderContext ctx = searcher.leafContexts.get(ReaderUtil.subIndex(i, searcher.leafContexts));
       int doc = i - ctx.docBase;
@@ -282,7 +282,7 @@ public class TestMatchesIterator extends LuceneTestCase {
       return position + "[" + startOffset + "->" + endOffset + "]";
     }
   }
-
+  
   public void testTermQuery() throws IOException {
     Term t = new Term(FIELD_WITH_OFFSETS, "w1");
     Query q = new TermQuery(t);
@@ -481,7 +481,7 @@ public class TestMatchesIterator extends LuceneTestCase {
 
   public void testNoMatchWildcards() throws IOException {
     Query nomatch = new PrefixQuery(new Term(FIELD_WITH_OFFSETS, "wibble"));
-    Matches matches = searcher.createWeight(searcher.rewrite(nomatch), ScoreMode.COMPLETE_NO_SCORES, 1)
+    Matches matches = searcher.createWeight(searcher.rewrite(nomatch), false, 1)
         .matches(searcher.leafContexts.get(0), 0);
     assertNull(matches);
   }
@@ -517,7 +517,7 @@ public class TestMatchesIterator extends LuceneTestCase {
         .add(new TermQuery(new Term("id", "1")), BooleanClause.Occur.SHOULD)
         .add(new TermQuery(new Term(FIELD_WITH_OFFSETS, "w3")), BooleanClause.Occur.MUST)
         .build();
-    Weight w = searcher.createWeight(searcher.rewrite(q), ScoreMode.COMPLETE, 1);
+    Weight w = searcher.createWeight(searcher.rewrite(q), false, 1);
 
     LeafReaderContext ctx = searcher.leafContexts.get(ReaderUtil.subIndex(1, searcher.leafContexts));
     Matches m = w.matches(ctx, 1 - ctx.docBase);

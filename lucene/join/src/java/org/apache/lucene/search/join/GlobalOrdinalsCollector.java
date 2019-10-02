@@ -24,7 +24,7 @@ import org.apache.lucene.index.OrdinalMap;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.LeafCollector;
-import org.apache.lucene.search.Scorable;
+import org.apache.lucene.search.Scorer;
 import org.apache.lucene.util.LongBitSet;
 import org.apache.lucene.util.LongValues;
 
@@ -50,8 +50,8 @@ final class GlobalOrdinalsCollector implements Collector {
   }
 
   @Override
-  public org.apache.lucene.search.ScoreMode scoreMode() {
-    return org.apache.lucene.search.ScoreMode.COMPLETE_NO_SCORES;
+  public boolean needsScores() {
+    return false;
   }
 
   @Override
@@ -85,7 +85,7 @@ final class GlobalOrdinalsCollector implements Collector {
     }
 
     @Override
-    public void setScorer(Scorable scorer) throws IOException {
+    public void setScorer(Scorer scorer) throws IOException {
     }
   }
 
@@ -105,7 +105,7 @@ final class GlobalOrdinalsCollector implements Collector {
     }
 
     @Override
-    public void setScorer(Scorable scorer) throws IOException {
+    public void setScorer(Scorer scorer) throws IOException {
     }
   }
 

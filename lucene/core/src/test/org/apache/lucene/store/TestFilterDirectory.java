@@ -29,7 +29,7 @@ public class TestFilterDirectory extends BaseDirectoryTestCase {
 
   @Override
   protected Directory getDirectory(Path path) {
-    return new FilterDirectory(new ByteBuffersDirectory()) {};
+    return new FilterDirectory(new RAMDirectory()) {};
   }
   
   @Test

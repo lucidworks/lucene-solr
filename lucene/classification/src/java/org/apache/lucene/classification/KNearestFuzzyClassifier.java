@@ -159,7 +159,7 @@ public class KNearestFuzzyClassifier implements Classifier<BytesRef> {
   private List<ClassificationResult<BytesRef>> buildListFromTopDocs(TopDocs topDocs) throws IOException {
     Map<BytesRef, Integer> classCounts = new HashMap<>();
     Map<BytesRef, Double> classBoosts = new HashMap<>(); // this is a boost based on class ranking positions in topDocs
-    float maxScore = topDocs.totalHits.value == 0 ? Float.NaN : topDocs.scoreDocs[0].score;
+    float maxScore = topDocs.getMaxScore();
     for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
       IndexableField storableField = indexSearcher.doc(scoreDoc.doc).getField(classFieldName);
       if (storableField != null) {
@@ -204,7 +204,7 @@ public class KNearestFuzzyClassifier implements Classifier<BytesRef> {
         ", classFieldName='" + classFieldName + '\'' +
         ", k=" + k +
         ", query=" + query +
-        ", similarity=" + indexSearcher.getSimilarity() +
+        ", similarity=" + indexSearcher.getSimilarity(true) +
         '}';
   }
 }

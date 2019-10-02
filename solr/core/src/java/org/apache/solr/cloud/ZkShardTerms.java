@@ -583,16 +583,12 @@ public class ZkShardTerms implements AutoCloseable{
      */
     Terms startRecovering(String coreNodeName) {
       long maxTerm = getMaxTerm();
-      if (values.get(coreNodeName) == maxTerm)
+      if (values.get(coreNodeName) == maxTerm && values.getOrDefault(coreNodeName+"_recovering", -1L) == maxTerm)
         return null;
 
       HashMap<String, Long> newValues = new HashMap<>(values);
-      if (!newValues.containsKey(coreNodeName+"_recovering")) {
-        long currentTerm = newValues.getOrDefault(coreNodeName, 0L);
-        // by keeping old term, we will have more information in leader election
-        newValues.put(coreNodeName+"_recovering", currentTerm);
-      }
       newValues.put(coreNodeName, maxTerm);
+      newValues.put(coreNodeName+"_recovering", maxTerm);
       return new Terms(newValues, version);
     }
 

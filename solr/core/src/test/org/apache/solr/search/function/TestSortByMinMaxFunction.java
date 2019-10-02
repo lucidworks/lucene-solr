@@ -24,7 +24,7 @@ import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
  *
  * @see SortByFunctionTest
  **/
-@SuppressCodecs({"SimpleText"}) // see TestSortedSetSelector
+@SuppressCodecs({"Memory", "SimpleText"}) // see TestSortedSetSelector
 public class TestSortByMinMaxFunction extends SortByFunctionTest {
 
   @Override

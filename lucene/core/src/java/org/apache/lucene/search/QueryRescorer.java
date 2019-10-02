@@ -61,7 +61,7 @@ public abstract class QueryRescorer extends Rescorer {
     List<LeafReaderContext> leaves = searcher.getIndexReader().leaves();
 
     Query rewritten = searcher.rewrite(query);
-    Weight weight = searcher.createWeight(rewritten, ScoreMode.COMPLETE, 1);
+    Weight weight = searcher.createWeight(rewritten, true, 1);
 
     // Now merge sort docIDs from hits, with reader's leaves:
     int hitUpto = 0;
@@ -135,20 +135,20 @@ public abstract class QueryRescorer extends Rescorer {
       hits = subset;
     }
 
-    return new TopDocs(firstPassTopDocs.totalHits, hits);
+    return new TopDocs(firstPassTopDocs.totalHits, hits, hits[0].score);
   }
 
   @Override
   public Explanation explain(IndexSearcher searcher, Explanation firstPassExplanation, int docID) throws IOException {
     Explanation secondPassExplanation = searcher.explain(query, docID);
 
-    Number secondPassScore = secondPassExplanation.isMatch() ? secondPassExplanation.getValue() : null;
+    Float secondPassScore = secondPassExplanation.isMatch() ? secondPassExplanation.getValue() : null;
 
     float score;
     if (secondPassScore == null) {
-      score = combine(firstPassExplanation.getValue().floatValue(), false, 0.0f);
+      score = combine(firstPassExplanation.getValue(), false, 0.0f);
     } else {
-      score = combine(firstPassExplanation.getValue().floatValue(), true,  secondPassScore.floatValue());
+      score = combine(firstPassExplanation.getValue(), true,  secondPassScore.floatValue());
     }
 
     Explanation first = Explanation.match(firstPassExplanation.getValue(), "first pass score", firstPassExplanation);

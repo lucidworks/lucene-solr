@@ -162,8 +162,8 @@ public class TimeLimitingCollector implements Collector {
   }
 
   @Override
-  public ScoreMode scoreMode() {
-    return collector.scoreMode();
+  public boolean needsScores() {
+    return collector.needsScores();
   }
 
   /**

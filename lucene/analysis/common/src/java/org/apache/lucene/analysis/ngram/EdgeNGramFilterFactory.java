@@ -43,8 +43,8 @@ public class EdgeNGramFilterFactory extends TokenFilterFactory {
   /** Creates a new EdgeNGramFilterFactory */
   public EdgeNGramFilterFactory(Map<String, String> args) {
     super(args);
-    minGramSize = requireInt(args, "minGramSize");
-    maxGramSize = requireInt(args, "maxGramSize");
+    minGramSize = getInt(args, "minGramSize", EdgeNGramTokenFilter.DEFAULT_MIN_GRAM_SIZE);
+    maxGramSize = getInt(args, "maxGramSize", EdgeNGramTokenFilter.DEFAULT_MAX_GRAM_SIZE);
     preserveOriginal = getBoolean(args, "preserveOriginal", EdgeNGramTokenFilter.DEFAULT_PRESERVE_ORIGINAL);
     if (!args.isEmpty()) {
       throw new IllegalArgumentException("Unknown parameters: " + args);

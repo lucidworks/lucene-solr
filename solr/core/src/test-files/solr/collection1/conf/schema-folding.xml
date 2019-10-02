@@ -81,8 +81,7 @@
 
   <fieldType name="text_lower_token" class="solr.TextField">
     <analyzer>
-      <tokenizer class="solr.LetterTokenizerFactory"/>
-      <filter class="solr.LowerCaseFilterFactory"/>
+      <tokenizer class="solr.LowerCaseTokenizerFactory"/>
       <filter class="solr.ASCIIFoldingFilterFactory"/>
     </analyzer>
   </fieldType>

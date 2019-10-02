@@ -33,7 +33,6 @@ import org.apache.lucene.search.ConstantScoreScorer;
 import org.apache.lucene.search.ConstantScoreWeight;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.DocIdSetBuilder;
@@ -76,7 +75,7 @@ final class LatLonPointInPolygonQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
 
     // I don't use RandomAccessWeight here: it's no good to approximate with "match all docs"; this is an inverted structure and should be
     // used in the first pass:
@@ -158,7 +157,7 @@ final class LatLonPointInPolygonQuery extends Query {
                            }
                          });
 
-        return new ConstantScoreScorer(this, score(), scoreMode, result.build().iterator());
+        return new ConstantScoreScorer(this, score(), result.build().iterator());
       }
 
       @Override

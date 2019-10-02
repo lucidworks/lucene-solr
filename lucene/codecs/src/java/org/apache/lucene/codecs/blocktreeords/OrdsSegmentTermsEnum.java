@@ -25,10 +25,9 @@ import java.io.PrintStream;
 
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.blocktreeords.FSTOrdsOutputs.Output;
-import org.apache.lucene.index.BaseTermsEnum;
-import org.apache.lucene.index.ImpactsEnum;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.TermState;
+import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.ArrayUtil;
@@ -41,7 +40,7 @@ import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.Util;
 
 /** Iterates through terms in this field. */
-public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
+public final class OrdsSegmentTermsEnum extends TermsEnum {
 
   // Lazy init:
   IndexInput in;
@@ -932,19 +931,6 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
     //System.out.println("  state=" + currentFrame.state);
     //}
     return fr.parent.postingsReader.postings(fr.fieldInfo, currentFrame.state, reuse, flags);
-  }
-
-  @Override
-  public ImpactsEnum impacts(int flags) throws IOException {
-    assert !eof;
-    //if (DEBUG) {
-    //System.out.println("BTTR.docs seg=" + segment);
-    //}
-    currentFrame.decodeMetaData();
-    //if (DEBUG) {
-    //System.out.println("  state=" + currentFrame.state);
-    //}
-    return fr.parent.postingsReader.impacts(fr.fieldInfo, currentFrame.state, flags);
   }
 
   @Override

@@ -20,6 +20,8 @@ package org.apache.lucene.analysis.cjk;
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
@@ -35,7 +37,7 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * &lt;/fieldType&gt;</pre>
  * @since 3.6.0
  */
-public class CJKWidthFilterFactory extends TokenFilterFactory {
+public class CJKWidthFilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
   
   /** Creates a new CJKWidthFilterFactory */
   public CJKWidthFilterFactory(Map<String,String> args) {
@@ -49,9 +51,9 @@ public class CJKWidthFilterFactory extends TokenFilterFactory {
   public TokenStream create(TokenStream input) {
     return new CJKWidthFilter(input);
   }
-
+  
   @Override
-  public TokenStream normalize(TokenStream input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

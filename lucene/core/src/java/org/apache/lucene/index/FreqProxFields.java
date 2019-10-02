@@ -124,7 +124,7 @@ class FreqProxFields extends Fields {
     }
   }
 
-  private static class FreqProxTermsEnum extends BaseTermsEnum {
+  private static class FreqProxTermsEnum extends TermsEnum {
     final FreqProxTermsWriterPerField terms;
     final int[] sortedTermIDs;
     final FreqProxPostingsArray postingsArray;
@@ -271,11 +271,6 @@ class FreqProxFields extends Fields {
       }
       docsEnum.reset(sortedTermIDs[ord]);
       return docsEnum;
-    }
-
-    @Override
-    public ImpactsEnum impacts(int flags) throws IOException {
-      throw new UnsupportedOperationException();
     }
 
     /**

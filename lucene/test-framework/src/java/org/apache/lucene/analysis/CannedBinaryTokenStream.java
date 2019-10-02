@@ -57,7 +57,7 @@ public final class CannedBinaryTokenStream extends TokenStream {
   private final OffsetAttribute offsetAtt = addAttribute(OffsetAttribute.class);
 
   public CannedBinaryTokenStream(BinaryToken... tokens) {
-    super(Token.TOKEN_ATTRIBUTE_FACTORY);
+    super();
     this.tokens = tokens;
   }
   

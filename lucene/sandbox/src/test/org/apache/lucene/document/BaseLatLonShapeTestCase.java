@@ -34,14 +34,13 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.MultiBits;
 import org.apache.lucene.index.MultiDocValues;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.index.SerialMergeScheduler;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.SimpleCollector;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.Bits;
@@ -270,7 +269,7 @@ public abstract class BaseLatLonShapeTestCase extends LuceneTestCase {
 
     final int iters = scaledIterationCount(shapes.length);
 
-    Bits liveDocs = MultiBits.getLiveDocs(s.getIndexReader());
+    Bits liveDocs = MultiFields.getLiveDocs(s.getIndexReader());
     int maxDoc = s.getIndexReader().maxDoc();
 
     for (int iter = 0; iter < iters; ++iter) {
@@ -293,8 +292,8 @@ public abstract class BaseLatLonShapeTestCase extends LuceneTestCase {
         private int docBase;
 
         @Override
-        public ScoreMode scoreMode() {
-          return ScoreMode.COMPLETE_NO_SCORES;
+        public boolean needsScores() {
+          return false;
         }
 
         @Override
@@ -385,7 +384,7 @@ public abstract class BaseLatLonShapeTestCase extends LuceneTestCase {
 
     final int iters = scaledIterationCount(shapes.length);
 
-    Bits liveDocs = MultiBits.getLiveDocs(s.getIndexReader());
+    Bits liveDocs = MultiFields.getLiveDocs(s.getIndexReader());
     int maxDoc = s.getIndexReader().maxDoc();
 
     for (int iter = 0; iter < iters; ++iter) {
@@ -409,8 +408,8 @@ public abstract class BaseLatLonShapeTestCase extends LuceneTestCase {
         private int docBase;
 
         @Override
-        public ScoreMode scoreMode() {
-          return ScoreMode.COMPLETE_NO_SCORES;
+        public boolean needsScores() {
+          return false;
         }
 
         @Override
@@ -476,7 +475,7 @@ public abstract class BaseLatLonShapeTestCase extends LuceneTestCase {
 
     final int iters = scaledIterationCount(shapes.length);
 
-    Bits liveDocs = MultiBits.getLiveDocs(s.getIndexReader());
+    Bits liveDocs = MultiFields.getLiveDocs(s.getIndexReader());
     int maxDoc = s.getIndexReader().maxDoc();
 
     for (int iter = 0; iter < iters; ++iter) {
@@ -500,8 +499,8 @@ public abstract class BaseLatLonShapeTestCase extends LuceneTestCase {
         private int docBase;
 
         @Override
-        public ScoreMode scoreMode() {
-          return ScoreMode.COMPLETE_NO_SCORES;
+        public boolean needsScores() {
+          return false;
         }
 
         @Override

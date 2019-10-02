@@ -44,7 +44,6 @@ import org.apache.lucene.analysis.Token;
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
-import org.apache.lucene.analysis.tokenattributes.BytesTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.apache.lucene.document.Document;
@@ -304,82 +303,52 @@ public class AnalyzingSuggesterTest extends LuceneTestCase {
     IOUtils.close(a, tempDir);
   }
 
-  static final class MultiCannedTokenizer extends Tokenizer {
-
-    int counter = -1;
-    final TokenStream[] tokenStreams;
-
-    MultiCannedTokenizer(TokenStream... tokenStreams) {
-      super(tokenStreams[0].getAttributeFactory());
-      this.tokenStreams = tokenStreams;
-    }
-
-    @Override
-    public boolean incrementToken() throws IOException {
-      if (tokenStreams[counter].incrementToken() == false) {
-        return false;
-      }
-      this.restoreState(tokenStreams[counter].captureState());
-      return true;
-    }
-
-    @Override
-    public void reset() throws IOException {
-      tokenStreams[counter].reset();
-    }
-  }
-
-  static final class MultiCannedAnalyzer extends Analyzer {
-
-    final MultiCannedTokenizer tokenizer;
-
-    MultiCannedAnalyzer(TokenStream... tokenStreams) {
-      this(false, tokenStreams);
-    }
-
-    MultiCannedAnalyzer(boolean addBytesAtt, TokenStream... tokenStreams) {
-      this.tokenizer = new MultiCannedTokenizer(tokenStreams);
-      if (addBytesAtt) {
-        this.tokenizer.addAttribute(BytesTermAttribute.class);
-      }
-    }
-
-    @Override
-    protected TokenStreamComponents createComponents(String fieldName) {
-      tokenizer.counter = 0;
-      return new TokenStreamComponents(tokenizer);
-    }
-
-    @Override
-    protected Reader initReader(String fieldName, Reader reader) {
-      tokenizer.counter++;
-      if (tokenizer.counter >= tokenizer.tokenStreams.length) {
-        tokenizer.counter = tokenizer.tokenStreams.length - 1;
-      }
-      return super.initReader(fieldName, reader);
-    }
-  }
-
   public void testGraphDups() throws Exception {
 
-    final Analyzer analyzer = new MultiCannedAnalyzer(
-        new CannedTokenStream(
-            token("wifi",1,1),
-            token("hotspot",0,2),
-            token("network",1,1),
-            token("is",1,1),
-            token("slow",1,1)),
-        new CannedTokenStream(
-            token("wi",1,1),
-            token("hotspot",0,3),
-            token("fi",1,1),
-            token("network",1,1),
-            token("is",1,1),
-            token("fast",1,1)),
-        new CannedTokenStream(
-            token("wifi",1,1),
-            token("hotspot",0,2),
-            token("network",1,1)));
+    final Analyzer analyzer = new Analyzer() {
+      @Override
+      protected TokenStreamComponents createComponents(String fieldName) {
+        Tokenizer tokenizer = new MockTokenizer(MockTokenizer.SIMPLE, true);
+        
+        return new TokenStreamComponents(tokenizer) {
+          int tokenStreamCounter = 0;
+          final TokenStream[] tokenStreams = new TokenStream[] {
+            new CannedTokenStream(new Token[] {
+                token("wifi",1,1),
+                token("hotspot",0,2),
+                token("network",1,1),
+                token("is",1,1),
+                token("slow",1,1)
+              }),
+            new CannedTokenStream(new Token[] {
+                token("wi",1,1),
+                token("hotspot",0,3),
+                token("fi",1,1),
+                token("network",1,1),
+                token("is",1,1),
+                token("fast",1,1)
+
+              }),
+            new CannedTokenStream(new Token[] {
+                token("wifi",1,1),
+                token("hotspot",0,2),
+                token("network",1,1)
+              }),
+          };
+
+          @Override
+          public TokenStream getTokenStream() {
+            TokenStream result = tokenStreams[tokenStreamCounter];
+            tokenStreamCounter++;
+            return result;
+          }
+         
+          @Override
+          protected void setReader(final Reader reader) {
+          }
+        };
+      }
+    };
 
     Input keys[] = new Input[] {
         new Input("wifi network is slow", 50),
@@ -409,20 +378,45 @@ public class AnalyzingSuggesterTest extends LuceneTestCase {
 
     //  The Analyzer below mimics the functionality of the SynonymAnalyzer
     //  using the above map, so that the suggest module does not need a dependency on the 
-    //  synonym module
+    //  synonym module 
 
-    final Analyzer analyzer = new MultiCannedAnalyzer(
-        new CannedTokenStream(
-            token("ab", 1, 1),
-            token("ba", 0, 1),
-            token("xc", 1, 1)),
-        new CannedTokenStream(
-            token("ba", 1, 1),
-            token("xd", 1, 1)),
-        new CannedTokenStream(
-            token("ab",1,1),
-            token("ba",0,1),
-            token("x",1,1)));
+    final Analyzer analyzer = new Analyzer() {
+      @Override
+      protected TokenStreamComponents createComponents(String fieldName) {
+        Tokenizer tokenizer = new MockTokenizer(MockTokenizer.SIMPLE, true);
+        
+        return new TokenStreamComponents(tokenizer) {
+          int tokenStreamCounter = 0;
+          final TokenStream[] tokenStreams = new TokenStream[] {
+            new CannedTokenStream(new Token[] {
+                token("ab",1,1),
+                token("ba",0,1),
+                token("xc",1,1)
+              }),
+            new CannedTokenStream(new Token[] {
+                token("ba",1,1),          
+                token("xd",1,1)
+              }),
+            new CannedTokenStream(new Token[] {
+                token("ab",1,1),
+                token("ba",0,1),
+                token("x",1,1)
+              })
+          };
+
+          @Override
+          public TokenStream getTokenStream() {
+            TokenStream result = tokenStreams[tokenStreamCounter];
+            tokenStreamCounter++;
+            return result;
+          }
+         
+          @Override
+          protected void setReader(final Reader reader) {
+          }
+        };
+      }
+    };
 
     Input keys[] = new Input[] {
         new Input("ab xc", 50),
@@ -432,7 +426,7 @@ public class AnalyzingSuggesterTest extends LuceneTestCase {
     AnalyzingSuggester suggester = new AnalyzingSuggester(tempDir, "suggest", analyzer);
     suggester.build(new InputArrayIterator(keys));
     List<LookupResult> results = suggester.lookup("ab x", false, 1);
-    assertEquals(1, results.size());
+    assertTrue(results.size() == 1);
     IOUtils.close(analyzer, tempDir);
   }
 
@@ -465,15 +459,39 @@ public class AnalyzingSuggesterTest extends LuceneTestCase {
   } 
   */ 
 
-  private Analyzer getUnusualAnalyzer() {
-    // First three calls just returns "a", then returns ["a","b"], then "a" again
-    return new MultiCannedAnalyzer(
-        new CannedTokenStream(token("a", 1, 1)),
-        new CannedTokenStream(token("a", 1, 1)),
-        new CannedTokenStream(token("a", 1, 1)),
-        new CannedTokenStream(token("a", 1, 1), token("b", 1, 1)),
-        new CannedTokenStream(token("a", 1, 1)),
-        new CannedTokenStream(token("a", 1, 1)));
+  private final Analyzer getUnusualAnalyzer() {
+    return new Analyzer() {
+      @Override
+      protected TokenStreamComponents createComponents(String fieldName) {
+        Tokenizer tokenizer = new MockTokenizer(MockTokenizer.SIMPLE, true);
+        
+        return new TokenStreamComponents(tokenizer) {
+
+          int count;
+
+          @Override
+          public TokenStream getTokenStream() {
+            // 4th time we are called, return tokens a b,
+            // else just a:
+            if (count++ != 3) {
+              return new CannedTokenStream(new Token[] {
+                  token("a", 1, 1),
+                });
+            } else {
+              // After that "a b":
+              return new CannedTokenStream(new Token[] {
+                  token("a", 1, 1),
+                  token("b", 1, 1),
+                });
+            }
+          }
+         
+          @Override
+          protected void setReader(final Reader reader)  {
+          }
+        };
+      }
+    };
   }
 
   public void testExactFirst() throws Exception {
@@ -981,10 +999,23 @@ public class AnalyzingSuggesterTest extends LuceneTestCase {
     Analyzer a = new Analyzer() {
       @Override
       protected TokenStreamComponents createComponents(String fieldName) {
-        return new TokenStreamComponents(r -> {}, new CannedTokenStream(
-            token("hairy", 1, 1),
-            token("smelly", 0, 1),
-            token("dog", 1, 1)));
+        Tokenizer tokenizer = new MockTokenizer(MockTokenizer.SIMPLE, true);
+        
+        return new TokenStreamComponents(tokenizer) {
+
+          @Override
+          public TokenStream getTokenStream() {
+            return new CannedTokenStream(new Token[] {
+                token("hairy", 1, 1),
+                token("smelly", 0, 1),
+                token("dog", 1, 1),
+              });
+          }
+         
+          @Override
+          protected void setReader(final Reader reader) {
+          }
+        };
       }
     };
 
@@ -1025,15 +1056,38 @@ public class AnalyzingSuggesterTest extends LuceneTestCase {
   }
 
   public void testDupSurfaceFormsMissingResults2() throws Exception {
-    Analyzer a = new MultiCannedAnalyzer(
-        new CannedTokenStream(
-            token("p", 1, 1),
-            token("q", 1, 1),
-            token("r", 0, 1),
-            token("s", 0, 1)),
-        new CannedTokenStream(token("p", 1, 1)),
-        new CannedTokenStream(token("p", 1, 1)),
-        new CannedTokenStream(token("p", 1, 1)));
+    Analyzer a = new Analyzer() {
+      @Override
+      protected TokenStreamComponents createComponents(String fieldName) {
+        Tokenizer tokenizer = new MockTokenizer(MockTokenizer.SIMPLE, true);
+        
+        return new TokenStreamComponents(tokenizer) {
+
+          int count;
+
+          @Override
+          public TokenStream getTokenStream() {
+            if (count == 0) {
+              count++;
+              return new CannedTokenStream(new Token[] {
+                  token("p", 1, 1),
+                  token("q", 1, 1),
+                  token("r", 0, 1),
+                  token("s", 0, 1),
+                });
+            } else {
+              return new CannedTokenStream(new Token[] {
+                  token("p", 1, 1),
+                });
+            }
+          }
+         
+          @Override
+          protected void setReader(final Reader reader) {
+          }
+        };
+      }
+    };
 
     Directory tempDir = getDirectory();
     AnalyzingSuggester suggester = new AnalyzingSuggester(tempDir, "suggest", a, a, 0, 256, -1, true);
@@ -1077,7 +1131,24 @@ public class AnalyzingSuggesterTest extends LuceneTestCase {
    * and checks that they come back in surface-form order.
    */
   public void testTieBreakOnSurfaceForm() throws Exception {
-    Analyzer a = new MultiCannedAnalyzer(new CannedTokenStream(token("dog", 1, 1)));
+    Analyzer a = new Analyzer() {
+      @Override
+      protected TokenStreamComponents createComponents(String fieldName) {
+        Tokenizer tokenizer = new MockTokenizer(MockTokenizer.SIMPLE, true);
+
+        return new TokenStreamComponents(tokenizer) {
+          @Override
+          public TokenStream getTokenStream() {
+            return new CannedTokenStream(new Token[] {
+                token("dog", 1, 1)
+              });
+          }
+          @Override
+          protected void setReader(final Reader reader) {
+          }
+        };
+      }
+    };
 
     Directory tempDir = getDirectory();
     AnalyzingSuggester suggester = new AnalyzingSuggester(tempDir, "suggest", a, a, 0, 256, -1, true);
@@ -1116,12 +1187,41 @@ public class AnalyzingSuggesterTest extends LuceneTestCase {
   }
 
   public void test0ByteKeys() throws Exception {
-    final Analyzer a = new MultiCannedAnalyzer(true,
-        new CannedBinaryTokenStream(token(new BytesRef(new byte[] {0x0, 0x0, 0x0}))),
-        new CannedBinaryTokenStream(token(new BytesRef(new byte[] {0x0, 0x0}))),
-        new CannedBinaryTokenStream(token(new BytesRef(new byte[] {0x0, 0x0, 0x0}))),
-        new CannedBinaryTokenStream(token(new BytesRef(new byte[] {0x0, 0x0})))
-    );
+    final Analyzer a = new Analyzer() {
+        @Override
+        protected TokenStreamComponents createComponents(String fieldName) {
+          Tokenizer tokenizer = new MockTokenizer(MockTokenizer.SIMPLE, true);
+        
+          return new TokenStreamComponents(tokenizer) {
+            int tokenStreamCounter = 0;
+            final TokenStream[] tokenStreams = new TokenStream[] {
+              new CannedBinaryTokenStream(new BinaryToken[] {
+                  token(new BytesRef(new byte[] {0x0, 0x0, 0x0})),
+                }),
+              new CannedBinaryTokenStream(new BinaryToken[] {
+                  token(new BytesRef(new byte[] {0x0, 0x0})),
+                }),
+              new CannedBinaryTokenStream(new BinaryToken[] {
+                  token(new BytesRef(new byte[] {0x0, 0x0, 0x0})),
+                }),
+              new CannedBinaryTokenStream(new BinaryToken[] {
+                  token(new BytesRef(new byte[] {0x0, 0x0})),
+                }),
+            };
+
+            @Override
+            public TokenStream getTokenStream() {
+              TokenStream result = tokenStreams[tokenStreamCounter];
+              tokenStreamCounter++;
+              return result;
+            }
+         
+            @Override
+            protected void setReader(final Reader reader) {
+            }
+          };
+        }
+      };
 
     Directory tempDir = getDirectory();
     AnalyzingSuggester suggester = new AnalyzingSuggester(tempDir, "suggest", a, a, 0, 256, -1, true);
@@ -1165,13 +1265,26 @@ public class AnalyzingSuggesterTest extends LuceneTestCase {
   public void testTooManyExpansions() throws Exception {
 
     final Analyzer a = new Analyzer() {
-      @Override
-      protected TokenStreamComponents createComponents(String fieldName) {
-        return new TokenStreamComponents(r -> {}, new CannedTokenStream(
-            new Token("a", 0, 1),
-            new Token("b", 0, 0, 1)));
-      }
-    };
+        @Override
+        protected TokenStreamComponents createComponents(String fieldName) {
+          Tokenizer tokenizer = new MockTokenizer(MockTokenizer.SIMPLE, true);
+        
+          return new TokenStreamComponents(tokenizer) {
+            @Override
+            public TokenStream getTokenStream() {
+              Token a = new Token("a", 0, 1);
+              a.setPositionIncrement(1);
+              Token b = new Token("b", 0, 1);
+              b.setPositionIncrement(0);
+              return new CannedTokenStream(new Token[] {a, b});
+            }
+         
+            @Override
+            protected void setReader(final Reader reader) {
+            }
+          };
+        }
+      };
 
     Directory tempDir = getDirectory();
     AnalyzingSuggester suggester = new AnalyzingSuggester(tempDir, "suggest", a, a, 0, 256, 1, true);

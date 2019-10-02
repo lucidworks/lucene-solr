@@ -120,7 +120,7 @@ public class TestPayloads extends LuceneTestCase {
     ram.close();
   }
 
-  // Tests if payloads are correctly stored and loaded.
+  // Tests if payloads are correctly stored and loaded using both RamDirectory and FSDirectory
   public void testPayloadsEncoding() throws Exception {
     Directory dir = newDirectory();
     performTest(dir);
@@ -191,7 +191,7 @@ public class TestPayloads extends LuceneTestCase {
     offset = 0;
     PostingsEnum[] tps = new PostingsEnum[numTerms];
     for (int i = 0; i < numTerms; i++) {
-      tps[i] = MultiTerms.getTermPostingsEnum(reader,
+      tps[i] = MultiFields.getTermPositionsEnum(reader,
                                                 terms[i].field(),
                                                 new BytesRef(terms[i].text()));
     }
@@ -219,7 +219,7 @@ public class TestPayloads extends LuceneTestCase {
     /*
      *  test lazy skipping
      */        
-    PostingsEnum tp = MultiTerms.getTermPostingsEnum(reader,
+    PostingsEnum tp = MultiFields.getTermPositionsEnum(reader,
                                                                terms[0].field(),
                                                                new BytesRef(terms[0].text()));
     tp.nextDoc();
@@ -245,7 +245,7 @@ public class TestPayloads extends LuceneTestCase {
     /*
      * Test different lengths at skip points
      */
-    tp = MultiTerms.getTermPostingsEnum(reader,
+    tp = MultiFields.getTermPositionsEnum(reader,
                                           terms[1].field(),
                                           new BytesRef(terms[1].text()));
     tp.nextDoc();
@@ -282,7 +282,7 @@ public class TestPayloads extends LuceneTestCase {
     writer.close();
         
     reader = DirectoryReader.open(dir);
-    tp = MultiTerms.getTermPostingsEnum(reader,
+    tp = MultiFields.getTermPositionsEnum(reader,
                                           fieldName,
                                           new BytesRef(singleTerm));
     tp.nextDoc();
@@ -479,7 +479,7 @@ public class TestPayloads extends LuceneTestCase {
     }
     writer.close();
     IndexReader reader = DirectoryReader.open(dir);
-    TermsEnum terms = MultiTerms.getTerms(reader, field).iterator();
+    TermsEnum terms = MultiFields.getTerms(reader, field).iterator();
     PostingsEnum tp = null;
     while (terms.next() != null) {
       String termText = terms.term().utf8ToString();
@@ -602,7 +602,7 @@ public class TestPayloads extends LuceneTestCase {
     field.setTokenStream(ts);
     writer.addDocument(doc);
     DirectoryReader reader = writer.getReader();
-    TermsEnum te = MultiTerms.getTerms(reader, "field").iterator();
+    TermsEnum te = MultiFields.getTerms(reader, "field").iterator();
     assertTrue(te.seekExact(new BytesRef("withPayload")));
     PostingsEnum de = te.postings(null, PostingsEnum.PAYLOADS);
     de.nextDoc();

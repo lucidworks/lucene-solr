@@ -55,10 +55,6 @@ class TermIntervalsSource extends IntervalsSource {
     if (te.seekExact(term) == false) {
       return null;
     }
-    return intervals(term, te);
-  }
-
-  static IntervalIterator intervals(BytesRef term, TermsEnum te) throws IOException {
     PostingsEnum pe = te.postings(null, PostingsEnum.POSITIONS);
     float cost = termPositionsCost(te);
     return new IntervalIterator() {
@@ -97,11 +93,6 @@ class TermIntervalsSource extends IntervalsSource {
       @Override
       public int end() {
         return pos;
-      }
-
-      @Override
-      public int gaps() {
-        return 0;
       }
 
       @Override
@@ -147,10 +138,6 @@ class TermIntervalsSource extends IntervalsSource {
     if (te.seekExact(term) == false) {
       return null;
     }
-    return matches(te, doc);
-  }
-
-  static MatchesIterator matches(TermsEnum te, int doc) throws IOException {
     PostingsEnum pe = te.postings(null, PostingsEnum.OFFSETS);
     if (pe.advance(doc) != doc) {
       return null;
@@ -201,11 +188,6 @@ class TermIntervalsSource extends IntervalsSource {
         throw new UnsupportedOperationException();
       }
     };
-  }
-
-  @Override
-  public int minExtent() {
-    return 1;
   }
 
   @Override

@@ -86,7 +86,7 @@ public class TestElevationComparator extends LuceneTestCase {
         new SortField(null, SortField.Type.SCORE, reversed)
       );
 
-    TopDocsCollector<Entry> topCollector = TopFieldCollector.create(sort, 50, Integer.MAX_VALUE);
+    TopDocsCollector<Entry> topCollector = TopFieldCollector.create(sort, 50, false, true, true, true);
     searcher.search(newq.build(), topCollector);
 
     TopDocs topDocs = topCollector.topDocs(0, 10);
@@ -193,7 +193,7 @@ class ElevationComparatorSource extends FieldComparatorSource {
         }
 
         @Override
-        public void setScorer(Scorable scorer) {}
+        public void setScorer(Scorer scorer) {}
       };
     }
 

@@ -19,6 +19,8 @@ package org.apache.lucene.search;
 
 import java.io.IOException;
 
+import org.apache.lucene.search.similarities.Similarity;
+
 /**
  * Base class for exact and sloppy phrase matching
  *
@@ -58,7 +60,7 @@ abstract class PhraseMatcher {
    *
    * The sum of the slop-adjusted weights is used as the freq for scoring
    */
-  abstract float sloppyWeight();
+  abstract float sloppyWeight(Similarity.SimScorer simScorer);
 
   /**
    * The start position of the current match

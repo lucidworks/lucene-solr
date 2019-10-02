@@ -136,6 +136,11 @@ public class SolrRrdBackendFactory extends RrdBackendFactory implements SolrClos
   }
 
   @Override
+  public URI getCanonicalUri(URI uri) {
+    return uri;
+  }
+
+  @Override
   public String getPath(URI uri) {
     return uri.getSchemeSpecificPart();
   }
@@ -336,7 +341,7 @@ public class SolrRrdBackendFactory extends RrdBackendFactory implements SolrClos
     log.debug("-- maybe sync backends: " + backends.keySet());
     Map<String, SolrRrdBackend.SyncData> syncDatas = new HashMap<>();
     backends.forEach((path, backend) -> {
-      SolrRrdBackend.SyncData syncData = backend.getSyncData();
+      SolrRrdBackend.SyncData syncData = backend.getSyncDataAndMarkClean();
       if (syncData != null) {
         syncDatas.put(backend.getPath(), syncData);
       }
@@ -367,12 +372,6 @@ public class SolrRrdBackendFactory extends RrdBackendFactory implements SolrClos
       } catch (SolrServerException e) {
         log.warn("Error committing RRD data updates", e);
       }
-      syncDatas.forEach((path, data) -> {
-        SolrRrdBackend backend = backends.get(path);
-        if (backend != null) {
-          backend.markClean();
-        }
-      });
     } catch (IOException e) {
       log.warn("Error sending RRD data updates", e);
     }

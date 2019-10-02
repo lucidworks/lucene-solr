@@ -23,7 +23,6 @@ import java.util.List;
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
-import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsWriterBase;
 import org.apache.lucene.codecs.blocktree.BlockTreeTermsWriter;
 import org.apache.lucene.index.FieldInfo;
@@ -34,8 +33,8 @@ import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.store.ByteBuffersDataOutput;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.RAMOutputStream;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
@@ -47,8 +46,8 @@ import org.apache.lucene.util.fst.Builder;
 import org.apache.lucene.util.fst.ByteSequenceOutputs;
 import org.apache.lucene.util.fst.BytesRefFSTEnum;
 import org.apache.lucene.util.fst.FST;
-import org.apache.lucene.util.fst.PairOutputs;
 import org.apache.lucene.util.fst.PairOutputs.Pair;
+import org.apache.lucene.util.fst.PairOutputs;
 import org.apache.lucene.util.fst.PositiveIntOutputs;
 import org.apache.lucene.util.fst.Util;
 
@@ -162,6 +161,7 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
   }
 
   private final List<FieldMetaData> fields = new ArrayList<>();
+  private final String segment;
 
   /** Create a new writer.  The number of items (terms or
    *  sub-blocks) per block will aim to be between
@@ -175,6 +175,8 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
     throws IOException
   {
     BlockTreeTermsWriter.validateSettings(minItemsInBlock, maxItemsInBlock);
+    segment = state.segmentInfo.name;
+
     maxDoc = state.segmentInfo.maxDoc();
 
     final String termsFileName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, TERMS_EXTENSION);
@@ -219,7 +221,7 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
   }
 
   @Override
-  public void write(Fields fields, NormsProducer norms) throws IOException {
+  public void write(Fields fields) throws IOException {
 
     String lastField = null;
     for(String field : fields) {
@@ -239,7 +241,7 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
         if (term == null) {
           break;
         }
-        termsWriter.write(term, termsEnum, norms);
+        termsWriter.write(term, termsEnum);
       }
 
       termsWriter.finish();
@@ -323,12 +325,12 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
       return "BLOCK: " + brToString(prefix);
     }
 
-    public void compileIndex(List<PendingBlock> blocks, ByteBuffersDataOutput scratchBytes, IntsRefBuilder scratchIntsRef) throws IOException {
+    public void compileIndex(List<PendingBlock> blocks, RAMOutputStream scratchBytes, IntsRefBuilder scratchIntsRef) throws IOException {
 
       assert (isFloor && blocks.size() > 1) || (isFloor == false && blocks.size() == 1): "isFloor=" + isFloor + " blocks=" + blocks;
       assert this == blocks.get(0);
 
-      assert scratchBytes.size() == 0;
+      assert scratchBytes.getFilePointer() == 0;
 
       long maxVersionIndex = maxVersion;
 
@@ -357,8 +359,9 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
       //  System.out.println("  compile index for prefix=" + prefix);
       //}
       //indexBuilder.DEBUG = false;
-      final byte[] bytes = scratchBytes.toArrayCopy();
+      final byte[] bytes = new byte[(int) scratchBytes.getFilePointer()];
       assert bytes.length > 0;
+      scratchBytes.writeTo(bytes, 0);
       indexBuilder.add(Util.toIntsRef(prefix, scratchIntsRef), FST_OUTPUTS.newPair(new BytesRef(bytes, 0, bytes.length), Long.MAX_VALUE - maxVersionIndex));
       scratchBytes.reset();
 
@@ -399,7 +402,7 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
     }
   }
 
-  private final ByteBuffersDataOutput scratchBytes = ByteBuffersDataOutput.newResettableInstance();
+  private final RAMOutputStream scratchBytes = new RAMOutputStream();
   private final IntsRefBuilder scratchIntsRef = new IntsRefBuilder();
 
   class TermsWriter {
@@ -611,7 +614,7 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
             assert longs[pos] >= 0;
             metaWriter.writeVLong(longs[pos]);
           }
-          bytesWriter.copyTo(metaWriter);
+          bytesWriter.writeTo(metaWriter);
           bytesWriter.reset();
           absolute = false;
         }
@@ -654,7 +657,7 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
               assert longs[pos] >= 0;
               metaWriter.writeVLong(longs[pos]);
             }
-            bytesWriter.copyTo(metaWriter);
+            bytesWriter.writeTo(metaWriter);
             bytesWriter.reset();
             absolute = false;
           } else {
@@ -696,13 +699,13 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
       // search on lookup
 
       // Write suffixes byte[] blob to terms dict output:
-      out.writeVInt((int) (suffixWriter.size() << 1) | (isLeafBlock ? 1:0));
-      suffixWriter.copyTo(out);
+      out.writeVInt((int) (suffixWriter.getFilePointer() << 1) | (isLeafBlock ? 1:0));
+      suffixWriter.writeTo(out);
       suffixWriter.reset();
 
       // Write term meta data byte[] blob
-      out.writeVInt((int) metaWriter.size());
-      metaWriter.copyTo(out);
+      out.writeVInt((int) metaWriter.getFilePointer());
+      metaWriter.writeTo(out);
       metaWriter.reset();
 
       // if (DEBUG) {
@@ -726,8 +729,8 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
     }
     
     /** Writes one term's worth of postings. */
-    public void write(BytesRef text, TermsEnum termsEnum, NormsProducer norms) throws IOException {
-      BlockTermState state = postingsWriter.writeTerm(text, termsEnum, docsSeen, norms);
+    public void write(BytesRef text, TermsEnum termsEnum) throws IOException {
+      BlockTermState state = postingsWriter.writeTerm(text, termsEnum, docsSeen);
       // TODO: LUCENE-5693: we don't need this check if we fix IW to not send deleted docs to us on flush:
       if (state != null && ((IDVersionPostingsWriter) postingsWriter).lastDocID != -1) {
         assert state.docFreq != 0;
@@ -827,9 +830,9 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
       }
     }
 
-    private final ByteBuffersDataOutput suffixWriter = ByteBuffersDataOutput.newResettableInstance();
-    private final ByteBuffersDataOutput metaWriter = ByteBuffersDataOutput.newResettableInstance();
-    private final ByteBuffersDataOutput bytesWriter = ByteBuffersDataOutput.newResettableInstance();
+    private final RAMOutputStream suffixWriter = new RAMOutputStream();
+    private final RAMOutputStream metaWriter = new RAMOutputStream();
+    private final RAMOutputStream bytesWriter = new RAMOutputStream();
   }
 
   private boolean closed;

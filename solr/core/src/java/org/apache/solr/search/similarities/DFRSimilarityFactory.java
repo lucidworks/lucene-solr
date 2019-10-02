@@ -17,13 +17,17 @@
 package org.apache.solr.search.similarities;
 
 import org.apache.lucene.search.similarities.AfterEffect;
+import org.apache.lucene.search.similarities.AfterEffect.NoAfterEffect; // javadoc
 import org.apache.lucene.search.similarities.AfterEffectB;
 import org.apache.lucene.search.similarities.AfterEffectL;
 import org.apache.lucene.search.similarities.BasicModel;
+import org.apache.lucene.search.similarities.BasicModelBE;
+import org.apache.lucene.search.similarities.BasicModelD;
 import org.apache.lucene.search.similarities.BasicModelG;
 import org.apache.lucene.search.similarities.BasicModelIF;
 import org.apache.lucene.search.similarities.BasicModelIn;
 import org.apache.lucene.search.similarities.BasicModelIne;
+import org.apache.lucene.search.similarities.BasicModelP;
 import org.apache.lucene.search.similarities.DFRSimilarity;
 import org.apache.lucene.search.similarities.Normalization;
 import org.apache.lucene.search.similarities.Normalization.NoNormalization; // javadoc
@@ -44,7 +48,10 @@ import org.apache.solr.schema.SimilarityFactory;
  * <ol>
  *    <li>{@link BasicModel basicModel}: Basic model of information content:
  *        <ul>
+ *           <li>{@link BasicModelBE Be}: Limiting form of Bose-Einstein
  *           <li>{@link BasicModelG G}: Geometric approximation of Bose-Einstein
+ *           <li>{@link BasicModelP P}: Poisson approximation of the Binomial
+ *           <li>{@link BasicModelD D}: Divergence approximation of the Binomial 
  *           <li>{@link BasicModelIn I(n)}: Inverse document frequency
  *           <li>{@link BasicModelIne I(ne)}: Inverse expected document
  *               frequency [mixture of Poisson and IDF]
@@ -56,6 +63,7 @@ import org.apache.solr.schema.SimilarityFactory;
  *        <ul>
  *           <li>{@link AfterEffectL L}: Laplace's law of succession
  *           <li>{@link AfterEffectB B}: Ratio of two Bernoulli processes
+ *           <li>{@link NoAfterEffect none}: no first normalization
  *        </ul>
  *    <li>{@link Normalization normalization}: Second (length) normalization:
  *        <ul>
@@ -114,7 +122,11 @@ public class DFRSimilarityFactory extends SimilarityFactory {
   }
   
   private BasicModel parseBasicModel(String expr) {
-    if ("G".equals(expr)) {
+    if ("Be".equals(expr)) {
+      return new BasicModelBE();
+    } else if ("D".equals(expr)) {
+      return new BasicModelD();
+    } else if ("G".equals(expr)) {
       return new BasicModelG();
     } else if ("I(F)".equals(expr)) {
       return new BasicModelIF();
@@ -122,6 +134,8 @@ public class DFRSimilarityFactory extends SimilarityFactory {
       return new BasicModelIn();
     } else if ("I(ne)".equals(expr)) {
       return new BasicModelIne();
+    } else if ("P".equals(expr)) {
+      return new BasicModelP();
     } else {
       throw new RuntimeException("Invalid basicModel: " + expr);
     }
@@ -132,6 +146,8 @@ public class DFRSimilarityFactory extends SimilarityFactory {
       return new AfterEffectB();
     } else if ("L".equals(expr)) {
       return new AfterEffectL();
+    } else if ("none".equals(expr)) {
+      return new AfterEffect.NoAfterEffect();
     } else {
       throw new RuntimeException("Invalid afterEffect: " + expr);
     }

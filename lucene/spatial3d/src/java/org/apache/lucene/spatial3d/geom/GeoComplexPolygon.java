@@ -16,15 +16,15 @@
  */
 package org.apache.lucene.spatial3d.geom;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.ArrayList;
+import java.io.IOException;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Collections;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * GeoComplexPolygon objects are structures designed to handle very large numbers of edges.
@@ -1777,7 +1777,7 @@ class GeoComplexPolygon extends GeoBasePolygon {
       return false;
     final GeoComplexPolygon other = (GeoComplexPolygon) o;
     return super.equals(other) && testPoint1InSet == other.testPoint1InSet
-        && testPoint1.equals(other.testPoint1)
+        && testPoint1.equals(testPoint1)
         && pointsList.equals(other.pointsList);
   }
 

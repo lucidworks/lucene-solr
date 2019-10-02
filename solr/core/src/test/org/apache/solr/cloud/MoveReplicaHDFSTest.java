@@ -16,14 +16,11 @@
  */
 package org.apache.solr.cloud;
 
-import java.io.IOException;
-
 import com.carrotsearch.randomizedtesting.ThreadFilter;
 import com.carrotsearch.randomizedtesting.annotations.Nightly;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakFilters;
 import com.carrotsearch.randomizedtesting.annotations.TimeoutSuite;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase.AwaitsFix;
 import org.apache.lucene.util.TimeUnits;
 import org.apache.solr.cloud.hdfs.HdfsTestUtil;
@@ -60,27 +57,9 @@ public class MoveReplicaHDFSTest extends MoveReplicaTest {
 
   @AfterClass
   public static void teardownClass() throws Exception {
-    try {
-      IOUtils.close(
-          () -> {
-            try {
-              if (cluster != null) cluster.shutdown();
-            } catch (Exception e) {
-              throw new IOException("Could not shut down the cluster.", e);
-            }
-          },
-          () -> {
-            try {
-              if (dfsCluster != null) HdfsTestUtil.teardownClass(dfsCluster);
-            } catch (Exception e) {
-              throw new IOException("Could not shut down dfs cluster.", e);
-            }
-          }
-      );
-    } finally {
-      cluster = null;
-      dfsCluster = null;
-    }
+    cluster.shutdown(); // need to close before the MiniDFSCluster
+    HdfsTestUtil.teardownClass(dfsCluster);
+    dfsCluster = null;
   }
 
   @Test
@@ -110,11 +89,15 @@ public class MoveReplicaHDFSTest extends MoveReplicaTest {
   }
 
   public static class ForkJoinThreadsFilter implements ThreadFilter {
+
     @Override
     public boolean reject(Thread t) {
       String name = t.getName();
-      return name.startsWith("ForkJoinPool.commonPool");
+      if (name.startsWith("ForkJoinPool.commonPool")) {
+        return true;
+      }
+      return false;
     }
   }
-}
 
+}

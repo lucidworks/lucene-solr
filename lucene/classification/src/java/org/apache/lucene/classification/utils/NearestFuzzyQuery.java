@@ -27,9 +27,9 @@ import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.BooleanClause;
@@ -62,7 +62,7 @@ public class NearestFuzzyQuery extends Query {
   /**
    * Default constructor
    *
-   * @param analyzer the analyzer used to process the query text
+   * @param analyzer the analyzer used to proecss the query text
    */
   public NearestFuzzyQuery(Analyzer analyzer) {
     this.analyzer = analyzer;
@@ -114,8 +114,11 @@ public class NearestFuzzyQuery extends Query {
       if (prefixLength != other.prefixLength)
         return false;
       if (queryString == null) {
-        return other.queryString == null;
-      } else return queryString.equals(other.queryString);
+        if (other.queryString != null)
+          return false;
+      } else if (!queryString.equals(other.queryString))
+        return false;
+      return true;
     }
 
 
@@ -137,7 +140,7 @@ public class NearestFuzzyQuery extends Query {
 
   private void addTerms(IndexReader reader, FieldVals f, ScoreTermQueue q) throws IOException {
     if (f.queryString == null) return;
-    final Terms terms = MultiTerms.getTerms(reader, f.fieldName);
+    final Terms terms = MultiFields.getTerms(reader, f.fieldName);
     if (terms == null) {
       return;
     }
@@ -207,20 +210,20 @@ public class NearestFuzzyQuery extends Query {
   }
 
   private Query newTermQuery(IndexReader reader, Term term) throws IOException {
-    // we build an artificial TermStates that will give an overall df and ttf
+    // we build an artificial TermContext that will give an overall df and ttf
     // equal to 1
-    TermStates termStates = new TermStates(reader.getContext());
+    TermContext context = new TermContext(reader.getContext());
     for (LeafReaderContext leafContext : reader.leaves()) {
       Terms terms = leafContext.reader().terms(term.field());
       if (terms != null) {
         TermsEnum termsEnum = terms.iterator();
         if (termsEnum.seekExact(term.bytes())) {
-          int freq = 1 - termStates.docFreq(); // we want the total df and ttf to be 1
-          termStates.register(termsEnum.termState(), leafContext.ord, freq, freq);
+          int freq = 1 - context.docFreq(); // we want the total df and ttf to be 1
+          context.register(termsEnum.termState(), leafContext.ord, freq, freq);
         }
       }
     }
-    return new TermQuery(term, termStates);
+    return new TermQuery(term, context);
   }
 
   @Override

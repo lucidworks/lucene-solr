@@ -292,9 +292,7 @@ final class OrdsIntersectTermsEnumFrame {
       // stats
       termState.docFreq = statsReader.readVInt();
       //if (DEBUG) System.out.println("    dF=" + state.docFreq);
-      if (ite.fr.fieldInfo.getIndexOptions() == IndexOptions.DOCS) {
-        termState.totalTermFreq = termState.docFreq; // all tf values are 1
-      } else {
+      if (ite.fr.fieldInfo.getIndexOptions() != IndexOptions.DOCS) {
         termState.totalTermFreq = termState.docFreq + statsReader.readVLong();
         //if (DEBUG) System.out.println("    totTF=" + state.totalTermFreq);
       }

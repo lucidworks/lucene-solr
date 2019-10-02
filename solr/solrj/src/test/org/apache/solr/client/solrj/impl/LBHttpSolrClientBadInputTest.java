@@ -39,7 +39,7 @@ public class LBHttpSolrClientBadInputTest extends SolrJettyTestBase {
   @BeforeClass
   public static void beforeTest() throws Exception {
     JettyConfig jettyConfig = JettyConfig.builder()
-        .withSSLConfig(sslConfig.buildServerSSLConfig())
+        .withSSLConfig(sslConfig)
         .build();
     createAndStartJetty(legacyExampleCollection1SolrHome(), jettyConfig);
   }

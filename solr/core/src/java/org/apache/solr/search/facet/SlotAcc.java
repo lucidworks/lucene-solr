@@ -68,9 +68,20 @@ public abstract class SlotAcc implements Closeable {
   }
 
   /**
-   * All subclasses must override this method to collect documents.  This method is called by the 
-   * default impl of {@link #collect(DocSet,int,IntFunction)} but it's also neccessary if this accumulator 
-   * is used for sorting.
+   * @deprecated This method exists only for backcompatibility, developers of new {@link SlotAcc} 
+   * implementations should not implement this method, and should instead override 
+   * {@link #collect(int,int,IntFunction)}
+   */
+  @Deprecated
+  public void collect(int doc, int slot) throws IOException {
+    throw new UnsupportedOperationException
+      ("SlotAcc implementations must implement 'collect(int,int,IntFunction<SlotContext>)' or the (deprecated)"
+      + "'collect(int,int)'");
+  }
+  
+  /**
+   * All subclasses should override this method, for backcompatability the default implementaion
+   * delegates to the (deprecated) {@link #collect(int,int)}
    *
    * @param doc Single Segment docId (relative to the current {@link LeafReaderContext} to collect
    * @param slot The slot number to collect this document in
@@ -79,7 +90,10 @@ public abstract class SlotAcc implements Closeable {
    *        the current slot, and the {@link SlotContext} returned is only valid for the duration 
    *        of the <code>collect()</code> call.
    */
-  public abstract void collect(int doc, int slot, IntFunction<SlotContext> slotContext) throws IOException;
+  @Deprecated
+  public void collect(int doc, int slot, IntFunction<SlotContext> slotContext) throws IOException {
+    collect(doc,slot);
+  }
 
   /**
    * Bulk collection of all documents in a slot.  The default implementation calls {@link #collect(int,int,IntFunction)}

@@ -38,9 +38,6 @@ public class DisiWrapper {
   // two-phase iteration
   public final TwoPhaseIterator twoPhaseView;
 
-  // For WANDScorer
-  long maxScore;
-
   // FOR SPANS
   public final Spans spans;
   public int lastApproxMatchDoc; // last doc of approximation that did match

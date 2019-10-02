@@ -43,11 +43,6 @@ abstract class BaseGlobalOrdinalScorer extends Scorer {
   }
 
   @Override
-  public float getMaxScore(int upTo) throws IOException {
-    return Float.POSITIVE_INFINITY;
-  }
-
-  @Override
   public int docID() {
     return approximation.docID();
   }

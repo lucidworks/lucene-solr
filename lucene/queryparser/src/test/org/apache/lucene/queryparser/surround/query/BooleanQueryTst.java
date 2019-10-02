@@ -18,15 +18,14 @@ package org.apache.lucene.queryparser.surround.query;
 
 import java.io.IOException;
 
+import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.queryparser.surround.parser.QueryParser;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.Scorable;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.SimpleCollector;
+import org.apache.lucene.queryparser.surround.parser.QueryParser;
 import org.junit.Assert;
 
 public class BooleanQueryTst {
@@ -58,7 +57,7 @@ public class BooleanQueryTst {
   class TestCollector extends SimpleCollector { // FIXME: use check hits from Lucene tests
     int totalMatched;
     boolean[] encountered;
-    private Scorable scorer = null;
+    private Scorer scorer = null;
     private int docBase = 0;
 
     TestCollector() {
@@ -67,7 +66,7 @@ public class BooleanQueryTst {
     }
 
     @Override
-    public void setScorer(Scorable scorer) throws IOException {
+    public void setScorer(Scorer scorer) throws IOException {
       this.scorer = scorer;
     }
 
@@ -97,8 +96,8 @@ public class BooleanQueryTst {
     }
     
     @Override
-    public ScoreMode scoreMode() {
-      return ScoreMode.COMPLETE;
+    public boolean needsScores() {
+      return true;
     }
 
     void checkNrHits() {

@@ -43,11 +43,9 @@ import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.search.PrefixQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.search.WildcardQuery;
 import org.apache.lucene.search.spans.SpanMultiTermQueryWrapper;
@@ -420,7 +418,7 @@ public class TestUnifiedHighlighterStrictPhrases extends LuceneTestCase {
         .add(phraseQuery, BooleanClause.Occur.MUST) // must match and it will
         .build();
     topDocs = searcher.search(query, 10);
-    assertEquals(1, topDocs.totalHits.value);
+    assertEquals(1, topDocs.totalHits);
     snippets = highlighter.highlight("body", query, topDocs, 2);
     if (highlighter.getFlags("body").contains(HighlightFlag.WEIGHT_MATCHES)) {
       assertEquals("one <b>bravo</b> <b>three</b>... four <b>bravo</b> six", snippets[0]);
@@ -518,7 +516,7 @@ public class TestUnifiedHighlighterStrictPhrases extends LuceneTestCase {
         .add(proximityBoostingQuery, BooleanClause.Occur.SHOULD)
         .build();
     TopDocs topDocs = searcher.search(totalQuery, 10, Sort.INDEXORDER);
-    assertEquals(1, topDocs.totalHits.value);
+    assertEquals(1, topDocs.totalHits);
     String[] snippets = highlighter.highlight("body", totalQuery, topDocs);
     assertArrayEquals(new String[]{"There is no <b>accord</b> <b>and</b> <b>satisfaction</b> with this - <b>Consideration</b> of the <b>accord</b> is arbitrary."}, snippets);
   }
@@ -561,8 +559,8 @@ public class TestUnifiedHighlighterStrictPhrases extends LuceneTestCase {
     }
 
     @Override
-    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-      return wrapped.createWeight(searcher, scoreMode, boost);
+    public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+      return wrapped.createWeight(searcher, needsScores, boost);
     }
 
     @Override
@@ -599,7 +597,7 @@ public class TestUnifiedHighlighterStrictPhrases extends LuceneTestCase {
     final String indexedText = "x y z x z x a";
     indexWriter.addDocument(newDoc(indexedText));
     initReaderSearcherHighlighter();
-    TopDocs topDocs = new TopDocs(new TotalHits(1, TotalHits.Relation.EQUAL_TO), new ScoreDoc[]{new ScoreDoc(0, 1f)});
+    TopDocs topDocs = new TopDocs(1, new ScoreDoc[]{new ScoreDoc(0, 1f)}, 1f);
 
     String expected = "<b>x</b> <b>y</b> <b>z</b> x z x <b>a</b>";
     Query q = new SpanNearQuery(new SpanQuery[] {

@@ -890,10 +890,13 @@ public class TestCollapseQParserPlugin extends SolrTestCaseJ4 {
 
   public void testGroupHeadSelector() {
     GroupHeadSelector s;
-
-    expectThrows(SolrException.class, "no exception with multi criteria",
-        () -> GroupHeadSelector.build(params("sort", "foo_s asc", "min", "bar_s"))
-    );
+    
+    try {
+      s = GroupHeadSelector.build(params("sort", "foo_s asc", "min", "bar_s"));
+      fail("no exception with multi criteria");
+    } catch (SolrException e) {
+      // expected
+    }
     
     s = GroupHeadSelector.build(params("min", "foo_s"));
     assertEquals(GroupHeadSelectorType.MIN, s.type);

@@ -18,7 +18,6 @@ package org.apache.solr.client.solrj.impl;
 
 import org.apache.http.HttpResponse;
 import org.apache.solr.SolrJettyTestBase;
-import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.embedded.JettyConfig;
@@ -129,7 +128,7 @@ public class ConcurrentUpdateSolrClientTest extends SolrJettyTestBase {
   public static void beforeTest() throws Exception {
     JettyConfig jettyConfig = JettyConfig.builder()
         .withServlet(new ServletHolder(TestServlet.class), "/cuss/*")
-        .withSSLConfig(sslConfig.buildServerSSLConfig())
+        .withSSLConfig(sslConfig)
         .build();
     createAndStartJetty(legacyExampleCollection1SolrHome(), jettyConfig);
   }
@@ -274,14 +273,14 @@ public class ConcurrentUpdateSolrClientTest extends SolrJettyTestBase {
     
     private String id;
     private int numDocs;
-    private SolrClient cuss;
+    private ConcurrentUpdateSolrClient cuss;
     private String collection;
     
-    SendDocsRunnable(String id, int numDocs, SolrClient cuss) {
+    SendDocsRunnable(String id, int numDocs, ConcurrentUpdateSolrClient cuss) {
       this(id, numDocs, cuss, null);
     }
     
-    SendDocsRunnable(String id, int numDocs, SolrClient cuss, String collection) {
+    SendDocsRunnable(String id, int numDocs, ConcurrentUpdateSolrClient cuss, String collection) {
       this.id = id;
       this.numDocs = numDocs;
       this.cuss = cuss;

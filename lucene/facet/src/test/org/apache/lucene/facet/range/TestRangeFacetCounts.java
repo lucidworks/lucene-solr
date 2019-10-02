@@ -53,7 +53,6 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.LongValuesSource;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.store.Directory;
@@ -298,7 +297,7 @@ public class TestRangeFacetCounts extends FacetTestCase {
     DrillDownQuery ddq = new DrillDownQuery(config);
     DrillSidewaysResult dsr = ds.search(null, ddq, 10);
 
-    assertEquals(100, dsr.hits.totalHits.value);
+    assertEquals(100, dsr.hits.totalHits);
     assertEquals("dim=dim path=[] value=100 childCount=2\n  b (75)\n  a (25)\n", dsr.facets.getTopChildren(10, "dim").toString());
     assertEquals("dim=field path=[] value=21 childCount=5\n  less than 10 (10)\n  less than or equal to 10 (11)\n  over 90 (9)\n  90 or above (10)\n  over 1000 (0)\n",
                  dsr.facets.getTopChildren(10, "field").toString());
@@ -308,7 +307,7 @@ public class TestRangeFacetCounts extends FacetTestCase {
     ddq.add("dim", "b");
     dsr = ds.search(null, ddq, 10);
 
-    assertEquals(75, dsr.hits.totalHits.value);
+    assertEquals(75, dsr.hits.totalHits);
     assertEquals("dim=dim path=[] value=100 childCount=2\n  b (75)\n  a (25)\n", dsr.facets.getTopChildren(10, "dim").toString());
     assertEquals("dim=field path=[] value=16 childCount=5\n  less than 10 (7)\n  less than or equal to 10 (8)\n  over 90 (7)\n  90 or above (8)\n  over 1000 (0)\n",
                  dsr.facets.getTopChildren(10, "field").toString());
@@ -318,7 +317,7 @@ public class TestRangeFacetCounts extends FacetTestCase {
     ddq.add("field", LongPoint.newRangeQuery("field", 0L, 10L));
     dsr = ds.search(null, ddq, 10);
 
-    assertEquals(11, dsr.hits.totalHits.value);
+    assertEquals(11, dsr.hits.totalHits);
     assertEquals("dim=dim path=[] value=11 childCount=2\n  b (8)\n  a (3)\n", dsr.facets.getTopChildren(10, "dim").toString());
     assertEquals("dim=field path=[] value=21 childCount=5\n  less than 10 (10)\n  less than or equal to 10 (11)\n  over 90 (9)\n  90 or above (10)\n  over 1000 (0)\n",
                  dsr.facets.getTopChildren(10, "field").toString());
@@ -495,7 +494,7 @@ public class TestRangeFacetCounts extends FacetTestCase {
         } else {
           ddq.add("field", range.getQuery(fastMatchQuery, vs));
         }
-        assertEquals(expectedCounts[rangeID], s.search(ddq, 10).totalHits.value);
+        assertEquals(expectedCounts[rangeID], s.search(ddq, 10).totalHits);
       }
     }
 
@@ -639,7 +638,7 @@ public class TestRangeFacetCounts extends FacetTestCase {
           ddq.add("field", range.getQuery(fastMatchFilter, vs));
         }
 
-        assertEquals(expectedCounts[rangeID], s.search(ddq, 10).totalHits.value);
+        assertEquals(expectedCounts[rangeID], s.search(ddq, 10).totalHits);
       }
     }
 
@@ -715,8 +714,8 @@ public class TestRangeFacetCounts extends FacetTestCase {
     }
 
     @Override
-    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-      final Weight in = this.in.createWeight(searcher, scoreMode, boost);
+    public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+      final Weight in = this.in.createWeight(searcher, needsScores, boost);
       return new FilterWeight(in) {
         @Override
         public Scorer scorer(LeafReaderContext context) throws IOException {
@@ -841,7 +840,7 @@ public class TestRangeFacetCounts extends FacetTestCase {
     ddq.add("field", ranges[1].getQuery(fastMatchFilter, vs));
 
     // Test simple drill-down:
-    assertEquals(1, s.search(ddq, 10).totalHits.value);
+    assertEquals(1, s.search(ddq, 10).totalHits);
 
     // Test drill-sideways after drill-down
     DrillSideways ds = new DrillSideways(s, config, (TaxonomyReader) null) {
@@ -860,7 +859,7 @@ public class TestRangeFacetCounts extends FacetTestCase {
 
 
     DrillSidewaysResult dsr = ds.search(ddq, 10);
-    assertEquals(1, dsr.hits.totalHits.value);
+    assertEquals(1, dsr.hits.totalHits);
     assertEquals("dim=field path=[] value=3 childCount=6\n  < 1 (0)\n  < 2 (1)\n  < 5 (3)\n  < 10 (3)\n  < 20 (3)\n  < 50 (3)\n",
                  dsr.facets.getTopChildren(10, "field").toString());
 

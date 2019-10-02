@@ -96,13 +96,13 @@ public class DocValuesNumbersQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
     return new ConstantScoreWeight(this, boost) {
 
       @Override
       public Scorer scorer(LeafReaderContext context) throws IOException {
         final SortedNumericDocValues values = DocValues.getSortedNumeric(context.reader(), field);
-        return new ConstantScoreScorer(this, score(), scoreMode, new TwoPhaseIterator(values) {
+        return new ConstantScoreScorer(this, score(), new TwoPhaseIterator(values) {
 
           @Override
           public boolean matches() throws IOException {

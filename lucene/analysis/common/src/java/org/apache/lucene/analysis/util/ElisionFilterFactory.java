@@ -38,7 +38,7 @@ import org.apache.lucene.analysis.fr.FrenchAnalyzer;
  *
  * @since 3.1
  */
-public class ElisionFilterFactory extends TokenFilterFactory implements ResourceLoaderAware {
+public class ElisionFilterFactory extends TokenFilterFactory implements ResourceLoaderAware, MultiTermAwareComponent {
   private final String articlesFile;
   private final boolean ignoreCase;
   private CharArraySet articles;
@@ -63,13 +63,13 @@ public class ElisionFilterFactory extends TokenFilterFactory implements Resource
   }
 
   @Override
-  public TokenStream create(TokenStream input) {
+  public ElisionFilter create(TokenStream input) {
     return new ElisionFilter(input, articles);
   }
 
   @Override
-  public TokenStream normalize(TokenStream input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }
 

@@ -24,7 +24,6 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.search.BoostQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 
 /**
  * Counterpart of {@link BoostQuery} for spans.
@@ -109,8 +108,8 @@ public final class SpanBoostQuery extends SpanQuery {
   }
 
   @Override
-  public SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    return query.createWeight(searcher, scoreMode, SpanBoostQuery.this.boost * boost);
+  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+    return query.createWeight(searcher, needsScores, SpanBoostQuery.this.boost * boost);
   }
 
 }

@@ -37,14 +37,13 @@ An example `security.json` showing both sections is shown below to show how thes
    "blockUnknown": true, <2>
    "class":"solr.BasicAuthPlugin",
    "credentials":{"solr":"IV0EHq1OnNrj6gvRCwvFwTrZ1+z1oBbnQdiVC3otuq0= Ndd7LKvVBAaZIF0QAVi1ekCfAJXr1GGfLtRUXhgrF8c="}, <3>
-   "realm":"My Solr users", <4>
-   "forwardCredentials": false <5>
+   "realm":"My Solr users" <4>
 },
 "authorization":{
    "class":"solr.RuleBasedAuthorizationPlugin",
    "permissions":[{"name":"security-edit",
-      "role":"admin"}], <6>
-   "user-role":{"solr":"admin"} <7>
+      "role":"admin"}], <5>
+   "user-role":{"solr":"admin"} <6>
 }}
 ----
 
@@ -54,9 +53,8 @@ There are several things defined in this file:
 <2> The parameter `"blockUnknown":true` means that unauthenticated requests are not allowed to pass through.
 <3> A user called 'solr', with a password `'SolrRocks'` has been defined.
 <4> We override the `realm` property to display another text on the login prompt.
-<5> The parameter `"forwardCredentials":false` means we let Solr's PKI authenticaion handle distributed request instead of forwarding the Basic Auth header. 
-<6> The 'admin' role has been defined, and it has permission to edit security settings.
-<7> The 'solr' user has been defined to the 'admin' role.
+<5> The 'admin' role has been defined, and it has permission to edit security settings.
+<6> The 'solr' user has been defined to the 'admin' role.
 
 Save your settings to a file called `security.json` locally. If you are using Solr in standalone mode, you should put this file in `$SOLR_HOME`.
 
@@ -81,7 +79,7 @@ There are a few things to keep in mind when using the Basic authentication plugi
 * A user who has access to write permissions to `security.json` will be able to modify all the permissions and how users have been assigned permissions. Special care should be taken to only grant access to editing security to appropriate users.
 * Your network should, of course, be secure. Even with Basic authentication enabled, you should not unnecessarily expose Solr to the outside world.
 
-== Editing Basic Authentication Plugin Configuration
+== Editing Authentication Plugin Configuration
 
 An Authentication API allows modifying user IDs and passwords. The API provides an endpoint with specific commands to set user details or delete a user.
 
@@ -145,7 +143,7 @@ curl --user solr:SolrRocks http://localhost:8983/api/cluster/security/authentica
 
 === Set a Property
 
-Set properties for the authentication plugin. The currently supported properties for the Basic Authentication plugin are `blockUnknown`, `realm` and `forwardCredentials`.
+Set properties for the authentication plugin. The currently supported properties for the Basic Authentication plugin are `blockUnknown` and `realm`.
 
 [.dynamic-tabs]
 --

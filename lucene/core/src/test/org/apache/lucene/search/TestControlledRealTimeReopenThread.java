@@ -47,7 +47,7 @@ import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.ThreadInterruptedException;
 
-@SuppressCodecs({ "SimpleText", "Direct" })
+@SuppressCodecs({ "SimpleText", "Memory", "Direct" })
 public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearchingTestCase {
 
   // Not guaranteed to reflect deletes:
@@ -107,7 +107,7 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
         System.out.println(Thread.currentThread().getName() + ": nrt: got deletes searcher=" + s);
       }
       try {
-        assertEquals(docs.size(), s.search(new TermQuery(id), 10).totalHits.value);
+        assertEquals(docs.size(), s.search(new TermQuery(id), 10).totalHits);
       } finally {
         nrtDeletes.release(s);
       }
@@ -131,7 +131,7 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
         System.out.println(Thread.currentThread().getName() + ": nrt: got noDeletes searcher=" + s);
       }
       try {
-        assertEquals(docs.size(), s.search(new TermQuery(id), 10).totalHits.value);
+        assertEquals(docs.size(), s.search(new TermQuery(id), 10).totalHits);
       } finally {
         nrtNoDeletes.release(s);
       }
@@ -155,7 +155,7 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
         System.out.println(Thread.currentThread().getName() + ": nrt: got noDeletes searcher=" + s);
       }
       try {
-        assertEquals(1, s.search(new TermQuery(id), 10).totalHits.value);
+        assertEquals(1, s.search(new TermQuery(id), 10).totalHits);
       } finally {
         nrtNoDeletes.release(s);
       }
@@ -178,7 +178,7 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
         System.out.println(Thread.currentThread().getName() + ": nrt: got deletes searcher=" + s);
       }
       try {
-        assertEquals(1, s.search(new TermQuery(id), 10).totalHits.value);
+        assertEquals(1, s.search(new TermQuery(id), 10).totalHits);
       } finally {
         nrtDeletes.release(s);
       }
@@ -201,7 +201,7 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
         System.out.println(Thread.currentThread().getName() + ": nrt: got deletes searcher=" + s);
       }
       try {
-        assertEquals(0, s.search(new TermQuery(id), 10).totalHits.value);
+        assertEquals(0, s.search(new TermQuery(id), 10).totalHits);
       } finally {
         nrtDeletes.release(s);
       }
@@ -524,7 +524,7 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
       IndexSearcher searcher = sm.acquire();
       TopDocs td = searcher.search(new TermQuery(new Term("count", i + "")), 10);
       sm.release(searcher);
-      assertEquals(1, td.totalHits.value);
+      assertEquals(1, td.totalHits);
     }
 
     for(Thread commitThread : commitThreads) {

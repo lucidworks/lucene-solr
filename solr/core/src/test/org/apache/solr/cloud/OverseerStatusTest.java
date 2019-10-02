@@ -16,7 +16,6 @@
  */
 package org.apache.solr.cloud;
 
-import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.common.params.CollectionParams;
 import org.apache.solr.common.util.NamedList;
@@ -59,14 +58,14 @@ public class OverseerStatusTest extends SolrCloudTestCase {
     SimpleOrderedMap<Object> reload = (SimpleOrderedMap<Object>) collection_operations.get(CollectionParams.CollectionAction.RELOAD.toLower());
     assertEquals("No stats for reload in OverseerCollectionProcessor", 1, reload.get("requests"));
 
-    HttpSolrClient.RemoteSolrException e = expectThrows(HttpSolrClient.RemoteSolrException.class,
-        "Split shard for non existent collection should have failed",
-        () -> CollectionAdminRequest
-            .splitShard("non_existent_collection")
-            .setShardName("non_existent_shard")
-            .process(cluster.getSolrClient())
-    );
-
+    try {
+      CollectionAdminRequest.splitShard("non_existent_collection")
+          .setShardName("non_existent_shard")
+          .process(cluster.getSolrClient());
+      fail("Split shard for non existent collection should have failed");
+    } catch (Exception e) {
+      // expected because we did not correctly specify required params for split
+    }
     resp = new CollectionAdminRequest.OverseerStatus().process(cluster.getSolrClient()).getResponse();
     collection_operations = (NamedList<Object>) resp.get("collection_operations");
     SimpleOrderedMap<Object> split = (SimpleOrderedMap<Object>) collection_operations.get(CollectionParams.CollectionAction.SPLITSHARD.toLower());

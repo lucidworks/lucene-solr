@@ -19,7 +19,6 @@ package org.apache.solr.security;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Locale;
 
 import javax.servlet.FilterChain;
 import javax.servlet.FilterConfig;
@@ -59,7 +58,6 @@ public class HadoopAuthFilter extends DelegationTokenAuthenticationFilter {
   static final String DELEGATION_TOKEN_ZK_CLIENT = "solr.kerberos.delegation.token.zk.client";
 
   private CuratorFramework curatorFramework;
-  private final Locale defaultLocale = Locale.getDefault();
 
   @Override
   public void init(FilterConfig conf) throws ServletException {
@@ -96,7 +94,6 @@ public class HadoopAuthFilter extends DelegationTokenAuthenticationFilter {
       @Override
       public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse)
           throws IOException, ServletException {
-        Locale.setDefault(defaultLocale);
         HttpServletRequest httpRequest = (HttpServletRequest) servletRequest;
 
         UserGroupInformation ugi = HttpUserGroupInformation.get();
@@ -110,8 +107,6 @@ public class HadoopAuthFilter extends DelegationTokenAuthenticationFilter {
       }
     };
 
-    // A hack until HADOOP-15681 get committed
-    Locale.setDefault(Locale.US);
     super.doFilter(requestNonNullQueryString, response, filterChainWrapper);
   }
 

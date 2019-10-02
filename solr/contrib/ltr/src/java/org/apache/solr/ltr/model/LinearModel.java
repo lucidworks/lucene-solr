@@ -134,7 +134,7 @@ public class LinearModel extends LTRScoringModel {
           "weight on feature"));
       featureDetails.add(featureExplain);
 
-      details.add(Explanation.match(featureExplain.getValue().floatValue()
+      details.add(Explanation.match(featureExplain.getValue()
           * featureToWeight[index], "prod of:", featureDetails));
       index++;
     }

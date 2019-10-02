@@ -180,6 +180,7 @@ public final class UpdateRequestProcessorChain implements PluginInfoInitialized
     this.solrCore =  solrCore;
   }
 
+
   /**
    * Uses the factories in this chain to creates a new 
    * <code>UpdateRequestProcessor</code> instance specific for this request.  
@@ -192,17 +193,13 @@ public final class UpdateRequestProcessorChain implements PluginInfoInitialized
    * @see DistributingUpdateProcessorFactory#DISTRIB_UPDATE_PARAM
    */
   public UpdateRequestProcessor createProcessor(SolrQueryRequest req, 
-                                                SolrQueryResponse rsp) {
+                                                SolrQueryResponse rsp) 
+  {
+    UpdateRequestProcessor processor = null;
+    UpdateRequestProcessor last = null;
+    
     final String distribPhase = req.getParams().get(DistributingUpdateProcessorFactory.DISTRIB_UPDATE_PARAM);
     final boolean skipToDistrib = distribPhase != null;
-    return createProcessor(req, rsp, skipToDistrib, null);
-  }
-
-  /**
-   * @lucene.internal
-   */
-  public UpdateRequestProcessor createProcessor(SolrQueryRequest req,
-                                                SolrQueryResponse rsp, boolean skipToDistrib, UpdateRequestProcessor last) {
     boolean afterDistrib = true;  // we iterate backwards, so true to start
 
     for (int i = chain.size() - 1; i >= 0; i--) {
@@ -219,8 +216,8 @@ public final class UpdateRequestProcessorChain implements PluginInfoInitialized
         }
       }
 
-      // create a new URP with current "last" following it; then replace "last" with this new URP
-      last = factory.getInstance(req, rsp, last);
+      processor = factory.getInstance(req, rsp, last);
+      last = processor == null ? last : processor;
     }
 
     return last;
@@ -245,7 +242,7 @@ public final class UpdateRequestProcessorChain implements PluginInfoInitialized
     //port-processor is tried to be inserted before RunUpdateProcessor
     insertBefore(urps, post, RunUpdateProcessorFactory.class, urps.size() - 1);
     UpdateRequestProcessorChain result = new UpdateRequestProcessorChain(urps, core);
-    if (log.isDebugEnabled()) {
+    if (log.isInfoEnabled()) {
       ArrayList<String> names = new ArrayList<>(urps.size());
       for (UpdateRequestProcessorFactory urp : urps) names.add(urp.getClass().getSimpleName());
       log.debug("New dynamic chain constructed : " + StrUtils.join(names, '>'));

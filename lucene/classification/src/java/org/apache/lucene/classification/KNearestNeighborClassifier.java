@@ -190,14 +190,19 @@ public class KNearestNeighborClassifier implements Classifier<BytesRef> {
   protected List<ClassificationResult<BytesRef>> buildListFromTopDocs(TopDocs topDocs) throws IOException {
     Map<BytesRef, Integer> classCounts = new HashMap<>();
     Map<BytesRef, Double> classBoosts = new HashMap<>(); // this is a boost based on class ranking positions in topDocs
-    float maxScore = topDocs.totalHits.value == 0 ? Float.NaN : topDocs.scoreDocs[0].score;
+    float maxScore = topDocs.getMaxScore();
     for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
       IndexableField[] storableFields = indexSearcher.doc(scoreDoc.doc).getFields(classFieldName);
       for (IndexableField singleStorableField : storableFields) {
         if (singleStorableField != null) {
           BytesRef cl = new BytesRef(singleStorableField.stringValue());
         //update count
-          classCounts.merge(cl, 1, (a, b) -> a + b);
+        Integer count = classCounts.get(cl);
+        if (count != null) {
+          classCounts.put(cl, count + 1);
+        } else {
+          classCounts.put(cl, 1);
+        }
         //update boost, the boost is based on the best score
         Double totalBoost = classBoosts.get(cl);
         double singleBoost = scoreDoc.score / maxScore;
@@ -237,7 +242,7 @@ public class KNearestNeighborClassifier implements Classifier<BytesRef> {
         ", classFieldName='" + classFieldName + '\'' +
         ", k=" + k +
         ", query=" + query +
-        ", similarity=" + indexSearcher.getSimilarity() +
+        ", similarity=" + indexSearcher.getSimilarity(true) +
         '}';
   }
 }

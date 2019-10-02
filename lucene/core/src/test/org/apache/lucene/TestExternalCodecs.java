@@ -42,10 +42,13 @@ public class TestExternalCodecs extends LuceneTestCase {
     
     private final PostingsFormat ramFormat = PostingsFormat.forName("RAMOnly");
     private final PostingsFormat defaultFormat = TestUtil.getDefaultPostingsFormat();
+    private final PostingsFormat memoryFormat = PostingsFormat.forName("Memory");
 
     @Override
     public PostingsFormat getPostingsFormatForField(String field) {
-      if (field.equals("field2") || field.equals("field1") || field.equals("id")) {
+      if (field.equals("field2") || field.equals("id")) {
+        return memoryFormat;
+      } else if (field.equals("field1")) {
         return defaultFormat;
       } else {
         return ramFormat;
@@ -97,8 +100,8 @@ public class TestExternalCodecs extends LuceneTestCase {
     
     assertEquals(NUM_DOCS-1, r.numDocs());
     IndexSearcher s = newSearcher(r);
-    assertEquals(NUM_DOCS-1, s.count(new TermQuery(new Term("field1", "standard"))));
-    assertEquals(NUM_DOCS-1, s.count(new TermQuery(new Term("field2", "memory"))));
+    assertEquals(NUM_DOCS-1, s.search(new TermQuery(new Term("field1", "standard")), 1).totalHits);
+    assertEquals(NUM_DOCS-1, s.search(new TermQuery(new Term("field2", "memory")), 1).totalHits);
     r.close();
 
     if (VERBOSE) {
@@ -117,11 +120,11 @@ public class TestExternalCodecs extends LuceneTestCase {
     assertEquals(NUM_DOCS-2, r.maxDoc());
     assertEquals(NUM_DOCS-2, r.numDocs());
     s = newSearcher(r);
-    assertEquals(NUM_DOCS-2, s.count(new TermQuery(new Term("field1", "standard"))));
-    assertEquals(NUM_DOCS-2, s.count(new TermQuery(new Term("field2", "memory"))));
-    assertEquals(1, s.count(new TermQuery(new Term("id", "76"))));
-    assertEquals(0, s.count(new TermQuery(new Term("id", "77"))));
-    assertEquals(0, s.count(new TermQuery(new Term("id", "44"))));
+    assertEquals(NUM_DOCS-2, s.search(new TermQuery(new Term("field1", "standard")), 1).totalHits);
+    assertEquals(NUM_DOCS-2, s.search(new TermQuery(new Term("field2", "memory")), 1).totalHits);
+    assertEquals(1, s.search(new TermQuery(new Term("id", "76")), 1).totalHits);
+    assertEquals(0, s.search(new TermQuery(new Term("id", "77")), 1).totalHits);
+    assertEquals(0, s.search(new TermQuery(new Term("id", "44")), 1).totalHits);
 
     if (VERBOSE) {
       System.out.println("\nTEST: now close NRT reader");

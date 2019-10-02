@@ -164,10 +164,7 @@ public abstract class FieldType extends FieldProperties {
     return false;
   }
 
-  /**
-   * Initializes the field type.  Subclasses should usually override {@link #init(IndexSchema, Map)}
-   * which is called by this method.
-   */
+  // Handle additional arguments...
   protected void setArgs(IndexSchema schema, Map<String,String> args) {
     // default to STORED, INDEXED, OMIT_TF_POSITIONS and MULTIVALUED depending on schema version
     properties = (STORED | INDEXED);
@@ -1184,6 +1181,9 @@ public abstract class FieldType extends FieldProperties {
   /**Converts any Object to a java Object native to this field type
    */
   public Object toNativeType(Object val) {
+    if (val instanceof CharSequence) {
+      return ((CharSequence) val).toString();
+    }
     return val;
   }
   

@@ -145,11 +145,6 @@ public class FieldLengthFeature extends Feature {
         final float numTerms = decodeNorm(l);
         return numTerms;
       }
-
-      @Override
-      public float getMaxScore(int upTo) throws IOException {
-        return Float.POSITIVE_INFINITY;
-      }
     }
   }
 

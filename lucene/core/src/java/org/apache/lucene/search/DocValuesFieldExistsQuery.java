@@ -60,7 +60,7 @@ public final class DocValuesFieldExistsQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) {
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) {
     return new ConstantScoreWeight(this, boost) {
       @Override
       public Scorer scorer(LeafReaderContext context) throws IOException {
@@ -68,7 +68,7 @@ public final class DocValuesFieldExistsQuery extends Query {
         if (iterator == null) {
           return null;
         }
-        return new ConstantScoreScorer(this, score(), scoreMode, iterator);
+        return new ConstantScoreScorer(this, score(), iterator);
       }
 
       @Override

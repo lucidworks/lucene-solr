@@ -1309,7 +1309,7 @@ public class TestQPHelper extends LuceneTestCase {
     
     Query q = new StandardQueryParser(new CannedAnalyzer()).parse("\"a\"", "field");
     assertTrue(q instanceof MultiPhraseQuery);
-    assertEquals(1, s.search(q, 10).totalHits.value);
+    assertEquals(1, s.search(q, 10).totalHits);
     r.close();
     w.close();
     dir.close();

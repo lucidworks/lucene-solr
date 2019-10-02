@@ -112,10 +112,10 @@ public class Geo3dRptTest extends RandomSpatialOpStrategyTestCase {
     points.add(new GeoPoint(planetModel, 14 * DEGREES_TO_RADIANS, -180 * DEGREES_TO_RADIANS));
     points.add(new GeoPoint(planetModel, -15 * DEGREES_TO_RADIANS, 153 * DEGREES_TO_RADIANS));
     final GeoPoint[] pathPoints = new GeoPoint[] {
-        new GeoPoint(planetModel, 55.0 * DEGREES_TO_RADIANS, -26.0 * DEGREES_TO_RADIANS),
-        new GeoPoint(planetModel, -90.0 * DEGREES_TO_RADIANS, 0.0),
-        new GeoPoint(planetModel, 54.0 * DEGREES_TO_RADIANS, 165.0 * DEGREES_TO_RADIANS),
-        new GeoPoint(planetModel, -90.0 * DEGREES_TO_RADIANS, 0.0)};
+      new GeoPoint(planetModel, 55.0 * DEGREES_TO_RADIANS, -26.0 * DEGREES_TO_RADIANS),
+      new GeoPoint(planetModel, -90.0 * DEGREES_TO_RADIANS, 0.0),
+      new GeoPoint(planetModel, 54.0 * DEGREES_TO_RADIANS, 165.0 * DEGREES_TO_RADIANS),
+      new GeoPoint(planetModel, -90.0 * DEGREES_TO_RADIANS, 0.0)};
     final GeoPath path = GeoPathFactory.makeGeoPath(planetModel, 29 * DEGREES_TO_RADIANS, pathPoints);
     final Shape shape = new Geo3dShape<>(path,ctx);
     final Rectangle rect = ctx.makeRectangle(131, 143, 39, 54);

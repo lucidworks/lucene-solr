@@ -18,6 +18,8 @@ package org.apache.solr.core;
 
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.params.EventParams;
+import org.apache.solr.common.util.ExecutorUtil;
+import org.apache.solr.request.SolrRequestInfo;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -36,8 +38,12 @@ public class TestQuerySenderListener extends SolrTestCaseJ4 {
     // in the same VM
     preInitMockListenerCount = MockEventListener.getCreateCount();
 
+    if (usually()) {
+      // This is set by the SolrDispatchFilter, used in Http calls but not Embedded
+      ExecutorUtil.addThreadLocalProvider(SolrRequestInfo.getInheritableThreadLocalProvider());
+    }
     initCore("solrconfig-querysender.xml","schema.xml");
-
+    
   }
 
   public void testListenerCreationCounts() {

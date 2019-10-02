@@ -19,7 +19,6 @@ package org.apache.solr.search.grouping.distributed.command;
 import org.apache.lucene.search.*;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.search.DocSet;
-import org.apache.solr.search.MaxScoreCollector;
 import org.apache.solr.search.QParser;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.apache.solr.search.SyntaxError;
@@ -111,10 +110,8 @@ public class QueryCommand implements Command<QueryCommandResult> {
   private final boolean needScores;
   private final String queryString;
 
-  private TopDocsCollector topDocsCollector;
+  private TopDocsCollector collector;
   private FilterCollector filterCollector;
-  private MaxScoreCollector maxScoreCollector;
-  private TopDocs topDocs;
 
   private QueryCommand(Sort sort, Query query, int docsToCollect, boolean needScores, DocSet docSet, String queryString) {
     this.sort = sort;
@@ -127,39 +124,18 @@ public class QueryCommand implements Command<QueryCommandResult> {
 
   @Override
   public List<Collector> create() throws IOException {
-    Collector subCollector;
     if (sort == null || sort.equals(Sort.RELEVANCE)) {
-      subCollector = topDocsCollector = TopScoreDocCollector.create(docsToCollect, Integer.MAX_VALUE);
+      collector = TopScoreDocCollector.create(docsToCollect);
     } else {
-      topDocsCollector = TopFieldCollector.create(sort, docsToCollect, Integer.MAX_VALUE);
-      if (needScores) {
-        maxScoreCollector = new MaxScoreCollector();
-        subCollector = MultiCollector.wrap(topDocsCollector, maxScoreCollector);
-      } else {
-        subCollector = topDocsCollector;
-      }
+      collector = TopFieldCollector.create(sort, docsToCollect, true, needScores, needScores, true);
     }
-    filterCollector = new FilterCollector(docSet, subCollector);
+    filterCollector = new FilterCollector(docSet, collector);
     return Arrays.asList((Collector) filterCollector);
   }
 
   @Override
-  public void postCollect(IndexSearcher searcher) throws IOException {
-    topDocs = topDocsCollector.topDocs();
-    if (needScores) {
-      TopFieldCollector.populateScores(topDocs.scoreDocs, searcher, query);
-    }
-  }
-
-  @Override
-  public QueryCommandResult result() throws IOException {
-    float maxScore;
-    if (sort == null) {
-      maxScore = topDocs.scoreDocs.length == 0 ? Float.NaN : topDocs.scoreDocs[0].score;
-    } else {
-      maxScore = maxScoreCollector == null ? Float.NaN : maxScoreCollector.getMaxScore();
-    }
-    return new QueryCommandResult(topDocs, filterCollector.getMatches(), maxScore);
+  public QueryCommandResult result() {
+    return new QueryCommandResult(collector.topDocs(), filterCollector.getMatches());
   }
 
   @Override

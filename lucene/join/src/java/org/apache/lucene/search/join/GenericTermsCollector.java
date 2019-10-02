@@ -129,8 +129,8 @@ interface GenericTermsCollector extends Collector {
       }
 
       @Override
-      public org.apache.lucene.search.ScoreMode scoreMode() {
-        return collector.scoreMode();
+      public boolean needsScores() {
+        return collector.needsScores();
       }
 
       @Override

@@ -135,8 +135,11 @@ public class TestTopFieldCollectorEarlyTermination extends LuceneTestCase {
         } else {
           after = null;
         }
-        final TopFieldCollector collector1 = TopFieldCollector.create(sort, numHits, after, Integer.MAX_VALUE);
-        final TopFieldCollector collector2 = TopFieldCollector.create(sort, numHits, after, 1);
+        final boolean fillFields = random().nextBoolean();
+        final boolean trackDocScores = random().nextBoolean();
+        final boolean trackMaxScore = random().nextBoolean();
+        final TopFieldCollector collector1 = TopFieldCollector.create(sort, numHits, after, fillFields, trackDocScores, trackMaxScore, true);
+        final TopFieldCollector collector2 = TopFieldCollector.create(sort, numHits, after, fillFields, trackDocScores, trackMaxScore, false);
 
         final Query query;
         if (random().nextBoolean()) {
@@ -150,15 +153,15 @@ public class TestTopFieldCollectorEarlyTermination extends LuceneTestCase {
         TopDocs td2 = collector2.topDocs();
 
         assertFalse(collector1.isEarlyTerminated());
-        if (paging == false && maxSegmentSize > numHits && query instanceof MatchAllDocsQuery) {
+        if (trackMaxScore == false && paging == false && maxSegmentSize > numHits && query instanceof MatchAllDocsQuery) {
           // Make sure that we sometimes early terminate
           assertTrue(collector2.isEarlyTerminated());
         }
         if (collector2.isEarlyTerminated()) {
-          assertTrue(td2.totalHits.value >= td1.scoreDocs.length);
-          assertTrue(td2.totalHits.value <= reader.maxDoc());
+          assertTrue(td2.totalHits >= td1.scoreDocs.length);
+          assertTrue(td2.totalHits <= reader.maxDoc());
         } else {
-          assertEquals(td2.totalHits.value, td1.totalHits.value);
+          assertEquals(td2.totalHits, td1.totalHits);
         }
         assertTopDocsEquals(td1.scoreDocs, td2.scoreDocs);
       }

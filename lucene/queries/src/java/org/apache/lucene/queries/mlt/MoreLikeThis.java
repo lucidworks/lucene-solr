@@ -29,10 +29,10 @@ import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
@@ -425,7 +425,7 @@ public final class MoreLikeThis {
    * in to be still considered relevant.
    */
   public void setMaxDocFreqPct(int maxPercentage) {
-    setMaxDocFreq(Math.toIntExact((long) maxPercentage * ir.maxDoc() / 100));
+    setMaxDocFreq(Math.toIntExact((long) maxPercentage * ir.numDocs() / 100));
   }
 
   /**
@@ -577,7 +577,7 @@ public final class MoreLikeThis {
   public Query like(int docNum) throws IOException {
     if (fieldNames == null) {
       // gather list of valid fields from lucene
-      Collection<String> fields = FieldInfos.getIndexedFields(ir);
+      Collection<String> fields = MultiFields.getIndexedFields(ir);
       fieldNames = fields.toArray(new String[fields.size()]);
     }
 
@@ -592,7 +592,7 @@ public final class MoreLikeThis {
   public Query like(Map<String, Collection<Object>> filteredDocument) throws IOException {
     if (fieldNames == null) {
       // gather list of valid fields from lucene
-      Collection<String> fields = FieldInfos.getIndexedFields(ir);
+      Collection<String> fields = MultiFields.getIndexedFields(ir);
       fieldNames = fields.toArray(new String[fields.size()]);
     }
     return createQuery(retrieveTerms(filteredDocument));
@@ -784,7 +784,11 @@ public final class MoreLikeThis {
    * @param vector List of terms and their frequencies for a doc/field
    */
   private void addTermFrequencies(Map<String, Map<String, Int>> field2termFreqMap, Terms vector, String fieldName) throws IOException {
-    Map<String, Int> termFreqMap = field2termFreqMap.computeIfAbsent(fieldName, k -> new HashMap<>());
+    Map<String, Int> termFreqMap = field2termFreqMap.get(fieldName);
+    if (termFreqMap == null) {
+      termFreqMap = new HashMap<>();
+      field2termFreqMap.put(fieldName, termFreqMap);
+    }
     final TermsEnum termsEnum = vector.iterator();
     final CharsRefBuilder spare = new CharsRefBuilder();
     BytesRef text;
@@ -821,7 +825,11 @@ public final class MoreLikeThis {
       throw new UnsupportedOperationException("To use MoreLikeThis without " +
           "term vectors, you must provide an Analyzer");
     }
-    Map<String, Int> termFreqMap = perFieldTermFrequencies.computeIfAbsent(fieldName, k -> new HashMap<>());
+    Map<String, Int> termFreqMap = perFieldTermFrequencies.get(fieldName);
+    if (termFreqMap == null) {
+      termFreqMap = new HashMap<>();
+      perFieldTermFrequencies.put(fieldName, termFreqMap);
+    }
     try (TokenStream ts = analyzer.tokenStream(fieldName, r)) {
       int tokenCount = 0;
       // for every token
@@ -900,7 +908,7 @@ public final class MoreLikeThis {
    * @see #retrieveInterestingTerms(java.io.Reader, String)
    */
   public String[] retrieveInterestingTerms(int docNum) throws IOException {
-    ArrayList<String> al = new ArrayList<>(maxQueryTerms);
+    ArrayList<Object> al = new ArrayList<>(maxQueryTerms);
     PriorityQueue<ScoreTerm> pq = retrieveTerms(docNum);
     ScoreTerm scoreTerm;
     int lim = maxQueryTerms; // have to be careful, retrieveTerms returns all words but that's probably not useful to our caller...
@@ -923,7 +931,7 @@ public final class MoreLikeThis {
    * @see #setMaxQueryTerms
    */
   public String[] retrieveInterestingTerms(Reader r, String fieldName) throws IOException {
-    ArrayList<String> al = new ArrayList<>(maxQueryTerms);
+    ArrayList<Object> al = new ArrayList<>(maxQueryTerms);
     PriorityQueue<ScoreTerm> pq = retrieveTerms(r, fieldName);
     ScoreTerm scoreTerm;
     int lim = maxQueryTerms; // have to be careful, retrieveTerms returns all words but that's probably not useful to our caller...

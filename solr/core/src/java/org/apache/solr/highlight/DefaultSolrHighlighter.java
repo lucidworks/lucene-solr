@@ -19,7 +19,6 @@ package org.apache.solr.highlight;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -53,10 +52,6 @@ import org.apache.lucene.search.highlight.QueryTermScorer;
 import org.apache.lucene.search.highlight.Scorer;
 import org.apache.lucene.search.highlight.TextFragment;
 import org.apache.lucene.search.highlight.TokenSources;
-import org.apache.lucene.search.highlight.WeightedSpanTerm;
-import org.apache.lucene.search.highlight.WeightedSpanTermExtractor;
-import org.apache.lucene.search.join.ToChildBlockJoinQuery;
-import org.apache.lucene.search.join.ToParentBlockJoinQuery;
 import org.apache.lucene.search.vectorhighlight.BoundaryScanner;
 import org.apache.lucene.search.vectorhighlight.FastVectorHighlighter;
 import org.apache.lucene.search.vectorhighlight.FieldQuery;
@@ -243,12 +238,7 @@ public class DefaultSolrHighlighter extends SolrHighlighter implements PluginInf
    */
   protected QueryScorer getSpanQueryScorer(Query query, String fieldName, TokenStream tokenStream, SolrQueryRequest request) {
     QueryScorer scorer = new QueryScorer(query,
-        request.getParams().getFieldBool(fieldName, HighlightParams.FIELD_MATCH, false) ? fieldName : null) {
-      @Override
-      protected WeightedSpanTermExtractor newTermExtractor(String defaultField) {
-        return new CustomSpanTermExtractor(defaultField);
-      }
-    };
+        request.getParams().getFieldBool(fieldName, HighlightParams.FIELD_MATCH, false) ? fieldName : null);
     scorer.setExpandMultiTermQuery(request.getParams().getBool(HighlightParams.HIGHLIGHT_MULTI_TERM, true));
 
     boolean defaultPayloads = true;//overwritten below
@@ -264,24 +254,6 @@ public class DefaultSolrHighlighter extends SolrHighlighter implements PluginInf
     }
     scorer.setUsePayloads(request.getParams().getFieldBool(fieldName, HighlightParams.PAYLOADS, defaultPayloads));
     return scorer;
-  }
-
-  private static class CustomSpanTermExtractor extends WeightedSpanTermExtractor {
-    public CustomSpanTermExtractor(String defaultField) {
-      super(defaultField);
-    }
-
-    @Override
-    protected void extract(Query query, float boost, Map<String, WeightedSpanTerm> terms) throws IOException {
-      // these queries are not supported in lucene highlighting out of the box since 8.0
-      if (query instanceof ToParentBlockJoinQuery) {
-        extract(((ToParentBlockJoinQuery) query).getChildQuery(), boost, terms);
-      } else if (query instanceof ToChildBlockJoinQuery) {
-        extract(((ToChildBlockJoinQuery) query).getParentQuery(), boost, terms);
-      } else {
-        super.extract(query, boost, terms);
-      }
-    }
   }
 
   /**
@@ -497,24 +469,7 @@ public class DefaultSolrHighlighter extends SolrHighlighter implements PluginInf
             // FVH cannot process hl.usePhraseHighlighter parameter per-field basis
             params.getBool(HighlightParams.USE_PHRASE_HIGHLIGHTER, true),
             // FVH cannot process hl.requireFieldMatch parameter per-field basis
-            params.getBool(HighlightParams.FIELD_MATCH, false)) {
-          @Override
-          public FieldQuery getFieldQuery(Query query, IndexReader reader) throws IOException {
-            return new FieldQuery(query, reader, phraseHighlight, fieldMatch) {
-              @Override
-              protected void flatten(Query sourceQuery, IndexReader reader, Collection<Query> flatQueries, float boost) throws IOException {
-                if (sourceQuery instanceof ToParentBlockJoinQuery) {
-                  Query childQuery = ((ToParentBlockJoinQuery) sourceQuery).getChildQuery();
-                  if (childQuery != null) {
-                    flatten(childQuery, reader, flatQueries, boost);
-                  }
-                } else {
-                  super.flatten(sourceQuery, reader, flatQueries, boost);
-                }
-              }
-            };
-          }
-        };
+            params.getBool(HighlightParams.FIELD_MATCH, false));
         fvh.setPhraseLimit(params.getInt(HighlightParams.PHRASE_LIMIT, SolrHighlighter.DEFAULT_PHRASE_LIMIT));
         fvhContainer.fvh = fvh;
         fvhContainer.fieldQuery = fvh.getFieldQuery(query, reader);

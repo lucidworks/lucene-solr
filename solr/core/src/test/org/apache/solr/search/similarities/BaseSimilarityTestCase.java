@@ -18,7 +18,6 @@ package org.apache.solr.search.similarities;
 
 import java.io.IOException;
 
-import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.similarities.PerFieldSimilarityWrapper;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.solr.SolrTestCaseJ4;
@@ -29,7 +28,7 @@ public abstract class BaseSimilarityTestCase extends SolrTestCaseJ4 {
   protected Similarity getSimilarity(String field) {
     Similarity sim = null;
     try {
-      sim = h.getCore().withSearcher(IndexSearcher::getSimilarity);
+      sim = h.getCore().withSearcher(searcher -> searcher.getSimilarity(true));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

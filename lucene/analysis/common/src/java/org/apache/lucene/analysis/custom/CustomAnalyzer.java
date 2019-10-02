@@ -40,6 +40,7 @@ import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
 import org.apache.lucene.analysis.util.CharFilterFactory;
 import org.apache.lucene.analysis.util.ClasspathResourceLoader;
 import org.apache.lucene.analysis.util.FilesystemResourceLoader;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.lucene.analysis.util.ResourceLoader;
 import org.apache.lucene.analysis.util.ResourceLoaderAware;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
@@ -142,7 +143,10 @@ public final class CustomAnalyzer extends Analyzer {
   @Override
   protected Reader initReaderForNormalization(String fieldName, Reader reader) {
     for (CharFilterFactory charFilter : charFilters) {
-      reader = charFilter.normalize(reader);
+      if (charFilter instanceof MultiTermAwareComponent) {
+        charFilter = (CharFilterFactory) ((MultiTermAwareComponent) charFilter).getMultiTermComponent();
+        reader = charFilter.create(reader);
+      }
     }
     return reader;
   }
@@ -160,8 +164,17 @@ public final class CustomAnalyzer extends Analyzer {
   @Override
   protected TokenStream normalize(String fieldName, TokenStream in) {
     TokenStream result = in;
+    // tokenizers can return a tokenfilter if the tokenizer does normalization,
+    // although this is really bogus/abstraction violation...
+    if (tokenizer instanceof MultiTermAwareComponent) {
+      TokenFilterFactory filter = (TokenFilterFactory) ((MultiTermAwareComponent) tokenizer).getMultiTermComponent();
+      result = filter.create(result);
+    }
     for (TokenFilterFactory filter : tokenFilters) {
-      result = filter.normalize(result);
+      if (filter instanceof MultiTermAwareComponent) {
+        filter = (TokenFilterFactory) ((MultiTermAwareComponent) filter).getMultiTermComponent();
+        result = filter.create(result);
+      }
     }
     return result;
   }

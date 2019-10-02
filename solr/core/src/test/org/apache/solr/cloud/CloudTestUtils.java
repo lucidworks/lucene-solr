@@ -131,9 +131,7 @@ public class CloudTestUtils {
 
   /**
    * Return a {@link CollectionStatePredicate} that returns true if a collection has the expected
-   * number of active shards and replicas
-   * @param expectedShards expected number of active shards
-   * @param expectedReplicas expected number of active replicas
+   * number of shards and replicas
    */
   public static CollectionStatePredicate clusterShape(int expectedShards, int expectedReplicas) {
     return clusterShape(expectedShards, expectedReplicas, false, false);

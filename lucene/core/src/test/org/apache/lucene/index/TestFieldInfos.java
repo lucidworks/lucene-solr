@@ -121,7 +121,7 @@ public class TestFieldInfos extends LuceneTestCase {
     writer.forceMerge(1);
 
     IndexReader reader = writer.getReader();
-    FieldInfos fis = FieldInfos.getMergedFieldInfos(reader);
+    FieldInfos fis = MultiFields.getMergedFieldInfos(reader);
     assertEquals(fis.size(), 2);
     Iterator<FieldInfo>  it = fis.iterator();
     while(it.hasNext()) {
@@ -150,7 +150,7 @@ public class TestFieldInfos extends LuceneTestCase {
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random())));
 
     IndexReader reader = writer.getReader();
-    FieldInfos actual = FieldInfos.getMergedFieldInfos(reader);
+    FieldInfos actual = MultiFields.getMergedFieldInfos(reader);
     FieldInfos expected = FieldInfos.EMPTY;
 
     assertThat(actual, sameInstance(expected));
@@ -177,7 +177,7 @@ public class TestFieldInfos extends LuceneTestCase {
     writer.forceMerge(1);
 
     IndexReader reader = writer.getReader();
-    FieldInfos actual = FieldInfos.getMergedFieldInfos(reader);
+    FieldInfos actual = MultiFields.getMergedFieldInfos(reader);
     FieldInfos expected = reader.leaves().get(0).reader().getFieldInfos();
 
     assertThat(reader.leaves().size(), equalTo(1));
