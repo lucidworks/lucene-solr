@@ -1,4 +1,4 @@
-eDiscovery Solr 7.7.2 fixes.
+Solr 7.7.2 fixes for Apple IS&T.
 
 Fixes:-
 SOLR-13538
