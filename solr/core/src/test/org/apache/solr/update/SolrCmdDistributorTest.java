@@ -35,6 +35,8 @@ import org.apache.solr.client.solrj.request.LukeRequest;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrException;
+import java.io.ByteArrayInputStream;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.solr.common.cloud.ZkCoreNodeProps;
 import org.apache.solr.common.cloud.ZkNodeProps;
 import org.apache.solr.common.cloud.ZkStateReader;
@@ -839,5 +841,22 @@ public class SolrCmdDistributorTest extends BaseDistributedSearchTestCase {
       openSearcher = updateRequest.getParams().getBool(UpdateParams.OPEN_SEARCHER, true);
       assertFalse(openSearcher);
     }
+  }
+  
+  @Test
+  public void getRfFromResponseShouldNotCloseTheInputStream() {
+    UpdateRequest dbqReq = new UpdateRequest();
+    dbqReq.deleteByQuery("*:*");
+    SolrCmdDistributor.Req req = new SolrCmdDistributor.Req(null, new StdNode(null, "collection1", "shard1", 1), dbqReq, true);
+    AtomicBoolean isClosed = new AtomicBoolean(false);
+    ByteArrayInputStream is = new ByteArrayInputStream(new byte[100]) {
+      @Override
+      public void close() throws IOException {
+        isClosed.set(true);
+        super.close();
+      }
+    };
+    req.trackRequestResult(null, is, true);
+    assertFalse("Underlying stream should not be closed!", isClosed.get());
   }
 }
