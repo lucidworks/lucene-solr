@@ -1,6 +1,7 @@
 Solr 7.7.2 fixes for Apple IS&T.
 
 Fixes:-
+SOLR-13532
 SOLR-13538
 SOLR-13672 
 SOLR-8346
