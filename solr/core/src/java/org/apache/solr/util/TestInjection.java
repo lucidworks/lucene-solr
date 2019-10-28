@@ -20,7 +20,6 @@ import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.Timer;
@@ -143,8 +142,6 @@ public class TestInjection {
 
   public volatile static boolean uifOutOfMemoryError = false;
 
-  public volatile static Map<String, String> additionalSystemProps = null;
-
   private volatile static CountDownLatch notifyPauseForeverDone = new CountDownLatch(1);
   
   public static void notifyPauseForeverDone() {
@@ -153,7 +150,6 @@ public class TestInjection {
   }
 
   public static void reset() {
-    additionalSystemProps = null;
     nonGracefullClose = null;
     failReplicaRequests = null;
     failUpdateRequests = null;
@@ -464,10 +460,6 @@ public class TestInjection {
       }
     }
     return true;
-  }
-
-  public static Map<String,String> injectAdditionalProps() {
-    return additionalSystemProps;
   }
 
   public static boolean injectUIFOutOfMemoryError() {
