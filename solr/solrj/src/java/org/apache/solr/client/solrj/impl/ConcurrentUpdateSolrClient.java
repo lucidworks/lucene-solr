@@ -209,10 +209,20 @@ public class ConcurrentUpdateSolrClient extends SolrClient {
     public void interruptPoll() {
       Thread lthread = thread;
       if (inPoll && lthread != null) {
+        log.info("LWHD interrupt current thread");
         lthread.interrupt();
       }
     }
-    
+
+    @Override
+    public String toString() {
+      if (thread != null) {
+        return "CUCC Runner " + thread.getName();
+      } else {
+        return "CUCC Runner";
+      }
+    }
+
     //
     // Pull from the queue multiple times and streams over a single connection.
     // Exits on exception, interruption, or an empty queue to pull from.
@@ -289,9 +299,11 @@ public class ConcurrentUpdateSolrClient extends SolrClient {
                   while (true) {
                     try {
                       upd = queue.poll(pollQueueTime, TimeUnit.MILLISECONDS);
+                      log.info("LWHD got upd:{}", upd == null);
                       break;
                     } catch (InterruptedException e) {
                       if (log.isDebugEnabled()) pollInterrupts.incrementAndGet();
+                      log.info("LWHD interrupted queue:{}", queue.isEmpty());
                       if (!queue.isEmpty()) {
                         continue;
                       }
@@ -564,7 +576,7 @@ public class ConcurrentUpdateSolrClient extends SolrClient {
   public synchronized void blockUntilFinished() {
     lock = new CountDownLatch(1);
     try {
-
+      log.info("LWHD Block until finished for CUCC:{} runners:{}",this, runners);
       waitForEmptyQueue();
       interruptRunnerThreadsPolling();
 
@@ -615,6 +627,7 @@ public class ConcurrentUpdateSolrClient extends SolrClient {
     } finally {
       lock.countDown();
       lock = null;
+      log.info("LWHD Done block until finished for CUCC:{}",this);
     }
   }
 
