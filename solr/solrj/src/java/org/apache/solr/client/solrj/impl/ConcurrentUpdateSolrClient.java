@@ -322,8 +322,8 @@ public class ConcurrentUpdateSolrClient extends SolrClient {
               if (isXml) {
                 out.write("</stream>".getBytes(StandardCharsets.UTF_8));
               }
-            
-            
+
+              log.info("LWHD out of runner loop");
             }
           });
 
