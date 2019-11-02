@@ -129,6 +129,7 @@ public class UpdateShardHandler implements SolrMetricProducer, SolrInfoBean {
       log.debug("Creating recoveryExecutor with unbounded pool");
       recoveryExecutor = ExecutorUtil.newMDCAwareCachedThreadPool(recoveryThreadFactory);
     }
+    log.info("LWHD socketTimeout:{} connectionTimeout:{}", socketTimeout, connectionTimeout);
   }
 
   @Override

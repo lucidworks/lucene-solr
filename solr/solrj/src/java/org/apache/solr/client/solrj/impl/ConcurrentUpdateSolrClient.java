@@ -209,7 +209,6 @@ public class ConcurrentUpdateSolrClient extends SolrClient {
     public void interruptPoll() {
       Thread lthread = thread;
       if (inPoll && lthread != null) {
-        log.info("LWHD interrupt current thread");
         lthread.interrupt();
       }
     }
@@ -299,11 +298,9 @@ public class ConcurrentUpdateSolrClient extends SolrClient {
                   while (true) {
                     try {
                       upd = queue.poll(pollQueueTime, TimeUnit.MILLISECONDS);
-                      log.info("LWHD got upd:{}", upd == null);
                       break;
                     } catch (InterruptedException e) {
                       if (log.isDebugEnabled()) pollInterrupts.incrementAndGet();
-                      log.info("LWHD interrupted queue:{}", queue.isEmpty());
                       if (!queue.isEmpty()) {
                         continue;
                       }
