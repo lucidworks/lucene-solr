@@ -86,7 +86,7 @@ public class StreamingSolrClients {
           .withSocketTimeout(socketTimeout)
           .withConnectionTimeout(connectionTimeout)
           .build();
-      client.setPollQueueTime(Integer.MAX_VALUE); // minimize connections created
+      client.setPollQueueTime(10000); // minimize connections created
       client.setParser(new BinaryResponseParser());
       client.setRequestWriter(new BinaryRequestWriter());
       Set<String> queryParams = new HashSet<>(2);
