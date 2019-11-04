@@ -123,6 +123,8 @@ public class ConcurrentUpdateSolrClient extends SolrClient {
     this.internalHttpClient = (builder.httpClient == null);
     this.client = new HttpSolrClient.Builder(builder.baseSolrUrl)
         .withHttpClient(builder.httpClient)
+        .withSocketTimeout(builder.socketTimeoutMillis)
+        .withConnectionTimeout(builder.connectionTimeoutMillis)
         .build();
     this.client.setFollowRedirects(false);
     this.queue = new LinkedBlockingQueue<>(builder.queueSize);
@@ -320,7 +322,6 @@ public class ConcurrentUpdateSolrClient extends SolrClient {
                 out.write("</stream>".getBytes(StandardCharsets.UTF_8));
               }
 
-              log.info("LWHD out of runner loop");
             }
           });
 
