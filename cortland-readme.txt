@@ -1,4 +1,4 @@
-Solr 8.2.0 fixes for Apple IS&T.
+Solr 8.2.0 fixes
 
 Fixes:-
 SOLR-13293
