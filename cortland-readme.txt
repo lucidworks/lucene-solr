@@ -1,6 +1,7 @@
 Solr 7.7.2 fixes
 
 Fixes:-
+SOLR-12859
 SOLR-13532
 SOLR-13538
 SOLR-13672 
