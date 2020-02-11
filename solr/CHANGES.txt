@@ -34,6 +34,8 @@ Bug fixes
 * SOLR-13336: add maxBooleanClauses (default to 1024) setting to solr.xml, reverting previous effective
   value of Integer.MAX_VALUE-1, to restrict risk of pathalogical query expansion.  (hossman)
 
+* SOLR-14058: Fix IndexOutOfBoundsException in PeerSync that can prevent nodes from recovering
+  under certain circumstances. (yonik)
 
 ==================  7.7.3 ==================
 
