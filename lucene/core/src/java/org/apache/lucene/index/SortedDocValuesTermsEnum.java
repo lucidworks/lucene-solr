@@ -25,7 +25,7 @@ import org.apache.lucene.util.BytesRefBuilder;
 /** Implements a {@link TermsEnum} wrapping a provided
  * {@link SortedDocValues}. */
 
-class SortedDocValuesTermsEnum extends TermsEnum {
+class SortedDocValuesTermsEnum extends BaseTermsEnum {
   private final SortedDocValues values;
   private int currentOrd = -1;
   private final BytesRefBuilder scratch;
@@ -101,11 +101,16 @@ class SortedDocValuesTermsEnum extends TermsEnum {
 
   @Override
   public long totalTermFreq() {
-    return -1;
+    throw new UnsupportedOperationException();
   }
 
   @Override
   public PostingsEnum postings(PostingsEnum reuse, int flags) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public ImpactsEnum impacts(int flags) throws IOException {
     throw new UnsupportedOperationException();
   }
 

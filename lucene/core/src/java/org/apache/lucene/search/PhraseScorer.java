@@ -19,31 +19,41 @@ package org.apache.lucene.search;
 
 import java.io.IOException;
 
-import org.apache.lucene.search.similarities.Similarity;
-
 class PhraseScorer extends Scorer {
 
+  final DocIdSetIterator approximation;
+  final ImpactsDISI impactsApproximation;
   final PhraseMatcher matcher;
-  final boolean needsScores;
-  private final Similarity.SimScorer simScorer;
+  final ScoreMode scoreMode;
+  private final LeafSimScorer simScorer;
   final float matchCost;
 
+  private float minCompetitiveScore = 0;
   private float freq = 0;
 
-  PhraseScorer(Weight weight, PhraseMatcher matcher, boolean needsScores, Similarity.SimScorer simScorer) {
+  PhraseScorer(Weight weight, PhraseMatcher matcher, ScoreMode scoreMode, LeafSimScorer simScorer) {
     super(weight);
     this.matcher = matcher;
-    this.needsScores = needsScores;
+    this.scoreMode = scoreMode;
     this.simScorer = simScorer;
     this.matchCost = matcher.getMatchCost();
+    this.approximation = matcher.approximation();
+    this.impactsApproximation = matcher.impactsApproximation();
   }
 
   @Override
   public TwoPhaseIterator twoPhaseIterator() {
-    return new TwoPhaseIterator(matcher.approximation) {
+    return new TwoPhaseIterator(approximation) {
       @Override
       public boolean matches() throws IOException {
         matcher.reset();
+        if (scoreMode == ScoreMode.TOP_SCORES && minCompetitiveScore > 0) {
+          float maxFreq = matcher.maxFreq();
+          if (simScorer.score(docID(), maxFreq) < minCompetitiveScore) {
+            // The maximum score we could get is less than the min competitive score
+            return false;
+          }
+        }
         freq = 0;
         return matcher.nextMatch();
       }
@@ -57,15 +67,15 @@ class PhraseScorer extends Scorer {
 
   @Override
   public int docID() {
-    return matcher.approximation.docID();
+    return approximation.docID();
   }
 
   @Override
   public float score() throws IOException {
     if (freq == 0) {
-      freq = matcher.sloppyWeight(simScorer);
+      freq = matcher.sloppyWeight();
       while (matcher.nextMatch()) {
-        freq += matcher.sloppyWeight(simScorer);
+        freq += matcher.sloppyWeight();
       }
     }
     return simScorer.score(docID(), freq);
@@ -77,9 +87,24 @@ class PhraseScorer extends Scorer {
   }
 
   @Override
+  public void setMinCompetitiveScore(float minScore) {
+    this.minCompetitiveScore = minScore;
+    impactsApproximation.setMinCompetitiveScore(minScore);
+  }
+
+  @Override
+  public int advanceShallow(int target) throws IOException {
+    return impactsApproximation.advanceShallow(target);
+  }
+
+  @Override
+  public float getMaxScore(int upTo) throws IOException {
+    return impactsApproximation.getMaxScore(upTo);
+  }
+
+  @Override
   public String toString() {
     return "PhraseScorer(" + weight + ")";
   }
-
 
 }

@@ -22,21 +22,25 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
-import org.apache.lucene.codecs.lucene50.Lucene50PostingsFormat;
-import org.apache.lucene.codecs.lucene50.Lucene50PostingsReader;
+import org.apache.lucene.codecs.lucene84.Lucene84PostingsFormat;
+import org.apache.lucene.codecs.lucene84.Lucene84PostingsReader;
+import org.apache.lucene.index.ImpactsEnum;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.SlowImpactsEnum;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.TermState;
+import org.apache.lucene.index.TermStates;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.similarities.Similarity;
+import org.apache.lucene.search.similarities.Similarity.SimScorer;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 
@@ -108,6 +112,7 @@ public class PhraseQuery extends Query {
      * all of them.
      */
     public Builder add(Term term, int position) {
+      Objects.requireNonNull(term, "Cannot add a null term to PhraseQuery");
       if (position < 0) {
         throw new IllegalArgumentException("Positions must be >= 0, got " + position);
       }
@@ -151,6 +156,9 @@ public class PhraseQuery extends Query {
     if (slop < 0) {
       throw new IllegalArgumentException("Slop must be >= 0, got " + slop);
     }
+    for (Term term : terms) {
+      Objects.requireNonNull(term, "Cannot add a null term to PhraseQuery");
+    }
     for (int i = 1; i < terms.length; ++i) {
       if (terms[i-1].field().equals(terms[i].field()) == false) {
         throw new IllegalArgumentException("All terms should have the same field");
@@ -184,6 +192,7 @@ public class PhraseQuery extends Query {
   private static Term[] toTerms(String field, String... termStrings) {
     Term[] terms = new Term[termStrings.length];
     for (int i = 0; i < terms.length; ++i) {
+      Objects.requireNonNull(termStrings[i], "Cannot add a null term to PhraseQuery");
       terms[i] = new Term(field, termStrings[i]);
     }
     return terms;
@@ -192,6 +201,7 @@ public class PhraseQuery extends Query {
   private static Term[] toTerms(String field, BytesRef... termBytes) {
     Term[] terms = new Term[termBytes.length];
     for (int i = 0; i < terms.length; ++i) {
+      Objects.requireNonNull(termBytes[i], "Cannot add a null term to PhraseQuery");
       terms[i] = new Term(field, termBytes[i]);
     }
     return terms;
@@ -255,6 +265,9 @@ public class PhraseQuery extends Query {
    */
   public int getSlop() { return slop; }
 
+  /** Returns the field this query applies to */
+  public String getField() { return field; }
+
   /** Returns the list of terms in this phrase. */
   public Term[] getTerms() {
     return terms;
@@ -284,14 +297,25 @@ public class PhraseQuery extends Query {
     }
   }
 
+  @Override
+  public void visit(QueryVisitor visitor) {
+    if (visitor.acceptField(field) == false) {
+      return;
+    }
+    QueryVisitor v = visitor.getSubVisitor(BooleanClause.Occur.MUST, this);
+    v.consumeTerms(this, terms);
+  }
+
   static class PostingsAndFreq implements Comparable<PostingsAndFreq> {
     final PostingsEnum postings;
+    final ImpactsEnum impacts;
     final int position;
     final Term[] terms;
     final int nTerms; // for faster comparisons
 
-    public PostingsAndFreq(PostingsEnum postings, int position, Term... terms) {
+    public PostingsAndFreq(PostingsEnum postings, ImpactsEnum impacts, int position, Term... terms) {
       this.postings = postings;
+      this.impacts = impacts;
       this.position = position;
       nTerms = terms==null ? 0 : terms.length;
       if (nTerms>0) {
@@ -303,6 +327,22 @@ public class PhraseQuery extends Query {
           Arrays.sort(terms2);
           this.terms = terms2;
         }
+      } else {
+        this.terms = null;
+      }
+    }
+
+    public PostingsAndFreq(PostingsEnum postings, ImpactsEnum impacts, int position, List<Term> terms) {
+      this.postings = postings;
+      this.impacts = impacts;
+      this.position = position;
+      nTerms = terms == null ? 0 : terms.size();
+      if (nTerms > 0) {
+        Term[] terms2 = terms.toArray(new Term[0]);
+        if (nTerms > 1) {
+          Arrays.sort(terms2);
+        }
+        this.terms = terms2;
       } else {
         this.terms = null;
       }
@@ -352,10 +392,10 @@ public class PhraseQuery extends Query {
   /** A guess of
    * the average number of simple operations for the initial seek and buffer refill
    * per document for the positions of a term.
-   * See also {@link Lucene50PostingsReader.BlockPostingsEnum#nextPosition()}.
+   * See also {@link Lucene84PostingsReader.BlockImpactsPostingsEnum#nextPosition()}.
    * <p>
    * Aside: Instead of being constant this could depend among others on
-   * {@link Lucene50PostingsFormat#BLOCK_SIZE},
+   * {@link Lucene84PostingsFormat#BLOCK_SIZE},
    * {@link TermsEnum#docFreq()},
    * {@link TermsEnum#totalTermFreq()},
    * {@link DocIdSetIterator#cost()} (expected number of matching docs),
@@ -364,7 +404,7 @@ public class PhraseQuery extends Query {
    */
   private static final int TERM_POSNS_SEEK_OPS_PER_DOC = 128;
 
-  /** Number of simple operations in {@link Lucene50PostingsReader.BlockPostingsEnum#nextPosition()}
+  /** Number of simple operations in {@link Lucene84PostingsReader.BlockImpactsPostingsEnum#nextPosition()}
    *  when no seek or buffer refill is done.
    */
   private static final int TERM_OPS_PER_POS = 7;
@@ -373,25 +413,25 @@ public class PhraseQuery extends Query {
    *  of processing the occurrences of a term
    *  in a document that contains the term.
    *  This is for use by {@link TwoPhaseIterator#matchCost} implementations.
-   *  <br>This may be inaccurate when {@link TermsEnum#totalTermFreq()} is not available.
    *  @param termsEnum The term is the term at which this TermsEnum is positioned.
    */
   static float termPositionsCost(TermsEnum termsEnum) throws IOException {
     int docFreq = termsEnum.docFreq();
     assert docFreq > 0;
-    long totalTermFreq = termsEnum.totalTermFreq(); // -1 when not available
-    float expOccurrencesInMatchingDoc = (totalTermFreq < docFreq) ? 1 : (totalTermFreq / (float) docFreq);
+    long totalTermFreq = termsEnum.totalTermFreq();
+    float expOccurrencesInMatchingDoc = totalTermFreq / (float) docFreq;
     return TERM_POSNS_SEEK_OPS_PER_DOC + expOccurrencesInMatchingDoc * TERM_OPS_PER_POS;
   }
 
-  @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
-    return new PhraseWeight(this, field, searcher, needsScores) {
 
-      private transient TermContext states[];
+  @Override
+  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+    return new PhraseWeight(this, field, searcher, scoreMode) {
+
+      private transient TermStates states[];
 
       @Override
-      protected Similarity.SimWeight getStats(IndexSearcher searcher) throws IOException {
+      protected Similarity.SimScorer getStats(IndexSearcher searcher) throws IOException {
         final int[] positions = PhraseQuery.this.getPositions();
         if (positions.length < 2) {
           throw new IllegalStateException("PhraseWeight does not support less than 2 terms, call rewrite first");
@@ -399,28 +439,28 @@ public class PhraseQuery extends Query {
           throw new IllegalStateException("PhraseWeight requires that the first position is 0, call rewrite first");
         }
         final IndexReaderContext context = searcher.getTopReaderContext();
-        states = new TermContext[terms.length];
+        states = new TermStates[terms.length];
         TermStatistics termStats[] = new TermStatistics[terms.length];
         int termUpTo = 0;
         for (int i = 0; i < terms.length; i++) {
           final Term term = terms[i];
-          states[i] = TermContext.build(context, term);
-          if (needsScores) {
-            TermStatistics termStatistics = searcher.termStatistics(term, states[i]);
-            if (termStatistics != null) {
-              termStats[termUpTo++] = termStatistics;
+          states[i] = TermStates.build(context, term, scoreMode.needsScores());
+          if (scoreMode.needsScores()) {
+            TermStates ts = states[i];
+            if (ts.docFreq() > 0) {
+              termStats[termUpTo++] = searcher.termStatistics(term, ts.docFreq(), ts.totalTermFreq());
             }
           }
         }
         if (termUpTo > 0) {
-          return similarity.computeWeight(boost, searcher.collectionStatistics(field), ArrayUtil.copyOfSubArray(termStats, 0, termUpTo));
+          return similarity.scorer(boost, searcher.collectionStatistics(field), ArrayUtil.copyOfSubArray(termStats, 0, termUpTo));
         } else {
           return null; // no terms at all, we won't use similarity
         }
       }
 
       @Override
-      protected PhraseMatcher getPhraseMatcher(LeafReaderContext context, boolean exposeOffsets) throws IOException {
+      protected PhraseMatcher getPhraseMatcher(LeafReaderContext context, SimScorer scorer, boolean exposeOffsets) throws IOException {
         assert terms.length > 0;
         final LeafReader reader = context.reader();
         PostingsAndFreq[] postingsFreqs = new PostingsAndFreq[terms.length];
@@ -440,24 +480,31 @@ public class PhraseQuery extends Query {
 
         for (int i = 0; i < terms.length; i++) {
           final Term t = terms[i];
-          final TermState state = states[i].get(context.ord);
+          final TermState state = states[i].get(context);
           if (state == null) { /* term doesnt exist in this segment */
             assert termNotInReader(reader, t): "no termstate found but term exists in reader";
             return null;
           }
           te.seekExact(t.bytes(), state);
-          PostingsEnum postingsEnum = te.postings(null, exposeOffsets ? PostingsEnum.ALL : PostingsEnum.POSITIONS);
-          postingsFreqs[i] = new PostingsAndFreq(postingsEnum, positions[i], t);
+          PostingsEnum postingsEnum;
+          ImpactsEnum impactsEnum;
+          if (scoreMode == ScoreMode.TOP_SCORES) {
+            postingsEnum = impactsEnum = te.impacts(exposeOffsets ? PostingsEnum.OFFSETS : PostingsEnum.POSITIONS);
+          } else {
+            postingsEnum = te.postings(null, exposeOffsets ? PostingsEnum.OFFSETS : PostingsEnum.POSITIONS);
+            impactsEnum = new SlowImpactsEnum(postingsEnum);
+          }
+          postingsFreqs[i] = new PostingsAndFreq(postingsEnum, impactsEnum, positions[i], t);
           totalMatchCost += termPositionsCost(te);
         }
 
         // sort by increasing docFreq order
         if (slop == 0) {
           ArrayUtil.timSort(postingsFreqs);
-          return new ExactPhraseMatcher(postingsFreqs, totalMatchCost);
+          return new ExactPhraseMatcher(postingsFreqs, scoreMode, scorer, totalMatchCost);
         }
         else {
-          return new SloppyPhraseMatcher(postingsFreqs, slop, totalMatchCost, exposeOffsets);
+          return new SloppyPhraseMatcher(postingsFreqs, slop, scoreMode, scorer, totalMatchCost, exposeOffsets);
         }
       }
 

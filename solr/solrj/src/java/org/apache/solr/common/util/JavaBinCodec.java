@@ -37,8 +37,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
-import org.apache.solr.common.ConditionalMapWriter;
+import org.apache.solr.common.ConditionalKeyMapWriter;
 import org.apache.solr.common.EnumFieldValue;
 import org.apache.solr.common.IteratorWriter;
 import org.apache.solr.common.IteratorWriter.ItemWriter;
@@ -49,6 +50,7 @@ import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.SolrInputField;
+import org.apache.solr.common.params.CommonParams;
 import org.noggit.CharArr;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,6 +102,7 @@ public class JavaBinCodec implements PushWriter {
           MAP_ENTRY_ITER = 17,
           ENUM_FIELD_VALUE = 18,
           MAP_ENTRY = 19,
+          UUID = 20, // This is reserved to be used only in LogCodec
           // types that combine tag + length (or other info) in a single byte
           TAG_AND_LEN = (byte) (1 << 5),
           STR = (byte) (1 << 5),
@@ -204,7 +207,7 @@ public class JavaBinCodec implements PushWriter {
     return _init(dis);
   }
 
-  private FastInputStream _init(FastInputStream dis) throws IOException {
+  protected FastInputStream _init(FastInputStream dis) throws IOException {
     version = dis.readByte();
     if (version != VERSION) {
       throw new RuntimeException("Invalid version (expected " + VERSION +
@@ -359,7 +362,7 @@ public class JavaBinCodec implements PushWriter {
       return true;
     }
     if (val instanceof SolrInputField) {
-      return writeKnownType(((SolrInputField) val).getRawValue());
+      return writeKnownType(((SolrInputField) val).getValue());
     }
     if (val instanceof IteratorWriter) {
       writeIterator((IteratorWriter) val);
@@ -530,7 +533,7 @@ public class JavaBinCodec implements PushWriter {
   //use this to ignore the writable interface because , child docs will ignore the fl flag
   // is it a good design?
   private boolean ignoreWritable =false;
-  private ConditionalMapWriter.EntryWriterWrapper cew;
+  private MapWriter.EntryWriter cew;
 
   public void writeSolrDocument(SolrDocument doc) throws IOException {
     List<SolrDocument> children = doc.getChildDocuments();
@@ -545,7 +548,7 @@ public class JavaBinCodec implements PushWriter {
     int sz = fieldsCount + (children==null ? 0 : children.size());
     writeTag(SOLRDOC);
     writeTag(ORDERED_MAP, sz);
-    if (cew == null) cew = new ConditionalMapWriter.EntryWriterWrapper(ew, (k, o) -> toWrite(k.toString()));
+    if (cew == null) cew = new ConditionalKeyMapWriter.EntryWriterWrapper(ew, (k) -> toWrite(k.toString()));
     doc.writeMap(cew);
     if (children != null) {
       try {
@@ -648,13 +651,14 @@ public class JavaBinCodec implements PushWriter {
   protected SolrInputDocument createSolrInputDocument(int sz) {
     return new SolrInputDocument(new LinkedHashMap<>(sz));
   }
+  static final Predicate<CharSequence> IGNORECHILDDOCS = it -> !CommonParams.CHILDDOC.equals(it.toString());
 
   public void writeSolrInputDocument(SolrInputDocument sdoc) throws IOException {
     List<SolrInputDocument> children = sdoc.getChildDocuments();
     int sz = sdoc.size() + (children==null ? 0 : children.size());
     writeTag(SOLRINPUTDOC, sz);
     writeFloat(1f); // document boost
-    sdoc.writeMap(ew);
+    sdoc.writeMap(new ConditionalKeyMapWriter.EntryWriterWrapper(ew,IGNORECHILDDOCS));
     if (children != null) {
       for (SolrInputDocument child : children) {
         writeSolrInputDocument(child);
@@ -685,6 +689,10 @@ public class JavaBinCodec implements PushWriter {
   public Map<Object,Object> readMap(DataInputInputStream dis)
           throws IOException {
     int sz = readVInt(dis);
+    return readMap(dis, sz);
+  }
+
+  protected Map<Object, Object> readMap(DataInputInputStream dis, int sz) throws IOException {
     Map<Object, Object> m = newMap(sz);
     for (int i = 0; i < sz; i++) {
       Object key = readVal(dis);
@@ -782,6 +790,10 @@ public class JavaBinCodec implements PushWriter {
 
   public List<Object> readArray(DataInputInputStream dis) throws IOException {
     int sz = readSize(dis);
+    return readArray(dis, sz);
+  }
+
+  protected List readArray(DataInputInputStream dis, int sz) throws IOException {
     ArrayList<Object> l = new ArrayList<>(sz);
     for (int i = 0; i < sz; i++) {
       l.add(readVal(dis));
@@ -798,8 +810,8 @@ public class JavaBinCodec implements PushWriter {
     writeInt(enumFieldValue.toInt());
     writeStr(enumFieldValue.toString());
   }
-  
-  public void writeMapEntry(Entry<Object,Object> val) throws IOException {
+
+  public void writeMapEntry(Map.Entry val) throws IOException {
     writeTag(MAP_ENTRY);
     writeVal(val.getKey());
     writeVal(val.getValue());
@@ -928,23 +940,41 @@ public class JavaBinCodec implements PushWriter {
 
   protected CharSequence readUtf8(DataInputInputStream dis) throws IOException {
     int sz = readSize(dis);
+    return readUtf8(dis, sz);
+  }
+
+  protected CharSequence readUtf8(DataInputInputStream dis, int sz) throws IOException {
+    ByteArrayUtf8CharSequence result = new ByteArrayUtf8CharSequence(null,0,0);
+    if(dis.readDirectUtf8(result, sz)){
+     result.stringProvider= getStringProvider();
+     return result;
+    }
+
     if (sz > MAX_UTF8_SZ) return _readStr(dis, null, sz);
     if (bytesBlock == null) bytesBlock = new BytesBlock(1024 * 4);
     BytesBlock block = this.bytesBlock.expand(sz);
     dis.readFully(block.getBuf(), block.getStartPos(), sz);
 
-    ByteArrayUtf8CharSequence result = new ByteArrayUtf8CharSequence(block.getBuf(), block.getStartPos(), sz);
+    result.reset(block.getBuf(), block.getStartPos(), sz,null);
+    result.stringProvider = getStringProvider();
+    return result;
+  }
+
+  private Function<ByteArrayUtf8CharSequence, String> getStringProvider() {
     if (stringProvider == null) {
-      stringProvider = butf8cs -> {
-        synchronized (JavaBinCodec.this) {
-          arr.reset();
-          ByteUtils.UTF8toUTF16(butf8cs.buf, butf8cs.offset(), butf8cs.size(), arr);
-          return arr.toString();
+      stringProvider = new Function<ByteArrayUtf8CharSequence,String>() {
+        final CharArr charArr = new CharArr(8);
+        @Override
+        public String apply(ByteArrayUtf8CharSequence butf8cs) {
+          synchronized (charArr) {
+            charArr.reset();
+            ByteUtils.UTF8toUTF16(butf8cs.buf, butf8cs.offset(), butf8cs.size(), charArr);
+            return charArr.toString();
+          }
         }
       };
     }
-    result.stringProvider = this.stringProvider;
-    return result;
+    return this.stringProvider;
   }
 
   public void writeInt(int val) throws IOException {
@@ -1230,66 +1260,6 @@ public class JavaBinCodec implements PushWriter {
         cache.put(copy, result);
       }
       return result;
-    }
-  }
-
-  public static class StringBytes {
-    byte[] bytes;
-
-    /**
-     * Offset of first valid byte.
-     */
-    int offset;
-
-    /**
-     * Length of used bytes.
-     */
-    private int length;
-    private int hash;
-
-    public StringBytes(byte[] bytes, int offset, int length) {
-      reset(bytes, offset, length);
-    }
-
-    StringBytes reset(byte[] bytes, int offset, int length) {
-      this.bytes = bytes;
-      this.offset = offset;
-      this.length = length;
-      hash = bytes == null ? 0 : Hash.murmurhash3_x86_32(bytes, offset, length, 0);
-      return this;
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      if (other == null) {
-        return false;
-      }
-      if (other instanceof StringBytes) {
-        return this.bytesEquals((StringBytes) other);
-      }
-      return false;
-    }
-
-    boolean bytesEquals(StringBytes other) {
-      assert other != null;
-      if (length == other.length) {
-        int otherUpto = other.offset;
-        final byte[] otherBytes = other.bytes;
-        final int end = offset + length;
-        for (int upto = offset; upto < end; upto++, otherUpto++) {
-          if (bytes[upto] != otherBytes[otherUpto]) {
-            return false;
-          }
-        }
-        return true;
-      } else {
-        return false;
-      }
-    }
-
-    @Override
-    public int hashCode() {
-      return hash;
     }
   }
 

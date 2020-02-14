@@ -33,6 +33,7 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MultiPhraseQuery;
 import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.spans.SpanNearQuery;
 import org.apache.lucene.search.spans.SpanOrQuery;
@@ -172,7 +173,7 @@ public class PayloadSpanUtil {
     searcher.setQueryCache(null);
 
     query = (SpanQuery) searcher.rewrite(query);
-    SpanWeight w = (SpanWeight) searcher.createWeight(query, false, 1);
+    SpanWeight w = (SpanWeight) searcher.createWeight(query, ScoreMode.COMPLETE_NO_SCORES, 1);
 
     PayloadSpanCollector collector = new PayloadSpanCollector();
     for (LeafReaderContext leafReaderContext : context.leaves()) {

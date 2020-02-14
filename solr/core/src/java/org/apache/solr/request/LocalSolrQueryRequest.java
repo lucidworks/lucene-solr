@@ -21,7 +21,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
-
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.MultiMapSolrParams;
 import org.apache.solr.common.params.SolrParams;
@@ -74,8 +73,8 @@ public class LocalSolrQueryRequest extends SolrQueryRequestBase {
   @Override public Principal getUserPrincipal() {
     return new LocalPrincipal(this.userPrincipalName);
   }
-   
-  /** 
+ 
+   /** 
    * Allows setting the 'name' of the User Principal for the purposes of creating local requests
    * in a solr node when security is enabled.  It is experiemental and subject to removal
    *
@@ -103,7 +102,6 @@ public class LocalSolrQueryRequest extends SolrQueryRequestBase {
       return Objects.equals(this.getClass(), other.getClass())
         && Objects.equals(this.getName(), ((LocalPrincipal)other).getName() );
     }
-  }
- 
+ }
 }
 

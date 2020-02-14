@@ -43,7 +43,7 @@ import org.apache.lucene.util.TestUtil;
  * Test that norms info is preserved during index life - including
  * separate norms, addDocument, addIndexes, forceMerge.
  */
-@SuppressCodecs({ "Memory", "Direct", "SimpleText" })
+@SuppressCodecs({ "Direct", "SimpleText" })
 @Slow
 public class TestNorms extends LuceneTestCase {
   static final String BYTE_TEST_FIELD = "normsTestByte";
@@ -117,12 +117,7 @@ public class TestNorms extends LuceneTestCase {
     }
 
     @Override
-    public SimWeight computeWeight(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public SimScorer simScorer(SimWeight weight, LeafReaderContext context) throws IOException {
+    public SimScorer scorer(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
       throw new UnsupportedOperationException();
     }
   } 

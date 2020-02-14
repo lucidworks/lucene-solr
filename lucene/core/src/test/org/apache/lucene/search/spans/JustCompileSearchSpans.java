@@ -20,6 +20,8 @@ package org.apache.lucene.search.spans;
 import java.io.IOException;
 
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.QueryVisitor;
+import org.apache.lucene.search.ScoreMode;
 
 /**
  * Holds all implementations of classes in the o.a.l.s.spans package as a
@@ -93,7 +95,12 @@ final class JustCompileSearchSpans {
     }
 
     @Override
-    public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+    public SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+      throw new UnsupportedOperationException(UNSUPPORTED_MSG);
+    }
+
+    @Override
+    public void visit(QueryVisitor visitor) {
       throw new UnsupportedOperationException(UNSUPPORTED_MSG);
     }
 

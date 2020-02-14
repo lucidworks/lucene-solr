@@ -21,6 +21,7 @@ import java.lang.invoke.MethodHandles;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
 import java.util.Locale;
 import java.util.concurrent.ExecutionException;
 
@@ -33,8 +34,6 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.IndexSchemaFactory;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,7 +87,7 @@ public abstract class ConfigSetService {
               && !flags.getBooleanArg("trusted")
               ) ? false: true;
 
-      SolrConfig solrConfig = createSolrConfig(dcore, coreLoader);
+      SolrConfig solrConfig = createSolrConfig(dcore, coreLoader, trusted);
       IndexSchema schema = createIndexSchema(dcore, solrConfig);
       return new ConfigSet(configName(dcore), solrConfig, schema, properties, trusted);
     } catch (Exception e) {
@@ -103,10 +102,11 @@ public abstract class ConfigSetService {
    * Create a SolrConfig object for a core
    * @param cd the core's CoreDescriptor
    * @param loader the core's resource loader
+   * @param isTrusted is the configset trusted?
    * @return a SolrConfig object
    */
-  protected SolrConfig createSolrConfig(CoreDescriptor cd, SolrResourceLoader loader) {
-    return SolrConfig.readFromResourceLoader(loader, cd.getConfigName());
+  protected SolrConfig createSolrConfig(CoreDescriptor cd, SolrResourceLoader loader, boolean isTrusted) {
+    return SolrConfig.readFromResourceLoader(loader, cd.getConfigName(), isTrusted);
   }
 
   /**
@@ -212,12 +212,10 @@ public abstract class ConfigSetService {
       super(loader, configSetBase);
     }
 
-    public static final DateTimeFormatter cacheKeyFormatter = DateTimeFormat.forPattern("yyyyMMddHHmmss");
-
     public static String cacheName(Path schemaFile) throws IOException {
       long lastModified = Files.getLastModifiedTime(schemaFile).toMillis();
       return String.format(Locale.ROOT, "%s:%s",
-                            schemaFile.toString(), cacheKeyFormatter.print(lastModified));
+                            schemaFile.toString(), Instant.ofEpochMilli(lastModified).toString());
     }
 
     @Override

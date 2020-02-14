@@ -27,17 +27,21 @@ import java.util.stream.Collectors;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.util.Accountable;
+import org.apache.lucene.util.RamUsageEstimator;
 
 /** A {@link Query} that allows to have a configurable number or required
  *  matches per document. This is typically useful in order to build queries
  *  whose query terms must all appear in documents.
  *  @lucene.experimental
  */
-public final class CoveringQuery extends Query {
+public final class CoveringQuery extends Query implements Accountable {
+  private static final long BASE_RAM_BYTES = RamUsageEstimator.shallowSizeOfInstance(CoveringQuery.class);
 
   private final Collection<Query> queries;
   private final LongValuesSource minimumNumberMatch;
   private final int hashCode;
+  private final long ramBytesUsed;
 
   /**
    * Sole constructor.
@@ -60,6 +64,9 @@ public final class CoveringQuery extends Query {
     this.queries.addAll(queries);
     this.minimumNumberMatch = Objects.requireNonNull(minimumNumberMatch);
     this.hashCode = computeHashCode();
+
+    this.ramBytesUsed = BASE_RAM_BYTES +
+        RamUsageEstimator.sizeOfObject(this.queries, RamUsageEstimator.QUERY_DEFAULT_RAM_BYTES_USED);
   }
 
   @Override
@@ -95,6 +102,11 @@ public final class CoveringQuery extends Query {
   }
 
   @Override
+  public long ramBytesUsed() {
+    return ramBytesUsed;
+  }
+
+  @Override
   public Query rewrite(IndexReader reader) throws IOException {
     Multiset<Query> rewritten = new Multiset<>();
     boolean actuallyRewritten = false;
@@ -110,10 +122,18 @@ public final class CoveringQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  public void visit(QueryVisitor visitor) {
+    QueryVisitor v = visitor.getSubVisitor(BooleanClause.Occur.SHOULD, this);
+    for (Query query : queries) {
+      query.visit(v);
+    }
+  }
+
+  @Override
+  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
     final List<Weight> weights = new ArrayList<>(queries.size());
     for (Query query : queries) {
-      weights.add(searcher.createWeight(query, needsScores, boost));
+      weights.add(searcher.createWeight(query, scoreMode, boost));
     }
     return new CoveringWeight(this, weights, minimumNumberMatch.rewrite(searcher));
   }
@@ -172,7 +192,7 @@ public final class CoveringQuery extends Query {
         Explanation subExpl = weight.explain(context, doc);
         if (subExpl.isMatch()) {
           freq++;
-          score += subExpl.getValue();
+          score += subExpl.getValue().doubleValue();
         }
         subExpls.add(subExpl);
       }

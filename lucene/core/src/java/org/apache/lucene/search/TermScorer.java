@@ -19,30 +19,40 @@ package org.apache.lucene.search;
 
 import java.io.IOException;
 
+import org.apache.lucene.index.ImpactsEnum;
 import org.apache.lucene.index.PostingsEnum;
-import org.apache.lucene.search.similarities.Similarity;
+import org.apache.lucene.index.SlowImpactsEnum;
 
 /** Expert: A <code>Scorer</code> for documents matching a <code>Term</code>.
  */
 final class TermScorer extends Scorer {
   private final PostingsEnum postingsEnum;
-  private final Similarity.SimScorer docScorer;
+  private final ImpactsEnum impactsEnum;
+  private final DocIdSetIterator iterator;
+  private final LeafSimScorer docScorer;
+  private final ImpactsDISI impactsDisi;
 
   /**
-   * Construct a <code>TermScorer</code>.
-   *
-   * @param weight
-   *          The weight of the <code>Term</code> in the query.
-   * @param td
-   *          An iterator over the documents matching the <code>Term</code>.
-   * @param docScorer
-   *          The <code>Similarity.SimScorer</code> implementation
-   *          to be used for score computations.
+   * Construct a {@link TermScorer} that will iterate all documents.
    */
-  TermScorer(Weight weight, PostingsEnum td, Similarity.SimScorer docScorer) {
+  TermScorer(Weight weight, PostingsEnum postingsEnum, LeafSimScorer docScorer) {
     super(weight);
+    iterator = this.postingsEnum = postingsEnum;
+    impactsEnum = new SlowImpactsEnum(postingsEnum);
+    impactsDisi = new ImpactsDISI(impactsEnum, impactsEnum, docScorer.getSimScorer());
     this.docScorer = docScorer;
-    this.postingsEnum = td;
+  }
+
+  /**
+   * Construct a {@link TermScorer} that will use impacts to skip blocks of
+   * non-competitive documents.
+   */
+  TermScorer(Weight weight, ImpactsEnum impactsEnum, LeafSimScorer docScorer) {
+    super(weight);
+    postingsEnum = this.impactsEnum = impactsEnum;
+    impactsDisi = new ImpactsDISI(impactsEnum, impactsEnum, docScorer.getSimScorer());
+    iterator = impactsDisi;
+    this.docScorer = docScorer;
   }
 
   @Override
@@ -56,7 +66,7 @@ final class TermScorer extends Scorer {
 
   @Override
   public DocIdSetIterator iterator() {
-    return postingsEnum;
+    return iterator;
   }
 
   @Override
@@ -65,7 +75,23 @@ final class TermScorer extends Scorer {
     return docScorer.score(postingsEnum.docID(), postingsEnum.freq());
   }
 
+  @Override
+  public int advanceShallow(int target) throws IOException {
+    return impactsDisi.advanceShallow(target);
+  }
+
+  @Override
+  public float getMaxScore(int upTo) throws IOException {
+    return impactsDisi.getMaxScore(upTo);
+  }
+
+  @Override
+  public void setMinCompetitiveScore(float minScore) {
+    impactsDisi.setMinCompetitiveScore(minScore);
+  }
+
   /** Returns a string representation of this <code>TermScorer</code>. */
   @Override
   public String toString() { return "scorer(" + weight + ")[" + super.toString() + "]"; }
+
 }

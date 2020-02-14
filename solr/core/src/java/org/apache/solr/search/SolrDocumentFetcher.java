@@ -30,6 +30,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -218,27 +219,35 @@ public class SolrDocumentFetcher {
   public Document doc(int i, Set<String> fields) throws IOException {
     Document d;
     if (documentCache != null) {
-      d = documentCache.get(i);
-      if (d != null) return d;
+      final Set<String> getFields = enableLazyFieldLoading ? fields : null;
+      AtomicReference<IOException> exceptionRef = new AtomicReference<>();
+      d = documentCache.computeIfAbsent(i, docId -> {
+        try {
+          return docNC(docId, getFields);
+        } catch (IOException e) {
+          exceptionRef.set(e);
+          return null;
+        }
+      });
+      if (exceptionRef.get() != null) {
+        throw exceptionRef.get();
+      }
+      if (d == null) {
+        // failed to retrieve due to an earlier exception, try again?
+        return docNC(i, fields);
+      } else {
+        return d;
+      }
+    } else {
+      return docNC(i, fields);
     }
+  }
 
+  private Document docNC(int i, Set<String> fields) throws IOException {
     final DirectoryReader reader = searcher.getIndexReader();
-    if (documentCache != null && !enableLazyFieldLoading) {
-      // we do not filter the fields in this case because that would return an incomplete document which would
-      // be eventually cached. The alternative would be to read the stored fields twice; once with the fields
-      // and then without for caching leading to a performance hit
-      // see SOLR-8858 for related discussion
-      fields = null;
-    }
     final SolrDocumentStoredFieldVisitor visitor = new SolrDocumentStoredFieldVisitor(fields, reader, i);
     reader.document(i, visitor);
-    d = visitor.getDocument();
-
-    if (documentCache != null) {
-      documentCache.put(i, d);
-    }
-
-    return d;
+    return visitor.getDocument();
   }
 
   /**
@@ -333,13 +342,12 @@ public class SolrDocumentFetcher {
   /** @see SolrIndexSearcher#doc(int, StoredFieldVisitor) */
   public void doc(int docId, StoredFieldVisitor visitor) throws IOException {
     if (documentCache != null) {
-      Document cached = documentCache.get(docId);
-      if (cached != null) {
-        visitFromCached(cached, visitor);
-        return;
-      }
+      // get cached document or retrieve it including all fields (and cache it)
+      Document cached = doc(docId);
+      visitFromCached(cached, visitor);
+    } else {
+      searcher.getIndexReader().document(docId, visitor);
     }
-    searcher.getIndexReader().document(docId, visitor);
   }
 
   /** Executes a stored field visitor against a hit from the document cache */
@@ -554,8 +562,9 @@ public class SolrDocumentFetcher {
       case SORTED_NUMERIC:
         final SortedNumericDocValues numericDv = leafReader.getSortedNumericDocValues(fieldName);
         if (numericDv != null && numericDv.advance(localId) == localId) {
-          final List<Object> outValues = new ArrayList<>(numericDv.docValueCount());
-          for (int i = 0; i < numericDv.docValueCount(); i++) {
+          final int docValueCount = numericDv.docValueCount();
+          final List<Object> outValues = new ArrayList<>(docValueCount);
+          for (int i = 0; i < docValueCount; i++) {
             long number = numericDv.nextValue();
             Object value = decodeNumberFromDV(schemaField, number, true);
             // return immediately if the number is not decodable, hence won't return an empty list.

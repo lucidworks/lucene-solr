@@ -24,7 +24,10 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.util.AttributeSource;
+import org.apache.lucene.util.automaton.Automaton;
+import org.apache.lucene.util.automaton.ByteRunAutomaton;
 import org.apache.lucene.util.automaton.LevenshteinAutomata;
+import org.apache.lucene.util.automaton.Operations;
 
 /** Implements the fuzzy search query. The similarity measurement
  * is based on the Damerau-Levenshtein (optimal string alignment) algorithm,
@@ -146,6 +149,26 @@ public class FuzzyQuery extends MultiTermQuery {
     return transpositions;
   }
 
+  /**
+   * Expert: Constructs an equivalent Automaton accepting terms matched by this query
+   */
+  public Automaton toAutomaton() {
+    return FuzzyTermsEnum.buildAutomaton(term.text(), prefixLength, transpositions, maxEdits);
+  }
+
+  @Override
+  public void visit(QueryVisitor visitor) {
+    if (visitor.acceptField(field)) {
+      if (maxEdits == 0 || prefixLength >= term.text().length()) {
+        visitor.consumeTerms(this, term);
+      } else {
+        // Note: we're rebuilding the automaton here, so this can be expensive
+        visitor.consumeTermsMatching(this, field,
+            new ByteRunAutomaton(toAutomaton(), false, Operations.DEFAULT_MAX_DETERMINIZED_STATES));
+      }
+    }
+  }
+
   @Override
   protected TermsEnum getTermsEnum(Terms terms, AttributeSource atts) throws IOException {
     if (maxEdits == 0 || prefixLength >= term.text().length()) {  // can only match if it's exact
@@ -153,7 +176,7 @@ public class FuzzyQuery extends MultiTermQuery {
     }
     return new FuzzyTermsEnum(terms, atts, getTerm(), maxEdits, prefixLength, transpositions);
   }
-  
+
   /**
    * Returns the pattern term.
    */
@@ -173,7 +196,7 @@ public class FuzzyQuery extends MultiTermQuery {
     buffer.append(Integer.toString(maxEdits));
     return buffer.toString();
   }
-  
+
   @Override
   public int hashCode() {
     final int prime = 31;

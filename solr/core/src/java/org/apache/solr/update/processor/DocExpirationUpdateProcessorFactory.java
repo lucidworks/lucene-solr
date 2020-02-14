@@ -43,9 +43,9 @@ import org.apache.solr.core.CloseHook;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.security.PKIAuthenticationPlugin;
 import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.response.SolrQueryResponse;
-import org.apache.solr.security.PKIAuthenticationPlugin;
 import org.apache.solr.update.AddUpdateCommand;
 import org.apache.solr.update.CommitUpdateCommand;
 import org.apache.solr.update.DeleteUpdateCommand;
@@ -385,7 +385,7 @@ public final class DocExpirationUpdateProcessorFactory
       final LocalSolrQueryRequest req = new LocalSolrQueryRequest
         (factory.core, Collections.<String,String[]>emptyMap());
       try {
-        // HACK: to indicate to PKI that this is a server initiated request for the purposes
+	// HACK: to indicate to PKI that this is a server initiated request for the purposes
         // of distributed requet/credential forwarding...
         req.setUserPrincipalName(PKIAuthenticationPlugin.NODE_IS_USER);
         final SolrQueryResponse rsp = new SolrQueryResponse();

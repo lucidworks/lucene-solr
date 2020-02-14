@@ -28,9 +28,9 @@ import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.MultiFields;
+import org.apache.lucene.index.MultiTerms;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermContext;
+import org.apache.lucene.index.TermStates;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.BooleanClause;
@@ -41,6 +41,7 @@ import org.apache.lucene.search.ConstantScoreQuery;
 import org.apache.lucene.search.FuzzyTermsEnum;
 import org.apache.lucene.search.MaxNonCompetitiveBoostAttribute;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.similarities.ClassicSimilarity;
 import org.apache.lucene.search.similarities.TFIDFSimilarity;
@@ -68,7 +69,7 @@ public class FuzzyLikeThisQuery extends Query
 {
   // TODO: generalize this query (at least it should not reuse this static sim!
   // a better way might be to convert this into multitermquery rewrite methods.
-  // the rewrite method can 'average' the TermContext's term statistics (docfreq,totalTermFreq) 
+  // the rewrite method can 'average' the TermStates's term statistics (docfreq,totalTermFreq)
   // provided to TermQuery, so that the general idea is agnostic to any scoring system...
   static TFIDFSimilarity sim=new ClassicSimilarity();
   ArrayList<FieldVals> fieldVals=new ArrayList<>();
@@ -188,7 +189,7 @@ public class FuzzyLikeThisQuery extends Query
 
   private void addTerms(IndexReader reader, FieldVals f, ScoreTermQueue q) throws IOException {
     if (f.queryString == null) return;
-    final Terms terms = MultiFields.getTerms(reader, f.fieldName);
+    final Terms terms = MultiTerms.getTerms(reader, f.fieldName);
     if (terms == null) {
       return;
     }
@@ -255,9 +256,9 @@ public class FuzzyLikeThisQuery extends Query
     if (ignoreTF) {
       return new ConstantScoreQuery(new TermQuery(term));
     } else {
-      // we build an artificial TermContext that will give an overall df and ttf
+      // we build an artificial TermStates that will give an overall df and ttf
       // equal to 1
-      TermContext context = new TermContext(reader.getContext());
+      TermStates context = new TermStates(reader.getContext());
       for (LeafReaderContext leafContext : reader.leaves()) {
         Terms terms = leafContext.reader().terms(term.field());
         if (terms != null) {
@@ -270,6 +271,11 @@ public class FuzzyLikeThisQuery extends Query
       }
       return new TermQuery(term, context);
     }
+  }
+
+  @Override
+  public void visit(QueryVisitor visitor) {
+    visitor.visitLeaf(this);
   }
 
   @Override
@@ -330,7 +336,7 @@ public class FuzzyLikeThisQuery extends Query
     // booleans with a minimum-should-match of NumFields-1?
     return bq.build();
   }
-    
+
   //Holds info for a fuzzy term variant - initially score is set to edit distance (for ranking best
   // term variants) then is reset with IDF for use in ranking against all other
   // terms/fields

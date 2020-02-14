@@ -28,11 +28,9 @@ import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.store.RAMDirectory;
-import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 
 public class TestSloppyPhraseQuery extends LuceneTestCase {
@@ -185,46 +183,26 @@ public class TestSloppyPhraseQuery extends LuceneTestCase {
     float max;
     int totalHits;
     Scorer scorer;
-
-    Similarity.SimScorer simScorer = new Similarity.SimScorer() {
-      @Override
-      public float score(int doc, float freq) throws IOException {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public float computeSlopFactor(int distance) {
-        return 1f / (1f + distance);
-      }
-
-      @Override
-      public float computePayloadFactor(int doc, int start, int end, BytesRef payload) {
-        throw new UnsupportedOperationException();
-      }
-    };
     
     @Override
-    public void setScorer(Scorer scorer) throws IOException {
-      this.scorer = scorer;
-      while (this.scorer instanceof AssertingScorer) {
-        this.scorer = ((AssertingScorer)this.scorer).getIn();
-      }
+    public void setScorer(Scorable scorer) throws IOException {
+      this.scorer = (Scorer) AssertingScorable.unwrap(scorer);
     }
 
     @Override
     public void collect(int doc) throws IOException {
       totalHits++;
       PhraseScorer ps = (PhraseScorer) scorer;
-      float freq = ps.matcher.sloppyWeight(simScorer);
+      float freq = ps.matcher.sloppyWeight();
       while (ps.matcher.nextMatch()) {
-        freq += ps.matcher.sloppyWeight(simScorer);
+        freq += ps.matcher.sloppyWeight();
       }
       max = Math.max(max, freq);
     }
     
     @Override
-    public boolean needsScores() {
-      return true;
+    public ScoreMode scoreMode() {
+      return ScoreMode.COMPLETE;
     }
   }
   
@@ -234,11 +212,8 @@ public class TestSloppyPhraseQuery extends LuceneTestCase {
       Scorer scorer;
       
       @Override
-      public void setScorer(Scorer scorer) {
-        this.scorer = scorer;
-        while (this.scorer instanceof AssertingScorer) {
-          this.scorer = ((AssertingScorer)this.scorer).getIn();
-        }
+      public void setScorer(Scorable scorer) {
+        this.scorer = (Scorer) AssertingScorable.unwrap(scorer);
       }
       
       @Override
@@ -247,8 +222,8 @@ public class TestSloppyPhraseQuery extends LuceneTestCase {
       }
       
       @Override
-      public boolean needsScores() {
-        return true;
+      public ScoreMode scoreMode() {
+        return ScoreMode.COMPLETE;
       }
     });
     QueryUtils.check(random(), pq, searcher);
@@ -280,13 +255,13 @@ public class TestSloppyPhraseQuery extends LuceneTestCase {
     builder.add(new Term("lyrics", "drug"), 4);
     PhraseQuery pq = builder.build();
     // "drug the drug"~1
-    assertEquals(1, is.search(pq, 4).totalHits);
+    assertEquals(1, is.search(pq, 4).totalHits.value);
     builder.setSlop(1);
     pq = builder.build();
-    assertEquals(3, is.search(pq, 4).totalHits);
+    assertEquals(3, is.search(pq, 4).totalHits.value);
     builder.setSlop(2);
     pq = builder.build();
-    assertEquals(4, is.search(pq, 4).totalHits);
+    assertEquals(4, is.search(pq, 4).totalHits.value);
     ir.close();
     dir.close();
   }

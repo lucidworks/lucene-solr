@@ -31,7 +31,6 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.util.Utils;
 import org.apache.zookeeper.KeeperException;
-import org.apache.zookeeper.Watcher;
 import org.noggit.JSONWriter;
 
 /**
@@ -40,7 +39,7 @@ import org.noggit.JSONWriter;
  * @lucene.experimental
  */
 public class ClusterState implements JSONWriter.Writable {
-
+  
   private final Integer znodeVersion;
 
   private final Map<String, CollectionRef> collectionStates, immutableCollectionStates;
@@ -104,7 +103,6 @@ public class ClusterState implements JSONWriter.Writable {
    * Implementation note: This method resolves the collection reference by calling
    * {@link CollectionRef#get()} which can make a call to ZooKeeper. This is necessary
    * because the semantics of how collection list is loaded have changed in SOLR-6629.
-   * Please see javadocs in {@link ZkStateReader#refreshCollectionList(Watcher)}
    */
   public boolean hasCollection(String collectionName) {
     return getCollectionOrNull(collectionName) != null;
@@ -141,7 +139,6 @@ public class ClusterState implements JSONWriter.Writable {
    * Implementation note: This method resolves the collection reference by calling
    * {@link CollectionRef#get()} which may make a call to ZooKeeper. This is necessary
    * because the semantics of how collection list is loaded have changed in SOLR-6629.
-   * Please see javadocs in {@link ZkStateReader#refreshCollectionList(Watcher)}
    */
   public DocCollection getCollectionOrNull(String collectionName, boolean allowCached) {
     CollectionRef ref = collectionStates.get(collectionName);
@@ -154,7 +151,6 @@ public class ClusterState implements JSONWriter.Writable {
    * Implementation note: This method resolves the collection reference by calling
    * {@link CollectionRef#get()} which can make a call to ZooKeeper. This is necessary
    * because the semantics of how collection list is loaded have changed in SOLR-6629.
-   * Please see javadocs in {@link ZkStateReader#refreshCollectionList(Watcher)}
    *
    * @return a map of collection name vs DocCollection object
    */
@@ -203,9 +199,9 @@ public class ClusterState implements JSONWriter.Writable {
     }
     return null;
   }
-
+  
   /**
-   * Check if node is alive.
+   * Check if node is alive. 
    */
   public boolean liveNodesContain(String name) {
     return liveNodes.contains(name);
@@ -214,11 +210,11 @@ public class ClusterState implements JSONWriter.Writable {
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append("znodeVersion: " + znodeVersion);
+    sb.append("znodeVersion: ").append(znodeVersion);
     sb.append("\n");
-    sb.append("live nodes:" + liveNodes);
+    sb.append("live nodes:").append(liveNodes);
     sb.append("\n");
-    sb.append("collections:" + collectionStates);
+    sb.append("collections:").append(collectionStates);
     return sb.toString();
   }
 
@@ -227,7 +223,7 @@ public class ClusterState implements JSONWriter.Writable {
   }
   /**
    * Create ClusterState from json string that is typically stored in zookeeper.
-   *
+   * 
    * @param version zk version of the clusterstate.json file (bytes)
    * @param bytes clusterstate.json as a byte array
    * @param liveNodes list of live nodes
@@ -258,13 +254,13 @@ public class ClusterState implements JSONWriter.Writable {
     Map<String,Object> props;
     Map<String,Slice> slices;
 
-    Map<String,Object> sliceObjs = (Map<String,Object>)objs.get(DocCollection.SHARDS);
+    Map<String, Object> sliceObjs = (Map<String, Object>) objs.get(DocCollection.SHARDS);
     if (sliceObjs == null) {
       // legacy format from 4.0... there was no separate "shards" level to contain the collection shards.
-      slices = Slice.loadAllFromMap(objs);
+      slices = Slice.loadAllFromMap(name, objs);
       props = Collections.emptyMap();
     } else {
-      slices = Slice.loadAllFromMap(sliceObjs);
+      slices = Slice.loadAllFromMap(name, sliceObjs);
       props = new HashMap<>(objs);
       objs.remove(DocCollection.SHARDS);
     }
@@ -302,7 +298,7 @@ public class ClusterState implements JSONWriter.Writable {
 
   /**
    * The version of clusterstate.json in ZooKeeper.
-   *
+   * 
    * @return null if ClusterState was created for publication, not consumption
    * @deprecated true cluster state spans many ZK nodes, stop depending on the version number of the shared node!
    * will be removed in 8.0
@@ -353,10 +349,19 @@ public class ClusterState implements JSONWriter.Writable {
   public Map<String, CollectionRef> getCollectionStates() {
     return immutableCollectionStates;
   }
+
+  /**
+   * Iterate over collections. Unlike {@link #getCollectionStates()} collections passed to the
+   * consumer are guaranteed to exist.
+   * @param consumer collection consumer.
+   */
   public void forEachCollection(Consumer<DocCollection> consumer) {
     collectionStates.forEach((s, collectionRef) -> {
       try {
-        consumer.accept(collectionRef.get());
+        DocCollection collection = collectionRef.get();
+        if (collection != null) {
+          consumer.accept(collection);
+        }
       } catch (SolrException e) {
         if (e.getCause() instanceof KeeperException.NoNodeException) {
           //don't do anything. This collection does not exist

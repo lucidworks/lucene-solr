@@ -196,7 +196,7 @@ public abstract class PerFieldDocValuesFormat extends DocValuesFormat {
 
         if (field.getDocValuesGen() != -1) {
           String suffixAtt = null;
-          if (ignoreCurrentFormat == false) {
+          if (!ignoreCurrentFormat) {
             suffixAtt = field.getAttribute(PER_FIELD_SUFFIX_KEY);
           }
           // even when dvGen is != -1, it can still be a new field, that never
@@ -261,7 +261,7 @@ public abstract class PerFieldDocValuesFormat extends DocValuesFormat {
     private final Map<String,DocValuesProducer> formats = new HashMap<>();
     
     // clone for merge
-    FieldsReader(FieldsReader other) throws IOException {
+    FieldsReader(FieldsReader other) {
       Map<DocValuesProducer,DocValuesProducer> oldToNew = new IdentityHashMap<>();
       // First clone all formats
       for(Map.Entry<String,DocValuesProducer> ent : other.formats.entrySet()) {
@@ -368,7 +368,7 @@ public abstract class PerFieldDocValuesFormat extends DocValuesFormat {
     }
     
     @Override
-    public DocValuesProducer getMergeInstance() throws IOException {
+    public DocValuesProducer getMergeInstance() {
       return new FieldsReader(this);
     }
 

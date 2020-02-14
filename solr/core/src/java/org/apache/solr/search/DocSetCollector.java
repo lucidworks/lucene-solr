@@ -20,7 +20,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.search.Scorer;
+import org.apache.lucene.search.Scorable;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.SimpleCollector;
 import org.apache.lucene.util.FixedBitSet;
 
@@ -91,12 +92,12 @@ public class DocSetCollector extends SimpleCollector {
   }
 
   @Override
-  public void setScorer(Scorer scorer) throws IOException {
+  public void setScorer(Scorable scorer) throws IOException {
   }
 
   @Override
-  public boolean needsScores() {
-    return false;
+  public ScoreMode scoreMode() {
+    return ScoreMode.COMPLETE_NO_SCORES;
   }
 
   @Override

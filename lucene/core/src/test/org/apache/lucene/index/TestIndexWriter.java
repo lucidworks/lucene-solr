@@ -1660,29 +1660,6 @@ public class TestIndexWriter extends LuceneTestCase {
     d.close();
   }
 
-  public void testChangeIndexOptions() throws Exception {
-    Directory dir = newDirectory();
-    IndexWriter w = new IndexWriter(dir,
-                                    new IndexWriterConfig(new MockAnalyzer(random())));
-
-    FieldType docsAndFreqs = new FieldType(TextField.TYPE_NOT_STORED);
-    docsAndFreqs.setIndexOptions(IndexOptions.DOCS_AND_FREQS);
-
-    FieldType docsOnly = new FieldType(TextField.TYPE_NOT_STORED);
-    docsOnly.setIndexOptions(IndexOptions.DOCS);
-
-    Document doc = new Document();
-    doc.add(new Field("field", "a b c", docsAndFreqs));
-    w.addDocument(doc);
-    w.addDocument(doc);
-
-    doc = new Document();
-    doc.add(new Field("field", "a b c", docsOnly));
-    w.addDocument(doc);
-    w.close();
-    dir.close();
-  }
-
   public void testOnlyUpdateDocuments() throws Exception {
     Directory dir = newDirectory();
     IndexWriter w = new IndexWriter(dir,
@@ -1825,7 +1802,7 @@ public class TestIndexWriter extends LuceneTestCase {
     builder.add(new Term("body", "test"), 2);
     PhraseQuery pq = builder.build();
     // body:"just ? test"
-    assertEquals(1, is.search(pq, 5).totalHits);
+    assertEquals(1, is.search(pq, 5).totalHits.value);
     ir.close();
     dir.close();
   }
@@ -1857,7 +1834,7 @@ public class TestIndexWriter extends LuceneTestCase {
     builder.add(new Term("body", "test"), 3);
     PhraseQuery pq = builder.build();
     // body:"just ? ? test"
-    assertEquals(1, is.search(pq, 5).totalHits);
+    assertEquals(1, is.search(pq, 5).totalHits.value);
     ir.close();
     dir.close();
   }
@@ -2508,7 +2485,7 @@ public class TestIndexWriter extends LuceneTestCase {
     // Make sure CheckIndex includes id output:
     ByteArrayOutputStream bos = new ByteArrayOutputStream(1024);
     CheckIndex checker = new CheckIndex(d);
-    checker.setCrossCheckTermVectors(false);
+    checker.setDoSlowChecks(false);
     checker.setInfoStream(new PrintStream(bos, false, IOUtils.UTF_8), false);
     CheckIndex.Status indexStatus = checker.checkIndex(null);
     String s = bos.toString(IOUtils.UTF_8);
@@ -2761,6 +2738,45 @@ public class TestIndexWriter extends LuceneTestCase {
       w.close();
     }
 
+  }
+
+  public void testPendingDeletionsRollbackWithReader() throws IOException {
+    // irony: currently we don't emulate windows well enough to work on windows!
+    assumeFalse("windows is not supported", Constants.WINDOWS);
+
+    Path path = createTempDir();
+
+    // Use WindowsFS to prevent open files from being deleted:
+    FileSystem fs = new WindowsFS(path.getFileSystem()).getFileSystem(URI.create("file:///"));
+    Path root = new FilterPath(path, fs);
+    try (FSDirectory _dir = new SimpleFSDirectory(root)) {
+      Directory dir = new FilterDirectory(_dir) {};
+
+      IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random()));
+      IndexWriter w = new IndexWriter(dir, iwc);
+      Document d = new Document();
+      d.add(new StringField("id", "1", Field.Store.YES));
+      d.add(new NumericDocValuesField("numval", 1));
+      w.addDocument(d);
+      w.commit();
+      w.addDocument(d);
+      w.flush();
+      DirectoryReader reader = DirectoryReader.open(w);
+      w.rollback();
+
+      // try-delete superfluous files (some will fail due to windows-fs)
+      IndexWriterConfig iwc2 = new IndexWriterConfig(new MockAnalyzer(random()));
+      new IndexWriter(dir, iwc2).close();
+
+      // test that we can index on top of pending deletions
+      IndexWriterConfig iwc3 = new IndexWriterConfig(new MockAnalyzer(random()));
+      w = new IndexWriter(dir, iwc3);
+      w.addDocument(d);
+      w.commit();
+
+      reader.close();
+      w.close();
+    }
   }
 
   public void testWithPendingDeletions() throws Exception {
@@ -3160,7 +3176,7 @@ public class TestIndexWriter extends LuceneTestCase {
     assertEquals(2, reader.docFreq(new Term("id", "1")));
     IndexSearcher searcher = new IndexSearcher(reader);
     TopDocs topDocs = searcher.search(new TermQuery(new Term("id", "1")), 10);
-    assertEquals(1, topDocs.totalHits);
+    assertEquals(1, topDocs.totalHits.value);
     Document document = reader.document(topDocs.scoreDocs[0].doc);
     assertEquals("2", document.get("version"));
 
@@ -3176,7 +3192,7 @@ public class TestIndexWriter extends LuceneTestCase {
     oldReader.close();
     searcher = new IndexSearcher(reader);
     topDocs = searcher.search(new TermQuery(new Term("id", "1")), 10);
-    assertEquals(1, topDocs.totalHits);
+    assertEquals(1, topDocs.totalHits.value);
     document = reader.document(topDocs.scoreDocs[0].doc);
     assertEquals("3", document.get("version"));
 
@@ -3189,7 +3205,7 @@ public class TestIndexWriter extends LuceneTestCase {
     oldReader.close();
     searcher = new IndexSearcher(reader);
     topDocs = searcher.search(new TermQuery(new Term("id", "1")), 10);
-    assertEquals(0, topDocs.totalHits);
+    assertEquals(0, topDocs.totalHits.value);
     int numSoftDeleted = 0;
     for (SegmentCommitInfo info : writer.cloneSegmentInfos()) {
      numSoftDeleted += info.getSoftDelCount();
@@ -3313,10 +3329,10 @@ public class TestIndexWriter extends LuceneTestCase {
     for (String id : ids) {
       TopDocs topDocs = searcher.search(new TermQuery(new Term("id", id)), 10);
       if (updateSeveralDocs) {
-        assertEquals(2, topDocs.totalHits);
+        assertEquals(2, topDocs.totalHits.value);
         assertEquals(Math.abs(topDocs.scoreDocs[0].doc - topDocs.scoreDocs[1].doc), 1);
       } else {
-        assertEquals(1, topDocs.totalHits);
+        assertEquals(1, topDocs.totalHits.value);
       }
     }
     if (mixDeletes == false) {
@@ -3715,45 +3731,6 @@ public class TestIndexWriter extends LuceneTestCase {
     w.docWriter.flushControl.abortFullFlushes();
     w.close();
     dir.close();
-  }
-
-  public void testPendingDeletionsRollbackWithReader() throws IOException {
-    // irony: currently we don't emulate windows well enough to work on windows!
-    assumeFalse("windows is not supported", Constants.WINDOWS);
-
-    Path path = createTempDir();
-
-    // Use WindowsFS to prevent open files from being deleted:
-    FileSystem fs = new WindowsFS(path.getFileSystem()).getFileSystem(URI.create("file:///"));
-    Path root = new FilterPath(path, fs);
-    try (FSDirectory _dir = new SimpleFSDirectory(root)) {
-      Directory dir = new FilterDirectory(_dir) {};
-
-      IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random()));
-      IndexWriter w = new IndexWriter(dir, iwc);
-      Document d = new Document();
-      d.add(new StringField("id", "1", Field.Store.YES));
-      d.add(new NumericDocValuesField("numval", 1));
-      w.addDocument(d);
-      w.commit();
-      w.addDocument(d);
-      w.flush();
-      DirectoryReader reader = DirectoryReader.open(w);
-      w.rollback();
-
-      // try-delete superfluous files (some will fail due to windows-fs)
-      IndexWriterConfig iwc2 = new IndexWriterConfig(new MockAnalyzer(random()));
-      new IndexWriter(dir, iwc2).close();
-
-      // test that we can index on top of pending deletions
-      IndexWriterConfig iwc3 = new IndexWriterConfig(new MockAnalyzer(random()));
-      w = new IndexWriter(dir, iwc3);
-      w.addDocument(d);
-      w.commit();
-
-      reader.close();
-      w.close();
-    }
   }
 
   public void testRefreshAndRollbackConcurrently() throws Exception {

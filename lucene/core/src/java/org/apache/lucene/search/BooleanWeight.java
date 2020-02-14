@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,30 +39,38 @@ final class BooleanWeight extends Weight {
   /** The Similarity implementation. */
   final Similarity similarity;
   final BooleanQuery query;
-  
-  final ArrayList<Weight> weights;
-  final boolean needsScores;
 
-  BooleanWeight(BooleanQuery query, IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  private static class WeightedBooleanClause {
+    final BooleanClause clause;
+    final Weight weight;
+
+    WeightedBooleanClause(BooleanClause clause, Weight weight) {
+      this.clause = clause;
+      this.weight = weight;
+    }
+  }
+
+  final ArrayList<WeightedBooleanClause> weightedClauses;
+  final ScoreMode scoreMode;
+
+  BooleanWeight(BooleanQuery query, IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
     super(query);
     this.query = query;
-    this.needsScores = needsScores;
-    this.similarity = searcher.getSimilarity(needsScores);
-    weights = new ArrayList<>();
+    this.scoreMode = scoreMode;
+    this.similarity = searcher.getSimilarity();
+    weightedClauses = new ArrayList<>();
     for (BooleanClause c : query) {
-      Weight w = searcher.createWeight(c.getQuery(), needsScores && c.isScoring(), boost);
-      weights.add(w);
+      Weight w = searcher.createWeight(c.getQuery(), c.isScoring() ? scoreMode : ScoreMode.COMPLETE_NO_SCORES, boost);
+      weightedClauses.add(new WeightedBooleanClause(c, w));
     }
   }
 
   @Override
   public void extractTerms(Set<Term> terms) {
-    int i = 0;
-    for (BooleanClause clause : query) {
-      if (clause.isScoring() || (needsScores == false && clause.isProhibited() == false)) {
-        weights.get(i).extractTerms(terms);
+    for (WeightedBooleanClause wc : weightedClauses) {
+      if (wc.clause.isScoring() || (scoreMode.needsScores() == false && wc.clause.isProhibited() == false)) {
+        wc.weight.extractTerms(terms);
       }
-      i++;
     }
   }
 
@@ -71,19 +78,16 @@ final class BooleanWeight extends Weight {
   public Explanation explain(LeafReaderContext context, int doc) throws IOException {
     final int minShouldMatch = query.getMinimumNumberShouldMatch();
     List<Explanation> subs = new ArrayList<>();
-    float sum = 0.0f;
     boolean fail = false;
     int matchCount = 0;
     int shouldMatchCount = 0;
-    Iterator<BooleanClause> cIter = query.iterator();
-    for (Iterator<Weight> wIter = weights.iterator(); wIter.hasNext();) {
-      Weight w = wIter.next();
-      BooleanClause c = cIter.next();
+    for (WeightedBooleanClause wc : weightedClauses) {
+      Weight w = wc.weight;
+      BooleanClause c = wc.clause;
       Explanation e = w.explain(context, doc);
       if (e.isMatch()) {
         if (c.isScoring()) {
           subs.add(e);
-          sum += e.getValue();
         } else if (c.isRequired()) {
           subs.add(Explanation.match(0f, "match on required clause, product of:",
               Explanation.match(0f, Occur.FILTER + " clause"), e));
@@ -109,8 +113,15 @@ final class BooleanWeight extends Weight {
     } else if (shouldMatchCount < minShouldMatch) {
       return Explanation.noMatch("Failure to match minimum number of optional clauses: " + minShouldMatch, subs);
     } else {
-      // we have a match
-      return Explanation.match(sum, "sum of:", subs);
+      // Replicating the same floating-point errors as the scorer does is quite
+      // complex (essentially because of how ReqOptSumScorer casts intermediate
+      // contributions to the score to floats), so in order to make sure that
+      // explanations have the same value as the score, we pull a scorer and
+      // use it to compute the score.
+      Scorer scorer = scorer(context);
+      int advanced = scorer.iterator().advance(doc);
+      assert advanced == doc;
+      return Explanation.match(scorer.score(), "sum of:", subs);
     }
   }
 
@@ -119,11 +130,9 @@ final class BooleanWeight extends Weight {
     final int minShouldMatch = query.getMinimumNumberShouldMatch();
     List<Matches> matches = new ArrayList<>();
     int shouldMatchCount = 0;
-    Iterator<Weight> wIt = weights.iterator();
-    Iterator<BooleanClause> cIt = query.clauses().iterator();
-    while (wIt.hasNext()) {
-      Weight w = wIt.next();
-      BooleanClause bc = cIt.next();
+    for (WeightedBooleanClause wc : weightedClauses) {
+      Weight w = wc.weight;
+      BooleanClause bc = wc.clause;
       Matches m = w.matches(context, doc);
       if (bc.isProhibited()) {
         if (m != null) {
@@ -155,10 +164,10 @@ final class BooleanWeight extends Weight {
       @Override
       public int score(final LeafCollector collector, Bits acceptDocs, int min, int max) throws IOException {
         final LeafCollector noScoreCollector = new LeafCollector() {
-          FakeScorer fake = new FakeScorer();
+          ScoreAndDoc fake = new ScoreAndDoc();
 
           @Override
-          public void setScorer(Scorer scorer) throws IOException {
+          public void setScorer(Scorable scorer) throws IOException {
             collector.setScorer(fake);
           }
 
@@ -183,9 +192,9 @@ final class BooleanWeight extends Weight {
   // pkg-private for forcing use of BooleanScorer in tests
   BulkScorer optionalBulkScorer(LeafReaderContext context) throws IOException {
     List<BulkScorer> optional = new ArrayList<BulkScorer>();
-    Iterator<BooleanClause> cIter = query.iterator();
-    for (Weight w  : weights) {
-      BooleanClause c =  cIter.next();
+    for (WeightedBooleanClause wc : weightedClauses) {
+      Weight w = wc.weight;
+      BooleanClause c = wc.clause;
       if (c.getOccur() != Occur.SHOULD) {
         continue;
       }
@@ -208,7 +217,7 @@ final class BooleanWeight extends Weight {
       return optional.get(0);
     }
 
-    return new BooleanScorer(this, optional, Math.max(1, query.getMinimumNumberShouldMatch()), needsScores);
+    return new BooleanScorer(this, optional, Math.max(1, query.getMinimumNumberShouldMatch()), scoreMode.needsScores());
   }
 
   // Return a BulkScorer for the required clauses only,
@@ -216,9 +225,9 @@ final class BooleanWeight extends Weight {
   private BulkScorer requiredBulkScorer(LeafReaderContext context) throws IOException {
     BulkScorer scorer = null;
 
-    Iterator<BooleanClause> cIter = query.iterator();
-    for (Weight w  : weights) {
-      BooleanClause c =  cIter.next();
+    for (WeightedBooleanClause wc : weightedClauses) {
+      Weight w = wc.weight;
+      BooleanClause c = wc.clause;
       if (c.isRequired() == false) {
         continue;
       }
@@ -231,7 +240,7 @@ final class BooleanWeight extends Weight {
         // no matches
         return null;
       }
-      if (c.isScoring() == false && needsScores) {
+      if (c.isScoring() == false && scoreMode.needsScores()) {
         scorer = disableScoring(scorer);
       }
     }
@@ -288,9 +297,9 @@ final class BooleanWeight extends Weight {
     }
 
     List<Scorer> prohibited = new ArrayList<>();
-    Iterator<BooleanClause> cIter = query.iterator();
-    for (Weight w  : weights) {
-      BooleanClause c =  cIter.next();
+    for (WeightedBooleanClause wc : weightedClauses) {
+      Weight w = wc.weight;
+      BooleanClause c = wc.clause;
       if (c.isProhibited()) {
         Scorer scorer = w.scorer(context);
         if (scorer != null) {
@@ -304,7 +313,7 @@ final class BooleanWeight extends Weight {
     } else {
       Scorer prohibitedScorer = prohibited.size() == 1
           ? prohibited.get(0)
-          : new DisjunctionSumScorer(this, prohibited, false);
+          : new DisjunctionSumScorer(this, prohibited, ScoreMode.COMPLETE_NO_SCORES);
       if (prohibitedScorer.twoPhaseIterator() != null) {
         // ReqExclBulkScorer can't deal efficiently with two-phased prohibited clauses
         return null;
@@ -315,6 +324,11 @@ final class BooleanWeight extends Weight {
 
   @Override
   public BulkScorer bulkScorer(LeafReaderContext context) throws IOException {
+    if (scoreMode == ScoreMode.TOP_SCORES) {
+      // If only the top docs are requested, use the default bulk scorer
+      // so that we can dynamically prune non-competitive hits.
+      return super.bulkScorer(context);
+    }
     final BulkScorer bulkScorer = booleanScorer(context);
     if (bulkScorer != null) {
       // bulk scoring is applicable, use it
@@ -336,13 +350,14 @@ final class BooleanWeight extends Weight {
 
   @Override
   public boolean isCacheable(LeafReaderContext ctx) {
-    if (weights.size() > TermInSetQuery.BOOLEAN_REWRITE_TERM_COUNT_THRESHOLD) {
+    if (query.clauses().size() > TermInSetQuery.BOOLEAN_REWRITE_TERM_COUNT_THRESHOLD) {
       // Disallow caching large boolean queries to not encourage users
       // to build large boolean queries as a workaround to the fact that
       // we disallow caching large TermInSetQueries.
       return false;
     }
-    for (Weight w : weights) {
+    for (WeightedBooleanClause wc : weightedClauses) {
+      Weight w = wc.weight;
       if (w.isCacheable(ctx) == false)
         return false;
     }
@@ -358,9 +373,9 @@ final class BooleanWeight extends Weight {
       scorers.put(occur, new ArrayList<>());
     }
 
-    Iterator<BooleanClause> cIter = query.iterator();
-    for (Weight w  : weights) {
-      BooleanClause c =  cIter.next();
+    for (WeightedBooleanClause wc : weightedClauses) {
+      Weight w = wc.weight;
+      BooleanClause c = wc.clause;
       ScorerSupplier subScorer = w.scorerSupplier(context);
       if (subScorer == null) {
         if (c.isRequired()) {
@@ -390,12 +405,7 @@ final class BooleanWeight extends Weight {
       return null;
     }
 
-    // we don't need scores, so if we have required clauses, drop optional clauses completely
-    if (!needsScores && minShouldMatch == 0 && scorers.get(Occur.MUST).size() + scorers.get(Occur.FILTER).size() > 0) {
-      scorers.get(Occur.SHOULD).clear();
-    }
-
-    return new Boolean2ScorerSupplier(this, scorers, needsScores, minShouldMatch);
+    return new Boolean2ScorerSupplier(this, scorers, scoreMode, minShouldMatch);
   }
 
 }

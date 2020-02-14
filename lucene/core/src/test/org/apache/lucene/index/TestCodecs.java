@@ -17,6 +17,7 @@
 package org.apache.lucene.index;
 
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -28,6 +29,7 @@ import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.FieldsProducer;
+import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.document.StringField;
@@ -220,7 +222,7 @@ public class TestCodecs extends LuceneTestCase {
     final SegmentInfo si = new SegmentInfo(dir, Version.LATEST, Version.LATEST, SEGMENT, 10000, false, codec, Collections.emptyMap(), StringHelper.randomId(), new HashMap<>(), null);
     
     this.write(si, fieldInfos, dir, fields);
-    final FieldsProducer reader = codec.postingsFormat().fieldsProducer(new SegmentReadState(dir, si, fieldInfos, newIOContext(random())));
+    final FieldsProducer reader = codec.postingsFormat().fieldsProducer(new SegmentReadState(dir, si, fieldInfos, false, newIOContext(random()), Collections.emptyMap()));
 
     final Iterator<String> fieldsEnum = reader.iterator();
     String fieldName = fieldsEnum.next();
@@ -280,7 +282,7 @@ public class TestCodecs extends LuceneTestCase {
     if (VERBOSE) {
       System.out.println("TEST: now read postings");
     }
-    final FieldsProducer terms = codec.postingsFormat().fieldsProducer(new SegmentReadState(dir, si, fieldInfos, newIOContext(random())));
+    final FieldsProducer terms = codec.postingsFormat().fieldsProducer(new SegmentReadState(dir, si, fieldInfos, false, newIOContext(random()), Collections.emptyMap()));
 
     final Verify[] threads = new Verify[NUM_TEST_THREADS-1];
     for(int i=0;i<NUM_TEST_THREADS-1;i++) {
@@ -611,7 +613,7 @@ public class TestCodecs extends LuceneTestCase {
     }
   }
 
-  private static class DataTermsEnum extends TermsEnum {
+  private static class DataTermsEnum extends BaseTermsEnum {
     final FieldData fieldData;
     private int upto = -1;
 
@@ -676,6 +678,10 @@ public class TestCodecs extends LuceneTestCase {
       return new DataPostingsEnum(fieldData.terms[upto]);
     }
 
+    @Override
+    public ImpactsEnum impacts(int flags) throws IOException {
+      throw new UnsupportedOperationException();
+    }
   }
 
   private static class DataPostingsEnum extends PostingsEnum {
@@ -752,9 +758,65 @@ public class TestCodecs extends LuceneTestCase {
 
     Arrays.sort(fields);
     FieldsConsumer consumer = codec.postingsFormat().fieldsConsumer(state);
+    NormsProducer fakeNorms = new NormsProducer() {
+      
+      @Override
+      public long ramBytesUsed() {
+        return 0;
+      }
+      
+      @Override
+      public void close() throws IOException {}
+      
+      @Override
+      public NumericDocValues getNorms(FieldInfo field) throws IOException {
+        return new NumericDocValues() {
+          
+          int doc = -1;
+          
+          @Override
+          public int nextDoc() throws IOException {
+            return advance(doc + 1);
+          }
+          
+          @Override
+          public int docID() {
+            return doc;
+          }
+          
+          @Override
+          public long cost() {
+            return si.maxDoc();
+          }
+          
+          @Override
+          public int advance(int target) throws IOException {
+            if (target >= si.maxDoc()) {
+              return doc = NO_MORE_DOCS;
+            } else {
+              return doc = target;
+            }
+          }
+          
+          @Override
+          public boolean advanceExact(int target) throws IOException {
+            doc = target;
+            return true;
+          }
+          
+          @Override
+          public long longValue() throws IOException {
+            return 1;
+          }
+        };
+      }
+      
+      @Override
+      public void checkIntegrity() throws IOException {}
+    };
     boolean success = false;
     try {
-      consumer.write(new DataFields(fields));
+      consumer.write(new DataFields(fields), fakeNorms);
       success = true;
     } finally {
       if (success) {

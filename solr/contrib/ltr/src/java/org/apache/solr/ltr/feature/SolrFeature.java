@@ -29,6 +29,7 @@ import org.apache.lucene.search.DocIdSet;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.Bits;
@@ -93,7 +94,7 @@ public class SolrFeature extends Feature {
 
   @Override
   public LinkedHashMap<String,Object> paramsToMap() {
-    final LinkedHashMap<String,Object> params = new LinkedHashMap<>(3, 1.0f);
+    final LinkedHashMap<String,Object> params = defaultParamsToMap();
     if (df != null) {
       params.put("df", df);
     }
@@ -178,7 +179,7 @@ public class SolrFeature extends Feature {
         // leaving nothing for the phrase query to parse.
         if (query != null) {
           queryAndFilters.add(query);
-          solrQueryWeight = searcher.createWeight(searcher.rewrite(query), true, 1);
+          solrQueryWeight = searcher.createWeight(searcher.rewrite(query), ScoreMode.COMPLETE, 1);
         } else {
           solrQueryWeight = null;
         }
@@ -284,6 +285,11 @@ public class SolrFeature extends Feature {
                   "Unable to extract feature for "
                   + name, e);
         }
+      }
+
+      @Override
+      public float getMaxScore(int upTo) throws IOException {
+        return Float.POSITIVE_INFINITY;
       }
     }
 

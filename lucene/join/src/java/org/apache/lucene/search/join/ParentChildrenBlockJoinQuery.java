@@ -28,6 +28,7 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.BitSet;
@@ -84,6 +85,11 @@ public class ParentChildrenBlockJoinQuery extends Query {
   }
 
   @Override
+  public void visit(QueryVisitor visitor) {
+    visitor.visitLeaf(this);
+  }
+
+  @Override
   public Query rewrite(IndexReader reader) throws IOException {
     final Query childRewrite = childQuery.rewrite(reader);
     if (childRewrite != childQuery) {
@@ -94,8 +100,8 @@ public class ParentChildrenBlockJoinQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
-    final Weight childWeight = childQuery.createWeight(searcher, needsScores, boost);
+  public Weight createWeight(IndexSearcher searcher, org.apache.lucene.search.ScoreMode scoreMode, float boost) throws IOException {
+    final Weight childWeight = childQuery.createWeight(searcher, scoreMode, boost);
     final int readerIndex = ReaderUtil.subIndex(parentDocId, searcher.getIndexReader().leaves());
     return new Weight(this) {
 
@@ -183,6 +189,10 @@ public class ParentChildrenBlockJoinQuery extends Query {
             return childrenScorer.score();
           }
 
+          @Override
+          public float getMaxScore(int upTo) throws IOException {
+            return Float.POSITIVE_INFINITY;
+          }
           @Override
           public DocIdSetIterator iterator() {
             return it;

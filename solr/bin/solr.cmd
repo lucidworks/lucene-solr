@@ -16,6 +16,8 @@
 
 @echo off
 
+@REM Make sure to keep line endings as CRLF for .cmd files
+
 IF "%OS%"=="Windows_NT" setlocal enabledelayedexpansion enableextensions
 
 set "PASS_TO_RUN_EXAMPLE="
@@ -58,7 +60,12 @@ IF NOT DEFINED SOLR_SSL_ENABLED (
 )
 
 IF "%SOLR_SSL_ENABLED%"=="true" (
-  set "SOLR_JETTY_CONFIG=--lib="%DEFAULT_SERVER_DIR%\solr-webapp\webapp\WEB-INF\lib\*" --module=https"
+  set "SOLR_JETTY_CONFIG=--lib="%DEFAULT_SERVER_DIR%\solr-webapp\webapp\WEB-INF\lib\*""
+  if !JAVA_MAJOR_VERSION! GEQ 9  (
+    set "SOLR_JETTY_CONFIG=!SOLR_JETTY_CONFIG! --module=https"
+  ) else (
+    set "SOLR_JETTY_CONFIG=!SOLR_JETTY_CONFIG! --module=https8"
+  )
   set SOLR_URL_SCHEME=https
   IF DEFINED SOLR_SSL_KEY_STORE (
     set "SOLR_SSL_OPTS=!SOLR_SSL_OPTS! -Dsolr.jetty.keystore=%SOLR_SSL_KEY_STORE%"
@@ -73,6 +80,10 @@ IF "%SOLR_SSL_ENABLED%"=="true" (
   )
   IF DEFINED SOLR_SSL_TRUST_STORE_TYPE (
     set "SOLR_SSL_OPTS=!SOLR_SSL_OPTS! -Dsolr.jetty.truststore.type=%SOLR_SSL_TRUST_STORE_TYPE%"
+  )
+
+  IF NOT DEFINED SOLR_SSL_CLIENT_HOSTNAME_VERIFICATION (
+    set "SOLR_SSL_OPTS=!SOLR_SSL_OPTS! -Dsolr.jetty.ssl.verifyClientHostName=HTTPS"
   )
 
   IF DEFINED SOLR_SSL_NEED_CLIENT_AUTH (
@@ -208,6 +219,9 @@ IF "%1"=="version" goto get_version
 IF "%1"=="-v" goto get_version
 IF "%1"=="-version" goto get_version
 IF "%1"=="assert" goto run_assert
+IF "%1"=="autoscaling" goto run_autoscaling
+IF "%1"=="export" goto run_export
+IF "%1"=="package" goto run_package
 
 REM Only allow the command to be the first argument, assume start if not supplied
 IF "%1"=="start" goto set_script_cmd
@@ -284,7 +298,7 @@ goto done
 :script_usage
 @echo.
 @echo Usage: solr COMMAND OPTIONS
-@echo        where COMMAND is one of: start, stop, restart, healthcheck, create, create_core, create_collection, delete, version, zk, auth, assert, config
+@echo        where COMMAND is one of: start, stop, restart, healthcheck, create, create_core, create_collection, delete, version, zk, auth, assert, config, autoscaling, export
 @echo.
 @echo   Standalone server example (start Solr running in the background on port 8984):
 @echo.
@@ -1161,20 +1175,12 @@ set SOLR_OPTS=%SOLR_JAVA_STACK_SIZE% %SOLR_OPTS%
 IF "%SOLR_TIMEZONE%"=="" set SOLR_TIMEZONE=UTC
 
 IF "%GC_TUNE%"=="" (
-  set GC_TUNE=-XX:NewRatio=3 ^
-   -XX:SurvivorRatio=4 ^
-   -XX:TargetSurvivorRatio=90 ^
-   -XX:MaxTenuringThreshold=8 ^
-   -XX:+UseConcMarkSweepGC ^
-   -XX:ConcGCThreads=4 -XX:ParallelGCThreads=4 ^
-   -XX:+CMSScavengeBeforeRemark ^
-   -XX:PretenureSizeThreshold=64m ^
-   -XX:+UseCMSInitiatingOccupancyOnly ^
-   -XX:CMSInitiatingOccupancyFraction=50 ^
-   -XX:CMSMaxAbortablePrecleanTime=6000 ^
-   -XX:+CMSParallelRemarkEnabled ^
-   -XX:+ParallelRefProcEnabled ^
-   -XX:-OmitStackTraceInFastThrow
+  set GC_TUNE=-XX:+UseG1GC ^
+    -XX:+PerfDisableSharedMem ^
+    -XX:+ParallelRefProcEnabled ^
+    -XX:MaxGCPauseMillis=250 ^
+    -XX:+UseLargePages ^
+    -XX:+AlwaysPreTouch
 )
 
 if !JAVA_MAJOR_VERSION! GEQ 9  (
@@ -1408,6 +1414,29 @@ if errorlevel 1 (
    exit /b 1
 )
 goto done
+
+:run_autoscaling
+"%JAVA%" %SOLR_SSL_OPTS% %AUTHC_OPTS% %SOLR_ZK_CREDS_AND_ACLS% -Dsolr.install.dir="%SOLR_TIP%" ^
+  -Dlog4j.configurationFile="file:///%DEFAULT_SERVER_DIR%\resources\log4j2-console.xml" ^
+  -classpath "%DEFAULT_SERVER_DIR%\solr-webapp\webapp\WEB-INF\lib\*;%DEFAULT_SERVER_DIR%\lib\ext\*" ^
+  org.apache.solr.util.SolrCLI %* 
+goto done:
+
+:run_export
+"%JAVA%" %SOLR_SSL_OPTS% %AUTHC_OPTS% %SOLR_ZK_CREDS_AND_ACLS% -Dsolr.install.dir="%SOLR_TIP%" ^
+  -Dlog4j.configurationFile="file:///%DEFAULT_SERVER_DIR%\resources\log4j2-console.xml" ^
+  -classpath "%DEFAULT_SERVER_DIR%\solr-webapp\webapp\WEB-INF\lib\*;%DEFAULT_SERVER_DIR%\lib\ext\*" ^
+  org.apache.solr.util.SolrCLI %*
+goto done:
+
+:run_package
+REM TODO: Compute the running Solr URL and populate it as a parameter (as has been done for the shell script)
+REM Without that, users will have to supply -solrUrl parameter in every request. Life can be so hard for Windows users!
+"%JAVA%" %SOLR_SSL_OPTS% %AUTHC_OPTS% %SOLR_ZK_CREDS_AND_ACLS% -Dsolr.install.dir="%SOLR_TIP%" ^
+  -Dlog4j.configurationFile="file:///%DEFAULT_SERVER_DIR%\resources\log4j2-console.xml" ^
+  -classpath "%DEFAULT_SERVER_DIR%\solr-webapp\webapp\WEB-INF\lib\*;%DEFAULT_SERVER_DIR%\lib\ext\*" ^
+  org.apache.solr.util.SolrCLI %*
+goto done:
 
 :parse_config_args
 IF [%1]==[] goto run_config

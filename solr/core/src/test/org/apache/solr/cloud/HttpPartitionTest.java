@@ -22,7 +22,6 @@ import static org.apache.solr.common.cloud.Replica.State.RECOVERING;
 import java.io.File;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -31,7 +30,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.apache.lucene.util.LuceneTestCase.Slow;
@@ -51,7 +49,6 @@ import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.Slice;
-import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.common.cloud.ZkCoreNodeProps;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.util.NamedList;
@@ -59,7 +56,6 @@ import org.apache.solr.common.util.TimeSource;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.update.UpdateLog;
-import org.apache.solr.util.MockCoreContainer.MockCoreDescriptor;
 import org.apache.solr.util.RTimer;
 import org.apache.solr.util.TestInjection;
 import org.apache.solr.util.TimeOut;
@@ -88,8 +84,6 @@ public class HttpPartitionTest extends AbstractFullDistribZkTestBase {
   // give plenty of time for replicas to recover when running in slow Jenkins test envs
   protected static final int maxWaitSecsToSeeAllActive = 90;
 
-  private final boolean onlyLeaderIndexes = random().nextBoolean();
-
   @BeforeClass
   public static void setupSysProps() {
     System.setProperty("socketTimeout", "10000");
@@ -103,11 +97,6 @@ public class HttpPartitionTest extends AbstractFullDistribZkTestBase {
     super();
     sliceCount = 2;
     fixShardCount(3);
-  }
-
-  @Override
-  protected boolean useTlogReplicas() {
-    return false; // TODO: tlog replicas makes commits take way to long due to what is likely a bug and it's TestInjection use
   }
 
   /**
@@ -140,8 +129,6 @@ public class HttpPartitionTest extends AbstractFullDistribZkTestBase {
   public void test() throws Exception {
     waitForThingsToLevelOut(30000);
 
-    testLeaderInitiatedRecoveryCRUD();
-
     testDoRecoveryOnRestart();
 
     // test a 1x2 collection
@@ -163,62 +150,6 @@ public class HttpPartitionTest extends AbstractFullDistribZkTestBase {
     waitForThingsToLevelOut(30000);
 
     log.info("HttpPartitionTest succeeded ... shutting down now!");
-  }
-
-  /**
-   * Tests handling of different format of lir nodes
-   */
-  //TODO remove in SOLR-11812
-  protected void testLeaderInitiatedRecoveryCRUD() throws Exception {
-    String testCollectionName = "c8n_crud_1x2";
-    String shardId = "shard1";
-    createCollectionRetry(testCollectionName, "conf1", 1, 2, 1);
-    cloudClient.setDefaultCollection(testCollectionName);
-
-    Replica leader = cloudClient.getZkStateReader().getLeaderRetry(testCollectionName, shardId);
-    JettySolrRunner leaderJetty = getJettyOnPort(getReplicaPort(leader));
-
-    CoreContainer cores = leaderJetty.getCoreContainer();
-    ZkController zkController = cores.getZkController();
-    assertNotNull("ZkController is null", zkController);
-
-    Replica notLeader =
-        ensureAllReplicasAreActive(testCollectionName, shardId, 1, 2, maxWaitSecsToSeeAllActive).get(0);
-
-    ZkCoreNodeProps replicaCoreNodeProps = new ZkCoreNodeProps(notLeader);
-    String replicaUrl = replicaCoreNodeProps.getCoreUrl();
-
-    MockCoreDescriptor cd = new MockCoreDescriptor() {
-      public CloudDescriptor getCloudDescriptor() {
-        return new CloudDescriptor(leader.getStr(ZkStateReader.CORE_NAME_PROP), new Properties(), this) {
-          @Override
-          public String getCoreNodeName() {
-            return leader.getName();
-          }
-          @Override
-          public boolean isLeader() {
-            return true;
-          }
-        };
-      }
-    };
-
-    zkController.updateLeaderInitiatedRecoveryState(testCollectionName, shardId, notLeader.getName(), DOWN, cd, true);
-    Map<String,Object> lirStateMap = zkController.getLeaderInitiatedRecoveryStateObject(testCollectionName, shardId, notLeader.getName());
-    assertNotNull(lirStateMap);
-    assertSame(DOWN, Replica.State.getState((String) lirStateMap.get(ZkStateReader.STATE_PROP)));
-
-    // test old non-json format handling
-    SolrZkClient zkClient = zkController.getZkClient();
-    String znodePath = zkController.getLeaderInitiatedRecoveryZnodePath(testCollectionName, shardId, notLeader.getName());
-    zkClient.setData(znodePath, "down".getBytes(StandardCharsets.UTF_8), true);
-    lirStateMap = zkController.getLeaderInitiatedRecoveryStateObject(testCollectionName, shardId, notLeader.getName());
-    assertNotNull(lirStateMap);
-    assertSame(DOWN, Replica.State.getState((String) lirStateMap.get(ZkStateReader.STATE_PROP)));
-    zkClient.delete(znodePath, -1, false);
-
-    // try to clean up
-    attemptCollectionDelete(cloudClient, testCollectionName);
   }
 
   private void testDoRecoveryOnRestart() throws Exception {
@@ -332,7 +263,7 @@ public class HttpPartitionTest extends AbstractFullDistribZkTestBase {
     log.info("Looked up max version bucket seed "+maxVersionBefore+" for core "+coreName);
 
     // now up the stakes and do more docs
-    int numDocs = TEST_NIGHTLY ? 1000 : 100;
+    int numDocs = TEST_NIGHTLY ? 1000 : 105;
     boolean hasPartition = false;
     for (int d = 0; d < numDocs; d++) {
       // create / restore partition every 100 docs
@@ -551,8 +482,12 @@ public class HttpPartitionTest extends AbstractFullDistribZkTestBase {
     List<Replica> replicas = new ArrayList<Replica>();
     replicas.addAll(activeReplicas.values());
     return replicas;
-  }  
+  }
 
+  /**
+   * Assert docs exists in {@code notLeaders} replicas, docs must also exist in the shard1 leader as well.
+   * This method uses RTG for validation therefore it must work for asserting both TLOG and NRT replicas.
+   */
   protected void assertDocsExistInAllReplicas(List<Replica> notLeaders,
       String testCollectionName, int firstDocId, int lastDocId)
       throws Exception {

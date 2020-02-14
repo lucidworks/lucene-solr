@@ -156,15 +156,9 @@ public class FieldAnalysisRequestHandlerTest extends AnalysisRequestHandlerTestB
     params.remove(CommonParams.Q);
     params.remove(AnalysisParams.QUERY);
     params.remove(AnalysisParams.FIELD_VALUE);
-    try {
-      request = handler.resolveAnalysisRequest(req);
-      fail("Analysis request must fail if all of q, analysis.query or analysis.value are absent");
-    } catch (SolrException e) {
-      if (e.code() != SolrException.ErrorCode.BAD_REQUEST.code)  {
-        fail("Unexpected exception");
-      }
-    } catch (Exception e) {
-      fail("Unexpected exception");
+    try (SolrQueryRequest solrQueryRequest = new LocalSolrQueryRequest(h.getCore(), params)) {
+      SolrException ex = expectThrows(SolrException.class, () -> handler.resolveAnalysisRequest(solrQueryRequest));
+      assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, ex.code());
     }
 
     req.close();
@@ -432,7 +426,7 @@ public class FieldAnalysisRequestHandlerTest extends AnalysisRequestHandlerTestB
     NamedList<NamedList> result = handler.handleAnalysisRequest(request, h.getCore().getLatestSchema());
     NamedList<List<NamedList>> tokens = (NamedList<List<NamedList>>)
         ((NamedList)result.get("field_types").get("location_rpt")).get("index");
-    List<NamedList> tokenList = tokens.get("org.apache.lucene.spatial.prefix.BytesRefIteratorTokenStream");
+    List<NamedList> tokenList = tokens.get("org.apache.lucene.spatial.prefix.PrefixTreeStrategy$ShapeTokenStream");
 
 
     List<String> vals = new ArrayList<>(tokenList.size());

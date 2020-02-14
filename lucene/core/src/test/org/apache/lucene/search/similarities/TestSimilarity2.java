@@ -54,6 +54,13 @@ public class TestSimilarity2 extends LuceneTestCase {
     sims = new ArrayList<>();
     sims.add(new ClassicSimilarity());
     sims.add(new BM25Similarity());
+    sims.add(new BooleanSimilarity());
+    sims.add(new AxiomaticF1EXP());
+    sims.add(new AxiomaticF1LOG());
+    sims.add(new AxiomaticF2EXP());
+    sims.add(new AxiomaticF2LOG());
+    sims.add(new AxiomaticF3EXP(0.25f, 3));
+    sims.add(new AxiomaticF3LOG(0.25f, 3));
     // TODO: not great that we dup this all with TestSimilarityBase
     for (BasicModel basicModel : TestSimilarityBase.BASIC_MODELS) {
       for (AfterEffect afterEffect : TestSimilarityBase.AFTER_EFFECTS) {
@@ -89,7 +96,7 @@ public class TestSimilarity2 extends LuceneTestCase {
     
     for (Similarity sim : sims) {
       is.setSimilarity(sim);
-      assertEquals(0, is.search(new TermQuery(new Term("foo", "bar")), 10).totalHits);
+      assertEquals(0, is.search(new TermQuery(new Term("foo", "bar")), 10).totalHits.value);
     }
     ir.close();
     dir.close();
@@ -111,7 +118,7 @@ public class TestSimilarity2 extends LuceneTestCase {
       BooleanQuery.Builder query = new BooleanQuery.Builder();
       query.add(new TermQuery(new Term("foo", "bar")), BooleanClause.Occur.SHOULD);
       query.add(new TermQuery(new Term("bar", "baz")), BooleanClause.Occur.SHOULD);
-      assertEquals(1, is.search(query.build(), 10).totalHits);
+      assertEquals(1, is.search(query.build(), 10).totalHits.value);
     }
     ir.close();
     dir.close();
@@ -133,7 +140,7 @@ public class TestSimilarity2 extends LuceneTestCase {
       BooleanQuery.Builder query = new BooleanQuery.Builder();
       query.add(new TermQuery(new Term("foo", "bar")), BooleanClause.Occur.SHOULD);
       query.add(new TermQuery(new Term("foo", "baz")), BooleanClause.Occur.SHOULD);
-      assertEquals(1, is.search(query.build(), 10).totalHits);
+      assertEquals(1, is.search(query.build(), 10).totalHits.value);
     }
     ir.close();
     dir.close();
@@ -157,7 +164,7 @@ public class TestSimilarity2 extends LuceneTestCase {
       is.setSimilarity(sim);
       BooleanQuery.Builder query = new BooleanQuery.Builder();
       query.add(new TermQuery(new Term("foo", "bar")), BooleanClause.Occur.SHOULD);
-      assertEquals(1, is.search(query.build(), 10).totalHits);
+      assertEquals(1, is.search(query.build(), 10).totalHits.value);
     }
     ir.close();
     dir.close();
@@ -201,7 +208,7 @@ public class TestSimilarity2 extends LuceneTestCase {
       is.setSimilarity(sims.get(i));
       Explanation expected = scores.get(i);
       Explanation actual = is.explain(query, 0);
-      assertEquals(sims.get(i).toString() + ": actual=" + actual + ",expected=" + expected, expected.getValue(), actual.getValue(), 0F);
+      assertEquals(sims.get(i).toString() + ": actual=" + actual + ",expected=" + expected, expected.getValue(), actual.getValue());
     }
     
     iw.close();
@@ -228,7 +235,7 @@ public class TestSimilarity2 extends LuceneTestCase {
       is.setSimilarity(sim);
       BooleanQuery.Builder query = new BooleanQuery.Builder();
       query.add(new TermQuery(new Term("foo", "bar")), BooleanClause.Occur.SHOULD);
-      assertEquals(1, is.search(query.build(), 10).totalHits);
+      assertEquals(1, is.search(query.build(), 10).totalHits.value);
     }
     ir.close();
     dir.close();
@@ -254,7 +261,7 @@ public class TestSimilarity2 extends LuceneTestCase {
       is.setSimilarity(sim);
       BooleanQuery.Builder query = new BooleanQuery.Builder();
       query.add(new TermQuery(new Term("foo", "bar")), BooleanClause.Occur.SHOULD);
-      assertEquals(1, is.search(query.build(), 10).totalHits);
+      assertEquals(1, is.search(query.build(), 10).totalHits.value);
     }
     ir.close();
     dir.close();
@@ -262,10 +269,7 @@ public class TestSimilarity2 extends LuceneTestCase {
   
   /** make sure all sims work with spanOR(termX, termY) where termY does not exist */
   public void testCrazySpans() throws Exception {
-    // The problem: "normal" lucene queries create scorers, returning null if terms dont exist
-    // This means they never score a term that does not exist.
-    // however with spans, there is only one scorer for the whole hierarchy:
-    // inner queries are not real queries, their boosts are ignored, etc.
+    // historically this was a problem, but sim's no longer have to score terms that dont exist
     Directory dir = newDirectory();
     RandomIndexWriter iw = new RandomIndexWriter(random(), dir);
     Document doc = new Document();
@@ -282,7 +286,7 @@ public class TestSimilarity2 extends LuceneTestCase {
       SpanTermQuery s2 = new SpanTermQuery(new Term("foo", "baz"));
       Query query = new SpanOrQuery(s1, s2);
       TopDocs td = is.search(query, 10);
-      assertEquals(1, td.totalHits);
+      assertEquals(1, td.totalHits.value);
       float score = td.scoreDocs[0].score;
       assertFalse("negative score for " + sim, score < 0.0f);
       assertFalse("inf score for " + sim, Float.isInfinite(score));

@@ -135,7 +135,25 @@
   <property name="tests.asserts" value="true" />
   <property name="tests.policy" location="${common.dir}/tools/junit4/tests.policy"/>
 
-  <condition property="tests.asserts.args" value="-ea -esa" else="">
+  <condition property="tests.asserts.bug.jdk8205399" value="-da:java.util.HashMap" else="">
+    <!-- LUCENE-8991 / JDK-8205399: HashMap assertion bug until java12-->
+    <and>
+      <or>
+        <contains string="${java.vm.name}" substring="hotspot" casesensitive="false"/>
+        <contains string="${java.vm.name}" substring="openjdk" casesensitive="false"/>
+        <contains string="${java.vm.name}" substring="jrockit" casesensitive="false"/>
+      </or>
+      <or>
+        <equals arg1="${java.specification.version}" arg2="1.8"/>
+        <equals arg1="${java.specification.version}" arg2="9"/>
+        <equals arg1="${java.specification.version}" arg2="10"/>
+        <equals arg1="${java.specification.version}" arg2="11"/>
+      </or>
+      <isfalse value="${tests.asserts.hashmap}" />
+    </and>
+  </condition>
+  
+  <condition property="tests.asserts.args" value="-ea -esa ${tests.asserts.bug.jdk8205399}" else="">
     <istrue value="${tests.asserts}"/>
   </condition>
 
@@ -186,9 +204,10 @@
   <property name="javadoc.maxmemory" value="512m" />
   <property name="javadoc.noindex" value="true"/>
 
-  <property name="javadoc.doclint.args" value="-Xdoclint:all -Xdoclint:-missing"/>
+  <!---TODO: Fix accessibility (order of H1/H2/H3 headings), see https://issues.apache.org/jira/browse/LUCENE-8729 -->
+  <property name="javadoc.doclint.args" value="-Xdoclint:all -Xdoclint:-missing -Xdoclint:-accessibility"/>
   <!---proc:none was added because of LOG4J2-1925 / JDK-8186647 -->
-  <property name="javac.doclint.args" value="-Xdoclint:all/protected -Xdoclint:-missing -proc:none"/>
+  <property name="javac.doclint.args" value="-Xdoclint:all/protected -Xdoclint:-missing -Xdoclint:-accessibility -proc:none"/>
   
   <!-- Javadoc classpath -->
   <path id="javadoc.classpath">
@@ -1155,6 +1174,7 @@
 
             <!-- Restrict access to certain Java features and install security manager: -->
             <sysproperty key="common.dir" file="${common.dir}" />
+            <sysproperty key="ant.library.dir" file="${ant.library.dir}" />
             <sysproperty key="clover.db.dir" file="${clover.db.dir}" />
             <syspropertyset>
                 <propertyref prefix="java.security.manager"/>
@@ -1353,7 +1373,7 @@ ant test "-Dtests.class=*.ClassName"
 ant test -Dtestcase=ClassName
 
 # Run all tests in a package and sub-packages
-ant test "-Dtests.class=org.apache.lucene.package.*"
+ant test "-Dtests.class=org.apache.lucene.package.Test*|org.apache.lucene.package.*Test"
 
 # Run any test methods that contain 'esi' (like: ...r*esi*ze...).
 ant test "-Dtests.method=*esi*"
@@ -2101,7 +2121,7 @@ ${ant.project.name}.test.dependencies=${test.classpath.list}
   </target>
   
   <target name="-ecj-resolve" unless="ecj.loaded" depends="ivy-availability-check,ivy-configure" if="ecj-javadoc-lint.supported">
-    <ivy:cachepath organisation="org.eclipse.jdt.core.compiler" module="ecj" revision="4.6.1"
+    <ivy:cachepath organisation="org.eclipse.jdt" module="ecj" revision="3.19.0"
      inline="true" conf="master" type="jar" pathid="ecj.classpath" />
     <componentdef classname="org.eclipse.jdt.core.JDTCompilerAdapter"
      classpathref="ecj.classpath" name="ecj-component"/>
@@ -2202,6 +2222,8 @@ ${ant.project.name}.test.dependencies=${test.classpath.list}
           description="WARNING: This API is experimental and might change in incompatible ways in the next release."/>
         <tag name="lucene.internal"
         description="NOTE: This API is for internal purposes only and might change in incompatible ways in the next release."/>
+        <tag name="lucene.spi"
+        description="SPI Name (Note: This is case-insensitive. e.g., if the name is 'htmlStrip', 'htmlstrip' can be used when looking up the service):" scope="types"/>
         <link offline="true" packagelistLoc="${javadoc.dir}"/>
         <link offline="true" href="${javadoc.link}" packagelistLoc="${javadoc.packagelist.dir}/java8"/>
         <bottom><![CDATA[
@@ -2213,6 +2235,8 @@ ${ant.project.name}.test.dependencies=${test.classpath.list}
         <classpath refid="javadoc.classpath"/>
         <arg line="${javadoc.release.args}"/>
         <arg line="${javadoc.doclint.args}"/>
+        <!-- force locale to be "en_US", as Javadoc tool ignores locale parameter (in some cases) -->
+        <arg line="-J-Duser.language=en -J-Duser.country=US"/>
       </javadoc>
       <record name="@{destdir}/log_javadoc.txt" action="stop"/>
       
@@ -2395,7 +2419,7 @@ ${ant.project.name}.test.dependencies=${test.classpath.list}
 
   <!-- GROOVY scripting engine for ANT tasks -->
   <target name="resolve-groovy" unless="groovy.loaded" depends="ivy-availability-check,ivy-configure">
-    <ivy:cachepath organisation="org.codehaus.groovy" module="groovy-all" revision="2.4.15"
+    <ivy:cachepath organisation="org.codehaus.groovy" module="groovy-all" revision="2.4.17"
       inline="true" conf="default" type="jar" transitive="true" pathid="groovy.classpath"/>
     <taskdef name="groovy"
       classname="org.codehaus.groovy.ant.Groovy"
@@ -2409,7 +2433,7 @@ ${ant.project.name}.test.dependencies=${test.classpath.list}
   <property name="forbidden-sysout-excludes" value=""/>
   
   <target name="-install-forbidden-apis" unless="forbidden-apis.loaded" depends="ivy-availability-check,ivy-configure">
-    <ivy:cachepath organisation="de.thetaphi" module="forbiddenapis" revision="2.6"
+    <ivy:cachepath organisation="de.thetaphi" module="forbiddenapis" revision="2.7"
       inline="true" conf="default" transitive="true" pathid="forbidden-apis.classpath"/>
     <taskdef name="forbidden-apis" classname="de.thetaphi.forbiddenapis.ant.AntTask" classpathref="forbidden-apis.classpath"/>
     <property name="forbidden-apis.loaded" value="true"/>
@@ -2472,8 +2496,8 @@ ${ant.project.name}.test.dependencies=${test.classpath.list}
   </target>
 
   <target name="resolve-markdown" unless="markdown.loaded" depends="resolve-groovy">
-    <property name="flexmark.version" value="0.16.1"/>
-    <ivy:cachepath transitive="true" pathid="markdown.classpath">
+    <property name="flexmark.version" value="0.42.6"/>
+    <ivy:cachepath transitive="true" resolveId="flexmark" pathid="markdown.classpath">
       <ivy:dependency org="com.vladsch.flexmark" name="flexmark" rev="${flexmark.version}" conf="default" />
       <ivy:dependency org="com.vladsch.flexmark" name="flexmark-ext-autolink" rev="${flexmark.version}" conf="default" />
       <ivy:dependency org="com.vladsch.flexmark" name="flexmark-ext-abbreviation" rev="${flexmark.version}" conf="default" />
@@ -2616,7 +2640,6 @@ The following arguments can be provided to ant to alter its behaviour and target
         <path id="pitest.classpath">
             <path refid="junit.classpath"/>
             <path refid="pitest.framework.classpath"/>
-            <pathelement path="${java.class.path}"/>
         </path>
 
         <junit4:pickseed property="pitest.seed" />

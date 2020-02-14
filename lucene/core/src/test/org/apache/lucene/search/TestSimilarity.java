@@ -39,7 +39,6 @@ public class TestSimilarity extends LuceneTestCase {
   public static class SimpleSimilarity extends ClassicSimilarity {
     @Override public float lengthNorm(int length) { return 1; }
     @Override public float tf(float freq) { return freq; }
-    @Override public float sloppyFreq(int distance) { return 2.0f; }
     @Override public float idf(long docFreq, long docCount) { return 1.0f; }
     @Override public Explanation idfExplain(CollectionStatistics collectionStats, TermStatistics[] stats) {
       return Explanation.match(1.0f, "Inexplicable"); 
@@ -56,7 +55,7 @@ public class TestSimilarity extends LuceneTestCase {
     d1.add(newTextField("field", "a c", Field.Store.YES));
 
     Document d2 = new Document();
-    d2.add(newTextField("field", "a b c", Field.Store.YES));
+    d2.add(newTextField("field", "a c b", Field.Store.YES));
     
     writer.addDocument(d1);
     writer.addDocument(d2);
@@ -71,9 +70,9 @@ public class TestSimilarity extends LuceneTestCase {
     Term c = new Term("field", "c");
 
     searcher.search(new TermQuery(b), new SimpleCollector() {
-         private Scorer scorer;
+         private Scorable scorer;
          @Override
-        public void setScorer(Scorer scorer) {
+        public void setScorer(Scorable scorer) {
            this.scorer = scorer; 
          }
          @Override
@@ -81,8 +80,8 @@ public class TestSimilarity extends LuceneTestCase {
            assertEquals(1.0f, scorer.score(), 0);
          }
          @Override
-         public boolean needsScores() {
-           return true;
+         public ScoreMode scoreMode() {
+           return ScoreMode.COMPLETE;
          }
        });
 
@@ -92,9 +91,9 @@ public class TestSimilarity extends LuceneTestCase {
     //System.out.println(bq.toString("field"));
     searcher.search(bq.build(), new SimpleCollector() {
          private int base = 0;
-         private Scorer scorer;
+         private Scorable scorer;
          @Override
-        public void setScorer(Scorer scorer) {
+        public void setScorer(Scorable scorer) {
            this.scorer = scorer; 
          }
          @Override
@@ -107,8 +106,8 @@ public class TestSimilarity extends LuceneTestCase {
            base = context.docBase;
          }
          @Override
-         public boolean needsScores() {
-           return true;
+         public ScoreMode scoreMode() {
+           return ScoreMode.COMPLETE;
          }
        });
 
@@ -116,9 +115,9 @@ public class TestSimilarity extends LuceneTestCase {
     //System.out.println(pq.toString("field"));
     searcher.search(pq,
        new SimpleCollector() {
-         private Scorer scorer;
+         private Scorable scorer;
          @Override
-         public void setScorer(Scorer scorer) {
+         public void setScorer(Scorable scorer) {
           this.scorer = scorer; 
          }
          @Override
@@ -127,27 +126,27 @@ public class TestSimilarity extends LuceneTestCase {
            assertEquals(1.0f, scorer.score(), 0);
          }
          @Override
-         public boolean needsScores() {
-           return true;
+         public ScoreMode scoreMode() {
+           return ScoreMode.COMPLETE;
          }
        });
 
-    pq = new PhraseQuery(2, a.field(), a.bytes(), c.bytes());
+    pq = new PhraseQuery(2, a.field(), a.bytes(), b.bytes());
     //System.out.println(pq.toString("field"));
     searcher.search(pq, new SimpleCollector() {
-      private Scorer scorer;
+      private Scorable scorer;
       @Override
-      public void setScorer(Scorer scorer) {
+      public void setScorer(Scorable scorer) {
         this.scorer = scorer; 
       }
       @Override
       public final void collect(int doc) throws IOException {
         //System.out.println("Doc=" + doc + " score=" + score);
-        assertEquals(2.0f, scorer.score(), 0);
+        assertEquals(0.5f, scorer.score(), 0);
       }
       @Override
-      public boolean needsScores() {
-        return true;
+      public ScoreMode scoreMode() {
+        return ScoreMode.COMPLETE;
       }
     });
 

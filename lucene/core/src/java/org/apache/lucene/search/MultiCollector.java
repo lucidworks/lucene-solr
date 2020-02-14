@@ -95,7 +95,7 @@ public class MultiCollector implements Collector {
     this.collectors = collectors;
     int numNeedsScores = 0;
     for (Collector collector : collectors) {
-      if (collector.needsScores()) {
+      if (collector.scoreMode().needsScores()) {
         numNeedsScores += 1;
       }
     }
@@ -103,13 +103,16 @@ public class MultiCollector implements Collector {
   }
 
   @Override
-  public boolean needsScores() {
+  public ScoreMode scoreMode() {
+    ScoreMode scoreMode = null;
     for (Collector collector : collectors) {
-      if (collector.needsScores()) {
-        return true;
+      if (scoreMode == null) {
+        scoreMode = collector.scoreMode();
+      } else if (scoreMode != collector.scoreMode()) {
+        return ScoreMode.COMPLETE;
       }
     }
-    return false;
+    return scoreMode;
   }
 
   @Override
@@ -148,10 +151,21 @@ public class MultiCollector implements Collector {
     }
 
     @Override
-    public void setScorer(Scorer scorer) throws IOException {
+    public void setScorer(Scorable scorer) throws IOException {
       if (cacheScores) {
         scorer = new ScoreCachingWrappingScorer(scorer);
       }
+      scorer = new FilterScorable(scorer) {
+        @Override
+        public void setMinCompetitiveScore(float minScore) {
+          // Ignore calls to setMinCompetitiveScore so that if we wrap two
+          // collectors and one of them wants to skip low-scoring hits, then
+          // the other collector still sees all hits. We could try to reconcile
+          // min scores and take the maximum min score across collectors, but
+          // this is very unlikely to be helpful in practice.
+        }
+
+      };
       for (int i = 0; i < numCollectors; ++i) {
         final LeafCollector c = collectors[i];
         c.setScorer(scorer);

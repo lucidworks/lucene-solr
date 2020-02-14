@@ -23,13 +23,13 @@ import org.apache.lucene.search.spell.LevenshteinDistance;
 import org.apache.lucene.search.spell.LuceneLevenshteinDistance;
 import org.apache.lucene.search.spell.NGramDistance;
 import org.apache.lucene.search.spell.StringDistance;
-import org.apache.lucene.util.LuceneTestCase;
+import org.apache.solr.SolrTestCase;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.junit.Assert;
 import org.junit.Test;
 
-public class ConjunctionSolrSpellCheckerTest extends LuceneTestCase {
+public class ConjunctionSolrSpellCheckerTest extends SolrTestCase {
   
   public static final Class<?>[] AVAILABLE_DISTANCES = {LevenshteinDistance.class, LuceneLevenshteinDistance.class,
       JaroWinklerDistance.class, NGramDistance.class};
@@ -60,12 +60,7 @@ public class ConjunctionSolrSpellCheckerTest extends LuceneTestCase {
     
     cssc.addChecker(checker1);
     cssc.addChecker(checker2);
-    try {
-      cssc.addChecker(checker3);
-      fail("ConjunctionSolrSpellChecker should have thrown an exception about non-identical StringDistances.");
-    } catch (IllegalArgumentException iae) {
-      // correct behavior
-    }
+    expectThrows(IllegalArgumentException.class, () -> cssc.addChecker(checker3));
   }
 
   static class MockSolrSpellChecker extends SolrSpellChecker {

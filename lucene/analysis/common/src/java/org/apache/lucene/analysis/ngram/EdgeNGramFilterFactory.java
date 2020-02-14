@@ -34,8 +34,13 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * &lt;/fieldType&gt;</pre>
  *
  * @since 3.1
+ * @lucene.spi {@value #NAME}
  */
 public class EdgeNGramFilterFactory extends TokenFilterFactory {
+
+  /** SPI name */
+  public static final String NAME = "edgeNGram";
+
   private final int maxGramSize;
   private final int minGramSize;
   private final boolean preserveOriginal;
@@ -43,8 +48,8 @@ public class EdgeNGramFilterFactory extends TokenFilterFactory {
   /** Creates a new EdgeNGramFilterFactory */
   public EdgeNGramFilterFactory(Map<String, String> args) {
     super(args);
-    minGramSize = getInt(args, "minGramSize", EdgeNGramTokenFilter.DEFAULT_MIN_GRAM_SIZE);
-    maxGramSize = getInt(args, "maxGramSize", EdgeNGramTokenFilter.DEFAULT_MAX_GRAM_SIZE);
+    minGramSize = requireInt(args, "minGramSize");
+    maxGramSize = requireInt(args, "maxGramSize");
     preserveOriginal = getBoolean(args, "preserveOriginal", EdgeNGramTokenFilter.DEFAULT_PRESERVE_ORIGINAL);
     if (!args.isEmpty()) {
       throw new IllegalArgumentException("Unknown parameters: " + args);

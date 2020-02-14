@@ -29,7 +29,7 @@ import org.apache.lucene.index.MultiReader;
 import org.apache.lucene.index.NoMergePolicy;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermContext;
+import org.apache.lucene.index.TermStates;
 import org.apache.lucene.index.TermState;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
@@ -49,7 +49,7 @@ public class TestTermQuery extends LuceneTestCase {
         new TermQuery(new Term("foo", "baz")));
     QueryUtils.checkEqual(
         new TermQuery(new Term("foo", "bar")),
-        new TermQuery(new Term("foo", "bar"), TermContext.build(new MultiReader().getContext(), new Term("foo", "bar"))));
+        new TermQuery(new Term("foo", "bar"), TermStates.build(new MultiReader().getContext(), new Term("foo", "bar"), true)));
   }
 
   public void testCreateWeightDoesNotSeekIfScoresAreNotNeeded() throws IOException {
@@ -73,10 +73,10 @@ public class TestTermQuery extends LuceneTestCase {
     IndexSearcher noSeekSearcher = new IndexSearcher(noSeekReader);
     Query query = new TermQuery(new Term("foo", "bar"));
     AssertionError e = expectThrows(AssertionError.class,
-        () -> noSeekSearcher.createWeight(noSeekSearcher.rewrite(query), true, 1));
+        () -> noSeekSearcher.createWeight(noSeekSearcher.rewrite(query), ScoreMode.COMPLETE, 1));
     assertEquals("no seek", e.getMessage());
 
-    noSeekSearcher.createWeight(noSeekSearcher.rewrite(query), false, 1); // no exception
+    noSeekSearcher.createWeight(noSeekSearcher.rewrite(query), ScoreMode.COMPLETE_NO_SCORES, 1); // no exception
     IndexSearcher searcher = new IndexSearcher(reader);
     // use a collector rather than searcher.count() which would just read the
     // doc freq instead of creating a scorer
@@ -84,7 +84,7 @@ public class TestTermQuery extends LuceneTestCase {
     searcher.search(query, collector);
     assertEquals(1, collector.getTotalHits());
     TermQuery queryWithContext = new TermQuery(new Term("foo", "bar"),
-        TermContext.build(reader.getContext(), new Term("foo", "bar")));
+        TermStates.build(reader.getContext(), new Term("foo", "bar"), true));
     collector = new TotalHitCountCollector();
     searcher.search(queryWithContext, collector);
     assertEquals(1, collector.getTotalHits());
@@ -92,10 +92,10 @@ public class TestTermQuery extends LuceneTestCase {
     IOUtils.close(reader, w, dir);
   }
 
-  public void testGetTermContext() throws Exception {
+  public void testGetTermStates() throws Exception {
 
     // no term states:
-    assertNull(new TermQuery(new Term("foo", "bar")).getTermContext());
+    assertNull(new TermQuery(new Term("foo", "bar")).getTermStates());
 
     Directory dir = newDirectory();
     RandomIndexWriter w = new RandomIndexWriter(random(), dir, newIndexWriterConfig().setMergePolicy(NoMergePolicy.INSTANCE));
@@ -117,8 +117,8 @@ public class TestTermQuery extends LuceneTestCase {
     IndexSearcher noSeekSearcher = new IndexSearcher(noSeekReader);
     Query query = new TermQuery(new Term("foo", "bar"));
     TermQuery queryWithContext = new TermQuery(new Term("foo", "bar"),
-        TermContext.build(reader.getContext(), new Term("foo", "bar")));
-    assertNotNull(queryWithContext.getTermContext());
+        TermStates.build(reader.getContext(), new Term("foo", "bar"), true));
+    assertNotNull(queryWithContext.getTermStates());
     IOUtils.close(reader, w, dir);
   }
 

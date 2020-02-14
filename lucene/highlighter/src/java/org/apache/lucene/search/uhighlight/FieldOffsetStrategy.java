@@ -28,9 +28,9 @@ import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Matches;
 import org.apache.lucene.search.MatchesIterator;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CharsRefBuilder;
-import org.apache.lucene.util.automaton.CharacterRunAutomaton;
 
 /**
  * Ultimately returns an {@link OffsetsEnum} yielding potentially highlightable words in the text.  Needs
@@ -133,7 +133,7 @@ public abstract class FieldOffsetStrategy {
     IndexSearcher indexSearcher = new IndexSearcher(leafReader);
     indexSearcher.setQueryCache(null);
     Matches matches = indexSearcher.rewrite(components.getQuery())
-        .createWeight(indexSearcher, false, 1.0f)
+        .createWeight(indexSearcher, ScoreMode.COMPLETE_NO_SCORES, 1.0f)
         .matches(leafReader.getContext(), docId);
     if (matches == null) {
       return; // doc doesn't match
@@ -167,7 +167,7 @@ public abstract class FieldOffsetStrategy {
   }
 
   protected void createOffsetsEnumsForAutomata(Terms termsIndex, int doc, List<OffsetsEnum> results) throws IOException {
-    final CharacterRunAutomaton[] automata = components.getAutomata();
+    final LabelledCharArrayMatcher[] automata = components.getAutomata();
     List<List<PostingsEnum>> automataPostings = new ArrayList<>(automata.length);
     for (int i = 0; i < automata.length; i++) {
       automataPostings.add(new ArrayList<>());
@@ -179,9 +179,9 @@ public abstract class FieldOffsetStrategy {
     CharsRefBuilder refBuilder = new CharsRefBuilder();
     while ((term = termsEnum.next()) != null) {
       for (int i = 0; i < automata.length; i++) {
-        CharacterRunAutomaton automaton = automata[i];
+        CharArrayMatcher automaton = automata[i];
         refBuilder.copyUTF8Bytes(term);
-        if (automaton.run(refBuilder.chars(), 0, refBuilder.length())) {
+        if (automaton.match(refBuilder.get())) {
           PostingsEnum postings = termsEnum.postings(null, PostingsEnum.OFFSETS);
           if (doc == postings.advance(doc)) {
             automataPostings.get(i).add(postings);
@@ -191,13 +191,13 @@ public abstract class FieldOffsetStrategy {
     }
 
     for (int i = 0; i < automata.length; i++) {
-      CharacterRunAutomaton automaton = automata[i];
+      LabelledCharArrayMatcher automaton = automata[i];
       List<PostingsEnum> postingsEnums = automataPostings.get(i);
       if (postingsEnums.isEmpty()) {
         continue;
       }
-      // Build one OffsetsEnum exposing the automata.toString as the term, and the sum of freq
-      BytesRef wildcardTerm = new BytesRef(automaton.toString());
+      // Build one OffsetsEnum exposing the automaton label as the term, and the sum of freq
+      BytesRef wildcardTerm = new BytesRef(automaton.getLabel());
       int sumFreq = 0;
       for (PostingsEnum postingsEnum : postingsEnums) {
         sumFreq += postingsEnum.freq();

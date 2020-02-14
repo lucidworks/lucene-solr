@@ -21,8 +21,9 @@ import java.io.IOException;
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.PostingsReaderBase;
-import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.FieldInfo;
+import org.apache.lucene.index.ImpactsEnum;
+import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.IndexInput;
@@ -85,6 +86,11 @@ final class IDVersionPostingsReader extends PostingsReaderBase {
     docsEnum.reset(((IDVersionTermState) termState).docID);
 
     return docsEnum;
+  }
+
+  @Override
+  public ImpactsEnum impacts(FieldInfo fieldInfo, BlockTermState state, int flags) throws IOException {
+    throw new UnsupportedOperationException("Should never be called, IDVersionSegmentTermsEnum implements impacts directly");
   }
 
   @Override

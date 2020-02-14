@@ -88,7 +88,9 @@ public class TestPerFieldAnalyzerWrapper extends BaseTokenStreamTestCase {
     // test that the PerFieldWrapper returns the same instance as original Analyzer:
     ts1 = defaultAnalyzer.tokenStream("something", text);
     ts2 = wrapper1.tokenStream("something", text);
+    ts3 = wrapper1.tokenStream("somethingElse", text);
     assertSame(ts1, ts2);
+    assertSame(ts2, ts3);
 
     ts1 = specialAnalyzer.tokenStream("special", text);
     ts2 = wrapper1.tokenStream("special", text);
@@ -105,7 +107,7 @@ public class TestPerFieldAnalyzerWrapper extends BaseTokenStreamTestCase {
       protected TokenStreamComponents wrapComponents(String fieldName, TokenStreamComponents components) {
         assertNotSame(specialAnalyzer.tokenStream("special", text), components.getTokenStream());
         TokenFilter filter = new ASCIIFoldingFilter(components.getTokenStream());
-        return new TokenStreamComponents(components.getTokenizer(), filter);
+        return new TokenStreamComponents(components.getSource(), filter);
       }
     };
     ts3 = wrapper2.tokenStream("special", text);

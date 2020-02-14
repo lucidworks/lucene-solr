@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 package org.apache.solr.schema;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +35,8 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.Weight;
@@ -484,6 +487,11 @@ class SpatialDistanceQuery extends ExtendedQueryBase implements PostFilter {
       return (float)(dist * qWeight);
     }
 
+    @Override
+    public float getMaxScore(int upTo) throws IOException {
+      return Float.POSITIVE_INFINITY;
+    }
+
     public Explanation explain(Explanation base, int doc) throws IOException {
       if (base.isMatch() == false) {
         return base;
@@ -491,7 +499,7 @@ class SpatialDistanceQuery extends ExtendedQueryBase implements PostFilter {
       double dist = dist(latVals.doubleVal(doc), lonVals.doubleVal(doc));
 
       String description = SpatialDistanceQuery.this.toString();
-      return Explanation.match((float) (base.getValue() * dist), description + " product of:",
+      return Explanation.match((float) (base.getValue().floatValue() * dist), description + " product of:",
           base, Explanation.match((float) dist, "hsin("+latVals.doubleVal(doc)+","+lonVals.doubleVal(doc)));
     }
 
@@ -532,7 +540,7 @@ class SpatialDistanceQuery extends ExtendedQueryBase implements PostFilter {
 
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
     // if we were supposed to use bboxQuery, then we should have been rewritten using that query
     assert bboxQuery == null;
     return new SpatialWeight(searcher, boost);
@@ -586,6 +594,11 @@ class SpatialDistanceQuery extends ExtendedQueryBase implements PostFilter {
     hash = hash * 31 + Double.doubleToLongBits(latCenter);
     hash = hash * 31 + Double.doubleToLongBits(lonMin);
     return (int) (hash >> 32 + hash);
+  }
+
+  @Override
+  public void visit(QueryVisitor visitor) {
+    visitor.visitLeaf(this);
   }
 }
 

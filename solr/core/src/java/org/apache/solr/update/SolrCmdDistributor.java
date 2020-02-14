@@ -32,13 +32,15 @@ import java.util.Set;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.Future;
-import org.apache.http.HttpResponse;
+
+import io.opentracing.Span;
+import io.opentracing.Tracer;
+import io.opentracing.propagation.Format;
 import org.apache.http.NoHttpResponseException;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.BinaryResponseParser;
-import org.apache.solr.client.solrj.impl.ConcurrentUpdateSolrClient; // jdoc
-import org.apache.solr.client.solrj.impl.HttpSolrClient;
+import org.apache.solr.client.solrj.impl.ConcurrentUpdateSolrClient;
 import org.apache.solr.client.solrj.request.AbstractUpdateRequest;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.common.SolrException;
@@ -47,9 +49,12 @@ import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.Diagnostics;
+import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.update.processor.DistributedUpdateProcessor;
 import org.apache.solr.update.processor.DistributedUpdateProcessor.LeaderRequestReplicationTracker;
 import org.apache.solr.update.processor.DistributedUpdateProcessor.RollupRequestReplicationTracker;
+import org.apache.solr.util.tracing.GlobalTracer;
+import org.apache.solr.util.tracing.SolrRequestCarrier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,10 +93,12 @@ public class SolrCmdDistributor implements Closeable {
   
   public void finish() {    
     try {
-      assert ! finished : "lifecycle sanity check";
+      assert !finished : "lifecycle sanity check";
       finished = true;
-      
+
       blockAndDoRetries();
+    } catch (IOException e) {
+      log.warn("Unable to finish sending updates", e);
     } finally {
       clients.shutdown();
     }
@@ -101,7 +108,7 @@ public class SolrCmdDistributor implements Closeable {
     clients.shutdown();
   }
 
-  private void doRetriesIfNeeded() {
+  private void doRetriesIfNeeded() throws IOException {
     // NOTE: retries will be forwards to a single url
     
     List<Error> errors = new ArrayList<>(this.errors);
@@ -117,7 +124,7 @@ public class SolrCmdDistributor implements Closeable {
       int maxErrorsToShow = 10;
       for (Error e:errors) {
         if (maxErrorsToShow-- <= 0) break;
-        builder.append("\n" + e);
+        builder.append("\n").append(e);
       }
       if (errors.size() > 10) {
         builder.append("\n... and ");
@@ -242,21 +249,19 @@ public class SolrCmdDistributor implements Closeable {
     
     // we need to do any retries before commit...
     blockAndDoRetries();
-    
-    UpdateRequest uReq = new UpdateRequest();
-    uReq.setParams(params);
-    
-    addCommit(uReq, cmd);
-    
     log.debug("Distrib commit to: {} params: {}", nodes, params);
-    
+
     for (Node node : nodes) {
+      UpdateRequest uReq = new UpdateRequest();
+      uReq.setParams(params);
+
+      addCommit(uReq, cmd);
       submit(new Req(cmd, node, uReq, false), true);
     }
     
   }
 
-  public void blockAndDoRetries() {
+  public void blockAndDoRetries() throws IOException {
     clients.blockUntilFinished();
     
     // wait for any async commits to complete
@@ -281,12 +286,25 @@ public class SolrCmdDistributor implements Closeable {
         : AbstractUpdateRequest.ACTION.COMMIT, false, cmd.waitSearcher, cmd.maxOptimizeSegments, cmd.softCommit, cmd.expungeDeletes, cmd.openSearcher);
   }
 
-  private void submit(final Req req, boolean isCommit) {
+  private void submit(final Req req, boolean isCommit) throws IOException {
+    // Copy user principal from the original request to the new update request, for later authentication interceptor use
+    if (SolrRequestInfo.getRequestInfo() != null) {
+      req.uReq.setUserPrincipal(SolrRequestInfo.getRequestInfo().getReq().getUserPrincipal());
+    }
+
+    Tracer tracer = GlobalTracer.getTracer();
+    Span parentSpan = tracer.activeSpan();
+    if (parentSpan != null) {
+      tracer.inject(parentSpan.context(), Format.Builtin.HTTP_HEADERS,
+          new SolrRequestCarrier(req.uReq));
+    }
+
     if (req.synchronous) {
       blockAndDoRetries();
 
-      try (HttpSolrClient client = new HttpSolrClient.Builder(req.node.getUrl()).withHttpClient(clients.getHttpClient()).build()) {
-        client.request(req.uReq);
+      try {
+        req.uReq.setBasePath(req.node.getUrl());
+        clients.getHttpClient().request(req.uReq);
       } catch (Exception e) {
         SolrException.log(log, e);
         Error error = new Error();
@@ -387,11 +405,11 @@ public class SolrCmdDistributor implements Closeable {
     //
     // In the case of a leaderTracker and rollupTracker both being present, then we need to take care when assembling
     // the final response to check both the rollup and leader trackers on the aggregator node.
-    public void trackRequestResult(HttpResponse resp, boolean success) {
-      
+    public void trackRequestResult(org.eclipse.jetty.client.api.Response resp, InputStream respBody, boolean success) {
+
       // Returning Integer.MAX_VALUE here means there was no "rf" on the response, therefore we just need to increment
       // our achieved rf if we are a leader, i.e. have a leaderTracker.
-      int rfFromResp = getRfFromResponse(resp);
+      int rfFromResp = getRfFromResponse(respBody);
 
       if (leaderTracker != null && rfFromResp == Integer.MAX_VALUE) {
         leaderTracker.trackRequestResult(node, success);
@@ -402,13 +420,9 @@ public class SolrCmdDistributor implements Closeable {
       }
     }
 
-    private int getRfFromResponse(HttpResponse resp) {
-      if (resp != null) {
-
-        InputStream inputStream = null;
-
+    private int getRfFromResponse(InputStream inputStream) {
+      if (inputStream != null) {
         try {
-          inputStream = resp.getEntity().getContent();
           BinaryResponseParser brp = new BinaryResponseParser();
           NamedList<Object> nl = brp.processResponse(inputStream, null);
           Object hdr = nl.get("responseHeader");
@@ -421,13 +435,6 @@ public class SolrCmdDistributor implements Closeable {
           }
         } catch (Exception e) {
           log.warn("Failed to parse response from {} during replication factor accounting", node, e);
-        } finally {
-          if (inputStream != null) {
-            try {
-              inputStream.close();
-            } catch (Exception ignore) {
-            }
-          }
         }
       }
       return Integer.MAX_VALUE;

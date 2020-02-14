@@ -23,6 +23,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.util.ArrayUtil;
 
 /** A {@link Rescorer} that uses a provided Query to assign
  *  scores to the first-pass hits.
@@ -50,6 +51,7 @@ public abstract class QueryRescorer extends Rescorer {
   @Override
   public TopDocs rescore(IndexSearcher searcher, TopDocs firstPassTopDocs, int topN) throws IOException {
     ScoreDoc[] hits = firstPassTopDocs.scoreDocs.clone();
+
     Arrays.sort(hits,
                 new Comparator<ScoreDoc>() {
                   @Override
@@ -61,7 +63,7 @@ public abstract class QueryRescorer extends Rescorer {
     List<LeafReaderContext> leaves = searcher.getIndexReader().leaves();
 
     Query rewritten = searcher.rewrite(query);
-    Weight weight = searcher.createWeight(rewritten, true, 1);
+    Weight weight = searcher.createWeight(rewritten, ScoreMode.COMPLETE, 1);
 
     // Now merge sort docIDs from hits, with reader's leaves:
     int hitUpto = 0;
@@ -109,46 +111,45 @@ public abstract class QueryRescorer extends Rescorer {
       hitUpto++;
     }
 
-    // TODO: we should do a partial sort (of only topN)
-    // instead, but typically the number of hits is
-    // smallish:
-    Arrays.sort(hits,
-                new Comparator<ScoreDoc>() {
-                  @Override
-                  public int compare(ScoreDoc a, ScoreDoc b) {
-                    // Sort by score descending, then docID ascending:
-                    if (a.score > b.score) {
-                      return -1;
-                    } else if (a.score < b.score) {
-                      return 1;
-                    } else {
-                      // This subtraction can't overflow int
-                      // because docIDs are >= 0:
-                      return a.doc - b.doc;
-                    }
-                  }
-                });
+    Comparator<ScoreDoc> sortDocComparator = new Comparator<ScoreDoc>() {
+      @Override
+      public int compare(ScoreDoc a, ScoreDoc b) {
+        // Sort by score descending, then docID ascending:
+        if (a.score > b.score) {
+          return -1;
+        } else if (a.score < b.score) {
+          return 1;
+        } else {
+          // This subtraction can't overflow int
+          // because docIDs are >= 0:
+          return a.doc - b.doc;
+        }
+      }
+    };
 
     if (topN < hits.length) {
+      ArrayUtil.select(hits, 0, hits.length, topN, sortDocComparator);
       ScoreDoc[] subset = new ScoreDoc[topN];
       System.arraycopy(hits, 0, subset, 0, topN);
       hits = subset;
     }
 
-    return new TopDocs(firstPassTopDocs.totalHits, hits, hits[0].score);
+    Arrays.sort(hits, sortDocComparator);
+
+    return new TopDocs(firstPassTopDocs.totalHits, hits);
   }
 
   @Override
   public Explanation explain(IndexSearcher searcher, Explanation firstPassExplanation, int docID) throws IOException {
     Explanation secondPassExplanation = searcher.explain(query, docID);
 
-    Float secondPassScore = secondPassExplanation.isMatch() ? secondPassExplanation.getValue() : null;
+    Number secondPassScore = secondPassExplanation.isMatch() ? secondPassExplanation.getValue() : null;
 
     float score;
     if (secondPassScore == null) {
-      score = combine(firstPassExplanation.getValue(), false, 0.0f);
+      score = combine(firstPassExplanation.getValue().floatValue(), false, 0.0f);
     } else {
-      score = combine(firstPassExplanation.getValue(), true,  secondPassScore.floatValue());
+      score = combine(firstPassExplanation.getValue().floatValue(), true,  secondPassScore.floatValue());
     }
 
     Explanation first = Explanation.match(firstPassExplanation.getValue(), "first pass score", firstPassExplanation);

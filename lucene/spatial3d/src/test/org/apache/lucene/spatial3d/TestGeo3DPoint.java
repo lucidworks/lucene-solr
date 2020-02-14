@@ -55,6 +55,7 @@ import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.SimpleCollector;
 import org.apache.lucene.spatial3d.geom.GeoArea;
 import org.apache.lucene.spatial3d.geom.GeoAreaFactory;
@@ -85,14 +86,14 @@ import com.carrotsearch.randomizedtesting.generators.RandomNumbers;
 public class TestGeo3DPoint extends LuceneTestCase {
 
   private static Codec getCodec() {
-    if (Codec.getDefault().getName().equals("Lucene70")) {
+    if (Codec.getDefault().getName().equals("Lucene84")) {
       int maxPointsInLeafNode = TestUtil.nextInt(random(), 16, 2048);
       double maxMBSortInHeap = 3.0 + (3*random().nextDouble());
       if (VERBOSE) {
         System.out.println("TEST: using Lucene60PointsFormat with maxPointsInLeafNode=" + maxPointsInLeafNode + " and maxMBSortInHeap=" + maxMBSortInHeap);
       }
 
-      return new FilterCodec("Lucene70", Codec.getDefault()) {
+      return new FilterCodec("Lucene84", Codec.getDefault()) {
         @Override
         public PointsFormat pointsFormat() {
           return new PointsFormat() {
@@ -125,7 +126,7 @@ public class TestGeo3DPoint extends LuceneTestCase {
     // We can't wrap with "exotic" readers because the query must see the BKD3DDVFormat:
     IndexSearcher s = newSearcher(r, false);
     assertEquals(1, s.search(Geo3DPoint.newShapeQuery("field",
-                                                      GeoCircleFactory.makeGeoCircle(PlanetModel.WGS84, toRadians(50), toRadians(-97), Math.PI/180.)), 1).totalHits);
+                                                      GeoCircleFactory.makeGeoCircle(PlanetModel.WGS84, toRadians(50), toRadians(-97), Math.PI/180.)), 1).totalHits.value);
     w.close();
     r.close();
     dir.close();
@@ -814,8 +815,8 @@ public class TestGeo3DPoint extends LuceneTestCase {
           private int docBase;
 
           @Override
-          public boolean needsScores() {
-            return false;
+          public ScoreMode scoreMode() {
+            return ScoreMode.COMPLETE_NO_SCORES;
           }
 
           @Override

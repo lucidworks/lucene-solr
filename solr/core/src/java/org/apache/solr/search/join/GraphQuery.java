@@ -34,6 +34,8 @@ import org.apache.lucene.search.DocValuesFieldExistsQuery;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.search.WildcardQuery;
@@ -109,7 +111,7 @@ public class GraphQuery extends Query {
   }
   
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
     Weight graphWeight = new GraphQueryWeight((SolrIndexSearcher)searcher, boost);
     return graphWeight;
   }
@@ -117,14 +119,14 @@ public class GraphQuery extends Query {
   @Override
   public String toString(String field) {
     StringBuilder sb = new StringBuilder();
-    sb.append("[[" + q.toString() + "]," + fromField + "=" + toField + "]");
+    sb.append("[[").append(q.toString()).append("],").append(fromField).append('=').append(toField).append(']');
     if (traversalFilter != null) {
-      sb.append(" [TraversalFilter: " + traversalFilter.toString() + "]");
+      sb.append(" [TraversalFilter: ").append(traversalFilter.toString()).append(']');
     }
-    sb.append("[maxDepth=" + maxDepth + "]");
-    sb.append("[returnRoot=" + returnRoot + "]");
-    sb.append("[onlyLeafNodes=" + onlyLeafNodes + "]");
-    sb.append("[useAutn=" + useAutn + "]");
+    sb.append("[maxDepth=").append(maxDepth).append(']');
+    sb.append("[returnRoot=").append(returnRoot).append(']');
+    sb.append("[onlyLeafNodes=").append(onlyLeafNodes).append(']');
+    sb.append("[useAutn=").append(useAutn).append(']');
     return sb.toString();
   }
   
@@ -285,7 +287,7 @@ public class GraphQuery extends Query {
     public void extractTerms(Set<Term> terms) {
       // NoOp for now , not used.. / supported
     }
-    
+
   }
   
   private static class GraphScorer extends Scorer {
@@ -302,6 +304,11 @@ public class GraphQuery extends Query {
     @Override
     public float score() throws IOException {
       // no dynamic scoring now.  
+      return score;
+    }
+
+    @Override
+    public float getMaxScore(int upTo) throws IOException {
       return score;
     }
 
@@ -435,5 +442,10 @@ public class GraphQuery extends Query {
            Objects.equals(toField, other.toField) &&
            Objects.equals(traversalFilter, other.traversalFilter);
   }
-  
+
+  @Override
+  public void visit(QueryVisitor visitor) {
+    visitor.visitLeaf(this);
+  }
+
 }

@@ -49,6 +49,15 @@ public abstract class CharFilterFactory extends AbstractAnalysisFactory {
     return loader.availableServices();
   }
 
+  /** looks up a SPI name for the specified char filter factory */
+  public static String findSPIName(Class<? extends CharFilterFactory> serviceClass) {
+    try {
+      return lookupSPIName(serviceClass);
+    } catch (NoSuchFieldException | IllegalAccessException | IllegalStateException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
   /** 
    * Reloads the factory list from the given {@link ClassLoader}.
    * Changes to the factories are visible after the method ends, all
@@ -73,4 +82,13 @@ public abstract class CharFilterFactory extends AbstractAnalysisFactory {
 
   /** Wraps the given Reader with a CharFilter. */
   public abstract Reader create(Reader input);
+
+  /**
+   * Normalize the specified input Reader
+   * While the default implementation returns input unchanged,
+   * char filters that should be applied at normalization time can delegate to {@code create} method.
+   */
+  public Reader normalize(Reader input) {
+    return input;
+  }
 }

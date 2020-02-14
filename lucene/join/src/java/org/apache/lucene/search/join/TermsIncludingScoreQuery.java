@@ -30,14 +30,18 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
+import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.BitSetIterator;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefHash;
 import org.apache.lucene.util.FixedBitSet;
+import org.apache.lucene.util.RamUsageEstimator;
 
-class TermsIncludingScoreQuery extends Query {
+class TermsIncludingScoreQuery extends Query implements Accountable {
+  protected static final long BASE_RAM_BYTES = RamUsageEstimator.shallowSizeOfInstance(TermsIncludingScoreQuery.class);
 
   private final ScoreMode scoreMode;
   private final String toField;
@@ -52,6 +56,8 @@ class TermsIncludingScoreQuery extends Query {
   // id of the context rather than the context itself in order not to hold references to index readers
   private final Object topReaderContextId;
 
+  private final long ramBytesUsed; // cache
+
   TermsIncludingScoreQuery(ScoreMode scoreMode, String toField, boolean multipleValuesPerDocument, BytesRefHash terms, float[] scores,
                            String fromField, Query fromQuery, Object indexReaderContextId) {
     this.scoreMode = scoreMode;
@@ -64,11 +70,26 @@ class TermsIncludingScoreQuery extends Query {
     this.fromField = fromField;
     this.fromQuery = fromQuery;
     this.topReaderContextId = indexReaderContextId;
+
+    this.ramBytesUsed = BASE_RAM_BYTES +
+        RamUsageEstimator.sizeOfObject(fromField) +
+        RamUsageEstimator.sizeOfObject(fromQuery, RamUsageEstimator.QUERY_DEFAULT_RAM_BYTES_USED) +
+        RamUsageEstimator.sizeOfObject(ords) +
+        RamUsageEstimator.sizeOfObject(scores) +
+        RamUsageEstimator.sizeOfObject(terms) +
+        RamUsageEstimator.sizeOfObject(toField);
   }
 
   @Override
   public String toString(String string) {
     return String.format(Locale.ROOT, "TermsIncludingScoreQuery{field=%s;fromQuery=%s}", toField, fromQuery);
+  }
+
+  @Override
+  public void visit(QueryVisitor visitor) {
+    if (visitor.acceptField(toField)) {
+      visitor.visitLeaf(this);
+    }
   }
 
   @Override
@@ -91,11 +112,16 @@ class TermsIncludingScoreQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
-    if (needsScores == false) {
+  public long ramBytesUsed() {
+    return ramBytesUsed;
+  }
+
+  @Override
+  public Weight createWeight(IndexSearcher searcher, org.apache.lucene.search.ScoreMode scoreMode, float boost) throws IOException {
+    if (scoreMode.needsScores() == false) {
       // We don't need scores then quickly change the query:
       TermsQuery termsQuery = new TermsQuery(toField, terms, fromField, fromQuery, topReaderContextId);
-      return searcher.rewrite(termsQuery).createWeight(searcher, false, boost);
+      return searcher.rewrite(termsQuery).createWeight(searcher, org.apache.lucene.search.ScoreMode.COMPLETE_NO_SCORES, boost);
     }
     return new Weight(TermsIncludingScoreQuery.this) {
 
@@ -183,6 +209,11 @@ class TermsIncludingScoreQuery extends Query {
     @Override
     public float score() throws IOException {
       return scores[docID()];
+    }
+
+    @Override
+    public float getMaxScore(int upTo) throws IOException {
+      return Float.POSITIVE_INFINITY;
     }
 
     @Override

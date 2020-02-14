@@ -34,6 +34,7 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.QueryUtils;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
@@ -88,7 +89,7 @@ public class TestFeatureField extends LuceneTestCase {
     LeafReaderContext context = reader.leaves().get(0);
 
     Query q = FeatureField.newLogQuery("features", "pagerank", 3f, 4.5f);
-    Weight w = q.createWeight(searcher, true, 2);
+    Weight w = q.createWeight(searcher, ScoreMode.TOP_SCORES, 2);
     Scorer s = w.scorer(context);
 
     assertEquals(0, s.iterator().nextDoc());
@@ -106,7 +107,7 @@ public class TestFeatureField extends LuceneTestCase {
     assertEquals(DocIdSetIterator.NO_MORE_DOCS, s.iterator().nextDoc());
 
     q = FeatureField.newSaturationQuery("features", "pagerank", 3f, 4.5f);
-    w = q.createWeight(searcher, true, 2);
+    w = q.createWeight(searcher, ScoreMode.TOP_SCORES, 2);
     s = w.scorer(context);
 
     assertEquals(0, s.iterator().nextDoc());
@@ -124,7 +125,7 @@ public class TestFeatureField extends LuceneTestCase {
     assertEquals(DocIdSetIterator.NO_MORE_DOCS, s.iterator().nextDoc());
 
     q = FeatureField.newSigmoidQuery("features", "pagerank", 3f, 4.5f, 0.6f);
-    w = q.createWeight(searcher, true, 2);
+    w = q.createWeight(searcher, ScoreMode.TOP_SCORES, 2);
     s = w.scorer(context);
     double kPa = Math.pow(4.5f, 0.6f);
 
@@ -143,7 +144,7 @@ public class TestFeatureField extends LuceneTestCase {
     assertEquals(DocIdSetIterator.NO_MORE_DOCS, s.iterator().nextDoc());
 
     q = FeatureField.newSaturationQuery("features", "urlLen", 3f, 1f/24);
-    w = q.createWeight(searcher, true, 2);
+    w = q.createWeight(searcher, ScoreMode.TOP_SCORES, 2);
     s = w.scorer(context);
 
     assertEquals(0, s.iterator().nextDoc());
@@ -209,20 +210,20 @@ public class TestFeatureField extends LuceneTestCase {
     dir.close();
   }
 
-  public void testLogSimScorer() throws IOException {
-    doTestSimScorer(new FeatureField.LogFunction(4.5f).scorer("foo", 3f));
+  public void testLogSimScorer() {
+    doTestSimScorer(new FeatureField.LogFunction(4.5f).scorer(3f));
   }
 
-  public void testSatuSimScorer() throws IOException {
-    doTestSimScorer(new FeatureField.SaturationFunction("foo", "bar", 20f).scorer("foo", 3f));
+  public void testSatuSimScorer() {
+    doTestSimScorer(new FeatureField.SaturationFunction("foo", "bar", 20f).scorer(3f));
   }
 
-  public void testSigmSimScorer() throws IOException {
-    doTestSimScorer(new FeatureField.SigmoidFunction(20f, 0.6f).scorer("foo", 3f));
+  public void testSigmSimScorer() {
+    doTestSimScorer(new FeatureField.SigmoidFunction(20f, 0.6f).scorer(3f));
   }
 
-  private void doTestSimScorer(SimScorer s) throws IOException {
-    float maxScore = s.score(0, Float.MAX_VALUE);
+  private void doTestSimScorer(SimScorer s) {
+    float maxScore = s.score(Float.MAX_VALUE, 1);
     assertTrue(Float.isFinite(maxScore)); // used to compute max scores
     // Test that the score doesn't decrease with freq
     for (int freq = 2; freq < 65536; ++freq) {
@@ -276,13 +277,18 @@ public class TestFeatureField extends LuceneTestCase {
     IndexSearcher searcher = newSearcher(reader);
     Query query = FeatureField.newLogQuery("field", "term", 2f, 42);
 
-    Weight weight = searcher.createWeight(query, false, 1f);
+    Weight weight = searcher.createWeight(query, ScoreMode.COMPLETE_NO_SCORES, 1f);
     Set<Term> terms = new HashSet<>();
     weight.extractTerms(terms);
     assertEquals(Collections.emptySet(), terms);
 
     terms = new HashSet<>();
-    weight = searcher.createWeight(query, true, 1f);
+    weight = searcher.createWeight(query, ScoreMode.COMPLETE, 1f);
+    weight.extractTerms(terms);
+    assertEquals(Collections.singleton(new Term("field", "term")), terms);
+
+    terms = new HashSet<>();
+    weight = searcher.createWeight(query, ScoreMode.TOP_SCORES, 1f);
     weight.extractTerms(terms);
     assertEquals(Collections.singleton(new Term("field", "term")), terms);
   }

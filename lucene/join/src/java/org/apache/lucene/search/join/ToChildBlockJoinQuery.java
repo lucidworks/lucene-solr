@@ -20,13 +20,15 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Locale;
+
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.search.FilterWeight;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
+import org.apache.lucene.search.FilterWeight;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.BitSet;
@@ -65,8 +67,13 @@ public class ToChildBlockJoinQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
-    return new ToChildBlockJoinWeight(this, parentQuery.createWeight(searcher, needsScores, boost), parentsFilter, needsScores);
+  public void visit(QueryVisitor visitor) {
+    visitor.visitLeaf(this);
+  }
+
+  @Override
+  public Weight createWeight(IndexSearcher searcher, org.apache.lucene.search.ScoreMode scoreMode, float boost) throws IOException {
+    return new ToChildBlockJoinWeight(this, parentQuery.createWeight(searcher, scoreMode, boost), parentsFilter, scoreMode.needsScores());
   }
 
   /** Return our parent query. */
@@ -142,8 +149,8 @@ public class ToChildBlockJoinQuery extends Query {
     }
 
     @Override
-    public Collection<ChildScorer> getChildren() {
-      return Collections.singleton(new ChildScorer(parentScorer, "BLOCK_JOIN"));
+    public Collection<ChildScorable> getChildren() {
+      return Collections.singleton(new ChildScorable(parentScorer, "BLOCK_JOIN"));
     }
 
     @Override
@@ -278,6 +285,11 @@ public class ToChildBlockJoinQuery extends Query {
     @Override
     public float score() throws IOException {
       return parentScore;
+    }
+
+    @Override
+    public float getMaxScore(int upTo) throws IOException {
+      return Float.POSITIVE_INFINITY;
     }
     
     int getParentDoc() {

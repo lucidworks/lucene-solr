@@ -53,7 +53,6 @@ import org.apache.solr.client.solrj.SolrResponse;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.embedded.JettyConfig;
 import org.apache.solr.client.solrj.embedded.JettySolrRunner;
-import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.client.solrj.response.UpdateResponse;
@@ -224,9 +223,9 @@ public abstract class BaseDistributedSearchTestCase extends SolrTestCaseJ4 {
    */
   protected BaseDistributedSearchTestCase(final String context) {
     this.context = context;
-    this.deadServers = new String[] {"[ff01::114]:33332" + context, 
-                                     "[ff01::083]:33332" + context, 
-                                     "[ff01::213]:33332" + context};
+    this.deadServers = new String[] {DEAD_HOST_1 + context,
+                                     DEAD_HOST_2 + context,
+                                     DEAD_HOST_3 + context};
   }
 
   private final static int DEFAULT_MAX_SHARD_COUNT = 3;
@@ -373,7 +372,11 @@ public abstract class BaseDistributedSearchTestCase extends SolrTestCaseJ4 {
       j.start();
       jettys.add(j);
       clients.add(createNewSolrClient(j.getLocalPort()));
-      String shardStr = buildUrl(j.getLocalPort()) + "/" + DEFAULT_TEST_CORENAME;
+      String shardStr = buildUrl(j.getLocalPort());
+
+      if (shardStr.endsWith("/")) shardStr += DEFAULT_TEST_CORENAME;
+      else shardStr += "/" + DEFAULT_TEST_CORENAME;
+
       shardsArr[i] = shardStr;
       sb.append(shardStr);
     }
@@ -480,7 +483,7 @@ public abstract class BaseDistributedSearchTestCase extends SolrTestCaseJ4 {
         .setContext(context)
         .withFilters(getExtraRequestFilters())
         .withServlets(getExtraServlets())
-        .withSSLConfig(sslConfig)
+        .withSSLConfig(sslConfig.buildServerSSLConfig())
         .build());
 
     return jetty;
@@ -499,8 +502,12 @@ public abstract class BaseDistributedSearchTestCase extends SolrTestCaseJ4 {
   protected SolrClient createNewSolrClient(int port) {
     try {
       // setup the client...
-      HttpSolrClient client = getHttpSolrClient(buildUrl(port) + "/" + DEFAULT_TEST_CORENAME);
-      return client;
+      String baseUrl = buildUrl(port);
+      if (baseUrl.endsWith("/")) {
+        return getHttpSolrClient(baseUrl + DEFAULT_TEST_CORENAME);
+      } else {
+        return getHttpSolrClient(baseUrl + "/" + DEFAULT_TEST_CORENAME);
+      }
     }
     catch (Exception ex) {
       throw new RuntimeException(ex);

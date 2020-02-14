@@ -46,7 +46,7 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.MultiFields;
+import org.apache.lucene.index.MultiTerms;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.Terms;
@@ -81,7 +81,7 @@ import static org.apache.lucene.util.fst.FSTTester.getRandomString;
 import static org.apache.lucene.util.fst.FSTTester.simpleRandomString;
 import static org.apache.lucene.util.fst.FSTTester.toIntsRef;
 
-@SuppressCodecs({ "SimpleText", "Memory", "Direct" })
+@SuppressCodecs({ "SimpleText", "Direct" })
 @Slow
 public class TestFSTs extends LuceneTestCase {
 
@@ -303,7 +303,7 @@ public class TestFSTs extends LuceneTestCase {
   public void testBigSet() throws IOException {
     testRandomWords(TestUtil.nextInt(random(), 50000, 60000), 1);
   }
-  
+
   // Build FST for all unique terms in the test line docs
   // file, up until a doc limit
   public void testRealTerms() throws Exception {
@@ -337,7 +337,7 @@ public class TestFSTs extends LuceneTestCase {
         System.out.println("FST stores docFreq");
       }
     }
-    Terms terms = MultiFields.getTerms(r, "body");
+    Terms terms = MultiTerms.getTerms(r, "body");
     if (terms != null) {
       final IntsRefBuilder scratchIntsRef = new IntsRefBuilder();
       final TermsEnum termsEnum = terms.iterator();
@@ -913,11 +913,11 @@ public class TestFSTs extends LuceneTestCase {
         if (VERBOSE) {
           System.out.println("TEST: TermQuery " + (exists ? "" : "non-exist ") + " id=" + id);
         }
-        assertEquals((exists ? "" : "non-exist ") + "id=" + id, exists ? 1 : 0, s.search(new TermQuery(new Term("id", id)), 1).totalHits);
+        assertEquals((exists ? "" : "non-exist ") + "id=" + id, exists ? 1 : 0, s.count(new TermQuery(new Term("id", id))));
       }
 
       // Verify w/ MultiTermsEnum
-      final TermsEnum termsEnum = MultiFields.getTerms(r, "id").iterator();
+      final TermsEnum termsEnum = MultiTerms.getTerms(r, "id").iterator();
       for(int iter=0;iter<2*NUM_IDS;iter++) {
         final String id;
         final String nextID;
@@ -1016,7 +1016,7 @@ public class TestFSTs extends LuceneTestCase {
       if (VERBOSE) {
         System.out.println("TEST: term=" + term);
       }
-      assertEquals("term=" + term, 1, s.search(new TermQuery(new Term("field", term)), 1).totalHits);
+      assertEquals("term=" + term, 1, s.count(new TermQuery(new Term("field", term))));
     }
 
     r.close();
@@ -1078,10 +1078,10 @@ public class TestFSTs extends LuceneTestCase {
             int children = verifyStateAndBelow(fst, new FST.Arc<>().copyFrom(arc), depth + 1);
 
             assertEquals(
-                expanded,
-                (depth <= FST.FIXED_ARRAY_SHALLOW_DISTANCE &&
-                    children >= FST.FIXED_ARRAY_NUM_ARCS_SHALLOW) ||
-                 children >= FST.FIXED_ARRAY_NUM_ARCS_DEEP);
+                (depth <= FST.FIXED_LENGTH_ARC_SHALLOW_DEPTH &&
+                    children >= FST.FIXED_LENGTH_ARC_SHALLOW_NUM_ARCS) ||
+                 children >= FST.FIXED_LENGTH_ARC_DEEP_NUM_ARCS,
+                expanded);
             if (arc.isLast()) break;
           }
 
@@ -1092,8 +1092,8 @@ public class TestFSTs extends LuceneTestCase {
     }
 
     // Sanity check.
-    assertTrue(FST.FIXED_ARRAY_NUM_ARCS_SHALLOW < FST.FIXED_ARRAY_NUM_ARCS_DEEP);
-    assertTrue(FST.FIXED_ARRAY_SHALLOW_DISTANCE >= 0);
+    assertTrue(FST.FIXED_LENGTH_ARC_SHALLOW_NUM_ARCS < FST.FIXED_LENGTH_ARC_DEEP_NUM_ARCS);
+    assertTrue(FST.FIXED_LENGTH_ARC_SHALLOW_DEPTH >= 0);
 
     SyntheticData s = new SyntheticData();
 
@@ -1201,19 +1201,19 @@ public class TestFSTs extends LuceneTestCase {
   private void checkStopNodes(FST<Long> fst, PositiveIntOutputs outputs) throws Exception {
     final Long nothing = outputs.getNoOutput();
     FST.Arc<Long> startArc = fst.getFirstArc(new FST.Arc<Long>());
-    assertEquals(nothing, startArc.output);
-    assertEquals(nothing, startArc.nextFinalOutput);
+    assertEquals(nothing, startArc.output());
+    assertEquals(nothing, startArc.nextFinalOutput());
 
     FST.Arc<Long> arc = fst.readFirstTargetArc(startArc, new FST.Arc<Long>(),
                                                fst.getBytesReader());
-    assertEquals('a', arc.label);
-    assertEquals(17, arc.nextFinalOutput.longValue());
+    assertEquals('a', arc.label());
+    assertEquals(17, arc.nextFinalOutput().longValue());
     assertTrue(arc.isFinal());
 
     arc = fst.readNextArc(arc, fst.getBytesReader());
-    assertEquals('b', arc.label);
+    assertEquals('b', arc.label());
     assertFalse(arc.isFinal());
-    assertEquals(42, arc.output.longValue());
+    assertEquals(42, arc.output().longValue());
   }
 
   static final Comparator<Long> minLongComparator = new Comparator<Long> () {
@@ -1404,7 +1404,7 @@ public class TestFSTs extends LuceneTestCase {
         if (fst.findTargetArc((int) prefix.charAt(idx), arc, arc, reader) == null) {
           fail();
         }
-        prefixOutput += arc.output;
+        prefixOutput += arc.output();
       }
 
       final int topN = TestUtil.nextInt(random, 1, 10);
@@ -1526,7 +1526,7 @@ public class TestFSTs extends LuceneTestCase {
         if (fst.findTargetArc((int) prefix.charAt(idx), arc, arc, reader) == null) {
           fail();
         }
-        prefixOutput = outputs.add(prefixOutput, arc.output);
+        prefixOutput = outputs.add(prefixOutput, arc.output());
       }
 
       final int topN = TestUtil.nextInt(random, 1, 10);
@@ -1623,10 +1623,10 @@ public class TestFSTs extends LuceneTestCase {
     FST.BytesReader reader = fst.getBytesReader();
     arc = fst.findTargetArc((int) 'm', arc, arc, reader);
     assertNotNull(arc);
-    assertEquals(new BytesRef("m"), arc.output);
+    assertEquals(new BytesRef("m"), arc.output());
 
     // NOTE: illegal:
-    arc.output.length = 0;
+    arc.output().length = 0;
 
     fst.getFirstArc(arc);
     try {
@@ -1634,5 +1634,24 @@ public class TestFSTs extends LuceneTestCase {
     } catch (AssertionError ae) {
       // expected
     }
+  }
+
+  public void testSimpleDepth() throws Exception {
+    PositiveIntOutputs outputs = PositiveIntOutputs.getSingleton();
+    Builder<Long> builder = new Builder<>(FST.INPUT_TYPE.BYTE1, outputs);
+
+    BytesRef ab = new BytesRef("ab");
+    BytesRef ac = new BytesRef("ac");
+    BytesRef bd = new BytesRef("bd");
+
+    builder.add(Util.toIntsRef(ab, new IntsRefBuilder()), 3L);
+    builder.add(Util.toIntsRef(ac, new IntsRefBuilder()), 5L);
+    builder.add(Util.toIntsRef(bd, new IntsRefBuilder()), 7L);
+
+    FST<Long> fst = builder.finish();
+
+    assertEquals(3, (long) Util.get(fst, ab));
+    assertEquals(5, (long) Util.get(fst, ac));
+    assertEquals(7, (long) Util.get(fst, bd));
   }
 }

@@ -24,7 +24,8 @@ import java.util.List;
 import java.util.NavigableSet;
 import java.util.TreeSet;
 
-import org.apache.lucene.search.Scorer;
+import org.apache.lucene.search.Scorable;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.SimpleCollector;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.PriorityQueue;
@@ -109,12 +110,12 @@ public abstract class GroupFacetCollector extends SimpleCollector {
   protected abstract SegmentResult createSegmentResult() throws IOException;
 
   @Override
-  public void setScorer(Scorer scorer) throws IOException {
+  public void setScorer(Scorable scorer) throws IOException {
   }
 
   @Override
-  public boolean needsScores() {
-    return false;
+  public ScoreMode scoreMode() {
+    return ScoreMode.COMPLETE_NO_SCORES;
   }
 
   /**

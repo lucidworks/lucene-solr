@@ -147,6 +147,8 @@ limitations under the License.
 {
   float: left;
   width: 30%;
+  overflow-x: overlay;
+  overflow-y: hidden;
 }
 
 #content #cloud .show #tree
@@ -156,10 +158,10 @@ limitations under the License.
 
 #content #cloud #file-content
 {
-  float: right;
-  position: relative;
-  width: 68%;
-  min-height: 100px
+  position: fixed;
+  width: 55%;
+  min-height: 100px;
+  right: 5%;
 }
 
 #content #cloud .show #file-content
@@ -535,6 +537,17 @@ limitations under the License.
   color: red;
 }
 
+#content #cloud #nodes-content .node-down
+{
+  font-weight: bold;
+  font-size: 12px;
+}
+
+#content #cloud #nodes-content .dead-node
+{
+  background-color: salmon;
+}
+
 /* Styling of reload and details buttons */
 #content #cloud #controls,
 #content #cloud #frame #zk-status-content #zk-controls
@@ -636,6 +649,7 @@ limitations under the License.
 ::-webkit-scrollbar {
     -webkit-appearance: none;
     width: 7px;
+    height: 7px;
 }
 
 ::-webkit-scrollbar-thumb {

@@ -40,8 +40,12 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
+import org.apache.lucene.util.Accountable;
+import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.solr.ltr.feature.Feature;
 import org.apache.solr.ltr.model.LTRScoringModel;
 import org.apache.solr.request.SolrQueryRequest;
@@ -52,9 +56,11 @@ import org.slf4j.LoggerFactory;
  * The ranking query that is run, reranking results using the
  * LTRScoringModel algorithm
  */
-public class LTRScoringQuery extends Query {
+public class LTRScoringQuery extends Query implements Accountable {
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+
+  private static final long BASE_RAM_BYTES = RamUsageEstimator.shallowSizeOfInstance(LTRScoringQuery.class);
 
   // contains a description of the model
   final private LTRScoringModel ltrScoringModel;
@@ -152,6 +158,11 @@ public class LTRScoringQuery extends Query {
     return sameClassAs(o) &&  equalsTo(getClass().cast(o));
   }
 
+  @Override
+  public void visit(QueryVisitor visitor) {
+    visitor.visitLeaf(this);
+  }
+
   private boolean equalsTo(LTRScoringQuery other) {
     if (ltrScoringModel == null) {
       if (other.ltrScoringModel != null) {
@@ -187,7 +198,7 @@ public class LTRScoringQuery extends Query {
   }
 
   @Override
-  public ModelWeight createWeight(IndexSearcher searcher, boolean needsScores, float boost)
+  public ModelWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost)
       throws IOException {
     final Collection<Feature> modelFeatures = ltrScoringModel.getFeatures();
     final Collection<Feature> allFeatures = ltrScoringModel.getAllFeatures();
@@ -205,10 +216,10 @@ public class LTRScoringQuery extends Query {
     List<Feature.FeatureWeight > featureWeights = new ArrayList<>(features.size());
 
     if (querySemaphore == null) {
-      createWeights(searcher, needsScores, featureWeights, features);
+      createWeights(searcher, scoreMode.needsScores(), featureWeights, features);
     }
     else{
-      createWeightsParallel(searcher, needsScores, featureWeights, features);
+      createWeightsParallel(searcher, scoreMode.needsScores(), featureWeights, features);
     }
     int i=0, j = 0;
     if (this.extractAllFeatures) {
@@ -298,6 +309,14 @@ public class LTRScoringQuery extends Query {
   @Override
   public String toString(String field) {
     return field;
+  }
+
+  @Override
+  public long ramBytesUsed() {
+    return BASE_RAM_BYTES +
+        RamUsageEstimator.sizeOfObject(efi) +
+        RamUsageEstimator.sizeOfObject(ltrScoringModel) +
+        RamUsageEstimator.sizeOfObject(originalQuery, RamUsageEstimator.QUERY_DEFAULT_RAM_BYTES_USED);
   }
 
   public static class FeatureInfo {
@@ -507,7 +526,7 @@ public class LTRScoringQuery extends Query {
       }
 
       @Override
-      public Collection<ChildScorer> getChildren() throws IOException {
+      public Collection<ChildScorable> getChildren() throws IOException {
         return featureTraversalScorer.getChildren();
       }
 
@@ -519,6 +538,11 @@ public class LTRScoringQuery extends Query {
       @Override
       public float score() throws IOException {
         return featureTraversalScorer.score();
+      }
+
+      @Override
+      public float getMaxScore(int upTo) throws IOException {
+        return Float.POSITIVE_INFINITY;
       }
 
       @Override
@@ -576,15 +600,20 @@ public class LTRScoringQuery extends Query {
         }
 
         @Override
+        public float getMaxScore(int upTo) throws IOException {
+          return Float.POSITIVE_INFINITY;
+        }
+
+        @Override
         public DocIdSetIterator iterator() {
           return itr;
         }
 
         @Override
-        public final Collection<ChildScorer> getChildren() {
-          final ArrayList<ChildScorer> children = new ArrayList<>();
+        public final Collection<ChildScorable> getChildren() {
+          final ArrayList<ChildScorable> children = new ArrayList<>();
           for (final DisiWrapper scorer : subScorers) {
-            children.add(new ChildScorer(scorer.scorer, "SHOULD"));
+            children.add(new ChildScorable(scorer.scorer, "SHOULD"));
           }
           return children;
         }
@@ -658,10 +687,15 @@ public class LTRScoringQuery extends Query {
         }
 
         @Override
-        public final Collection<ChildScorer> getChildren() {
-          final ArrayList<ChildScorer> children = new ArrayList<>();
+        public float getMaxScore(int upTo) throws IOException {
+          return Float.POSITIVE_INFINITY;
+        }
+        
+        @Override
+        public final Collection<ChildScorable> getChildren() {
+          final ArrayList<ChildScorable> children = new ArrayList<>();
           for (final Scorer scorer : featureScorers) {
-            children.add(new ChildScorer(scorer, "SHOULD"));
+            children.add(new ChildScorable(scorer, "SHOULD"));
           }
           return children;
         }

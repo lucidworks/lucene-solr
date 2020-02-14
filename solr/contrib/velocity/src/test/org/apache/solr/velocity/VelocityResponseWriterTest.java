@@ -16,22 +16,24 @@
  */
 package org.apache.solr.velocity;
 
+import java.io.IOException;
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.security.AccessControlException;
+import java.util.Properties;
+
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.NamedList;
+import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.QueryResponseWriter;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.response.VelocityResponseWriter;
-import org.apache.solr.request.SolrQueryRequest;
+import org.apache.velocity.exception.MethodInvocationException;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
-
-import java.io.IOException;
-import java.io.StringWriter;
-import java.io.StringReader;
-import java.util.Properties;
-
 
 public class VelocityResponseWriterTest extends SolrTestCaseJ4 {
   @BeforeClass
@@ -39,7 +41,11 @@ public class VelocityResponseWriterTest extends SolrTestCaseJ4 {
     initCore("solrconfig.xml", "schema.xml", getFile("velocity/solr").getAbsolutePath());
   }
 
-   @Override
+  @AfterClass
+  public static void afterClass() throws Exception {
+  }
+
+  @Override
   public void setUp() throws Exception {
     // This test case toggles the configset used from trusted to untrusted - return to default of trusted for each test
     h.getCoreContainer().getCoreDescriptor(h.coreName).setConfigSetTrusted(true);
@@ -52,8 +58,7 @@ public class VelocityResponseWriterTest extends SolrTestCaseJ4 {
     assertTrue("VrW registered check", writer instanceof VelocityResponseWriter);
   }
 
-/*
-   @Test
+  @Test
   public void testSecureUberspector() throws Exception {
     VelocityResponseWriter vrw = new VelocityResponseWriter();
     NamedList<String> nl = new NamedList<>();
@@ -65,12 +70,53 @@ public class VelocityResponseWriterTest extends SolrTestCaseJ4 {
     vrw.write(buf, req, rsp);
     assertEquals("$ex",buf.toString());  // $ex rendered literally because it is null, and thus did not succeed to break outside the box
   }
-*/
+
+  @Test
+  @Ignore("SOLR-14025: Velocity's SecureUberspector addresses this")
+  public void testTemplateSandbox() throws Exception {
+    assumeTrue("This test only works with security manager", System.getSecurityManager() != null);
+    VelocityResponseWriter vrw = new VelocityResponseWriter();
+    NamedList<String> nl = new NamedList<>();
+    nl.add("template.base.dir", getFile("velocity").getAbsolutePath());
+    vrw.init(nl);
+    SolrQueryRequest req = req(VelocityResponseWriter.TEMPLATE,"outside_the_box");
+    SolrQueryResponse rsp = new SolrQueryResponse();
+    StringWriter buf = new StringWriter();
+    try {
+      vrw.write(buf, req, rsp);
+      fail("template broke outside the box, retrieved: " + buf);
+    } catch (MethodInvocationException e) {
+      assertNotNull(e.getCause());
+      assertEquals(AccessControlException.class, e.getCause().getClass());
+      // expected failure, can't get outside the box
+    }
+  }
+
+  @Test
+  @Ignore("SOLR-14025: Velocity's SecureUberspector addresses this")
+  public void testSandboxIntersection() throws Exception {
+    assumeTrue("This test only works with security manager", System.getSecurityManager() != null);
+    VelocityResponseWriter vrw = new VelocityResponseWriter();
+    NamedList<String> nl = new NamedList<>();
+    nl.add("template.base.dir", getFile("velocity").getAbsolutePath());
+    vrw.init(nl);
+    SolrQueryRequest req = req(VelocityResponseWriter.TEMPLATE,"sandbox_intersection");
+    SolrQueryResponse rsp = new SolrQueryResponse();
+    StringWriter buf = new StringWriter();
+    try {
+      vrw.write(buf, req, rsp);
+      fail("template broke outside the box, retrieved: " + buf);
+    } catch (MethodInvocationException e) {
+      assertNotNull(e.getCause());
+      assertEquals(AccessControlException.class, e.getCause().getClass());
+      // expected failure, can't get outside the box
+    }
+  }
 
   @Test
   public void testFileResourceLoader() throws Exception {
     VelocityResponseWriter vrw = new VelocityResponseWriter();
-    NamedList<String> nl = new NamedList<String>();
+    NamedList<String> nl = new NamedList<>();
     nl.add("template.base.dir", getFile("velocity").getAbsolutePath());
     vrw.init(nl);
     SolrQueryRequest req = req(VelocityResponseWriter.TEMPLATE,"file");
@@ -79,7 +125,7 @@ public class VelocityResponseWriterTest extends SolrTestCaseJ4 {
     vrw.write(buf, req, rsp);
     assertEquals("testing", buf.toString());
   }
-/*
+
   @Test
   public void testTemplateTrust() throws Exception {
     // Try on trusted configset....
@@ -100,7 +146,8 @@ public class VelocityResponseWriterTest extends SolrTestCaseJ4 {
     // set the harness back to the default of trusted
     h.getCoreContainer().getCoreDescriptor(h.coreName).setConfigSetTrusted(true);
   }
-*/
+
+
   @Test
   public void testSolrResourceLoaderTemplate() throws Exception {
     assertEquals("0", h.query(req("q","*:*", "wt","velocity",VelocityResponseWriter.TEMPLATE,"numFound")));
@@ -124,7 +171,6 @@ public class VelocityResponseWriterTest extends SolrTestCaseJ4 {
     assertEquals("legacy_macro_SUCCESS", h.query(req("q","*:*", "wt","velocity",VelocityResponseWriter.TEMPLATE,"test_macro_legacy_support")));
   }
 
-/*
   @Test
   public void testInitProps() throws Exception {
     // The test init properties file turns off being able to use $foreach.index (the implicit loop counter)
@@ -142,8 +188,16 @@ public class VelocityResponseWriterTest extends SolrTestCaseJ4 {
     // set the harness back to the default of trusted
     h.getCoreContainer().getCoreDescriptor(h.coreName).setConfigSetTrusted(true);
   }
+
   @Test
   public void testCustomTools() throws Exception {
+    // Render this template once without a custom tool defined, and once with it defined.  The tool has a `.star` method.
+    // The tool added as `mytool`, `log`, and `response`.  `log` is designed to be overridable, but not `response`
+    //    mytool.star=$!mytool.star("LATERALUS")
+    //    mytool.locale=$!mytool.locale
+    //    log.star=$!log.star("log overridden")
+    //    response.star=$!response.star("response overridden??")
+
     // First without the tool defined, with `$!` turning null object/method references into empty string
     Properties rendered_props = new Properties();
     String rsp = h.query(req("q","*:*", "wt","velocity",VelocityResponseWriter.TEMPLATE,"custom_tool"));
@@ -188,8 +242,7 @@ public class VelocityResponseWriterTest extends SolrTestCaseJ4 {
     //        SolrParamResourceLoader.TEMPLATE_PARAM_PREFIX+"t", "$mytool.core.name")))
     //           - NOTE: example uses removed inline param; convert to external template as needed
   }
-*/
-/*
+
   @Test
   public void testLocaleFeature() throws Exception {
     assertEquals("Color", h.query(req("q", "*:*", "wt", "velocity", VelocityResponseWriter.TEMPLATE, "locale",
@@ -205,9 +258,8 @@ public class VelocityResponseWriterTest extends SolrTestCaseJ4 {
         VelocityResponseWriter.LOCALE, "en_US")));
     assertEquals("2.112", h.query(req("q","*:*", "wt","velocity",VelocityResponseWriter.TEMPLATE,"locale_number",
         VelocityResponseWriter.LOCALE, "de_DE")));
-
   }
-*/
+
   @Test
   public void testLayoutFeature() throws Exception {
     assertEquals("{{{0}}}", h.query(req("q","*:*", "wt","velocity",
@@ -239,9 +291,9 @@ public class VelocityResponseWriterTest extends SolrTestCaseJ4 {
   }
 
   @Test
-  public void testContentType() throws Exception {
+  public void testContentType() {
     VelocityResponseWriter vrw = new VelocityResponseWriter();
-    NamedList<String> nl = new NamedList<String>();
+    NamedList<String> nl = new NamedList<>();
     vrw.init(nl);
     SolrQueryResponse rsp = new SolrQueryResponse();
 
@@ -263,5 +315,4 @@ public class VelocityResponseWriterTest extends SolrTestCaseJ4 {
             VelocityResponseWriter.JSON,"wrf",
             VelocityResponseWriter.CONTENT_TYPE,"text/plain"), rsp));
   }
-
 }

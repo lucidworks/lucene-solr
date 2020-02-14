@@ -496,7 +496,7 @@ public class Automaton implements Accountable {
 
     int upto = t.transitionUpto;
     if (upto == states[2*t.source]) {
-      // Transition isn't initialzed yet (this is the first transition); don't check:
+      // Transition isn't initialized yet (this is the first transition); don't check:
       return true;
     }
 
@@ -589,9 +589,9 @@ public class Automaton implements Accountable {
       b.append("  ");
       b.append(state);
       if (isAccept(state)) {
-        b.append(" [shape=doublecircle,label=\"" + state + "\"]\n");
+        b.append(" [shape=doublecircle,label=\"").append(state).append("\"]\n");
       } else {
-        b.append(" [shape=circle,label=\"" + state + "\"]\n");
+        b.append(" [shape=circle,label=\"").append(state).append("\"]\n");
       }
       int numTransitions = initTransition(state, t);
       //System.out.println("toDot: state " + state + " has " + numTransitions + " transitions; t.nextTrans=" + t.transitionUpto);

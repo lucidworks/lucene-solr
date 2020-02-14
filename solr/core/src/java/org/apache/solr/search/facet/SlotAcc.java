@@ -68,20 +68,9 @@ public abstract class SlotAcc implements Closeable {
   }
 
   /**
-   * @deprecated This method exists only for backcompatibility, developers of new {@link SlotAcc} 
-   * implementations should not implement this method, and should instead override 
-   * {@link #collect(int,int,IntFunction)}
-   */
-  @Deprecated
-  public void collect(int doc, int slot) throws IOException {
-    throw new UnsupportedOperationException
-      ("SlotAcc implementations must implement 'collect(int,int,IntFunction<SlotContext>)' or the (deprecated)"
-      + "'collect(int,int)'");
-  }
-  
-  /**
-   * All subclasses should override this method, for backcompatability the default implementaion
-   * delegates to the (deprecated) {@link #collect(int,int)}
+   * All subclasses must override this method to collect documents.  This method is called by the 
+   * default impl of {@link #collect(DocSet,int,IntFunction)} but it's also neccessary if this accumulator 
+   * is used for sorting.
    *
    * @param doc Single Segment docId (relative to the current {@link LeafReaderContext} to collect
    * @param slot The slot number to collect this document in
@@ -90,10 +79,7 @@ public abstract class SlotAcc implements Closeable {
    *        the current slot, and the {@link SlotContext} returned is only valid for the duration 
    *        of the <code>collect()</code> call.
    */
-  @Deprecated
-  public void collect(int doc, int slot, IntFunction<SlotContext> slotContext) throws IOException {
-    collect(doc,slot);
-  }
+  public abstract void collect(int doc, int slot, IntFunction<SlotContext> slotContext) throws IOException;
 
   /**
    * Bulk collection of all documents in a slot.  The default implementation calls {@link #collect(int,int,IntFunction)}
@@ -445,13 +431,8 @@ class AvgSlotAcc extends DoubleFuncSlotAcc {
     }
   }
 
-  private double avg(double tot, int count) {
-    return count == 0 ? 0 : tot / count; // returns 0 instead of NaN.. todo - make configurable? if NaN, we need to
-                                         // handle comparisons though...
-  }
-
   private double avg(int slot) {
-    return avg(result[slot], counts[slot]); // calc once and cache in result?
+    return AggUtil.avg(result[slot], counts[slot]); // calc once and cache in result?
   }
 
   @Override
@@ -502,13 +483,8 @@ class VarianceSlotAcc extends DoubleFuncSlotAcc {
     this.sum = resizer.resize(this.sum, 0);
   }
 
-  private double variance(double sumSq, double sum, int count) {
-    double val = count == 0 ? 0 : (sumSq / count) - Math.pow(sum / count, 2);
-    return val;
-  }
-
   private double variance(int slot) {
-    return variance(result[slot], sum[slot], counts[slot]); // calc once and cache in result?
+    return AggUtil.uncorrectedVariance(result[slot], sum[slot], counts[slot]); // calc once and cache in result?
   }
 
   @Override
@@ -564,13 +540,8 @@ class StddevSlotAcc extends DoubleFuncSlotAcc {
     this.result = resizer.resize(this.result, 0);
   }
 
-  private double stdDev(double sumSq, double sum, int count) {
-    double val = count == 0 ? 0 : Math.sqrt((sumSq / count) - Math.pow(sum / count, 2)); 
-    return val;
-  }
-
   private double stdDev(int slot) {
-    return stdDev(result[slot], sum[slot], counts[slot]); // calc once and cache in result?
+    return AggUtil.uncorrectedStdDev(result[slot], sum[slot], counts[slot]); // calc once and cache in result?
   }
 
   @Override

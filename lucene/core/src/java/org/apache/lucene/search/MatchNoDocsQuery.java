@@ -42,7 +42,7 @@ public class MatchNoDocsQuery extends Query {
   }
   
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
     return new Weight(this) {
       @Override
       public void extractTerms(Set<Term> terms) {
@@ -63,6 +63,11 @@ public class MatchNoDocsQuery extends Query {
         return true;
       }
     };
+  }
+
+  @Override
+  public void visit(QueryVisitor visitor) {
+    visitor.visitLeaf(this);
   }
 
   @Override

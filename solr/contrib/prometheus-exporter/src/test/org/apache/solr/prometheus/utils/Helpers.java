@@ -27,8 +27,8 @@ import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.request.ContentStreamUpdateRequest;
-import org.apache.solr.core.Config;
 import org.apache.solr.core.SolrResourceLoader;
+import org.apache.solr.core.XmlConfigFile;
 import org.apache.solr.prometheus.PrometheusExporterTestBase;
 import org.apache.solr.prometheus.exporter.MetricsConfiguration;
 
@@ -38,7 +38,7 @@ public class Helpers {
     Path configPath = Paths.get(path);
 
     try (SolrResourceLoader loader = new SolrResourceLoader(configPath.getParent())) {
-      Config config = new Config(loader, configPath.getFileName().toString());
+      XmlConfigFile config = new XmlConfigFile(loader, configPath.getFileName().toString());
       return MetricsConfiguration.from(config);
     }
   }

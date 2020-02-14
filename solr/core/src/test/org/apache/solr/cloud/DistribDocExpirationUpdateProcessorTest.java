@@ -50,7 +50,9 @@ import org.apache.solr.security.BasicAuthPlugin;
 import org.apache.solr.security.RuleBasedAuthorizationPlugin;
 import org.apache.solr.update.processor.DocExpirationUpdateProcessorFactory;
 import org.apache.solr.util.TimeOut;
+
 import static org.apache.solr.security.Sha256AuthenticationProvider.getSaltedHashedValue;
+
 import org.junit.After;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -121,6 +123,7 @@ public class DistribDocExpirationUpdateProcessorTest extends SolrCloudTestCase {
     runTest();
   }
 
+
   public void testBasicAuth() throws Exception {
     setupCluster(true);
 
@@ -137,8 +140,8 @@ public class DistribDocExpirationUpdateProcessorTest extends SolrCloudTestCase {
     
     runTest();
   }
-
-    private void runTest() throws Exception {
+  
+  private void runTest() throws Exception {
     final int totalNumDocs = atLeast(50);
     
     // Add a bunch of docs; some with extremely short expiration, some with no expiration
@@ -228,6 +231,7 @@ public class DistribDocExpirationUpdateProcessorTest extends SolrCloudTestCase {
       boolean firstReplica = true;
       for (Replica replica : shard) {
         coresCompared++;
+        assertEquals(shard.getName(), replica.getSlice()); // sanity check
         final String core = replica.getCoreName();
         final ReplicaData initData = initReplicaData.get(core);
         final ReplicaData finalData = finalReplicaData.get(core);
@@ -264,47 +268,44 @@ public class DistribDocExpirationUpdateProcessorTest extends SolrCloudTestCase {
   }
 
   /**
-   * returns a map whose key is the coreNodeName and whose value is what the replication
-   * handler returns for the indexversion
+   * returns a map whose key is the coreNodeName and whose value is data about that core needed for the test
    */
   private Map<String,ReplicaData> getTestDataForAllReplicas() throws IOException, SolrServerException {
     Map<String,ReplicaData> results = new HashMap<>();
 
     DocCollection collectionState = cluster.getSolrClient().getZkStateReader().getClusterState().getCollection(COLLECTION);
 
-    for (Slice slice : collectionState) {
-      for (Replica replica : slice) {
- 
-        String coreName = replica.getCoreName();
-        try (HttpSolrClient client = getHttpSolrClient(replica.getCoreUrl())) {
-           
-          ModifiableSolrParams params = new ModifiableSolrParams();
-          params.set("command", "indexversion");
-          params.set("_trace", "getIndexVersion");
-          params.set("qt", ReplicationHandler.PATH);
-          QueryRequest req = setAuthIfNeeded(new QueryRequest(params));
-           
-          NamedList<Object> res = client.request(req);
-          assertNotNull("null response from server: " + coreName, res);
-          
-          Object version = res.get("indexversion");
-          assertNotNull("null version from server: " + coreName, version);
-          assertTrue("version isn't a long: " + coreName, version instanceof Long);
-           
-          long numDocs = 
-            setAuthIfNeeded(new QueryRequest
-                            (params("q", "*:*",
-                                    "distrib", "false",
-                                    "rows", "0",
-                                    "_trace", "counting_docs"))).process(client).getResults().getNumFound();
-    
-          final ReplicaData data = new ReplicaData(slice.getName(),coreName,(Long)version,numDocs);
-          log.info("{}", data);
-          results.put(coreName, data);
-        }
-       }
-    }
+    for (Replica replica : collectionState.getReplicas()) {
 
+      String coreName = replica.getCoreName();
+      try (HttpSolrClient client = getHttpSolrClient(replica.getCoreUrl())) {
+
+        ModifiableSolrParams params = new ModifiableSolrParams();
+        params.set("command", "indexversion");
+        params.set("_trace", "getIndexVersion");
+        params.set("qt", ReplicationHandler.PATH);
+        QueryRequest req = setAuthIfNeeded(new QueryRequest(params));
+
+        NamedList<Object> res = client.request(req);
+        assertNotNull("null response from server: " + coreName, res);
+
+        Object version = res.get("indexversion");
+        assertNotNull("null version from server: " + coreName, version);
+        assertTrue("version isn't a long: " + coreName, version instanceof Long);
+
+        long numDocs = 
+          setAuthIfNeeded(new QueryRequest
+                          (params("q", "*:*",
+                                  "distrib", "false",
+                                  "rows", "0",
+                                  "_trace", "counting_docs"))).process(client).getResults().getNumFound();
+
+        final ReplicaData data = new ReplicaData(replica.getSlice(),coreName,(Long)version,numDocs);
+        log.info("{}", data);
+        results.put(coreName, data);
+
+      }
+    }
 
     return results;
   }
@@ -319,18 +320,20 @@ public class DistribDocExpirationUpdateProcessorTest extends SolrCloudTestCase {
       throws SolrServerException, InterruptedException, IOException {
 
     final QueryRequest req = setAuthIfNeeded(new QueryRequest(params));
-
     final TimeOut timeout = new TimeOut(maxTimeLimitSeconds, TimeUnit.SECONDS, TimeSource.NANO_TIME);
+    
     long numFound = req.process(cluster.getSolrClient(), COLLECTION).getResults().getNumFound();
     while (0L < numFound && ! timeout.hasTimedOut()) {
       Thread.sleep(Math.max(1, Math.min(5000, timeout.timeLeft(TimeUnit.MILLISECONDS))));
+      
       numFound = req.process(cluster.getSolrClient(), COLLECTION).getResults().getNumFound();
     }
+
     assertEquals("Give up waiting for no results: " + params,
                  0L, numFound);
   }
 
-    private static class ReplicaData {
+  private static class ReplicaData {
     public final String shardName;
     public final String coreName;
     public final long indexVersion;
@@ -372,5 +375,5 @@ public class DistribDocExpirationUpdateProcessorTest extends SolrCloudTestCase {
       return Objects.hash(this.shardName, this.coreName, this.indexVersion, this.numDocs);
     }
   }
-
+  
 }

@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -58,13 +59,17 @@ class SolrSchema extends AbstractSchema {
 
       final ImmutableMap.Builder<String, Table> builder = ImmutableMap.builder();
 
-      for (String collection : clusterState.getCollectionsMap().keySet()) {
+      Set<String> collections = clusterState.getCollectionsMap().keySet();
+      for (String collection : collections) {
         builder.put(collection, new SolrTable(this, collection));
       }
 
       Aliases aliases = zkStateReader.getAliases();
       for (String alias : aliases.getCollectionAliasListMap().keySet()) {
-        builder.put(alias, new SolrTable(this, alias));
+        // don't create duplicate entries
+        if (!collections.contains(alias)) {
+          builder.put(alias, new SolrTable(this, alias));
+        }
       }
 
       return builder.build();
@@ -91,7 +96,7 @@ class SolrSchema extends AbstractSchema {
     // because we're creating a proto-type, not a type; before being used, the
     // proto-type will be copied into a real type factory.
     final RelDataTypeFactory typeFactory = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
-    final RelDataTypeFactory.FieldInfoBuilder fieldInfo = typeFactory.builder();
+    final RelDataTypeFactory.Builder fieldInfo = typeFactory.builder();
     Map<String, LukeResponse.FieldInfo> luceneFieldInfoMap = getFieldInfo(collection);
 
     for(Map.Entry<String, LukeResponse.FieldInfo> entry : luceneFieldInfoMap.entrySet()) {

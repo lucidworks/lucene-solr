@@ -32,7 +32,15 @@ solrAdminApp.config([
         templateUrl: 'partials/index.html',
         controller: 'IndexController'
       }).
+      when('/unknown', {
+        templateUrl: 'partials/unknown.html',
+        controller: 'UnknownController'
+      }).
       when('/login', {
+        templateUrl: 'partials/login.html',
+        controller: 'LoginController'
+      }).
+      when('/login/:route', {
         templateUrl: 'partials/login.html',
         controller: 'LoginController'
       }).
@@ -79,6 +87,10 @@ solrAdminApp.config([
       when('/:core/core-overview', {
         templateUrl: 'partials/core_overview.html',
         controller: 'CoreOverviewController'
+      }).
+      when('/:core/alias-overview', {
+        templateUrl: 'partials/alias_overview.html',
+        controller: 'AliasOverviewController'
       }).
       when('/:core/collection-overview', {
         templateUrl: 'partials/collection_overview.html',
@@ -143,7 +155,8 @@ solrAdminApp.config([
         controller: 'SegmentsController'
       }).
       otherwise({
-        redirectTo: '/'
+        templateUrl: 'partials/unknown.html',
+        controller: 'UnknownController'
       });
 }])
 .constant('Constants', {
@@ -286,7 +299,7 @@ solrAdminApp.config([
             scope.$watch("data", function(newValue, oldValue) {
                 if (newValue) {
                   var treeConfig = {
-                      "plugins" : [ "themes", "json_data", "ui" ],
+                      "plugins" : [ "json_data", "ui" ],
                       "json_data" : {
                         "data" : scope.data,
                         "progressive_render" : true
@@ -351,7 +364,7 @@ solrAdminApp.config([
         $rootScope.$broadcast('connectionStatusInactive');
       },2000);
     }
-    if (!$location.path().startsWith('/login')) {
+    if (!$location.path().startsWith('/login') && !$location.path().startsWith('/unknown')) {
       sessionStorage.removeItem("http401");
       sessionStorage.removeItem("auth.state");
       sessionStorage.removeItem("auth.statusText");
@@ -379,6 +392,7 @@ solrAdminApp.config([
       var headers = rejection.headers();
       var wwwAuthHeader = headers['www-authenticate'];
       sessionStorage.setItem("auth.wwwAuthHeader", wwwAuthHeader);
+      sessionStorage.setItem("auth.authDataHeader", headers['x-solr-authdata']);
       sessionStorage.setItem("auth.statusText", rejection.statusText);
       sessionStorage.setItem("http401", "true");
       sessionStorage.removeItem("auth.scheme");
@@ -434,6 +448,7 @@ solrAdminApp.controller('MainController', function($scope, $route, $rootScope, $
   $scope.refresh = function() {
       $scope.cores = [];
       $scope.collections = [];
+      $scope.aliases = [];
   }
 
   $scope.refresh();
@@ -456,21 +471,53 @@ solrAdminApp.controller('MainController', function($scope, $route, $rootScope, $
     System.get(function(data) {
       $scope.isCloudEnabled = data.mode.match( /solrcloud/i );
 
+      var currentCollectionName = $route.current.params.core;
+      delete $scope.currentCollection;
       if ($scope.isCloudEnabled) {
-        Collections.list(function (data) {
-          $scope.collections = [];
-          var currentCollectionName = $route.current.params.core;
-          delete $scope.currentCollection;
-          for (key in data.collections) {
-            var collection = {name: data.collections[key]};
-            $scope.collections.push(collection);
-            if (pageType == Constants.IS_COLLECTION_PAGE && collection.name == currentCollectionName) {
-              $scope.currentCollection = collection;
+        Collections.list(function (cdata) {
+          Collections.listaliases(function (adata) {
+            $scope.aliases = [];
+            for (var key in adata.aliases) {
+              props = {};
+              if (key in adata.properties) {
+                props = adata.properties[key];
+              }
+              var alias = {name: key, collections: adata.aliases[key], type: 'alias', properties: props};
+              $scope.aliases.push(alias);
+              if (pageType == Constants.IS_COLLECTION_PAGE && alias.name == currentCollectionName) {
+                $scope.currentCollection = alias;
+              }
             }
-          }
-        })
+            $scope.collections = [];
+            for (key in cdata.collections) {
+              var collection = {name: cdata.collections[key], type: 'collection'};
+              $scope.collections.push(collection);
+              if (pageType == Constants.IS_COLLECTION_PAGE && collection.name == currentCollectionName) {
+                $scope.currentCollection = collection;
+              }
+            }
+
+            $scope.aliases_and_collections = $scope.aliases;
+            if ($scope.aliases.length > 0) {
+              $scope.aliases_and_collections = $scope.aliases_and_collections.concat({name:'-----'});
+            }
+            $scope.aliases_and_collections = $scope.aliases_and_collections.concat($scope.collections);
+          });
+        });
       }
 
+      $scope.showEnvironment = data.environment !== undefined;
+      if (data.environment) {
+        $scope.environment = data.environment;
+        var env_labels = {'prod': 'Production', 'stage': 'Staging', 'test': 'Test', 'dev': 'Development'};
+        $scope.environment_label = env_labels[data.environment];
+        if (data.environment_label) {
+          $scope.environment_label = data.environment_label;
+        }
+        if (data.environment_color) {
+          $scope.environment_color = data.environment_color;
+        }
+      }
     });
 
     $scope.showingLogging = page.lastIndexOf("logging", 0) === 0;
@@ -478,6 +525,10 @@ solrAdminApp.controller('MainController', function($scope, $route, $rootScope, $
     $scope.page = page;
     $scope.currentUser = sessionStorage.getItem("auth.username");
     $scope.http401 = sessionStorage.getItem("http401");
+  };
+
+  $scope.isMultiDestAlias = function(selectedColl) {
+    return selectedColl && selectedColl.type === 'alias' && selectedColl.collections.includes(',');
   };
 
   $scope.ping = function() {
@@ -497,8 +548,12 @@ solrAdminApp.controller('MainController', function($scope, $route, $rootScope, $
   }
 
   $scope.showCollection = function(collection) {
-    $location.url("/" + collection.name + "/collection-overview")
-  }
+    if (collection.type === 'collection') {
+      $location.url("/" + collection.name + "/collection-overview")
+    } else if (collection.type === 'alias') {
+      $location.url("/" + collection.name + "/alias-overview")
+    }
+  };
 
   $scope.$on('$routeChangeStart', function() {
       $rootScope.exceptions = {};

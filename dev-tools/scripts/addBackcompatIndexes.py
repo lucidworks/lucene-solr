@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -48,7 +50,7 @@ def create_and_add_index(source, indextype, index_version, current_version, temp
   else:
     dirname = indextype
     filename = '%s.%s.zip' % (prefix, index_version)
-
+  
   print('  creating %s...' % filename, end='', flush=True)
   module = 'backward-codecs'
   index_dir = os.path.join('lucene', module, 'src/test/org/apache/lucene/index')
@@ -121,7 +123,7 @@ def update_backcompat_tests(types, index_version, current_version):
     def __call__(self, buffer, match, line):
       if self.start:
         # find where this version should exist
-        i = len(buffer) - 1 
+        i = len(buffer) - 1
         previous_version_exists = not ('};' in line and buffer[-1].strip().endswith("{"))
         if previous_version_exists: # Only look if there is a version here
           v = find_version(buffer[i])

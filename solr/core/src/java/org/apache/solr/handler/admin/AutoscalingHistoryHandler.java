@@ -17,8 +17,8 @@
 package org.apache.solr.handler.admin;
 
 import java.lang.invoke.MethodHandles;
-import java.util.Collections;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;

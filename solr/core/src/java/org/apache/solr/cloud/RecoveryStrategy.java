@@ -27,6 +27,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.lucene.index.IndexCommit;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.store.Directory;
 import org.apache.solr.client.solrj.SolrServerException;
@@ -172,7 +173,7 @@ public class RecoveryStrategy implements Runnable, Closeable {
   final public void setRecoveringAfterStartup(boolean recoveringAfterStartup) {
     this.recoveringAfterStartup = recoveringAfterStartup;
   }
- 
+
   /** Builds a new HttpSolrClient for use in recovery.  Caller must close */
   private final HttpSolrClient buildRecoverySolrClient(final String leaderUrl) {
     // workaround for SOLR-13605: get the configured timeouts & set them directly
@@ -184,7 +185,7 @@ public class RecoveryStrategy implements Runnable, Closeable {
             .withHttpClient(cc.getUpdateShardHandler().getRecoveryOnlyHttpClient())
             ).build();
   }
-
+  
   // make sure any threads stop retrying
   @Override
   final public void close() {
@@ -261,6 +262,7 @@ public class RecoveryStrategy implements Runnable, Closeable {
         SolrIndexSearcher searcher = searchHolder.get();
         Directory dir = core.getDirectoryFactory().get(core.getIndexDir(), DirContext.META_DATA, null);
         try {
+          final IndexCommit commit = core.getDeletionPolicy().getLatestCommit();
           log.debug(core.getCoreContainer()
               .getZkController().getNodeName()
               + " replicated "
@@ -268,8 +270,7 @@ public class RecoveryStrategy implements Runnable, Closeable {
               + " from "
               + leaderUrl
               + " gen:"
-              + (core.getDeletionPolicy().getLatestCommit() != null ? "null"
-                  : core.getDeletionPolicy().getLatestCommit().getGeneration())
+              + (null == commit ? "null" : commit.getGeneration())
               + " data:" + core.getDataDir()
               + " index:" + core.getIndexDir()
               + " newIndex:" + core.getNewIndexDir()
@@ -287,7 +288,7 @@ public class RecoveryStrategy implements Runnable, Closeable {
 
   final private void commitOnLeader(String leaderUrl) throws SolrServerException,
       IOException {
-      try (HttpSolrClient client = buildRecoverySolrClient(leaderUrl)) {
+    try (HttpSolrClient client = buildRecoverySolrClient(leaderUrl)) {
       UpdateRequest ureq = new UpdateRequest();
       ureq.setParams(new ModifiableSolrParams());
       // ureq.getParams().set(DistributedUpdateProcessor.COMMIT_END_POINT, true);
@@ -640,11 +641,11 @@ public class RecoveryStrategy implements Runnable, Closeable {
             cloudDebugLog(core, "synced");
 
             log.info("Replaying updates buffered during PeerSync.");
-            replay(core);
+            replayFuture = replay(core);
 
             // sync success
             successfulRecovery = true;
-            return;
+            break;
           }
 
           log.info("PeerSync Recovery was not successful - trying replication.");
@@ -796,15 +797,15 @@ public class RecoveryStrategy implements Runnable, Closeable {
         return leaderReplica;
       }
 
-        try (HttpSolrClient httpSolrClient = buildRecoverySolrClient(leaderReplica.getCoreUrl())) {
+      try (HttpSolrClient httpSolrClient = buildRecoverySolrClient(leaderReplica.getCoreUrl())) {
         SolrPingResponse resp = httpSolrClient.ping();
         return leaderReplica;
       } catch (IOException e) {
-	log.error("Failed to connect leader {} on recovery, try again", leaderReplica.getBaseUrl());
+        log.error("Failed to connect leader {} on recovery, try again", leaderReplica.getBaseUrl());
         Thread.sleep(500);
       } catch (Exception e) {
         if (e.getCause() instanceof IOException) {
-	  log.error("Failed to connect leader {} on recovery, try again", leaderReplica.getBaseUrl());
+          log.error("Failed to connect leader {} on recovery, try again", leaderReplica.getBaseUrl());
           Thread.sleep(500);
         } else {
           return leaderReplica;

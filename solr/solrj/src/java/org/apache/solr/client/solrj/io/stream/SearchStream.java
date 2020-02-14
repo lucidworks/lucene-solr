@@ -190,7 +190,7 @@ public class SearchStream extends TupleStream implements Expressible  {
     }
 
 
-    QueryRequest request = new QueryRequest(params,  SolrRequest.METHOD.POST);
+    QueryRequest request = new QueryRequest(params, SolrRequest.METHOD.POST);
     try {
       QueryResponse response = request.process(cloudSolrClient, collection);
       SolrDocumentList docs = response.getResults();
@@ -210,8 +210,8 @@ public class SearchStream extends TupleStream implements Expressible  {
     if(documentIterator.hasNext()) {
       Map map = new HashMap();
       SolrDocument doc = documentIterator.next();
-      for(String key  : doc.keySet()) {
-        map.put(key, doc.get(key));
+      for(Entry<String, Object> entry : doc.entrySet()) {
+        map.put(entry.getKey(), entry.getValue());
       }
       return new Tuple(map);
     } else {

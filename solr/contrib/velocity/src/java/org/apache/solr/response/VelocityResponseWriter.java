@@ -17,6 +17,7 @@
 package org.apache.solr.response;
 
 import java.io.File;
+import java.io.FilePermission;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -24,14 +25,20 @@ import java.io.StringWriter;
 import java.io.Writer;
 import java.lang.invoke.MethodHandles;
 import java.nio.charset.StandardCharsets;
+import java.security.AccessControlContext;
+import java.security.AccessController;
+import java.security.Permissions;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.PropertyPermission;
 import java.util.ResourceBundle;
 
-import org.apache.commons.lang.StringUtils;
 import org.apache.solr.client.solrj.SolrResponse;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.client.solrj.response.SolrResponseBase;
@@ -46,16 +53,14 @@ import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.VelocityEngine;
 import org.apache.velocity.runtime.RuntimeConstants;
 import org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader;
-import org.apache.velocity.tools.ConversionUtils;
+import org.apache.velocity.tools.generic.CollectionTool;
 import org.apache.velocity.tools.generic.ComparisonDateTool;
 import org.apache.velocity.tools.generic.DisplayTool;
 import org.apache.velocity.tools.generic.EscapeTool;
-import org.apache.velocity.tools.generic.ListTool;
 import org.apache.velocity.tools.generic.LocaleConfig;
 import org.apache.velocity.tools.generic.MathTool;
 import org.apache.velocity.tools.generic.NumberTool;
 import org.apache.velocity.tools.generic.ResourceTool;
-import org.apache.velocity.tools.generic.SortTool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,8 +71,9 @@ public class VelocityResponseWriter implements QueryResponseWriter, SolrCoreAwar
   //   - multiple different named writers could be created with different init params
   public static final String TEMPLATE_BASE_DIR = "template.base.dir";
   public static final String PROPERTIES_FILE = "init.properties.file";
-  public static final String PARAMS_RESOURCE_LOADER_ENABLED = "params.resource.loader.enabled";
-  public static final String SOLR_RESOURCE_LOADER_ENABLED = "solr.resource.loader.enabled";
+
+  // System property names, these are _only_ loaded at node startup (no per-request control of these)
+  public static final String SOLR_RESOURCE_LOADER_ENABLED = "velocity.resourceloader.solr.enabled";
 
   // request param names
   public static final String TEMPLATE = "v.template";
@@ -85,12 +91,12 @@ public class VelocityResponseWriter implements QueryResponseWriter, SolrCoreAwar
   private String initPropertiesFileName;  // used just to hold from init() to inform()
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-  private static final SolrVelocityLogger velocityLogger = new SolrVelocityLogger(log);
   private Properties velocityInitProps = new Properties();
   private Map<String,String> customTools = new HashMap<String,String>();
 
   @Override
   public void init(NamedList args) {
+    log.warn("VelocityResponseWriter is deprecated. This may be removed in future Solr releases. Please SOLR-14065.");
     fileResourceLoaderBaseDir = null;
     String templateBaseDir = (String) args.get(TEMPLATE_BASE_DIR);
 
@@ -129,7 +135,7 @@ public class VelocityResponseWriter implements QueryResponseWriter, SolrCoreAwar
         log.warn("Error loading " + PROPERTIES_FILE + " specified property file: " + initPropertiesFileName, e);
       }
     }
-  }
+    }
 
   @Override
   public String getContentType(SolrQueryRequest request, SolrQueryResponse response) {
@@ -141,6 +147,39 @@ public class VelocityResponseWriter implements QueryResponseWriter, SolrCoreAwar
 
   @Override
   public void write(Writer writer, SolrQueryRequest request, SolrQueryResponse response) throws IOException {
+    // run doWrite() with the velocity sandbox
+    try {
+      AccessController.doPrivileged(new PrivilegedExceptionAction<Void>() {
+        @Override
+        public Void run() throws IOException {
+          doWrite(writer, request, response);
+          return null;
+        }
+      }, VELOCITY_SANDBOX);
+    } catch (PrivilegedActionException e) {
+      throw (IOException) e.getException();
+    }
+  }
+
+  // sandbox for velocity code
+  // TODO: we could read in a policy file instead, in case someone needs to tweak it?
+  private static final AccessControlContext VELOCITY_SANDBOX;
+  static {
+    Permissions permissions = new Permissions();
+    // TODO: restrict the scope of this! we probably only need access to classpath
+    permissions.add(new FilePermission("<<ALL FILES>>", "read,readlink"));
+    // properties needed by SolrResourceLoader (called from velocity code)
+    permissions.add(new PropertyPermission("jetty.testMode", "read"));
+    permissions.add(new PropertyPermission("solr.allow.unsafe.resourceloading", "read"));
+    // properties needed by log4j (called from velocity code)
+    permissions.add(new PropertyPermission("java.version", "read"));
+    // needed by velocity duck-typing
+    permissions.add(new RuntimePermission("accessDeclaredMembers"));
+    permissions.setReadOnly();
+    VELOCITY_SANDBOX = new AccessControlContext(new ProtectionDomain[] { new ProtectionDomain(null, permissions) });
+  }
+
+  private void doWrite(Writer writer, SolrQueryRequest request, SolrQueryResponse response) throws IOException {
     VelocityEngine engine = createEngine(request);  // TODO: have HTTP headers available for configuring engine
 
     Template template = getTemplate(engine, request);
@@ -201,8 +240,7 @@ public class VelocityResponseWriter implements QueryResponseWriter, SolrCoreAwar
     context.put("log", log);   // TODO: add test; TODO: should this be overridable with a custom "log" named tool?
     context.put("esc", new EscapeTool());
     context.put("date", new ComparisonDateTool());
-    context.put("list", new ListTool());
-    context.put(SORT, new SortTool());
+    context.put(SORT, new CollectionTool());
 
     MathTool mathTool = new MathTool();
     mathTool.configure(toolConfig);
@@ -223,15 +261,15 @@ public class VelocityResponseWriter implements QueryResponseWriter, SolrCoreAwar
 
     if (request.getCore().getCoreDescriptor().isConfigSetTrusted()) {
       // Load custom tools, only if in a trusted configset
-      
-      /*  
+
+      /*
           // Custom tools, specified in config as:
               <queryResponseWriter name="velocityWithCustomTools" class="solr.VelocityResponseWriter">
                 <lst name="tools">
                   <str name="mytool">com.example.solr.velocity.MyTool</str>
                 </lst>
               </queryResponseWriter>
-      */ 
+      */
       // Custom tools can override any of the built-in tools provided above, by registering one with the same name
       if (request.getCore().getCoreDescriptor().isConfigSetTrusted()) {
         for (Map.Entry<String, String> entry : customTools.entrySet()) {
@@ -244,16 +282,9 @@ public class VelocityResponseWriter implements QueryResponseWriter, SolrCoreAwar
           context.put(name, customTool);
         }
       }
-      
+
       // custom tools _cannot_ override context objects added below, like $request and $response
     }
-    /*for(String name : customTools.keySet()) {
-      Object customTool = SolrCore.createInstance(customTools.get(name), Object.class, "VrW custom tool: " + name, request.getCore(), request.getCore().getResourceLoader());
-      if (customTool instanceof LocaleConfig) {
-        ((LocaleConfig)customTool).configure(toolConfig);
-      }
-      context.put(name, customTool);
-    }*/
 
 
     // Turn the SolrQueryResponse into a SolrResponse.
@@ -290,14 +321,8 @@ public class VelocityResponseWriter implements QueryResponseWriter, SolrCoreAwar
 
     boolean trustedMode = request.getCore().getCoreDescriptor().isConfigSetTrusted();
 
+
     VelocityEngine engine = new VelocityEngine();
-
-    // route all Velocity logging through Solr's logging facility
-    engine.setProperty(RuntimeConstants.RUNTIME_LOG_LOGSYSTEM, velocityLogger);
-
-    // Set some engine properties that improve the experience
-    //   - these could be considered in the future for parameterization, but can also be overridden by using
-    //     the init.properties.file setting.  (TODO: add a test for this properties set here overridden)
 
     // load the built-in _macros.vm first, then load VM_global_library.vm for legacy (pre-5.0) support,
     // and finally allow macros.vm to have the final say and override anything defined in the preceding files.
@@ -308,7 +333,7 @@ public class VelocityResponseWriter implements QueryResponseWriter, SolrCoreAwar
     engine.setProperty(RuntimeConstants.VM_LIBRARY_AUTORELOAD, "true");
 
     /*
-  Set up Velocity resource loader(s)
+      Set up Velocity resource loader(s)
        terminology note: "resource loader" is overloaded here, there is Solr's resource loader facility for plugins,
        and there are Velocity template resource loaders.  It's confusing, they overlap: there is a Velocity resource
        loader that loads templates from Solr's resource loader (SolrVelocityResourceLoader).
@@ -345,12 +370,12 @@ public class VelocityResponseWriter implements QueryResponseWriter, SolrCoreAwar
     loaders.add("builtin");
     engine.setProperty("builtin.resource.loader.instance", new ClasspathResourceLoader());
 
-    engine.setProperty(RuntimeConstants.RESOURCE_LOADER, StringUtils.join(loaders,','));
+    engine.setProperty(RuntimeConstants.RESOURCE_LOADER, String.join(",", loaders));
+
 
     engine.setProperty(RuntimeConstants.INPUT_ENCODING, "UTF-8");
-    /*  RuntimeConstants.SPACE_GOBBLING - Not there in velocity of solr 7.7.2
     engine.setProperty(RuntimeConstants.SPACE_GOBBLING, RuntimeConstants.SpaceGobbling.LINES.toString());
-    */
+
     // install a class/package restricting uberspector
     engine.setProperty(RuntimeConstants.UBERSPECT_CLASSNAME,"org.apache.velocity.util.introspection.SecureUberspector");
     engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_PACKAGES,"java.lang.reflect");
@@ -372,17 +397,17 @@ public class VelocityResponseWriter implements QueryResponseWriter, SolrCoreAwar
 
     if (trustedMode) {
       // Work around VELOCITY-908 with Velocity not handling locales properly
-      /* RuntimeConstants.SPACE_GOBBLING not present in this version of velocity
       Object spaceGobblingInitProperty = velocityInitProps.get(RuntimeConstants.SPACE_GOBBLING);
       if (spaceGobblingInitProperty != null) {
+        // If there is an init property, uppercase it before Velocity.
         velocityInitProps.put(RuntimeConstants.SPACE_GOBBLING,
             String.valueOf(spaceGobblingInitProperty).toUpperCase(Locale.ROOT));
-      }*/
-      engine.init(velocityInitProps);
-    } else {
-
-      engine.init();
+      }
+      // bring in any custom properties too
+      engine.setProperties(velocityInitProps);
     }
+
+    engine.init();
 
     return engine;
   }
@@ -420,7 +445,7 @@ public class VelocityResponseWriter implements QueryResponseWriter, SolrCoreAwar
     return "{\"result\":\"" + replaced + "\"}";
   }
 
-  // see: http://svn.apache.org/repos/asf/velocity/tools/branches/2.0.x/src/main/java/org/apache/velocity/tools/generic/ResourceTool.java
+  // see: https://github.com/apache/velocity-tools/blob/trunk/velocity-tools-generic/src/main/java/org/apache/velocity/tools/generic/ResourceTool.java
   private static class SolrVelocityResourceTool extends ResourceTool {
 
     private ClassLoader solrClassLoader;
@@ -436,18 +461,6 @@ public class VelocityResponseWriter implements QueryResponseWriter, SolrCoreAwar
           "velocity." + baseName,
           (loc == null) ? this.getLocale() : this.toLocale(loc),
           solrClassLoader);
-    }
-
-    // Why did Velocity Tools make this private?  Copied from ResourceTools.java
-    private Locale toLocale(Object obj) {
-      if (obj == null) {
-        return null;
-      }
-      if (obj instanceof Locale) {
-        return (Locale) obj;
-      }
-      String s = String.valueOf(obj);
-      return ConversionUtils.toLocale(s);
     }
   }
 }

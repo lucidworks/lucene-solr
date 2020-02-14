@@ -17,18 +17,20 @@
 package org.apache.lucene.search.spans;
 
 
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermContext;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.Query;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.index.TermStates;
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
 
 abstract class SpanContainQuery extends SpanQuery implements Cloneable {
 
@@ -61,7 +63,7 @@ abstract class SpanContainQuery extends SpanQuery implements Cloneable {
     final SpanWeight bigWeight;
     final SpanWeight littleWeight;
 
-    public SpanContainWeight(IndexSearcher searcher, Map<Term, TermContext> terms,
+    public SpanContainWeight(IndexSearcher searcher, Map<Term, TermStates> terms,
                              SpanWeight bigWeight, SpanWeight littleWeight, float boost) throws IOException {
       super(SpanContainQuery.this, searcher, terms, boost);
       this.bigWeight = bigWeight;
@@ -93,9 +95,9 @@ abstract class SpanContainQuery extends SpanQuery implements Cloneable {
     }
 
     @Override
-    public void extractTermContexts(Map<Term, TermContext> contexts) {
-      bigWeight.extractTermContexts(contexts);
-      littleWeight.extractTermContexts(contexts);
+    public void extractTermStates(Map<Term, TermStates> contexts) {
+      bigWeight.extractTermStates(contexts);
+      littleWeight.extractTermStates(contexts);
     }
 
   }
@@ -126,6 +128,15 @@ abstract class SpanContainQuery extends SpanQuery implements Cloneable {
       }
     }
     return super.rewrite(reader);
+  }
+
+  @Override
+  public void visit(QueryVisitor visitor) {
+    if (visitor.acceptField(getField())) {
+      QueryVisitor v = visitor.getSubVisitor(BooleanClause.Occur.MUST, this);
+      big.visit(v);
+      little.visit(v);
+    }
   }
 
   @Override

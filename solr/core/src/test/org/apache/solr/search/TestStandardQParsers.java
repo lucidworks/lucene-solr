@@ -22,7 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.lucene.util.LuceneTestCase;
+import org.apache.solr.SolrTestCase;
 import org.junit.Test;
 
 /**
@@ -34,7 +34,7 @@ import org.junit.Test;
  * @see org.apache.solr.search.QParserPlugin#standardPlugins
  *
  */
-public class TestStandardQParsers extends LuceneTestCase {
+public class TestStandardQParsers extends SolrTestCase {
   /**
    * Field name of constant mandatory for query parser plugin.
    */
@@ -65,11 +65,6 @@ public class TestStandardQParsers extends LuceneTestCase {
         mismatch.add(regName +" != "+ nameField.get(null) +"("+ clazz.getName() +")");
       }
     }
-
-    // for Solr 7.x backcompat only
-    mismatch.remove(SignificantTermsQParserPlugin.OLD_NAME
-        + " != " + SignificantTermsQParserPlugin.NAME
-        + "(" + SignificantTermsQParserPlugin.class.getName() + ")");
 
     assertTrue("All standard QParsers must have final NAME, broken: " + notFinal, 
                notFinal.isEmpty());

@@ -43,7 +43,7 @@ import org.apache.lucene.util.Bits;
  * A <code>Weight</code> is used in the following way:
  * <ol>
  * <li>A <code>Weight</code> is constructed by a top-level query, given a
- * <code>IndexSearcher</code> ({@link Query#createWeight(IndexSearcher, boolean, float)}).
+ * <code>IndexSearcher</code> ({@link Query#createWeight(IndexSearcher, ScoreMode, float)}).
  * <li>A <code>Scorer</code> is constructed by
  * {@link #scorer(org.apache.lucene.index.LeafReaderContext)}.
  * </ol>
@@ -66,7 +66,10 @@ public abstract class Weight implements SegmentCacheable {
    * {@link Weight} was created with {@code needsScores == true} then this
    * method will only extract terms which are used for scoring, otherwise it
    * will extract all terms which are used for matching.
+   *
+   * @deprecated Use {@link Query#visit(QueryVisitor)} with {@link QueryVisitor#termCollector(Set)}
    */
+  @Deprecated
   public abstract void extractTerms(Set<Term> terms);
 
   /**
@@ -81,10 +84,11 @@ public abstract class Weight implements SegmentCacheable {
    * @lucene.experimental
    */
   public Matches matches(LeafReaderContext context, int doc) throws IOException {
-    Scorer scorer = scorer(context);
-    if (scorer == null) {
+    ScorerSupplier scorerSupplier = scorerSupplier(context);
+    if (scorerSupplier == null) {
       return null;
     }
+    Scorer scorer = scorerSupplier.get(1);
     final TwoPhaseIterator twoPhase = scorer.twoPhaseIterator();
     if (twoPhase == null) {
       if (scorer.iterator().advance(doc) != doc) {

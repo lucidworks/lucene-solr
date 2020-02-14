@@ -136,11 +136,6 @@ public class SolrRrdBackendFactory extends RrdBackendFactory implements SolrClos
   }
 
   @Override
-  public URI getCanonicalUri(URI uri) {
-    return uri;
-  }
-
-  @Override
   public String getPath(URI uri) {
     return uri.getSchemeSpecificPart();
   }
@@ -157,6 +152,20 @@ public class SolrRrdBackendFactory extends RrdBackendFactory implements SolrClos
     }
   }
 
+  @Override
+  public URI getCanonicalUri(URI uri) {
+    return uri;
+  }
+
+//  @Override
+//  protected URI getRootUri() {
+//    try {
+//      return new URI("solr", null, null, null);
+//    } catch (URISyntaxException e) {
+//      throw new RuntimeException("Impossible error", e);
+//    }
+//  }
+//
   /**
    * Open (or get) a backend.
    * @param path backend path (without URI scheme)

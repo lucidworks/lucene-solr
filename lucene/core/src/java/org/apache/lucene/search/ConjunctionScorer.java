@@ -29,7 +29,7 @@ class ConjunctionScorer extends Scorer {
   final Collection<Scorer> required;
 
   /** Create a new {@link ConjunctionScorer}, note that {@code scorers} must be a subset of {@code required}. */
-  ConjunctionScorer(Weight weight, Collection<Scorer> required, Collection<Scorer> scorers) {
+  ConjunctionScorer(Weight weight, Collection<Scorer> required, Collection<Scorer> scorers) throws IOException {
     super(weight);
     assert required.containsAll(scorers);
     this.disi = ConjunctionDISI.intersectScorers(required);
@@ -62,10 +62,39 @@ class ConjunctionScorer extends Scorer {
   }
 
   @Override
-  public Collection<ChildScorer> getChildren() {
-    ArrayList<ChildScorer> children = new ArrayList<>();
+  public float getMaxScore(int upTo) throws IOException {
+    // This scorer is only used for TOP_SCORES when there is at most one scoring clause
+    switch (scorers.length) {
+      case 0:
+        return 0;
+      case 1:
+        return scorers[0].getMaxScore(upTo);
+      default:
+        return Float.POSITIVE_INFINITY;
+    }
+  }
+
+  @Override
+  public int advanceShallow(int target) throws IOException {
+    if (scorers.length == 1) {
+      return scorers[0].advanceShallow(target);
+    }
+    return super.advanceShallow(target);
+  }
+
+  @Override
+  public void setMinCompetitiveScore(float minScore) throws IOException {
+    // This scorer is only used for TOP_SCORES when there is a single scoring clause
+    if (scorers.length == 1) {
+      scorers[0].setMinCompetitiveScore(minScore);
+    }
+  }
+
+  @Override
+  public Collection<ChildScorable> getChildren() {
+    ArrayList<ChildScorable> children = new ArrayList<>();
     for (Scorer scorer : required) {
-      children.add(new ChildScorer(scorer, "MUST"));
+      children.add(new ChildScorable(scorer, "MUST"));
     }
     return children;
   }

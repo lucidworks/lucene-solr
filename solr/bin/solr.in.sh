@@ -46,7 +46,20 @@
 #  -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps -XX:+PrintTenuringDistribution -XX:+PrintGCApplicationStoppedTime"
 
 # These GC settings have shown to work well for a number of common Solr workloads
-#GC_TUNE="-XX:NewRatio=3 -XX:SurvivorRatio=4    etc.
+#GC_TUNE=" \
+#-XX:SurvivorRatio=4 \
+#-XX:TargetSurvivorRatio=90 \
+#-XX:MaxTenuringThreshold=8 \
+#-XX:+UseConcMarkSweepGC \
+#-XX:ConcGCThreads=4 -XX:ParallelGCThreads=4 \
+#-XX:+CMSScavengeBeforeRemark \
+#-XX:PretenureSizeThreshold=64m \
+#-XX:+UseCMSInitiatingOccupancyOnly \
+#-XX:CMSInitiatingOccupancyFraction=50 \
+#-XX:CMSMaxAbortablePrecleanTime=6000 \
+#-XX:+CMSParallelRemarkEnabled \
+#-XX:+ParallelRefProcEnabled \
+#-XX:-OmitStackTraceInFastThrow  etc.
 
 # Set the ZooKeeper connection string if using an external ZooKeeper ensemble
 # e.g. host1:2181,host2:2181/chroot
@@ -126,6 +139,8 @@
 #SOLR_SSL_NEED_CLIENT_AUTH=false
 # Enable clients to authenticate (but not require)
 #SOLR_SSL_WANT_CLIENT_AUTH=false
+# Verify client's hostname during SSL handshake
+#SOLR_SSL_CLIENT_HOSTNAME_VERIFICATION=false
 # SSL Certificates contain host/ip "peer name" information that is validated by default. Setting
 # this to false can be useful to disable these checks when re-using a certificate on many hosts
 #SOLR_SSL_CHECK_PEER_NAME=true
@@ -183,3 +198,8 @@
 # or if you are using the OOTB solr.xml, can be specified using the system property "solr.shardsWhitelist". Alternatively
 # host checking can be disabled by using the system property "solr.disable.shardsWhitelist"
 #SOLR_OPTS="$SOLR_OPTS -Dsolr.shardsWhitelist=http://localhost:8983,http://localhost:8984"
+
+# For a visual indication in the Admin UI of what type of environment this cluster is, configure
+# a -Dsolr.environment property below. Valid values are prod, stage, test, dev, with an optional
+# label or color, e.g. -Dsolr.environment=test,label=Functional+test,color=brown
+#SOLR_OPTS="$SOLR_OPTS -Dsolr.environment=prod"

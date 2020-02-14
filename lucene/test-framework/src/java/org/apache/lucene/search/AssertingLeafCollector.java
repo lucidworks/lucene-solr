@@ -17,30 +17,27 @@
 package org.apache.lucene.search;
 
 import java.io.IOException;
-import java.util.Random;
 
 /** Wraps another Collector and checks that
  *  order is respected. */
 class AssertingLeafCollector extends FilterLeafCollector {
 
-  private final Random random;
   private final int min;
   private final int max;
 
-  private Scorer scorer;
+  private Scorable scorer;
   private int lastCollected = -1;
 
-  AssertingLeafCollector(Random random, LeafCollector collector, int min, int max) {
+  AssertingLeafCollector(LeafCollector collector, int min, int max) {
     super(collector);
-    this.random = random;
     this.min = min;
     this.max = max;
   }
 
   @Override
-  public void setScorer(Scorer scorer) throws IOException {
+  public void setScorer(Scorable scorer) throws IOException {
     this.scorer = scorer;
-    super.setScorer(AssertingScorer.wrap(random, scorer, true));
+    super.setScorer(AssertingScorable.wrap(scorer));
   }
 
   @Override

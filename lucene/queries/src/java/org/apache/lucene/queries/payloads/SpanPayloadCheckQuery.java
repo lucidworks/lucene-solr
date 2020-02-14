@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 package org.apache.lucene.queries.payloads;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -25,11 +26,14 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermContext;
+import org.apache.lucene.index.TermStates;
 import org.apache.lucene.index.Terms;
+import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.LeafSimScorer;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.similarities.Similarity;
+import org.apache.lucene.search.QueryVisitor;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.spans.FilterSpans;
 import org.apache.lucene.search.spans.FilterSpans.AcceptStatus;
 import org.apache.lucene.search.spans.SpanCollector;
@@ -62,9 +66,9 @@ public class SpanPayloadCheckQuery extends SpanQuery {
   }
 
   @Override
-  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
-    SpanWeight matchWeight = match.createWeight(searcher, false, boost);
-    return new SpanPayloadCheckWeight(searcher, needsScores ? getTermContexts(matchWeight) : null, matchWeight, boost);
+  public SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+    SpanWeight matchWeight = match.createWeight(searcher, scoreMode, boost);
+    return new SpanPayloadCheckWeight(searcher, scoreMode.needsScores() ? getTermStates(matchWeight) : null, matchWeight, boost);
   }
 
   @Override
@@ -76,6 +80,13 @@ public class SpanPayloadCheckQuery extends SpanQuery {
     return super.rewrite(reader);
   }
 
+  @Override
+  public void visit(QueryVisitor visitor) {
+    if (visitor.acceptField(match.getField())) {
+      match.visit(visitor.getSubVisitor(BooleanClause.Occur.MUST, this));
+    }
+  }
+
   /**
    * Weight that pulls its Spans using a PayloadSpanCollector
    */
@@ -83,8 +94,8 @@ public class SpanPayloadCheckQuery extends SpanQuery {
 
     final SpanWeight matchWeight;
 
-    public SpanPayloadCheckWeight(IndexSearcher searcher, Map<Term, TermContext> termContexts, SpanWeight matchWeight, float boost) throws IOException {
-      super(SpanPayloadCheckQuery.this, searcher, termContexts, boost);
+    public SpanPayloadCheckWeight(IndexSearcher searcher, Map<Term, TermStates> termStates, SpanWeight matchWeight, float boost) throws IOException {
+      super(SpanPayloadCheckQuery.this, searcher, termStates, boost);
       this.matchWeight = matchWeight;
     }
 
@@ -94,8 +105,8 @@ public class SpanPayloadCheckQuery extends SpanQuery {
     }
 
     @Override
-    public void extractTermContexts(Map<Term, TermContext> contexts) {
-      matchWeight.extractTermContexts(contexts);
+    public void extractTermStates(Map<Term, TermStates> contexts) {
+      matchWeight.extractTermStates(contexts);
     }
 
     @Override
@@ -126,7 +137,7 @@ public class SpanPayloadCheckQuery extends SpanQuery {
       if (spans == null) {
         return null;
       }
-      final Similarity.SimScorer docScorer = getSimScorer(context);
+      final LeafSimScorer docScorer = getSimScorer(context);
       return new SpanScorer(this, spans, docScorer);
     }
 

@@ -16,14 +16,8 @@
  */
 package org.apache.solr.cloud;
 
-import java.io.IOException;
-import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-
-import com.google.common.collect.Lists;
 
 import org.apache.lucene.mockfile.FilterPath;
 import org.apache.solr.SolrTestCaseJ4.SuppressSSL;
@@ -41,7 +35,7 @@ import org.apache.solr.common.cloud.ZkNodeProps;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
-import org.apache.solr.handler.CheckBackupStatus;
+import org.apache.solr.handler.BackupStatusChecker;
 import org.apache.solr.handler.ReplicationHandler;
 import org.junit.Test;
 
@@ -116,12 +110,7 @@ public class BasicDistributedZk2Test extends AbstractFullDistribZkTestBase {
       long docId = testUpdateAndDelete();
       
       // index a bad doc...
-      try {
-        indexr(t1, "a doc with no id");
-        fail("this should fail");
-      } catch (SolrException e) {
-        // expected
-      }
+      expectThrows(SolrException.class, () -> indexr(t1, "a doc with no id"));
       
       // TODO: bring this to its own method?
       // try indexing to a leader that has no replicas up
@@ -255,29 +244,26 @@ public class BasicDistributedZk2Test extends AbstractFullDistribZkTestBase {
   private void brindDownShardIndexSomeDocsAndRecover() throws Exception {
     SolrQuery query = new SolrQuery("*:*");
     query.set("distrib", false);
-    
+
     commit();
-    
+
     long deadShardCount = shardToJetty.get(SHARD2).get(0).client.solrClient
         .query(query).getResults().getNumFound();
 
     query("q", "*:*", "sort", "n_tl1 desc");
-    
+
     int oldLiveNodes = cloudClient.getZkStateReader().getZkClient().getChildren(ZkStateReader.LIVE_NODES_ZKNODE, null, true).size();
-    
+
     assertEquals(5, oldLiveNodes);
-    
+
     // kill a shard
     CloudJettyRunner deadShard = chaosMonkey.stopShard(SHARD1, 0);
-    
+
     // ensure shard is dead
-    try {
-      index_specific(deadShard.client.solrClient, id, 999, i1, 107, t1,
-          "specific doc!");
-      fail("This server should be down and this update should have failed");
-    } catch (SolrServerException e) {
-      // expected..
-    }
+    expectThrows(SolrServerException.class,
+        "This server should be down and this update should have failed",
+        () -> index_specific(deadShard.client.solrClient, id, 999, i1, 107, t1, "specific doc!")
+    );
     
     commit();
     
@@ -412,9 +398,11 @@ public class BasicDistributedZk2Test extends AbstractFullDistribZkTestBase {
     
     // try a backup command
     try(final HttpSolrClient client = getHttpSolrClient((String) shardToJetty.get(SHARD2).get(0).info.get("base_url"))) {
+      final String backupName = "the_backup";
       ModifiableSolrParams params = new ModifiableSolrParams();
       params.set("qt", ReplicationHandler.PATH);
       params.set("command", "backup");
+      params.set("name", backupName);
       Path location = createTempDir();
       location = FilterPath.unwrap(location).toRealPath();
       params.set("location", location.toString());
@@ -422,25 +410,16 @@ public class BasicDistributedZk2Test extends AbstractFullDistribZkTestBase {
       QueryRequest request = new QueryRequest(params);
       client.request(request, DEFAULT_TEST_COLLECTION_NAME);
 
-      checkForBackupSuccess(client, location);
-      client.close();
+
+      final BackupStatusChecker backupStatus
+        = new BackupStatusChecker(client, "/" + DEFAULT_TEST_COLLECTION_NAME + "/replication");
+      final String backupDirName = backupStatus.waitForBackupSuccess(backupName, 30);
+      assertTrue("Backup dir does not exist: " + backupDirName,
+                 Files.exists(location.resolve(backupDirName)));
     }
 
   }
 
-  private void checkForBackupSuccess(HttpSolrClient client, Path location) throws InterruptedException, IOException {
-    CheckBackupStatus checkBackupStatus = new CheckBackupStatus(client, DEFAULT_TEST_COLLECTION_NAME);
-    while (!checkBackupStatus.success) {
-      checkBackupStatus.fetchStatus();
-      Thread.sleep(1000);
-    }
-    try (DirectoryStream<Path> stream = Files.newDirectoryStream(location, "snapshot*")) {
-      ArrayList<Path> files = Lists.newArrayList(stream.iterator());
-      assertEquals(Arrays.asList(files).toString(), 1, files.size());
-    }
-
-  }
-  
   private void addNewReplica() throws Exception {
     
     waitForRecoveriesToFinish(false);

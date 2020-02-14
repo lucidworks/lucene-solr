@@ -16,12 +16,14 @@
  */
 package org.apache.solr.search;
 
+import java.io.IOException;
+
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Weight;
-
-import java.io.IOException;
 
 /** A simple query that wraps another query and implements ExtendedQuery. */
 public final class WrappedQuery extends ExtendedQueryBase {
@@ -40,14 +42,19 @@ public final class WrappedQuery extends ExtendedQueryBase {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
-    return q.createWeight(searcher, needsScores, boost);
+  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+    return q.createWeight(searcher, scoreMode, boost);
   }
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
     // currently no need to continue wrapping at this point.
     return q.rewrite(reader);
+  }
+
+  @Override
+  public void visit(QueryVisitor visitor) {
+    q.visit(visitor);
   }
 
   @Override
