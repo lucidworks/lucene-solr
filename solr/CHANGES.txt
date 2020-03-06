@@ -36,6 +36,8 @@ Bug fixes
 
 * SOLR-14058: Fix IndexOutOfBoundsException in PeerSync that can prevent nodes from recovering
   under certain circumstances. (yonik)
+  
+* SOLR-14073: Fix segment look ahead NPE in CollapsingQParserPlugin (Joel Bernstein)
 
 ==================  7.7.3 ==================
 
