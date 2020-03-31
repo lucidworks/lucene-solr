@@ -17,9 +17,8 @@ servlet container in the directory named "example".
 See the Solr tutorial at https://lucene.apache.org/solr/guide/solr-tutorial.html
 
 
-<<<<<<< HEAD
 ==================  7.7.2 ==================
-=======
+
 Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.
 
 Versions of Major Components
@@ -221,10 +220,9 @@ Bug fixes
   all the cores.
   (Danyal Prout via shalin)
 
-<<<<<<< HEAD
 * SOLR-12708: Async collection actions should not hide internal failures (Mano Kovacs, Varun Thacker, Tomás Fernández Löbbe)
-=======
-* SOLR-9882: 500 error code on breaching timeAllowed by core and distributed (fsv) search, 
+
+* SOLR-9882: 500 error code on breaching timeAllowed by core and distributed (fsv) search,
   old and json facets (Mikhail Khludnev)
 
 * SOLR-13285: Updates with enum fields and javabin cause ClassCastException (noble)
@@ -431,10 +429,9 @@ New Features
 
 * SOLR-12833: Avoid unnecessary memory cost when DistributedUpdateProcessor timed-out lock is not used. (ab)
 
-<<<<<<< HEAD
 * SOLR-13449: SolrClientNodeStateProvider always retries on requesting metrics from other nodes (Cao Manh Dat)
-=======
-* SOLR-9882: 500 error code on breaching timeAllowed by core and distributed (fsv) search, 
+
+* SOLR-9882: 500 error code on breaching timeAllowed by core and distributed (fsv) search,
   old and json facets (Mikhail Khludnev)
 
 Improvements
