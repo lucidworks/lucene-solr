@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import org.apache.lucene.index.ExitableDirectoryReader;
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.ReaderUtil;
@@ -386,6 +387,7 @@ public class QueryComponent extends SearchComponent
     // TODO: See SOLR-5595
     boolean fsv = req.getParams().getBool(ResponseBuilder.FIELD_SORT_VALUES,false);
     if(fsv){
+      try {
       NamedList<Object[]> sortVals = new NamedList<>(); // order is important for the sort fields
       IndexReaderContext topReaderContext = searcher.getTopReaderContext();
       List<LeafReaderContext> leaves = topReaderContext.leaves();
@@ -396,13 +398,12 @@ public class QueryComponent extends SearchComponent
         leaves=null;
       }
 
-      DocList docList = rb.getResults().docList;
+      final DocList docs = rb.getResults().docList;
 
       // sort ids from lowest to highest so we can access them in order
-      int nDocs = docList.size();
+      int nDocs = docs.size();
       final long[] sortedIds = new long[nDocs];
       final float[] scores = new float[nDocs]; // doc scores, parallel to sortedIds
-      DocList docs = rb.getResults().docList;
       DocIterator it = docs.iterator();
       for (int i=0; i<nDocs; i++) {
         sortedIds[i] = (((long)it.nextDoc()) << 32) | i;
@@ -478,8 +479,13 @@ public class QueryComponent extends SearchComponent
 
         sortVals.add(sortField.getField(), vals);
       }
-
       rsp.add("sort_values", sortVals);
+    }catch(ExitableDirectoryReader.ExitingReaderException x) {
+      // it's hard to understand where we stopped, so yield nothing
+      // search handler will flag partial results
+      rsp.add("sort_values",new NamedList<>() );
+      throw x;
+    }
     }
   }
 
@@ -808,7 +814,7 @@ public class QueryComponent extends SearchComponent
       
       long numFound = 0;
       Float maxScore=null;
-      boolean partialResults = false;
+      boolean thereArePartialResults = false;
       Boolean segmentTerminatedEarly = null;
       for (ShardResponse srsp : sreq.responses) {
         SolrDocumentList docs = null;
@@ -832,7 +838,7 @@ public class QueryComponent extends SearchComponent
           }
           else {
             responseHeader = (NamedList<?>)srsp.getSolrResponse().getResponse().get("responseHeader");
-            final Object rhste = (responseHeader == null ? null : responseHeader.get(SolrQueryResponse.RESPONSE_HEADER_SEGMENT_TERMINATED_EARLY_KEY));
+            final Object rhste = responseHeader.get(SolrQueryResponse.RESPONSE_HEADER_SEGMENT_TERMINATED_EARLY_KEY);
             if (rhste != null) {
               nl.add(SolrQueryResponse.RESPONSE_HEADER_SEGMENT_TERMINATED_EARLY_KEY, rhste);
             }
@@ -849,7 +855,7 @@ public class QueryComponent extends SearchComponent
         }
         // now that we've added the shard info, let's only proceed if we have no error.
         if (srsp.getException() != null) {
-          partialResults = true;
+          thereArePartialResults = true;
           continue;
         }
 
@@ -861,17 +867,16 @@ public class QueryComponent extends SearchComponent
           responseHeader = (NamedList<?>)srsp.getSolrResponse().getResponse().get("responseHeader");
         }
 
-        if (responseHeader != null) {
-          if (Boolean.TRUE.equals(responseHeader.get(SolrQueryResponse.RESPONSE_HEADER_PARTIAL_RESULTS_KEY))) {
-            partialResults = true;
-          }
-          if (!Boolean.TRUE.equals(segmentTerminatedEarly)) {
-            final Object ste = responseHeader.get(SolrQueryResponse.RESPONSE_HEADER_SEGMENT_TERMINATED_EARLY_KEY);
-            if (Boolean.TRUE.equals(ste)) {
-              segmentTerminatedEarly = Boolean.TRUE;
-            } else if (Boolean.FALSE.equals(ste)) {
-              segmentTerminatedEarly = Boolean.FALSE;
-            }
+        final boolean thisResponseIsPartial;
+        thisResponseIsPartial = Boolean.TRUE.equals(responseHeader.getBooleanArg(SolrQueryResponse.RESPONSE_HEADER_PARTIAL_RESULTS_KEY));
+        thereArePartialResults |= thisResponseIsPartial;
+        
+        if (!Boolean.TRUE.equals(segmentTerminatedEarly)) {
+          final Object ste = responseHeader.get(SolrQueryResponse.RESPONSE_HEADER_SEGMENT_TERMINATED_EARLY_KEY);
+          if (Boolean.TRUE.equals(ste)) {
+            segmentTerminatedEarly = Boolean.TRUE;
+          } else if (Boolean.FALSE.equals(ste)) {
+            segmentTerminatedEarly = Boolean.FALSE;
           }
         }
         
@@ -882,6 +887,10 @@ public class QueryComponent extends SearchComponent
         numFound += docs.getNumFound();
 
         NamedList sortFieldValues = (NamedList)(srsp.getSolrResponse().getResponse().get("sort_values"));
+        if ((sortFieldValues == null || sortFieldValues.size()==0) && // we bypass merging this response only if it's partial itself
+                            thisResponseIsPartial) { // but not the previous one!!
+          continue; //fsv timeout yields empty sort_vlaues
+        }
         NamedList unmarshalledSortFieldValues = unmarshalSortValues(ss, sortFieldValues, schema);
 
         // go through every doc in this response, construct a ShardDoc, and
@@ -959,10 +968,9 @@ public class QueryComponent extends SearchComponent
 
       populateNextCursorMarkFromMergedShards(rb);
 
-      if (partialResults) {
-        if(rb.rsp.getResponseHeader().get(SolrQueryResponse.RESPONSE_HEADER_PARTIAL_RESULTS_KEY) == null) {
-          rb.rsp.getResponseHeader().add(SolrQueryResponse.RESPONSE_HEADER_PARTIAL_RESULTS_KEY, Boolean.TRUE);
-        }
+      if (thereArePartialResults) {
+         rb.rsp.getResponseHeader().asShallowMap()
+                   .put(SolrQueryResponse.RESPONSE_HEADER_PARTIAL_RESULTS_KEY, Boolean.TRUE);
       }
       if (segmentTerminatedEarly != null) {
         final Object existingSegmentTerminatedEarly = rb.rsp.getResponseHeader().get(SolrQueryResponse.RESPONSE_HEADER_SEGMENT_TERMINATED_EARLY_KEY);
@@ -1159,6 +1167,13 @@ public class QueryComponent extends SearchComponent
           }
           
           continue;
+        }
+        {
+          NamedList<?> responseHeader = (NamedList<?>)srsp.getSolrResponse().getResponse().get("responseHeader");
+          if (Boolean.TRUE.equals(responseHeader.getBooleanArg(SolrQueryResponse.RESPONSE_HEADER_PARTIAL_RESULTS_KEY))) {
+            rb.rsp.getResponseHeader().asShallowMap()
+               .put(SolrQueryResponse.RESPONSE_HEADER_PARTIAL_RESULTS_KEY, Boolean.TRUE);
+          }
         }
         SolrDocumentList docs = (SolrDocumentList) srsp.getSolrResponse().getResponse().get("response");
         for (SolrDocument doc : docs) {
@@ -1437,7 +1452,7 @@ public class QueryComponent extends SearchComponent
 
     ResultContext ctx = new BasicResultContext(rb);
     rsp.addResponse(ctx);
-    rsp.getToLog().add("hits", rb.getResults().docList.matches());
+    rsp.getToLog().add("hits", rb.getResults()==null || rb.getResults().docList==null ? 0 : rb.getResults().docList.matches());
 
     if ( ! rb.req.getParams().getBool(ShardParams.IS_SHARD,false) ) {
       if (null != rb.getNextCursorMark()) {
