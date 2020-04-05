@@ -91,363 +91,37 @@ public class VelocityResponseWriter implements QueryResponseWriter, SolrCoreAwar
 
   @Override
   public void init(NamedList args) {
-    fileResourceLoaderBaseDir = null;
-    String templateBaseDir = (String) args.get(TEMPLATE_BASE_DIR);
-
-    if (templateBaseDir != null && !templateBaseDir.isEmpty()) {
-      fileResourceLoaderBaseDir = new File(templateBaseDir).getAbsoluteFile();
-      if (!fileResourceLoaderBaseDir.exists()) { // "*not* exists" condition!
-        log.warn(TEMPLATE_BASE_DIR + " specified does not exist: " + fileResourceLoaderBaseDir);
-        fileResourceLoaderBaseDir = null;
-      } else {
-        if (!fileResourceLoaderBaseDir.isDirectory()) { // "*not* a directory" condition
-          log.warn(TEMPLATE_BASE_DIR + " specified is not a directory: " + fileResourceLoaderBaseDir);
-          fileResourceLoaderBaseDir = null;
-        }
-      }
-    }
-
-    initPropertiesFileName = (String) args.get(PROPERTIES_FILE);
-
-    NamedList tools = (NamedList)args.get("tools");
-    if (tools != null) {
-      for(Object t : tools) {
-        Map.Entry tool = (Map.Entry)t;
-        customTools.put(tool.getKey().toString(), tool.getValue().toString());
-      }
-    }
   }
 
   @Override
   public void inform(SolrCore core) {
-    // need to leverage SolrResourceLoader, so load init.properties.file here instead of init()
-    if (initPropertiesFileName != null) {
-      InputStream is = null;
-      try {
-        velocityInitProps.load(new InputStreamReader(core.getResourceLoader().openResource(initPropertiesFileName), StandardCharsets.UTF_8));
-      } catch (IOException e) {
-        log.warn("Error loading " + PROPERTIES_FILE + " specified property file: " + initPropertiesFileName, e);
-      }
-    }
   }
 
   @Override
   public String getContentType(SolrQueryRequest request, SolrQueryResponse response) {
-    String contentType = request.getParams().get(CONTENT_TYPE);
-
-    // Use the v.contentType specified, or either of the default content types depending on the presence of v.json
-    return (contentType != null) ? contentType : ((request.getParams().get(JSON) == null) ? DEFAULT_CONTENT_TYPE : JSON_CONTENT_TYPE);
+	return null;
   }
 
   @Override
   public void write(Writer writer, SolrQueryRequest request, SolrQueryResponse response) throws IOException {
-    VelocityEngine engine = createEngine(request);  // TODO: have HTTP headers available for configuring engine
-
-    Template template = getTemplate(engine, request);
-
-    VelocityContext context = createContext(request, response);
-    context.put("engine", engine);  // for $engine.resourceExists(...)
-
-    String layoutTemplate = request.getParams().get(LAYOUT);
-    boolean layoutEnabled = request.getParams().getBool(LAYOUT_ENABLED, true) && layoutTemplate != null;
-
-    String jsonWrapper = request.getParams().get(JSON);
-    boolean wrapResponse = layoutEnabled || jsonWrapper != null;
-
-    // create output
-    if (!wrapResponse) {
-      // straight-forward template/context merge to output
-      template.merge(context, writer);
-    }
-    else {
-      // merge to a string buffer, then wrap with layout and finally as JSON
-      StringWriter stringWriter = new StringWriter();
-      template.merge(context, stringWriter);
-
-      if (layoutEnabled) {
-        context.put("content", stringWriter.toString());
-        stringWriter = new StringWriter();
-        try {
-          engine.getTemplate(layoutTemplate + TEMPLATE_EXTENSION).merge(context, stringWriter);
-        } catch (Exception e) {
-          throw new IOException(e.getMessage());
-        }
-      }
-
-      if (jsonWrapper != null) {
-        for (int i=0; i<jsonWrapper.length(); i++) {
-          if (!Character.isJavaIdentifierPart(jsonWrapper.charAt(i))) {
-            throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Invalid function name for " + JSON + ": '" + jsonWrapper + "'");
-          }
-        }
-        writer.write(jsonWrapper + "(");
-        writer.write(getJSONWrap(stringWriter.toString()));
-        writer.write(')');
-      } else {  // using a layout, but not JSON wrapping
-        writer.write(stringWriter.toString());
-      }
-    }
   }
 
   private VelocityContext createContext(SolrQueryRequest request, SolrQueryResponse response) {
-    VelocityContext context = new VelocityContext();
-
-    // Register useful Velocity "tools"
-    String locale = request.getParams().get(LOCALE);
-    Map toolConfig = new HashMap();
-    toolConfig.put("locale", locale);
-
-
-    context.put("log", log);   // TODO: add test; TODO: should this be overridable with a custom "log" named tool?
-    context.put("esc", new EscapeTool());
-    context.put("date", new ComparisonDateTool());
-    context.put("list", new ListTool());
-    context.put(SORT, new SortTool());
-
-    MathTool mathTool = new MathTool();
-    mathTool.configure(toolConfig);
-    context.put("math", mathTool);
-
-    NumberTool numberTool = new NumberTool();
-    numberTool.configure(toolConfig);
-    context.put("number", numberTool);
-
-
-    DisplayTool displayTool = new DisplayTool();
-    displayTool.configure(toolConfig);
-    context.put("display", displayTool);
-
-    ResourceTool resourceTool = new SolrVelocityResourceTool(request.getCore().getSolrConfig().getResourceLoader().getClassLoader());
-    resourceTool.configure(toolConfig);
-    context.put("resource", resourceTool);
-
-    if (request.getCore().getCoreDescriptor().isConfigSetTrusted()) {
-      // Load custom tools, only if in a trusted configset
-      
-      /*  
-          // Custom tools, specified in config as:
-              <queryResponseWriter name="velocityWithCustomTools" class="solr.VelocityResponseWriter">
-                <lst name="tools">
-                  <str name="mytool">com.example.solr.velocity.MyTool</str>
-                </lst>
-              </queryResponseWriter>
-      */ 
-      // Custom tools can override any of the built-in tools provided above, by registering one with the same name
-      if (request.getCore().getCoreDescriptor().isConfigSetTrusted()) {
-        for (Map.Entry<String, String> entry : customTools.entrySet()) {
-          String name = entry.getKey();
-          // TODO: at least log a warning when one of the *fixed* tools classes is same name with a custom one, currently silently ignored
-          Object customTool = SolrCore.createInstance(entry.getValue(), Object.class, "VrW custom tool: " + name, request.getCore(), request.getCore().getResourceLoader());
-          if (customTool instanceof LocaleConfig) {
-            ((LocaleConfig) customTool).configure(toolConfig);
-          }
-          context.put(name, customTool);
-        }
-      }
-      
-      // custom tools _cannot_ override context objects added below, like $request and $response
-    }
-    /*for(String name : customTools.keySet()) {
-      Object customTool = SolrCore.createInstance(customTools.get(name), Object.class, "VrW custom tool: " + name, request.getCore(), request.getCore().getResourceLoader());
-      if (customTool instanceof LocaleConfig) {
-        ((LocaleConfig)customTool).configure(toolConfig);
-      }
-      context.put(name, customTool);
-    }*/
-
-
-    // Turn the SolrQueryResponse into a SolrResponse.
-    // QueryResponse has lots of conveniences suitable for a view
-    // Problem is, which SolrResponse class to use?
-    // One patch to SOLR-620 solved this by passing in a class name as
-    // as a parameter and using reflection and Solr's class loader to
-    // create a new instance.  But for now the implementation simply
-    // uses QueryResponse, and if it chokes in a known way, fall back
-    // to bare bones SolrResponseBase.
-    // Can this writer know what the handler class is?  With echoHandler=true it can get its string name at least
-    SolrResponse rsp = new QueryResponse();
-    NamedList<Object> parsedResponse = BinaryResponseWriter.getParsedResponse(request, response);
-    try {
-      rsp.setResponse(parsedResponse);
-
-      // page only injected if QueryResponse works
-      context.put("page", new PageTool(request, response));  // page tool only makes sense for a SearchHandler request
-      context.put("debug",((QueryResponse)rsp).getDebugMap());
-    } catch (ClassCastException e) {
-      // known edge case where QueryResponse's extraction assumes "response" is a SolrDocumentList
-      // (AnalysisRequestHandler emits a "response")
-      rsp = new SolrResponseBase();
-      rsp.setResponse(parsedResponse);
-    }
-
-    context.put("request", request);
-    context.put("response", rsp);
-
-    return context;
+	return null;
   }
 
   private VelocityEngine createEngine(SolrQueryRequest request) {
-
-    boolean trustedMode = request.getCore().getCoreDescriptor().isConfigSetTrusted();
-
-    VelocityEngine engine = new VelocityEngine();
-
-    // route all Velocity logging through Solr's logging facility
-    engine.setProperty(RuntimeConstants.RUNTIME_LOG_LOGSYSTEM, velocityLogger);
-
-    // Set some engine properties that improve the experience
-    //   - these could be considered in the future for parameterization, but can also be overridden by using
-    //     the init.properties.file setting.  (TODO: add a test for this properties set here overridden)
-
-    // load the built-in _macros.vm first, then load VM_global_library.vm for legacy (pre-5.0) support,
-    // and finally allow macros.vm to have the final say and override anything defined in the preceding files.
-    engine.setProperty(RuntimeConstants.VM_LIBRARY, "_macros.vm,VM_global_library.vm,macros.vm");
-
-    // Standard templates autoload, but not the macro one(s), by default, so let's just make life
-    // easier, and consistent, for macro development too.
-    engine.setProperty(RuntimeConstants.VM_LIBRARY_AUTORELOAD, "true");
-
-    /*
-  Set up Velocity resource loader(s)
-       terminology note: "resource loader" is overloaded here, there is Solr's resource loader facility for plugins,
-       and there are Velocity template resource loaders.  It's confusing, they overlap: there is a Velocity resource
-       loader that loads templates from Solr's resource loader (SolrVelocityResourceLoader).
-
-      The Velocity resource loader order is `[file,][solr],builtin` intentionally ordered in this manner.
-      The "file" resource loader, enabled when the configset is trusted and `template.base.dir` is specified as a
-      response writer init property.
-
-      The "solr" resource loader, enabled when the configset is trusted, and provides templates from a velocity/
-      sub-tree in either the classpath or under conf/.
-
-      By default, only "builtin" resource loader is enabled, providing tenplates from builtin Solr .jar files.
-
-      The basic browse templates are built into
-      this plugin, but can be individually overridden by placing a same-named template in the template.base.dir specified
-      directory, or within a trusted configset's velocity/ directory.
-     */
-    ArrayList<String> loaders = new ArrayList<String>();
-    if ((fileResourceLoaderBaseDir != null) && trustedMode) {
-      loaders.add("file");
-      engine.setProperty(RuntimeConstants.FILE_RESOURCE_LOADER_PATH, fileResourceLoaderBaseDir.getAbsolutePath());
-    }
-    if (trustedMode) {
-      // The solr resource loader serves templates under a velocity/ subtree from <lib>, conf/,
-      // or SolrCloud's configuration tree.  Or rather the other way around, other resource loaders are rooted
-      // from the top, whereas this is velocity/ sub-tree rooted.
-      loaders.add("solr");
-      engine.setProperty("solr.resource.loader.instance", new SolrVelocityResourceLoader(request.getCore().getSolrConfig().getResourceLoader()));
-    }
-
-    // Always have the built-in classpath loader.  This is needed when using VM_LIBRARY macros, as they are required
-    // to be present if specified, and we want to have a nice macros facility built-in for users to use easily, and to
-    // extend in custom ways.
-    loaders.add("builtin");
-    engine.setProperty("builtin.resource.loader.instance", new ClasspathResourceLoader());
-
-    engine.setProperty(RuntimeConstants.RESOURCE_LOADER, StringUtils.join(loaders,','));
-
-    engine.setProperty(RuntimeConstants.INPUT_ENCODING, "UTF-8");
-    /*  RuntimeConstants.SPACE_GOBBLING - Not there in velocity of solr 7.7.2
-    engine.setProperty(RuntimeConstants.SPACE_GOBBLING, RuntimeConstants.SpaceGobbling.LINES.toString());
-    */
-    // install a class/package restricting uberspector
-    engine.setProperty(RuntimeConstants.UBERSPECT_CLASSNAME,"org.apache.velocity.util.introspection.SecureUberspector");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_PACKAGES,"java.lang.reflect");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_CLASSES,"java.lang.Class");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_CLASSES,"java.lang.ClassLoader");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_CLASSES,"java.lang.Compiler");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_CLASSES,"java.lang.InheritableThreadLocal");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_CLASSES,"java.lang.Package");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_CLASSES,"java.lang.Process");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_CLASSES,"java.lang.Runtime");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_CLASSES,"java.lang.RuntimePermission");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_CLASSES,"java.lang.SecurityManager");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_CLASSES,"java.lang.System");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_CLASSES,"java.lang.Thread");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_CLASSES,"java.lang.ThreadGroup");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_CLASSES,"java.lang.ThreadLocal");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_CLASSES,"org.apache.solr.core.SolrResourceLoader");
-    engine.addProperty(RuntimeConstants.INTROSPECTOR_RESTRICT_CLASSES,"org.apache.solr.core.CoreContainer");
-
-    if (trustedMode) {
-      // Work around VELOCITY-908 with Velocity not handling locales properly
-      /* RuntimeConstants.SPACE_GOBBLING not present in this version of velocity
-      Object spaceGobblingInitProperty = velocityInitProps.get(RuntimeConstants.SPACE_GOBBLING);
-      if (spaceGobblingInitProperty != null) {
-        velocityInitProps.put(RuntimeConstants.SPACE_GOBBLING,
-            String.valueOf(spaceGobblingInitProperty).toUpperCase(Locale.ROOT));
-      }*/
-      engine.init(velocityInitProps);
-    } else {
-
-      engine.init();
-    }
-
-    return engine;
+    return null;
   }
 
   private Template getTemplate(VelocityEngine engine, SolrQueryRequest request) throws IOException {
-    Template template;
-
-    String templateName = request.getParams().get(TEMPLATE);
-
-    String qt = request.getParams().get(CommonParams.QT);
-    String path = (String) request.getContext().get("path");
-    if (templateName == null && path != null) {
-      templateName = path;
-    }  // TODO: path is never null, so qt won't get picked up  maybe special case for '/select' to use qt, otherwise use path?
-    if (templateName == null && qt != null) {
-      templateName = qt;
-    }
-    if (templateName == null) templateName = "index";
-    try {
-      template = engine.getTemplate(templateName + TEMPLATE_EXTENSION);
-    } catch (Exception e) {
-      throw new IOException(e.getMessage());
-    }
-
-    return template;
+    return null;
   }
 
   private String getJSONWrap(String xmlResult) {  // maybe noggit or Solr's JSON utilities can make this cleaner?
-    // escape the double quotes and backslashes
-    String replace1 = xmlResult.replaceAll("\\\\", "\\\\\\\\");
-    replace1 = replace1.replaceAll("\\n", "\\\\n");
-    replace1 = replace1.replaceAll("\\r", "\\\\r");
-    String replaced = replace1.replaceAll("\"", "\\\\\"");
-    // wrap it in a JSON object
-    return "{\"result\":\"" + replaced + "\"}";
+	return null;
   }
 
-  // see: http://svn.apache.org/repos/asf/velocity/tools/branches/2.0.x/src/main/java/org/apache/velocity/tools/generic/ResourceTool.java
   private static class SolrVelocityResourceTool extends ResourceTool {
-
-    private ClassLoader solrClassLoader;
-
-    public SolrVelocityResourceTool(ClassLoader cl) {
-      this.solrClassLoader = cl;
-    }
-
-    @Override
-    protected ResourceBundle getBundle(String baseName, Object loc) {
-      // resource bundles for this tool must be in velocity "package"
-      return ResourceBundle.getBundle(
-          "velocity." + baseName,
-          (loc == null) ? this.getLocale() : this.toLocale(loc),
-          solrClassLoader);
-    }
-
-    // Why did Velocity Tools make this private?  Copied from ResourceTools.java
-    private Locale toLocale(Object obj) {
-      if (obj == null) {
-        return null;
-      }
-      if (obj instanceof Locale) {
-        return (Locale) obj;
-      }
-      String s = String.valueOf(obj);
-      return ConversionUtils.toLocale(s);
-    }
   }
 }
