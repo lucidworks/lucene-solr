@@ -1,6 +1,7 @@
 Solr 7.7.2 fixes
 
 Fixes:-
+Read zk credentials from file for ZK ACLs(No Solr JIRA)
 SOLR-13669
 SOLR-13971
 SOLR-14025
