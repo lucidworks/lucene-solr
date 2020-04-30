@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,26 +16,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
 
-
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.nio.file.FileAlreadyExistsException;
+import java.io.FileNotFoundException;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.apache.lucene.index.IndexFileNames;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Accountables;
+
 
 /**
  * A memory-resident {@link Directory} implementation.  Locking
@@ -50,19 +47,11 @@ import org.apache.lucene.util.Accountables;
  * {@link MMapDirectory}, which is a high-performance directory
  * implementation working directly on the file system cache of the
  * operating system, so copying data to Java heap space is not useful.
- * 
- * @deprecated This class uses inefficient synchronization and is discouraged
- * in favor of {@link MMapDirectory}. It will be removed in future versions 
- * of Lucene.
  */
-@Deprecated
 public class RAMDirectory extends BaseDirectory implements Accountable {
   protected final Map<String,RAMFile> fileMap = new ConcurrentHashMap<>();
   protected final AtomicLong sizeInBytes = new AtomicLong();
   
-  /** Used to generate temp file names in {@link #createTempOutput}. */
-  private final AtomicLong nextTempFileCounter = new AtomicLong();
-
   /** Constructs an empty {@link Directory}. */
   public RAMDirectory() {
     this(new SingleInstanceLockFactory());
@@ -122,17 +111,10 @@ public class RAMDirectory extends BaseDirectory implements Accountable {
     // and do not synchronize or anything stronger. it's great for testing!
     // NOTE: fileMap.keySet().toArray(new String[0]) is broken in non Sun JDKs,
     // and the code below is resilient to map changes during the array population.
-    // NOTE: don't replace this with return names.toArray(new String[names.size()]);
-    // or some files could be null at the end of the array if files are being deleted
-    // concurrently
     Set<String> fileNames = fileMap.keySet();
     List<String> names = new ArrayList<>(fileNames.size());
-    for (String name : fileNames) {
-      names.add(name);
-    }
-    String[] namesArray = names.toArray(new String[names.size()]);
-    Arrays.sort(namesArray);
-    return namesArray;
+    for (String name : fileNames) names.add(name);
+    return names.toArray(new String[names.size()]);
   }
 
   public final boolean fileNameExists(String name) {
@@ -168,6 +150,9 @@ public class RAMDirectory extends BaseDirectory implements Accountable {
     return Accountables.namedAccountables("file", fileMap);
   }
   
+  /** Removes an existing file in the directory.
+   * @throws IOException if the file does not exist
+   */
   @Override
   public void deleteFile(String name) throws IOException {
     ensureOpen();
@@ -180,30 +165,18 @@ public class RAMDirectory extends BaseDirectory implements Accountable {
     }
   }
 
+  /** Creates a new, empty file in the directory with the given name. Returns a stream writing this file. */
   @Override
   public IndexOutput createOutput(String name, IOContext context) throws IOException {
     ensureOpen();
     RAMFile file = newRAMFile();
-    if (fileMap.putIfAbsent(name, file) != null) {
-      throw new FileAlreadyExistsException(name);
+    RAMFile existing = fileMap.remove(name);
+    if (existing != null) {
+      sizeInBytes.addAndGet(-existing.sizeInBytes);
+      existing.directory = null;
     }
+    fileMap.put(name, file);
     return new RAMOutputStream(name, file, true);
-  }
-
-  @Override
-  public IndexOutput createTempOutput(String prefix, String suffix, IOContext context) throws IOException {
-    ensureOpen();
-
-    // Make the file first...
-    RAMFile file = newRAMFile();
-
-    // ... then try to find a unique name for it:
-    while (true) {
-      String name = IndexFileNames.segmentFileName(prefix, suffix + "_" + Long.toString(nextTempFileCounter.getAndIncrement(), Character.MAX_RADIX), "tmp");
-      if (fileMap.putIfAbsent(name, file) == null) {
-        return new RAMOutputStream(name, file, true);
-      }
-    }
   }
 
   /**
@@ -220,26 +193,16 @@ public class RAMDirectory extends BaseDirectory implements Accountable {
   }
 
   @Override
-  public void rename(String source, String dest) throws IOException {
+  public void renameFile(String source, String dest) throws IOException {
     ensureOpen();
     RAMFile file = fileMap.get(source);
     if (file == null) {
       throw new FileNotFoundException(source);
     }
-    if (fileMap.putIfAbsent(dest, file) != null) {
-      throw new FileAlreadyExistsException(dest);
-    }
-    if (!fileMap.remove(source, file)) {
-      throw new IllegalStateException("file was unexpectedly replaced: " + source);
-    }
+    fileMap.put(dest, file);
     fileMap.remove(source);
   }
 
-  @Override
-  public void syncMetaData() throws IOException {
-    // we are by definition not durable!
-  }
-  
   /** Returns a stream reading an existing file. */
   @Override
   public IndexInput openInput(String name, IOContext context) throws IOException {
@@ -257,10 +220,4 @@ public class RAMDirectory extends BaseDirectory implements Accountable {
     isOpen = false;
     fileMap.clear();
   }
-
-  @Override
-  public Set<String> getPendingDeletions() {
-    return Collections.emptySet();
-  }
-
 }

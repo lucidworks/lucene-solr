@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.payloads;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.payloads;
 
 import org.apache.lucene.analysis.*;
 import org.apache.lucene.analysis.tokenattributes.PayloadAttribute;
@@ -126,11 +127,10 @@ public class PayloadHelper {
       doc.add(new TextField(NO_PAYLOAD_FIELD, English.intToEnglish(i), Field.Store.YES));
       writer.addDocument(doc);
     }
-    writer.forceMerge(1);
-    reader = DirectoryReader.open(writer);
+    reader = DirectoryReader.open(writer, true);
     writer.close();
 
-    IndexSearcher searcher = LuceneTestCase.newSearcher(LuceneTestCase.getOnlyLeafReader(reader));
+    IndexSearcher searcher = LuceneTestCase.newSearcher(reader);
     searcher.setSimilarity(similarity);
     return searcher;
   }

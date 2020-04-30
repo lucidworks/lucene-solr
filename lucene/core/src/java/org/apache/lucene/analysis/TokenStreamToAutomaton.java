@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis;
-
 
 import java.io.IOException;
 
@@ -39,7 +39,6 @@ import org.apache.lucene.util.automaton.Automaton;
 public class TokenStreamToAutomaton {
 
   private boolean preservePositionIncrements;
-  private boolean finalOffsetGapAsHole;
   private boolean unicodeArcs;
 
   /** Sole constructor. */
@@ -50,11 +49,6 @@ public class TokenStreamToAutomaton {
   /** Whether to generate holes in the automaton for missing positions, <code>true</code> by default. */
   public void setPreservePositionIncrements(boolean enablePositionIncrements) {
     this.preservePositionIncrements = enablePositionIncrements;
-  }
-
-  /** If true, any final offset gaps will result in adding a position hole. */
-  public void setFinalOffsetGapAsHole(boolean finalOffsetGapAsHole) {
-    this.finalOffsetGapAsHole = finalOffsetGapAsHole;
   }
 
   /** Whether to make transition labels Unicode code points instead of UTF8 bytes, 
@@ -119,12 +113,11 @@ public class TokenStreamToAutomaton {
     final RollingBuffer<Position> positions = new Positions();
 
     int pos = -1;
-    int freedPos = 0;
     Position posData = null;
     int maxOffset = 0;
     while (in.incrementToken()) {
       int posInc = posIncAtt.getPositionIncrement();
-      if (preservePositionIncrements == false && posInc > 1) {
+      if (!preservePositionIncrements && posInc > 1) {
         posInc = 1;
       }
       assert pos > -1 || posInc > 0;
@@ -157,15 +150,7 @@ public class TokenStreamToAutomaton {
             addHoles(builder, positions, pos);
           }
         }
-        while (freedPos <= pos) {
-          Position freePosData = positions.get(freedPos);
-          // don't free this position yet if we may still need to fill holes over it:
-          if (freePosData.arriving == -1 || freePosData.leaving == -1) {
-            break;
-          }
-          positions.freeBefore(freedPos);
-          freedPos++;
-        }
+        positions.freeBefore(pos);
       }
 
       final int endPos = pos + posLengthAtt.getPositionLength();
@@ -207,35 +192,10 @@ public class TokenStreamToAutomaton {
     }
 
     in.end();
-
-    int endPosInc = posIncAtt.getPositionIncrement();
-    if (endPosInc == 0 && finalOffsetGapAsHole && offsetAtt.endOffset() > maxOffset) {
-      endPosInc = 1;
-    } else if (endPosInc > 0 && preservePositionIncrements==false) {
-      endPosInc = 0;
-    }
-
-    int endState;
-    if (endPosInc > 0) {
-      // there were hole(s) after the last token
+    int endState = -1;
+    if (offsetAtt.endOffset() > maxOffset) {
       endState = builder.createState();
-
-      // add trailing holes now:
-      int lastState = endState;
-      while (true) {
-        int state1 = builder.createState();
-        builder.addTransition(lastState, state1, HOLE);
-        endPosInc--;
-        if (endPosInc == 0) {
-          builder.setAccept(state1, true);
-          break;
-        }
-        int state2 = builder.createState();
-        builder.addTransition(state1, state2, POS_SEP);
-        lastState = state2;
-      }
-    } else {
-      endState = -1;
+      builder.setAccept(endState, true);
     }
 
     pos++;
@@ -250,7 +210,7 @@ public class TokenStreamToAutomaton {
       }
       pos++;
     }
-    
+
     return builder.finish();
   }
 

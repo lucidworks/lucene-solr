@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,45 +16,59 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
+import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.solr.client.solrj.SolrClient;
-import org.apache.solr.client.solrj.embedded.JettySolrRunner;
-import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-import static org.hamcrest.core.StringContains.containsString;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.internal.matchers.StringContains.containsString;
 
 /**
  * Verify that remote (proxied) queries return proper error messages
  */
-public class RemoteQueryErrorTest extends SolrCloudTestCase {
+@Slow
+public class RemoteQueryErrorTest extends AbstractFullDistribZkTestBase {
 
-  @BeforeClass
-  public static void setupCluster() throws Exception {
-    configureCluster(3)
-        .addConfig("conf", configset("cloud-minimal"))
-        .configure();
+  public RemoteQueryErrorTest() {
+    super();
+    sliceCount = 1;
+    fixShardCount(random().nextBoolean() ? 3 : 4);
   }
-
-  // TODO add test for CloudSolrClient as well
 
   @Test
   public void test() throws Exception {
+    handle.clear();
+    handle.put("timestamp", SKIPVAL);
+    
+    waitForThingsToLevelOut(15);
 
-    CollectionAdminRequest.createCollection("collection", "conf", 2, 1).process(cluster.getSolrClient());
+    del("*:*");
+    
+    createCollection("collection2", 2, 1, 10);
+    
+    List<Integer> numShardsNumReplicaList = new ArrayList<>(2);
+    numShardsNumReplicaList.add(2);
+    numShardsNumReplicaList.add(1);
+    checkForCollection("collection2", numShardsNumReplicaList, null);
+    waitForRecoveriesToFinish("collection2", true);
 
-    for (JettySolrRunner jetty : cluster.getJettySolrRunners()) {
-      try (SolrClient client = jetty.newClient()) {
-        SolrException e = expectThrows(SolrException.class, () -> {
-          client.add("collection", new SolrInputDocument());
-        });
-        assertThat(e.getMessage(), containsString("Document is missing mandatory uniqueKey field: id"));
+    for (SolrClient solrClient : clients) {
+      try {
+        SolrInputDocument emptyDoc = new SolrInputDocument();
+        solrClient.add(emptyDoc);
+        fail("Expected unique key exceptoin");
+      } catch (SolrException ex) {
+        assertThat(ex.getMessage(), containsString("Document is missing mandatory uniqueKey field: id"));
+      } catch(Exception ex) {
+        fail("Expected a SolrException to occur, instead received: " + ex.getClass());
+      } finally {
+        solrClient.close();
       }
     }
-
   }
 }

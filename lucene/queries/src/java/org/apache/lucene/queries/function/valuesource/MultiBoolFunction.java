@@ -14,17 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function.valuesource;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.Map;
+package org.apache.lucene.queries.function.valuesource;
 
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.docvalues.BoolDocValues;
 import org.apache.lucene.search.IndexSearcher;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Abstract {@link ValueSource} implementation which wraps multiple ValueSources
@@ -39,7 +40,7 @@ public abstract class MultiBoolFunction extends BoolFunction {
 
   protected abstract String name();
 
-  protected abstract boolean func(int doc, FunctionValues[] vals) throws IOException;
+  protected abstract boolean func(int doc, FunctionValues[] vals);
 
   @Override
   public BoolDocValues getValues(Map context, LeafReaderContext readerContext) throws IOException {
@@ -51,12 +52,12 @@ public abstract class MultiBoolFunction extends BoolFunction {
 
     return new BoolDocValues(this) {
       @Override
-      public boolean boolVal(int doc) throws IOException {
+      public boolean boolVal(int doc) {
         return func(doc, vals);
       }
 
       @Override
-      public String toString(int doc) throws IOException {
+      public String toString(int doc) {
         StringBuilder sb = new StringBuilder(name());
         sb.append('(');
         boolean first = true;
@@ -68,7 +69,6 @@ public abstract class MultiBoolFunction extends BoolFunction {
           }
           sb.append(dv.toString(doc));
         }
-        sb.append(')');
         return sb.toString();
       }
     };
@@ -87,7 +87,6 @@ public abstract class MultiBoolFunction extends BoolFunction {
       }
       sb.append(source.description());
     }
-    sb.append(')');
     return sb.toString();
   }
 

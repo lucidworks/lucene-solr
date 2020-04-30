@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Random;
@@ -52,7 +54,7 @@ public abstract class BaseFieldInfoFormatTestCase extends BaseIndexFileFormatTes
     Directory dir = newDirectory();
     Codec codec = getCodec();
     SegmentInfo segmentInfo = newSegmentInfo(dir, "_123");
-    FieldInfos.Builder builder = new FieldInfos.Builder(new FieldInfos.FieldNumbers(null));
+    FieldInfos.Builder builder = new FieldInfos.Builder();
     FieldInfo fi = builder.getOrAdd("field");
     fi.setIndexOptions(TextField.TYPE_STORED.indexOptions());
     addAttributes(fi);
@@ -74,7 +76,7 @@ public abstract class BaseFieldInfoFormatTestCase extends BaseIndexFileFormatTes
     Directory dir = newDirectory();
     Codec codec = getCodec();
     SegmentInfo segmentInfo = newSegmentInfo(dir, "_123");
-    FieldInfos.Builder builder = new FieldInfos.Builder(new FieldInfos.FieldNumbers(null));
+    FieldInfos.Builder builder = new FieldInfos.Builder();
     FieldInfo fi = builder.getOrAdd("field");
     fi.setIndexOptions(TextField.TYPE_STORED.indexOptions());
     addAttributes(fi);
@@ -86,11 +88,12 @@ public abstract class BaseFieldInfoFormatTestCase extends BaseIndexFileFormatTes
     assertEquals(1, infos2.size());
     assertNotNull(infos2.fieldInfo("field"));
     Map<String,String> attributes = infos2.fieldInfo("field").attributes();
-    // shouldn't be able to modify attributes
-    expectThrows(UnsupportedOperationException.class, () -> {
+    try {
       attributes.put("bogus", "bogus");
-    });
-
+      fail("shouldn't be able to modify attributes");
+    } catch (UnsupportedOperationException expected) {
+      // ok
+    }
     dir.close();
   }
   
@@ -114,17 +117,21 @@ public abstract class BaseFieldInfoFormatTestCase extends BaseIndexFileFormatTes
     dir.failOn(fail);
     Codec codec = getCodec();
     SegmentInfo segmentInfo = newSegmentInfo(dir, "_123");
-    FieldInfos.Builder builder = new FieldInfos.Builder(new FieldInfos.FieldNumbers(null));
+    FieldInfos.Builder builder = new FieldInfos.Builder();
     FieldInfo fi = builder.getOrAdd("field");
     fi.setIndexOptions(TextField.TYPE_STORED.indexOptions());
     addAttributes(fi);
     FieldInfos infos = builder.finish();
     
     fail.setDoFail();
-    expectThrows(FakeIOException.class, () -> {
+    try {
       codec.fieldInfosFormat().write(dir, segmentInfo, "", infos, IOContext.DEFAULT);
-    });
-    fail.clearDoFail();
+      fail("didn't get expected exception");
+    } catch (FakeIOException expected) {
+      // ok
+    } finally {
+      fail.clearDoFail();
+    }
     
     dir.close();
   }
@@ -149,17 +156,21 @@ public abstract class BaseFieldInfoFormatTestCase extends BaseIndexFileFormatTes
     dir.failOn(fail);
     Codec codec = getCodec();
     SegmentInfo segmentInfo = newSegmentInfo(dir, "_123");
-    FieldInfos.Builder builder = new FieldInfos.Builder(new FieldInfos.FieldNumbers(null));
+    FieldInfos.Builder builder = new FieldInfos.Builder();
     FieldInfo fi = builder.getOrAdd("field");
     fi.setIndexOptions(TextField.TYPE_STORED.indexOptions());
     addAttributes(fi);
     FieldInfos infos = builder.finish();
     
     fail.setDoFail();
-    expectThrows(FakeIOException.class, () -> {
+    try {
       codec.fieldInfosFormat().write(dir, segmentInfo, "", infos, IOContext.DEFAULT);
-    });
-    fail.clearDoFail();
+      fail("didn't get expected exception");
+    } catch (FakeIOException expected) {
+      // ok
+    } finally {
+      fail.clearDoFail();
+    }
     
     dir.close();
   }
@@ -184,7 +195,7 @@ public abstract class BaseFieldInfoFormatTestCase extends BaseIndexFileFormatTes
     dir.failOn(fail);
     Codec codec = getCodec();
     SegmentInfo segmentInfo = newSegmentInfo(dir, "_123");
-    FieldInfos.Builder builder = new FieldInfos.Builder(new FieldInfos.FieldNumbers(null));
+    FieldInfos.Builder builder = new FieldInfos.Builder();
     FieldInfo fi = builder.getOrAdd("field");
     fi.setIndexOptions(TextField.TYPE_STORED.indexOptions());
     addAttributes(fi);
@@ -192,10 +203,14 @@ public abstract class BaseFieldInfoFormatTestCase extends BaseIndexFileFormatTes
     codec.fieldInfosFormat().write(dir, segmentInfo, "", infos, IOContext.DEFAULT);
     
     fail.setDoFail();
-    expectThrows(FakeIOException.class, () -> {
-      codec.fieldInfosFormat().read(dir, segmentInfo, "", IOContext.DEFAULT);
-    });
-    fail.clearDoFail();
+    try {
+      codec.fieldInfosFormat().read(dir, segmentInfo, "", IOContext.DEFAULT);      
+      fail("didn't get expected exception");
+    } catch (FakeIOException expected) {
+      // ok
+    } finally {
+      fail.clearDoFail();
+    }
     
     dir.close();
   }
@@ -220,7 +235,7 @@ public abstract class BaseFieldInfoFormatTestCase extends BaseIndexFileFormatTes
     dir.failOn(fail);
     Codec codec = getCodec();
     SegmentInfo segmentInfo = newSegmentInfo(dir, "_123");
-    FieldInfos.Builder builder = new FieldInfos.Builder(new FieldInfos.FieldNumbers(null));
+    FieldInfos.Builder builder = new FieldInfos.Builder();
     FieldInfo fi = builder.getOrAdd("field");
     fi.setIndexOptions(TextField.TYPE_STORED.indexOptions());
     addAttributes(fi);
@@ -228,10 +243,14 @@ public abstract class BaseFieldInfoFormatTestCase extends BaseIndexFileFormatTes
     codec.fieldInfosFormat().write(dir, segmentInfo, "", infos, IOContext.DEFAULT);
     
     fail.setDoFail();
-    expectThrows(FakeIOException.class, () -> {
-      codec.fieldInfosFormat().read(dir, segmentInfo, "", IOContext.DEFAULT);
-    });
-    fail.clearDoFail();
+    try {
+      codec.fieldInfosFormat().read(dir, segmentInfo, "", IOContext.DEFAULT);      
+      fail("didn't get expected exception");
+    } catch (FakeIOException expected) {
+      // ok
+    } finally {
+      fail.clearDoFail();
+    }
     
     dir.close();
   }
@@ -250,7 +269,7 @@ public abstract class BaseFieldInfoFormatTestCase extends BaseIndexFileFormatTes
     for (int i = 0; i < numFields; i++) {
       fieldNames.add(TestUtil.randomUnicodeString(random()));
     }
-    FieldInfos.Builder builder = new FieldInfos.Builder(new FieldInfos.FieldNumbers(null));
+    FieldInfos.Builder builder = new FieldInfos.Builder();
     for (String field : fieldNames) {
       IndexableFieldType fieldType = randomFieldType(random());
       FieldInfo fi = builder.getOrAdd(field);
@@ -346,8 +365,7 @@ public abstract class BaseFieldInfoFormatTestCase extends BaseIndexFileFormatTes
   
   /** Returns a new fake segment */
   protected static SegmentInfo newSegmentInfo(Directory dir, String name) {
-    Version minVersion = random().nextBoolean() ? null : Version.LATEST;
-    return new SegmentInfo(dir, Version.LATEST, minVersion, name, 10000, false, Codec.getDefault(), Collections.emptyMap(), StringHelper.randomId(), Collections.emptyMap(), null);
+    return new SegmentInfo(dir, Version.LATEST, name, 10000, false, Codec.getDefault(), Collections.<String,String>emptyMap(), StringHelper.randomId(), new HashMap<String,String>());
   }
   
   @Override

@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.tr;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,27 +16,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.tr;
-
 
 import java.io.IOException;
 import java.io.Reader;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.StopFilter;
-import org.apache.lucene.analysis.StopwordAnalyzerBase;
+import org.apache.lucene.analysis.core.StopFilter;
+import org.apache.lucene.analysis.miscellaneous.SetKeywordMarkerFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
-import org.apache.lucene.analysis.miscellaneous.SetKeywordMarkerFilter;
 import org.apache.lucene.analysis.snowball.SnowballFilter;
+import org.apache.lucene.analysis.standard.StandardFilter;
 import org.apache.lucene.analysis.standard.StandardTokenizer;
+import org.apache.lucene.analysis.standard.std40.StandardTokenizer40;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.analysis.util.StopwordAnalyzerBase;
+import org.apache.lucene.util.Version;
 import org.tartarus.snowball.ext.TurkishStemmer;
 
 /**
  * {@link Analyzer} for Turkish.
- *
- * @since 3.1
  */
 public final class TurkishAnalyzer extends StopwordAnalyzerBase {
   private final CharArraySet stemExclusionSet;
@@ -111,14 +112,22 @@ public final class TurkishAnalyzer extends StopwordAnalyzerBase {
    * @return A
    *         {@link org.apache.lucene.analysis.Analyzer.TokenStreamComponents}
    *         built from an {@link StandardTokenizer} filtered with
-   *         {@link TurkishLowerCaseFilter},
+   *         {@link StandardFilter}, {@link TurkishLowerCaseFilter},
    *         {@link StopFilter}, {@link SetKeywordMarkerFilter} if a stem
    *         exclusion set is provided and {@link SnowballFilter}.
    */
   @Override
   protected TokenStreamComponents createComponents(String fieldName) {
-    final Tokenizer source = new StandardTokenizer();
-    TokenStream result = new ApostropheFilter(source);
+    final Tokenizer source;
+    if (getVersion().onOrAfter(Version.LUCENE_4_7_0)) {
+      source = new StandardTokenizer();
+    } else {
+      source = new StandardTokenizer40();
+    }
+    TokenStream result = new StandardFilter(source);
+    if (getVersion().onOrAfter(Version.LUCENE_4_8_0)) {
+      result = new ApostropheFilter(result);
+    }
     result = new TurkishLowerCaseFilter(result);
     result = new StopFilter(result, stopwords);
     if (!stemExclusionSet.isEmpty()) {
@@ -126,10 +135,5 @@ public final class TurkishAnalyzer extends StopwordAnalyzerBase {
     }
     result = new SnowballFilter(result, new TurkishStemmer());
     return new TokenStreamComponents(source, result);
-  }
-
-  @Override
-  protected TokenStream normalize(String fieldName, TokenStream in) {
-    return new TurkishLowerCaseFilter(in);
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.solr.update.processor;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update.processor;
 
 import com.google.common.collect.Maps;
+import org.noggit.ObjectBuilder;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.core.SolrCore;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.util.List;
 import java.util.Map;
+
+import static org.apache.solr.update.processor.SignatureUpdateProcessorFactoryTest.addDoc;
 
 public class TestPartialUpdateDeduplication extends SolrTestCaseJ4 {
   @BeforeClass

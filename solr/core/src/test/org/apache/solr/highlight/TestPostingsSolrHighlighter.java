@@ -1,3 +1,5 @@
+package org.apache.solr.highlight;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.highlight;
 
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.handler.component.HighlightComponent;
@@ -52,7 +53,7 @@ public class TestPostingsSolrHighlighter extends SolrTestCaseJ4 {
   
   public void testSimple() {
     assertQ("simplest test", 
-        req("q", "text:document", "sort", "id asc", "hl", "true", "hl.method", "postings"), // test hl.method is happy too
+        req("q", "text:document", "sort", "id asc", "hl", "true"),
         "count(//lst[@name='highlighting']/*)=2",
         "//lst[@name='highlighting']/lst[@name='101']/arr[@name='text']/str='<em>document</em> one'",
         "//lst[@name='highlighting']/lst[@name='102']/arr[@name='text']/str='second <em>document</em>'");
@@ -99,23 +100,15 @@ public class TestPostingsSolrHighlighter extends SolrTestCaseJ4 {
         "//lst[@name='highlighting']/lst[@name='102']/arr[@name='text3']/str='crappier <em>document</em>'");
   }
   
-  // SOLR-5127
-  public void testMultipleFieldsViaWildcard() {
-    assertQ("highlighting text and text3*",
-        req("q", (random().nextBoolean() ? "text:document text3:document" : "text3:document text:document"),
-            "sort", "id asc", "hl", "true",
-            "hl.fl", (random().nextBoolean() ? "text,text3*" : "text3*,text")),
-        "count(//lst[@name='highlighting']/*)=2",
-        "//lst[@name='highlighting']/lst[@name='101']/arr[@name='text']/str='<em>document</em> one'",
-        "//lst[@name='highlighting']/lst[@name='101']/arr[@name='text3']/str='crappy <em>document</em>'",
-        "//lst[@name='highlighting']/lst[@name='102']/arr[@name='text']/str='second <em>document</em>'",
-        "//lst[@name='highlighting']/lst[@name='102']/arr[@name='text3']/str='crappier <em>document</em>'");
-  }
-
   public void testMisconfiguredField() {
     ignoreException("was indexed without offsets");
-    expectThrows(Exception.class, () ->
-        h.query(req("q", "text2:document", "sort", "id asc", "hl", "true", "hl.fl", "text2")));
+    try {
+      assertQ("should fail, has no offsets",
+        req("q", "text2:document", "sort", "id asc", "hl", "true", "hl.fl", "text2"));
+      fail();
+    } catch (Exception expected) {
+      // expected
+    }
     resetExceptionIgnores();
   }
   
@@ -151,19 +144,6 @@ public class TestPostingsSolrHighlighter extends SolrTestCaseJ4 {
     assertQ("different breakiterator", 
         req("q", "text:document", "sort", "id asc", "hl", "true", "hl.bs.type", "WHOLE"),
         "//lst[@name='highlighting']/lst[@name='103']/arr[@name='text']/str='<em>Document</em> one has a first sentence. <em>Document</em> two has a second sentence.'");
-  }
-  
-  public void testBreakIterator3() {
-    assertU(adoc("text", "This document contains # special characters, while the other document contains the same # special character.", "id", "103"));
-    assertU(adoc("text", "While the other document contains the same # special character.", "id", "104"));
-    assertU(commit());
-    assertQ("different breakiterator", 
-        req("q", "text:document", "sort", "id asc", "hl", "true", "hl.bs.type", "SEPARATOR","hl.bs.separator","#"),
-        "//lst[@name='highlighting']/lst[@name='103']/arr[@name='text']/str='This <em>document</em> contains #'");
-    assertQ("different breakiterator", 
-        req("q", "text:document", "sort", "id asc", "hl", "true", "hl.bs.type", "SEPARATOR","hl.bs.separator","#"),
-        "//lst[@name='highlighting']/lst[@name='104']/arr[@name='text']/str='While the other <em>document</em> contains the same #'");
-
   }
   
   public void testEncoder() {

@@ -1,3 +1,5 @@
+package org.apache.solr.store.blockcache;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.store.blockcache;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -35,7 +36,6 @@ public class BlockCacheLocation {
     touch();
   }
 
-  /** The block within the bank.  This has no relationship to the blockId in BlockCacheKey */
   public void setBlock(int block) {
     this.block = block;
   }
@@ -43,8 +43,7 @@ public class BlockCacheLocation {
   public void setBankId(int bankId) {
     this.bankId = bankId;
   }
-
-  /** The block within the bank.  This has no relationship to the blockId in BlockCacheKey */
+  
   public int getBlock() {
     return block;
   }

@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.icu.segmentation;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.icu.segmentation;
 
-
-import com.ibm.icu.lang.UCharacter;
-import com.ibm.icu.lang.UProperty;
 import com.ibm.icu.lang.UScript;
 import com.ibm.icu.text.BreakIterator;
 
@@ -40,7 +38,7 @@ import com.ibm.icu.text.BreakIterator;
  */
 final class CompositeBreakIterator {
   private final ICUTokenizerConfig config;
-  private final BreakIteratorWrapper wordBreakers[] = new BreakIteratorWrapper[1 + UCharacter.getIntPropertyMaxValue(UProperty.SCRIPT)];
+  private final BreakIteratorWrapper wordBreakers[] = new BreakIteratorWrapper[UScript.CODE_LIMIT];
 
   private BreakIteratorWrapper rbbi;
   private final ScriptIterator scriptIterator;
@@ -123,7 +121,7 @@ final class CompositeBreakIterator {
   
   private BreakIteratorWrapper getBreakIterator(int scriptCode) {
     if (wordBreakers[scriptCode] == null)
-      wordBreakers[scriptCode] = new BreakIteratorWrapper(config.getBreakIterator(scriptCode));
+      wordBreakers[scriptCode] = BreakIteratorWrapper.wrap(config.getBreakIterator(scriptCode));
     return wordBreakers[scriptCode];
   }
 }

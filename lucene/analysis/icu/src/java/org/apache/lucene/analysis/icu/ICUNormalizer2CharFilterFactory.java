@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.icu;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.icu;
-
 
 import java.io.Reader;
 import java.util.Arrays;
 import java.util.Map;
 
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.CharFilterFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
+
 import com.ibm.icu.text.FilteredNormalizer2;
 import com.ibm.icu.text.Normalizer2;
 import com.ibm.icu.text.UnicodeSet;
-import org.apache.lucene.analysis.util.CharFilterFactory;
 
 /**
  * Factory for {@link ICUNormalizer2CharFilter}
@@ -41,15 +44,8 @@ import org.apache.lucene.analysis.util.CharFilterFactory;
  * @see ICUNormalizer2CharFilter
  * @see Normalizer2
  * @see FilteredNormalizer2
- *
- * @since 4.10.0
- * @lucene.spi {@value #NAME}
  */
-public class ICUNormalizer2CharFilterFactory extends CharFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "icuNormalizer2";
-
+public class ICUNormalizer2CharFilterFactory extends CharFilterFactory implements MultiTermAwareComponent {
   private final Normalizer2 normalizer;
 
   /** Creates a new ICUNormalizer2CharFilterFactory */
@@ -80,7 +76,8 @@ public class ICUNormalizer2CharFilterFactory extends CharFilterFactory {
   }
 
   @Override
-  public Reader normalize(Reader input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
+  
 }

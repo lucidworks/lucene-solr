@@ -1,3 +1,5 @@
+package org.apache.lucene.facet;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet;
 
 import java.io.IOException;
 import java.util.Random;
@@ -142,7 +143,7 @@ public class SlowRAMDirectory extends RAMDirectory {
     private final Random rand;
     
     public SlowIndexOutput(IndexOutput io) {
-      super("SlowIndexOutput(" + io + ")", io.getName());
+      super("SlowIndexOutput(" + io + ")");
       this.io = io;
       this.rand = forkRandom();
     }

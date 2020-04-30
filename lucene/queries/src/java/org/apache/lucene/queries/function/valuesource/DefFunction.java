@@ -1,3 +1,4 @@
+package org.apache.lucene.queries.function.valuesource;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function.valuesource;
+
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -48,7 +49,7 @@ public class DefFunction extends MultiFunction {
     return new Values(valsArr(sources, fcontext, readerContext)) {
       final int upto = valsArr.length - 1;
 
-      private FunctionValues get(int doc) throws IOException {
+      private FunctionValues get(int doc) {
         for (int i=0; i<upto; i++) {
           FunctionValues vals = valsArr[i];
           if (vals.exists(doc)) {
@@ -59,57 +60,57 @@ public class DefFunction extends MultiFunction {
       }
 
       @Override
-      public byte byteVal(int doc) throws IOException {
+      public byte byteVal(int doc) {
         return get(doc).byteVal(doc);
       }
 
       @Override
-      public short shortVal(int doc) throws IOException {
+      public short shortVal(int doc) {
         return get(doc).shortVal(doc);
       }
 
       @Override
-      public float floatVal(int doc) throws IOException {
+      public float floatVal(int doc) {
         return get(doc).floatVal(doc);
       }
 
       @Override
-      public int intVal(int doc) throws IOException {
+      public int intVal(int doc) {
         return get(doc).intVal(doc);
       }
 
       @Override
-      public long longVal(int doc) throws IOException {
+      public long longVal(int doc) {
         return get(doc).longVal(doc);
       }
 
       @Override
-      public double doubleVal(int doc) throws IOException {
+      public double doubleVal(int doc) {
         return get(doc).doubleVal(doc);
       }
 
       @Override
-      public String strVal(int doc) throws IOException {
+      public String strVal(int doc) {
         return get(doc).strVal(doc);
       }
 
       @Override
-      public boolean boolVal(int doc) throws IOException {
+      public boolean boolVal(int doc) {
         return get(doc).boolVal(doc);
       }
 
       @Override
-      public boolean bytesVal(int doc, BytesRefBuilder target) throws IOException {
+      public boolean bytesVal(int doc, BytesRefBuilder target) {
         return get(doc).bytesVal(doc, target);
       }
 
       @Override
-      public Object objectVal(int doc) throws IOException {
+      public Object objectVal(int doc) {
         return get(doc).objectVal(doc);
       }
 
       @Override
-      public boolean exists(int doc) throws IOException {
+      public boolean exists(int doc) {
         // return true if any source is exists?
         for (FunctionValues vals : valsArr) {
           if (vals.exists(doc)) {

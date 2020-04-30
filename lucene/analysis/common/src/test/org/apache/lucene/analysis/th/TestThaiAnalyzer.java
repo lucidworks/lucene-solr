@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.th;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.th;
-
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
-import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.en.EnglishAnalyzer;
+import org.apache.lucene.analysis.core.StopAnalyzer;
 import org.apache.lucene.analysis.tokenattributes.FlagsAttribute;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.util.Version;
 
 /**
  * Test case for ThaiAnalyzer, modified from TestFrenchAnalyzer
@@ -63,7 +64,7 @@ public class TestThaiAnalyzer extends BaseTokenStreamTestCase {
    */
   // note this test uses stopfilter's stopset
   public void testPositionIncrements() throws Exception {
-    final ThaiAnalyzer analyzer = new ThaiAnalyzer(EnglishAnalyzer.ENGLISH_STOP_WORDS_SET);
+    final ThaiAnalyzer analyzer = new ThaiAnalyzer(StopAnalyzer.ENGLISH_STOP_WORDS_SET);
     assertAnalyzesTo(analyzer, "การที่ได้ต้อง the แสดงว่างานดี", 
         new String[] { "การ", "ที่", "ได้", "ต้อง", "แสดง", "ว่า", "งาน", "ดี" },
         new int[] { 0, 3, 6, 9, 18, 22, 25, 28 },
@@ -131,6 +132,18 @@ public class TestThaiAnalyzer extends BaseTokenStreamTestCase {
     a.close();
   }
   
+  /**
+   * test that we don't fold digits for back compat behavior
+   * @deprecated remove this test in lucene 7
+   */
+  @Deprecated
+  public void testDigitsBackCompat() throws Exception {
+    ThaiAnalyzer a = new ThaiAnalyzer();
+    a.setVersion(Version.LUCENE_5_3_0);
+    checkOneTerm(a, "๑๒๓๔", "๑๒๓๔");
+    a.close();
+  }
+  
   public void testTwoSentences() throws Exception {
     Analyzer analyzer = new ThaiAnalyzer(CharArraySet.EMPTY_SET);
     assertAnalyzesTo(analyzer, "This is a test. การที่ได้ต้องแสดงว่างานดี",
@@ -138,5 +151,12 @@ public class TestThaiAnalyzer extends BaseTokenStreamTestCase {
           new int[] { 0, 5, 8, 10, 16, 19, 22, 25, 29, 33, 36, 39 },
           new int[] { 4, 7, 9, 14, 19, 22, 25, 29, 33, 36, 39, 41 });
     analyzer.close();
+  }
+
+  public void testBackcompat40() throws Exception {
+    ThaiAnalyzer a = new ThaiAnalyzer();
+    a.setVersion(Version.LUCENE_4_6_1);
+    // this is just a test to see the correct unicode version is being used, not actually testing hebrew
+    assertAnalyzesTo(a, "א\"א", new String[] {"א", "א"});
   }
 }

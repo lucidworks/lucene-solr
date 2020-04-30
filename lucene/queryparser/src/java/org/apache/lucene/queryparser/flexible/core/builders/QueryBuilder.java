@@ -1,3 +1,8 @@
+package org.apache.lucene.queryparser.flexible.core.builders;
+
+import org.apache.lucene.queryparser.flexible.core.QueryNodeException;
+import org.apache.lucene.queryparser.flexible.core.nodes.QueryNode;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +19,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.core.builders;
 
-import org.apache.lucene.queryparser.flexible.core.QueryNodeException;
-import org.apache.lucene.queryparser.flexible.core.nodes.QueryNode;
 
 /**
  * This interface is used by implementors classes that builds some kind of

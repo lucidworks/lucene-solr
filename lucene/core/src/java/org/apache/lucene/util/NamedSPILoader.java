@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Objects;
 import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.ServiceConfigurationError;
@@ -35,16 +34,13 @@ public final class NamedSPILoader<S extends NamedSPILoader.NamedSPI> implements 
   private final Class<S> clazz;
 
   public NamedSPILoader(Class<S> clazz) {
-    this(clazz, null);
+    this(clazz, Thread.currentThread().getContextClassLoader());
   }
   
   public NamedSPILoader(Class<S> clazz, ClassLoader classloader) {
     this.clazz = clazz;
     // if clazz' classloader is not a parent of the given one, we scan clazz's classloader, too:
     final ClassLoader clazzClassloader = clazz.getClassLoader();
-    if (classloader == null) {
-      classloader = clazzClassloader;
-    }
     if (clazzClassloader != null && !SPIClassIterator.isParentClassLoader(clazzClassloader, classloader)) {
       reload(clazzClassloader);
     }
@@ -63,7 +59,6 @@ public final class NamedSPILoader<S extends NamedSPILoader.NamedSPI> implements 
    * of new service providers on the given classpath/classloader!</em>
    */
   public void reload(ClassLoader classloader) {
-    Objects.requireNonNull(classloader, "classloader");
     final LinkedHashMap<String,S> services = new LinkedHashMap<>(this.services);
     final SPIClassIterator<S> loader = SPIClassIterator.get(clazz, classloader);
     while (loader.hasNext()) {

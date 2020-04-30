@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 /**
  * Base for query timeout implementations, which will provide a {@code shouldExit()} method,
@@ -28,11 +28,6 @@ public interface QueryTimeout {
    * to determine whether to stop processing a query.
    */
   public abstract boolean shouldExit();
-
-  /** Returns true if timeouts are enabled for this query (i.e. if shouldExit would ever return true) */
-  public default boolean isTimeoutEnabled() {
-    return true;
-  }
 
 }
 

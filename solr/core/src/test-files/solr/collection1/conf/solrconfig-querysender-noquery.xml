@@ -24,7 +24,6 @@
         solr.StandardDirectoryFactory, the default, is filesystem based.
         solr.RAMDirectoryFactory is memory based and not persistent. -->
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
   
   <updateHandler class="solr.DirectUpdateHandler2">
     <listener event="postCommit" 
@@ -68,7 +67,7 @@
 
   
   </query>
-  <requestHandler name="/mock" class="org.apache.solr.core.MockQuerySenderListenerReqHandler" default="true">
+  <requestHandler name="mock" class="org.apache.solr.core.MockQuerySenderListenerReqHandler" default="true">
     <!-- default values for query parameters -->
 
   </requestHandler>

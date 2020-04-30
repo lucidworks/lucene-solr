@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,37 +16,40 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 /** Scorer for conjunctions, sets of queries, all of which are required. */
 class ConjunctionScorer extends Scorer {
 
-  final DocIdSetIterator disi;
+  final ConjunctionDISI disi;
   final Scorer[] scorers;
-  final Collection<Scorer> required;
+  final float coord;
+
+  ConjunctionScorer(Weight weight, List<? extends DocIdSetIterator> required, List<Scorer> scorers) {
+    this(weight, required, scorers, 1f);
+  }
 
   /** Create a new {@link ConjunctionScorer}, note that {@code scorers} must be a subset of {@code required}. */
-  ConjunctionScorer(Weight weight, Collection<Scorer> required, Collection<Scorer> scorers) throws IOException {
+  ConjunctionScorer(Weight weight, List<? extends DocIdSetIterator> required, List<Scorer> scorers, float coord) {
     super(weight);
     assert required.containsAll(scorers);
-    this.disi = ConjunctionDISI.intersectScorers(required);
+    this.coord = coord;
+    this.disi = ConjunctionDISI.intersect(required);
     this.scorers = scorers.toArray(new Scorer[scorers.size()]);
-    this.required = required;
   }
 
   @Override
-  public TwoPhaseIterator twoPhaseIterator() {
-    return TwoPhaseIterator.unwrap(disi);
+  public TwoPhaseIterator asTwoPhaseIterator() {
+    return disi.asTwoPhaseIterator();
   }
 
   @Override
-  public DocIdSetIterator iterator() {
-    return disi;
+  public int advance(int target) throws IOException {
+    return disi.advance(target);
   }
 
   @Override
@@ -53,48 +58,34 @@ class ConjunctionScorer extends Scorer {
   }
 
   @Override
+  public int nextDoc() throws IOException {
+    return disi.nextDoc();
+  }
+
+  @Override
   public float score() throws IOException {
     double sum = 0.0d;
     for (Scorer scorer : scorers) {
       sum += scorer.score();
     }
-    return (float) sum;
+    return coord * (float)sum;
   }
 
   @Override
-  public float getMaxScore(int upTo) throws IOException {
-    // This scorer is only used for TOP_SCORES when there is at most one scoring clause
-    switch (scorers.length) {
-      case 0:
-        return 0;
-      case 1:
-        return scorers[0].getMaxScore(upTo);
-      default:
-        return Float.POSITIVE_INFINITY;
-    }
+  public int freq() {
+    return scorers.length;
   }
 
   @Override
-  public int advanceShallow(int target) throws IOException {
-    if (scorers.length == 1) {
-      return scorers[0].advanceShallow(target);
-    }
-    return super.advanceShallow(target);
+  public long cost() {
+    return disi.cost();
   }
 
   @Override
-  public void setMinCompetitiveScore(float minScore) throws IOException {
-    // This scorer is only used for TOP_SCORES when there is a single scoring clause
-    if (scorers.length == 1) {
-      scorers[0].setMinCompetitiveScore(minScore);
-    }
-  }
-
-  @Override
-  public Collection<ChildScorable> getChildren() {
-    ArrayList<ChildScorable> children = new ArrayList<>();
-    for (Scorer scorer : required) {
-      children.add(new ChildScorable(scorer, "MUST"));
+  public Collection<ChildScorer> getChildren() {
+    ArrayList<ChildScorer> children = new ArrayList<>();
+    for (Scorer scorer : scorers) {
+      children.add(new ChildScorer(scorer, "MUST"));
     }
     return children;
   }

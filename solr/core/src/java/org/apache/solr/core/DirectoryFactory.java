@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,24 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
 
 import java.io.Closeable;
 import java.io.File;
 import java.io.FileFilter;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
-import java.nio.file.NoSuchFileException;
-import java.util.Arrays;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.store.FlushInfo;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.LockFactory;
@@ -55,22 +50,10 @@ public abstract class DirectoryFactory implements NamedListInitializedPlugin,
 
   protected static final String INDEX_W_TIMESTAMP_REGEX = "index\\.[0-9]{17}"; // see SnapShooter.DATE_FMT
 
-  // May be set by sub classes as data root, in which case getDataHome will use it as base
-  protected Path dataHomePath;
-
   // hint about what the directory contains - default is index directory
   public enum DirContext {DEFAULT, META_DATA}
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-
-  // Available lock types
-  public final static String LOCK_TYPE_SIMPLE = "simple";
-  public final static String LOCK_TYPE_NATIVE = "native";
-  public final static String LOCK_TYPE_SINGLE = "single";
-  public final static String LOCK_TYPE_NONE   = "none";
-  public final static String LOCK_TYPE_HDFS   = "hdfs";
-
-  protected volatile CoreContainer coreContainer;
   
   /**
    * Indicates a Directory will no longer be used, and when its ref count
@@ -109,14 +92,9 @@ public abstract class DirectoryFactory implements NamedListInitializedPlugin,
   protected abstract LockFactory createLockFactory(String rawLockType) throws IOException;
   
   /**
-   * Returns true if a Directory exists for a given path in the underlying (stable) storage <em>and</em> 
-   * contains at least one file.  
-   * Note that the existence of a {@link Directory} <em>Object</em> as returned by a previous call to the 
-   * {@link #get} method (on the specified <code>path</code>) is not enough to cause this method to return 
-   * true.  Some prior user of that Directory must have written &amp; synced at least one file to that 
-   * Directory (and at least one file must still exist)
-   *
+   * Returns true if a Directory exists for a given path.
    * @throws IOException If there is a low-level I/O error.
+   * 
    */
   public abstract boolean exists(String path) throws IOException;
   
@@ -160,31 +138,6 @@ public abstract class DirectoryFactory implements NamedListInitializedPlugin,
   public abstract void remove(String path) throws IOException;
   
   /**
-   * @param directory to calculate size of
-   * @return size in bytes
-   * @throws IOException on low level IO error
-   */
-  public long size(Directory directory) throws IOException {
-    return sizeOfDirectory(directory);
-  }
-  
-  /**
-   * @param path to calculate size of
-   * @return size in bytes
-   * @throws IOException on low level IO error
-   */
-  public long size(String path) throws IOException {
-    Directory dir = get(path, DirContext.DEFAULT, null);
-    long size;
-    try {
-      size = sizeOfDirectory(dir);
-    } finally {
-      release(dir); 
-    }
-    return size;
-  }
-  
-  /**
    * Override for more efficient moves.
    * 
    * Intended for use with replication - use
@@ -196,20 +149,6 @@ public abstract class DirectoryFactory implements NamedListInitializedPlugin,
   public void move(Directory fromDir, Directory toDir, String fileName, IOContext ioContext) throws IOException {
     toDir.copyFrom(fromDir, fileName, fileName, ioContext);
     fromDir.deleteFile(fileName);
-  }
-  
-  // sub classes perform an atomic rename if possible, otherwise fall back to delete + rename
-  // this is important to support for index roll over durability after crashes
-  public void renameWithOverwrite(Directory dir, String fileName, String toName) throws IOException {
-    try {
-      dir.deleteFile(toName);
-    } catch (FileNotFoundException | NoSuchFileException e) {
-
-    } catch (Exception e) {
-      log.error("Exception deleting file", e);
-    }
-
-    dir.rename(fileName, toName);
   }
   
   /**
@@ -325,28 +264,23 @@ public abstract class DirectoryFactory implements NamedListInitializedPlugin,
     return false;
   }
 
-  /**
-   * Get the data home folder. If solr.data.home is set, that is used, else base on instanceDir
-   * @param cd core descriptor instance
-   * @return a String with absolute path to data direcotry
-   */
   public String getDataHome(CoreDescriptor cd) throws IOException {
-    String dataDir;
-    if (dataHomePath != null) {
-      String instanceDirLastPath = cd.getInstanceDir().getName(cd.getInstanceDir().getNameCount()-1).toString();
-      dataDir = Paths.get(coreContainer.getSolrHome()).resolve(dataHomePath)
-          .resolve(instanceDirLastPath).resolve(cd.getDataDir()).toAbsolutePath().toString();
-    } else {
-      // by default, we go off the instance directory
-      dataDir = cd.getInstanceDir().resolve(cd.getDataDir()).toAbsolutePath().toString();
-    }
-    return dataDir;
+    // by default, we go off the instance directory
+    String instanceDir = new File(cd.getInstanceDir()).getAbsolutePath();
+    return normalize(SolrResourceLoader.normalizeDir(instanceDir) + cd.getDataDir());
   }
 
-  public void cleanupOldIndexDirectories(final String dataDirPath, final String currentIndexDirPath, boolean afterCoreReload) {
+  /**
+   * Optionally allow the DirectoryFactory to request registration of some MBeans.
+   */
+  public Collection<SolrInfoMBean> offerMBeans() {
+    return Collections.emptySet();
+  }
+
+  public void cleanupOldIndexDirectories(final String dataDirPath, final String currentIndexDirPath) {
     File dataDir = new File(dataDirPath);
     if (!dataDir.isDirectory()) {
-      log.debug("{} does not point to a valid data directory; skipping clean-up of old index directories.", dataDirPath);
+      log.warn("{} does not point to a valid data directory; skipping clean-up of old index directories.", dataDirPath);
       return;
     }
 
@@ -364,17 +298,9 @@ public abstract class DirectoryFactory implements NamedListInitializedPlugin,
     if (oldIndexDirs == null || oldIndexDirs.length == 0)
       return; // nothing to do (no log message needed)
 
-    List<File> dirsList = Arrays.asList(oldIndexDirs);
-    Collections.sort(dirsList, Collections.reverseOrder());
-    
-    int i = 0;
-    if (afterCoreReload) {
-      log.info("Will not remove most recent old directory after reload {}", oldIndexDirs[0]);
-      i = 1;
-    }
-    log.info("Found {} old index directories to clean-up under {} afterReload={}", oldIndexDirs.length - i, dataDirPath, afterCoreReload);
-    for (; i < dirsList.size(); i++) {
-      File dir = dirsList.get(i);
+    log.info("Found {} old index directories to clean-up under {}", oldIndexDirs.length, dataDirPath);
+    for (File dir : oldIndexDirs) {
+
       String dirToRmPath = dir.getAbsolutePath();
       try {
         if (deleteOldIndexDirectory(dirToRmPath)) {
@@ -393,42 +319,5 @@ public abstract class DirectoryFactory implements NamedListInitializedPlugin,
     File dirToRm = new File(oldDirPath);
     FileUtils.deleteDirectory(dirToRm);
     return !dirToRm.isDirectory();
-  }
-  
-  public void initCoreContainer(CoreContainer cc) {
-    this.coreContainer = cc;
-    if (cc != null && cc.getConfig() != null) {
-      this.dataHomePath = cc.getConfig().getSolrDataHome();
-    }
-  }
-  
-  // special hack to work with FilterDirectory
-  protected Directory getBaseDir(Directory dir) {
-    Directory baseDir = dir;
-    while (baseDir instanceof FilterDirectory) {
-      baseDir = ((FilterDirectory)baseDir).getDelegate();
-    } 
-    
-    return baseDir;
-  }
-
-  /**
-   * Create a new DirectoryFactory instance from the given SolrConfig and tied to the specified core container.
-   */
-  static DirectoryFactory loadDirectoryFactory(SolrConfig config, CoreContainer cc, String registryName) {
-    final PluginInfo info = config.getPluginInfo(DirectoryFactory.class.getName());
-    final DirectoryFactory dirFactory;
-    if (info != null) {
-      log.debug(info.className);
-      dirFactory = config.getResourceLoader().newInstance(info.className, DirectoryFactory.class);
-      // allow DirectoryFactory instances to access the CoreContainer
-      dirFactory.initCoreContainer(cc);
-      dirFactory.init(info.initArgs);
-    } else {
-      log.debug("solr.NRTCachingDirectoryFactory");
-      dirFactory = new NRTCachingDirectoryFactory();
-      dirFactory.initCoreContainer(cc);
-    }
-    return dirFactory;
   }
 }

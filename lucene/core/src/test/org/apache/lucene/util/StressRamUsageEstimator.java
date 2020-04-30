@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
+
+import java.util.Arrays;
 
 /**
  * Estimates how {@link RamUsageEstimator} estimates physical memory consumption
@@ -85,7 +88,7 @@ public class StressRamUsageEstimator extends LuceneTestCase {
 
         // Make another batch of objects.
         Object[] seg =  new Object[10000];
-        all = ArrayUtil.growExact(all, all.length + 1);
+        all = Arrays.copyOf(all, all.length + 1);
         all[all.length - 1] = seg;
         for (int i = 0; i < seg.length; i++) {
           seg[i] = new byte[random().nextInt(7)];

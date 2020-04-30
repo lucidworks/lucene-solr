@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.cjk;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,25 +16,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.cjk;
-
 
 import java.io.IOException;
 import java.io.Reader;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
-import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.MockTokenizer;
-import org.apache.lucene.analysis.StopFilter;
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.charfilter.MappingCharFilter;
 import org.apache.lucene.analysis.charfilter.NormalizeCharMap;
 import org.apache.lucene.analysis.core.KeywordTokenizer;
+import org.apache.lucene.analysis.core.StopFilter;
 import org.apache.lucene.analysis.standard.StandardTokenizer;
 import org.apache.lucene.analysis.tokenattributes.TypeAttribute;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.util.Version;
 
 /**
  * Most tests adopted from TestCJKTokenizer
@@ -307,5 +308,12 @@ public class TestCJKAnalyzer extends BaseTokenStreamTestCase {
     };
     checkOneTerm(a, "", "");
     a.close();
+  }
+
+  public void testBackcompat40() throws IOException {
+    CJKAnalyzer a = new CJKAnalyzer();
+    a.setVersion(Version.LUCENE_4_6_1);
+    // this is just a test to see the correct unicode version is being used, not actually testing hebrew
+    assertAnalyzesTo(a, "א\"א", new String[] {"א", "א"});
   }
 }

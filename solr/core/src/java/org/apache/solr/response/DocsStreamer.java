@@ -1,3 +1,5 @@
+package org.apache.solr.response;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.response;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -25,19 +26,17 @@ import java.util.Set;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.search.Query;
 import org.apache.lucene.util.BytesRef;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrException;
+import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.transform.DocTransformer;
+import org.apache.solr.response.transform.TransformContext;
 import org.apache.solr.schema.BinaryField;
 import org.apache.solr.schema.BoolField;
-import org.apache.solr.schema.DatePointField;
-import org.apache.solr.schema.DoublePointField;
 import org.apache.solr.schema.FieldType;
-import org.apache.solr.schema.FloatPointField;
 import org.apache.solr.schema.IndexSchema;
-import org.apache.solr.schema.IntPointField;
-import org.apache.solr.schema.LongPointField;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.schema.StrField;
 import org.apache.solr.schema.TextField;
@@ -50,35 +49,45 @@ import org.apache.solr.schema.TrieLongField;
 import org.apache.solr.search.DocIterator;
 import org.apache.solr.search.DocList;
 import org.apache.solr.search.ReturnFields;
-import org.apache.solr.search.SolrDocumentFetcher;
+import org.apache.solr.search.SolrIndexSearcher;
 import org.apache.solr.search.SolrReturnFields;
 
-/**
+/*
  * This streams SolrDocuments from a DocList and applies transformer
  */
 public class DocsStreamer implements Iterator<SolrDocument> {
-  public static final Set<Class> KNOWN_TYPES = new HashSet<>();
-
-  private final org.apache.solr.response.ResultContext rctx;
-  private final SolrDocumentFetcher docFetcher; // a collaborator of SolrIndexSearcher
+  private static final Set<Class> KNOWN_TYPES = new HashSet<>();
   private final DocList docs;
 
-  private final DocTransformer transformer;
-  private final DocIterator docIterator;
-
-  private final SolrReturnFields solrReturnFields;
-
+  private SolrIndexSearcher searcher;
+  private final IndexSchema schema;
+  private DocTransformer transformer;
+  private DocIterator docIterator;
+  private boolean onlyPseudoFields;
+  private Set<String> fnames;
+  private TransformContext context;
   private int idx = -1;
 
-  public DocsStreamer(ResultContext rctx) {
-    this.rctx = rctx;
-    this.docs = rctx.getDocList();
-    transformer = rctx.getReturnFields().getTransformer();
-    docIterator = this.docs.iterator();
-    docFetcher = rctx.getSearcher().getDocFetcher();
-    solrReturnFields = (SolrReturnFields)rctx.getReturnFields();
+  public DocsStreamer(DocList docList, Query query, SolrQueryRequest req, ReturnFields returnFields) {
+    this.docs = docList;
+    this.schema = req.getSchema();
+    searcher = req.getSearcher();
+    transformer = returnFields.getTransformer();
+    docIterator = docList.iterator();
+    context = new TransformContext();
+    context.query = query;
+    context.wantsScores = returnFields.wantsScore() && docList.hasScores();
+    context.req = req;
+    context.searcher = searcher;
+    context.iterator = docIterator;
+    fnames = returnFields.getLuceneFieldNames();
+    onlyPseudoFields = (fnames == null && !returnFields.wantsAllFields() && !returnFields.hasPatternMatching())
+        || (fnames != null && fnames.size() == 1 && SolrReturnFields.SCORE.equals(fnames.iterator().next()));
+    if (transformer != null) transformer.setContext(context);
+  }
 
-    if (transformer != null) transformer.setContext(rctx);
+  public boolean hasScores() {
+    return context.wantsScores;
   }
 
   public int currentIndex() {
@@ -92,16 +101,23 @@ public class DocsStreamer implements Iterator<SolrDocument> {
   public SolrDocument next() {
     int id = docIterator.nextDoc();
     idx++;
-    SolrDocument sdoc = docFetcher.solrDoc(id, solrReturnFields);
+    SolrDocument sdoc = null;
+
+    if (onlyPseudoFields) {
+      // no need to get stored fields of the document, see SOLR-5968
+      sdoc = new SolrDocument();
+    } else {
+      try {
+        Document doc = searcher.doc(id, fnames);
+        sdoc = getDoc(doc, schema);
+      } catch (IOException e) {
+        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Error reading document with docId " + id, e);
+      }
+    }
 
     if (transformer != null) {
-      boolean doScore = rctx.wantsScores();
       try {
-        if (doScore) {
-          transformer.transform(sdoc, id, docIterator.score());
-        } else {
-          transformer.transform(sdoc, id);
-        }
+        transformer.transform(sdoc, id);
       } catch (IOException e) {
         throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Error applying transformer", e);
       }
@@ -110,75 +126,27 @@ public class DocsStreamer implements Iterator<SolrDocument> {
 
   }
 
-  /**
-   * This method is less efficient then the 3 arg version because it may convert some fields that 
-   * are not needed
-   *
-   * @deprecated use the 3 arg version for better performance
-   * @see #convertLuceneDocToSolrDoc(Document,IndexSchema,ReturnFields)
-   */
-  @Deprecated
-  public static SolrDocument convertLuceneDocToSolrDoc(Document doc, final IndexSchema schema) {
-    return convertLuceneDocToSolrDoc(doc,schema, new SolrReturnFields());
-  }
-  
-  /**
-   * Converts the specified <code>Document</code> into a <code>SolrDocument</code>.
-   * <p>
-   * The use of {@link ReturnFields} can be important even when it was already used to retrieve the 
-   * {@link Document} from {@link SolrDocumentFetcher} because the Document may have been cached with 
-   * more fields then are desired.
-   * </p>
-   * 
-   * @param doc <code>Document</code> to be converted, must not be null
-   * @param schema <code>IndexSchema</code> containing the field/fieldType details for the index
-   *               the <code>Document</code> came from, must not be null.
-   * @param fields <code>ReturnFields</code> instance that can be use to limit the set of fields 
-   *               that will be converted, must not be null
-   */
-  public static SolrDocument convertLuceneDocToSolrDoc(Document doc,
-                                                       final IndexSchema schema,
-                                                       final ReturnFields fields) {
-    // TODO move to SolrDocumentFetcher ?  Refactor to also call docFetcher.decorateDocValueFields(...) ?
-    assert null != doc;
-    assert null != schema;
-    assert null != fields;
-    
-    // can't just use fields.wantsField(String)
-    // because that doesn't include extra fields needed by transformers
-    final Set<String> fieldNamesNeeded = fields.getLuceneFieldNames();
-
-    BinaryResponseWriter.MaskCharSeqSolrDocument masked = null;
-    final SolrDocument out = ResultContext.READASBYTES.get() == null ?
-        new SolrDocument() :
-        (masked = new BinaryResponseWriter.MaskCharSeqSolrDocument());
-
-    // NOTE: it would be tempting to try and optimize this to loop over fieldNamesNeeded
-    // when it's smaller then the IndexableField[] in the Document -- but that's actually *less* effecient
-    // since Document.getFields(String) does a full (internal) iteration over the full IndexableField[]
-    // see SOLR-11891
+  public static SolrDocument getDoc(Document doc, final IndexSchema schema) {
+    SolrDocument out = new SolrDocument();
     for (IndexableField f : doc.getFields()) {
-      final String fname = f.name();
-      if (null == fieldNamesNeeded || fieldNamesNeeded.contains(fname) ) {
-        // Make sure multivalued fields are represented as lists
-        Object existing = masked == null ? out.get(fname) : masked.getRaw(fname);
-        if (existing == null) {
-          SchemaField sf = schema.getFieldOrNull(fname);
-          if (sf != null && sf.multiValued()) {
-            List<Object> vals = new ArrayList<>();
-            vals.add(f);
-            out.setField(fname, vals);
-          } else {
-            out.setField(fname, f);
-          }
+      // Make sure multivalued fields are represented as lists
+      Object existing = out.get(f.name());
+      if (existing == null) {
+        SchemaField sf = schema.getFieldOrNull(f.name());
+        if (sf != null && sf.multiValued()) {
+          List<Object> vals = new ArrayList<>();
+          vals.add(f);
+          out.setField(f.name(), vals);
         } else {
-          out.addField(fname, f);
+          out.setField(f.name(), f);
         }
+      } else {
+        out.addField(f.name(), f);
       }
     }
     return out;
   }
-  
+
   @Override
   public void remove() { //do nothing
   }
@@ -219,11 +187,6 @@ public class DocsStreamer implements Iterator<SolrDocument> {
     KNOWN_TYPES.add(TrieDoubleField.class);
     KNOWN_TYPES.add(TrieDateField.class);
     KNOWN_TYPES.add(BinaryField.class);
-    KNOWN_TYPES.add(IntPointField.class);
-    KNOWN_TYPES.add(LongPointField.class);
-    KNOWN_TYPES.add(DoublePointField.class);
-    KNOWN_TYPES.add(FloatPointField.class);
-    KNOWN_TYPES.add(DatePointField.class);
     // We do not add UUIDField because UUID object is not a supported type in JavaBinCodec
     // and if we write UUIDField.toObject, we wouldn't know how to handle it in the client side
   }

@@ -14,27 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.schema;
 
-import java.io.IOException;
-import java.util.Locale;
-import java.util.Map;
-
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.TermToBytesRefAttribute;
-import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.valuesource.SortedSetFieldSource;
 import org.apache.lucene.search.*;
+import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.uninverting.UninvertingReader.Type;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.QueryBuilder;
 import org.apache.solr.common.SolrException;
-import org.apache.solr.parser.SolrQueryParserBase;
-import org.apache.solr.query.SolrRangeQuery;
 import org.apache.solr.response.TextResponseWriter;
 import org.apache.solr.search.QParser;
-import org.apache.solr.uninverting.UninvertingReader.Type;
+import org.apache.solr.search.Sorting;
+
+import java.util.Map;
+import java.io.IOException;
 
 /** <code>TextField</code> is the basic type for configurable text analysis.
  * Analyzers for field types using this implementation should be defined in the schema.
@@ -42,8 +41,6 @@ import org.apache.solr.uninverting.UninvertingReader.Type;
  */
 public class TextField extends FieldType {
   protected boolean autoGeneratePhraseQueries;
-  protected boolean enableGraphQueries;
-  protected SolrQueryParserBase.SynonymQueryStyle synonymQueryStyle;
 
   /**
    * Analyzer set by schema for text types to use when searching fields
@@ -72,21 +69,9 @@ public class TextField extends FieldType {
     } else {
       autoGeneratePhraseQueries = true;
     }
-    String autoGeneratePhraseQueriesStr = args.remove(AUTO_GENERATE_PHRASE_QUERIES);
+    String autoGeneratePhraseQueriesStr = args.remove("autoGeneratePhraseQueries");
     if (autoGeneratePhraseQueriesStr != null)
       autoGeneratePhraseQueries = Boolean.parseBoolean(autoGeneratePhraseQueriesStr);
-
-    synonymQueryStyle = SolrQueryParserBase.SynonymQueryStyle.AS_SAME_TERM;
-    String synonymQueryStyle = args.remove(SYNONYM_QUERY_STYLE);
-    if (synonymQueryStyle != null) {
-      this.synonymQueryStyle = SolrQueryParserBase.SynonymQueryStyle.valueOf(synonymQueryStyle.toUpperCase(Locale.ROOT));
-    }
-    
-    enableGraphQueries = true;
-    String enableGraphQueriesStr = args.remove(ENABLE_GRAPH_QUERIES);
-    if (enableGraphQueriesStr != null)
-      enableGraphQueries = Boolean.parseBoolean(enableGraphQueriesStr);
-
     super.init(schema, args);    
   }
 
@@ -108,23 +93,12 @@ public class TextField extends FieldType {
   public boolean getAutoGeneratePhraseQueries() {
     return autoGeneratePhraseQueries;
   }
-  
-  public boolean getEnableGraphQueries() {
-    return enableGraphQueries;
-  }
-
-  public SolrQueryParserBase.SynonymQueryStyle getSynonymQueryStyle() {return synonymQueryStyle;}
 
   @Override
   public SortField getSortField(SchemaField field, boolean reverse) {
     /* :TODO: maybe warn if isTokenized(), but doesn't use LimitTokenCountFilter in its chain? */
-    return getSortedSetSortField(field,
-                                 // historical behavior based on how the early versions of the FieldCache
-                                 // would deal with multiple indexed terms in a singled valued field...
-                                 //
-                                 // Always use the 'min' value from the (Uninverted) "psuedo doc values"
-                                 SortedSetSelector.Type.MIN,
-                                 reverse, SortField.STRING_FIRST, SortField.STRING_LAST);
+    field.checkSortability();
+    return Sorting.getTextSortField(field.getName(), reverse, field.sortMissingLast(), field.sortMissingFirst());
   }
   
   @Override
@@ -162,7 +136,7 @@ public class TextField extends FieldType {
     Analyzer multiAnalyzer = getMultiTermAnalyzer();
     BytesRef lower = analyzeMultiTerm(field.getName(), part1, multiAnalyzer);
     BytesRef upper = analyzeMultiTerm(field.getName(), part2, multiAnalyzer);
-    return new SolrRangeQuery(field.getName(), lower, upper, minInclusive, maxInclusive);
+    return new TermRangeQuery(field.getName(), lower, upper, minInclusive, maxInclusive);
   }
 
   public static BytesRef analyzeMultiTerm(String field, String part, Analyzer analyzerIn) {
@@ -208,10 +182,5 @@ public class TextField extends FieldType {
   @Override
   public Object unmarshalSortValue(Object value) {
     return unmarshalStringSortValue(value);
-  }
-
-  @Override
-  public boolean isUtf8Field() {
-    return true;
   }
 }

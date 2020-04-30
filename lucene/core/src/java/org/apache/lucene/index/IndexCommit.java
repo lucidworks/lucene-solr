@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -13,8 +15,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-package org.apache.lucene.index;
+*/
 
 import java.util.Collection;
 import java.util.Map;
@@ -108,7 +109,7 @@ public abstract class IndexCommit implements Comparable<IndexCommit> {
   public abstract long getGeneration();
 
   /** Returns userData, previously passed to {@link
-   *  IndexWriter#setLiveCommitData(Iterable)} for this commit.  Map is
+   *  IndexWriter#setCommitData(Map)} for this commit.  Map is
    *  {@code String -> String}. */
   public abstract Map<String,String> getUserData() throws IOException;
   

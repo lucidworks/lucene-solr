@@ -1,3 +1,4 @@
+package org.apache.solr.servlet;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +15,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.servlet;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
-
-import org.apache.solr.api.ApiBag;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.NamedList;
 import org.slf4j.Logger;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
 
 /**
  * Response helper methods.
@@ -44,16 +43,8 @@ public class ResponseUtils {
       SolrException solrExc = (SolrException)ex;
       code = solrExc.code();
       NamedList<String> errorMetadata = solrExc.getMetadata();
-      if (errorMetadata == null) {
-        errorMetadata = new NamedList<>();
-      }
-      errorMetadata.add(SolrException.ERROR_CLASS, ex.getClass().getName());
-      errorMetadata.add(SolrException.ROOT_ERROR_CLASS, SolrException.getRootCause(ex).getClass().getName());
-      info.add("metadata", errorMetadata);
-      if (ex instanceof ApiBag.ExceptionWithErrObject) {
-        ApiBag.ExceptionWithErrObject exception = (ApiBag.ExceptionWithErrObject) ex;
-        info.add("details", exception.getErrs() );
-      }
+      if (errorMetadata != null)
+        info.add("metadata", errorMetadata);
     }
     
     for (Throwable th = ex; th != null; th = th.getCause()) {

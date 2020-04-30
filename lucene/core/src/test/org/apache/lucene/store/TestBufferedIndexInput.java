@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -36,6 +36,7 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.util.ArrayUtil;
+import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase;
 
 public class TestBufferedIndexInput extends LuceneTestCase {
@@ -141,24 +142,26 @@ public class TestBufferedIndexInput extends LuceneTestCase {
      input.seek(pos);
      checkReadBytes(input, 10, pos);  
      input.seek(pos);
-     // block read past end of file
-     expectThrows(IOException.class, () -> {
+     try {
        checkReadBytes(input, 11, pos);
-     });
-
+           fail("Block read past end of file");
+       } catch (IOException e) {
+           /* success */
+       }
      input.seek(pos);
-
-     // block read past end of file
-     expectThrows(IOException.class, () -> {
+     try {
        checkReadBytes(input, 50, pos);
-     });
-
+           fail("Block read past end of file");
+       } catch (IOException e) {
+           /* success */
+       }
      input.seek(pos);
-
-     // block read past end of file
-     expectThrows(IOException.class, () -> {
+     try {
        checkReadBytes(input, 100000, pos);
-     });
+           fail("Block read past end of file");
+       } catch (IOException e) {
+           /* success */
+       }
   }
 
     // byten emulates a file - byten(n) returns the n'th byte in that file.
@@ -208,54 +211,58 @@ public class TestBufferedIndexInput extends LuceneTestCase {
     public void testSetBufferSize() throws IOException {
       Path indexDir = createTempDir("testSetBufferSize");
       MockFSDirectory dir = new MockFSDirectory(indexDir, random());
-      IndexWriter writer = new IndexWriter(
-                                           dir,
-                                           new IndexWriterConfig(new MockAnalyzer(random())).
-                                           setOpenMode(OpenMode.CREATE).
-                                           setMergePolicy(newLogMergePolicy(false))
-                                           );
-      for(int i=0;i<37;i++) {
-        Document doc = new Document();
-        doc.add(newTextField("content", "aaa bbb ccc ddd" + i, Field.Store.YES));
-        doc.add(newTextField("id", "" + i, Field.Store.YES));
-        writer.addDocument(doc);
+      try {
+        IndexWriter writer = new IndexWriter(
+            dir,
+            new IndexWriterConfig(new MockAnalyzer(random())).
+                setOpenMode(OpenMode.CREATE).
+                setMergePolicy(newLogMergePolicy(false))
+        );
+        for(int i=0;i<37;i++) {
+          Document doc = new Document();
+          doc.add(newTextField("content", "aaa bbb ccc ddd" + i, Field.Store.YES));
+          doc.add(newTextField("id", "" + i, Field.Store.YES));
+          writer.addDocument(doc);
+        }
+
+        dir.allIndexInputs.clear();
+
+        IndexReader reader = DirectoryReader.open(writer, true);
+        Term aaa = new Term("content", "aaa");
+        Term bbb = new Term("content", "bbb");
+        
+        reader.close();
+        
+        dir.tweakBufferSizes();
+        writer.deleteDocuments(new Term("id", "0"));
+        reader = DirectoryReader.open(writer, true);
+        IndexSearcher searcher = newSearcher(reader);
+        ScoreDoc[] hits = searcher.search(new TermQuery(bbb), 1000).scoreDocs;
+        dir.tweakBufferSizes();
+        assertEquals(36, hits.length);
+        
+        reader.close();
+        
+        dir.tweakBufferSizes();
+        writer.deleteDocuments(new Term("id", "4"));
+        reader = DirectoryReader.open(writer, true);
+        searcher = newSearcher(reader);
+
+        hits = searcher.search(new TermQuery(bbb), 1000).scoreDocs;
+        dir.tweakBufferSizes();
+        assertEquals(35, hits.length);
+        dir.tweakBufferSizes();
+        hits = searcher.search(new TermQuery(new Term("id", "33")), 1000).scoreDocs;
+        dir.tweakBufferSizes();
+        assertEquals(1, hits.length);
+        hits = searcher.search(new TermQuery(aaa), 1000).scoreDocs;
+        dir.tweakBufferSizes();
+        assertEquals(35, hits.length);
+        writer.close();
+        reader.close();
+      } finally {
+        IOUtils.rm(indexDir);
       }
-
-      dir.allIndexInputs.clear();
-
-      IndexReader reader = DirectoryReader.open(writer);
-      Term aaa = new Term("content", "aaa");
-      Term bbb = new Term("content", "bbb");
-        
-      reader.close();
-        
-      dir.tweakBufferSizes();
-      writer.deleteDocuments(new Term("id", "0"));
-      reader = DirectoryReader.open(writer);
-      IndexSearcher searcher = newSearcher(reader);
-      ScoreDoc[] hits = searcher.search(new TermQuery(bbb), 1000).scoreDocs;
-      dir.tweakBufferSizes();
-      assertEquals(36, hits.length);
-        
-      reader.close();
-        
-      dir.tweakBufferSizes();
-      writer.deleteDocuments(new Term("id", "4"));
-      reader = DirectoryReader.open(writer);
-      searcher = newSearcher(reader);
-
-      hits = searcher.search(new TermQuery(bbb), 1000).scoreDocs;
-      dir.tweakBufferSizes();
-      assertEquals(35, hits.length);
-      dir.tweakBufferSizes();
-      hits = searcher.search(new TermQuery(new Term("id", "33")), 1000).scoreDocs;
-      dir.tweakBufferSizes();
-      assertEquals(1, hits.length);
-      hits = searcher.search(new TermQuery(aaa), 1000).scoreDocs;
-      dir.tweakBufferSizes();
-      assertEquals(35, hits.length);
-      writer.close();
-      reader.close();
     }
 
     private static class MockFSDirectory extends FilterDirectory {

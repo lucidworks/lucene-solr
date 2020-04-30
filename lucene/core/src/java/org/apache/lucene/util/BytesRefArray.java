@@ -1,23 +1,32 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * contributor license agreements. See the NOTICE file distributed with this
+ * work for additional information regarding copyright ownership. The ASF
+ * licenses this file to You under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
  */
-package org.apache.lucene.util;
 
 import java.util.Arrays;
 import java.util.Comparator;
+
+import org.apache.lucene.util.ArrayUtil;
+import org.apache.lucene.util.ByteBlockPool;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.BytesRefIterator;
+import org.apache.lucene.util.Counter;
+import org.apache.lucene.util.IntroSorter;
+import org.apache.lucene.util.RamUsageEstimator;
 
 /**
  * A simple append only random-access {@link BytesRef} array that stores full
@@ -29,13 +38,13 @@ import java.util.Comparator;
  * @lucene.internal
  * @lucene.experimental
  */
-public final class BytesRefArray implements SortableBytesRefArray {
+public final class BytesRefArray {
   private final ByteBlockPool pool;
   private int[] offsets = new int[1];
   private int lastElement = 0;
   private int currentOffset = 0;
   private final Counter bytesUsed;
-
+  
   /**
    * Creates a new {@link BytesRefArray} with a counter to track allocated bytes
    */
@@ -43,18 +52,17 @@ public final class BytesRefArray implements SortableBytesRefArray {
     this.pool = new ByteBlockPool(new ByteBlockPool.DirectTrackingAllocator(
         bytesUsed));
     pool.nextBuffer();
-    bytesUsed.addAndGet(RamUsageEstimator.NUM_BYTES_ARRAY_HEADER * Integer.BYTES);
+    bytesUsed.addAndGet(RamUsageEstimator.NUM_BYTES_ARRAY_HEADER
+        + RamUsageEstimator.NUM_BYTES_INT);
     this.bytesUsed = bytesUsed;
   }
  
   /**
    * Clears this {@link BytesRefArray}
    */
-  @Override
   public void clear() {
     lastElement = 0;
     currentOffset = 0;
-    // TODO: it's trappy that this does not return storage held by int[] offsets array!
     Arrays.fill(offsets, 0);
     pool.reset(false, true); // no need to 0 fill the buffers we control the allocator
   }
@@ -64,12 +72,12 @@ public final class BytesRefArray implements SortableBytesRefArray {
    * @param bytes the bytes to append
    * @return the index of the appended bytes
    */
-  @Override
   public int append(BytesRef bytes) {
     if (lastElement >= offsets.length) {
       int oldLen = offsets.length;
       offsets = ArrayUtil.grow(offsets, offsets.length + 1);
-      bytesUsed.addAndGet((offsets.length - oldLen) * Integer.BYTES);
+      bytesUsed.addAndGet((offsets.length - oldLen)
+          * RamUsageEstimator.NUM_BYTES_INT);
     }
     pool.append(bytes);
     offsets[lastElement++] = currentOffset;
@@ -81,7 +89,6 @@ public final class BytesRefArray implements SortableBytesRefArray {
    * Returns the current size of this {@link BytesRefArray}
    * @return the current size of this {@link BytesRefArray}
    */
-  @Override
   public int size() {
     return lastElement;
   }
@@ -93,28 +100,18 @@ public final class BytesRefArray implements SortableBytesRefArray {
    * @return the <i>n'th</i> element of this {@link BytesRefArray}
    */
   public BytesRef get(BytesRefBuilder spare, int index) {
-    FutureObjects.checkIndex(index, lastElement);
-    int offset = offsets[index];
-    int length = index == lastElement - 1 ? currentOffset - offset
-        : offsets[index + 1] - offset;
-    spare.grow(length);
-    spare.setLength(length);
-    pool.readBytes(offset, spare.bytes(), 0, spare.length());
-    return spare.get();
-  }
-
-  /** Used only by sort below, to set a {@link BytesRef} with the specified slice, avoiding copying bytes in the common case when the slice
-   *  is contained in a single block in the byte block pool. */
-  private void setBytesRef(BytesRefBuilder spare, BytesRef result, int index) {
-    FutureObjects.checkIndex(index, lastElement);
-    int offset = offsets[index];
-    int length;
-    if (index == lastElement - 1) {
-      length = currentOffset - offset;
-    } else {
-      length = offsets[index + 1] - offset;
+    if (lastElement > index) {
+      int offset = offsets[index];
+      int length = index == lastElement - 1 ? currentOffset - offset
+          : offsets[index + 1] - offset;
+      spare.grow(length);
+      spare.setLength(length);
+      pool.readBytes(offset, spare.bytes(), 0, spare.length());
+      return spare.get();
     }
-    pool.setBytesRef(spare, result, offset, length);
+    throw new IndexOutOfBoundsException("index " + index
+        + " must be less than the size: " + lastElement);
+    
   }
   
   private int[] sort(final Comparator<BytesRef> comp) {
@@ -133,30 +130,25 @@ public final class BytesRefArray implements SortableBytesRefArray {
       @Override
       protected int compare(int i, int j) {
         final int idx1 = orderedEntries[i], idx2 = orderedEntries[j];
-        setBytesRef(scratch1, scratchBytes1, idx1);
-        setBytesRef(scratch2, scratchBytes2, idx2);
-        return comp.compare(scratchBytes1, scratchBytes2);
+        return comp.compare(get(scratch1, idx1), get(scratch2, idx2));
       }
       
       @Override
       protected void setPivot(int i) {
         final int index = orderedEntries[i];
-        setBytesRef(pivotBuilder, pivot, index);
+        pivot = get(pivotBuilder, index);
       }
       
       @Override
       protected int comparePivot(int j) {
         final int index = orderedEntries[j];
-        setBytesRef(scratch2, scratchBytes2, index);
-        return comp.compare(pivot, scratchBytes2);
+        return comp.compare(pivot, get(scratch2, index));
       }
 
-      private final BytesRef pivot = new BytesRef();
-      private final BytesRef scratchBytes1 = new BytesRef();
-      private final BytesRef scratchBytes2 = new BytesRef();
-      private final BytesRefBuilder pivotBuilder = new BytesRefBuilder();
-      private final BytesRefBuilder scratch1 = new BytesRefBuilder();
-      private final BytesRefBuilder scratch2 = new BytesRefBuilder();
+      private BytesRef pivot;
+      private final BytesRefBuilder pivotBuilder = new BytesRefBuilder(),
+          scratch1 = new BytesRefBuilder(),
+          scratch2 = new BytesRefBuilder();
     }.sort(0, size());
     return orderedEntries;
   }
@@ -182,19 +174,17 @@ public final class BytesRefArray implements SortableBytesRefArray {
    * This is a non-destructive operation.
    * </p>
    */
-  @Override
   public BytesRefIterator iterator(final Comparator<BytesRef> comp) {
     final BytesRefBuilder spare = new BytesRefBuilder();
-    final BytesRef result = new BytesRef();
     final int size = size();
     final int[] indices = comp == null ? null : sort(comp);
     return new BytesRefIterator() {
       int pos = 0;
+      
       @Override
       public BytesRef next() {
         if (pos < size) {
-          setBytesRef(spare, result, indices == null ? pos++ : indices[pos++]);
-          return result;
+          return get(spare, indices == null ? pos++ : indices[pos++]);
         }
         return null;
       }

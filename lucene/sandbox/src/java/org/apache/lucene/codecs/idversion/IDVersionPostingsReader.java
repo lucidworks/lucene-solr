@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.idversion;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.idversion;
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Collections;
 
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.PostingsReaderBase;
-import org.apache.lucene.index.FieldInfo;
-import org.apache.lucene.index.ImpactsEnum;
 import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.IndexInput;
+import org.apache.lucene.util.Accountable;
+import org.apache.lucene.util.Bits;
 
 final class IDVersionPostingsReader extends PostingsReaderBase {
 
@@ -89,13 +93,13 @@ final class IDVersionPostingsReader extends PostingsReaderBase {
   }
 
   @Override
-  public ImpactsEnum impacts(FieldInfo fieldInfo, BlockTermState state, int flags) throws IOException {
-    throw new UnsupportedOperationException("Should never be called, IDVersionSegmentTermsEnum implements impacts directly");
-  }
-
-  @Override
   public long ramBytesUsed() {
     return 0;
+  }
+  
+  @Override
+  public Collection<Accountable> getChildResources() {
+    return Collections.emptyList();
   }
 
   @Override

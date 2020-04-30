@@ -1,3 +1,5 @@
+package org.apache.lucene.facet;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.lucene.search.Scorable;
-import org.apache.lucene.search.ScoreMode;
+import org.apache.lucene.search.Scorer;
+import org.apache.lucene.search.Scorer.ChildScorer;
 import org.apache.lucene.search.SimpleCollector;
 
 /** Verifies in collect() that all child subScorers are on
@@ -30,17 +30,17 @@ class AssertingSubDocsAtOnceCollector extends SimpleCollector {
 
   // TODO: allow wrapping another Collector
 
-  List<Scorable> allScorers;
+  List<Scorer> allScorers;
 
   @Override
-  public void setScorer(Scorable s) throws IOException {
+  public void setScorer(Scorer s) {
     // Gathers all scorers, including s and "under":
     allScorers = new ArrayList<>();
     allScorers.add(s);
     int upto = 0;
     while(upto < allScorers.size()) {
       s = allScorers.get(upto++);
-      for (Scorable.ChildScorable sub : s.getChildren()) {
+      for (ChildScorer sub : s.getChildren()) {
         allScorers.add(sub.child);
       }
     }
@@ -48,7 +48,7 @@ class AssertingSubDocsAtOnceCollector extends SimpleCollector {
 
   @Override
   public void collect(int docID) {
-    for(Scorable s : allScorers) {
+    for(Scorer s : allScorers) {
       if (docID != s.docID()) {
         throw new IllegalStateException("subScorer=" + s + " has docID=" + s.docID() + " != collected docID=" + docID);
       }
@@ -56,7 +56,7 @@ class AssertingSubDocsAtOnceCollector extends SimpleCollector {
   }
 
   @Override
-  public ScoreMode scoreMode() {
-    return ScoreMode.COMPLETE_NO_SCORES;
+  public boolean needsScores() {
+    return false;
   }
 }

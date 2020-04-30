@@ -1,3 +1,5 @@
+package org.apache.solr.update;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update;
-
-import org.apache.solr.client.solrj.impl.HttpClientUtil;
 
 public class UpdateShardHandlerConfig {
 
-  public static final String DEFAULT_METRICNAMESTRATEGY = "queryLessURLAndMethod";
-  public static final int DEFAULT_MAXRECOVERYTHREADS = -1;
+  public static final int DEFAULT_DISTRIBUPDATECONNTIMEOUT = 60000;
+  public static final int DEFAULT_DISTRIBUPDATESOTIMEOUT = 600000;
+  public static final int DEFAULT_MAXUPDATECONNECTIONS = 10000;
+  public static final int DEFAULT_MAXUPDATECONNECTIONSPERHOST = 100;
 
   public static final UpdateShardHandlerConfig DEFAULT
-      = new UpdateShardHandlerConfig(HttpClientUtil.DEFAULT_MAXCONNECTIONS, HttpClientUtil.DEFAULT_MAXCONNECTIONSPERHOST,
-                                     HttpClientUtil.DEFAULT_SO_TIMEOUT, HttpClientUtil.DEFAULT_CONNECT_TIMEOUT,
-                                      DEFAULT_METRICNAMESTRATEGY, DEFAULT_MAXRECOVERYTHREADS);
+      = new UpdateShardHandlerConfig(DEFAULT_MAXUPDATECONNECTIONS, DEFAULT_MAXUPDATECONNECTIONSPERHOST,
+                                     DEFAULT_DISTRIBUPDATESOTIMEOUT, DEFAULT_DISTRIBUPDATECONNTIMEOUT);
 
   private final int maxUpdateConnections;
 
@@ -36,18 +36,11 @@ public class UpdateShardHandlerConfig {
 
   private final int distributedConnectionTimeout;
 
-  private final String metricNameStrategy;
-
-  private final int maxRecoveryThreads;
-
-  public UpdateShardHandlerConfig(int maxUpdateConnections, int maxUpdateConnectionsPerHost, int distributedSocketTimeout, int distributedConnectionTimeout,
-                                  String metricNameStrategy, int maxRecoveryThreads) {
+  public UpdateShardHandlerConfig(int maxUpdateConnections, int maxUpdateConnectionsPerHost, int distributedSocketTimeout, int distributedConnectionTimeout) {
     this.maxUpdateConnections = maxUpdateConnections;
     this.maxUpdateConnectionsPerHost = maxUpdateConnectionsPerHost;
     this.distributedSocketTimeout = distributedSocketTimeout;
     this.distributedConnectionTimeout = distributedConnectionTimeout;
-    this.metricNameStrategy = metricNameStrategy;
-    this.maxRecoveryThreads = maxRecoveryThreads;
   }
 
   public int getMaxUpdateConnectionsPerHost() {
@@ -64,13 +57,5 @@ public class UpdateShardHandlerConfig {
 
   public int getDistributedConnectionTimeout() {
     return distributedConnectionTimeout;
-  }
-
-  public String getMetricNameStrategy() {
-    return metricNameStrategy;
-  }
-
-  public int getMaxRecoveryThreads() {
-    return maxRecoveryThreads;
   }
 }

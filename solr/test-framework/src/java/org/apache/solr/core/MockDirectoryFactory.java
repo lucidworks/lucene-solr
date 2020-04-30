@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
 
 import java.io.File;
 import java.io.IOException;
@@ -33,9 +34,7 @@ import org.apache.lucene.util.LuceneTestCase;
 public class MockDirectoryFactory extends EphemeralDirectoryFactory {
   
   public static final String SOLR_TESTS_ALLOW_READING_FILES_STILL_OPEN_FOR_WRITE = "solr.tests.allow_reading_files_still_open_for_write";
-  public static final String SOLR_TESTS_USING_MOCK_DIRECTORY_WRAPPER = "solr.tests.using_mock_directory_wrapper";
   private boolean allowReadingFilesStillOpenForWrite = Boolean.getBoolean(SOLR_TESTS_ALLOW_READING_FILES_STILL_OPEN_FOR_WRITE);
-  private boolean useMockDirectoryWrapper = Boolean.getBoolean(SOLR_TESTS_USING_MOCK_DIRECTORY_WRAPPER);
 
   @Override
   protected LockFactory createLockFactory(String rawLockType) throws IOException {
@@ -44,9 +43,7 @@ public class MockDirectoryFactory extends EphemeralDirectoryFactory {
 
   @Override
   protected Directory create(String path, LockFactory lockFactory, DirContext dirContext) throws IOException {
-    Directory dir;
-    if (useMockDirectoryWrapper) dir = LuceneTestCase.newMockDirectory();
-    else dir = LuceneTestCase.newDirectory(); // we ignore the given lock factory
+    Directory dir = LuceneTestCase.newDirectory(); // we ignore the given lock factory
     
     Directory cdir = reduce(dir);
     cdir = reduce(cdir);
@@ -66,6 +63,14 @@ public class MockDirectoryFactory extends EphemeralDirectoryFactory {
       // ram dirs in cores that are restarted end up empty
       // and check index fails
       mockDirWrapper.setCheckIndexOnClose(false);
+      
+      // if we enable this, TestReplicationHandler fails when it
+      // tries to write to index.properties after the file has
+      // already been created.
+      mockDirWrapper.setPreventDoubleWrite(false);
+      
+      // IndexFetcher & co don't seem ready for this:
+      mockDirWrapper.setEnableVirusScanner(false);
       
       if (allowReadingFilesStillOpenForWrite) {
         mockDirWrapper.setAllowReadingFilesStillOpenForWrite(true);

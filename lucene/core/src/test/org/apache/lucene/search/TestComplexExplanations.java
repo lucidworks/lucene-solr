@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,7 +23,7 @@ import java.util.List;
 
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.similarities.ClassicSimilarity;
+import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.spans.*;
 
 /**
@@ -33,17 +33,30 @@ import org.apache.lucene.search.spans.*;
  */
 public class TestComplexExplanations extends BaseExplanationTestCase {
 
+  /**
+   * Override the Similarity used in our searcher with one that plays
+   * nice with boosts of 0.0
+   */
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    // TODO: switch to BM25?
-    searcher.setSimilarity(new ClassicSimilarity());
+    searcher.setSimilarity(createQnorm1Similarity());
   }
   
   @Override
   public void tearDown() throws Exception {
     searcher.setSimilarity(IndexSearcher.getDefaultSimilarity());
     super.tearDown();
+  }
+
+  // must be static for weight serialization tests 
+  private static DefaultSimilarity createQnorm1Similarity() {
+    return new DefaultSimilarity() {
+        @Override
+        public float queryNorm(float sumOfSquaredWeights) {
+          return 1.0f; // / (float) Math.sqrt(1.0f + sumOfSquaredWeights);
+        }
+      };
   }
 
   
@@ -60,10 +73,8 @@ public class TestComplexExplanations extends BaseExplanationTestCase {
     q.add(snear(sf("w3",2), st("w2"), st("w3"), 5, true),
           Occur.SHOULD);
 
-    Query t = new BooleanQuery.Builder()
-        .add(new TermQuery(new Term(FIELD, "xx")), Occur.MUST)
-        .add(matchTheseItems(new int[] {1,3}), Occur.FILTER)
-        .build();
+    Query t = new FilteredQuery(new TermQuery(new Term(FIELD, "xx")),
+                                new QueryWrapperFilter(matchTheseItems(new int[] {1,3})));
     q.add(new BoostQuery(t, 1000), Occur.SHOULD);
     
     t = new ConstantScoreQuery(matchTheseItems(new int[] {0,2}));
@@ -120,14 +131,12 @@ public class TestComplexExplanations extends BaseExplanationTestCase {
     q.add(snear(sf("w3",2), st("w2"), st("w3"), 5, true),
           Occur.SHOULD);
     
-    Query t = new BooleanQuery.Builder()
-        .add(new TermQuery(new Term(FIELD, "xx")), Occur.MUST)
-        .add(matchTheseItems(new int[] {1,3}), Occur.FILTER)
-        .build();
+    Query t = new FilteredQuery(new TermQuery(new Term(FIELD, "xx")),
+                                new QueryWrapperFilter(matchTheseItems(new int[] {1,3})));
     q.add(new BoostQuery(t, 1000), Occur.SHOULD);
     
     t = new ConstantScoreQuery(matchTheseItems(new int[] {0,2}));
-    q.add(new BoostQuery(t, 20), Occur.SHOULD);
+    q.add(new BoostQuery(t, -20), Occur.SHOULD);
     
     List<Query> disjuncts = new ArrayList<>();
     disjuncts.add(snear(st("w2"),
@@ -149,7 +158,7 @@ public class TestComplexExplanations extends BaseExplanationTestCase {
     disjuncts.add(xxW1.build());
 
     DisjunctionMaxQuery dm2 = new DisjunctionMaxQuery(
-        Arrays.asList(
+        Arrays.<Query>asList(
             new TermQuery(new Term(FIELD, "w1")),
             new TermQuery(new Term(FIELD, "w2")),
             new TermQuery(new Term(FIELD, "w3"))),
@@ -191,11 +200,7 @@ public class TestComplexExplanations extends BaseExplanationTestCase {
   
   public void testFQ5() throws Exception {
     TermQuery query = new TermQuery(new Term(FIELD, "xx"));
-    Query filtered = new BooleanQuery.Builder()
-        .add(new BoostQuery(query, 0), Occur.MUST)
-        .add(matchTheseItems(new int[] {1,3}), Occur.FILTER)
-        .build();
-    bqtest(filtered, new int[] {3});
+    bqtest(new FilteredQuery(query, new QueryWrapperFilter(matchTheseItems(new int[] {1,3}))), new int[] {3});
   }
   
   public void testCSQ4() throws Exception {
@@ -218,11 +223,11 @@ public class TestComplexExplanations extends BaseExplanationTestCase {
   }
   
   public void testMPQ7() throws Exception {
-    MultiPhraseQuery.Builder qb = new MultiPhraseQuery.Builder();
-    qb.add(ta(new String[] {"w1"}));
-    qb.add(ta(new String[] {"w2"}));
-    qb.setSlop(1);
-    bqtest(new BoostQuery(qb.build(), 0), new int[] { 0,1,2 });
+    MultiPhraseQuery q = new MultiPhraseQuery();
+    q.add(ta(new String[] {"w1"}));
+    q.add(ta(new String[] {"w2"}));
+    q.setSlop(1);
+    bqtest(new BoostQuery(q, 0), new int[] { 0,1,2 });
   }
   
   public void testBQ12() throws Exception {

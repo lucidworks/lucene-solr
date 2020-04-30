@@ -1,3 +1,5 @@
+package org.apache.lucene.util.automaton;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,20 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.automaton;
-
 
 //import java.io.IOException;
 //import java.io.PrintWriter;
 
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.ArrayUtil;
-import org.apache.lucene.util.FutureObjects;
 import org.apache.lucene.util.InPlaceMergeSorter;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.Sorter;
@@ -115,8 +116,14 @@ public class Automaton implements Accountable {
 
   /** Set or clear this state as an accept state. */
   public void setAccept(int state, boolean accept) {
-    FutureObjects.checkIndex(state, getNumStates());
-    isAccept.set(state, accept);
+    if (state >= getNumStates()) {
+      throw new IllegalArgumentException("state=" + state + " is out of bounds (numStates=" + getNumStates() + ")");
+    }
+    if (accept) {
+      isAccept.set(state);
+    } else {
+      isAccept.clear(state);
+    }
   }
 
   /** Sugar to get all transitions for all states.  This is
@@ -156,9 +163,12 @@ public class Automaton implements Accountable {
   public void addTransition(int source, int dest, int min, int max) {
     assert nextTransition%3 == 0;
 
-    int bounds = nextState/2;
-    FutureObjects.checkIndex(source, bounds);
-    FutureObjects.checkIndex(dest, bounds);
+    if (source >= nextState/2) {
+      throw new IllegalArgumentException("source=" + source + " is out of bounds (maxState is " + (nextState/2-1) + ")");
+    }
+    if (dest >= nextState/2) {
+      throw new IllegalArgumentException("dest=" + dest + " is out of bounds (max state is " + (nextState/2-1) + ")");
+    }
 
     growTransitions();
     if (curState != source) {
@@ -349,13 +359,13 @@ public class Automaton implements Accountable {
   }
 
   private void growStates() {
-    if (nextState+2 > states.length) {
+    if (nextState+2 >= states.length) {
       states = ArrayUtil.grow(states, nextState+2);
     }
   }
 
   private void growTransitions() {
-    if (nextTransition+3 > transitions.length) {
+    if (nextTransition+3 >= transitions.length) {
       transitions = ArrayUtil.grow(transitions, nextTransition+3);
     }
   }
@@ -496,7 +506,7 @@ public class Automaton implements Accountable {
 
     int upto = t.transitionUpto;
     if (upto == states[2*t.source]) {
-      // Transition isn't initialized yet (this is the first transition); don't check:
+      // Transition isn't initialzed yet (this is the first transition); don't check:
       return true;
     }
 
@@ -571,15 +581,14 @@ public class Automaton implements Accountable {
   /** Returns the dot (graphviz) representation of this automaton.
    *  This is extremely useful for visualizing the automaton. */
   public String toDot() {
-    // TODO: breadth first search so we can get layered output...
+    // TODO: breadth first search so we can see get layered output...
 
     StringBuilder b = new StringBuilder();
     b.append("digraph Automaton {\n");
     b.append("  rankdir = LR\n");
-    b.append("  node [width=0.2, height=0.2, fontsize=8]\n");
     final int numStates = getNumStates();
     if (numStates > 0) {
-      b.append("  initial [shape=plaintext,label=\"\"]\n");
+      b.append("  initial [shape=plaintext,label=\"0\"]\n");
       b.append("  initial -> 0\n");
     }
 
@@ -589,9 +598,9 @@ public class Automaton implements Accountable {
       b.append("  ");
       b.append(state);
       if (isAccept(state)) {
-        b.append(" [shape=doublecircle,label=\"").append(state).append("\"]\n");
+        b.append(" [shape=doublecircle,label=\"" + state + "\"]\n");
       } else {
-        b.append(" [shape=circle,label=\"").append(state).append("\"]\n");
+        b.append(" [shape=circle,label=\"" + state + "\"]\n");
       }
       int numTransitions = initTransition(state, t);
       //System.out.println("toDot: state " + state + " has " + numTransitions + " transitions; t.nextTrans=" + t.transitionUpto);
@@ -834,7 +843,10 @@ public class Automaton implements Accountable {
 
     /** Set or clear this state as an accept state. */
     public void setAccept(int state, boolean accept) {
-      FutureObjects.checkIndex(state, getNumStates());      
+      if (state >= getNumStates()) {
+        throw new IllegalArgumentException("state=" + state + " is out of bounds (numStates=" + getNumStates() + ")");
+      }
+      
       this.isAccept.set(state, accept);
     }
 
@@ -883,7 +895,12 @@ public class Automaton implements Accountable {
     return RamUsageEstimator.NUM_BYTES_OBJECT_HEADER + RamUsageEstimator.sizeOf(states) + RamUsageEstimator.sizeOf(transitions) +
       RamUsageEstimator.NUM_BYTES_OBJECT_HEADER + (isAccept.size() / 8) + RamUsageEstimator.NUM_BYTES_OBJECT_REF +
       2 * RamUsageEstimator.NUM_BYTES_OBJECT_REF +
-      3 * Integer.BYTES +
-      1;
+      3 * RamUsageEstimator.NUM_BYTES_INT +
+      RamUsageEstimator.NUM_BYTES_BOOLEAN;
+  }
+
+  @Override
+  public Collection<Accountable> getChildResources() {
+    return Collections.emptyList();
   }
 }

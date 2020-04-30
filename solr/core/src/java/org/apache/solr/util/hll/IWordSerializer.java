@@ -1,3 +1,5 @@
+package org.apache.solr.util.hll;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util.hll;
 
 /**
  * Writes 'words' of fixed width, in sequence, to a byte array.

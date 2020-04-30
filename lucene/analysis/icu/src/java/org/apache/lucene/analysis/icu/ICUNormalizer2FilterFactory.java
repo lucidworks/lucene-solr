@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.icu;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.icu;
-
 
 import java.util.Arrays;
 import java.util.Map;
 
+import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory; // javadocs
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
+
 import com.ibm.icu.text.FilteredNormalizer2;
 import com.ibm.icu.text.Normalizer2;
 import com.ibm.icu.text.UnicodeSet;
-import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
  * Factory for {@link ICUNormalizer2Filter}
@@ -41,14 +44,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * @see ICUNormalizer2Filter
  * @see Normalizer2
  * @see FilteredNormalizer2
- * @since 3.1.0
- * @lucene.spi {@value #NAME}
  */
-public class ICUNormalizer2FilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "icuNormalizer2";
-
+public class ICUNormalizer2FilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
   private final Normalizer2 normalizer;
 
   /** Creates a new ICUNormalizer2FilterFactory */
@@ -81,7 +78,7 @@ public class ICUNormalizer2FilterFactory extends TokenFilterFactory {
   }
 
   @Override
-  public TokenStream normalize(TokenStream input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

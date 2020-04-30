@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search.function;
 
 import org.apache.lucene.index.LeafReaderContext;
@@ -45,7 +46,7 @@ public class CollapseScoreFunction extends ValueSource {
     return new CollapseScoreFunctionValues(context);
   }
 
-  public static class CollapseScoreFunctionValues extends FunctionValues {
+  public class CollapseScoreFunctionValues extends FunctionValues {
 
     private CollapseScore cscore;
 

@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.solr.SolrTestCaseJ4.SuppressSSL;
@@ -43,11 +39,16 @@ import org.apache.solr.common.params.CollectionParams.CollectionAction;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.Utils;
+import org.apache.solr.update.VersionInfo;
+import org.apache.solr.update.processor.DistributedUpdateProcessor;
 import org.apache.zookeeper.CreateMode;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import static org.apache.solr.common.params.CommonParams.VERSION_FIELD;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Super basic testing, no shard restarting or anything.
@@ -68,8 +69,6 @@ public class FullSolrCloudDistribCmdsTest extends AbstractFullDistribZkTestBase 
 
   @Test
   @ShardsFixed(num = 6)
-  // commented 15-Sep-2018 @LuceneTestCase.BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // 2-Aug-2018
-  @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // annotated on: 24-Dec-2018
   public void test() throws Exception {
     handle.clear();
     handle.put("timestamp", SKIPVAL);
@@ -159,9 +158,13 @@ public class FullSolrCloudDistribCmdsTest extends AbstractFullDistribZkTestBase 
     CollectionAdminResponse response;
     Map<String, NamedList<Integer>> coresStatus;
 
-    CollectionAdminRequest.Create createCollectionRequest
-      = CollectionAdminRequest.createCollectionWithImplicitRouter("implicit_collection_without_routerfield",
-                                                                  "conf1","shard1,shard2",2);
+    CollectionAdminRequest.Create createCollectionRequest = new CollectionAdminRequest.Create()
+            .setCollectionName("implicit_collection_without_routerfield")
+            .setRouterName("implicit")
+            .setNumShards(2)
+            .setShards("shard1,shard2")
+            .setReplicationFactor(2)
+            .setConfigName("conf1");
     response = createCollectionRequest.process(server);
 
     assertEquals(0, response.getStatus());
@@ -283,10 +286,14 @@ public class FullSolrCloudDistribCmdsTest extends AbstractFullDistribZkTestBase 
     CollectionAdminResponse response;
     Map<String, NamedList<Integer>> coresStatus;
 
-    response = CollectionAdminRequest.createCollection("compositeid_collection_with_routerfield","conf1",2,2)
+    response = new CollectionAdminRequest.Create()
+            .setCollectionName("compositeid_collection_with_routerfield")
             .setRouterName("compositeId")
             .setRouterField("routefield_s")
+            .setNumShards(2)
             .setShards("shard1,shard2")
+            .setReplicationFactor(2)
+            .setConfigName("conf1")
             .process(server);
 
     assertEquals(0, response.getStatus());
@@ -622,11 +629,11 @@ public class FullSolrCloudDistribCmdsTest extends AbstractFullDistribZkTestBase 
       
       @Override
       public void run() {
-        int rnds = random().nextInt(TEST_NIGHTLY ? 10 : 3) + 1;
+        int rnds = random().nextInt(TEST_NIGHTLY ? 25 : 3) + 1;
         for (int i = 0; i < rnds; i++) {
           UpdateRequest uReq;
           uReq = new UpdateRequest();
-          int cnt = random().nextInt(TEST_NIGHTLY ? 2000 : 200) + 1;
+          int cnt = random().nextInt(TEST_NIGHTLY ? 3313 : 350) + 1;
           for (int j = 0; j <cnt; j++) {
             addDoc("thread" + name + "_" + i + "_" + j, uReq);
           }
@@ -692,8 +699,9 @@ public class FullSolrCloudDistribCmdsTest extends AbstractFullDistribZkTestBase 
     QueryResponse results = query(cloudClient);
     long beforeCount = results.getResults().getNumFound();
     int cnt = TEST_NIGHTLY ? 2933 : 313;
-    try (ConcurrentUpdateSolrClient concurrentClient = getConcurrentUpdateSolrClient(
-        ((HttpSolrClient) clients.get(0)).getBaseURL(), 10, 2, 120000)) {
+    try (ConcurrentUpdateSolrClient concurrentClient = new ConcurrentUpdateSolrClient(
+        ((HttpSolrClient) clients.get(0)).getBaseURL(), 10, 2)) {
+      concurrentClient.setConnectionTimeout(120000);
       for (int i = 0; i < cnt; i++) {
         index_specific(concurrentClient, id, docId++, "text_t", "some text so that it not's negligent work to parse this doc, even though it's still a pretty short doc");
       }
@@ -711,12 +719,12 @@ public class FullSolrCloudDistribCmdsTest extends AbstractFullDistribZkTestBase 
   
   private void testOptimisticUpdate(QueryResponse results) throws Exception {
     SolrDocument doc = results.getResults().get(0);
-    Long version = (Long) doc.getFieldValue(VERSION_FIELD);
+    Long version = (Long) doc.getFieldValue(VersionInfo.VERSION_FIELD);
     Integer theDoc = (Integer) doc.getFieldValue("id");
     UpdateRequest uReq = new UpdateRequest();
     SolrInputDocument doc1 = new SolrInputDocument();
     uReq.setParams(new ModifiableSolrParams());
-    uReq.getParams().set(VERSION_FIELD, Long.toString(version));
+    uReq.getParams().set(DistributedUpdateProcessor.VERSION_FIELD, Long.toString(version));
     addFields(doc1, "id", theDoc, t1, "theupdatestuff");
     uReq.add(doc1);
     
@@ -729,7 +737,7 @@ public class FullSolrCloudDistribCmdsTest extends AbstractFullDistribZkTestBase 
     SolrInputDocument doc2 = new SolrInputDocument();
     uReq = new UpdateRequest();
     uReq.setParams(new ModifiableSolrParams());
-    uReq.getParams().set(VERSION_FIELD, Long.toString(version));
+    uReq.getParams().set(DistributedUpdateProcessor.VERSION_FIELD, Long.toString(version));
     addFields(doc2, "id", theDoc, t1, "thenewupdatestuff");
     uReq.add(doc2);
     

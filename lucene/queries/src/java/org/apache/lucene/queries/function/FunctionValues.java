@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function;
 
-import java.io.IOException;
-
-import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.Scorer;
-import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.mutable.MutableValue;
 import org.apache.lucene.util.mutable.MutableValueFloat;
@@ -41,22 +39,22 @@ import org.apache.lucene.util.mutable.MutableValueFloat;
 //   want the Query carrying around big objects
 public abstract class FunctionValues {
 
-  public byte byteVal(int doc) throws IOException { throw new UnsupportedOperationException(); }
-  public short shortVal(int doc) throws IOException { throw new UnsupportedOperationException(); }
+  public byte byteVal(int doc) { throw new UnsupportedOperationException(); }
+  public short shortVal(int doc) { throw new UnsupportedOperationException(); }
 
-  public float floatVal(int doc) throws IOException { throw new UnsupportedOperationException(); }
-  public int intVal(int doc) throws IOException { throw new UnsupportedOperationException(); }
-  public long longVal(int doc) throws IOException { throw new UnsupportedOperationException(); }
-  public double doubleVal(int doc) throws IOException { throw new UnsupportedOperationException(); }
+  public float floatVal(int doc) { throw new UnsupportedOperationException(); }
+  public int intVal(int doc) { throw new UnsupportedOperationException(); }
+  public long longVal(int doc) { throw new UnsupportedOperationException(); }
+  public double doubleVal(int doc) { throw new UnsupportedOperationException(); }
   // TODO: should we make a termVal, returns BytesRef?
-  public String strVal(int doc) throws IOException { throw new UnsupportedOperationException(); }
+  public String strVal(int doc) { throw new UnsupportedOperationException(); }
 
-  public boolean boolVal(int doc) throws IOException {
+  public boolean boolVal(int doc) {
     return intVal(doc) != 0;
   }
 
   /** returns the bytes representation of the string val - TODO: should this return the indexed raw bytes not? */
-  public boolean bytesVal(int doc, BytesRefBuilder target) throws IOException {
+  public boolean bytesVal(int doc, BytesRefBuilder target) {
     String s = strVal(doc);
     if (s==null) {
       target.clear();
@@ -67,13 +65,13 @@ public abstract class FunctionValues {
   }
 
   /** Native Java Object representation of the value */
-  public Object objectVal(int doc) throws IOException {
+  public Object objectVal(int doc) {
     // most FunctionValues are functions, so by default return a Float()
     return floatVal(doc);
   }
 
   /** Returns true if there is a value for this document */
-  public boolean exists(int doc) throws IOException {
+  public boolean exists(int doc) {
     return true;
   }
 
@@ -82,15 +80,13 @@ public abstract class FunctionValues {
    * @return the sort ordinal for the specified doc
    * TODO: Maybe we can just use intVal for this...
    */
-  public int ordVal(int doc) throws IOException {
-    throw new UnsupportedOperationException();
-  }
+  public int ordVal(int doc) { throw new UnsupportedOperationException(); }
 
   /**
    * @return the number of unique sort ordinals this instance has
    */
   public int numOrd() { throw new UnsupportedOperationException(); }
-  public abstract String toString(int doc) throws IOException;
+  public abstract String toString(int doc);
 
   /**
    * Abstraction of the logic required to fill the value of a specified doc into
@@ -105,7 +101,7 @@ public abstract class FunctionValues {
     public abstract MutableValue getValue();
 
     /** MutableValue will be reused across calls.  Returns true if the value exists. */
-    public abstract void fillValue(int doc) throws IOException;
+    public abstract void fillValue(int doc);
   }
 
   /** @lucene.experimental  */
@@ -119,25 +115,25 @@ public abstract class FunctionValues {
       }
 
       @Override
-      public void fillValue(int doc) throws IOException {
+      public void fillValue(int doc) {
         mval.value = floatVal(doc);
       }
     };
   }
 
   //For Functions that can work with multiple values from the same document.  This does not apply to all functions
-  public void byteVal(int doc, byte [] vals) throws IOException { throw new UnsupportedOperationException(); }
-  public void shortVal(int doc, short [] vals) throws IOException { throw new UnsupportedOperationException(); }
+  public void byteVal(int doc, byte [] vals) { throw new UnsupportedOperationException(); }
+  public void shortVal(int doc, short [] vals) { throw new UnsupportedOperationException(); }
 
-  public void floatVal(int doc, float [] vals) throws IOException { throw new UnsupportedOperationException(); }
-  public void intVal(int doc, int [] vals) throws IOException { throw new UnsupportedOperationException(); }
-  public void longVal(int doc, long [] vals) throws IOException { throw new UnsupportedOperationException(); }
-  public void doubleVal(int doc, double [] vals) throws IOException { throw new UnsupportedOperationException(); }
+  public void floatVal(int doc, float [] vals) { throw new UnsupportedOperationException(); }
+  public void intVal(int doc, int [] vals) { throw new UnsupportedOperationException(); }
+  public void longVal(int doc, long [] vals) { throw new UnsupportedOperationException(); }
+  public void doubleVal(int doc, double [] vals) { throw new UnsupportedOperationException(); }
 
   // TODO: should we make a termVal, fills BytesRef[]?
-  public void strVal(int doc, String [] vals) throws IOException { throw new UnsupportedOperationException(); }
+  public void strVal(int doc, String [] vals) { throw new UnsupportedOperationException(); }
 
-  public Explanation explain(int doc) throws IOException {
+  public Explanation explain(int doc) {
     return Explanation.match(floatVal(doc), toString(doc));
   }
 
@@ -145,8 +141,8 @@ public abstract class FunctionValues {
    * Yields a {@link Scorer} that matches all documents,
    * and that which produces scores equal to {@link #floatVal(int)}.
    */
-  public ValueSourceScorer getScorer(Weight weight, LeafReaderContext readerContext) {
-    return new ValueSourceScorer(weight, readerContext, this) {
+  public ValueSourceScorer getScorer(IndexReader reader) {
+    return new ValueSourceScorer(reader, this) {
       @Override
       public boolean matches(int doc) {
         return true;
@@ -162,7 +158,7 @@ public abstract class FunctionValues {
   // because it needs different behavior depending on the type of fields.  There is also
   // a setup cost - parsing and normalizing params, and doing a binary search on the StringIndex.
   // TODO: change "reader" to LeafReaderContext
-  public ValueSourceScorer getRangeScorer(Weight weight, LeafReaderContext readerContext, String lowerVal, String upperVal, boolean includeLower, boolean includeUpper) throws IOException {
+  public ValueSourceScorer getRangeScorer(IndexReader reader, String lowerVal, String upperVal, boolean includeLower, boolean includeUpper) {
     float lower;
     float upper;
 
@@ -181,40 +177,36 @@ public abstract class FunctionValues {
     final float u = upper;
 
     if (includeLower && includeUpper) {
-      return new ValueSourceScorer(weight, readerContext, this) {
+      return new ValueSourceScorer(reader, this) {
         @Override
-        public boolean matches(int doc) throws IOException {
-          if (!exists(doc)) return false;
+        public boolean matches(int doc) {
           float docVal = floatVal(doc);
           return docVal >= l && docVal <= u;
         }
       };
     }
     else if (includeLower && !includeUpper) {
-       return new ValueSourceScorer(weight, readerContext, this) {
+       return new ValueSourceScorer(reader, this) {
         @Override
-        public boolean matches(int doc) throws IOException {
-          if (!exists(doc)) return false;
+        public boolean matches(int doc) {
           float docVal = floatVal(doc);
           return docVal >= l && docVal < u;
         }
       };
     }
     else if (!includeLower && includeUpper) {
-       return new ValueSourceScorer(weight, readerContext, this) {
+       return new ValueSourceScorer(reader, this) {
         @Override
-        public boolean matches(int doc) throws IOException {
-          if (!exists(doc)) return false;
+        public boolean matches(int doc) {
           float docVal = floatVal(doc);
           return docVal > l && docVal <= u;
         }
       };
     }
     else {
-       return new ValueSourceScorer(weight, readerContext, this) {
+       return new ValueSourceScorer(reader, this) {
         @Override
-        public boolean matches(int doc) throws IOException {
-          if (!exists(doc)) return false;
+        public boolean matches(int doc) {
           float docVal = floatVal(doc);
           return docVal > l && docVal < u;
         }

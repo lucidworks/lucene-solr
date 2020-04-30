@@ -1,3 +1,5 @@
+package org.apache.lucene.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.document;
-
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+
+import org.apache.lucene.document.FieldType.NumericType;
 import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.IndexOptions;
-import org.apache.lucene.index.PointValues;
 import org.apache.lucene.util.LuceneTestCase;
 
 import com.carrotsearch.randomizedtesting.generators.RandomPicks;
@@ -57,40 +59,17 @@ public class TestFieldType extends LuceneTestCase {
     ft7.setOmitNorms(true);
     assertFalse(ft7.equals(ft));
     
+    FieldType ft8 = new FieldType();
+    ft8.setNumericType(NumericType.DOUBLE);
+    assertFalse(ft8.equals(ft));
+    
+    FieldType ft9 = new FieldType();
+    ft9.setNumericPrecisionStep(3);
+    assertFalse(ft9.equals(ft));
+    
     FieldType ft10 = new FieldType();
     ft10.setStoreTermVectors(true);
     assertFalse(ft10.equals(ft));
-    
-    FieldType ft11 = new FieldType();
-    ft11.setDimensions(1, 4);
-    assertFalse(ft11.equals(ft));
-  }
-
-  public void testPointsToString() {
-    FieldType ft = new FieldType();
-    ft.setDimensions(1, Integer.BYTES);
-    assertEquals("pointDataDimensionCount=1,pointIndexDimensionCount=1,pointNumBytes=4", ft.toString());
-  }
-
-  /**
-   * FieldType's attribute map should not be modifiable/add after freeze
-   */
-  public void testAttributeMapFrozen() {
-    FieldType ft = new FieldType();
-    ft.putAttribute("dummy", "d");
-    ft.freeze();
-    expectThrows(IllegalStateException.class, () -> ft.putAttribute("dummy", "a"));
-  }
-
-  /**
-   * FieldType's attribute map can be changed if not frozen
-   */
-  public void testAttributeMapNotFrozen() {
-    FieldType ft = new FieldType();
-    ft.putAttribute("dummy", "d");
-    ft.putAttribute("dummy", "a");
-    assertEquals(ft.getAttributes().size(), 1);
-    assertEquals(ft.getAttributes().get("dummy"), "a");
   }
 
   private static Object randomValue(Class<?> clazz) {
@@ -105,25 +84,13 @@ public class TestFieldType extends LuceneTestCase {
   }
 
   private static FieldType randomFieldType() throws Exception {
-    // setDimensions handled special as values must be in-bounds.
-    Method setDimensionsMethodA = FieldType.class.getMethod("setDimensions", int.class, int.class);
-    Method setDimensionsMethodB = FieldType.class.getMethod("setDimensions", int.class, int.class, int.class);
     FieldType ft = new FieldType();
     for (Method method : FieldType.class.getMethods()) {
-      if (method.getName().startsWith("set")) {
+      if ((method.getModifiers() & Modifier.PUBLIC) != 0 && method.getName().startsWith("set")) {
         final Class<?>[] parameterTypes = method.getParameterTypes();
         final Object[] args = new Object[parameterTypes.length];
-        if (method.equals(setDimensionsMethodA)) {
-          args[0] = 1 + random().nextInt(PointValues.MAX_DIMENSIONS);
-          args[1] = 1 + random().nextInt(PointValues.MAX_NUM_BYTES);
-        } else if (method.equals(setDimensionsMethodB)) {
-          args[0] = 1 + random().nextInt(PointValues.MAX_DIMENSIONS);
-          args[1] = 1 + random().nextInt((Integer)args[0]);
-          args[2] = 1 + random().nextInt(PointValues.MAX_NUM_BYTES);
-        } else {
-          for (int i = 0; i < args.length; ++i) {
-            args[i] = randomValue(parameterTypes[i]);
-          }
+        for (int i = 0; i < args.length; ++i) {
+          args[i] = randomValue(parameterTypes[i]);
         }
         method.invoke(ft, args);
       }

@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -59,8 +59,10 @@ public abstract class FilterScorer extends Scorer {
     return in.score();
   }
 
-  // Leave maxScore abstract on purpose since the goal of this Filter class is
-  // to change the way the score is computed.
+  @Override
+  public int freq() throws IOException {
+    return in.freq();
+  }
 
   @Override
   public final int docID() {
@@ -68,12 +70,22 @@ public abstract class FilterScorer extends Scorer {
   }
 
   @Override
-  public final DocIdSetIterator iterator() {
-    return in.iterator();
+  public final int nextDoc() throws IOException {
+    return in.nextDoc();
+  }
+
+  @Override
+  public final int advance(int target) throws IOException {
+    return in.advance(target);
+  }
+
+  @Override
+  public long cost() {
+    return in.cost();
   }
   
   @Override
-  public final TwoPhaseIterator twoPhaseIterator() {
-    return in.twoPhaseIterator();
+  public final TwoPhaseIterator asTwoPhaseIterator() {
+    return in.asTwoPhaseIterator();
   }
 }

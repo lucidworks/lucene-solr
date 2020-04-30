@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
 import java.io.IOException;
@@ -22,6 +23,8 @@ import org.apache.solr.common.SolrException;
 import static org.apache.solr.common.SolrException.ErrorCode.*;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.util.NamedList;
+import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.update.AddUpdateCommand;
 
 /**
@@ -37,7 +40,6 @@ import org.apache.solr.update.AddUpdateCommand;
  * subclasses may choose to return from their <code>getInstance</code> 
  * implementation.
  * </p>
- * @since 4.0.0
  */
 public abstract class AbstractDefaultValueUpdateProcessorFactory
   extends UpdateRequestProcessorFactory {

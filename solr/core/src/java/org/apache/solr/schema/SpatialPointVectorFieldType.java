@@ -1,3 +1,5 @@
+package org.apache.solr.schema;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,20 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
+
+import org.apache.lucene.spatial.vector.PointVectorStrategy;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.solr.legacy.LegacyFieldType;
-import org.apache.solr.legacy.PointVectorStrategy;
-
 /**
  * @see PointVectorStrategy
- * @deprecated use {@link LatLonPointSpatialField} instead
+ * @lucene.experimental
  */
-@Deprecated
 public class SpatialPointVectorFieldType extends AbstractSpatialFieldType<PointVectorStrategy> implements SchemaAware {
 
   protected String numberFieldName = "tdouble";//in example schema defaults to non-zero precision step -- a good choice
@@ -64,12 +63,8 @@ public class SpatialPointVectorFieldType extends AbstractSpatialFieldType<PointV
     }
     precisionStep = ((TrieField)fieldType).getPrecisionStep();
 
-    // NOTE: the SchemaField constructor we're using ignores any properties of the fieldType
-    // so only the ones we're explicitly setting get used.
-    //
-    // In theory we should fix this, but since this class is already deprecated, we'll leave it alone
-    // to simplify the risk of back-compat break for existing users.
-    final int p = (INDEXED | TOKENIZED | OMIT_NORMS | OMIT_TF_POSITIONS | UNINVERTIBLE);
+    //Just set these, delegate everything else to the field type
+    final int p = (INDEXED | TOKENIZED | OMIT_NORMS | OMIT_TF_POSITIONS);
     List<SchemaField> newFields = new ArrayList<>();
     for( SchemaField sf : schema.getFields().values() ) {
       if( sf.getType() == this ) {
@@ -84,22 +79,10 @@ public class SpatialPointVectorFieldType extends AbstractSpatialFieldType<PointV
   }
 
   @Override
-  public NumberType getNumberType() {
-    return NumberType.DOUBLE;
-  }
-
-  @Override
   protected PointVectorStrategy newSpatialStrategy(String fieldName) {
-    // TODO update to how BBoxField does things
-    if (this.getNumberType() != null) {
-      // create strategy based on legacy numerics
-      // todo remove in 7.0
-      LegacyFieldType fieldType = new LegacyFieldType(PointVectorStrategy.LEGACY_FIELDTYPE);
-      fieldType.setNumericPrecisionStep(precisionStep);
-      return new PointVectorStrategy(ctx, fieldName, fieldType);
-    } else {
-      return PointVectorStrategy.newInstance(ctx, fieldName);
-    }
+    PointVectorStrategy strategy = new PointVectorStrategy(ctx, fieldName);
+    strategy.setPrecisionStep(precisionStep);
+    return strategy;
   }
 
 }

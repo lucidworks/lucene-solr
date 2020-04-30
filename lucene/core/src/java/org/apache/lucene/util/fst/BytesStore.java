@@ -1,3 +1,5 @@
+package org.apache.lucene.util.fst;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.fst;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import org.apache.lucene.store.DataInput;
@@ -77,10 +79,10 @@ class BytesStore extends DataOutput implements Accountable {
 
   /** Absolute write byte; you must ensure dest is &lt; max
    *  position written so far. */
-  public void writeByte(long dest, byte b) {
-    int blockIndex = (int) (dest >> blockBits);
+  public void writeByte(int dest, byte b) {
+    int blockIndex = dest >> blockBits;
     byte[] block = blocks.get(blockIndex);
-    block[(int) (dest & blockMask)] = b;
+    block[dest & blockMask] = b;
   }
 
   @Override
@@ -235,27 +237,6 @@ class BytesStore extends DataOutput implements Accountable {
         blockIndex--;
         block = blocks.get(blockIndex);
         downTo = blockSize;
-      }
-    }
-  }
-
-  /** Copies bytes from this store to a target byte array. */
-  public void copyBytes(long src, byte[] dest, int offset, int len) {
-    int blockIndex = (int) (src >> blockBits);
-    int upto = (int) (src & blockMask);
-    byte[] block = blocks.get(blockIndex);
-    while (len > 0) {
-      int chunk = blockSize - upto;
-      if (len <= chunk) {
-        System.arraycopy(block, upto, dest, offset, len);
-        break;
-      } else {
-        System.arraycopy(block, upto, dest, offset, chunk);
-        blockIndex++;
-        block = blocks.get(blockIndex);
-        upto = 0;
-        len -= chunk;
-        offset += chunk;
       }
     }
   }
@@ -502,6 +483,11 @@ class BytesStore extends DataOutput implements Accountable {
       size += RamUsageEstimator.sizeOf(block);
     }
     return size;
+  }
+  
+  @Override
+  public Collection<Accountable> getChildResources() {
+    return Collections.emptyList();
   }
 
   @Override

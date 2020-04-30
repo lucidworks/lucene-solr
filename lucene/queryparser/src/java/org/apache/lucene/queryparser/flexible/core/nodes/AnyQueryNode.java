@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.core.nodes;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.core.nodes;
 
 import org.apache.lucene.queryparser.flexible.core.parser.EscapeQuerySyntax;
 
@@ -109,7 +110,8 @@ public class AnyQueryNode extends AndQueryNode {
       return "<any field='" + this.field + "'  matchelements="
           + this.minimumMatchingmElements + "/>";
     StringBuilder sb = new StringBuilder();
-    sb.append("<any field='").append(this.field).append("'  matchelements=").append(this.minimumMatchingmElements).append('>');
+    sb.append("<any field='" + this.field + "'  matchelements="
+        + this.minimumMatchingmElements + ">");
     for (QueryNode clause : getChildren()) {
       sb.append("\n");
       sb.append(clause.toString());

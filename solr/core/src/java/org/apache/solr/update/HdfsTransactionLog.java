@@ -14,16 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -60,13 +59,11 @@ import org.slf4j.LoggerFactory;
  */
 public class HdfsTransactionLog extends TransactionLog {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-  private static boolean debug = log.isDebugEnabled();
-  private static boolean trace = log.isTraceEnabled();
 
 
   Path tlogFile;
 
-  private long finalLogSize;
+  
   private FSDataOutputStream tlogOutStream;
   private FileSystem fs;
 
@@ -82,6 +79,9 @@ public class HdfsTransactionLog extends TransactionLog {
     this.fs = fs;
 
     try {
+      if (debug) {
+        //log.debug("New TransactionLog file=" + tlogFile + ", exists=" + tlogFile.exists() + ", size=" + tlogFile.length() + ", openExisting=" + openExisting);
+      }
       this.tlogFile = tlogFile;
       
       if (fs.exists(tlogFile) && openExisting) {
@@ -127,7 +127,6 @@ public class HdfsTransactionLog extends TransactionLog {
       success = true;
 
       assert ObjectReleaseTracker.track(this);
-      log.debug("Opening new tlog {}", this);
       
     } catch (IOException e) {
       throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
@@ -144,8 +143,13 @@ public class HdfsTransactionLog extends TransactionLog {
 
   @Override
   public boolean endsWithCommit() throws IOException {
-    ensureFlushed();
-    long size = getLogSize();
+    long size;
+    synchronized (this) {
+      fos.flush();
+      tlogOutStream.hflush();
+      size = fos.size();
+    }
+
     
     // the end of the file should have the end message (added during a commit) plus a 4 byte size
     byte[] buf = new byte[ END_MESSAGE.length() ];
@@ -154,14 +158,31 @@ public class HdfsTransactionLog extends TransactionLog {
     
     FSDataFastInputStream dis = new FSDataFastInputStream(fs.open(tlogFile), pos);
     try {
-      dis.read(buf);
-      for (int i=0; i<buf.length; i++) {
-        if (buf[i] != END_MESSAGE.charAt(i)) return false;
-      }
+    //ChannelFastInputStream is = new ChannelFastInputStream(channel, pos);
+    dis.read(buf);
+    for (int i=0; i<buf.length; i++) {
+      if (buf[i] != END_MESSAGE.charAt(i)) return false;
+    }
     } finally {
       dis.close();
     }
     return true;
+  }
+  
+  // This could mess with any readers or reverse readers that are open, or anything that might try to do a log lookup.
+  // This should only be used to roll back buffered updates, not actually applied updates.
+  @Override
+  public void rollback(long pos) throws IOException {
+    synchronized (this) {
+      assert snapshot_size == pos;
+      fos.flush();
+      tlogOutStream.hflush();
+      // TODO: how do we rollback with hdfs?? We need HDFS-3107
+      //raf.setLength(pos);
+      fos.setWritten(pos);
+      assert fos.size() == pos;
+      numRecords = snapshot_numRecords;
+    }
   }
 
   private void readHeader(FastInputStream fis) throws IOException {
@@ -171,9 +192,8 @@ public class HdfsTransactionLog extends TransactionLog {
     fis = fis != null ? fis : new FSDataFastInputStream(fs.open(tlogFile), 0);
     Map header = null;
     try {
-      try (LogCodec codec = new LogCodec(resolver)) {
-        header = (Map) codec.unmarshal(fis);
-      }
+      LogCodec codec = new LogCodec(resolver);
+      header = (Map) codec.unmarshal(fis);
       
       fis.readInt(); // skip size
     } finally {
@@ -193,7 +213,7 @@ public class HdfsTransactionLog extends TransactionLog {
   }
 
   @Override
-  public long writeCommit(CommitUpdateCommand cmd) {
+  public long writeCommit(CommitUpdateCommand cmd, int flags) {
     LogCodec codec = new LogCodec(resolver);
     synchronized (this) {
       try {
@@ -206,16 +226,14 @@ public class HdfsTransactionLog extends TransactionLog {
         
         codec.init(fos);
         codec.writeTag(JavaBinCodec.ARR, 3);
-        codec.writeInt(UpdateLog.COMMIT);  // should just take one byte
+        codec.writeInt(UpdateLog.COMMIT | flags);  // should just take one byte
         codec.writeLong(cmd.getVersion());
         codec.writeStr(END_MESSAGE);  // ensure these bytes are (almost) last in the file
 
         endRecord(pos);
         
-        ensureFlushed();  // flush since this will be the last record in a log fill
-
-        // now the commit command is written we will never write to this log again
-        closeOutput();
+        fos.flush();  // flush since this will be the last record in a log fill
+        tlogOutStream.hflush();
 
         //assert fos.size() == channel.size();
 
@@ -236,66 +254,31 @@ public class HdfsTransactionLog extends TransactionLog {
 
     try {
       // make sure any unflushed buffer has been flushed
-      ensureFlushed();
+      synchronized (this) {
+        // TODO: optimize this by keeping track of what we have flushed up to
+        fos.flushBuffer();
+        
+        // flush to hdfs
+        tlogOutStream.hflush();
+        /***
+         System.out.println("###flushBuffer to " + fos.size() + " raf.length()=" + raf.length() + " pos="+pos);
+        if (fos.size() != raf.length() || pos >= fos.size() ) {
+          throw new RuntimeException("ERROR" + "###flushBuffer to " + fos.size() + " raf.length()=" + raf.length() + " pos="+pos);
+        }
+        ***/
+      }
 
       FSDataFastInputStream dis = new FSDataFastInputStream(fs.open(tlogFile),
           pos);
       try {
         dis.seek(pos);
-        try (LogCodec codec = new LogCodec(resolver)) {
-          return codec.readVal(new FastInputStream(dis));
-        }
+        LogCodec codec = new LogCodec(resolver);
+        return codec.readVal(new FastInputStream(dis));
       } finally {
         dis.close();
       }
     } catch (IOException e) {
       throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "pos=" + pos, e);
-    }
-  }
-
-  @Override
-  public void closeOutput() {
-    try {
-      doCloseOutput();
-    } catch (IOException e) {
-      log.error("Could not close tlog output", e);
-      // This situation is not fatal to the caller
-    }
-  }
-
-  private void doCloseOutput() throws IOException {
-    synchronized (this) {
-      if (fos == null) return;
-      if (debug) {
-        log.debug("Closing output for " + tlogFile);
-      }
-      fos.flushBuffer();
-      finalLogSize = fos.size();
-      fos = null;
-    }
-
-    tlogOutStream.hflush();
-    tlogOutStream.close();
-    tlogOutStream = null;
-  }
-
-  private void ensureFlushed() throws IOException {
-    synchronized (this) {
-      if (fos != null) {
-        fos.flush();
-        tlogOutStream.hflush();
-      }
-    }
-  }
-
-  @Override
-  public long getLogSize() {
-    synchronized (this) {
-      if (fos != null) {
-        return fos.size();
-      } else {
-        return finalLogSize;
-      }
     }
   }
 
@@ -319,13 +302,18 @@ public class HdfsTransactionLog extends TransactionLog {
   }
   
   @Override
-  public void close() {
+  protected void close() {
     try {
       if (debug) {
-        log.debug("Closing tlog {}", this);
+        log.debug("Closing tlog" + this);
       }
 
-      doCloseOutput();
+      synchronized (this) {
+        fos.flushBuffer();
+      }
+      
+      tlogOutStream.hflush();
+      tlogOutStream.close();
 
     } catch (IOException e) {
       log.error("Exception closing tlog.", e);
@@ -355,10 +343,6 @@ public class HdfsTransactionLog extends TransactionLog {
     return new HDFSLogReader(startingPos);
   }
 
-  public LogReader getSortedReader(long startingPos) {
-    return new HDFSSortedLogReader(startingPos);
-  }
-
   /** Returns a single threaded reverse reader */
   @Override
   public ReverseReader getReverseReader() throws IOException {
@@ -374,19 +358,10 @@ public class HdfsTransactionLog extends TransactionLog {
     public HDFSLogReader(long startingPos) {
       super();
       incref();
-      initStream(startingPos);
-    }
-
-    private void initStream(long pos) {
       try {
-        
-        synchronized (HdfsTransactionLog.this) {
-          ensureFlushed();
-          sz = getLogSize();
-        }
-
         FSDataInputStream fdis = fs.open(tlogFile);
-        fis = new FSDataFastInputStream(fdis, pos);
+        sz = fs.getFileStatus(tlogFile).getLen();
+        fis = new FSDataFastInputStream(fdis, startingPos);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
@@ -402,21 +377,28 @@ public class HdfsTransactionLog extends TransactionLog {
 
       synchronized (HdfsTransactionLog.this) {
         if (trace) {
-          log.trace("Reading log record.  pos="+pos+" currentSize="+getLogSize());
+          log.trace("Reading log record.  pos="+pos+" currentSize="+fos.size());
         }
 
-        if (pos >= getLogSize()) {
+        if (pos >= fos.size()) {
           return null;
         }
+       
+        fos.flushBuffer();
       }
       
       // we actually need a new reader to 
       // see if any data was added by the writer
-      if (pos >= sz) {
-        log.info("Read available inputstream data, opening new inputstream pos={} sz={}", pos, sz);
-        
+      if (fis.position() >= sz) {
         fis.close();
-        initStream(pos);
+        tlogOutStream.hflush();
+        try {
+          FSDataInputStream fdis = fs.open(tlogFile);
+          fis = new FSDataFastInputStream(fdis, pos);
+          sz = fs.getFileStatus(tlogFile).getLen();
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
       }
       
       if (pos == 0) {
@@ -424,7 +406,7 @@ public class HdfsTransactionLog extends TransactionLog {
 
         // shouldn't currently happen - header and first record are currently written at the same time
         synchronized (HdfsTransactionLog.this) {
-          if (fis.position() >= getLogSize()) {
+          if (fis.position() >= fos.size()) {
             return null;
           }
           pos = fis.position();
@@ -452,7 +434,7 @@ public class HdfsTransactionLog extends TransactionLog {
     @Override
     public String toString() {
       synchronized (HdfsTransactionLog.this) {
-        return "LogReader{" + "file=" + tlogFile + ", position=" + fis.position() + ", end=" + getLogSize() + "}";
+        return "LogReader{" + "file=" + tlogFile + ", position=" + fis.position() + ", end=" + fos.size() + "}";
       }
     }
     
@@ -463,53 +445,9 @@ public class HdfsTransactionLog extends TransactionLog {
     
     @Override
     public long currentSize() {
-      return getLogSize();
+      return sz;
     }
 
-  }
-
-  public class HDFSSortedLogReader extends HDFSLogReader{
-    private long startingPos;
-    private boolean inOrder = true;
-    private TreeMap<Long, Long> versionToPos;
-    Iterator<Long> iterator;
-
-    public HDFSSortedLogReader(long startingPos) {
-      super(startingPos);
-      this.startingPos = startingPos;
-    }
-
-    @Override
-    public Object next() throws IOException, InterruptedException {
-      if (versionToPos == null) {
-        versionToPos = new TreeMap<>();
-        Object o;
-        long pos = startingPos;
-
-        long lastVersion = Long.MIN_VALUE;
-        while ( (o = super.next()) != null) {
-          List entry = (List) o;
-          long version = (Long) entry.get(UpdateLog.VERSION_IDX);
-          version = Math.abs(version);
-          versionToPos.put(version, pos);
-          pos = currentPos();
-
-          if (version < lastVersion) inOrder = false;
-          lastVersion = version;
-        }
-        fis.seek(startingPos);
-      }
-
-      if (inOrder) {
-        return super.next();
-      } else {
-        if (iterator == null) iterator = versionToPos.values().iterator();
-        if (!iterator.hasNext()) return null;
-        long pos = iterator.next();
-        if (pos != currentPos()) fis.seek(pos);
-        return super.next();
-      }
-    }
   }
 
   public class HDFSReverseReader extends ReverseReader {
@@ -531,8 +469,12 @@ public class HdfsTransactionLog extends TransactionLog {
 
       long sz;
       synchronized (HdfsTransactionLog.this) {
-        ensureFlushed();
-        sz = getLogSize();
+        fos.flushBuffer();
+        
+        // this must be an hflush
+        tlogOutStream.hflush();
+        sz = fos.size();
+        //assert sz == channel.size();
       }
 
       fis = new FSDataFastInputStream(fs.open(tlogFile), 0);
@@ -603,7 +545,7 @@ public class HdfsTransactionLog extends TransactionLog {
     @Override
     public String toString() {
       synchronized (HdfsTransactionLog.this) {
-        return "LogReader{" + "file=" + tlogFile + ", position=" + fis.position() + ", end=" + getLogSize() + "}";
+        return "LogReader{" + "file=" + tlogFile + ", position=" + fis.position() + ", end=" + fos.size() + "}";
       }
     }
 
@@ -661,3 +603,5 @@ class FSDataFastInputStream extends FastInputStream {
     return "readFromStream="+readFromStream +" pos="+pos +" end="+end + " bufferPos="+getBufferPos() + " position="+position() ;
   }
 }
+
+

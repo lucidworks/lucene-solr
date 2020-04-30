@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.charfilter;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.charfilter;
-
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -499,7 +499,7 @@ public class HTMLStripCharFilterTest extends BaseTokenStreamTestCase {
 
     String randomHtmlishString2 // Don't create a comment (disallow "<!--") and don't include a closing ">"
         = TestUtil.randomHtmlishString(random(), maxNumElems).replaceAll(">", " ").replaceFirst("^--","__");
-    String unclosedAngleBangNonCDATA = "<!" + randomHtmlishString2 +"-[CDATA[";
+    String unclosedAngleBangNonCDATA = "<!" + randomHtmlishString1 +"-[CDATA[";
 
     String[] testGold = {
         "one<![CDATA[<one><two>three<four></four></two></one>]]>two",

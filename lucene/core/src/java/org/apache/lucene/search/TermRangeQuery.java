@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import org.apache.lucene.index.Term;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.ToStringUtils;
 import org.apache.lucene.util.automaton.Automata;
 import org.apache.lucene.util.automaton.Automaton;
 
@@ -27,10 +28,6 @@ import org.apache.lucene.util.automaton.Automaton;
  *
  * <p>This query matches the documents looking for terms that fall into the
  * supplied range according to {@link BytesRef#compareTo(BytesRef)}.
- *
- * <p><b>NOTE</b>: {@link TermRangeQuery} performs significantly slower than
- * {@link PointRangeQuery point-based ranges} as it needs to visit all terms
- * that match the range and merges their matches. 
  *
  * <p>This query uses the {@link
  * MultiTermQuery#CONSTANT_SCORE_REWRITE}
@@ -124,6 +121,7 @@ public class TermRangeQuery extends AutomatonQuery {
     buffer.append(" TO ");
     buffer.append(upperTerm != null ? ("*".equals(Term.toString(upperTerm)) ? "\\*" : Term.toString(upperTerm)) : "*");
     buffer.append(includeUpper ? ']' : '}');
+    buffer.append(ToStringUtils.boost(getBoost()));
     return buffer.toString();
   }
 

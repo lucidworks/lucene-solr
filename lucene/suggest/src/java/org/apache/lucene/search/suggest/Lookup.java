@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -30,6 +33,7 @@ import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.store.InputStreamDataInput;
 import org.apache.lucene.store.OutputStreamDataOutput;
 import org.apache.lucene.util.Accountable;
+import org.apache.lucene.util.Accountables;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.PriorityQueue;
@@ -283,4 +287,14 @@ public abstract class Lookup implements Accountable {
    * @throws IOException when fatal IO error occurs.
    */
   public abstract boolean load(DataInput input) throws IOException;
+
+  /**
+   * Returns nested resources of this class. 
+   * The result should be a point-in-time snapshot (to avoid race conditions).
+   * @see Accountables
+   */
+  @Override
+  public Collection<Accountable> getChildResources() {
+    return Collections.emptyList();
+  }
 }

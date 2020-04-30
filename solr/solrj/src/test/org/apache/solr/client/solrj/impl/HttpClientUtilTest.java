@@ -16,97 +16,147 @@
  */
 package org.apache.solr.client.solrj.impl;
 
-import javax.net.ssl.HostnameVerifier;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.solr.SolrTestCase;
-import org.apache.solr.client.solrj.impl.HttpClientUtil.SchemaRegistryProvider;
-
-import org.apache.commons.lang3.reflect.FieldUtils;
-import org.apache.http.conn.socket.ConnectionSocketFactory;
-import org.apache.http.conn.ssl.DefaultHostnameVerifier;
-import org.apache.http.conn.ssl.NoopHostnameVerifier;
-import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
-import org.apache.lucene.util.TestRuleRestoreSystemProperties;
-
-import org.junit.After;
-import org.junit.Rule;
-import org.junit.rules.TestRule;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.client.config.AuthSchemes;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.params.ClientPNames;
+import org.apache.http.conn.ssl.AllowAllHostnameVerifier;
+import org.apache.http.conn.ssl.BrowserCompatHostnameVerifier;
+import org.apache.http.conn.ssl.SSLSocketFactory;
+import org.apache.http.conn.ssl.X509HostnameVerifier;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.AbstractHttpClient;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.impl.conn.PoolingClientConnectionManager;
+import org.apache.http.params.HttpConnectionParams;
+import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.util.SSLTestConfig;
 import org.junit.Test;
 
-public class HttpClientUtilTest extends SolrTestCase {
+public class HttpClientUtilTest {
 
-  @Rule
-  public TestRule syspropRestore = new TestRuleRestoreSystemProperties
-    (HttpClientUtil.SYS_PROP_CHECK_PEER_NAME);
-
-  @After
-  public void resetHttpClientBuilder() {
-    HttpClientUtil.resetHttpClientBuilder();
+  @Test
+  public void testNoParamsSucceeds() throws IOException {
+    CloseableHttpClient client = HttpClientUtil.createClient(null);
+    client.close();
   }
 
   @Test
-  // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 20-Sep-2018
-  public void testSSLSystemProperties() throws IOException {
-
-    assertNotNull("HTTPS scheme could not be created using system defaults",
-                  HttpClientUtil.getSchemaRegisteryProvider().getSchemaRegistry().lookup("https"));
-
-    assertSSLHostnameVerifier(DefaultHostnameVerifier.class, HttpClientUtil.getSchemaRegisteryProvider());
-
-    System.setProperty(HttpClientUtil.SYS_PROP_CHECK_PEER_NAME, "true");
-    resetHttpClientBuilder();
-    assertSSLHostnameVerifier(DefaultHostnameVerifier.class, HttpClientUtil.getSchemaRegisteryProvider());
-
-    System.setProperty(HttpClientUtil.SYS_PROP_CHECK_PEER_NAME, "");
-    resetHttpClientBuilder();
-    assertSSLHostnameVerifier(DefaultHostnameVerifier.class, HttpClientUtil.getSchemaRegisteryProvider());
-    
-    System.setProperty(HttpClientUtil.SYS_PROP_CHECK_PEER_NAME, "false");
-    resetHttpClientBuilder();
-    assertSSLHostnameVerifier(NoopHostnameVerifier.class, HttpClientUtil.getSchemaRegisteryProvider());
+  public void testSetParams() {
+    ModifiableSolrParams params = new ModifiableSolrParams();
+    params.set(HttpClientUtil.PROP_ALLOW_COMPRESSION, true);
+    params.set(HttpClientUtil.PROP_BASIC_AUTH_PASS, "pass");
+    params.set(HttpClientUtil.PROP_BASIC_AUTH_USER, "user");
+    params.set(HttpClientUtil.PROP_CONNECTION_TIMEOUT, 12345);
+    params.set(HttpClientUtil.PROP_FOLLOW_REDIRECTS, true);
+    params.set(HttpClientUtil.PROP_MAX_CONNECTIONS, 22345);
+    params.set(HttpClientUtil.PROP_MAX_CONNECTIONS_PER_HOST, 32345);
+    params.set(HttpClientUtil.PROP_SO_TIMEOUT, 42345);
+    params.set(HttpClientUtil.PROP_USE_RETRY, false);
+    DefaultHttpClient client = (DefaultHttpClient) HttpClientUtil.createClient(params);
+    try {
+      assertEquals(12345, HttpConnectionParams.getConnectionTimeout(client.getParams()));
+      assertEquals(PoolingClientConnectionManager.class, client.getConnectionManager().getClass());
+      assertEquals(22345, ((PoolingClientConnectionManager)client.getConnectionManager()).getMaxTotal());
+      assertEquals(32345, ((PoolingClientConnectionManager)client.getConnectionManager()).getDefaultMaxPerRoute());
+      assertEquals(42345, HttpConnectionParams.getSoTimeout(client.getParams()));
+      assertEquals(HttpClientUtil.NO_RETRY, client.getHttpRequestRetryHandler());
+      assertEquals("pass", client.getCredentialsProvider().getCredentials(new AuthScope("127.0.0.1", 1234)).getPassword());
+      assertEquals("user", client.getCredentialsProvider().getCredentials(new AuthScope("127.0.0.1", 1234)).getUserPrincipal().getName());
+      assertEquals(true, client.getParams().getParameter(ClientPNames.HANDLE_REDIRECTS));
+    } finally {
+      client.close();
+    }
   }
 
-  private void assertSSLHostnameVerifier(Class<? extends HostnameVerifier> expected,
-                                         SchemaRegistryProvider provider) {
-    ConnectionSocketFactory socketFactory = provider.getSchemaRegistry().lookup("https");
-    assertNotNull("unable to lookup https", socketFactory);
-    assertTrue("socketFactory is not an SSLConnectionSocketFactory: " + socketFactory.getClass(),
-               socketFactory instanceof SSLConnectionSocketFactory);
-    SSLConnectionSocketFactory sslSocketFactory = (SSLConnectionSocketFactory) socketFactory;
+  @Test
+  public void testAuthSchemeConfiguration() {
+    System.setProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP, "test");
     try {
-      Object hostnameVerifier = FieldUtils.readField(sslSocketFactory, "hostnameVerifier", true);
-      assertNotNull("sslSocketFactory has null hostnameVerifier", hostnameVerifier);
-      assertEquals("sslSocketFactory does not have expected hostnameVerifier impl",
-                   expected, hostnameVerifier.getClass());
-    } catch (IllegalAccessException e) {
-      throw new AssertionError("Unexpected access error reading hostnameVerifier field", e);
+      HttpClientUtil.setConfigurer(new Krb5HttpClientConfigurer());
+      AbstractHttpClient client = (AbstractHttpClient)HttpClientUtil.createClient(null);
+      assertEquals(1, client.getAuthSchemes().getSchemeNames().size());
+      assertTrue(AuthSchemes.SPNEGO.equalsIgnoreCase(client.getAuthSchemes().getSchemeNames().get(0)));
+    } finally {
+      //Cleanup the system property.
+      System.clearProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP);
     }
+  }
+
+  @Test
+  public void testReplaceConfigurer() throws IOException{
+    
+    try {
+    final AtomicInteger counter = new AtomicInteger();
+    HttpClientConfigurer custom = new HttpClientConfigurer(){
+      @Override
+      public void configure(DefaultHttpClient httpClient, SolrParams config) {
+        super.configure(httpClient, config);
+        counter.set(config.getInt("custom-param", -1));
+      }
+      
+    };
+    
+    HttpClientUtil.setConfigurer(custom);
+    
+    ModifiableSolrParams params = new ModifiableSolrParams();
+    params.set("custom-param", 5);
+    HttpClientUtil.createClient(params).close();
+    assertEquals(5, counter.get());
+    } finally {
+      //restore default configurer
+      HttpClientUtil.setConfigurer(new HttpClientConfigurer());
+    }
+
   }
   
   @Test
-  // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 20-Sep-2018
-  public void testToBooleanDefaultIfNull() throws Exception {
-    assertFalse(HttpClientUtil.toBooleanDefaultIfNull(Boolean.FALSE, true));
-    assertTrue(HttpClientUtil.toBooleanDefaultIfNull(Boolean.TRUE, false));
-    assertFalse(HttpClientUtil.toBooleanDefaultIfNull(null, false));
-    assertTrue(HttpClientUtil.toBooleanDefaultIfNull(null, true));
+  @SuppressWarnings("deprecation")
+  public void testSSLSystemProperties() throws IOException {
+    CloseableHttpClient client = HttpClientUtil.createClient(null);
+    try {
+      SSLTestConfig.setSSLSystemProperties();
+      assertNotNull("HTTPS scheme could not be created using the javax.net.ssl.* system properties.", 
+          client.getConnectionManager().getSchemeRegistry().get("https"));
+      
+      System.clearProperty(HttpClientUtil.SYS_PROP_CHECK_PEER_NAME);
+      client.close();
+      client = HttpClientUtil.createClient(null);
+      assertEquals(BrowserCompatHostnameVerifier.class, getHostnameVerifier(client).getClass());
+      
+      System.setProperty(HttpClientUtil.SYS_PROP_CHECK_PEER_NAME, "true");
+      client.close();
+      client = HttpClientUtil.createClient(null);
+      assertEquals(BrowserCompatHostnameVerifier.class, getHostnameVerifier(client).getClass());
+      
+      System.setProperty(HttpClientUtil.SYS_PROP_CHECK_PEER_NAME, "");
+      client.close();
+      client = HttpClientUtil.createClient(null);
+      assertEquals(BrowserCompatHostnameVerifier.class, getHostnameVerifier(client).getClass());
+      
+      System.setProperty(HttpClientUtil.SYS_PROP_CHECK_PEER_NAME, "false");
+      client.close();
+      client = HttpClientUtil.createClient(null);
+      assertEquals(AllowAllHostnameVerifier.class, getHostnameVerifier(client).getClass());
+    } finally {
+      SSLTestConfig.clearSSLSystemProperties();
+      System.clearProperty(HttpClientUtil.SYS_PROP_CHECK_PEER_NAME);
+      client.close();
+    }
   }
-
-  @Test
-  // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 20-Sep-2018
-  public void testToBooleanObject() throws Exception {
-    assertEquals(Boolean.TRUE, HttpClientUtil.toBooleanObject("true"));
-    assertEquals(Boolean.TRUE, HttpClientUtil.toBooleanObject("TRUE"));
-    assertEquals(Boolean.TRUE, HttpClientUtil.toBooleanObject("tRuE"));
-
-    assertEquals(Boolean.FALSE, HttpClientUtil.toBooleanObject("false"));
-    assertEquals(Boolean.FALSE, HttpClientUtil.toBooleanObject("FALSE"));
-    assertEquals(Boolean.FALSE, HttpClientUtil.toBooleanObject("fALSE"));
-
-    assertEquals(null, HttpClientUtil.toBooleanObject("t"));
-    assertEquals(null, HttpClientUtil.toBooleanObject("f"));
-    assertEquals(null, HttpClientUtil.toBooleanObject("foo"));
-    assertEquals(null, HttpClientUtil.toBooleanObject(null));
+  
+  @SuppressWarnings("deprecation")
+  private X509HostnameVerifier getHostnameVerifier(HttpClient client) {
+    return ((SSLSocketFactory) client.getConnectionManager().getSchemeRegistry()
+        .get("https").getSchemeSocketFactory()).getHostnameVerifier();
   }
+  
 }

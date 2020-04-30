@@ -1,3 +1,9 @@
+package org.apache.solr.handler.clustering.carrot2;
+
+import java.util.Set;
+
+import com.google.common.collect.ImmutableSet;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +20,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.clustering.carrot2;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * Carrot2 parameter mapping (recognized and mapped if passed via Solr configuration).
@@ -46,11 +48,18 @@ public final class CarrotParams {
   public static String LANGUAGE_CODE_MAP = CARROT_PREFIX + "lcmap";
 
   /**
-   * Points to Carrot<sup>2</sup> resources
+   * Use {@link #RESOURCES_DIR}.
+   */
+  @Deprecated
+  public static String LEXICAL_RESOURCES_DIR = CARROT_PREFIX + "lexicalResourcesDir";
+  
+  /**
+   * A replacement property pointing to Carrot<sup>2</sup> resources
+   * (a more generic version of the deprecated {@link #LEXICAL_RESOURCES_DIR}).
    */
   public static String RESOURCES_DIR = CARROT_PREFIX + "resourcesDir";
 
-  static final Set<String> CARROT_PARAM_NAMES = new HashSet<>(Arrays.asList(
+  static final Set<String> CARROT_PARAM_NAMES = ImmutableSet.of(
           ALGORITHM, 
           
           TITLE_FIELD_NAME, 
@@ -65,9 +74,10 @@ public final class CarrotParams {
           
           NUM_DESCRIPTIONS, 
           OUTPUT_SUB_CLUSTERS, 
+          LEXICAL_RESOURCES_DIR,
           RESOURCES_DIR,
-          LANGUAGE_CODE_MAP));
-
+          LANGUAGE_CODE_MAP);
+  
   /** No instances. */
   private CarrotParams() {}
 }

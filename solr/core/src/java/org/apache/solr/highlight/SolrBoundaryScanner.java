@@ -14,18 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.highlight;
 
 import org.apache.lucene.search.vectorhighlight.BoundaryScanner;
 import org.apache.solr.common.params.SolrParams;
-import org.apache.solr.core.SolrInfoBean;
+import org.apache.solr.core.SolrInfoMBean;
 import org.apache.solr.util.plugin.NamedListInitializedPlugin;
 
 public abstract class SolrBoundaryScanner extends HighlightingPluginBase implements
-    SolrInfoBean, NamedListInitializedPlugin {
+    SolrInfoMBean, NamedListInitializedPlugin {
 
   public BoundaryScanner getBoundaryScanner(String fieldName, SolrParams params){
-    numRequests.inc();
+    numRequests++;
     params = SolrParams.wrapDefaults(params, defaults);
 
     return get(fieldName, params);

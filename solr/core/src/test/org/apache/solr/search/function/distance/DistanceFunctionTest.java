@@ -1,3 +1,4 @@
+package org.apache.solr.search.function.distance;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.function.distance;
-import org.locationtech.spatial4j.distance.DistanceUtils;
-import org.locationtech.spatial4j.io.GeohashUtils;
+
+import com.spatial4j.core.distance.DistanceUtils;
+import com.spatial4j.core.io.GeohashUtils;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrException;
 import org.junit.BeforeClass;

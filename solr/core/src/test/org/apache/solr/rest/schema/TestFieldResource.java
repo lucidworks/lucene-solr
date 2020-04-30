@@ -1,3 +1,4 @@
+package org.apache.solr.rest.schema;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.rest.schema;
+
 import org.apache.solr.rest.SolrRestletTestBase;
 import org.junit.Test;
 
@@ -23,12 +24,11 @@ public class TestFieldResource extends SolrRestletTestBase {
   public void testGetField() throws Exception {
     assertQ("/schema/fields/test_postv?indent=on&wt=xml&showDefaults=true",
             "count(/response/lst[@name='field']) = 1",
-            "count(/response/lst[@name='field']/*) = 19",
+            "count(/response/lst[@name='field']/*) = 16",
             "/response/lst[@name='field']/str[@name='name'] = 'test_postv'",
             "/response/lst[@name='field']/str[@name='type'] = 'text'",
             "/response/lst[@name='field']/bool[@name='indexed'] = 'true'",
             "/response/lst[@name='field']/bool[@name='stored'] = 'true'",
-            "/response/lst[@name='field']/bool[@name='uninvertible'] = 'true'",
             "/response/lst[@name='field']/bool[@name='docValues'] = 'false'",
             "/response/lst[@name='field']/bool[@name='termVectors'] = 'true'",
             "/response/lst[@name='field']/bool[@name='termPositions'] = 'true'",
@@ -39,10 +39,8 @@ public class TestFieldResource extends SolrRestletTestBase {
             "/response/lst[@name='field']/bool[@name='omitPositions'] = 'false'",
             "/response/lst[@name='field']/bool[@name='storeOffsetsWithPositions'] = 'false'",
             "/response/lst[@name='field']/bool[@name='multiValued'] = 'false'",
-            "/response/lst[@name='field']/bool[@name='large'] = 'false'",
             "/response/lst[@name='field']/bool[@name='required'] = 'false'",
-            "/response/lst[@name='field']/bool[@name='tokenized'] = 'true'",
-            "/response/lst[@name='field']/bool[@name='useDocValuesAsStored'] = 'true'");
+            "/response/lst[@name='field']/bool[@name='tokenized'] = 'true'");
   }
 
   @Test
@@ -60,7 +58,6 @@ public class TestFieldResource extends SolrRestletTestBase {
              "/field/type=='text'",
              "/field/indexed==true",
              "/field/stored==true",
-             "/field/uninvertible==true",
              "/field/docValues==false",
              "/field/termVectors==true",
              "/field/termPositions==true",
@@ -74,19 +71,19 @@ public class TestFieldResource extends SolrRestletTestBase {
              "/field/required==false",
              "/field/tokenized==true");
   }
+  
   @Test
   public void testGetFieldIncludeDynamic() throws Exception {
     assertQ("/schema/fields/some_crazy_name_i?indent=on&wt=xml&includeDynamic=true",
-        "/response/lst[@name='field']/str[@name='name'] = 'some_crazy_name_i'",
-        "/response/lst[@name='field']/str[@name='dynamicBase'] = '*_i'");
+            "/response/lst[@name='field']/str[@name='name'] = 'some_crazy_name_i'",
+            "/response/lst[@name='field']/str[@name='dynamicBase'] = '*_i'");    
   }
   
-
   @Test
   public void testGetFieldDontShowDefaults() throws Exception {
     String[] tests = { 
         "count(/response/lst[@name='field']) = 1",
-        "count(/response/lst[@name='field']/*) = 6",
+        "count(/response/lst[@name='field']/*) = 7",
         "/response/lst[@name='field']/str[@name='name'] = 'id'",
         "/response/lst[@name='field']/str[@name='type'] = 'string'",
         "/response/lst[@name='field']/bool[@name='indexed'] = 'true'",
@@ -98,4 +95,17 @@ public class TestFieldResource extends SolrRestletTestBase {
     assertQ("/schema/fields/id?indent=on&wt=xml&showDefaults=false", tests);
   }
   
+  @Test
+  public void testJsonPutFieldToNonMutableIndexSchema() throws Exception {
+    assertJPut("/schema/fields/newfield",
+        "{\"type\":\"text_general\", \"stored\":\"false\"}",
+        "/error/msg=='This IndexSchema is not mutable.'");
+  }
+
+  @Test
+  public void testJsonPostFieldsToNonMutableIndexSchema() throws Exception {
+    assertJPost("/schema/fields",
+        "[{\"name\":\"foobarbaz\", \"type\":\"text_general\", \"stored\":\"false\"}]",
+        "/error/msg=='This IndexSchema is not mutable.'");
+  }
 }

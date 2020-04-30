@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -31,7 +31,7 @@ import org.apache.lucene.search.DocIdSetIterator;
  * 
  * @lucene.internal
  */
-public final class FixedBitSet extends BitSet implements Bits, Accountable {
+public final class FixedBitSet extends BitSet implements MutableBits, Accountable {
 
   private static final long BASE_RAM_BYTES_USED = RamUsageEstimator.shallowSizeOfInstance(FixedBitSet.class);
 
@@ -264,7 +264,7 @@ public final class FixedBitSet extends BitSet implements Bits, Accountable {
   @Override
   public void or(DocIdSetIterator iter) throws IOException {
     if (BitSetIterator.getFixedBitSetOrNull(iter) != null) {
-      checkUnpositioned(iter);
+      assertUnpositioned(iter);
       final FixedBitSet bits = BitSetIterator.getFixedBitSetOrNull(iter); 
       or(bits);
     } else {
@@ -293,7 +293,7 @@ public final class FixedBitSet extends BitSet implements Bits, Accountable {
   
   /** Does in-place XOR of the bits provided by the iterator. */
   public void xor(DocIdSetIterator iter) throws IOException {
-    checkUnpositioned(iter);
+    assertUnpositioned(iter);
     if (BitSetIterator.getFixedBitSetOrNull(iter) != null) {
       final FixedBitSet bits = BitSetIterator.getFixedBitSetOrNull(iter); 
       xor(bits);
@@ -311,6 +311,17 @@ public final class FixedBitSet extends BitSet implements Bits, Accountable {
     int pos = Math.min(numWords, otherNumWords);
     while (--pos >= 0) {
       thisBits[pos] ^= otherBits[pos];
+    }
+  }
+
+  @Override
+  public void and(DocIdSetIterator iter) throws IOException {
+    if (BitSetIterator.getFixedBitSetOrNull(iter) != null) {
+      assertUnpositioned(iter);
+      final FixedBitSet bits = BitSetIterator.getFixedBitSetOrNull(iter); 
+      and(bits);
+    } else {
+      super.and(iter);
     }
   }
 
@@ -337,6 +348,17 @@ public final class FixedBitSet extends BitSet implements Bits, Accountable {
     }
     if (this.numWords > otherNumWords) {
       Arrays.fill(thisArr, otherNumWords, this.numWords, 0L);
+    }
+  }
+
+  @Override
+  public void andNot(DocIdSetIterator iter) throws IOException {
+    if (BitSetIterator.getFixedBitSetOrNull(iter) != null) {
+      assertUnpositioned(iter);
+      final FixedBitSet bits = BitSetIterator.getFixedBitSetOrNull(iter); 
+      andNot(bits);
+    } else {
+      super.andNot(iter);
     }
   }
 
@@ -509,42 +531,5 @@ public final class FixedBitSet extends BitSet implements Bits, Accountable {
     // fold leftmost bits into right and add a constant to prevent
     // empty sets from returning 0, which is too common.
     return (int) ((h>>32) ^ h) + 0x98761234;
-  }
-
-  /**
-   * Make a copy of the given bits.
-   */
-  public static FixedBitSet copyOf(Bits bits) {
-    if (bits instanceof FixedBits) {
-      // restore the original FixedBitSet
-      FixedBits fixedBits = (FixedBits) bits;
-      bits = new FixedBitSet(fixedBits.bits, fixedBits.length);
-    }
-
-    if (bits instanceof FixedBitSet) {
-      return ((FixedBitSet)bits).clone();
-    } else {
-      int length = bits.length();
-      FixedBitSet bitSet = new FixedBitSet(length);
-      bitSet.set(0, length);
-      for (int i = 0; i < length; ++i) {
-        if (bits.get(i) == false) {
-          bitSet.clear(i);
-        }
-      }
-      return bitSet;
-    }
-  }
-
-  /**
-   * Convert this instance to read-only {@link Bits}.
-   * This is useful in the case that this {@link FixedBitSet} is returned as a
-   * {@link Bits} instance, to make sure that consumers may not get write access
-   * back by casting to a {@link FixedBitSet}.
-   * NOTE: Changes to this {@link FixedBitSet} will be reflected on the returned
-   * {@link Bits}.
-   */
-  public Bits asReadOnlyBits() {
-    return new FixedBits(bits, numBits);
   }
 }

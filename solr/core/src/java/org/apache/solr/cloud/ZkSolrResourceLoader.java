@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -80,44 +81,17 @@ public class ZkSolrResourceLoader extends SolrResourceLoader {
    */
   @Override
   public InputStream openResource(String resource) throws IOException {
-    InputStream is;
-    String file = (".".equals(resource)) ? configSetZkPath : configSetZkPath + "/" + resource;
-    int maxTries = 10;
-    Exception exception = null;
-    while (maxTries -- > 0) {
-      try {
-        if (zkController.pathExists(file)) {
-          Stat stat = new Stat();
-          byte[] bytes = zkController.getZkClient().getData(file, null, stat, true);
-          return new ZkByteArrayInputStream(bytes, stat);
-        } else {
-          //Path does not exists. We only retry for session expired exceptions.
-          break;
-        }
-      } catch (KeeperException.SessionExpiredException e) {
-        exception = e;
-        if (!zkController.getCoreContainer().isShutDown()) {
-          // Retry in case of session expiry
-          try {
-            Thread.sleep(1000);
-            log.debug("Sleeping for 1s before retrying fetching resource=" + resource);
-          } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Could not load resource=" + resource, ie);
-          }
-        }
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new IOException("Error opening " + file, e);
-      } catch (Exception e) {
-        throw new IOException("Error opening " + file, e);
+    InputStream is = null;
+    String file = configSetZkPath + "/" + resource;
+    try {
+      if (zkController.pathExists(file)) {
+        Stat stat = new Stat();
+        byte[] bytes = zkController.getZkClient().getData(file, null, stat, true);
+        return new ZkByteArrayInputStream(bytes, stat);
       }
+    } catch (Exception e) {
+      throw new IOException("Error opening " + file, e);
     }
-
-    if (exception != null) {
-      throw new IOException("We re-tried 10 times but was still unable to fetch resource=" + resource + " from ZK", exception);
-    }
-
     try {
       // delegate to the class loader (looking into $INSTANCE_DIR/lib jars)
       is = classLoader.getResourceAsStream(resource.replace(File.separatorChar, '/'));

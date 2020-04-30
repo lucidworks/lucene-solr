@@ -1,3 +1,5 @@
+package org.apache.solr.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util;
 
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.common.util.NamedList;
 
-public class TestRTimerTree extends SolrTestCase {
+public class TestRTimerTree extends LuceneTestCase {
 
   private static class MockTimerImpl implements RTimer.TimerImpl {
     static private long systemTime;

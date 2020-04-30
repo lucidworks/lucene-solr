@@ -1,3 +1,4 @@
+package org.apache.lucene.search;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +15,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import com.carrotsearch.randomizedtesting.generators.RandomInts;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
@@ -34,7 +36,7 @@ import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 
-import com.carrotsearch.randomizedtesting.generators.RandomNumbers;
+import com.carrotsearch.randomizedtesting.generators.RandomInts;
 
 public class TestBooleanOr extends LuceneTestCase {
 
@@ -51,9 +53,9 @@ public class TestBooleanOr extends LuceneTestCase {
   private IndexReader reader;
   
 
-  private long search(Query q) throws IOException {
+  private int search(Query q) throws IOException {
     QueryUtils.check(random(), q,searcher);
-    return searcher.search(q, 1000).totalHits.value;
+    return searcher.search(q, 1000).totalHits;
   }
 
   public void testElements() throws IOException {
@@ -186,7 +188,7 @@ public class TestBooleanOr extends LuceneTestCase {
     bq.add(new TermQuery(new Term("field", "a")), BooleanClause.Occur.SHOULD);
     bq.add(new TermQuery(new Term("field", "a")), BooleanClause.Occur.SHOULD);
 
-    Weight w = s.createWeight(s.rewrite(bq.build()), ScoreMode.COMPLETE, 1);
+    Weight w = s.createNormalizedWeight(bq.build(), true);
 
     assertEquals(1, s.getIndexReader().leaves().size());
     BulkScorer scorer = w.bulkScorer(s.getIndexReader().leaves().get(0));
@@ -202,8 +204,8 @@ public class TestBooleanOr extends LuceneTestCase {
         }
         
         @Override
-        public ScoreMode scoreMode() {
-          return ScoreMode.COMPLETE_NO_SCORES;
+        public boolean needsScores() {
+          return false;
         }
       };
 
@@ -219,9 +221,9 @@ public class TestBooleanOr extends LuceneTestCase {
     dir.close();
   }
 
-  private static BulkScorer scorer(int... matches) {
+  private static BulkScorer scorer(final int... matches) {
     return new BulkScorer() {
-      final ScoreAndDoc scorer = new ScoreAndDoc();
+      final FakeScorer scorer = new FakeScorer();
       int i = 0;
       @Override
       public int score(LeafCollector collector, Bits acceptDocs, int min, int max) throws IOException {
@@ -239,7 +241,7 @@ public class TestBooleanOr extends LuceneTestCase {
         if (i == matches.length) {
           return DocIdSetIterator.NO_MORE_DOCS;
         }
-        return RandomNumbers.randomIntBetween(random(), max, matches[i]);
+        return RandomInts.randomIntBetween(random(), max, matches[i]);
       }
       @Override
       public long cost() {
@@ -257,12 +259,12 @@ public class TestBooleanOr extends LuceneTestCase {
         scorer(5000, 100000, 9999998, 9999999)
     );
     Collections.shuffle(optionalScorers, random());
-    BooleanScorer scorer = new BooleanScorer(null, optionalScorers, 1, random().nextBoolean());
+    BooleanScorer scorer = new BooleanScorer(null, true, 0, optionalScorers, 1, random().nextBoolean());
     final List<Integer> matches = new ArrayList<>();
     scorer.score(new LeafCollector() {
 
       @Override
-      public void setScorer(Scorable scorer) throws IOException {}
+      public void setScorer(Scorer scorer) throws IOException {}
 
       @Override
       public void collect(int doc) throws IOException {

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -33,6 +33,7 @@ import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
+import org.apache.lucene.document.IntField;
 import org.apache.lucene.document.NumericDocValuesField;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
@@ -81,7 +82,7 @@ public class TestPostingsOffsets extends LuceneTestCase {
     IndexReader r = w.getReader();
     w.close();
 
-    PostingsEnum dp = MultiTerms.getTermPostingsEnum(r, "content", new BytesRef("a"));
+    PostingsEnum dp = MultiFields.getTermPositionsEnum(r, "content", new BytesRef("a"));
     assertNotNull(dp);
     assertEquals(0, dp.nextDoc());
     assertEquals(2, dp.freq());
@@ -93,7 +94,7 @@ public class TestPostingsOffsets extends LuceneTestCase {
     assertEquals(17, dp.endOffset());
     assertEquals(DocIdSetIterator.NO_MORE_DOCS, dp.nextDoc());
 
-    dp = MultiTerms.getTermPostingsEnum(r, "content", new BytesRef("b"));
+    dp = MultiFields.getTermPositionsEnum(r, "content", new BytesRef("b"));
     assertNotNull(dp);
     assertEquals(0, dp.nextDoc());
     assertEquals(1, dp.freq());
@@ -102,7 +103,7 @@ public class TestPostingsOffsets extends LuceneTestCase {
     assertEquals(9, dp.endOffset());
     assertEquals(DocIdSetIterator.NO_MORE_DOCS, dp.nextDoc());
 
-    dp = MultiTerms.getTermPostingsEnum(r, "content", new BytesRef("c"));
+    dp = MultiFields.getTermPositionsEnum(r, "content", new BytesRef("c"));
     assertNotNull(dp);
     assertEquals(0, dp.nextDoc());
     assertEquals(1, dp.freq());
@@ -153,7 +154,7 @@ public class TestPostingsOffsets extends LuceneTestCase {
     String terms[] = { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "hundred" };
     
     for (String term : terms) {
-      PostingsEnum dp = MultiTerms.getTermPostingsEnum(reader, "numbers", new BytesRef(term));
+      PostingsEnum dp = MultiFields.getTermPositionsEnum(reader, "numbers", new BytesRef(term));
       int doc;
       while((doc = dp.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
         String storedNumbers = reader.document(doc).get("numbers");
@@ -181,7 +182,7 @@ public class TestPostingsOffsets extends LuceneTestCase {
     
     for (int j = 0; j < numSkippingTests; j++) {
       int num = TestUtil.nextInt(random(), 100, Math.min(numDocs - 1, 999));
-      PostingsEnum dp = MultiTerms.getTermPostingsEnum(reader, "numbers", new BytesRef("hundred"));
+      PostingsEnum dp = MultiFields.getTermPositionsEnum(reader, "numbers", new BytesRef("hundred"));
       int doc = dp.advance(num);
       assertEquals(num, doc);
       int freq = dp.freq();
@@ -206,7 +207,7 @@ public class TestPostingsOffsets extends LuceneTestCase {
     // check that other fields (without offsets) work correctly
     
     for (int i = 0; i < numDocs; i++) {
-      PostingsEnum dp = MultiTerms.getTermPostingsEnum(reader, "id", new BytesRef("" + i), 0);
+      PostingsEnum dp = MultiFields.getTermDocsEnum(reader, "id", new BytesRef("" + i), 0);
       assertEquals(i, dp.nextDoc());
       assertEquals(DocIdSetIterator.NO_MORE_DOCS, dp.nextDoc());
     }
@@ -238,6 +239,7 @@ public class TestPostingsOffsets extends LuceneTestCase {
 
     for(int docCount=0;docCount<numDocs;docCount++) {
       Document doc = new Document();
+      doc.add(new IntField("id", docCount, Field.Store.YES));
       doc.add(new NumericDocValuesField("id", docCount));
       List<Token> tokens = new ArrayList<>();
       final int numTokens = atLeast(100);
@@ -291,17 +293,11 @@ public class TestPostingsOffsets extends LuceneTestCase {
       // TODO: improve this
       LeafReader sub = ctx.reader();
       //System.out.println("\nsub=" + sub);
-      final TermsEnum termsEnum = sub.terms("content").iterator();
+      final TermsEnum termsEnum = sub.fields().terms("content").iterator();
       PostingsEnum docs = null;
       PostingsEnum docsAndPositions = null;
       PostingsEnum docsAndPositionsAndOffsets = null;
-      int[] docIDToID = new int[sub.maxDoc()];
-      NumericDocValues values = DocValues.getNumeric(sub, "id");
-      for(int i=0;i<sub.maxDoc();i++) {
-        assertEquals(i, values.nextDoc());
-        docIDToID[i] = (int) values.longValue();
-      }
-      
+      final NumericDocValues docIDToID = DocValues.getNumeric(sub, "id");
       for(String term : terms) {
         //System.out.println("  term=" + term);
         if (termsEnum.seekExact(new BytesRef(term))) {
@@ -310,8 +306,8 @@ public class TestPostingsOffsets extends LuceneTestCase {
           int doc;
           //System.out.println("    doc/freq");
           while((doc = docs.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
-            final List<Token> expected = actualTokens.get(term).get(docIDToID[doc]);
-            //System.out.println("      doc=" + docIDToID[doc] + " docID=" + doc + " " + expected.size() + " freq");
+            final List<Token> expected = actualTokens.get(term).get((int) docIDToID.get(doc));
+            //System.out.println("      doc=" + docIDToID.get(doc) + " docID=" + doc + " " + expected.size() + " freq");
             assertNotNull(expected);
             assertEquals(expected.size(), docs.freq());
           }
@@ -321,8 +317,8 @@ public class TestPostingsOffsets extends LuceneTestCase {
           assertNotNull(docsAndPositions);
           //System.out.println("    doc/freq/pos");
           while((doc = docsAndPositions.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
-            final List<Token> expected = actualTokens.get(term).get(docIDToID[doc]);
-            //System.out.println("      doc=" + docIDToID[doc] + " " + expected.size() + " freq");
+            final List<Token> expected = actualTokens.get(term).get((int) docIDToID.get(doc));
+            //System.out.println("      doc=" + docIDToID.get(doc) + " " + expected.size() + " freq");
             assertNotNull(expected);
             assertEquals(expected.size(), docsAndPositions.freq());
             for(Token token : expected) {
@@ -336,8 +332,8 @@ public class TestPostingsOffsets extends LuceneTestCase {
           assertNotNull(docsAndPositionsAndOffsets);
           //System.out.println("    doc/freq/pos/offs");
           while((doc = docsAndPositionsAndOffsets.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
-            final List<Token> expected = actualTokens.get(term).get(docIDToID[doc]);
-            //System.out.println("      doc=" + docIDToID[doc] + " " + expected.size() + " freq");
+            final List<Token> expected = actualTokens.get(term).get((int) docIDToID.get(doc));
+            //System.out.println("      doc=" + docIDToID.get(doc) + " " + expected.size() + " freq");
             assertNotNull(expected);
             assertEquals(expected.size(), docsAndPositionsAndOffsets.freq());
             for(Token token : expected) {
@@ -381,9 +377,10 @@ public class TestPostingsOffsets extends LuceneTestCase {
       riw.addDocument(doc);
     }
     CompositeReader ir = riw.getReader();
-    FieldInfos fis = FieldInfos.getMergedFieldInfos(ir);
+    LeafReader slow = SlowCompositeReaderWrapper.wrap(ir);
+    FieldInfos fis = slow.getFieldInfos();
     assertEquals(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS, fis.fieldInfo("foo").getIndexOptions());
-    ir.close();
+    slow.close();
     ir.close();
     riw.close();
     dir.close();
@@ -407,36 +404,48 @@ public class TestPostingsOffsets extends LuceneTestCase {
   
   // NOTE: the next two tests aren't that good as we need an EvilToken...
   public void testNegativeOffsets() throws Exception {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       checkTokens(new Token[] { 
           makeToken("foo", 1, -1, -1)
       });
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {
+      //expected
+    }
   }
   
   public void testIllegalOffsets() throws Exception {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       checkTokens(new Token[] { 
           makeToken("foo", 1, 1, 0)
       });
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {
+      //expected
+    }
   }
   
   public void testIllegalOffsetsAcrossFieldInstances() throws Exception {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       checkTokens(new Token[] { makeToken("use", 1, 150, 160) }, 
                   new Token[] { makeToken("use", 1, 50, 60) });
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {
+      //expected
+    }
   }
    
   public void testBackwardsOffsets() throws Exception {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       checkTokens(new Token[] { 
          makeToken("foo", 1, 0, 3),
          makeToken("foo", 1, 4, 7),
          makeToken("foo", 0, 3, 6)
       });
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {
+      // expected
+    }
   }
   
   public void testStackedTokens() throws Exception {
@@ -464,14 +473,14 @@ public class TestPostingsOffsets extends LuceneTestCase {
     // add good document
     Document doc = new Document();
     iw.addDocument(doc);
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       FieldType ft = new FieldType(TextField.TYPE_NOT_STORED);
       ft.setIndexOptions(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS);
       doc.add(new Field("foo", "bar", ft));
       doc.add(new Field("foo", "bar", ft));
       iw.addDocument(doc);
-    });
-    iw.commit();
+      fail("didn't get expected exception");
+    } catch (IllegalArgumentException expected) {}
     iw.close();
 
     // make sure we see our good doc

@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
 
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.QueryUtils;
@@ -45,9 +45,11 @@ public class TestSpanOrQuery extends LuceneTestCase {
   public void testDifferentField() throws Exception {
     SpanTermQuery q1 = new SpanTermQuery(new Term("field1", "foo"));
     SpanTermQuery q2 = new SpanTermQuery(new Term("field2", "bar"));
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new SpanOrQuery(q1, q2);
-    });
-    assertTrue(expected.getMessage().contains("must have same field"));
+      fail("didn't get expected exception");
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("must have same field"));
+    }
   }
 }

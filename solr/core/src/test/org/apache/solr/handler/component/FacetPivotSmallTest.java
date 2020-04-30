@@ -1,3 +1,5 @@
+package org.apache.solr.handler.component;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
 
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.params.FacetParams;
@@ -30,8 +31,6 @@ public class FacetPivotSmallTest extends SolrTestCaseJ4 {
 
   @BeforeClass
   public static void beforeClass() throws Exception {
-    // we need DVs on point fields to compute stats & facets
-    if (Boolean.getBoolean(NUMERIC_POINTS_SYSPROP)) System.setProperty(NUMERIC_DOCVALUES_SYSPROP,"true");
     initCore("solrconfig.xml", "schema11.xml");
   }
 
@@ -40,6 +39,7 @@ public class FacetPivotSmallTest extends SolrTestCaseJ4 {
     super.setUp();
     clearIndex();
     assertU(commit());
+    lrf = h.getRequestFactory("standard", 0, 20);
   }
 
   /**
@@ -375,18 +375,6 @@ public class FacetPivotSmallTest extends SolrTestCaseJ4 {
         facetPivotPrefix + "[5]/arr[@name='pivot']/lst[5]/null[@name='value'][.='']", // not the missing company value
         facetPivotPrefix + "[5]/arr[@name='pivot']/lst[5]/int[@name='count'][.=1]", // wrong missing company count
         facetPivotPrefix + "[5]/arr[@name='pivot']/lst[5][not(arr[@name='pivot'])]" // company shouldn't have sub-pivots
-    );
-
-    SolrParams missingC = SolrParams.wrapDefaults(missingA,
-        params(FacetParams.FACET_LIMIT, "0", "facet.sort", "index"));
-
-    assertQ(req(missingC), facetPivotPrefix + "/arr[@name='pivot'][count(.) > 0]",   // not enough values for pivot
-        facetPivotPrefix + "[1]/null[@name='value'][.='']",   // not the missing place value
-        facetPivotPrefix + "[1]/int[@name='count'][.=2]",       // wrong missing place count
-        facetPivotPrefix + "[1]/arr[@name='pivot'][count(.) > 0]", // not enough sub-pivots for missing place
-        facetPivotPrefix + "[1]/arr[@name='pivot']/lst[1]/null[@name='value'][.='']", // not the missing company value
-        facetPivotPrefix + "[1]/arr[@name='pivot']/lst[1]/int[@name='count'][.=1]", // wrong missing company count
-        facetPivotPrefix + "[1]/arr[@name='pivot']/lst[1][not(arr[@name='pivot'])]" // company shouldn't have sub-pivots
     );
   }
 

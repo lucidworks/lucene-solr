@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import org.apache.lucene.analysis.Token;
-import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.*;
 
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 
+@SuppressWarnings("deprecation")
 public class TestAttributeSource extends LuceneTestCase {
 
   public void testCaptureState() {
@@ -71,10 +70,12 @@ public class TestAttributeSource extends LuceneTestCase {
     // init a third instance missing one Attribute
     AttributeSource src3 = new AttributeSource();
     termAtt = src3.addAttribute(CharTermAttribute.class);
-    // The third instance is missing the TypeAttribute, so restoreState() should throw IllegalArgumentException
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       src3.restoreState(state);
-    });
+      fail("The third instance is missing the TypeAttribute, so restoreState() should throw IllegalArgumentException");
+    } catch (IllegalArgumentException iae) {
+      // pass
+    }
   }
   
   public void testCloneAttributes() {
@@ -131,22 +132,24 @@ public class TestAttributeSource extends LuceneTestCase {
   
   @SuppressWarnings({"rawtypes","unchecked"})
   public void testInvalidArguments() throws Exception {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       AttributeSource src = new AttributeSource();
       src.addAttribute(Token.class);
       fail("Should throw IllegalArgumentException");
-    });
+    } catch (IllegalArgumentException iae) {}
     
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       AttributeSource src = new AttributeSource(Token.TOKEN_ATTRIBUTE_FACTORY);
       src.addAttribute(Token.class);
-    });
+      fail("Should throw IllegalArgumentException");
+    } catch (IllegalArgumentException iae) {}
     
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       AttributeSource src = new AttributeSource();
       // break this by unsafe cast
       src.addAttribute((Class) Iterator.class);
-    });
+      fail("Should throw IllegalArgumentException");
+    } catch (IllegalArgumentException iae) {}
   }
   
   public void testLUCENE_3042() throws Exception {
@@ -174,52 +177,37 @@ public class TestAttributeSource extends LuceneTestCase {
     clone.getPayload().bytes[0] = 10; // modify one byte, srcBytes shouldn't change
     assertEquals("clone() wasn't deep", 1, src.getPayload().bytes[0]);
   }
+  
+  @SuppressWarnings("unused")
+  static final class OnlyReflectAttributeImpl extends AttributeImpl implements TypeAttribute {
+    private String field1 = "foo";
+    private int field2 = 4711;
+    private static int x = 0;
+    public String field3 = "public";
 
-  public void testRemoveAllAttributes() {
-    List<Class<? extends Attribute>> attrClasses = new ArrayList<>();
-    attrClasses.add(CharTermAttribute.class);
-    attrClasses.add(OffsetAttribute.class);
-    attrClasses.add(FlagsAttribute.class);
-    attrClasses.add(PayloadAttribute.class);
-    attrClasses.add(PositionIncrementAttribute.class);
-    attrClasses.add(TypeAttribute.class);
-
-    // Add attributes with the default factory, then try to remove all of them
-    AttributeSource defaultFactoryAttributeSource = new AttributeSource();
-
-    assertFalse(defaultFactoryAttributeSource.hasAttributes());
-
-    for (Class<? extends Attribute> attrClass : attrClasses) {
-      defaultFactoryAttributeSource.addAttribute(attrClass);
-      assertTrue("Missing added attribute " + attrClass.getSimpleName(),
-          defaultFactoryAttributeSource.hasAttribute(attrClass));
+    @Override
+    public String type() {
+      return field1;
     }
 
-    defaultFactoryAttributeSource.removeAllAttributes();
-
-    for (Class<? extends Attribute> attrClass : attrClasses) {
-      assertFalse("Didn't remove attribute " + attrClass.getSimpleName(),
-          defaultFactoryAttributeSource.hasAttribute(attrClass));
-    }
-    assertFalse(defaultFactoryAttributeSource.hasAttributes());
-
-    // Add attributes with the packed implementations factory, then try to remove all of them
-    AttributeSource packedImplsAttributeSource
-        = new AttributeSource(TokenStream.DEFAULT_TOKEN_ATTRIBUTE_FACTORY);
-    assertFalse(packedImplsAttributeSource.hasAttributes());
-
-    for (Class<? extends Attribute> attrClass : attrClasses) {
-      packedImplsAttributeSource.addAttribute(attrClass);
-      assertTrue("Missing added attribute " + attrClass.getSimpleName(),
-          packedImplsAttributeSource.hasAttribute(attrClass));
+    @Override
+    public void setType(String type) {
+      this.field1 = type;
     }
 
-    packedImplsAttributeSource.removeAllAttributes();
+    @Override
+    public void clear() {}
 
-    for (Class<? extends Attribute> attrClass : attrClasses) {
-      assertFalse("Didn't remove attribute " + attrClass.getSimpleName(),
-          packedImplsAttributeSource.hasAttribute(attrClass));
-    }
-    assertFalse(packedImplsAttributeSource.hasAttributes());
+    @Override
+    public void copyTo(AttributeImpl target) {}
   }
+  
+  public void testBackwardsCompatibilityReflector() throws Exception {
+    TestUtil.assertAttributeReflection(new OnlyReflectAttributeImpl(), new HashMap<String, Object>() {{
+      put(TypeAttribute.class.getName() + "#field1", "foo");
+      put(TypeAttribute.class.getName() + "#field2", 4711);
+      put(TypeAttribute.class.getName() + "#field3", "public");
+    }});    
+  }
+  
 }

@@ -14,9 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.apache.lucene.analysis.util.TokenFilterFactory;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.search.*;
+import org.apache.lucene.util.ToStringUtils;
+import org.apache.lucene.util.automaton.Automata;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.solr.analysis.ReversedWildcardFilterFactory;
+import org.apache.solr.analysis.TokenizerChain;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.parser.ParseException;
 import org.apache.solr.parser.QueryParser;
+import org.apache.solr.schema.FieldType;
+import org.apache.solr.schema.IndexSchema;
+import org.apache.solr.schema.SchemaField;
+import org.apache.solr.schema.TextField;
 
 
 /**
@@ -25,7 +44,7 @@ import org.apache.solr.parser.QueryParser;
 public class SolrQueryParser extends QueryParser {
 
   public SolrQueryParser(QParser parser, String defaultField) {
-    super(defaultField, parser);
+    super(parser.getReq().getCore().getSolrConfig().luceneMatchVersion, defaultField, parser);
   }
 
 }

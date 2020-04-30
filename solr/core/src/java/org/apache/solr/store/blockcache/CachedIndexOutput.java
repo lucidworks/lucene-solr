@@ -1,3 +1,5 @@
+package org.apache.solr.store.blockcache;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.store.blockcache;
 
 import java.io.IOException;
 
@@ -36,7 +37,7 @@ public class CachedIndexOutput extends ReusedBufferedIndexOutput {
   
   public CachedIndexOutput(BlockDirectory directory, IndexOutput dest,
       int blockSize, String name, Cache cache, int bufferSize) {
-    super("dest=" + dest + " name=" + name, name, bufferSize);
+    super("dest=" + dest + " name=" + name, bufferSize);
     this.directory = directory;
     this.dest = dest;
     this.blockSize = blockSize;

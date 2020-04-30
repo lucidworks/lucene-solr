@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.benchmark.byTask;
 
 import java.io.IOException;
@@ -37,6 +38,8 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.LuceneTestCase.SuppressSysoutChecks;
+
+import conf.ConfLoader;
 
 /** Test very simply that perf tasks are parses as expected. */
 @SuppressSysoutChecks(bugUrl = "very noisy")
@@ -112,7 +115,7 @@ public class TestPerfTasksParse extends LuceneTestCase {
   public void testParseExamples() throws Exception {
     // hackedy-hack-hack
     boolean foundFiles = false;
-    final Path examplesDir = Paths.get(getClass().getResource("/conf").toURI());
+    final Path examplesDir = Paths.get(ConfLoader.class.getResource(".").toURI());
     try (DirectoryStream<Path> stream = Files.newDirectoryStream(examplesDir, "*.alg")) {
       for (Path path : stream) {
         Config config = new Config(Files.newBufferedReader(path, StandardCharsets.UTF_8));

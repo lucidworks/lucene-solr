@@ -1,20 +1,21 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * contributor license agreements. See the NOTICE file distributed with this
+ * work for additional information regarding copyright ownership. The ASF
+ * licenses this file to You under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
  */
-package org.apache.lucene.store;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -73,10 +74,10 @@ public class NIOFSDirectory extends FSDirectory {
     this(path, FSLockFactory.getDefault());
   }
 
+  /** Creates an IndexInput for the file with the given name. */
   @Override
   public IndexInput openInput(String name, IOContext context) throws IOException {
     ensureOpen();
-    ensureCanRead(name);
     Path path = getDirectory().resolve(name);
     FileChannel fc = FileChannel.open(path, StandardOpenOption.READ);
     return new NIOFSIndexInput("NIOFSIndexInput(path=\"" + path + "\")", fc, context);
@@ -134,7 +135,7 @@ public class NIOFSDirectory extends FSDirectory {
     @Override
     public IndexInput slice(String sliceDescription, long offset, long length) throws IOException {
       if (offset < 0 || length < 0 || offset + length > this.length()) {
-        throw new IllegalArgumentException("slice() " + sliceDescription + " out of bounds: offset=" + offset + ",length=" + length + ",fileLength="  + this.length() + ": "  + this);
+        throw new IllegalArgumentException("slice() " + sliceDescription + " out of bounds: "  + this);
       }
       return new NIOFSIndexInput(getFullSliceDescription(sliceDescription), channel, off + offset, length, getBufferSize());
     }
@@ -191,10 +192,6 @@ public class NIOFSDirectory extends FSDirectory {
     }
 
     @Override
-    protected void seekInternal(long pos) throws IOException {
-      if (pos > length()) {
-        throw new EOFException("read past EOF: pos=" + pos + " vs length=" + length() + ": " + this);
-      }
-    }
+    protected void seekInternal(long pos) throws IOException {}
   }
 }

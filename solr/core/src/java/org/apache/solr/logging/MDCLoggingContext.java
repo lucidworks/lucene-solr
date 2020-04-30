@@ -1,3 +1,5 @@
+package org.apache.solr.logging;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.logging;
 
 import static org.apache.solr.common.cloud.ZkStateReader.COLLECTION_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.CORE_NAME_PROP;
@@ -22,11 +23,9 @@ import static org.apache.solr.common.cloud.ZkStateReader.NODE_NAME_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.REPLICA_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.SHARD_ID_PROP;
 
-import java.util.function.Supplier;
 
 import org.apache.solr.cloud.CloudDescriptor;
 import org.apache.solr.cloud.ZkController;
-import org.apache.solr.common.StringUtils;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.CoreDescriptor;
 import org.apache.solr.core.SolrCore;
@@ -35,35 +34,27 @@ import org.slf4j.MDC;
 /**
  * Set's per thread context info for logging. Nested calls will use the top level parent for all context. The first
  * caller always owns the context until it calls {@link #clear()}. Always call {@link #setCore(SolrCore)} or
- * {@link #setCoreDescriptor(CoreContainer, CoreDescriptor)} and then {@link #clear()} in a finally block.
+ * {@link #setCoreDescriptor(CoreDescriptor)} and then {@link #clear()} in a finally block.
  */
 public class MDCLoggingContext {
-  public static final String TRACE_ID = "trace_id";
   // When a thread sets context and finds that the context is already set, we should noop and ignore the finally clear
-  private static ThreadLocal<Integer> CALL_DEPTH = ThreadLocal.withInitial(new Supplier<Integer>() {
+  private static ThreadLocal<Integer> CALL_DEPTH = new ThreadLocal<Integer>() {
     @Override
-    public Integer get() {
+    protected Integer initialValue() {
       return 0;
     }
-  });
+  };
   
-  public static void setCollection(String collection) {
+  
+  private static void setCollection(String collection) {
     if (collection != null) {
       MDC.put(COLLECTION_PROP, "c:" + collection);
     } else {
       MDC.remove(COLLECTION_PROP);
     }
   }
-
-  public static void setTracerId(String traceId) {
-    if (!StringUtils.isEmpty(traceId)) {
-      MDC.put(TRACE_ID, "t:" + traceId);
-    } else {
-      MDC.remove(TRACE_ID);
-    }
-  }
   
-  public static void setShard(String shard) {
+  private static void setShard(String shard) {
     if (shard != null) {
       MDC.put(SHARD_ID_PROP, "s:" + shard);
     } else {
@@ -71,7 +62,7 @@ public class MDCLoggingContext {
     }
   }
   
-  public static void setReplica(String replica) {
+  private static void setReplica(String replica) {
     if (replica != null) {
       MDC.put(REPLICA_PROP, "r:" + replica);
     } else {
@@ -79,7 +70,7 @@ public class MDCLoggingContext {
     }
   }
   
-  public static void setCoreName(String core) {
+  private static void setCoreName(String core) {
     if (core != null) {
       MDC.put(CORE_NAME_PROP, "x:" + core);
     } else {
@@ -115,11 +106,12 @@ public class MDCLoggingContext {
   
   public static void setCore(SolrCore core) {
     if (core != null) {
-      setCoreDescriptor(core.getCoreContainer(), core.getCoreDescriptor());
+      CoreDescriptor cd = core.getCoreDescriptor();
+      setCoreDescriptor(cd);
     }
   }
   
-  public static void setCoreDescriptor(CoreContainer coreContainer, CoreDescriptor cd) {
+  public static void setCoreDescriptor(CoreDescriptor cd) {
     if (cd != null) {
       int callDepth = CALL_DEPTH.get();
       CALL_DEPTH.set(callDepth + 1);
@@ -128,8 +120,9 @@ public class MDCLoggingContext {
       }
       
       setCoreName(cd.getName());
-      if (coreContainer != null) {
-        ZkController zkController = coreContainer.getZkController();
+      CoreContainer cc = cd.getCoreContainer();
+      if (cc != null) {
+        ZkController zkController = cc.getZkController();
         if (zkController != null) {
           setNodeName(zkController.getNodeName());
         }
@@ -161,7 +154,6 @@ public class MDCLoggingContext {
     MDC.remove(REPLICA_PROP);
     MDC.remove(SHARD_ID_PROP);
     MDC.remove(NODE_NAME_PROP);
-    MDC.remove(TRACE_ID);
   }
   
   public static void reset() {

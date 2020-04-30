@@ -14,22 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.schema;
 
 import java.io.IOException;
 import java.util.Map;
 
-import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.ReaderUtil;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.docvalues.IntDocValues;
 import org.apache.lucene.search.*;
+import org.apache.lucene.uninverting.UninvertingReader.Type;
 import org.apache.solr.response.TextResponseWriter;
 import org.apache.solr.search.QParser;
-import org.apache.solr.uninverting.UninvertingReader.Type;
 
 /**
  * Utility Field used for random sorting.  It should not be passed a value.
@@ -160,7 +161,7 @@ public class RandomSortField extends FieldType {
 
 
 
-  public static class RandomValueSource extends ValueSource {
+  public class RandomValueSource extends ValueSource {
     private final String field;
 
     public RandomValueSource(String field) {

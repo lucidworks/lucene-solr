@@ -16,11 +16,10 @@
  */
 package org.apache.solr.common.util;
 
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.BaseDistributedSearchTestCase;
-import org.apache.solr.SolrTestCase;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
-import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
@@ -30,13 +29,11 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 
-public class TestNamedListCodec  extends SolrTestCase {
-  @Test
-  // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 20-Sep-2018
+public class TestNamedListCodec  extends LuceneTestCase {
   public void testSimple() throws Exception{
-
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
     NamedList nl = new NamedList();
-    Float fval = 10.01f;
+    Float fval = new Float( 10.01f );
     Boolean bval = Boolean.TRUE;
     String sval = "12qwaszx";
 
@@ -77,14 +74,10 @@ public class TestNamedListCodec  extends SolrTestCase {
     list.add(doc);
 
     nl.add("zzz",doc);
-    byte[] arr;
-    try (JavaBinCodec jbc = new JavaBinCodec(null); ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-      jbc.marshal(nl, baos);
-      arr = baos.toByteArray();
-    }
-    try (JavaBinCodec jbc = new JavaBinCodec(); ByteArrayInputStream bais = new ByteArrayInputStream(arr)) {
-      nl = (NamedList) jbc.unmarshal(bais);
-    }
+
+    new JavaBinCodec(null).marshal(nl,baos);
+    byte[] arr = baos.toByteArray();
+    nl = (NamedList) new JavaBinCodec().unmarshal(new ByteArrayInputStream(arr));
 
 
     assertEquals(3, nl.size());
@@ -95,12 +88,10 @@ public class TestNamedListCodec  extends SolrTestCase {
     assertEquals(101, ((List)list.get(1).getFieldValue("f")).get(1));
   }
 
-  @Test
-  // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 20-Sep-2018
   public void testIterator() throws Exception{
-    
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
     NamedList nl = new NamedList();
-    Float fval = 10.01f;
+    Float fval = new Float( 10.01f );
     Boolean bval = Boolean.TRUE;
     String sval = "12qwaszx";
 
@@ -123,23 +114,17 @@ public class TestNamedListCodec  extends SolrTestCase {
     list.add(doc);
 
     nl.add("zzz",list.iterator());
-    byte[] arr;
-    try (JavaBinCodec jbc = new JavaBinCodec(null); ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-      jbc.marshal(nl, baos);
-      arr = baos.toByteArray();
-    }
-    try (JavaBinCodec jbc = new JavaBinCodec(); ByteArrayInputStream bais = new ByteArrayInputStream(arr)) {
-      nl = (NamedList) jbc.unmarshal(bais);
-    }
+
+    new JavaBinCodec(null).marshal(nl,baos);
+    byte[] arr = baos.toByteArray();
+    nl = (NamedList) new JavaBinCodec().unmarshal(new ByteArrayInputStream(arr));
 
     List l = (List) nl.get("zzz");
     assertEquals(list.size(), l.size());
   }
 
-  @Test
-  // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 20-Sep-2018
   public void testIterable() throws Exception {
-    
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
     NamedList r = new NamedList();
 
@@ -152,14 +137,11 @@ public class TestNamedListCodec  extends SolrTestCase {
     r.add("more", "less");
     r.add("values", map.values());
     r.add("finally", "the end");
-    byte[] arr;
-    try (JavaBinCodec jbc = new JavaBinCodec(null); ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-      jbc.marshal(r,baos);
-      arr = baos.toByteArray();
-    }
+    new JavaBinCodec(null).marshal(r,baos);
+    byte[] arr = baos.toByteArray();
 
-    try (JavaBinCodec jbc = new JavaBinCodec(); ByteArrayInputStream bais = new ByteArrayInputStream(arr)) {
-      NamedList result = (NamedList) jbc.unmarshal(bais);
+    try {
+      NamedList result = (NamedList) new JavaBinCodec().unmarshal(new ByteArrayInputStream(arr));
       assertTrue("result is null and it shouldn't be", result != null);
       List keys = (List) result.get("keys");
       assertTrue("keys is null and it shouldn't be", keys != null);
@@ -252,8 +234,8 @@ public class TestNamedListCodec  extends SolrTestCase {
     }
   }
 
-  @Test
-  // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 20-Sep-2018
+
+
   public void testRandom() throws Exception {
     // Random r = random;
     // let's keep it deterministic since just the wrong
@@ -265,16 +247,13 @@ public class TestNamedListCodec  extends SolrTestCase {
 
     for (int i=0; i<10000; i++) { // pump up the iterations for good stress testing
       nl = rNamedList(3);
-      byte[] arr;
-      try (JavaBinCodec jbc = new JavaBinCodec(); ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-        jbc.marshal(nl, baos);
-        arr = baos.toByteArray();
-      }
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      new JavaBinCodec(null).marshal(nl,baos);
+      byte[] arr = baos.toByteArray();
       // System.out.println(arr.length);
-      try (JavaBinCodec jbc = new JavaBinCodec(); ByteArrayInputStream bais = new ByteArrayInputStream(arr)) {
-        res = (NamedList) jbc.unmarshal(bais);
-        cmp = BaseDistributedSearchTestCase.compare(nl, res, 0, null);
-      }
+      res = (NamedList) new JavaBinCodec().unmarshal(new ByteArrayInputStream(arr));
+      cmp = BaseDistributedSearchTestCase.compare(nl, res, 0, null);
+
       if (cmp != null) {
         System.out.println(nl);
         System.out.println(res);
@@ -282,4 +261,5 @@ public class TestNamedListCodec  extends SolrTestCase {
       }
     }
   }
+
 }

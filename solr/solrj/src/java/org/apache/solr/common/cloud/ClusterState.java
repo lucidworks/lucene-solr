@@ -1,3 +1,5 @@
+package org.apache.solr.common.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.cloud;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -24,13 +25,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
 
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.util.Utils;
-import org.apache.zookeeper.KeeperException;
+import org.apache.zookeeper.Watcher;
 import org.noggit.JSONWriter;
 
 /**
@@ -41,8 +40,8 @@ import org.noggit.JSONWriter;
 public class ClusterState implements JSONWriter.Writable {
   
   private final Integer znodeVersion;
-
-  private final Map<String, CollectionRef> collectionStates, immutableCollectionStates;
+  
+  private final Map<String, CollectionRef> collectionStates;
   private Set<String> liveNodes;
 
   /**
@@ -69,7 +68,6 @@ public class ClusterState implements JSONWriter.Writable {
     this.liveNodes = new HashSet<>(liveNodes.size());
     this.liveNodes.addAll(liveNodes);
     this.collectionStates = new LinkedHashMap<>(collectionStates);
-    this.immutableCollectionStates = Collections.unmodifiableMap(collectionStates);
   }
 
 
@@ -90,11 +88,24 @@ public class ClusterState implements JSONWriter.Writable {
     return result;
   }
 
+
   /**
-   * Returns the zNode version that was used to construct this instance.
+   * Get the lead replica for specific collection, or null if one currently doesn't exist.
    */
-  public int getZNodeVersion() {
-    return znodeVersion;
+  public Replica getLeader(String collection, String sliceName) {
+    DocCollection coll = getCollectionOrNull(collection);
+    if (coll == null) return null;
+    Slice slice = coll.getSlice(sliceName);
+    if (slice == null) return null;
+    return slice.getLeader();
+  }
+  private Replica getReplica(DocCollection coll, String replicaName) {
+    if (coll == null) return null;
+    for (Slice slice : coll.getSlices()) {
+      Replica replica = slice.getReplica(replicaName);
+      if (replica != null) return replica;
+    }
+    return null;
   }
 
   /**
@@ -103,10 +114,54 @@ public class ClusterState implements JSONWriter.Writable {
    * Implementation note: This method resolves the collection reference by calling
    * {@link CollectionRef#get()} which can make a call to ZooKeeper. This is necessary
    * because the semantics of how collection list is loaded have changed in SOLR-6629.
+   * Please javadocs in {@link ZkStateReader#refreshCollectionList(Watcher)}
    */
   public boolean hasCollection(String collectionName) {
     return getCollectionOrNull(collectionName) != null;
   }
+
+  /**
+   * Gets the replica by the core name (assuming the slice is unknown) or null if replica is not found.
+   * If the slice is known, do not use this method.
+   * coreNodeName is the same as replicaName
+   */
+  public Replica getReplica(final String collection, final String coreNodeName) {
+    return getReplica(getCollectionOrNull(collection), coreNodeName);
+  }
+
+  /**
+   * Get the named Slice for collection, or null if not found.
+   */
+  public Slice getSlice(String collection, String sliceName) {
+    DocCollection coll = getCollectionOrNull(collection);
+    if (coll == null) return null;
+    return coll.getSlice(sliceName);
+  }
+
+  public Map<String, Slice> getSlicesMap(String collection) {
+    DocCollection coll = getCollectionOrNull(collection);
+    if (coll == null) return null;
+    return coll.getSlicesMap();
+  }
+  
+  public Map<String, Slice> getActiveSlicesMap(String collection) {
+    DocCollection coll = getCollectionOrNull(collection);
+    if (coll == null) return null;
+    return coll.getActiveSlicesMap();
+  }
+
+  public Collection<Slice> getSlices(String collection) {
+    DocCollection coll = getCollectionOrNull(collection);
+    if (coll == null) return null;
+    return coll.getSlices();
+  }
+
+  public Collection<Slice> getActiveSlices(String collection) {
+    DocCollection coll = getCollectionOrNull(collection);
+    if (coll == null) return null;
+    return coll.getActiveSlices();
+  }
+
 
   /**
    * Get the named DocCollection object, or throw an exception if it doesn't exist.
@@ -123,43 +178,31 @@ public class ClusterState implements JSONWriter.Writable {
 
   /**
    * Returns the corresponding {@link DocCollection} object for the given collection name
-   * if such a collection exists. Returns null otherwise.  Equivalent to getCollectionOrNull(collectionName, false)
-   */
-  public DocCollection getCollectionOrNull(String collectionName) {
-    return getCollectionOrNull(collectionName, false);
-  }
-
-  /**
-   * Returns the corresponding {@link DocCollection} object for the given collection name
    * if such a collection exists. Returns null otherwise.
-   *
-   * @param collectionName Name of the collection
-   * @param allowCached allow LazyCollectionRefs to use a time-based cached value
-   *
-   * Implementation note: This method resolves the collection reference by calling
-   * {@link CollectionRef#get()} which may make a call to ZooKeeper. This is necessary
-   * because the semantics of how collection list is loaded have changed in SOLR-6629.
-   */
-  public DocCollection getCollectionOrNull(String collectionName, boolean allowCached) {
-    CollectionRef ref = collectionStates.get(collectionName);
-    return ref == null ? null : ref.get(allowCached);
-  }
-
-  /**
-   * Get a map of collection name vs DocCollection objects
    *
    * Implementation note: This method resolves the collection reference by calling
    * {@link CollectionRef#get()} which can make a call to ZooKeeper. This is necessary
    * because the semantics of how collection list is loaded have changed in SOLR-6629.
-   *
-   * @return a map of collection name vs DocCollection object
+   * Please javadocs in {@link ZkStateReader#refreshCollectionList(Watcher)}
    */
-  public Map<String, DocCollection> getCollectionsMap()  {
-    Map<String, DocCollection> result = new HashMap<>(collectionStates.size());
+  public DocCollection getCollectionOrNull(String collectionName) {
+    CollectionRef ref = collectionStates.get(collectionName);
+    return ref == null ? null : ref.get();
+  }
+
+  /**
+   * Get collection names.
+   *
+   * Implementation note: This method resolves the collection reference by calling
+   * {@link CollectionRef#get()} which can make a call to ZooKeeper. This is necessary
+   * because the semantics of how collection list is loaded have changed in SOLR-6629.
+   * Please javadocs in {@link ZkStateReader#refreshCollectionList(Watcher)}
+   */
+  public Set<String> getCollections() {
+    Set<String> result = new HashSet<>();
     for (Entry<String, CollectionRef> entry : collectionStates.entrySet()) {
-      DocCollection collection = entry.getValue().get();
-      if (collection != null) {
-        result.put(entry.getKey(), collection);
+      if (entry.getValue().get() != null) {
+        result.add(entry.getKey());
       }
     }
     return result;
@@ -210,11 +253,8 @@ public class ClusterState implements JSONWriter.Writable {
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append("znodeVersion: ").append(znodeVersion);
-    sb.append("\n");
-    sb.append("live nodes:").append(liveNodes);
-    sb.append("\n");
-    sb.append("collections:").append(collectionStates);
+    sb.append("live nodes:" + liveNodes);
+    sb.append("collections:" + collectionStates);
     return sb.toString();
   }
 
@@ -235,10 +275,6 @@ public class ClusterState implements JSONWriter.Writable {
       return new ClusterState(version, liveNodes, Collections.<String, DocCollection>emptyMap());
     }
     Map<String, Object> stateMap = (Map<String, Object>) Utils.fromJSON(bytes);
-    return load(version, stateMap, liveNodes, znode);
-  }
-
-  public static ClusterState load(Integer version, Map<String, Object> stateMap, Set<String> liveNodes, String znode) {
     Map<String,CollectionRef> collections = new LinkedHashMap<>(stateMap.size());
     for (Entry<String, Object> entry : stateMap.entrySet()) {
       String collectionName = entry.getKey();
@@ -249,18 +285,27 @@ public class ClusterState implements JSONWriter.Writable {
     return new ClusterState( liveNodes, collections,version);
   }
 
-  // TODO move to static DocCollection.loadFromMap
+
+  public static Aliases load(byte[] bytes) {
+    if (bytes == null || bytes.length == 0) {
+      return new Aliases();
+    }
+    Map<String,Map<String,String>> aliasMap = (Map<String,Map<String,String>>) Utils.fromJSON(bytes);
+
+    return new Aliases(aliasMap);
+  }
+
   private static DocCollection collectionFromObjects(String name, Map<String, Object> objs, Integer version, String znode) {
     Map<String,Object> props;
     Map<String,Slice> slices;
 
-    Map<String, Object> sliceObjs = (Map<String, Object>) objs.get(DocCollection.SHARDS);
+    Map<String,Object> sliceObjs = (Map<String,Object>)objs.get(DocCollection.SHARDS);
     if (sliceObjs == null) {
       // legacy format from 4.0... there was no separate "shards" level to contain the collection shards.
-      slices = Slice.loadAllFromMap(name, objs);
+      slices = makeSlices(objs);
       props = Collections.emptyMap();
     } else {
-      slices = Slice.loadAllFromMap(name, sliceObjs);
+      slices = makeSlices(sliceObjs);
       props = new HashMap<>(objs);
       objs.remove(DocCollection.SHARDS);
     }
@@ -278,6 +323,21 @@ public class ClusterState implements JSONWriter.Writable {
     }
 
     return new DocCollection(name, slices, props, router, version, znode);
+  }
+
+  private static Map<String,Slice> makeSlices(Map<String,Object> genericSlices) {
+    if (genericSlices == null) return Collections.emptyMap();
+    Map<String,Slice> result = new LinkedHashMap<>(genericSlices.size());
+    for (Map.Entry<String,Object> entry : genericSlices.entrySet()) {
+      String name = entry.getKey();
+      Object val = entry.getValue();
+      if (val instanceof Slice) {
+        result.put(name, (Slice)val);
+      } else if (val instanceof Map) {
+        result.put(name, new Slice(name, null, (Map<String,Object>)val));
+      }
+    }
+    return result;
   }
 
   @Override
@@ -301,7 +361,6 @@ public class ClusterState implements JSONWriter.Writable {
    * 
    * @return null if ClusterState was created for publication, not consumption
    * @deprecated true cluster state spans many ZK nodes, stop depending on the version number of the shared node!
-   * will be removed in 8.0
    */
   @Deprecated
   public Integer getZkClusterStateVersion() {
@@ -342,61 +401,20 @@ public class ClusterState implements JSONWriter.Writable {
     this.liveNodes = liveNodes;
   }
 
-  /** Be aware that this may return collections which may not exist now.
-   * You can confirm that this collection exists after verifying
-   * CollectionRef.get() != null
+  /**For internal use only
    */
-  public Map<String, CollectionRef> getCollectionStates() {
-    return immutableCollectionStates;
+  Map<String, CollectionRef> getCollectionStates() {
+    return collectionStates;
   }
 
-  /**
-   * Iterate over collections. Unlike {@link #getCollectionStates()} collections passed to the
-   * consumer are guaranteed to exist.
-   * @param consumer collection consumer.
-   */
-  public void forEachCollection(Consumer<DocCollection> consumer) {
-    collectionStates.forEach((s, collectionRef) -> {
-      try {
-        DocCollection collection = collectionRef.get();
-        if (collection != null) {
-          consumer.accept(collection);
-        }
-      } catch (SolrException e) {
-        if (e.getCause() instanceof KeeperException.NoNodeException) {
-          //don't do anything. This collection does not exist
-        } else{
-          throw e;
-        }
-      }
-    });
-
-  }
   public static class CollectionRef {
-    protected final AtomicInteger gets = new AtomicInteger();
     private final DocCollection coll;
-
-    public int getCount(){
-      return gets.get();
-    }
 
     public CollectionRef(DocCollection coll) {
       this.coll = coll;
     }
 
-    /** Return the DocCollection, always refetching if lazy. Equivalent to get(false)
-     * @return The collection state modeled in zookeeper
-     */
     public DocCollection get(){
-      return get(false);
-    }
-
-    /** Return the DocCollection
-     * @param allowCached Determines if cached value can be used.  Applies only to LazyCollectionRef.
-     * @return The collection state modeled in zookeeper
-     */
-    public DocCollection get(boolean allowCached) {
-      gets.incrementAndGet();
       return coll;
     }
 

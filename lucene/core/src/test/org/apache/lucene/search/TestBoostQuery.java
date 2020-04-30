@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -26,22 +26,8 @@ import org.apache.lucene.util.LuceneTestCase;
 
 public class TestBoostQuery extends LuceneTestCase {
 
-  public void testValidation() {
-    IllegalArgumentException e = expectThrows(IllegalArgumentException.class,
-        () -> new BoostQuery(new MatchAllDocsQuery(), -3));
-    assertEquals("boost must be a positive float, got -3.0", e.getMessage());
-
-    e = expectThrows(IllegalArgumentException.class,
-        () -> new BoostQuery(new MatchAllDocsQuery(), -0f));
-    assertEquals("boost must be a positive float, got -0.0", e.getMessage());
-
-    e = expectThrows(IllegalArgumentException.class,
-        () -> new BoostQuery(new MatchAllDocsQuery(), Float.NaN));
-    assertEquals("boost must be a positive float, got NaN", e.getMessage());
-  }
-
   public void testEquals() {
-    final float boost = random().nextFloat() * 3;
+    final float boost = random().nextFloat() * 3 - 1;
     BoostQuery q1 = new BoostQuery(new MatchAllDocsQuery(), boost);
     BoostQuery q2 = new BoostQuery(new MatchAllDocsQuery(), boost);
     assertEquals(q1, q2);
@@ -49,7 +35,7 @@ public class TestBoostQuery extends LuceneTestCase {
 
     float boost2 = boost;
     while (boost == boost2) {
-      boost2 = random().nextFloat() * 3;
+      boost2 = random().nextFloat() * 3 - 1;
     }
     BoostQuery q3 = new BoostQuery(new MatchAllDocsQuery(), boost2);
     assertFalse(q1.equals(q3));
@@ -57,7 +43,7 @@ public class TestBoostQuery extends LuceneTestCase {
   }
 
   public void testToString() {
-    assertEquals("(foo:bar)^2.0", new BoostQuery(new TermQuery(new Term("foo", "bar")), 2).toString());
+    assertEquals("foo:bar^2.0", new BoostQuery(new TermQuery(new Term("foo", "bar")), 2).toString());
     BooleanQuery bq = new BooleanQuery.Builder()
         .add(new TermQuery(new Term("foo", "bar")), Occur.SHOULD)
         .add(new TermQuery(new Term("foo", "baz")), Occur.SHOULD)
@@ -69,8 +55,8 @@ public class TestBoostQuery extends LuceneTestCase {
     IndexSearcher searcher = new IndexSearcher(new MultiReader());
 
     // inner queries are rewritten
-    Query q = new BoostQuery(new BooleanQuery.Builder().build(), 2);
-    assertEquals(new BoostQuery(new MatchNoDocsQuery(), 2), searcher.rewrite(q));
+    Query q = new BoostQuery(new MatchNoDocsQuery(), 2);
+    assertEquals(new BoostQuery(new BooleanQuery.Builder().build(), 2), searcher.rewrite(q));
 
     // boosts are merged
     q = new BoostQuery(new BoostQuery(new MatchAllDocsQuery(), 3), 2);
@@ -81,4 +67,10 @@ public class TestBoostQuery extends LuceneTestCase {
     assertEquals(new BoostQuery(new ConstantScoreQuery(new MatchAllDocsQuery()), 0), searcher.rewrite(q));
   }
 
+  public void testBoost() {
+    BoostQuery q = new BoostQuery(new MatchAllDocsQuery(), 2);
+    assertEquals(2, q.getBoost(), 0f);
+    q.setBoost(3);
+    assertEquals(3, q.getBoost(), 0f);
+  }
 }

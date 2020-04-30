@@ -25,11 +25,11 @@
   
   <property name="Name" value="Solr" />
   
-  <!-- solr uses Java 8 -->
-  <property name="javac.release" value="8"/>
-  <property name="javac.args" value="-Xlint:-deprecation"/>
-  <property name="javac.profile.args" value=""/>
-
+  <!-- solr uses 1.7 -->
+  <property name="javac.source" value="1.7"/>
+  <property name="javac.target" value="1.7"/>
+  <property name="javac.args" value=""/>
+  
   <property name="dest" location="${common-solr.dir}/build" />
   <property name="build.dir" location="${dest}/${ant.project.name}"/>
   <property name="jacoco.report.dir" location="${dest}/jacoco"/>
@@ -42,7 +42,6 @@
   <property name="server.dir" location="${common-solr.dir}/server" />
   <property name="example" location="${common-solr.dir}/example" />
   <property name="javadoc.dir" location="${dest}/docs"/>
-  <property name="javadoc-online.dir" location="${dest}/docs-online"/>
   <property name="tests.cleanthreads.sysprop" value="perClass"/>
 
   <property name="changes.target.dir" location="${dest}/docs/changes"/>
@@ -94,15 +93,13 @@
     -->
     <pathelement location="${analyzers-common.jar}"/>
     <pathelement location="${analyzers-kuromoji.jar}"/>
-    <pathelement location="${analyzers-nori.jar}"/>
     <pathelement location="${analyzers-phonetic.jar}"/>
     <pathelement location="${codecs.jar}"/>
     <pathelement location="${backward-codecs.jar}"/>
     <pathelement location="${highlighter.jar}"/>
     <pathelement location="${memory.jar}"/>
     <pathelement location="${misc.jar}"/>
-    <pathelement location="${spatial-extras.jar}"/>
-    <pathelement location="${spatial3d.jar}"/>
+    <pathelement location="${spatial.jar}"/>
     <pathelement location="${expressions.jar}"/>
     <pathelement location="${suggest.jar}"/>
     <pathelement location="${grouping.jar}"/>
@@ -110,7 +107,6 @@
     <pathelement location="${queryparser.jar}"/>
     <pathelement location="${join.jar}"/>
     <pathelement location="${sandbox.jar}"/>
-    <pathelement location="${classification.jar}"/>
   </path>
 
   <path id="solr.base.classpath">
@@ -152,15 +148,29 @@
     </sequential>
   </macrodef>
 
-  <!-- turn on security manager? -->
-  <condition property="java.security.manager" value="org.apache.solr.util.SolrSecurityManager">
-    <istrue value="${tests.useSecurityManager}"/>
+  <!-- 
+    We don't want to run HDFS tests on Windows, because they require Cygwin.
+    If you have Cygwin or manually raised permgen, you can override this property on command line:
+  -->
+  <condition property="tests.disableHdfs" value="true">
+    <os family="windows"/>
+  </condition>
+
+  <!-- SOLR needs extra PermGen space to run tests, but only on Java 7 (Oracle, OpenJDK): -->
+  <condition property="tests.memory.args" value="-XX:MaxPermSize=192m">
+    <and>
+      <equals arg1="${build.java.runtime}" arg2="1.7"/>
+      <or>
+        <contains string="${java.vm.name}" substring="hotspot" casesensitive="false"/>
+        <contains string="${java.vm.name}" substring="openjdk" casesensitive="false"/>
+      </or>
+    </and>
   </condition>
 
   <target name="validate" depends="compile-tools">
   </target>
 
-  <target name="init-dist" depends="resolve-groovy">
+  <target name="init-dist" >
     <mkdir dir="${build.dir}"/>
     <mkdir dir="${package.dir}"/>
     <mkdir dir="${dist}"/>
@@ -168,9 +178,8 @@
   </target>
 
   <target name="prep-lucene-jars" 
-          depends="resolve-groovy,
-                   jar-lucene-core, jar-backward-codecs, jar-analyzers-phonetic, jar-analyzers-kuromoji, jar-analyzers-nori, jar-codecs,jar-expressions, jar-suggest, jar-highlighter, jar-memory,
-                   jar-misc, jar-spatial-extras, jar-spatial3d, jar-grouping, jar-queries, jar-queryparser, jar-join, jar-sandbox, jar-classification">
+          depends="jar-lucene-core, jar-backward-codecs, jar-analyzers-phonetic, jar-analyzers-kuromoji, jar-codecs,jar-expressions, jar-suggest, jar-highlighter, jar-memory,
+                   jar-misc, jar-spatial, jar-grouping, jar-queries, jar-queryparser, jar-join, jar-sandbox">
       <property name="solr.deps.compiled" value="true"/>
   </target>
   
@@ -246,7 +255,7 @@
   <property name="lucenedocs" location="${common.dir}/build/docs"/>
 
   <!-- dependency to ensure all lucene javadocs are present -->
-  <target name="lucene-javadocs" depends="javadocs-lucene-core,javadocs-analyzers-common,javadocs-analyzers-icu,javadocs-analyzers-kuromoji,javadocs-analyzers-nori,javadocs-analyzers-phonetic,javadocs-analyzers-smartcn,javadocs-analyzers-morfologik,javadocs-analyzers-stempel,javadocs-backward-codecs,javadocs-codecs,javadocs-expressions,javadocs-suggest,javadocs-grouping,javadocs-queries,javadocs-queryparser,javadocs-highlighter,javadocs-memory,javadocs-misc,javadocs-spatial-extras,javadocs-join,javadocs-test-framework"/>
+  <target name="lucene-javadocs" depends="javadocs-lucene-core,javadocs-analyzers-common,javadocs-analyzers-icu,javadocs-analyzers-kuromoji,javadocs-analyzers-phonetic,javadocs-analyzers-smartcn,javadocs-analyzers-morfologik,javadocs-analyzers-stempel,javadocs-analyzers-uima,javadocs-backward-codecs,javadocs-codecs,javadocs-expressions,javadocs-suggest,javadocs-grouping,javadocs-queries,javadocs-queryparser,javadocs-highlighter,javadocs-memory,javadocs-misc,javadocs-spatial,javadocs-join,javadocs-test-framework"/>
 
   <!-- create javadocs for the current module -->
   <target name="javadocs" depends="compile-core,define-lucene-javadoc-url,lucene-javadocs,javadocs-solr-core,check-javadocs-uptodate" unless="javadocs-uptodate-${name}">
@@ -307,11 +316,11 @@
           <link offline="true" href="${lucene.javadoc.url}analyzers-common" packagelistloc="${lucenedocs}/analyzers-common"/>
           <link offline="true" href="${lucene.javadoc.url}analyzers-icu" packagelistloc="${lucenedocs}/analyzers-icu"/>
           <link offline="true" href="${lucene.javadoc.url}analyzers-kuromoji" packagelistloc="${lucenedocs}/analyzers-kuromoji"/>
-          <link offline="true" href="${lucene.javadoc.url}analyzers-nori" packagelistloc="${lucenedocs}/analyzers-nori"/>
           <link offline="true" href="${lucene.javadoc.url}analyzers-morfologik" packagelistloc="${lucenedocs}/analyzers-morfologik"/>
           <link offline="true" href="${lucene.javadoc.url}analyzers-phonetic" packagelistloc="${lucenedocs}/analyzers-phonetic"/>
           <link offline="true" href="${lucene.javadoc.url}analyzers-smartcn" packagelistloc="${lucenedocs}/analyzers-smartcn"/>
           <link offline="true" href="${lucene.javadoc.url}analyzers-stempel" packagelistloc="${lucenedocs}/analyzers-stempel"/>
+          <link offline="true" href="${lucene.javadoc.url}analyzers-uima" packagelistloc="${lucenedocs}/analyzers-uima"/>
           <link offline="true" href="${lucene.javadoc.url}backward-codecs" packagelistloc="${lucenedocs}/backward-codecs"/>
           <link offline="true" href="${lucene.javadoc.url}codecs" packagelistloc="${lucenedocs}/codecs"/>
           <link offline="true" href="${lucene.javadoc.url}expressions" packagelistloc="${lucenedocs}/expressions"/>
@@ -323,8 +332,7 @@
           <link offline="true" href="${lucene.javadoc.url}highlighter" packagelistloc="${lucenedocs}/highlighter"/>
           <link offline="true" href="${lucene.javadoc.url}memory" packagelistloc="${lucenedocs}/memory"/>
           <link offline="true" href="${lucene.javadoc.url}misc" packagelistloc="${lucenedocs}/misc"/>
-          <link offline="true" href="${lucene.javadoc.url}classification" packagelistloc="${lucenedocs}/classification"/>
-          <link offline="true" href="${lucene.javadoc.url}spatial-extras" packagelistloc="${lucenedocs}/spatial-extras"/>
+          <link offline="true" href="${lucene.javadoc.url}spatial" packagelistloc="${lucenedocs}/spatial"/>
           <links/>
           <link href=""/>
         </sources>
@@ -333,34 +341,17 @@
   </macrodef>
 
   <target name="define-lucene-javadoc-url" depends="resolve-groovy" unless="lucene.javadoc.url">
-    <property name="useLocalJavadocUrl" value=""/>
     <groovy><![CDATA[
       String url, version = properties['version'];
-      String useLocalJavadocUrl = properties['useLocalJavadocUrl'];
-      if (version != properties['version.base'] || Boolean.parseBoolean(useLocalJavadocUrl)) {
+      if (version.contains('-SNAPSHOT')) {
         url = new File(properties['common.dir'], 'build' + File.separator + 'docs').toURI().toASCIIString();
         if (!(url =~ /\/$/)) url += '/';
       } else {
         version = version.replace('.', '_');
-        url = 'https://lucene.apache.org/core/' + version + '/';
+        url = 'http://lucene.apache.org/core/' + version + '/';
       }
       task.log('Using the following URL to refer to Lucene Javadocs: ' + url);
       properties['lucene.javadoc.url'] = url;
-    ]]></groovy>
-  </target>
-
-  <target name="define-solr-javadoc-url" depends="resolve-groovy" unless="solr.javadoc.url">
-    <groovy><![CDATA[
-      String url, version = properties['version'];
-      if (version != properties['version.base']) {
-        url = '';
-        task.log('Disabled Solr Javadocs online URL for packaging (custom build / SNAPSHOT version).');
-      } else {
-        version = version.replace('.', '_');
-        url = 'https://lucene.apache.org/solr/' + version + '/';
-        task.log('Using the following URL to refer to Solr Javadocs: ' + url);
-      }
-      properties['solr.javadoc.url'] = url;
     ]]></groovy>
   </target>
 
@@ -480,24 +471,6 @@
     </sequential>
   </macrodef>
 
-  <target name="-compile-test-lucene-analysis">
-    <ant dir="${common.dir}/analysis" target="compile-test" inheritAll="false">
-      <propertyset refid="uptodate.and.compiled.properties"/>
-    </ant>
-  </target>
-
-  <target name="-compile-test-lucene-queryparser">
-    <ant dir="${common.dir}/queryparser" target="compile-test" inheritAll="false">
-      <propertyset refid="uptodate.and.compiled.properties"/>
-    </ant>
-  </target>
-
-  <target name="-compile-test-lucene-backward-codecs">
-    <ant dir="${common.dir}/backward-codecs" target="compile-test" inheritAll="false">
-      <propertyset refid="uptodate.and.compiled.properties"/>
-    </ant>
-  </target>
-
   <!-- Solr contrib targets -->
   <target name="-compile-analysis-extras">
     <ant dir="${common-solr.dir}/contrib/analysis-extras" target="compile" inheritAll="false">
@@ -529,14 +502,12 @@
   
   <!-- Forbidden API Task, customizations for Solr -->
   <target name="-check-forbidden-all" depends="-init-forbidden-apis,compile-core,compile-test">
-    <property prefix="ivyversions" file="${common.dir}/ivy-versions.properties"/><!-- for commons-io version -->
-    <forbidden-apis suppressAnnotation="**.SuppressForbidden" classpathref="forbidden-apis.allclasses.classpath" targetVersion="${javac.release}">
+    <property file="${common.dir}/ivy-versions.properties"/> <!-- for commons-io version -->
+    <forbidden-apis internalRuntimeForbidden="true" suppressAnnotation="**.SuppressForbidden" classpathref="forbidden-apis.allclasses.classpath">
       <signatures>
-        <bundled name="jdk-unsafe"/>
-        <bundled name="jdk-deprecated"/>
-        <bundled name="jdk-non-portable"/>
-        <bundled name="jdk-reflection"/>
-        <bundled name="commons-io-unsafe-${ivyversions./commons-io/commons-io}"/>
+        <bundled name="jdk-unsafe-${javac.target}"/>
+        <bundled name="jdk-deprecated-${javac.target}"/>
+        <bundled name="commons-io-unsafe-${/commons-io/commons-io}"/>
         <fileset dir="${common.dir}/tools/forbiddenApis">
           <include name="base.txt" />
           <include name="servlet-api.txt" />
@@ -554,7 +525,4 @@
   <target name="test" unless="tests.disable-solr">
     <antcall target="common.test" inheritrefs="true" inheritall="true"/>
   </target>
-  
-  <!-- In Solr we do not generate MR-JARs yet; disable completely so we do not accidentally patch -->
-  <target name="patch-mrjar-classes"/>
 </project>

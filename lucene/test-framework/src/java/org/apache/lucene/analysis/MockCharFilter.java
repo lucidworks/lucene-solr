@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis;
 
 import java.io.IOException;
 import java.io.Reader;
 import java.util.Map;
+import java.util.SortedMap;
 import java.util.TreeMap;
 
 /** the purpose of this charfilter is to send offsets out of bounds

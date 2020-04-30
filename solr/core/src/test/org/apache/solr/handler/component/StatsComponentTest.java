@@ -1,3 +1,4 @@
+package org.apache.solr.handler.component;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,30 +15,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
+
 import java.nio.ByteBuffer;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TimeZone;
 
-import com.google.common.hash.HashFunction;
-import com.tdunning.math.stats.AVLTreeDigest;
-import org.apache.commons.math3.util.Combinations;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.queries.function.valuesource.QueryValueSource;
 import org.apache.lucene.search.TermQuery;
-import org.apache.solr.SolrTestCaseJ4;
+import org.apache.lucene.queries.function.valuesource.QueryValueSource;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.params.CommonParams;
@@ -48,26 +45,31 @@ import org.apache.solr.common.util.Base64;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.core.SolrCore;
-import org.apache.solr.handler.component.StatsField.HllOptions;
 import org.apache.solr.handler.component.StatsField.Stat;
+import org.apache.solr.handler.component.StatsField.HllOptions;
 import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.schema.SchemaField;
+import org.apache.solr.util.AbstractSolrTestCase;
+
+import org.apache.commons.math3.util.Combinations;
+import com.tdunning.math.stats.AVLTreeDigest;
+import com.google.common.hash.Hashing; 
+import com.google.common.hash.HashFunction;
 import org.apache.solr.util.hll.HLL;
+
 import org.junit.BeforeClass;
 
 /**
- * Statistics Component Test (which also checks some equivalent json.facet functionality)
+ * Statistics Component Test
  */
-public class StatsComponentTest extends SolrTestCaseJ4 {
+public class StatsComponentTest extends AbstractSolrTestCase {
 
   final static String XPRE = "/response/lst[@name='stats']/";
 
   @BeforeClass
   public static void beforeClass() throws Exception {
-    // we need DVs on point fields to compute stats & facets
-    if (Boolean.getBoolean(NUMERIC_POINTS_SYSPROP)) System.setProperty(NUMERIC_DOCVALUES_SYSPROP,"true");
     initCore("solrconfig.xml", "schema11.xml");
   }
 
@@ -76,6 +78,7 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
     super.setUp();
     clearIndex();
     assertU(commit());
+    lrf = h.getRequestFactory("standard", 0, 20);
   }
 
   public void testStats() throws Exception {
@@ -83,8 +86,7 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
             "stats_i","stats_l","stats_f","stats_d",
             "stats_ti","stats_tl","stats_tf","stats_td",
             "stats_ti_dv","stats_tl_dv","stats_tf_dv","stats_td_dv", 
-            "stats_ti_ni_dv","stats_tl_ni_dv","stats_tf_ni_dv","stats_td_ni_dv",
-            "stats_i_ni_p","stats_l_ni_p","stats_f_ni_p","stats_d_ni_p",
+            "stats_ti_ni_dv","stats_tl_ni_dv","stats_tf_ni_dv","stats_td_ni_dv"
     }) {
 
       // all of our checks should work with all of these params
@@ -93,8 +95,8 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
         // NOTE: doTestFieldStatisticsResult needs the full list of possible tags to exclude
         params("stats.field", f, "stats", "true"),
         params("stats.field", "{!ex=fq1,fq2}"+f, "stats", "true",
-               "fq", "{!tag=fq1}-id_i:[0 TO 2]", 
-               "fq", "{!tag=fq2}-id_i:[2 TO 1000]"), 
+               "fq", "{!tag=fq1}-id:[0 TO 2]", 
+               "fq", "{!tag=fq2}-id:[2 TO 1000]"), 
         params("stats.field", "{!ex=fq1}"+f, "stats", "true",
                "fq", "{!tag=fq1}id:1")
       };
@@ -111,10 +113,8 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
     for (String f : new String[] {"stats_ii",
             "stats_tis","stats_tfs","stats_tls","stats_tds",  // trie fields
             "stats_tis_dv","stats_tfs_dv","stats_tls_dv","stats_tds_dv",  // Doc Values
-            "stats_tis_ni_dv","stats_tfs_ni_dv","stats_tls_ni_dv","stats_tds_ni_dv",  // Doc Values Not indexed
-            "stats_is_p", "stats_fs_p", "stats_ls_p", "stats_ds_p", // Point Fields
-            "stats_is_ni_p","stats_fs_ni_p","stats_ls_ni_p" // Point Doc Values Not indexed
-    }) {
+            "stats_tis_ni_dv","stats_tfs_ni_dv","stats_tls_ni_dv","stats_tds_ni_dv"  // Doc Values Not indexed
+                                  }) {
 
       doTestMVFieldStatisticsResult(f);
       clearIndex();
@@ -209,7 +209,7 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
 
     // we should be able to compute exact same stats for a field even
     // when we specify it using the "field()" function, or use other 
-    // identify equivalent functions
+    // identify equivilent functions
     for (String param : new String[] {
         // bare
         "{!key="+key+" ex=key_ex_tag}" + f,
@@ -277,6 +277,9 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
             );
   }
 
+  
+
+
   public void doTestMVFieldStatisticsResult(String f) throws Exception {
     assertU(adoc("id", "1", f, "-10", f, "-100", "active_s", "true"));
     assertU(adoc("id", "2", f, "-20", f, "200", "active_s", "true"));
@@ -295,91 +298,88 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
         params("stats.field", "{!ex=fq1}"+f, "stats", "true",
                "fq", "{!tag=fq1}id:1"),
         params("stats.field", "{!ex=fq1,fq2}"+f, "stats", "true",
-               "fq", "{!tag=fq1}-id_i:[0 TO 2]", 
-               "fq", "{!tag=fq2}-id_i:[2 TO 1000]"),
-        params("json.facet", // note: no distinctValues support and not comparing min/max values
-            "{min:'min("+f+")',count:'countvals("+f+")',missing:'missing("+f+")',max:'max("+f+")', sum:'sum("+f+")', " +
-                " countDistinct:'unique("+f+")', sumOfSquares:'sumsq("+f+")', mean:'avg("+f+")', stddev:'stddev("+f+")' }")
-    }) {
-      // easy switch to know if/when we are using json.facet which doesn't support some options
-      final boolean json = (null != baseParams.get("json.facet"));
+               "fq", "{!tag=fq1}-id:[0 TO 2]", 
+               "fq", "{!tag=fq2}-id:[2 TO 1000]")  }) {
+      
+      
       assertQ("test statistics values", 
               req(baseParams, "q", "*:*", "stats.calcdistinct", "true")
-              , json ? "//*" : "//double[@name='min'][.='-100.0']"
-              , json ? "//*" : "//double[@name='max'][.='200.0']"
+              , "//double[@name='min'][.='-100.0']"
+              , "//double[@name='max'][.='200.0']"
               , "//double[@name='sum'][.='9.0']"
               , "//long[@name='count'][.='8']"
               , "//long[@name='missing'][.='3']"
-              , json ? "//int[@name='countDistinct'][.='8']": "//long[@name='countDistinct'][.='8']" // SOLR-11775
-              , json ? "//*" : "count(//arr[@name='distinctValues']/*)=8"
+              , "//long[@name='countDistinct'][.='8']"
+              , "count(//arr[@name='distinctValues']/*)=8"
               , "//double[@name='sumOfSquares'][.='53101.0']"
               , "//double[@name='mean'][.='1.125']"
-              ,json ? "//*" :  "//double[@name='stddev'][.='87.08852228787508']" // SOLR-11725
+              , "//double[@name='stddev'][.='87.08852228787508']"
               );
 
       assertQ("test statistics values w/fq", 
               req(baseParams, "fq", "-id:1",
                   "q", "*:*", "stats.calcdistinct", "true")
-              , json ? "//*" : "//double[@name='min'][.='-40.0']"
-              , json ? "//*" : "//double[@name='max'][.='200.0']"
+              , "//double[@name='min'][.='-40.0']"
+              , "//double[@name='max'][.='200.0']"
               , "//double[@name='sum'][.='119.0']"
               , "//long[@name='count'][.='6']"
               , "//long[@name='missing'][.='3']"
-              , json? "//int[@name='countDistinct'][.='6']" :"//long[@name='countDistinct'][.='6']" // SOLR-11775
-              , json ? "//*" : "count(//arr[@name='distinctValues']/*)=6"
+              , "//long[@name='countDistinct'][.='6']"
+              , "count(//arr[@name='distinctValues']/*)=6"
               , "//double[@name='sumOfSquares'][.='43001.0']"
               , "//double[@name='mean'][.='19.833333333333332']"
-              , json ? "//*" : "//double[@name='stddev'][.='90.15634568163611']" // SOLR-11725
+              , "//double[@name='stddev'][.='90.15634568163611']"
               );
       
-      if (!json) { // checking stats.facet makes no sense for json faceting
-        assertQ("test stats.facet (using boolean facet field)",
-            req(baseParams, "q", "*:*", "stats.calcdistinct", "true", "stats.facet", "active_s")
-            // baseline
-            , "//lst[@name='"+f+"']/double[@name='min'][.='-100.0']"
-            , "//lst[@name='"+f+"']/double[@name='max'][.='200.0']"
-            , "//lst[@name='"+f+"']/double[@name='sum'][.='9.0']"
-            , "//lst[@name='"+f+"']/long[@name='count'][.='8']"
-            , "//lst[@name='"+f+"']/long[@name='missing'][.='3']"
-            , "//lst[@name='"+f+"']/long[@name='countDistinct'][.='8']"
-            , "count(//lst[@name='" + f + "']/arr[@name='distinctValues']/*)=8"
-            , "//lst[@name='"+f+"']/double[@name='sumOfSquares'][.='53101.0']"
-            , "//lst[@name='"+f+"']/double[@name='mean'][.='1.125']"
-            , "//lst[@name='"+f+"']/double[@name='stddev'][.='87.08852228787508']"
-            // facet 'true'
-            , "//lst[@name='true']/double[@name='min'][.='-100.0']"
-            , "//lst[@name='true']/double[@name='max'][.='200.0']"
-            , "//lst[@name='true']/double[@name='sum'][.='70.0']"
-            , "//lst[@name='true']/long[@name='count'][.='4']"
-            , "//lst[@name='true']/long[@name='missing'][.='1']"
-            , "//lst[@name='true']//long[@name='countDistinct'][.='4']"
-            , "count(//lst[@name='true']/arr[@name='distinctValues']/*)=4"
-            , "//lst[@name='true']/double[@name='sumOfSquares'][.='50500.0']"
-            , "//lst[@name='true']/double[@name='mean'][.='17.5']"
-            , "//lst[@name='true']/double[@name='stddev'][.='128.16005617976296']"
-            // facet 'false'
-            , "//lst[@name='false']/double[@name='min'][.='-40.0']"
-            , "//lst[@name='false']/double[@name='max'][.='10.0']"
-            , "//lst[@name='false']/double[@name='sum'][.='-61.0']"
-            , "//lst[@name='false']/long[@name='count'][.='4']"
-            , "//lst[@name='false']/long[@name='missing'][.='2']"
-            , "//lst[@name='true']//long[@name='countDistinct'][.='4']"
-            , "count(//lst[@name='true']/arr[@name='distinctValues']/*)=4"
-            , "//lst[@name='false']/double[@name='sumOfSquares'][.='2601.0']"
-            , "//lst[@name='false']/double[@name='mean'][.='-15.25']"
-            , "//lst[@name='false']/double[@name='stddev'][.='23.59908190304586']"
-        );
-      }
+      // TODO: why are there 3 identical requests below?
+      
+      assertQ("test statistics values", 
+              req(baseParams, "q", "*:*", "stats.calcdistinct", "true", "stats.facet", "active_s")
+              , "//double[@name='min'][.='-100.0']"
+              , "//double[@name='max'][.='200.0']"
+              , "//double[@name='sum'][.='9.0']"
+              , "//long[@name='count'][.='8']"
+              , "//long[@name='missing'][.='3']"
+              , "//long[@name='countDistinct'][.='8']"
+              , "count(//lst[@name='" + f + "']/arr[@name='distinctValues']/*)=8"
+              , "//double[@name='sumOfSquares'][.='53101.0']"
+              , "//double[@name='mean'][.='1.125']"
+              , "//double[@name='stddev'][.='87.08852228787508']"
+              );
+      
+      assertQ("test value for active_s=true", 
+              req(baseParams, "q", "*:*", "stats.calcdistinct", "true", "stats.facet", "active_s")
+              , "//lst[@name='true']/double[@name='min'][.='-100.0']"
+              , "//lst[@name='true']/double[@name='max'][.='200.0']"
+              , "//lst[@name='true']/double[@name='sum'][.='70.0']"
+              , "//lst[@name='true']/long[@name='count'][.='4']"
+              , "//lst[@name='true']/long[@name='missing'][.='1']"
+              , "//lst[@name='true']//long[@name='countDistinct'][.='4']"
+              , "count(//lst[@name='true']/arr[@name='distinctValues']/*)=4"
+              , "//lst[@name='true']/double[@name='sumOfSquares'][.='50500.0']"
+              , "//lst[@name='true']/double[@name='mean'][.='17.5']"
+              , "//lst[@name='true']/double[@name='stddev'][.='128.16005617976296']"
+              );
+      
+      assertQ("test value for active_s=false", 
+              req(baseParams, "q", "*:*", "stats.calcdistinct", "true", "stats.facet", "active_s")
+              , "//lst[@name='false']/double[@name='min'][.='-40.0']"
+              , "//lst[@name='false']/double[@name='max'][.='10.0']"
+              , "//lst[@name='false']/double[@name='sum'][.='-61.0']"
+              , "//lst[@name='false']/long[@name='count'][.='4']"
+              , "//lst[@name='false']/long[@name='missing'][.='2']"
+              , "//lst[@name='true']//long[@name='countDistinct'][.='4']"
+              , "count(//lst[@name='true']/arr[@name='distinctValues']/*)=4"
+              , "//lst[@name='false']/double[@name='sumOfSquares'][.='2601.0']"
+              , "//lst[@name='false']/double[@name='mean'][.='-15.25']"
+              , "//lst[@name='false']/double[@name='stddev'][.='23.59908190304586']"
+              );
     }
 
     assertQ("cardinality"
-        , req("q", "*:*", "rows", "0", "stats", "true", "stats.field", "{!cardinality=true}" + f)
-        , "//long[@name='cardinality'][.='8']"
-    );
-    assertQ("json cardinality"
-        , req("q", "*:*", "rows", "0", "json.facet", "{cardinality:'hll("+f+")'}")
-        , "//int[@name='cardinality'][.='8']" // SOLR-11775
-    );
+            , req("q", "*:*", "rows", "0", "stats", "true", "stats.field", "{!cardinality=true}" + f) 
+            , "//long[@name='cardinality'][.='8']"
+            );
   }
 
   public void testFieldStatisticsResultsStringField() throws Exception {
@@ -466,47 +466,6 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
 
   }
 
-  // Check for overflow of sumOfSquares
-  public void testFieldStatisticsResultsDateFieldOverflow() throws Exception {
-    SolrCore core = h.getCore();
-
-    assertU(adoc("id", "1", "active_dt", "2015-12-14T09:00:00Z"));
-    assertU(commit());
-
-    Map<String, String> args = new HashMap<>();
-    args.put(CommonParams.Q, "*:*");
-    args.put(StatsParams.STATS, "true");
-    args.put(StatsParams.STATS_FIELD, "active_dt");
-    args.put("indent", "true");
-    SolrQueryRequest req = new LocalSolrQueryRequest(core, new MapSolrParams(args));
-
-    assertQ("test date statistics values", req,
-            "//long[@name='count'][.='1']",
-            "//date[@name='min'][.='2015-12-14T09:00:00Z']",
-            "//date[@name='max'][.='2015-12-14T09:00:00Z']",
-            "//double[@name='sum'][.='1.4500836E12']",
-            "//date[@name='mean'][.='2015-12-14T09:00:00Z']",
-            "//double[@name='sumOfSquares'][.='" + Double.toString(2102742446988960000000000.0)+"']"
-            );
-
-    assertU(adoc("id", "2", "active_dt", "2115-12-14T09:00:00Z"));
-    assertU(adoc("id", "3", "active_dt", "2215-12-14T09:00:00Z"));
-    assertU(commit());
-
-    assertQ("test date statistics values", req,
-        "//long[@name='count'][.='3']",
-        "//date[@name='min'][.='2015-12-14T09:00:00Z']",
-        "//date[@name='max'][.='2215-12-14T09:00:00Z']",
-        "//double[@name='sum'][.='1.38172716E13']",
-        "//date[@name='mean'][.='2115-12-14T09:00:00Z']",
-        "//double[@name='sumOfSquares'][.='" + Double.toString(83555549895529430000000000.0)+"']",
-        // The following number matches the number returned by the current solr
-        // implementation of standard deviation. Should be 3155673600000.
-        // That number is not precise, and the implementation should be fixed.
-        "//double[@name='stddev'][.='" + Double.toString(3155673599999.999)+"']"
-        );
-  }
-
 
   public void doTestFieldStatisticsMissingResult(String f, SolrParams[] baseParamsSet) throws Exception {
     assertU(adoc("id", "1", f, "-10"));
@@ -541,7 +500,7 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
 
     // we should be able to compute exact same stats for a field even
     // when we specify it using the "field()" function, or use other 
-    // identify equivalent functions
+    // identify equivilent functions
     for (String param : new String[] {
         // bare
         "{!key="+key+" ex=key_ex_tag}" + f,
@@ -626,7 +585,7 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
 
     // we should be able to compute exact same stats & stats.facet for a field even
     // when we specify it using the "field()" function, or use other 
-    // identify equivalent functions
+    // identify equivilent functions
     for (String param : new String[] {
         // bare
         "{!key="+f+" ex=key_ex_tag}" + f,
@@ -828,7 +787,7 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
             ,"//lst[@name='active_dt']/null[@name='min']"
             ,"//lst[@name='active_dt']/null[@name='max']"
             ,"//lst[@name='active_dt']/null[@name='mean']"
-            ,"//lst[@name='active_dt']/double[@name='sum'][.='0.0']"
+            ,"//lst[@name='active_dt']/date[@name='sum'][.='1970-01-01T00:00:00Z']"
             ,"//lst[@name='active_dt']/double[@name='sumOfSquares'][.='0.0']"
             ,"//lst[@name='active_dt']/double[@name='stddev'][.='0.0']"
 
@@ -877,19 +836,19 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
     Map<String, String> args = new HashMap<String, String>();
     args.put(CommonParams.Q, "*:*");
     args.put(StatsParams.STATS, "true");
-    args.put(StatsParams.STATS_FIELD, "{!ex=id}id_i");
-    args.put("fq", "{!tag=id}id_i:[2 TO 3]");
+    args.put(StatsParams.STATS_FIELD, "{!ex=id}id");
+    args.put("fq", "{!tag=id}id:[2 TO 3]");
     SolrQueryRequest req = new LocalSolrQueryRequest(core, new MapSolrParams(args));
 
     assertQ("test exluding filter query", req
-            , "//lst[@name='id_i']/double[@name='min'][.='1.0']"
-            , "//lst[@name='id_i']/double[@name='max'][.='4.0']");
+            , "//lst[@name='id']/double[@name='min'][.='1.0']"
+            , "//lst[@name='id']/double[@name='max'][.='4.0']");
 
     args = new HashMap<String, String>();
     args.put(CommonParams.Q, "*:*");
     args.put(StatsParams.STATS, "true");
-    args.put(StatsParams.STATS_FIELD, "{!key=id2}id_i");
-    args.put("fq", "{!tag=id}id_i:[2 TO 3]");
+    args.put(StatsParams.STATS_FIELD, "{!key=id2}id");
+    args.put("fq", "{!tag=id}id:[2 TO 3]");
     req = new LocalSolrQueryRequest(core, new MapSolrParams(args));
 
     assertQ("test rename field", req
@@ -1034,7 +993,7 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
 
     assertU(adoc("id", "1", "a_f", "2.3", "b_f", "9.7", "foo_t", "how now brown cow"));
     assertU(adoc("id", "2", "a_f", "4.5", "b_f", "8.6", "foo_t", "cow cow cow cow"));
-    assertU(adoc("id", "3", "a_f", "5.6", "b_f", "7.5", "foo_t", "red fox")); // no cow
+    assertU(adoc("id", "3", "a_f", "5.6", "b_f", "7.5", "foo_t", "red fox"));
     assertU(adoc("id", "4", "a_f", "6.7", "b_f", "6.3", "foo_t", "red cow"));
     assertU(commit());
 
@@ -1052,21 +1011,20 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
             , kpre + "double[@name='stddev'][.='10.622007151430441']"
             );
 
-    // force constant score for matches so we aren't dependent on similarity
-    final float constScore = 4.2F;
-    final double expectedScore = (double) constScore;
     assertQ("functions over a query",
             req("q","*:*", "stats", "true",
-                "stats.field", "{!lucene key=k}foo_t:cow^=" + constScore)
-            , kpre + "double[@name='min'][.='" + expectedScore + "']"
-            , kpre + "double[@name='max'][.='" + expectedScore + "']"
-            , kpre + "double[@name='sum'][.='" + (3D * expectedScore) + "']"
+                "stats.field", "{!lucene key=k}foo_t:cow")
+            // scores are: 1.0, 0.625, 0.5, & "missing"
+            , kpre + "double[@name='min'][.='0.5']"
+            , kpre + "double[@name='max'][.='1.0']"
+            , kpre + "double[@name='sum'][.='2.125']"
             , kpre + "long[@name='count'][.='3']"
             , kpre + "long[@name='missing'][.='1']"
-            , kpre + "double[@name='sumOfSquares'][.='" + (3D * Math.pow(expectedScore, 2D)) + "']"
-            , kpre + "double[@name='mean'][.='" + expectedScore + "']"
-            , kpre + "double[@name='stddev'][.='0.0']"
+            , kpre + "double[@name='sumOfSquares'][.='1.640625']"
+            , kpre + "double[@name='mean'][.='0.7083333333333334']"
+            , kpre + "double[@name='stddev'][.='0.2602082499332666']"
             );
+    
   }
 
   /**
@@ -1083,7 +1041,8 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
     for (String param : new String[] { 
         "foo_i", "{!func}field(\"foo_i\")", "{!lucene}_val_:\"field(foo_i)\""
       }) {
-      try (SolrQueryRequest req = req(common)){
+      SolrQueryRequest req = req(common);
+      try {
         ResponseBuilder rb = new ResponseBuilder(req, new SolrQueryResponse(), components);
         
         StatsField sf = new StatsField(rb, param);
@@ -1093,6 +1052,8 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
 
         assertEquals("field name of: " + param,
                      "foo_i", sf.getSchemaField().getName());
+      } finally {
+        req.close();
       }
     }
 
@@ -1100,7 +1061,8 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
     for (String param : new String[] { 
         "{!lucene}foo_t:cow", "{!func}query($nested)", "{!field f=foo_t}cow", 
       }) {
-      try (SolrQueryRequest req = req(common)) {
+      SolrQueryRequest req = req(common);
+      try {
         ResponseBuilder rb = new ResponseBuilder(req, new SolrQueryResponse(), components);
         
         StatsField sf = new StatsField(rb, param);
@@ -1113,6 +1075,8 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
         assertEquals("query of :" + param,
                      new TermQuery(new Term("foo_t","cow")),
                      qvs.getQuery());
+      } finally {
+        req.close();
       }
     }
   }
@@ -1674,7 +1638,7 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
     assertNull(HllOptions.parseHllOptions(params(), field_l));
     assertNull(HllOptions.parseHllOptions(params("cardinality","false"), field_l));
 
-    // sanity check, future proof against the HLL library changing stuff on us
+    // sanity check, future proof againts the HLL library changing stuff on us
     assertEquals("HLL Changed definition min for log2m, " + 
                  "need to note in upgrade instructions and maybe adjust accuracy hueristic",
                  4, HLL.MINIMUM_LOG2M_PARAM);
@@ -1689,7 +1653,7 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
                  "need to note in upgrade instructions and probably adjust hueristic",
                  8, HLL.MAXIMUM_REGWIDTH_PARAM);
 
-    // all of these should produce equivalent HLLOptions (Long, Double, or String using defaults)
+    // all of these should produce equivilent HLLOptions (Long, Double, or String using defaults)
     SolrParams[] longDefaultParams = new SolrParams[] {
       // basic usage
       params("cardinality","true"),
@@ -1725,7 +1689,7 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
 
     }
 
-    // all of these should produce equivalent HLLOptions (Int, Float, or ValueSource using defaults)
+    // all of these should produce equivilent HLLOptions (Int, Float, or ValueSource using defaults)
     SolrParams[] intDefaultParams = new SolrParams[] {
       // basic usage
       params("cardinality","true"),
@@ -1771,7 +1735,7 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
   }
 
   /**
-   * Test user input errors (split into its own test to isolate ignored exceptions)
+   * Test user input errors (split into it's own test to isolate ignored exceptions
    * @see #testCardinality 
    * @see #testHllOptions
    */
@@ -1784,25 +1748,27 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
     ignoreException("hllPreHashed");
     for (SchemaField field : new SchemaField[] { foo_s, foo_i }) {
       // whitebox - field
-      SolrException ex = expectThrows(SolrException.class, () -> {
+      try {
         HllOptions.parseHllOptions(params("cardinality","true", "hllPreHashed", "true"), field);
-      });
-      assertTrue("MSG: " + ex.getMessage(),
-          ex.getMessage().contains("hllPreHashed is only supported with Long"));
+        fail("hllPreHashed should have failed for " + field.getName());
+      } catch (SolrException e) {
+        assertTrue("MSG: " + e.getMessage(),
+                   e.getMessage().contains("hllPreHashed is only supported with Long"));
+      }
       // blackbox - field
       assertQEx("hllPreHashed " + field.getName(), "hllPreHashed is only supported with Long",
                 req(params("stats.field","{!cardinality=true hllPreHashed=true}" + field.getName()),
                     baseParams),
                 ErrorCode.BAD_REQUEST);
     }
-
     // whitebox - function
-    SolrException ex = expectThrows(SolrException.class, () -> {
+    try {
       HllOptions.parseHllOptions(params("cardinality","true", "hllPreHashed", "true"), null);
-    });
-    assertTrue("MSG: " + ex.getMessage(),
-        ex.getMessage().contains("hllPreHashed is only supported with Long"));
-
+      fail("hllPreHashed should have failed for function");
+    } catch (SolrException e) {
+      assertTrue("MSG: " + e.getMessage(),
+                 e.getMessage().contains("hllPreHashed is only supported with Long"));
+    }
     // blackbox - function
     assertQEx("hllPreHashed function", "hllPreHashed is only supported with Long",
               req(params("stats.field","{!func cardinality=true hllPreHashed=true}sum(foo_i,foo_l)"),
@@ -1813,10 +1779,13 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
     ignoreException("accuracy");
     for (String invalid : new String[] { "-1", "1.1", "100" }) {
       // whitebox
-      ex = expectThrows(SolrException.class, () -> {
-        HllOptions.parseHllOptions(params("cardinality",invalid), foo_s);
-      });
-      assertTrue("MSG: " + ex.getMessage(), ex.getMessage().contains("number between 0 and 1"));
+      try {
+        Object trash = HllOptions.parseHllOptions(params("cardinality",invalid), foo_s);
+        fail("Should have failed: " + invalid);
+      } catch (SolrException e) {
+        assertTrue("MSG: " + e.getMessage(),
+                   e.getMessage().contains("number between 0 and 1"));
+      }
       // blackbox
       assertQEx("cardinality="+invalid, "number between 0 and 1",
                 req(params("stats.field","{!cardinality="+invalid+"}foo_s"),
@@ -1827,11 +1796,14 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
     ignoreException("hllLog2m must be");
     for (int invalid : new int[] { HLL.MINIMUM_LOG2M_PARAM-1, HLL.MAXIMUM_LOG2M_PARAM+11 }) {
       // whitebox
-      ex = expectThrows(SolrException.class, () -> {
-        HllOptions.parseHllOptions(params("cardinality","true", "hllLog2m", ""+invalid), foo_s);
-      });
-      assertTrue("MSG: " + ex.getMessage(), ex.getMessage().contains("hllLog2m must be"));
-
+      try {
+        Object trash = HllOptions.parseHllOptions(params("cardinality","true",
+                                                         "hllLog2m", ""+invalid), foo_s);
+        fail("Should have failed: " + invalid);
+      } catch (SolrException e) {
+        assertTrue("MSG: " + e.getMessage(),
+                   e.getMessage().contains("hllLog2m must be"));
+      }
       // blackbox
       assertQEx("hllLog2m="+invalid, "hllLog2m must be",
                 req(params("stats.field","{!cardinality=true hllLog2m="+invalid+"}foo_s"),
@@ -1842,13 +1814,14 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
     ignoreException("hllRegwidth must be");
     for (int invalid : new int[] { HLL.MINIMUM_REGWIDTH_PARAM-1, HLL.MAXIMUM_REGWIDTH_PARAM+1 }) {
       // whitebox
-      ex = expectThrows(SolrException.class, () -> {
-        HllOptions.parseHllOptions(params("cardinality","true",
-            "hllRegwidth", ""+invalid), foo_s);
-      });
-      assertTrue("MSG: " + ex.getMessage(),
-          ex.getMessage().contains("hllRegwidth must be"));
-
+      try {
+        Object trash = HllOptions.parseHllOptions(params("cardinality","true",
+                                                         "hllRegwidth", ""+invalid), foo_s);
+        fail("Should have failed: " + invalid);
+      } catch (SolrException e) {
+        assertTrue("MSG: " + e.getMessage(),
+                   e.getMessage().contains("hllRegwidth must be"));
+      }
       // blackbox
       assertQEx("hllRegwidth="+invalid, "hllRegwidth must be",
                 req(params("stats.field","{!cardinality=true hllRegwidth="+invalid+"}foo_s"),
@@ -1864,16 +1837,19 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
     String percentiles = "10.0,99.9,1.0,2.0,20.0,30.0,40.0,50.0,60.0,70.0,80.0,98.0,99.0";
     List <String> percentilesList = StrUtils.splitSmart(percentiles, ',');
     
-    // test empty case
-    try (SolrQueryRequest query = req("q", "*:*", "stats", "true", "stats.field",
-        "{!percentiles='" + percentiles + "'}stat_f")) {
+    // test empty case 
+    SolrQueryRequest query = req("q", "*:*", "stats", "true",
+                                 "stats.field", "{!percentiles='" + percentiles + "'}stat_f");
+    try {
       SolrQueryResponse rsp = h.queryAndResponse(null, query);
       NamedList<Double> pout = extractPercentils(rsp, "stat_f");
       for (int i = 0; i < percentilesList.size(); i++) {
         // ensure exact order, but all values should be null (empty result set)
         assertEquals(percentilesList.get(i), pout.getName(i));
-        assertNull(pout.getVal(i));
+        assertEquals(null, pout.getVal(i));
       }
+    } finally {
+      query.close();
     }
     
     int id = 0;
@@ -1887,8 +1863,9 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
 
     assertU(commit());
 
-    try (SolrQueryRequest query = req("q", "*:*", "stats", "true",
-        "stats.field", "{!percentiles='" + percentiles + "'}stat_f")) {
+    query = req("q", "*:*", "stats", "true", 
+                "stats.field", "{!percentiles='" + percentiles + "'}stat_f");
+    try {
       SolrQueryResponse rsp = h.queryAndResponse(null, query);
       NamedList<Double> pout = extractPercentils(rsp, "stat_f");
       for (int i = 0; i < percentilesList.size(); i++) { 
@@ -1897,14 +1874,19 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
         assertEquals(Double.parseDouble(p), pout.getVal(i), 1.0D);
                      
       }
+    } finally {
+      query.close();
     }
     
     // test request for no percentiles
-    try (SolrQueryRequest query = req("q", "*:*", "stats", "true",
-        "stats.field", "{!percentiles=''}stat_f")) {
+    query = req("q", "*:*", "stats", "true", 
+                "stats.field", "{!percentiles=''}stat_f");
+    try {
       SolrQueryResponse rsp = h.queryAndResponse(null, query);
       NamedList<Double> pout = extractPercentils(rsp, "stat_f");
       assertNull(pout);
+    } finally {
+      query.close();
     }
 
     // non-numeric types don't support percentiles
@@ -1913,12 +1895,16 @@ public class StatsComponentTest extends SolrTestCaseJ4 {
     
     assertU(commit());
 
-    try (SolrQueryRequest query = req("q", "*:*", "stats", "true",
-        "stats.field", "{!percentiles='" + percentiles + "'}stat_dt",
-        "stats.field", "{!percentiles='" + percentiles + "'}stat_s")) {
+    query = req("q", "*:*", "stats", "true", 
+                "stats.field", "{!percentiles='" + percentiles + "'}stat_dt",
+                "stats.field", "{!percentiles='" + percentiles + "'}stat_s");
+
+    try {
       SolrQueryResponse rsp = h.queryAndResponse(null, query);
       assertNull(extractPercentils(rsp, "stat_dt"));
       assertNull(extractPercentils(rsp, "stat_s"));
+    } finally {
+      query.close();
     }
     
   }

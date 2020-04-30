@@ -14,11 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
 import java.lang.invoke.MethodHandles;
 import java.util.Collection;
-import java.util.function.Function;
 
 import org.apache.solr.common.SolrInputField;
 
@@ -78,21 +78,11 @@ public abstract class FieldValueMutatingUpdateProcessor
           log.debug("replace value from field '{}': {} with {}", 
                     new Object[] { src.getName(), srcVal, destVal });
         }
-        result.addValue(destVal);
+        result.addValue(destVal, 1.0F);
       }
     }
+    result.setBoost(src.getBoost());
     return 0 == result.getValueCount() ? null : result;
-  }
-
-  public static FieldValueMutatingUpdateProcessor valueMutator(FieldNameSelector selector,
-                                                               UpdateRequestProcessor next,
-                                                               Function<Object, Object> fun) {
-    return new FieldValueMutatingUpdateProcessor(selector, next) {
-      @Override
-      protected Object mutateValue(Object src) {
-        return fun.apply(src);
-      }
-    };
   }
 }
 

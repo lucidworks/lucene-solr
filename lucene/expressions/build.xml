@@ -26,6 +26,7 @@
   <path id="classpath">
     <path refid="base.classpath"/>
     <fileset dir="lib"/>
+    <pathelement path="${queries.jar}"/>
   </path>
 
   <path id="test.classpath">
@@ -33,6 +34,16 @@
     <fileset dir="lib"/>
     <pathelement path="src/test-files"/>
   </path>
+
+  <target name="compile-core" depends="jar-queries,common.compile-core" />
+
+  <target name="javadocs" depends="javadocs-queries,compile-core,check-javadocs-uptodate" unless="javadocs-uptodate-${name}">
+    <invoke-module-javadoc>
+      <links>
+        <link href="../queries"/>
+      </links>
+    </invoke-module-javadoc>
+  </target>
 
   <target name="regenerate" depends="run-antlr"/>
 
@@ -81,6 +92,10 @@
       </delete>
       <!-- invoke ANTLR4 -->
       <java classname="org.antlr.v4.Tool" fork="true" failonerror="true" classpathref="antlr.classpath" taskname="antlr">
+        <!-- this is a hack because antlr generates code comments in nondeterministic order
+         (using HashMap somewhere it should use LinkedHashMap). This hack only works for Java 7,
+         Java 8 always uses murmurhash for strings and uses time-of-day as seed. -->
+        <sysproperty key="jdk.map.althashing.threshold" value="-1"/>
         <sysproperty key="file.encoding" value="UTF-8"/>
         <sysproperty key="user.language" value="en"/>
         <sysproperty key="user.country" value="US"/>

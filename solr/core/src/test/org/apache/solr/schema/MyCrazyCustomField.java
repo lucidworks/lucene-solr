@@ -1,3 +1,5 @@
+package org.apache.solr.schema;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
-
-import java.io.IOException;
 
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.index.Term;
@@ -26,10 +25,12 @@ import org.apache.lucene.search.SortField;
 import org.apache.solr.response.TextResponseWriter;
 import org.apache.solr.search.QParser;
 
+import java.io.IOException;
+
 /**
  * Custom field that overrides the PrefixQuery behaviour to map queries such that:
  * (foo* becomes bar*) and (bar* becomes foo*).
- * This is used for testing overridden prefix query for custom fields in TestOverriddenPrefixQueryForCustomFieldType
+ * This is used for testing overridded prefix query for custom fields in TestOverriddenPrefixQueryForCustomFieldType
  */
 public class MyCrazyCustomField extends TextField {
 

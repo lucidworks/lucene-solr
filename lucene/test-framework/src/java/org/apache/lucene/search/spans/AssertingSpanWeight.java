@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
 
 import java.io.IOException;
 import java.util.Map;
@@ -22,10 +23,11 @@ import java.util.Set;
 
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.LeafSimScorer;
+import org.apache.lucene.search.Scorer;
+import org.apache.lucene.search.similarities.Similarity;
 
 /**
  * Wraps a SpanWeight with additional asserts
@@ -40,13 +42,13 @@ public class AssertingSpanWeight extends SpanWeight {
    * @throws IOException on error
    */
   public AssertingSpanWeight(IndexSearcher searcher, SpanWeight in) throws IOException {
-    super((SpanQuery) in.getQuery(), searcher, null, 1f);
+    super((SpanQuery) in.getQuery(), searcher, null);
     this.in = in;
   }
 
   @Override
-  public void extractTermStates(Map<Term, TermStates> contexts) {
-    in.extractTermStates(contexts);
+  public void extractTermContexts(Map<Term, TermContext> contexts) {
+    in.extractTermContexts(contexts);
   }
 
   @Override
@@ -54,11 +56,11 @@ public class AssertingSpanWeight extends SpanWeight {
     Spans spans = in.getSpans(context, requiredPostings);
     if (spans == null)
       return null;
-    return new AssertingSpans(spans);
+    return new AssertingSpans(spans, in.getSimScorer(context));
   }
 
   @Override
-  public LeafSimScorer getSimScorer(LeafReaderContext context) throws IOException {
+  public Similarity.SimScorer getSimScorer(LeafReaderContext context) throws IOException {
     return in.getSimScorer(context);
   }
 
@@ -68,13 +70,18 @@ public class AssertingSpanWeight extends SpanWeight {
   }
 
   @Override
-  public SpanScorer scorer(LeafReaderContext context) throws IOException {
-    return in.scorer(context);
+  public float getValueForNormalization() throws IOException {
+    return in.getValueForNormalization();
   }
 
   @Override
-  public boolean isCacheable(LeafReaderContext ctx) {
-    return in.isCacheable(ctx);
+  public void normalize(float queryNorm, float boost) {
+    in.normalize(queryNorm, boost);
+  }
+
+  @Override
+  public Scorer scorer(LeafReaderContext context) throws IOException {
+    return in.scorer(context);
   }
 
   @Override

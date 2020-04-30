@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
 
 import java.util.Collections;
 import java.util.Map;
 
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 
 import static org.apache.solr.core.ConfigOverlay.isEditableProp;
 
-public class TestConfigOverlay extends SolrTestCase {
+public class TestConfigOverlay extends LuceneTestCase {
 
   public void testPaths() {
     assertTrue(isEditableProp("updateHandler/autoCommit/maxDocs", true, null));
@@ -53,7 +54,6 @@ public class TestConfigOverlay extends SolrTestCase {
     assertTrue(isEditableProp("requestDispatcher.requestParsers.multipartUploadLimitInKB", false, null));
     assertTrue(isEditableProp("requestDispatcher.requestParsers.formdataUploadLimitInKB", false, null));
     assertTrue(isEditableProp("requestDispatcher.requestParsers.enableRemoteStreaming", false, null));
-    assertTrue(isEditableProp("requestDispatcher.requestParsers.enableStreamBody", false, null));
     assertTrue(isEditableProp("requestDispatcher.requestParsers.addHttpRequestToContext", false, null));
 
     assertTrue(isEditableProp("requestDispatcher.handleSelect", false, null));

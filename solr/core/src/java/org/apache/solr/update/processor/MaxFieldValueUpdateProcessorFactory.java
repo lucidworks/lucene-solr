@@ -14,17 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
-import java.util.Collection;
-import java.util.Collections;
+import static org.apache.solr.common.SolrException.ErrorCode.*;
 
 import org.apache.solr.common.SolrException;
-import org.apache.solr.core.SolrCore;
-import org.apache.solr.update.processor.FieldMutatingUpdateProcessor.FieldNameSelector;
 
-import static org.apache.solr.common.SolrException.ErrorCode.BAD_REQUEST;
-import static org.apache.solr.update.processor.FieldMutatingUpdateProcessor.SELECT_NO_FIELDS;
+import org.apache.solr.core.SolrCore;
+
+import java.util.Collections;
+import java.util.Collection;
+import java.util.Iterator;
 
 /**
  * An update processor that keeps only the the maximum value from any selected 
@@ -50,7 +51,6 @@ import static org.apache.solr.update.processor.FieldMutatingUpdateProcessor.SELE
  *
  * @see MinFieldValueUpdateProcessorFactory
  * @see Collections#max
- * @since 4.0.0
  */
 public final class MaxFieldValueUpdateProcessorFactory extends FieldValueSubsetUpdateProcessorFactory {
 
@@ -59,9 +59,8 @@ public final class MaxFieldValueUpdateProcessorFactory extends FieldValueSubsetU
   public Collection pickSubset(Collection values) {
     Collection result = values;
     try {
-      // NOTE: the extra cast to Object is needed to prevent compile
-      // errors on Eclipse Compiler (ecj) used for javadoc lint
-      result = Collections.singletonList((Object) Collections.max(values));
+      result = Collections.singletonList
+        (Collections.max(values));
     } catch (ClassCastException e) {
       throw new SolrException
         (BAD_REQUEST, 
@@ -71,8 +70,10 @@ public final class MaxFieldValueUpdateProcessorFactory extends FieldValueSubsetU
   }
 
   @Override
-  public FieldNameSelector getDefaultSelector(SolrCore core) {
-    return SELECT_NO_FIELDS;
+  public FieldMutatingUpdateProcessor.FieldNameSelector 
+    getDefaultSelector(final SolrCore core) {
+    
+    return FieldMutatingUpdateProcessor.SELECT_NO_FIELDS;
   }
   
 }

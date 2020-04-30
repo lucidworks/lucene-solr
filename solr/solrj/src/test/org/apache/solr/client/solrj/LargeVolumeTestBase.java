@@ -14,14 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj;
 
-import java.io.IOException;
-import java.lang.invoke.MethodHandles;
-import java.util.ArrayList;
-import java.util.List;
-
-import org.apache.solr.EmbeddedSolrServerTestBase;
+import org.apache.solr.SolrJettyTestBase;
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.client.solrj.response.UpdateResponse;
@@ -30,11 +26,16 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.lang.invoke.MethodHandles;
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  *
  * @since solr 1.3
  */
-public abstract class LargeVolumeTestBase extends EmbeddedSolrServerTestBase
+public abstract class LargeVolumeTestBase extends SolrJettyTestBase
 {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -60,8 +61,7 @@ public abstract class LargeVolumeTestBase extends EmbeddedSolrServerTestBase
 
     // some of the commits could have failed because maxWarmingSearchers exceeded,
     // so do a final commit to make sure everything is visible.
-    // This should no longer be true as of SOLR-9712 (Solr 6.4)
-    // client.commit();
+    client.commit();
     
     query(threadCount * numdocs);
     log.info("done");

@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.standard;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.standard;
 
 import java.io.IOException;
 import java.text.DateFormat;
@@ -53,8 +54,8 @@ import org.apache.lucene.queryparser.flexible.core.processors.QueryNodeProcessor
 import org.apache.lucene.queryparser.flexible.messages.MessageImpl;
 import org.apache.lucene.queryparser.flexible.standard.config.StandardQueryConfigHandler;
 import org.apache.lucene.queryparser.flexible.standard.nodes.WildcardQueryNode;
-import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BoostQuery;
 import org.apache.lucene.search.FuzzyQuery;
@@ -245,20 +246,6 @@ public class TestQPHelper extends LuceneTestCase {
     }
   }
 
-  public void assertMatchNoDocsQuery(String queryString, Analyzer a) throws Exception {
-    assertMatchNoDocsQuery(getQuery(queryString, a));
-  }
-
-  public void assertMatchNoDocsQuery(Query query) throws Exception {
-    if (query instanceof MatchNoDocsQuery) {
-      // good
-    } else if (query instanceof BooleanQuery && ((BooleanQuery) query).clauses().size() == 0) {
-      // good
-    } else {
-      fail("expected MatchNoDocsQuery or an empty BooleanQuery but got: " + query);
-    }
-  }
-
   public void assertQueryEqualsAllowLeadingWildcard(String query, Analyzer a, String result)
       throws Exception {
     Query q = getQueryAllowLeadingWildcard(query, a);
@@ -288,9 +275,10 @@ public class TestQPHelper extends LuceneTestCase {
     }
   }
 
-  public void assertWildcardQueryEquals(String query,
+  public void assertWildcardQueryEquals(String query, boolean lowercase,
       String result, boolean allowLeadingWildcard) throws Exception {
     StandardQueryParser qp = getParser(null);
+    qp.setLowercaseExpandedTerms(lowercase);
     qp.setAllowLeadingWildcard(allowLeadingWildcard);
     Query q = qp.parse(query, "field");
     String s = q.toString("field");
@@ -300,9 +288,20 @@ public class TestQPHelper extends LuceneTestCase {
     }
   }
 
-  public void assertWildcardQueryEquals(String query,
+  public void assertWildcardQueryEquals(String query, boolean lowercase,
       String result) throws Exception {
-    assertWildcardQueryEquals(query, result, false);
+    assertWildcardQueryEquals(query, lowercase, result, false);
+  }
+
+  public void assertWildcardQueryEquals(String query, String result)
+      throws Exception {
+    StandardQueryParser qp = getParser(null);
+    Query q = qp.parse(query, "field");
+    String s = q.toString("field");
+    if (!s.equals(result)) {
+      fail("WildcardQuery /" + query + "/ yielded /" + s + "/, expecting /"
+          + result + "/");
+    }
   }
 
   public Query getQueryDOA(String query, Analyzer a) throws Exception {
@@ -350,7 +349,7 @@ public class TestQPHelper extends LuceneTestCase {
   }
 
   //individual CJK chars as terms, like StandardAnalyzer
-  private static class SimpleCJKTokenizer extends Tokenizer {
+  private class SimpleCJKTokenizer extends Tokenizer {
     private CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);
 
     public SimpleCJKTokenizer() {
@@ -368,7 +367,7 @@ public class TestQPHelper extends LuceneTestCase {
     }
   }
 
-  private static class SimpleCJKAnalyzer extends Analyzer {
+  private class SimpleCJKAnalyzer extends Analyzer {
     @Override
     public TokenStreamComponents createComponents(String fieldName) {
       return new TokenStreamComponents(new SimpleCJKTokenizer());
@@ -479,13 +478,13 @@ public class TestQPHelper extends LuceneTestCase {
     assertTrue(getQuery("hello", null) instanceof TermQuery);
     assertTrue(getQuery("\"hello there\"", null) instanceof PhraseQuery);
 
-    assertQueryEquals("germ term^2.0", null, "germ (term)^2.0");
-    assertQueryEquals("(term)^2.0", null, "(term)^2.0");
+    assertQueryEquals("germ term^2.0", null, "germ term^2.0");
+    assertQueryEquals("(term)^2.0", null, "term^2.0");
     assertQueryEquals("(germ term)^2.0", null, "(germ term)^2.0");
-    assertQueryEquals("term^2.0", null, "(term)^2.0");
-    assertQueryEquals("term^2", null, "(term)^2.0");
-    assertQueryEquals("\"germ term\"^2.0", null, "(\"germ term\")^2.0");
-    assertQueryEquals("\"term germ\"^2", null, "(\"term germ\")^2.0");
+    assertQueryEquals("term^2.0", null, "term^2.0");
+    assertQueryEquals("term^2", null, "term^2.0");
+    assertQueryEquals("\"germ term\"^2.0", null, "\"germ term\"^2.0");
+    assertQueryEquals("\"term germ\"^2", null, "\"term germ\"^2.0");
 
     assertQueryEquals("(foo OR bar) AND (baz OR boo)", null,
         "+(foo bar) +(baz boo)");
@@ -519,12 +518,12 @@ public class TestQPHelper extends LuceneTestCase {
     assertQueryEquals("\"term germ\"~2 flork", null, "\"term germ\"~2 flork");
     assertQueryEquals("\"term\"~2", null, "term");
     assertQueryEquals("\" \"~2 germ", null, "germ");
-    assertQueryEquals("\"term germ\"~2^2", null, "(\"term germ\"~2)^2.0");
+    assertQueryEquals("\"term germ\"~2^2", null, "\"term germ\"~2^2.0");
   }
 
   public void testNumber() throws Exception {
     // The numbers go away because SimpleAnalzyer ignores them
-    assertMatchNoDocsQuery("3", null);
+    assertQueryEquals("3", null, "");
     assertQueryEquals("term 1.0 1 2", null, "term");
     assertQueryEquals("term term1 term2", null, "term term term");
 
@@ -553,15 +552,15 @@ public class TestQPHelper extends LuceneTestCase {
   
   public void testWildcard() throws Exception {
     assertQueryEquals("term*", null, "term*");
-    assertQueryEquals("term*^2", null, "(term*)^2.0");
+    assertQueryEquals("term*^2", null, "term*^2.0");
     assertQueryEquals("term~", null, "term~2");
     assertQueryEquals("term~0.7", null, "term~1");
 
-    assertQueryEquals("term~^3", null, "(term~2)^3.0");
+    assertQueryEquals("term~^3", null, "term~2^3.0");
 
-    assertQueryEquals("term^3~", null, "(term~2)^3.0");
+    assertQueryEquals("term^3~", null, "term~2^3.0");
     assertQueryEquals("term*germ", null, "term*germ");
-    assertQueryEquals("term*germ^3", null, "(term*germ)^3.0");
+    assertQueryEquals("term*germ^3", null, "term*germ^3.0");
 
     assertTrue(getQuery("term*", null) instanceof PrefixQuery);
     assertTrue(getQuery("term*^2", null) instanceof BoostQuery);
@@ -585,21 +584,32 @@ public class TestQPHelper extends LuceneTestCase {
      */
     // First prefix queries:
     // by default, convert to lowercase:
-    assertWildcardQueryEquals("Term*", "term*");
+    assertWildcardQueryEquals("Term*", true, "term*");
     // explicitly set lowercase:
-    assertWildcardQueryEquals("term*", "term*");
-    assertWildcardQueryEquals("Term*", "term*");
-    assertWildcardQueryEquals("TERM*", "term*");
+    assertWildcardQueryEquals("term*", true, "term*");
+    assertWildcardQueryEquals("Term*", true, "term*");
+    assertWildcardQueryEquals("TERM*", true, "term*");
+    // explicitly disable lowercase conversion:
+    assertWildcardQueryEquals("term*", false, "term*");
+    assertWildcardQueryEquals("Term*", false, "Term*");
+    assertWildcardQueryEquals("TERM*", false, "TERM*");
     // Then 'full' wildcard queries:
     // by default, convert to lowercase:
     assertWildcardQueryEquals("Te?m", "te?m");
     // explicitly set lowercase:
-    assertWildcardQueryEquals("te?m", "te?m");
-    assertWildcardQueryEquals("Te?m", "te?m");
-    assertWildcardQueryEquals("TE?M", "te?m");
-    assertWildcardQueryEquals("Te?m*gerM", "te?m*germ");
+    assertWildcardQueryEquals("te?m", true, "te?m");
+    assertWildcardQueryEquals("Te?m", true, "te?m");
+    assertWildcardQueryEquals("TE?M", true, "te?m");
+    assertWildcardQueryEquals("Te?m*gerM", true, "te?m*germ");
+    // explicitly disable lowercase conversion:
+    assertWildcardQueryEquals("te?m", false, "te?m");
+    assertWildcardQueryEquals("Te?m", false, "Te?m");
+    assertWildcardQueryEquals("TE?M", false, "TE?M");
+    assertWildcardQueryEquals("Te?m*gerM", false, "Te?m*gerM");
     // Fuzzy queries:
     assertWildcardQueryEquals("Term~", "term~2");
+    assertWildcardQueryEquals("Term~", true, "term~2");
+    assertWildcardQueryEquals("Term~", false, "Term~2");
     // Range queries:
 
     // TODO: implement this on QueryParser
@@ -607,18 +617,24 @@ public class TestQPHelper extends LuceneTestCase {
     // C]': Lexical error at line 1, column 1. Encountered: "[" (91), after
     // : ""
     assertWildcardQueryEquals("[A TO C]", "[a TO c]");
+    assertWildcardQueryEquals("[A TO C]", true, "[a TO c]");
+    assertWildcardQueryEquals("[A TO C]", false, "[A TO C]");
     // Test suffix queries: first disallow
-    expectThrows(QueryNodeException.class, () -> {
-      assertWildcardQueryEquals("*Term", "*term");
-    });
-
-    expectThrows(QueryNodeException.class, () -> {
-      assertWildcardQueryEquals("?Term", "?term");
-    });
-
+    try {
+      assertWildcardQueryEquals("*Term", true, "*term");
+      fail();
+    } catch (QueryNodeException pe) {
+      // expected exception
+    }
+    try {
+      assertWildcardQueryEquals("?Term", true, "?term");
+      fail();
+    } catch (QueryNodeException pe) {
+      // expected exception
+    }
     // Test suffix queries: then allow
-    assertWildcardQueryEquals("*Term", "*term", true);
-    assertWildcardQueryEquals("?Term", "?term", true);
+    assertWildcardQueryEquals("*Term", true, "*term", true);
+    assertWildcardQueryEquals("?Term", true, "?term", true);
   }
 
   public void testLeadingWildcardType() throws Exception {
@@ -630,7 +646,7 @@ public class TestQPHelper extends LuceneTestCase {
   }
 
   public void testQPA() throws Exception {
-    assertQueryEquals("term term^3.0 term", qpAnalyzer, "term (term)^3.0 term");
+    assertQueryEquals("term term^3.0 term", qpAnalyzer, "term term^3.0 term");
     assertQueryEquals("term stop^3.0 term", qpAnalyzer, "term term");
 
     assertQueryEquals("term term term", qpAnalyzer, "term term term");
@@ -648,14 +664,14 @@ public class TestQPHelper extends LuceneTestCase {
     assertQueryEquals("term AND NOT phrase term", qpAnalyzer,
         "+term -(phrase1 phrase2) term");
 
-    assertMatchNoDocsQuery("stop^3", qpAnalyzer);
-    assertMatchNoDocsQuery("stop", qpAnalyzer);
-    assertMatchNoDocsQuery("(stop)^3", qpAnalyzer);
-    assertMatchNoDocsQuery("((stop))^3", qpAnalyzer);
-    assertMatchNoDocsQuery("(stop^3)", qpAnalyzer);
-    assertMatchNoDocsQuery("((stop)^3)", qpAnalyzer);
-    assertMatchNoDocsQuery("(stop)", qpAnalyzer);
-    assertMatchNoDocsQuery("((stop))", qpAnalyzer);
+    assertQueryEquals("stop^3", qpAnalyzer, "");
+    assertQueryEquals("stop", qpAnalyzer, "");
+    assertQueryEquals("(stop)^3", qpAnalyzer, "");
+    assertQueryEquals("((stop))^3", qpAnalyzer, "");
+    assertQueryEquals("(stop^3)", qpAnalyzer, "");
+    assertQueryEquals("((stop)^3)", qpAnalyzer, "");
+    assertQueryEquals("(stop)", qpAnalyzer, "");
+    assertQueryEquals("((stop))", qpAnalyzer, "");
     assertTrue(getQuery("term term term", qpAnalyzer) instanceof BooleanQuery);
     assertTrue(getQuery("term +stop", qpAnalyzer) instanceof TermQuery);
   }
@@ -688,7 +704,7 @@ public class TestQPHelper extends LuceneTestCase {
     assertQueryEquals("[ a TO z ]", null, "[a TO z]");
     assertQueryEquals("{ a TO z}", null, "{a TO z}");
     assertQueryEquals("{ a TO z }", null, "{a TO z}");
-    assertQueryEquals("{ a TO z }^2.0", null, "({a TO z})^2.0");
+    assertQueryEquals("{ a TO z }^2.0", null, "{a TO z}^2.0");
     assertQueryEquals("[ a TO z] OR bar", null, "[a TO z] bar");
     assertQueryEquals("[ a TO z] AND bar", null, "+[a TO z] +bar");
     assertQueryEquals("( bar blar { a TO z}) ", null, "bar blar {a TO z}");
@@ -747,14 +763,14 @@ public class TestQPHelper extends LuceneTestCase {
     
     // set a field specific date resolution    
     dateRes.put(monthField, DateTools.Resolution.MONTH);
-    qp.setDateResolutionMap(dateRes);
+    qp.setDateResolution(dateRes);
 
     // set default date resolution to MILLISECOND
     qp.setDateResolution(DateTools.Resolution.MILLISECOND);
 
     // set second field specific date resolution
     dateRes.put(hourField, DateTools.Resolution.HOUR);
-    qp.setDateResolutionMap(dateRes);
+    qp.setDateResolution(dateRes);
 
     // for this field no field specific date resolution has been set,
     // so verify if the default resolution is used
@@ -981,14 +997,17 @@ public class TestQPHelper extends LuceneTestCase {
     q = qp2.parse("the^3", "field");
     // "the" is a stop word so the result is an empty query:
     assertNotNull(q);
-    assertMatchNoDocsQuery(q);
+    assertEquals("", q.toString());
     assertFalse(q instanceof BoostQuery);
   }
 
   public void assertQueryNodeException(String queryString) throws Exception {
-    expectThrows(QueryNodeException.class, () -> {
+    try {
       getQuery(queryString, null);
-    });
+    } catch (QueryNodeException expected) {
+      return;
+    }
+    fail("ParseException expected, not thrown");
   }
 
   public void testException() throws Exception {
@@ -1001,29 +1020,35 @@ public class TestQPHelper extends LuceneTestCase {
     assertQueryNodeException("secret AND illegal) AND access:confidential");    
   }
 
-  // Wildcard queries should not be allowed
   public void testCustomQueryParserWildcard() {
-    expectThrows(QueryNodeException.class, () -> {
+    try {
       new QPTestParser(new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false)).parse("a?t", "contents");
-    });
+      fail("Wildcard queries should not be allowed");
+    } catch (QueryNodeException expected) {
+      // expected exception
+    }
   }
 
-  // Fuzzy queries should not be allowed"
   public void testCustomQueryParserFuzzy() throws Exception {
-    expectThrows(QueryNodeException.class, () -> {
+    try {
       new QPTestParser(new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false)).parse("xunit~", "contents");
-    });
+      fail("Fuzzy queries should not be allowed");
+    } catch (QueryNodeException expected) {
+      // expected exception
+    }
   }
 
-  // too many boolean clauses, so ParseException is expected
   public void testBooleanQuery() throws Exception {
     BooleanQuery.setMaxClauseCount(2);
-    expectThrows(QueryNodeException.class, () -> {
+    try {
       StandardQueryParser qp = new StandardQueryParser();
       qp.setAnalyzer(new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false));
 
       qp.parse("one two three", "field");
-    });
+      fail("ParseException expected due to too many boolean clauses");
+    } catch (QueryNodeException expected) {
+      // too many boolean clauses, so ParseException is expected
+    }
   }
 
   /**
@@ -1134,10 +1159,10 @@ public class TestQPHelper extends LuceneTestCase {
   
   public void testRegexps() throws Exception {
     StandardQueryParser qp = new StandardQueryParser();
-    qp.setAnalyzer(new MockAnalyzer(random(), MockTokenizer.WHITESPACE, true));
     final String df = "field" ;
     RegexpQuery q = new RegexpQuery(new Term("field", "[a-z][123]"));
     assertEquals(q, qp.parse("/[a-z][123]/", df));
+    qp.setLowercaseExpandedTerms(true);
     assertEquals(q, qp.parse("/[A-Z][123]/", df));
     assertEquals(new BoostQuery(q, 0.5f), qp.parse("/[A-Z][123]/^0.5", df));
     qp.setMultiTermRewriteMethod(MultiTermQuery.SCORING_BOOLEAN_REWRITE);
@@ -1252,7 +1277,7 @@ public class TestQPHelper extends LuceneTestCase {
     super.tearDown();
   }
 
-  private static class CannedTokenizer extends Tokenizer {
+  private class CannedTokenizer extends Tokenizer {
     private int upto = 0;
     private final PositionIncrementAttribute posIncr = addAttribute(PositionIncrementAttribute.class);
     private final CharTermAttribute term = addAttribute(CharTermAttribute.class);
@@ -1291,7 +1316,7 @@ public class TestQPHelper extends LuceneTestCase {
     }
   }
 
-  private static class CannedAnalyzer extends Analyzer {
+  private class CannedAnalyzer extends Analyzer {
     @Override
     public TokenStreamComponents createComponents(String ignored) {
       return new TokenStreamComponents(new CannedTokenizer());
@@ -1304,12 +1329,12 @@ public class TestQPHelper extends LuceneTestCase {
     Document doc = new Document();
     doc.add(newTextField("field", "", Field.Store.NO));
     w.addDocument(doc);
-    IndexReader r = DirectoryReader.open(w);
+    IndexReader r = DirectoryReader.open(w, true);
     IndexSearcher s = newSearcher(r);
     
     Query q = new StandardQueryParser(new CannedAnalyzer()).parse("\"a\"", "field");
     assertTrue(q instanceof MultiPhraseQuery);
-    assertEquals(1, s.search(q, 10).totalHits.value);
+    assertEquals(1, s.search(q, 10).totalHits);
     r.close();
     w.close();
     dir.close();

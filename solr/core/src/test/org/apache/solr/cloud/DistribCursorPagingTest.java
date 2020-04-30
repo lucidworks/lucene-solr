@@ -16,10 +16,11 @@
  */
 package org.apache.solr.cloud;
 
+import com.carrotsearch.randomizedtesting.annotations.Seed;
+
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.lucene.util.SentinelIntSet;
 import org.apache.lucene.util.TestUtil;
-import org.apache.solr.SolrTestCaseJ4.SuppressSSL;
 import org.apache.solr.CursorPagingTest;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.request.LukeRequest;
@@ -40,6 +41,7 @@ import static org.apache.solr.common.params.CursorMarkParams.CURSOR_MARK_PARAM;
 import static org.apache.solr.common.params.CursorMarkParams.CURSOR_MARK_NEXT;
 import static org.apache.solr.common.params.CursorMarkParams.CURSOR_MARK_START;
 
+import org.apache.solr.search.CursorMark; //jdoc
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,7 +61,6 @@ import java.util.Map;
  * @see CursorPagingTest 
  */
 @Slow
-@SuppressSSL(bugUrl="https://issues.apache.org/jira/browse/SOLR-9182 - causes OOM")
 public class DistribCursorPagingTest extends AbstractFullDistribZkTestBase {
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -76,7 +77,6 @@ public class DistribCursorPagingTest extends AbstractFullDistribZkTestBase {
   }
 
   @Test
-  // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 23-Aug-2018
   public void test() throws Exception {
     boolean testFinished = false;
     try {
@@ -104,7 +104,7 @@ public class DistribCursorPagingTest extends AbstractFullDistribZkTestBase {
   }
 
   private void doBadInputTest() throws Exception {
-    // sometimes seed some data, other times use an empty index
+    // sometimes seed some data, othertimes use an empty index
     if (random().nextBoolean()) {
       indexDoc(sdoc("id", "42", "str", "z", "float", "99.99", "int", "42"));
       indexDoc(sdoc("id", "66", "str", "x", "float", "22.00", "int", "-66"));
@@ -253,14 +253,12 @@ public class DistribCursorPagingTest extends AbstractFullDistribZkTestBase {
                     "fl", "id",
                     "facet", "true",
                     "facet.field", "str",
-                    "facet.mincount", "1",
                     "json.nl", "map",
                     "sort", intsort + " asc, id asc");
     rsp = query(p(params, CURSOR_MARK_PARAM, cursorMark));
     assertNumFound(8, rsp);
     assertStartsAt(0, rsp);
     assertDocList(rsp, 7, 0, 3);
-    assertEquals(3, rsp.getFacetField("str").getValues().size());
     assertEquals("a", rsp.getFacetField("str").getValues().get(0).getName());
     assertEquals(4, rsp.getFacetField("str").getValues().get(0).getCount());
     cursorMark = assertHashNextCursorMark(rsp);
@@ -559,7 +557,7 @@ public class DistribCursorPagingTest extends AbstractFullDistribZkTestBase {
           if (ids.size() < numInitialDocs) {
             message.append("Missing doc(s): ");
             for (SolrInputDocument doc : initialDocs) {
-              int id = Integer.parseInt(doc.getFieldValue("id").toString());
+              int id = ((Integer)doc.get("id").getValue()).intValue();
               if ( ! ids.exists(id)) {
                 QueryResponse rsp = cloudClient.query(params("q", "id:" + id,
                                                              "rows", "1"));
@@ -667,12 +665,12 @@ public class DistribCursorPagingTest extends AbstractFullDistribZkTestBase {
    * "id" of the list of documents returned matches the expected list
    * @see org.apache.solr.client.solrj.SolrClient#query
    */
-  private void assertDocList(QueryResponse rsp, int... ids) {
+  private void assertDocList(QueryResponse rsp, Object... ids) {
     SolrDocumentList docs = extractDocList(rsp);
     assertEquals("Wrong number of docs in response", ids.length, docs.size());
     int i = 0;
-    for (int id : ids) {
-      assertEquals(rsp.toString(), ""+id, docs.get(i).get("id"));
+    for (Object id : ids) {
+      assertEquals(rsp.toString(), id, docs.get(i).get("id"));
       i++;
     }
   }
@@ -699,15 +697,15 @@ public class DistribCursorPagingTest extends AbstractFullDistribZkTestBase {
    * Given a set of params, executes a cursor query using {@link CursorMarkParams#CURSOR_MARK_START} 
    * and then continuously walks the results using {@link CursorMarkParams#CURSOR_MARK_START} as long 
    * as a non-0 number of docs ar returned.  This method records the the set of all id's
-   * (must be positive ints) encountered and throws an assertion failure if any id is 
+   * (must be postive ints) encountered and throws an assertion failure if any id is 
    * encountered more then once, or if the set grows above maxSize
    * </p>
    *
    * <p>
-   * Note that this method explicitly uses the "cloudClient" for executing the queries, 
+   * Note that this method explicily uses the "cloudClient" for executing the queries, 
    * instead of relying on the test infrastructure to execute the queries redundently
-   * against both the cloud client as well as a control client.  This is because term stat 
-   * differences in a sharded setup can result in different scores for documents compared 
+   * aainst both the cloud client as well as a control client.  This is because term stat 
+   * differences in a sharded setup can result in differnent scores for documents compared 
    * to the control index -- which can affect the sorting in some cases and cause false 
    * negatives in the response comparisons (even if we don't include "score" in the "fl")
    * </p>
@@ -733,7 +731,7 @@ public class DistribCursorPagingTest extends AbstractFullDistribZkTestBase {
       }
 
       for (SolrDocument doc : docs) {
-        int id = Integer.parseInt(doc.getFieldValue("id").toString());
+        int id = ((Integer)doc.get("id")).intValue();
         if (ids.exists(id)) {
           String msg = "(" + p + ") walk already seen: " + id;
           try {

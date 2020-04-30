@@ -1,3 +1,5 @@
+package org.apache.solr.search.stats;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.stats;
-
+ 
 import org.apache.lucene.search.CollectionStatistics;
 
 /**
@@ -50,17 +51,30 @@ public class CollectionStats {
     this.sumDocFreq = stats.sumDocFreq();
   }
 
+  /*
+   * If any stats being added uses -1 then reset the total stats to -1
+   * as that parameter becomes unknowable.
+   */
   public void add(CollectionStats stats) {
     this.maxDoc += stats.maxDoc;
-    this.docCount += stats.docCount;
-    this.sumTotalTermFreq += stats.sumTotalTermFreq;
-    this.sumDocFreq += stats.sumDocFreq;
+    if (this.docCount < 0 || stats.docCount < 0) {
+      this.docCount = -1;
+    } else {
+      this.docCount += stats.docCount;
+    }
+    if (this.sumTotalTermFreq < 0 || stats.sumTotalTermFreq < 0) {
+      this.sumTotalTermFreq = -1;
+    } else {
+      this.sumTotalTermFreq += stats.sumTotalTermFreq;
+    }
+    if (this.sumDocFreq < 0 || stats.sumDocFreq < 0) {
+      this.sumDocFreq = -1;
+    } else {
+      this.sumDocFreq += stats.sumDocFreq;
+    }
   }
   
   public CollectionStatistics toCollectionStatistics() {
-    if (maxDoc == 0 || docCount == 0) {
-      return null;
-    }
     return new CollectionStatistics(field, maxDoc, docCount, sumTotalTermFreq, sumDocFreq);
   }
   

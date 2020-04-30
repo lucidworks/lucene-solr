@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.classic;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,26 +16,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.classic;
 
 import java.io.Reader;
 import java.io.StringReader;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.MockAnalyzer;
-import org.apache.lucene.analysis.MockSynonymFilter;
-import org.apache.lucene.analysis.MockTokenizer;
-import org.apache.lucene.analysis.Tokenizer;
+import org.apache.lucene.analysis.*;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanClause.Occur;
+import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
@@ -144,22 +141,22 @@ public class TestMultiFieldQueryParser extends LuceneTestCase {
       
       //Check for simple
       Query q = mfqp.parse("one");
-      assertEquals("(b:one)^5.0 (t:one)^10.0", q.toString());
+      assertEquals("b:one^5.0 t:one^10.0", q.toString());
       
       //Check for AND
       q = mfqp.parse("one AND two");
-      assertEquals("+((b:one)^5.0 (t:one)^10.0) +((b:two)^5.0 (t:two)^10.0)", q.toString());
+      assertEquals("+(b:one^5.0 t:one^10.0) +(b:two^5.0 t:two^10.0)", q.toString());
       
       //Check for OR
       q = mfqp.parse("one OR two");
-      assertEquals("((b:one)^5.0 (t:one)^10.0) ((b:two)^5.0 (t:two)^10.0)", q.toString());
+      assertEquals("(b:one^5.0 t:one^10.0) (b:two^5.0 t:two^10.0)", q.toString());
       
       //Check for AND and a field
       q = mfqp.parse("one AND two AND foo:test");
-      assertEquals("+((b:one)^5.0 (t:one)^10.0) +((b:two)^5.0 (t:two)^10.0) +foo:test", q.toString());
+      assertEquals("+(b:one^5.0 t:one^10.0) +(b:two^5.0 t:two^10.0) +foo:test", q.toString());
       
       q = mfqp.parse("one^3 AND two^4");
-      assertEquals("+((b:one)^5.0 (t:one)^10.0)^3.0 +((b:two)^5.0 (t:two)^10.0)^4.0", q.toString());
+      assertEquals("+(b:one^5.0 t:one^10.0)^3.0 +(b:two^5.0 t:two^10.0)^4.0", q.toString());
   }
 
   public void testStaticMethod1() throws ParseException {
@@ -181,10 +178,12 @@ public class TestMultiFieldQueryParser extends LuceneTestCase {
     assertEquals("(b:one +b:more) (+t:two)", q.toString());
 
     String[] queries5 = {"blah"};
-    // expected exception, array length differs
-    expectThrows(IllegalArgumentException.class, () -> {
-      MultiFieldQueryParser.parse(queries5, fields, new MockAnalyzer(random()));
-    });
+    try {
+      q = MultiFieldQueryParser.parse(queries5, fields, new MockAnalyzer(random()));
+      fail();
+    } catch(IllegalArgumentException e) {
+      // expected exception, array length differs
+    }
     
     // check also with stop words for this static form (qtxts[], fields[]).
     TestQueryParser.QPTestAnalyzer stopA = new TestQueryParser.QPTestAnalyzer();
@@ -208,11 +207,13 @@ public class TestMultiFieldQueryParser extends LuceneTestCase {
     q = MultiFieldQueryParser.parse("one two", fields, flags, new MockAnalyzer(random()));
     assertEquals("+(b:one b:two) -(t:one t:two)", q.toString());
 
-    // expected exception, array length differs
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       BooleanClause.Occur[] flags2 = {BooleanClause.Occur.MUST};
-      MultiFieldQueryParser.parse("blah", fields, flags2, new MockAnalyzer(random()));
-    });
+      q = MultiFieldQueryParser.parse("blah", fields, flags2, new MockAnalyzer(random()));
+      fail();
+    } catch(IllegalArgumentException e) {
+      // expected exception, array length differs
+    }
   }
 
   public void testStaticMethod2Old() throws ParseException {
@@ -226,11 +227,13 @@ public class TestMultiFieldQueryParser extends LuceneTestCase {
     q = MultiFieldQueryParser.parse("one two", fields, flags, new MockAnalyzer(random()));
     assertEquals("+(b:one b:two) -(t:one t:two)", q.toString());
 
-    // expected exception, array length differs
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       BooleanClause.Occur[] flags2 = {BooleanClause.Occur.MUST};
-      MultiFieldQueryParser.parse("blah", fields, flags2, new MockAnalyzer(random()));
-    });
+      q = MultiFieldQueryParser.parse("blah", fields, flags2, new MockAnalyzer(random()));
+      fail();
+    } catch(IllegalArgumentException e) {
+      // expected exception, array length differs
+    }
   }
 
   public void testStaticMethod3() throws ParseException {
@@ -241,11 +244,13 @@ public class TestMultiFieldQueryParser extends LuceneTestCase {
     Query q = MultiFieldQueryParser.parse(queries, fields, flags, new MockAnalyzer(random()));
     assertEquals("+f1:one -f2:two f3:three", q.toString());
 
-    // expected exception, array length differs
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       BooleanClause.Occur[] flags2 = {BooleanClause.Occur.MUST};
-      MultiFieldQueryParser.parse(queries, fields, flags2, new MockAnalyzer(random()));
-    });
+      q = MultiFieldQueryParser.parse(queries, fields, flags2, new MockAnalyzer(random()));
+      fail();
+    } catch(IllegalArgumentException e) {
+      // expected exception, array length differs
+    }
   }
 
   public void testStaticMethod3Old() throws ParseException {
@@ -255,11 +260,13 @@ public class TestMultiFieldQueryParser extends LuceneTestCase {
     Query q = MultiFieldQueryParser.parse(queries, fields, flags, new MockAnalyzer(random()));
     assertEquals("+b:one -t:two", q.toString());
 
-    // expected exception, array length differs
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       BooleanClause.Occur[] flags2 = {BooleanClause.Occur.MUST};
-      MultiFieldQueryParser.parse(queries, fields, flags2, new MockAnalyzer(random()));
-    });
+      q = MultiFieldQueryParser.parse(queries, fields, flags2, new MockAnalyzer(random()));
+      fail();
+    } catch(IllegalArgumentException e) {
+      // expected exception, array length differs
+    }
   }
 
   public void testAnalyzerReturningNull() throws ParseException {
@@ -330,30 +337,10 @@ public class TestMultiFieldQueryParser extends LuceneTestCase {
     MultiFieldQueryParser mfqp = new MultiFieldQueryParser(fields, new MockAnalyzer(random()));
 
     BooleanQuery.Builder bq = new BooleanQuery.Builder();
+    bq.setDisableCoord(true);
     bq.add(new RegexpQuery(new Term("a", "[a-z][123]")), Occur.SHOULD);
     bq.add(new RegexpQuery(new Term("b", "[a-z][123]")), Occur.SHOULD);
     assertEquals(bq.build(), mfqp.parse("/[a-z][123]/"));
   }
 
-  /** whitespace+lowercase analyzer with synonyms (dogs,dog) and (guinea pig,cavy) */
-  private static class MockSynonymAnalyzer extends Analyzer {
-    @Override
-    public TokenStreamComponents createComponents(String fieldName) {
-      Tokenizer tokenizer = new MockTokenizer(MockTokenizer.WHITESPACE, true);
-      return new TokenStreamComponents(tokenizer, new MockSynonymFilter(tokenizer));
-    }
-  }
-
-  public void testSynonyms() throws ParseException {
-    String[] fields = {"b", "t"};
-    MultiFieldQueryParser parser = new MultiFieldQueryParser(fields, new MockSynonymAnalyzer());
-    Query q = parser.parse("dogs");
-    assertEquals("Synonym(b:dog b:dogs) Synonym(t:dog t:dogs)", q.toString());
-    q = parser.parse("guinea pig");
-    assertFalse(parser.getSplitOnWhitespace());
-    assertEquals("((+b:guinea +b:pig) b:cavy) ((+t:guinea +t:pig) t:cavy)", q.toString());
-    parser.setSplitOnWhitespace(true);
-    q = parser.parse("guinea pig");
-    assertEquals("(b:guinea t:guinea) (b:pig t:pig)", q.toString());
-  }
 }

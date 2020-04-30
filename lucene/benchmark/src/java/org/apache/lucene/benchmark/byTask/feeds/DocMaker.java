@@ -1,3 +1,5 @@
+package org.apache.lucene.benchmark.byTask.feeds;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.feeds;
-
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -35,15 +35,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.benchmark.byTask.utils.Config;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.DoublePoint;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.FloatPoint;
-import org.apache.lucene.document.IntPoint;
+import org.apache.lucene.document.FieldType.NumericType;
 import org.apache.lucene.document.FieldType;
-import org.apache.lucene.document.LongPoint;
+import org.apache.lucene.document.IntField;
+import org.apache.lucene.document.LongField;
+import org.apache.lucene.document.FloatField;
+import org.apache.lucene.document.DoubleField;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.IndexOptions;
 
 /**
  * Creates {@link Document} objects. Uses a {@link ContentSource} to generate
@@ -59,8 +59,6 @@ import org.apache.lucene.index.IndexOptions;
  * (default <b>true</b>).
  * <li><b>doc.body.tokenized</b> - specifies whether the
  * body field should be tokenized (default = <b>doc.tokenized</b>).
- * <li><b>doc.body.offsets</b> - specifies whether to add offsets into the postings index
- *  for the body field.  It is useful for highlighting.  (default <b>false</b>)
  * <li><b>doc.tokenized.norms</b> - specifies whether norms should be stored in
  * the index or not. (default <b>false</b>).
  * <li><b>doc.body.tokenized.norms</b> - specifies whether norms should be
@@ -121,8 +119,8 @@ public class DocMaker implements Closeable {
         fields.put(ID_FIELD, new StringField(ID_FIELD, "", Field.Store.YES));
         fields.put(NAME_FIELD, new Field(NAME_FIELD, "", ft));
 
-        numericFields.put(DATE_MSEC_FIELD, new LongPoint(DATE_MSEC_FIELD, 0L));
-        numericFields.put(TIME_SEC_FIELD, new IntPoint(TIME_SEC_FIELD, 0));
+        numericFields.put(DATE_MSEC_FIELD, new LongField(DATE_MSEC_FIELD, 0L, Field.Store.NO));
+        numericFields.put(TIME_SEC_FIELD, new IntField(TIME_SEC_FIELD, 0, Field.Store.NO));
         
         doc = new Document();
       } else {
@@ -150,7 +148,7 @@ public class DocMaker implements Closeable {
       return f;
     }
 
-    Field getNumericField(String name, Class<? extends Number> numericType) {
+    Field getNumericField(String name, NumericType type) {
       Field f;
       if (reuseFields) {
         f = numericFields.get(name);
@@ -159,16 +157,21 @@ public class DocMaker implements Closeable {
       }
       
       if (f == null) {
-        if (numericType.equals(Integer.class)) {
-          f = new IntPoint(name, 0);
-        } else if (numericType.equals(Long.class)) {
-          f = new LongPoint(name, 0L);
-        } else if (numericType.equals(Float.class)) {
-          f = new FloatPoint(name, 0.0F);
-        } else if (numericType.equals(Double.class)) {
-          f = new DoublePoint(name, 0.0);
-        } else {
-          throw new UnsupportedOperationException("Unsupported numeric type: " + numericType);
+        switch(type) {
+        case INT:
+          f = new IntField(name, 0, Field.Store.NO);
+          break;
+        case LONG:
+          f = new LongField(name, 0L, Field.Store.NO);
+          break;
+        case FLOAT:
+          f = new FloatField(name, 0.0F, Field.Store.NO);
+          break;
+        case DOUBLE:
+          f = new DoubleField(name, 0.0, Field.Store.NO);
+          break;
+        default:
+          throw new AssertionError("Cannot get here");
         }
         if (reuseFields) {
           numericFields.put(name, f);
@@ -224,7 +227,7 @@ public class DocMaker implements Closeable {
 
     final DocState ds = getDocState();
     final Document doc = reuseFields ? ds.doc : new Document();
-    doc.clear();
+    doc.getFields().clear();
     
     // Set ID_FIELD
     FieldType ft = new FieldType(valType);
@@ -275,14 +278,14 @@ public class DocMaker implements Closeable {
       date = new Date();
     }
 
-    Field dateField = ds.getNumericField(DATE_MSEC_FIELD, Long.class);
+    Field dateField = ds.getNumericField(DATE_MSEC_FIELD, NumericType.LONG);
     dateField.setLongValue(date.getTime());
     doc.add(dateField);
 
     util.cal.setTime(date);
     final int sec = util.cal.get(Calendar.HOUR_OF_DAY)*3600 + util.cal.get(Calendar.MINUTE)*60 + util.cal.get(Calendar.SECOND);
 
-    Field timeSecField = ds.getNumericField(TIME_SEC_FIELD, Integer.class);
+    Field timeSecField = ds.getNumericField(TIME_SEC_FIELD, NumericType.INT);
     timeSecField.setIntValue(sec);
     doc.add(timeSecField);
     
@@ -427,7 +430,6 @@ public class DocMaker implements Closeable {
     boolean bodyTokenized = config.get("doc.body.tokenized", tokenized);
     boolean norms = config.get("doc.tokenized.norms", false);
     boolean bodyNorms = config.get("doc.body.tokenized.norms", true);
-    boolean bodyOffsets = config.get("doc.body.offsets", false);
     boolean termVec = config.get("doc.term.vector", false);
     boolean termVecPositions = config.get("doc.term.vector.positions", false);
     boolean termVecOffsets = config.get("doc.term.vector.offsets", false);
@@ -445,9 +447,6 @@ public class DocMaker implements Closeable {
     bodyValType.setStored(bodyStored);
     bodyValType.setTokenized(bodyTokenized);
     bodyValType.setOmitNorms(!bodyNorms);
-    if (bodyTokenized && bodyOffsets) {
-      bodyValType.setIndexOptions(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS);
-    }
     bodyValType.setStoreTermVectors(termVec);
     bodyValType.setStoreTermVectorPositions(termVecPositions);
     bodyValType.setStoreTermVectorOffsets(termVecOffsets);

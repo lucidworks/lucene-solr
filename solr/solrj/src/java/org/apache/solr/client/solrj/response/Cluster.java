@@ -1,3 +1,5 @@
+package org.apache.solr.client.solrj.response;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.response;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * This class represents a cluster of Solr Docs .
@@ -30,43 +29,41 @@ public class Cluster {
   private List<String> labels;
   private double score;
   private List<String> docIds;
-  private List<Cluster> subclusters;
-  private boolean otherTopics;
-
-  public Cluster(List<String> labels, double score, List<String> docIds) {
-    this(labels, score, docIds, Collections.emptyList(), false);
-  }
 
   /**
    * @param labels the list of human readable labels associated to the cluster
    * @param score  the score produced by the clustering algorithm for the current cluster
    * @param docIds   the list of document Ids belonging to the cluster
    */
-  public Cluster(List<String> labels, double score, List<String> docIds, List<Cluster> subclusters, boolean otherTopics) {
+  public Cluster(List<String> labels, double score, List<String> docIds) {
     this.labels = labels;
     this.score = score;
     this.docIds = docIds;
-    this.subclusters = subclusters;
-    this.otherTopics = otherTopics;
   }
 
   @Override
   public boolean equals(Object o) {
-    return o != null &&
-           this.getClass().isInstance(o) &&
-           equalsTo((Cluster) o);
-  }
+    if (this == o) return true;
+    if (!(o instanceof Cluster)) return false;
 
-  private boolean equalsTo(Cluster o) {
-    return Double.compare(o.score, score) == 0 &&
-           Objects.equals(o.docIds, docIds) &&
-           Objects.equals(o.labels, labels) &&
-           Objects.equals(o.subclusters, subclusters);
+    Cluster cluster = (Cluster) o;
+
+    if (Double.compare(cluster.score, score) != 0) return false;
+    if (!docIds.equals(cluster.docIds)) return false;
+    if (!labels.equals(cluster.labels)) return false;
+
+    return true;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(subclusters, docIds, labels, score);
+    int result;
+    long temp;
+    result = labels.hashCode();
+    temp = Double.doubleToLongBits(score);
+    result = 31 * result + (int) (temp ^ (temp >>> 32));
+    result = 31 * result + docIds.hashCode();
+    return result;
   }
 
   public List<String> getLabels() {
@@ -93,15 +90,5 @@ public class Cluster {
     this.docIds = docIds;
   }
 
-  public List<Cluster> getSubclusters() {
-    return subclusters;
-  }
 
-  /**
-   * @return If <code>true</code>, the cluster contains references to documents that are not semantically associated
-   * and form a group of documents not related to any other cluster (or themselves).
-   */
-  public boolean isOtherTopics() {
-    return otherTopics;
-  }
 }

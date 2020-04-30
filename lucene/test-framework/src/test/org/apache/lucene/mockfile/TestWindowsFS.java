@@ -1,3 +1,5 @@
+package org.apache.lucene.mockfile;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.mockfile;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.Exception;
+import java.lang.InterruptedException;
+import java.lang.NoSuchFieldException;
+import java.lang.RuntimeException;
 import java.net.URI;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
@@ -29,15 +34,17 @@ import java.nio.file.StandardCopyOption;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.lucene.mockfile.FilterPath;
+import org.apache.lucene.mockfile.WindowsFS;
 import org.apache.lucene.util.Constants;
 
 /** Basic tests for WindowsFS */
 public class TestWindowsFS extends MockFileSystemTestCase {
   
+  // currently we don't emulate windows well enough to work on windows!
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    // irony: currently we don't emulate windows well enough to work on windows!
     assumeFalse("windows is not supported", Constants.WINDOWS);
   }
 
@@ -55,9 +62,12 @@ public class TestWindowsFS extends MockFileSystemTestCase {
     file.write(5);
     file.close();
     InputStream is = Files.newInputStream(dir.resolve("stillopen"));
-
-    IOException e = expectThrows(IOException.class, () -> Files.delete(dir.resolve("stillopen")));
-    assertTrue(e.getMessage().contains("access denied"));
+    try {
+      Files.delete(dir.resolve("stillopen"));
+      fail("should have gotten exception");
+    } catch (IOException e) {
+      assertTrue(e.getMessage().contains("access denied"));
+    }
     is.close();
   }
   
@@ -69,9 +79,12 @@ public class TestWindowsFS extends MockFileSystemTestCase {
     file.write(5);
     file.close();
     InputStream is = Files.newInputStream(dir.resolve("stillopen"));
-
-    IOException e = expectThrows(IOException.class, () -> Files.deleteIfExists(dir.resolve("stillopen")));
-    assertTrue(e.getMessage().contains("access denied"));
+    try {
+      Files.deleteIfExists(dir.resolve("stillopen"));
+      fail("should have gotten exception");
+    } catch (IOException e) {
+      assertTrue(e.getMessage().contains("access denied"));
+    }
     is.close();
   }
   
@@ -84,10 +97,12 @@ public class TestWindowsFS extends MockFileSystemTestCase {
     file.write(5);
     file.close();
     InputStream is = Files.newInputStream(dir.resolve("stillopen"));
-
-    IOException e = expectThrows(IOException.class, () ->
-        Files.move(dir.resolve("stillopen"), dir.resolve("target"), StandardCopyOption.ATOMIC_MOVE));
-    assertTrue(e.getMessage().contains("access denied"));
+    try {
+      Files.move(dir.resolve("stillopen"), dir.resolve("target"), StandardCopyOption.ATOMIC_MOVE);
+      fail("should have gotten exception");
+    } catch (IOException e) {
+      assertTrue(e.getMessage().contains("access denied"));
+    }
     is.close();
   }
 
@@ -141,29 +156,6 @@ public class TestWindowsFS extends MockFileSystemTestCase {
     } finally {
       stopped.set(true);
       t.join();
-    }
-  }
-
-  public void testMove() throws IOException {
-    Path dir = wrap(createTempDir());
-    OutputStream file = Files.newOutputStream(dir.resolve("file"));
-    file.write(1);
-    file.close();
-    Files.move(dir.resolve("file"), dir.resolve("target"));
-    assertTrue(Files.exists(dir.resolve("target")));
-    assertFalse(Files.exists(dir.resolve("file")));
-    try (InputStream stream = Files.newInputStream(dir.resolve("target"))) {
-      assertEquals(1, stream.read());
-    }
-    file = Files.newOutputStream(dir.resolve("otherFile"));
-    file.write(2);
-    file.close();
-
-    Files.move(dir.resolve("otherFile"), dir.resolve("target"), StandardCopyOption.REPLACE_EXISTING);
-    assertTrue(Files.exists(dir.resolve("target")));
-    assertFalse(Files.exists(dir.resolve("otherFile")));
-    try (InputStream stream = Files.newInputStream(dir.resolve("target"))) {
-      assertEquals(2, stream.read());
     }
   }
 }

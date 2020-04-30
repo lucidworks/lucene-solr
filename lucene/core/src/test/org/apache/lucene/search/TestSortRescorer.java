@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -28,7 +28,6 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.search.similarities.ClassicSimilarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
@@ -42,7 +41,7 @@ public class TestSortRescorer extends LuceneTestCase {
   public void setUp() throws Exception {
     super.setUp();
     dir = newDirectory();
-    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, newIndexWriterConfig().setSimilarity(new ClassicSimilarity()));
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir);
     
     Document doc = new Document();
     doc.add(newStringField("id", "1", Field.Store.YES));
@@ -64,8 +63,6 @@ public class TestSortRescorer extends LuceneTestCase {
     
     reader = iw.getReader();
     searcher = new IndexSearcher(reader);
-    // TODO: fix this test to not be so flaky and use newSearcher
-    searcher.setSimilarity(new ClassicSimilarity());
     iw.close();
   }
   
@@ -84,7 +81,7 @@ public class TestSortRescorer extends LuceneTestCase {
 
     // Just first pass query
     TopDocs hits = searcher.search(query, 10);
-    assertEquals(3, hits.totalHits.value);
+    assertEquals(3, hits.totalHits);
     assertEquals("3", r.document(hits.scoreDocs[0].doc).get("id"));
     assertEquals("1", r.document(hits.scoreDocs[1].doc).get("id"));
     assertEquals("2", r.document(hits.scoreDocs[2].doc).get("id"));
@@ -93,7 +90,7 @@ public class TestSortRescorer extends LuceneTestCase {
     Sort sort = new Sort(new SortField("popularity", SortField.Type.INT, true));
     Rescorer rescorer = new SortRescorer(sort);
     hits = rescorer.rescore(searcher, hits, 10);
-    assertEquals(3, hits.totalHits.value);
+    assertEquals(3, hits.totalHits);
     assertEquals("2", r.document(hits.scoreDocs[0].doc).get("id"));
     assertEquals("1", r.document(hits.scoreDocs[1].doc).get("id"));
     assertEquals("3", r.document(hits.scoreDocs[2].doc).get("id"));
@@ -105,43 +102,6 @@ public class TestSortRescorer extends LuceneTestCase {
     // Confirm the explanation breaks out the individual
     // sort fields:
     assertTrue(expl, expl.contains("= sort field <int: \"popularity\">! value=20"));
-
-    // Confirm the explanation includes first pass details:
-    assertTrue(expl.contains("= first pass score"));
-    assertTrue(expl.contains("body:contents in"));
-
-  }
-
-  public void testDoubleValuesSourceSort() throws Exception {
-    // create a sort field and sort by it (reverse order)
-    Query query = new TermQuery(new Term("body", "contents"));
-    IndexReader r = searcher.getIndexReader();
-
-    // Just first pass query
-    TopDocs hits = searcher.search(query, 10);
-    assertEquals(3, hits.totalHits.value);
-    assertEquals("3", r.document(hits.scoreDocs[0].doc).get("id"));
-    assertEquals("1", r.document(hits.scoreDocs[1].doc).get("id"));
-    assertEquals("2", r.document(hits.scoreDocs[2].doc).get("id"));
-
-    DoubleValuesSource source = DoubleValuesSource.fromLongField("popularity");
-
-    // Now, rescore:
-    Sort sort = new Sort(source.getSortField(true));
-    Rescorer rescorer = new SortRescorer(sort);
-    hits = rescorer.rescore(searcher, hits, 10);
-    assertEquals(3, hits.totalHits.value);
-    assertEquals("2", r.document(hits.scoreDocs[0].doc).get("id"));
-    assertEquals("1", r.document(hits.scoreDocs[1].doc).get("id"));
-    assertEquals("3", r.document(hits.scoreDocs[2].doc).get("id"));
-
-    String expl = rescorer.explain(searcher,
-        searcher.explain(query, hits.scoreDocs[0].doc),
-        hits.scoreDocs[0].doc).toString();
-
-    // Confirm the explanation breaks out the individual
-    // sort fields:
-    assertTrue(expl, expl.contains("= sort field <double(popularity)>! value=20.0"));
 
     // Confirm the explanation includes first pass details:
     assertTrue(expl.contains("= first pass score"));

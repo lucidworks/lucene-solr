@@ -1,3 +1,24 @@
+package org.apache.lucene.search;
+
+import java.io.IOException;
+import java.util.BitSet;
+
+import org.apache.lucene.analysis.MockAnalyzer;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig.OpenMode;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.BitDocIdSet;
+import org.apache.lucene.util.BitSetIterator;
+import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.FixedBitSet;
+import org.apache.lucene.util.LuceneTestCase;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,25 +35,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
-import java.io.IOException;
-import java.util.BitSet;
-
-import org.apache.lucene.analysis.MockAnalyzer;
-import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig.OpenMode;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.BitSetIterator;
-import org.apache.lucene.util.FixedBitSet;
-import org.apache.lucene.util.LuceneTestCase;
-
 
 public class TestScorerPerf extends LuceneTestCase {
   boolean validate = true;  // set to false when doing performance testing
@@ -44,16 +46,18 @@ public class TestScorerPerf extends LuceneTestCase {
   Directory d;
 
   // TODO: this should be setUp()....
-  public void createDummySearcher() throws Exception {
+  public void createDummySearcher(int maxDoc) throws Exception {
       // Create a dummy index with nothing in it.
     // This could possibly fail if Lucene starts checking for docid ranges...
     d = newDirectory();
     IndexWriter iw = new IndexWriter(d, newIndexWriterConfig(new MockAnalyzer(random())));
-    iw.addDocument(new Document());
-    iw.close();
-    r = DirectoryReader.open(d);
+    for (int i = 0; i < maxDoc; ++i) {
+      iw.addDocument(new Document());
+    }
+    iw.forceMerge(1);
+    r = DirectoryReader.open(iw, false);
     s = newSearcher(r);
-    s.setQueryCache(null);
+    iw.close();
   }
 
   public void createRandomTerms(int nDocs, int nTerms, double power, Directory dir) throws Exception {
@@ -117,8 +121,8 @@ public class TestScorerPerf extends LuceneTestCase {
     }
     
     @Override
-    public ScoreMode scoreMode() {
-      return ScoreMode.COMPLETE_NO_SCORES;
+    public boolean needsScores() {
+      return false;
     }
   }
 
@@ -149,39 +153,31 @@ public class TestScorerPerf extends LuceneTestCase {
     }
 
     @Override
-    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-      return new ConstantScoreWeight(this, boost) {
+    public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+      return new ConstantScoreWeight(this) {
         @Override
         public Scorer scorer(LeafReaderContext context) throws IOException {
-          return new ConstantScoreScorer(this, score(), scoreMode, new BitSetIterator(docs, docs.approximateCardinality()));
-        }
-
-        @Override
-        public boolean isCacheable(LeafReaderContext ctx) {
-          return false;
+          return new ConstantScoreScorer(this, score(), new BitSetIterator(docs, docs.approximateCardinality()));
         }
       };
     }
-
-    @Override
-    public void visit(QueryVisitor visitor) {
-
-    }
-
+    
     @Override
     public String toString(String field) {
       return "randomBitSetFilter";
     }
     
     @Override
-    public boolean equals(Object other) {
-      return sameClassAs(other) &&
-             docs.equals(((BitSetQuery) other).docs);
+    public boolean equals(Object obj) {
+      if (super.equals(obj) == false) {
+        return false;
+      }
+      return docs == ((BitSetQuery) obj).docs;
     }
 
     @Override
     public int hashCode() {
-      return 31 * classHash() + docs.hashCode();
+      return 31 * super.hashCode() + System.identityHashCode(docs);
     }
   }
 
@@ -357,9 +353,10 @@ public class TestScorerPerf extends LuceneTestCase {
 
   public void testConjunctions() throws Exception {
     // test many small sets... the bugs will be found on boundary conditions
-    createDummySearcher();
     validate=true;
-    sets=randBitSets(atLeast(1000), atLeast(10));
+    final int maxDoc = atLeast(10);
+    createDummySearcher(maxDoc);
+    sets=randBitSets(atLeast(1000), maxDoc);
     doConjunctions(atLeast(10000), atLeast(5));
     doNestedConjunctions(atLeast(10000), atLeast(3), atLeast(3));
     r.close();

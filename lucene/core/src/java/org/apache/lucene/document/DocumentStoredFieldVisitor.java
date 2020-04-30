@@ -1,3 +1,5 @@
+package org.apache.lucene.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.document;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -26,10 +27,8 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.StoredFieldVisitor;
 
 /** A {@link StoredFieldVisitor} that creates a {@link
- *  Document} from stored fields.
- *  <p>
- *  This visitor supports loading all stored fields, or only specific
- *  requested fields provided from a {@link Set}.
+ *  Document} containing all stored fields, or only specific
+ *  requested fields provided to {@link #DocumentStoredFieldVisitor(Set)}.
  *  <p>
  *  This is used by {@link IndexReader#document(int)} to load a
  *  document.
@@ -72,7 +71,7 @@ public class DocumentStoredFieldVisitor extends StoredFieldVisitor {
     ft.setStoreTermVectors(fieldInfo.hasVectors());
     ft.setOmitNorms(fieldInfo.omitsNorms());
     ft.setIndexOptions(fieldInfo.getIndexOptions());
-    doc.add(new StoredField(fieldInfo.name, new String(value, StandardCharsets.UTF_8), ft));
+    doc.add(new Field(fieldInfo.name, new String(value, StandardCharsets.UTF_8), ft));
   }
 
   @Override
@@ -102,9 +101,9 @@ public class DocumentStoredFieldVisitor extends StoredFieldVisitor {
 
   /**
    * Retrieve the visited document.
-   * @return {@link Document} populated with stored fields. Note that only
+   * @return Document populated with stored fields. Note that only
    *         the stored information in the field instances is valid,
-   *         data such as indexing options, term vector options,
+   *         data such as boosts, indexing options, term vector options,
    *         etc is not set.
    */
   public Document getDocument() {

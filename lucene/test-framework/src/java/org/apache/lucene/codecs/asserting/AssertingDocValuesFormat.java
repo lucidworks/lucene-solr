@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.asserting;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,31 +16,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.asserting;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Iterator;
 
 import org.apache.lucene.codecs.DocValuesConsumer;
 import org.apache.lucene.codecs.DocValuesFormat;
 import org.apache.lucene.codecs.DocValuesProducer;
 import org.apache.lucene.index.AssertingLeafReader;
+import org.apache.lucene.index.AssertingLeafReader.AssertingRandomAccessOrds;
+import org.apache.lucene.index.AssertingLeafReader.AssertingSortedSetDocValues;
 import org.apache.lucene.index.BinaryDocValues;
 import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.NumericDocValues;
+import org.apache.lucene.index.RandomAccessOrds;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.index.SortedNumericDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.util.Accountable;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.LongBitSet;
 import org.apache.lucene.util.TestUtil;
-
-import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
 
 /**
  * Just like the default but with additional asserts.
@@ -62,7 +66,7 @@ public class AssertingDocValuesFormat extends DocValuesFormat {
     assert state.fieldInfos.hasDocValues();
     DocValuesProducer producer = in.fieldsProducer(state);
     assert producer != null;
-    return new AssertingDocValuesProducer(producer, state.segmentInfo.maxDoc(), false);
+    return new AssertingDocValuesProducer(producer, state.segmentInfo.maxDoc());
   }
   
   static class AssertingDocValuesConsumer extends DocValuesConsumer {
@@ -75,138 +79,131 @@ public class AssertingDocValuesFormat extends DocValuesFormat {
     }
 
     @Override
-    public void addNumericField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException {
-      NumericDocValues values = valuesProducer.getNumeric(field);
-
-      int docID;
-      int lastDocID = -1;
-      while ((docID = values.nextDoc()) != NO_MORE_DOCS) {
-        assert docID >= 0 && docID < maxDoc;
-        assert docID > lastDocID;
-        lastDocID = docID;
-        long value = values.longValue();
+    public void addNumericField(FieldInfo field, Iterable<Number> values) throws IOException {
+      int count = 0;
+      for (Number v : values) {
+        count++;
       }
-      
-      in.addNumericField(field, valuesProducer);
+      assert count == maxDoc;
+      TestUtil.checkIterator(values.iterator(), maxDoc, true);
+      in.addNumericField(field, values);
     }
     
     @Override
-    public void addBinaryField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException {
-      BinaryDocValues values = valuesProducer.getBinary(field);
-      
-      int docID;
-      int lastDocID = -1;
-      while ((docID = values.nextDoc()) != NO_MORE_DOCS) {
-        assert docID >= 0 && docID < maxDoc;
-        assert docID > lastDocID;
-        lastDocID = docID;
-        BytesRef value = values.binaryValue();
-        assert value.isValid();
+    public void addBinaryField(FieldInfo field, Iterable<BytesRef> values) throws IOException {
+      int count = 0;
+      for (BytesRef b : values) {
+        assert b == null || b.isValid();
+        count++;
       }
-
-      in.addBinaryField(field, valuesProducer);
+      assert count == maxDoc;
+      TestUtil.checkIterator(values.iterator(), maxDoc, true);
+      in.addBinaryField(field, values);
     }
     
     @Override
-    public void addSortedField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException {
-      SortedDocValues values = valuesProducer.getSorted(field);
-
-      int valueCount = values.getValueCount();
-      assert valueCount <= maxDoc;
+    public void addSortedField(FieldInfo field, Iterable<BytesRef> values, Iterable<Number> docToOrd) throws IOException {
+      int valueCount = 0;
       BytesRef lastValue = null;
-      for (int ord=0;ord<valueCount;ord++) {
-        BytesRef b = values.lookupOrd(ord);
+      for (BytesRef b : values) {
         assert b != null;
         assert b.isValid();
-        if (ord > 0) {
+        if (valueCount > 0) {
           assert b.compareTo(lastValue) > 0;
         }
         lastValue = BytesRef.deepCopyOf(b);
+        valueCount++;
       }
+      assert valueCount <= maxDoc;
       
       FixedBitSet seenOrds = new FixedBitSet(valueCount);
       
-      int docID;
-      int lastDocID = -1;
-      while ((docID = values.nextDoc()) != NO_MORE_DOCS) {
-        assert docID >= 0 && docID < maxDoc;
-        assert docID > lastDocID;
-        lastDocID = docID;
-        int ord = values.ordValue();
-        assert ord >= 0 && ord < valueCount;
-        seenOrds.set(ord);
+      int count = 0;
+      for (Number v : docToOrd) {
+        assert v != null;
+        int ord = v.intValue();
+        assert ord >= -1 && ord < valueCount;
+        if (ord >= 0) {
+          seenOrds.set(ord);
+        }
+        count++;
       }
       
+      assert count == maxDoc;
       assert seenOrds.cardinality() == valueCount;
-      in.addSortedField(field, valuesProducer);
+      TestUtil.checkIterator(values.iterator(), valueCount, false);
+      TestUtil.checkIterator(docToOrd.iterator(), maxDoc, false);
+      in.addSortedField(field, values, docToOrd);
     }
     
     @Override
-    public void addSortedNumericField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException {
-      SortedNumericDocValues values = valuesProducer.getSortedNumeric(field);
-
+    public void addSortedNumericField(FieldInfo field, Iterable<Number> docToValueCount, Iterable<Number> values) throws IOException {
       long valueCount = 0;
-      int lastDocID = -1;
-      while (true) {
-        int docID = values.nextDoc();
-        if (docID == NO_MORE_DOCS) {
-          break;
-        }
-        assert values.docID() > lastDocID;
-        lastDocID = values.docID();
-        int count = values.docValueCount();
-        assert count > 0;
-        valueCount += count;
+      Iterator<Number> valueIterator = values.iterator();
+      for (Number count : docToValueCount) {
+        assert count != null;
+        assert count.intValue() >= 0;
+        valueCount += count.intValue();
         long previous = Long.MIN_VALUE;
-        for (int i = 0; i < count; i++) {
-          long nextValue = values.nextValue();
+        for (int i = 0; i < count.intValue(); i++) {
+          assert valueIterator.hasNext();
+          Number next = valueIterator.next();
+          assert next != null;
+          long nextValue = next.longValue();
           assert nextValue >= previous;
           previous = nextValue;
         }
       }
-      in.addSortedNumericField(field, valuesProducer);
+      assert valueIterator.hasNext() == false;
+      TestUtil.checkIterator(docToValueCount.iterator(), maxDoc, false);
+      TestUtil.checkIterator(values.iterator(), valueCount, false);
+      in.addSortedNumericField(field, docToValueCount, values);
     }
     
     @Override
-    public void addSortedSetField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException {
-      SortedSetDocValues values = valuesProducer.getSortedSet(field);
-
-      long valueCount = values.getValueCount();
+    public void addSortedSetField(FieldInfo field, Iterable<BytesRef> values, Iterable<Number> docToOrdCount, Iterable<Number> ords) throws IOException {
+      long valueCount = 0;
       BytesRef lastValue = null;
-      for (long i=0;i<valueCount;i++) {
-        BytesRef b = values.lookupOrd(i);
+      for (BytesRef b : values) {
         assert b != null;
         assert b.isValid();
-        if (i > 0) {
+        if (valueCount > 0) {
           assert b.compareTo(lastValue) > 0;
         }
         lastValue = BytesRef.deepCopyOf(b);
+        valueCount++;
       }
       
       int docCount = 0;
+      long ordCount = 0;
       LongBitSet seenOrds = new LongBitSet(valueCount);
-      while (true) {
-        int docID = values.nextDoc();
-        if (docID == NO_MORE_DOCS) {
-          break;
-        }
+      Iterator<Number> ordIterator = ords.iterator();
+      for (Number v : docToOrdCount) {
+        assert v != null;
+        int count = v.intValue();
+        assert count >= 0;
         docCount++;
+        ordCount += count;
         
         long lastOrd = -1;
-        while (true) {
-          long ord = values.nextOrd();
-          if (ord == SortedSetDocValues.NO_MORE_ORDS) {
-            break;
-          }
-          assert ord >= 0 && ord < valueCount: "ord=" + ord + " is not in bounds 0 .." + (valueCount-1);
+        for (int i = 0; i < count; i++) {
+          Number o = ordIterator.next();
+          assert o != null;
+          long ord = o.longValue();
+          assert ord >= 0 && ord < valueCount;
           assert ord > lastOrd : "ord=" + ord + ",lastOrd=" + lastOrd;
           seenOrds.set(ord);
           lastOrd = ord;
         }
       }
+      assert ordIterator.hasNext() == false;
       
+      assert docCount == maxDoc;
       assert seenOrds.cardinality() == valueCount;
-      in.addSortedSetField(field, valuesProducer);
+      TestUtil.checkIterator(values.iterator(), valueCount, false);
+      TestUtil.checkIterator(docToOrdCount.iterator(), maxDoc, false);
+      TestUtil.checkIterator(ords.iterator(), ordCount, false);
+      in.addSortedSetField(field, values, docToOrdCount, ords);
     }
     
     @Override
@@ -219,14 +216,10 @@ public class AssertingDocValuesFormat extends DocValuesFormat {
   static class AssertingDocValuesProducer extends DocValuesProducer {
     private final DocValuesProducer in;
     private final int maxDoc;
-    private final boolean merging;
-    private final Thread creationThread;
     
-    AssertingDocValuesProducer(DocValuesProducer in, int maxDoc, boolean merging) {
+    AssertingDocValuesProducer(DocValuesProducer in, int maxDoc) {
       this.in = in;
       this.maxDoc = maxDoc;
-      this.merging = merging;
-      this.creationThread = Thread.currentThread();
       // do a few simple checks on init
       assert toString() != null;
       assert ramBytesUsed() >= 0;
@@ -235,9 +228,6 @@ public class AssertingDocValuesFormat extends DocValuesFormat {
 
     @Override
     public NumericDocValues getNumeric(FieldInfo field) throws IOException {
-      if (merging) {
-        AssertingCodec.assertThread("DocValuesProducer", creationThread);
-      }
       assert field.getDocValuesType() == DocValuesType.NUMERIC;
       NumericDocValues values = in.getNumeric(field);
       assert values != null;
@@ -246,9 +236,6 @@ public class AssertingDocValuesFormat extends DocValuesFormat {
 
     @Override
     public BinaryDocValues getBinary(FieldInfo field) throws IOException {
-      if (merging) {
-        AssertingCodec.assertThread("DocValuesProducer", creationThread);
-      }
       assert field.getDocValuesType() == DocValuesType.BINARY;
       BinaryDocValues values = in.getBinary(field);
       assert values != null;
@@ -257,9 +244,6 @@ public class AssertingDocValuesFormat extends DocValuesFormat {
 
     @Override
     public SortedDocValues getSorted(FieldInfo field) throws IOException {
-      if (merging) {
-        AssertingCodec.assertThread("DocValuesProducer", creationThread);
-      }
       assert field.getDocValuesType() == DocValuesType.SORTED;
       SortedDocValues values = in.getSorted(field);
       assert values != null;
@@ -268,9 +252,6 @@ public class AssertingDocValuesFormat extends DocValuesFormat {
     
     @Override
     public SortedNumericDocValues getSortedNumeric(FieldInfo field) throws IOException {
-      if (merging) {
-        AssertingCodec.assertThread("DocValuesProducer", creationThread);
-      }
       assert field.getDocValuesType() == DocValuesType.SORTED_NUMERIC;
       SortedNumericDocValues values = in.getSortedNumeric(field);
       assert values != null;
@@ -279,15 +260,25 @@ public class AssertingDocValuesFormat extends DocValuesFormat {
     
     @Override
     public SortedSetDocValues getSortedSet(FieldInfo field) throws IOException {
-      if (merging) {
-        AssertingCodec.assertThread("DocValuesProducer", creationThread);
-      }
       assert field.getDocValuesType() == DocValuesType.SORTED_SET;
       SortedSetDocValues values = in.getSortedSet(field);
       assert values != null;
-      return new AssertingLeafReader.AssertingSortedSetDocValues(values, maxDoc);
+      if (values instanceof RandomAccessOrds) {
+        return new AssertingRandomAccessOrds((RandomAccessOrds) values, maxDoc);
+      } else {
+        return new AssertingSortedSetDocValues(values, maxDoc);
+      }
     }
     
+    @Override
+    public Bits getDocsWithField(FieldInfo field) throws IOException {
+      assert field.getDocValuesType() != DocValuesType.NONE;
+      Bits bits = in.getDocsWithField(field);
+      assert bits != null;
+      assert bits.length() == maxDoc;
+      return new AssertingLeafReader.AssertingBits(bits);
+    }
+
     @Override
     public void close() throws IOException {
       in.close();
@@ -314,8 +305,8 @@ public class AssertingDocValuesFormat extends DocValuesFormat {
     }
     
     @Override
-    public DocValuesProducer getMergeInstance() {
-      return new AssertingDocValuesProducer(in.getMergeInstance(), maxDoc, true);
+    public DocValuesProducer getMergeInstance() throws IOException {
+      return new AssertingDocValuesProducer(in.getMergeInstance(), maxDoc);
     }
 
     @Override

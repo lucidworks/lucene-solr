@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ja;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ja;
-
 
 import java.io.IOException;
 import java.util.Random;
@@ -159,7 +159,7 @@ public class TestJapaneseAnalyzer extends BaseTokenStreamTestCase {
                               new String[] { "a", "b", "cd"  },
                               new int[] { 0, 1, 2 },
                               new int[] { 1, 2, 4 },
-                              4
+                              new Integer(4)
     );
     a.close();
   }

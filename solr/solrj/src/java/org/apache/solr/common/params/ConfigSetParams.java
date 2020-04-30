@@ -1,3 +1,5 @@
+package org.apache.solr.common.params;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.params;
 
 import java.util.Locale;
 
@@ -27,7 +28,6 @@ public interface ConfigSetParams
 
   public enum ConfigSetAction {
     CREATE,
-    UPLOAD,
     DELETE,
     LIST;
 

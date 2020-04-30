@@ -1,3 +1,5 @@
+package org.apache.solr.search.grouping.distributed.command;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.grouping.distributed.command;
 
 import org.apache.lucene.search.TopDocs;
 
@@ -25,12 +26,10 @@ public class QueryCommandResult {
 
   private final TopDocs topDocs;
   private final int matches;
-  private final float maxScore;
 
-  public QueryCommandResult(TopDocs topDocs, int matches, float maxScore) {
+  public QueryCommandResult(TopDocs topDocs, int matches) {
     this.topDocs = topDocs;
     this.matches = matches;
-    this.maxScore = maxScore;
   }
 
   public TopDocs getTopDocs() {
@@ -39,9 +38,5 @@ public class QueryCommandResult {
 
   public int getMatches() {
     return matches;
-  }
-
-  public float getMaxScore() {
-    return maxScore;
   }
 }

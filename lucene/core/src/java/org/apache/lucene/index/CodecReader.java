@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,24 +16,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.lucene.codecs.DocValuesProducer;
 import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.NormsProducer;
-import org.apache.lucene.codecs.PointsReader;
 import org.apache.lucene.codecs.StoredFieldsReader;
 import org.apache.lucene.codecs.TermVectorsReader;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Accountables;
-import org.apache.lucene.util.FutureObjects;
+import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.CloseableThreadLocal;
+import org.apache.lucene.util.IOUtils;
 
 /**
  * LeafReader implemented by codec APIs.
@@ -71,12 +74,6 @@ public abstract class CodecReader extends LeafReader implements Accountable {
    * @lucene.internal
    */
   public abstract FieldsProducer getPostingsReader();
-
-  /**
-   * Expert: retrieve underlying PointsReader
-   * @lucene.internal
-   */
-  public abstract PointsReader getPointsReader();
   
   @Override
   public final void document(int docID, StoredFieldVisitor visitor) throws IOException {
@@ -95,17 +92,30 @@ public abstract class CodecReader extends LeafReader implements Accountable {
   }
   
   private void checkBounds(int docID) {
-    FutureObjects.checkIndex(docID, maxDoc());
+    if (docID < 0 || docID >= maxDoc()) {       
+      throw new IndexOutOfBoundsException("docID must be >= 0 and < maxDoc=" + maxDoc() + " (got docID=" + docID + ")");
+    }
   }
-
+  
   @Override
-  public final Terms terms(String field) throws IOException {
-    //ensureOpen(); no; getPostingsReader calls this
-    // We could check the FieldInfo IndexOptions but there's no point since
-    //   PostingsReader will simply return null for fields that don't exist or that have no terms index.
-    return getPostingsReader().terms(field);
+  public final Fields fields() {
+    return getPostingsReader();
   }
+  
+  final CloseableThreadLocal<Map<String,Object>> docValuesLocal = new CloseableThreadLocal<Map<String,Object>>() {
+    @Override
+    protected Map<String,Object> initialValue() {
+      return new HashMap<>();
+    }
+  };
 
+  final CloseableThreadLocal<Map<String,Bits>> docsWithFieldLocal = new CloseableThreadLocal<Map<String,Bits>>() {
+    @Override
+    protected Map<String,Bits> initialValue() {
+      return new HashMap<>();
+    }
+  };
+  
   // returns the FieldInfo that corresponds to the given field and type, or
   // null if the field does not exist, or not indexed as the requested
   // DovDocValuesType.
@@ -126,15 +136,48 @@ public abstract class CodecReader extends LeafReader implements Accountable {
 
     return fi;
   }
-
+  
   @Override
   public final NumericDocValues getNumericDocValues(String field) throws IOException {
     ensureOpen();
-    FieldInfo fi = getDVField(field, DocValuesType.NUMERIC);
-    if (fi == null) {
-      return null;
+    Map<String,Object> dvFields = docValuesLocal.get();
+
+    Object previous = dvFields.get(field);
+    if (previous != null && previous instanceof NumericDocValues) {
+      return (NumericDocValues) previous;
+    } else {
+      FieldInfo fi = getDVField(field, DocValuesType.NUMERIC);
+      if (fi == null) {
+        return null;
+      }
+      NumericDocValues dv = getDocValuesReader().getNumeric(fi);
+      dvFields.put(field, dv);
+      return dv;
     }
-    return getDocValuesReader().getNumeric(fi);
+  }
+
+  @Override
+  public final Bits getDocsWithField(String field) throws IOException {
+    ensureOpen();
+    Map<String,Bits> dvFields = docsWithFieldLocal.get();
+
+    Bits previous = dvFields.get(field);
+    if (previous != null) {
+      return previous;
+    } else {
+      FieldInfo fi = getFieldInfos().fieldInfo(field);
+      if (fi == null) {
+        // Field does not exist
+        return null;
+      }
+      if (fi.getDocValuesType() == DocValuesType.NONE) {
+        // Field was not indexed with doc values
+        return null;
+      }
+      Bits dv = getDocValuesReader().getDocsWithField(fi);
+      dvFields.put(field, dv);
+      return dv;
+    }
   }
 
   @Override
@@ -144,66 +187,105 @@ public abstract class CodecReader extends LeafReader implements Accountable {
     if (fi == null) {
       return null;
     }
-    return getDocValuesReader().getBinary(fi);
+
+    Map<String,Object> dvFields = docValuesLocal.get();
+
+    BinaryDocValues dvs = (BinaryDocValues) dvFields.get(field);
+    if (dvs == null) {
+      dvs = getDocValuesReader().getBinary(fi);
+      dvFields.put(field, dvs);
+    }
+
+    return dvs;
   }
 
   @Override
   public final SortedDocValues getSortedDocValues(String field) throws IOException {
     ensureOpen();
-    FieldInfo fi = getDVField(field, DocValuesType.SORTED);
-    if (fi == null) {
-      return null;
+    Map<String,Object> dvFields = docValuesLocal.get();
+    
+    Object previous = dvFields.get(field);
+    if (previous != null && previous instanceof SortedDocValues) {
+      return (SortedDocValues) previous;
+    } else {
+      FieldInfo fi = getDVField(field, DocValuesType.SORTED);
+      if (fi == null) {
+        return null;
+      }
+      SortedDocValues dv = getDocValuesReader().getSorted(fi);
+      dvFields.put(field, dv);
+      return dv;
     }
-    return getDocValuesReader().getSorted(fi);
   }
   
   @Override
   public final SortedNumericDocValues getSortedNumericDocValues(String field) throws IOException {
     ensureOpen();
+    Map<String,Object> dvFields = docValuesLocal.get();
 
-    FieldInfo fi = getDVField(field, DocValuesType.SORTED_NUMERIC);
-    if (fi == null) {
-      return null;
+    Object previous = dvFields.get(field);
+    if (previous != null && previous instanceof SortedNumericDocValues) {
+      return (SortedNumericDocValues) previous;
+    } else {
+      FieldInfo fi = getDVField(field, DocValuesType.SORTED_NUMERIC);
+      if (fi == null) {
+        return null;
+      }
+      SortedNumericDocValues dv = getDocValuesReader().getSortedNumeric(fi);
+      dvFields.put(field, dv);
+      return dv;
     }
-    return getDocValuesReader().getSortedNumeric(fi);
   }
 
   @Override
   public final SortedSetDocValues getSortedSetDocValues(String field) throws IOException {
     ensureOpen();
-    FieldInfo fi = getDVField(field, DocValuesType.SORTED_SET);
-    if (fi == null) {
-      return null;
+    Map<String,Object> dvFields = docValuesLocal.get();
+    
+    Object previous = dvFields.get(field);
+    if (previous != null && previous instanceof SortedSetDocValues) {
+      return (SortedSetDocValues) previous;
+    } else {
+      FieldInfo fi = getDVField(field, DocValuesType.SORTED_SET);
+      if (fi == null) {
+        return null;
+      }
+      SortedSetDocValues dv = getDocValuesReader().getSortedSet(fi);
+      dvFields.put(field, dv);
+      return dv;
     }
-    return getDocValuesReader().getSortedSet(fi);
   }
+  
+  final CloseableThreadLocal<Map<String,NumericDocValues>> normsLocal = new CloseableThreadLocal<Map<String,NumericDocValues>>() {
+    @Override
+    protected Map<String,NumericDocValues> initialValue() {
+      return new HashMap<>();
+    }
+  };
   
   @Override
   public final NumericDocValues getNormValues(String field) throws IOException {
     ensureOpen();
-    FieldInfo fi = getFieldInfos().fieldInfo(field);
-    if (fi == null || fi.hasNorms() == false) {
-      // Field does not exist or does not index norms
-      return null;
+    Map<String,NumericDocValues> normFields = normsLocal.get();
+
+    NumericDocValues norms = normFields.get(field);
+    if (norms != null) {
+      return norms;
+    } else {
+      FieldInfo fi = getFieldInfos().fieldInfo(field);
+      if (fi == null || !fi.hasNorms()) {
+        // Field does not exist or does not index norms
+        return null;
+      }
+      norms = getNormsReader().getNorms(fi);
+      normFields.put(field, norms);
+      return norms;
     }
-
-    return getNormsReader().getNorms(fi);
-  }
-
-  @Override
-  public final PointValues getPointValues(String field) throws IOException {
-    ensureOpen();
-    FieldInfo fi = getFieldInfos().fieldInfo(field);
-    if (fi == null || fi.getPointDataDimensionCount() == 0) {
-      // Field does not exist or does not index points
-      return null;
-    }
-
-    return getPointsReader().getValues(field);
   }
 
   @Override
   protected void doClose() throws IOException {
+    IOUtils.close(docValuesLocal, docsWithFieldLocal, normsLocal);
   }
   
   @Override
@@ -232,11 +314,6 @@ public abstract class CodecReader extends LeafReader implements Accountable {
     if (getTermVectorsReader() != null) {
       ramBytesUsed += getTermVectorsReader().ramBytesUsed();
     }
-
-    // points
-    if (getPointsReader() != null) {
-      ramBytesUsed += getPointsReader().ramBytesUsed();
-    }
     
     return ramBytesUsed;
   }
@@ -244,7 +321,7 @@ public abstract class CodecReader extends LeafReader implements Accountable {
   @Override
   public Collection<Accountable> getChildResources() {
     ensureOpen();
-    final List<Accountable> resources = new ArrayList<>(6);
+    final List<Accountable> resources = new ArrayList<>(5);
     
     // terms/postings
     resources.add(Accountables.namedAccountable("postings", getPostingsReader()));
@@ -267,11 +344,6 @@ public abstract class CodecReader extends LeafReader implements Accountable {
     // term vectors
     if (getTermVectorsReader() != null) {
       resources.add(Accountables.namedAccountable("term vectors", getTermVectorsReader()));
-    }
-
-    // points
-    if (getPointsReader() != null) {
-      resources.add(Accountables.namedAccountable("points", getPointsReader()));
     }
     
     return Collections.unmodifiableList(resources);
@@ -302,11 +374,6 @@ public abstract class CodecReader extends LeafReader implements Accountable {
     // term vectors
     if (getTermVectorsReader() != null) {
       getTermVectorsReader().checkIntegrity();
-    }
-
-    // points
-    if (getPointsReader() != null) {
-      getPointsReader().checkIntegrity();
     }
   }
 }

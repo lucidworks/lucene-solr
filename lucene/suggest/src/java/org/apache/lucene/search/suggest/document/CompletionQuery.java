@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.document;
 
 import java.io.IOException;
 
@@ -27,14 +28,14 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.suggest.BitsProducer;
 
 import static org.apache.lucene.search.suggest.document.CompletionAnalyzer.HOLE_CHARACTER;
-import static org.apache.lucene.analysis.miscellaneous.ConcatenateGraphFilter.SEP_LABEL;
+import static org.apache.lucene.search.suggest.document.CompletionAnalyzer.SEP_LABEL;
 
 /**
  * Abstract {@link Query} that match documents containing terms with a specified prefix
  * filtered by {@link BitsProducer}. This should be used to query against any {@link SuggestField}s
  * or {@link ContextSuggestField}s of documents.
  * <p>
- * Use {@link SuggestIndexSearcher#suggest(CompletionQuery, int, boolean)} to execute any query
+ * Use {@link SuggestIndexSearcher#suggest(CompletionQuery, int)} to execute any query
  * that provides a concrete implementation of this query. Example below shows using this query
  * to retrieve the top 5 documents.
  *
@@ -94,6 +95,9 @@ public abstract class CompletionQuery extends Query {
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
     byte type = 0;
     boolean first = true;
     Terms terms;

@@ -1,3 +1,5 @@
+package org.apache.solr.update.processor;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update.processor;
 
 import org.apache.solr.common.SolrException;
-import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.core.SolrCore;
@@ -27,6 +27,7 @@ import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.update.*;
 import org.apache.solr.util.plugin.SolrCoreAware;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.FilenameUtils;
 
@@ -149,7 +150,6 @@ import org.slf4j.LoggerFactory;
  * &lt;/processor&gt;
  * </pre>
  * 
- * @since 4.0.0
  */
 public class StatelessScriptUpdateProcessorFactory extends UpdateRequestProcessorFactory implements SolrCoreAware {
 
@@ -218,11 +218,6 @@ public class StatelessScriptUpdateProcessorFactory extends UpdateRequestProcesso
 
   @Override
   public void inform(SolrCore core) {
-    if (!core.getCoreDescriptor().isConfigSetTrusted()) {
-      throw new SolrException(ErrorCode.UNAUTHORIZED, "The configset for this collection was uploaded without any authentication in place,"
-          + " and this operation is not available for collections with untrusted configsets. To use this component, re-upload the configset"
-          + " after enabling authentication and authorization.");
-    }
     resourceLoader = core.getResourceLoader();
 
     // test that our engines & scripts are valid
@@ -351,7 +346,7 @@ public class StatelessScriptUpdateProcessorFactory extends UpdateRequestProcesso
           engines.addAll(f.getNames());
         }
       }
-      result = String.join(", ", engines);
+      result = StringUtils.join(engines, ", ");
     } catch (RuntimeException e) {
       /* :NOOP: */
     }

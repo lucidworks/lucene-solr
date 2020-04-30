@@ -1,3 +1,5 @@
+package org.apache.solr.update;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update;
 
 import java.io.IOException;
 import java.net.URI;
@@ -24,6 +25,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.SolrTestCaseJ4.SuppressObjectReleaseTracker;
 import org.apache.solr.cloud.hdfs.HdfsTestUtil;
 import org.apache.solr.common.util.IOUtils;
 import org.apache.solr.request.SolrQueryRequest;
@@ -37,9 +39,13 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakFilters;
 @ThreadLeakFilters(defaultFilters = true, filters = {
     BadHdfsThreadsFilter.class // hdfs currently leaks thread(s)
 })
+@SuppressObjectReleaseTracker(bugUrl = "https://issues.apache.org/jira/browse/SOLR-7115")
 public class TestHdfsUpdateLog extends SolrTestCaseJ4 {
+  
   private static MiniDFSCluster dfsCluster;
+
   private static String hdfsUri;
+  
   private static FileSystem fs;
   
   @BeforeClass
@@ -50,11 +56,14 @@ public class TestHdfsUpdateLog extends SolrTestCaseJ4 {
     try {
       URI uri = new URI(hdfsUri);
       Configuration conf = HdfsTestUtil.getClientConfiguration(dfsCluster);
+      conf.setBoolean("fs.hdfs.impl.disable.cache", true);
       fs = FileSystem.get(uri, conf);
-    } catch (IOException | URISyntaxException e) {
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    } catch (URISyntaxException e) {
       throw new RuntimeException(e);
     }
-
+    
     System.setProperty("solr.ulog.dir", hdfsUri + "/solr/shard1");
     
     initCore("solrconfig-tlog.xml","schema15.xml");
@@ -62,25 +71,21 @@ public class TestHdfsUpdateLog extends SolrTestCaseJ4 {
   
   @AfterClass
   public static void afterClass() throws Exception {
+    System.clearProperty("solr.ulog.dir");
+    System.clearProperty("test.build.data");
+    System.clearProperty("test.cache.data");
+    deleteCore();
     IOUtils.closeQuietly(fs);
     fs = null;
-    try {
-      deleteCore();
-    } finally {
-      try {
-        HdfsTestUtil.teardownClass(dfsCluster);
-      } finally {
-        dfsCluster = null;
-        hdfsUri = null;
-        System.clearProperty("solr.ulog.dir");
-        System.clearProperty("test.build.data");
-        System.clearProperty("test.cache.data");
-      }
-    }
+    HdfsTestUtil.teardownClass(dfsCluster);
+    
+    hdfsDataDir = null;
+    dfsCluster = null;
   }
 
   @Test
   public void testFSThreadSafety() throws Exception {
+
     final SolrQueryRequest req = req();
     final UpdateHandler uhandler = req.getCore().getUpdateHandler();
     ((DirectUpdateHandler2) uhandler).getCommitTracker().setTimeUpperBound(100);
@@ -127,11 +132,15 @@ public class TestHdfsUpdateLog extends SolrTestCaseJ4 {
         }
       }
     };
+    
+
 
     thread.start();
     thread2.start();
     thread.join();
     thread2.join();
+    
   }
+
 }
 

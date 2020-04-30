@@ -14,21 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
 import java.io.File;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
-import java.util.Collections;
 import java.util.Date;
-import java.util.Locale;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.solr.common.SolrInputDocument;
-import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.schema.IndexSchema;
+import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
+import org.joda.time.format.ISODateTimeFormat;
 import org.junit.After;
 import org.junit.Before;
 
@@ -59,31 +57,18 @@ public class AddSchemaFieldsUpdateProcessorFactoryTest extends UpdateProcessorTe
     initCore(SOLRCONFIG_XML, SCHEMA_XML, tmpSolrHome.getPath());
   }
 
-  public void testEmptyValue() {
-    IndexSchema schema = h.getCore().getLatestSchema();
-    final String fieldName = "newFieldABC";
-    assertNull(schema.getFieldOrNull(fieldName));
-    //UpdateProcessorTestBase#doc doesn't deal with nulls
-    SolrInputDocument doc = new SolrInputDocument();
-    doc.addField("id", "1");
-    doc.addField(fieldName, null);
-
-    SolrInputDocument finalDoc = doc;
-    expectThrows(AssertionError.class, () -> processAdd("add-fields-no-run-processor", finalDoc));
-
-    expectThrows(AssertionError.class, () -> processAdd("add-fields-no-run-processor", new SolrInputDocument(null , null)));
-  }
-
   public void testSingleField() throws Exception {
     IndexSchema schema = h.getCore().getLatestSchema();
     final String fieldName = "newfield1";
     assertNull(schema.getFieldOrNull(fieldName));
-    Date date = Date.from(Instant.now());
+    String dateString = "2010-11-12T13:14:15.168Z";
+    DateTimeFormatter dateTimeFormatter = ISODateTimeFormat.dateTime();
+    Date date = dateTimeFormatter.parseDateTime(dateString).toDate();
     SolrInputDocument d = processAdd("add-fields-no-run-processor", doc(f("id", "1"), f(fieldName, date)));
     assertNotNull(d);
     schema = h.getCore().getLatestSchema();
     assertNotNull(schema.getFieldOrNull(fieldName));
-    assertEquals("pdates", schema.getFieldType(fieldName).getTypeName());
+    assertEquals("tdate", schema.getFieldType(fieldName).getTypeName());
   }
 
   public void testSingleFieldRoundTrip() throws Exception {
@@ -95,7 +80,7 @@ public class AddSchemaFieldsUpdateProcessorFactoryTest extends UpdateProcessorTe
     assertNotNull(d);
     schema = h.getCore().getLatestSchema();
     assertNotNull(schema.getFieldOrNull(fieldName));
-    assertEquals("pfloats", schema.getFieldType(fieldName).getTypeName());
+    assertEquals("tfloat", schema.getFieldType(fieldName).getTypeName());
     assertU(commit());
     assertQ(req("id:2"), "//arr[@name='" + fieldName + "']/float[.='" + floatValue.toString() + "']");
   }
@@ -111,7 +96,7 @@ public class AddSchemaFieldsUpdateProcessorFactoryTest extends UpdateProcessorTe
     assertNotNull(d);
     schema = h.getCore().getLatestSchema();
     assertNotNull(schema.getFieldOrNull(fieldName));
-    assertEquals("pdoubles", schema.getFieldType(fieldName).getTypeName());
+    assertEquals("tdouble", schema.getFieldType(fieldName).getTypeName());
     assertU(commit());
     assertQ(req("id:3")
         ,"//arr[@name='" + fieldName + "']/double[.='" + fieldValue1.toString() + "']"
@@ -131,29 +116,6 @@ public class AddSchemaFieldsUpdateProcessorFactoryTest extends UpdateProcessorTe
     schema = h.getCore().getLatestSchema();
     assertNotNull(schema.getFieldOrNull(fieldName));
     assertEquals("text", schema.getFieldType(fieldName).getTypeName());
-    assertEquals(0, schema.getCopyFieldProperties(true, Collections.singleton(fieldName), null).size());
-    assertU(commit());
-    assertQ(req("id:4")
-        ,"//arr[@name='" + fieldName + "']/str[.='" + fieldValue1.toString() + "']"
-        ,"//arr[@name='" + fieldName + "']/str[.='" + fieldValue2.toString() + "']"
-        ,"//arr[@name='" + fieldName + "']/str[.='" + fieldValue3.toString() + "']"
-    );
-  }
-
-  public void testSingleFieldDefaultTypeMappingRoundTrip() throws Exception {
-    IndexSchema schema = h.getCore().getLatestSchema();
-    final String fieldName = "newfield4";
-    assertNull(schema.getFieldOrNull(fieldName));
-    Float fieldValue1 = -13258.0f;
-    Double fieldValue2 = 8.4828800808E10;
-    String fieldValue3 = "blah blah";
-    SolrInputDocument d = processAdd
-        ("add-fields-default-mapping", doc(f("id", "4"), f(fieldName, fieldValue1, fieldValue2, fieldValue3)));
-    assertNotNull(d);
-    schema = h.getCore().getLatestSchema();
-    assertNotNull(schema.getFieldOrNull(fieldName));
-    assertEquals("text", schema.getFieldType(fieldName).getTypeName());
-    assertEquals(1, schema.getCopyFieldProperties(true, Collections.singleton(fieldName), null).size());
     assertU(commit());
     assertQ(req("id:4")
         ,"//arr[@name='" + fieldName + "']/str[.='" + fieldValue1.toString() + "']"
@@ -180,8 +142,8 @@ public class AddSchemaFieldsUpdateProcessorFactoryTest extends UpdateProcessorTe
     schema = h.getCore().getLatestSchema();
     assertNotNull(schema.getFieldOrNull(fieldName1));
     assertNotNull(schema.getFieldOrNull(fieldName2));
-    assertEquals("pdoubles", schema.getFieldType(fieldName1).getTypeName());
-    assertEquals("plongs", schema.getFieldType(fieldName2).getTypeName());
+    assertEquals("tdouble", schema.getFieldType(fieldName1).getTypeName());
+    assertEquals("tlong", schema.getFieldType(fieldName2).getTypeName());
     assertU(commit());
     assertQ(req("id:5")
         ,"//arr[@name='" + fieldName1 + "']/double[.='" + field1Value1.toString() + "']"
@@ -216,11 +178,11 @@ public class AddSchemaFieldsUpdateProcessorFactoryTest extends UpdateProcessorTe
     String field3String2 = "-5.28E-3";
     Double field3Value2 = -5.28E-3;
     String field4String1 = "1999-04-17 17:42";
-    DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ROOT).withZone(ZoneOffset.UTC);
-    LocalDateTime dateTime = LocalDateTime.parse(field4String1, dateTimeFormatter);
-    Date field4Value1 = Date.from(dateTime.atZone(ZoneOffset.UTC).toInstant());
-    DateTimeFormatter dateTimeFormatter2 = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).withZone(ZoneOffset.UTC);
-    String field4Value1String = dateTime.format(dateTimeFormatter2) + "Z";
+    DateTimeFormatter dateTimeFormatter = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm").withZoneUTC();
+    DateTime dateTime =  dateTimeFormatter.parseDateTime(field4String1);
+    Date field4Value1 = dateTime.toDate();
+    DateTimeFormatter dateTimeFormatter2 = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss").withZoneUTC();
+    String field4Value1String = dateTimeFormatter2.print(dateTime) + "Z";
     
     SolrInputDocument d = processAdd
         ("parse-and-add-fields", doc(f("id", "6"), f(fieldName1, field1String1, field1String2, field1String3),
@@ -233,10 +195,10 @@ public class AddSchemaFieldsUpdateProcessorFactoryTest extends UpdateProcessorTe
     assertNotNull(schema.getFieldOrNull(fieldName2));
     assertNotNull(schema.getFieldOrNull(fieldName3));
     assertNotNull(schema.getFieldOrNull(fieldName4));
-    assertEquals("pdoubles", schema.getFieldType(fieldName1).getTypeName());
-    assertEquals("plongs", schema.getFieldType(fieldName2).getTypeName());
+    assertEquals("tdouble", schema.getFieldType(fieldName1).getTypeName());
+    assertEquals("tlong", schema.getFieldType(fieldName2).getTypeName());
     assertEquals("text", schema.getFieldType(fieldName3).getTypeName());
-    assertEquals("pdates", schema.getFieldType(fieldName4).getTypeName());
+    assertEquals("tdate", schema.getFieldType(fieldName4).getTypeName());
     assertU(commit());
     assertQ(req("id:6")
         ,"//arr[@name='" + fieldName1 + "']/double[.='" + field1Value1.toString() + "']"
@@ -247,60 +209,6 @@ public class AddSchemaFieldsUpdateProcessorFactoryTest extends UpdateProcessorTe
         ,"//arr[@name='" + fieldName3 + "']/str[.='" + field3String1 + "']"
         ,"//arr[@name='" + fieldName3 + "']/str[.='" + field3String2 + "']"
         ,"//arr[@name='" + fieldName4 + "']/date[.='" + field4Value1String + "']");
-  }
-
-  public void testStringWithCopyField() throws Exception {
-    IndexSchema schema = h.getCore().getLatestSchema();
-    final String fieldName = "stringField";
-    final String strFieldName = fieldName+"_str";
-    assertNull(schema.getFieldOrNull(fieldName));
-    String content = "This is a text that should be copied to a string field but not be cutoff";
-    SolrInputDocument d = processAdd("add-fields", doc(f("id", "1"), f(fieldName, content)));
-    assertNotNull(d);
-    schema = h.getCore().getLatestSchema();
-    assertNotNull(schema.getFieldOrNull(fieldName));
-    assertNotNull(schema.getFieldOrNull(strFieldName));
-    assertEquals("text", schema.getFieldType(fieldName).getTypeName());
-    assertEquals(1, schema.getCopyFieldProperties(true, Collections.singleton(fieldName), Collections.singleton(strFieldName)).size());
-  }
-
-  public void testStringWithCopyFieldAndMaxChars() throws Exception {
-    IndexSchema schema = h.getCore().getLatestSchema();
-    final String fieldName = "stringField";
-    final String strFieldName = fieldName+"_str";
-    assertNull(schema.getFieldOrNull(fieldName));
-    String content = "This is a text that should be copied to a string field and cutoff at 10 characters";
-    SolrInputDocument d = processAdd("add-fields-maxchars", doc(f("id", "1"), f(fieldName, content)));
-    assertNotNull(d);
-    System.out.println("Document is "+d);
-    schema = h.getCore().getLatestSchema();
-    assertNotNull(schema.getFieldOrNull(fieldName));
-    assertNotNull(schema.getFieldOrNull(strFieldName));
-    assertEquals("text", schema.getFieldType(fieldName).getTypeName());
-    // We have three copyFields, one with maxChars 10 and two with maxChars 20
-    assertEquals(3, schema.getCopyFieldProperties(true, Collections.singleton(fieldName), null).size());
-    assertEquals("The configured maxChars cutoff does not exist on the copyField", 10, 
-        schema.getCopyFieldProperties(true, Collections.singleton(fieldName), Collections.singleton(strFieldName))
-            .get(0).get("maxChars"));
-    assertEquals("The configured maxChars cutoff does not exist on the copyField", 20, 
-        schema.getCopyFieldProperties(true, Collections.singleton(fieldName), Collections.singleton(fieldName+"_t"))
-            .get(0).get("maxChars"));
-    assertEquals("The configured maxChars cutoff does not exist on the copyField", 20, 
-        schema.getCopyFieldProperties(true, Collections.singleton(fieldName), Collections.singleton(fieldName+"2_t"))
-            .get(0).get("maxChars"));
-  }
-  
-  public void testCopyFieldByIndexing() throws Exception {
-    String content = "This is a text that should be copied to a string field and cutoff at 10 characters";
-    SolrInputDocument d = processAdd("add-fields-default-mapping", doc(f("id", "1"), f("mynewfield", content)));
-    assertU(commit());
-
-    ModifiableSolrParams params = new ModifiableSolrParams();
-    params.add("q", "*:*").add("facet", "true").add("facet.field", "mynewfield_str");
-    assertQ(req(params)
-            , "*[count(//doc)=1]"
-            ,"//lst[@name='mynewfield_str']/int[@name='This is a '][.='1']"
-            );
   }
   
   @After

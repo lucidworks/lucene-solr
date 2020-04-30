@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,29 +16,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
 import org.apache.solr.BaseDistributedSearchTestCase;
-import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
-import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope.Scope;
-
 /**
  * Test for QueryComponent's distributed querying
  *
  * @see org.apache.solr.handler.component.QueryComponent
  */
-
-@SolrTestCaseJ4.SuppressSSL(bugUrl="https://issues.apache.org/jira/browse/SOLR-8433")
-@ThreadLeakScope(Scope.NONE)
 public class AnalyticsMergeStrategyTest extends BaseDistributedSearchTestCase {
-
 
   public AnalyticsMergeStrategyTest() {
     stress = 0;
@@ -66,12 +59,6 @@ public class AnalyticsMergeStrategyTest extends BaseDistributedSearchTestCase {
 
     commit();
 
-    /*
-    *  The count qparser plugin is pointing to AnalyticsTestQParserPlugin. This class defines a simple AnalyticsQuery and
-    *  has two merge strategies. If the iterate local param is true then an InterativeMergeStrategy is used.
-    */
-
-
     ModifiableSolrParams params = new ModifiableSolrParams();
     params.add("q", "*:*");
     params.add("fq", "{!count}");
@@ -79,29 +66,12 @@ public class AnalyticsMergeStrategyTest extends BaseDistributedSearchTestCase {
     QueryResponse rsp = queryServer(params);
     assertCount(rsp, 11);
 
-    //Test IterativeMergeStrategy
-    params = new ModifiableSolrParams();
-    params.add("q", "*:*");
-    params.add("fq", "{!count iterate=true}");
-    setDistributedParams(params);
-    rsp = queryServer(params);
-    assertCountOnly(rsp, 44);
-
     params = new ModifiableSolrParams();
     params.add("q", "id:(1 2 5 6)");
     params.add("fq", "{!count}");
     setDistributedParams(params);
     rsp = queryServer(params);
     assertCount(rsp, 4);
-  }
-
-  private void assertCountOnly(QueryResponse rsp, int count) throws Exception {
-    NamedList response = rsp.getResponse();
-    NamedList analytics = (NamedList)response.get("analytics");
-    Integer c = (Integer)analytics.get("mycount");
-    if(c.intValue() != count) {
-      throw new Exception("Count is not correct:"+count+":"+c.intValue());
-    }
   }
 
   private void assertCount(QueryResponse rsp, int count) throws Exception {

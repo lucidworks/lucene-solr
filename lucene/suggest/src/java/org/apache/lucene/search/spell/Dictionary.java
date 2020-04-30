@@ -1,3 +1,4 @@
+package org.apache.lucene.search.spell;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spell;
+
 import java.io.IOException;
 
 import org.apache.lucene.search.suggest.InputIterator;

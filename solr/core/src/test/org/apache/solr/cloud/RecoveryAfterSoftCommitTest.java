@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
 import java.io.File;
 import java.util.List;
 
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.client.solrj.cloud.SocketProxy;
 import org.apache.solr.client.solrj.embedded.JettySolrRunner;
 import org.apache.solr.client.solrj.request.AbstractUpdateRequest;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.cloud.Replica;
-import org.apache.solr.util.TestInjection;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -35,21 +35,18 @@ import org.junit.Test;
 @SolrTestCaseJ4.SuppressSSL
 public class RecoveryAfterSoftCommitTest extends AbstractFullDistribZkTestBase {
   private static final int MAX_BUFFERED_DOCS = 2, ULOG_NUM_RECORDS_TO_KEEP = 2;
-  private final boolean onlyLeaderIndexes = random().nextBoolean();
+
   public RecoveryAfterSoftCommitTest() {
     sliceCount = 1;
     fixShardCount(2);
-  }
-
-  @Override
-  protected boolean useTlogReplicas() {
-    return false; // TODO: tlog replicas makes commits take way to long due to what is likely a bug and it's TestInjection use
   }
 
   @BeforeClass
   public static void beforeTests() {
     System.setProperty("solr.tests.maxBufferedDocs", String.valueOf(MAX_BUFFERED_DOCS));
     System.setProperty("solr.ulog.numRecordsToKeep", String.valueOf(ULOG_NUM_RECORDS_TO_KEEP));
+    // the default=7000ms artificially slows down recovery and is not needed for this test
+    System.setProperty("solr.cloud.wait-for-updates-with-stale-state-pause", "500");
     // avoid creating too many files, see SOLR-7421
     System.setProperty("useCompoundFile", "true");
   }
@@ -58,8 +55,8 @@ public class RecoveryAfterSoftCommitTest extends AbstractFullDistribZkTestBase {
   public static void afterTest()  {
     System.clearProperty("solr.tests.maxBufferedDocs");
     System.clearProperty("solr.ulog.numRecordsToKeep");
+    System.clearProperty("solr.cloud.wait-for-updates-with-stale-state-pause");
     System.clearProperty("useCompoundFile");
-    TestInjection.reset();
   }
 
   /**
@@ -67,10 +64,10 @@ public class RecoveryAfterSoftCommitTest extends AbstractFullDistribZkTestBase {
    */
   @Override
   public JettySolrRunner createJetty(File solrHome, String dataDir,
-                                     String shardList, String solrConfigOverride, String schemaOverride, Replica.Type replicaType)
+                                     String shardList, String solrConfigOverride, String schemaOverride)
       throws Exception
   {
-    return createProxiedJetty(solrHome, dataDir, shardList, solrConfigOverride, schemaOverride, replicaType);
+    return createProxiedJetty(solrHome, dataDir, shardList, solrConfigOverride, schemaOverride);
   }
 
   @Test

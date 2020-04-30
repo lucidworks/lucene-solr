@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
-
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 
@@ -71,8 +72,7 @@ public class TestUniqueTermCount extends LuceneTestCase {
     NumericDocValues fooNorms = MultiDocValues.getNormValues(reader, "foo");
     assertNotNull(fooNorms);
     for (int i = 0; i < reader.maxDoc(); i++) {
-      assertEquals(i, fooNorms.nextDoc());
-      assertEquals(expected.get(i).longValue(), fooNorms.longValue());
+      assertEquals(expected.get(i).longValue(), fooNorms.get(i));
     }
   }
 
@@ -97,7 +97,7 @@ public class TestUniqueTermCount extends LuceneTestCase {
   /**
    * Simple similarity that encodes maxTermFrequency directly
    */
-  static class TestSimilarity extends Similarity {
+  class TestSimilarity extends Similarity {
 
     @Override
     public long computeNorm(FieldInvertState state) {
@@ -105,7 +105,12 @@ public class TestUniqueTermCount extends LuceneTestCase {
     }
 
     @Override
-    public SimScorer scorer(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
+    public SimWeight computeWeight(CollectionStatistics collectionStats, TermStatistics... termStats) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public SimScorer simScorer(SimWeight weight, LeafReaderContext context) throws IOException {
       throw new UnsupportedOperationException();
     }
   }

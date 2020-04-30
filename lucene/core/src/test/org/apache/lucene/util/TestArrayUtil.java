@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Random;
-
-import static org.apache.lucene.util.ArrayUtil.copyOfSubArray;
-import static org.apache.lucene.util.ArrayUtil.growExact;
 
 public class TestArrayUtil extends LuceneTestCase {
 
@@ -53,9 +50,12 @@ public class TestArrayUtil extends LuceneTestCase {
   }
 
   public void testTooBig() {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       ArrayUtil.oversize(ArrayUtil.MAX_ARRAY_LENGTH+1, 1);
-    });
+      fail("did not hit exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
   }
 
   public void testExactLimit() {
@@ -73,40 +73,63 @@ public class TestArrayUtil extends LuceneTestCase {
     }
   }
 
-  private static int parseInt(String s) {
-    int start = random().nextInt(5);
-    char[] chars = new char[s.length() + start + random().nextInt(4)];
-    s.getChars(0, s.length(), chars, start);
-    return ArrayUtil.parseInt(chars, start, s.length());
+  public void testParseInt() throws Exception {
+    int test;
+    try {
+      test = ArrayUtil.parseInt("".toCharArray());
+      assertTrue(false);
+    } catch (NumberFormatException e) {
+      //expected
+    }
+    try {
+      test = ArrayUtil.parseInt("foo".toCharArray());
+      assertTrue(false);
+    } catch (NumberFormatException e) {
+      //expected
+    }
+    try {
+      test = ArrayUtil.parseInt(String.valueOf(Long.MAX_VALUE).toCharArray());
+      assertTrue(false);
+    } catch (NumberFormatException e) {
+      //expected
+    }
+    try {
+      test = ArrayUtil.parseInt("0.34".toCharArray());
+      assertTrue(false);
+    } catch (NumberFormatException e) {
+      //expected
+    }
+
+    try {
+      test = ArrayUtil.parseInt("1".toCharArray());
+      assertTrue(test + " does not equal: " + 1, test == 1);
+      test = ArrayUtil.parseInt("-10000".toCharArray());
+      assertTrue(test + " does not equal: " + -10000, test == -10000);
+      test = ArrayUtil.parseInt("1923".toCharArray());
+      assertTrue(test + " does not equal: " + 1923, test == 1923);
+      test = ArrayUtil.parseInt("-1".toCharArray());
+      assertTrue(test + " does not equal: " + -1, test == -1);
+      test = ArrayUtil.parseInt("foo 1923 bar".toCharArray(), 4, 4);
+      assertTrue(test + " does not equal: " + 1923, test == 1923);
+    } catch (NumberFormatException e) {
+      e.printStackTrace();
+      assertTrue(false);
+    }
+
   }
 
-  public void testParseInt() throws Exception {
-    expectThrows(NumberFormatException.class, () -> {
-      parseInt("");
-    });
+  public void testSliceEquals() {
+    String left = "this is equal";
+    String right = left;
+    char[] leftChars = left.toCharArray();
+    char[] rightChars = right.toCharArray();
+    assertTrue(left + " does not equal: " + right, ArrayUtil.equals(leftChars, 0, rightChars, 0, left.length()));
+    
+    assertFalse(left + " does not equal: " + right, ArrayUtil.equals(leftChars, 1, rightChars, 0, left.length()));
+    assertFalse(left + " does not equal: " + right, ArrayUtil.equals(leftChars, 1, rightChars, 2, left.length()));
 
-    expectThrows(NumberFormatException.class, () -> {
-      parseInt("foo");
-    });
-
-    expectThrows(NumberFormatException.class, () -> {
-      parseInt(String.valueOf(Long.MAX_VALUE));
-    });
-
-    expectThrows(NumberFormatException.class, () -> {
-      parseInt("0.34");
-    });
-
-    int test = parseInt("1");
-    assertTrue(test + " does not equal: " + 1, test == 1);
-    test = parseInt("-10000");
-    assertTrue(test + " does not equal: " + -10000, test == -10000);
-    test = parseInt("1923");
-    assertTrue(test + " does not equal: " + 1923, test == 1923);
-    test = parseInt("-1");
-    assertTrue(test + " does not equal: " + -1, test == -1);
-    test = ArrayUtil.parseInt("foo 1923 bar".toCharArray(), 4, 4);
-    assertTrue(test + " does not equal: " + 1923, test == 1923);
+    assertFalse(left + " does not equal: " + right, ArrayUtil.equals(leftChars, 25, rightChars, 0, left.length()));
+    assertFalse(left + " does not equal: " + right, ArrayUtil.equals(leftChars, 12, rightChars, 0, left.length()));
   }
   
   private Integer[] createRandomArray(int maxSize) {
@@ -263,122 +286,5 @@ public class TestArrayUtil extends LuceneTestCase {
     ArrayUtil.introSort(a, Collections.reverseOrder());
     ArrayUtil.timSort(a, Collections.reverseOrder());
   }
-
-  public void testSelect() {
-    for (int iter = 0; iter < 100; ++iter) {
-      doTestSelect();
-    }
-  }
-
-  private void doTestSelect() {
-    final int from = random().nextInt(5);
-    final int to = from + TestUtil.nextInt(random(), 1, 10000);
-    final int max = random().nextBoolean() ? random().nextInt(100) : random().nextInt(100000);
-    Integer[] arr = new Integer[from + to + random().nextInt(5)];
-    for (int i = 0; i < arr.length; ++i) {
-      arr[i] = TestUtil.nextInt(random(), 0, max);
-    }
-    final int k = TestUtil.nextInt(random(), from, to - 1);
-
-    Integer[] expected = arr.clone();
-    Arrays.sort(expected, from, to);
-
-    Integer[] actual = arr.clone();
-    ArrayUtil.select(actual, from, to, k, Comparator.naturalOrder());
-
-    assertEquals(expected[k], actual[k]);
-    for (int i = 0; i < actual.length; ++i) {
-      if (i < from || i >= to) {
-        assertSame(arr[i], actual[i]);
-      } else if (i <= k) {
-        assertTrue(actual[i].intValue() <= actual[k].intValue());
-      } else {
-        assertTrue(actual[i].intValue() >= actual[k].intValue());
-      }
-    }
-  }
-
-  public void testGrowExact() {
-    assertArrayEquals(new short[]{1, 2, 3, 0}, growExact(new short[]{1, 2, 3}, 4));
-    assertArrayEquals(new short[]{1, 2, 3, 0, 0}, growExact(new short[]{1, 2, 3}, 5));
-    expectThrows(IndexOutOfBoundsException.class, () -> growExact(new short[]{1, 2, 3}, random().nextInt(3)));
-
-    assertArrayEquals(new int[]{1, 2, 3, 0}, growExact(new int[]{1, 2, 3}, 4));
-    assertArrayEquals(new int[]{1, 2, 3, 0, 0}, growExact(new int[]{1, 2, 3}, 5));
-    expectThrows(IndexOutOfBoundsException.class, () -> growExact(new int[]{1, 2, 3}, random().nextInt(3)));
-
-    assertArrayEquals(new long[]{1, 2, 3, 0}, growExact(new long[]{1, 2, 3}, 4));
-    assertArrayEquals(new long[]{1, 2, 3, 0, 0}, growExact(new long[]{1, 2, 3}, 5));
-    expectThrows(IndexOutOfBoundsException.class, () -> growExact(new long[]{1, 2, 3}, random().nextInt(3)));
-
-    assertArrayEquals(new float[]{0.1f, 0.2f, 0.3f, 0}, growExact(new float[]{0.1f, 0.2f, 0.3f}, 4), 0.001f);
-    assertArrayEquals(new float[]{0.1f, 0.2f, 0.3f, 0, 0}, growExact(new float[]{0.1f, 0.2f, 0.3f}, 5), 0.001f);
-    expectThrows(IndexOutOfBoundsException.class, () -> growExact(new float[]{1, 2, 3}, random().nextInt(3)));
-
-    assertArrayEquals(new double[]{0.1, 0.2, 0.3, 0.0}, growExact(new double[]{0.1, 0.2, 0.3}, 4), 0.001);
-    assertArrayEquals(new double[]{0.1, 0.2, 0.3, 0.0, 0.0}, growExact(new double[]{0.1, 0.2, 0.3}, 5), 0.001);
-    expectThrows(IndexOutOfBoundsException.class, () -> growExact(new double[]{0.1, 0.2, 0.3}, random().nextInt(3)));
-
-    assertArrayEquals(new byte[]{1, 2, 3, 0}, growExact(new byte[]{1, 2, 3}, 4));
-    assertArrayEquals(new byte[]{1, 2, 3, 0, 0}, growExact(new byte[]{1, 2, 3}, 5));
-    expectThrows(IndexOutOfBoundsException.class, () -> growExact(new byte[]{1, 2, 3}, random().nextInt(3)));
-
-    assertArrayEquals(new char[]{'a', 'b', 'c', '\0'}, growExact(new char[]{'a', 'b', 'c'}, 4));
-    assertArrayEquals(new char[]{'a', 'b', 'c', '\0', '\0'}, growExact(new char[]{'a', 'b', 'c'}, 5));
-    expectThrows(IndexOutOfBoundsException.class, () -> growExact(new byte[]{'a', 'b', 'c'}, random().nextInt(3)));
-
-    assertArrayEquals(new String[]{"a1", "b2", "c3", null}, growExact(new String[]{"a1", "b2", "c3"}, 4));
-    assertArrayEquals(new String[]{"a1", "b2", "c3", null, null}, growExact(new String[]{"a1", "b2", "c3"}, 5));
-    expectThrows(IndexOutOfBoundsException.class, () -> growExact(new String[]{"a", "b", "c"}, random().nextInt(3)));
-  }
-
-  public void testCopyOfSubArray() {
-    short[] shortArray = {1, 2, 3};
-    assertArrayEquals(new short[]{1}, copyOfSubArray(shortArray, 0, 1));
-    assertArrayEquals(new short[]{1, 2, 3}, copyOfSubArray(shortArray, 0, 3));
-    assertEquals(0, copyOfSubArray(shortArray, 0, 0).length);
-    expectThrows(IndexOutOfBoundsException.class, () -> copyOfSubArray(shortArray, 0, 4 + random().nextInt(10)));
-
-    int[] intArray = {1, 2, 3};
-    assertArrayEquals(new int[]{1, 2}, copyOfSubArray(intArray, 0, 2));
-    assertArrayEquals(new int[]{1, 2, 3}, copyOfSubArray(intArray, 0, 3));
-    assertEquals(0, copyOfSubArray(intArray, 1, 1).length);
-    expectThrows(IndexOutOfBoundsException.class, () -> copyOfSubArray(intArray, 1, 4 + random().nextInt(10)));
-
-    long[] longArray = {1, 2, 3};
-    assertArrayEquals(new long[]{2}, copyOfSubArray(longArray, 1, 2));
-    assertArrayEquals(new long[]{1, 2, 3}, copyOfSubArray(longArray, 0, 3));
-    assertEquals(0, copyOfSubArray(longArray, 2, 2).length);
-    expectThrows(IndexOutOfBoundsException.class, () -> copyOfSubArray(longArray, 2, 4 + random().nextInt(10)));
-
-    float[] floatArray = {0.1f, 0.2f, 0.3f};
-    assertArrayEquals(new float[]{0.2f, 0.3f}, copyOfSubArray(floatArray, 1, 3), 0.001f);
-    assertArrayEquals(new float[]{0.1f, 0.2f, 0.3f}, copyOfSubArray(floatArray, 0, 3), 0.001f);
-    assertEquals(0, copyOfSubArray(floatArray, 0, 0).length);
-    expectThrows(IndexOutOfBoundsException.class, () -> copyOfSubArray(floatArray, 3, 4 + random().nextInt(10)));
-
-    double[] doubleArray = {0.1, 0.2, 0.3};
-    assertArrayEquals(new double[]{0.3}, copyOfSubArray(doubleArray, 2, 3), 0.001);
-    assertArrayEquals(new double[]{0.1, 0.2, 0.3}, copyOfSubArray(doubleArray, 0, 3), 0.001);
-    assertEquals(0, copyOfSubArray(doubleArray, 1, 1).length);
-    expectThrows(IndexOutOfBoundsException.class, () -> copyOfSubArray(doubleArray, 0, 4 + random().nextInt(10)));
-
-    byte[] byteArray = {1, 2, 3};
-    assertArrayEquals(new byte[]{1}, copyOfSubArray(byteArray, 0, 1));
-    assertArrayEquals(new byte[]{1, 2, 3}, copyOfSubArray(byteArray, 0, 3));
-    assertEquals(0, copyOfSubArray(byteArray, 1, 1).length);
-    expectThrows(IndexOutOfBoundsException.class, () -> copyOfSubArray(byteArray, 1, 4 + random().nextInt(10)));
-
-    char[] charArray = {'a', 'b', 'c'};
-    assertArrayEquals(new char[]{'a', 'b'}, copyOfSubArray(charArray, 0, 2));
-    assertArrayEquals(new char[]{'a', 'b', 'c'}, copyOfSubArray(charArray, 0, 3));
-    assertEquals(0, copyOfSubArray(charArray, 1, 1).length);
-    expectThrows(IndexOutOfBoundsException.class, () -> copyOfSubArray(charArray, 3, 4));
-
-    String[] objectArray = {"a1", "b2", "c3"};
-    assertArrayEquals(new String[]{"a1"}, copyOfSubArray(objectArray, 0, 1));
-    assertArrayEquals(new String[]{"a1", "b2", "c3"}, copyOfSubArray(objectArray, 0, 3));
-    assertEquals(0, copyOfSubArray(objectArray, 1, 1).length);
-    expectThrows(IndexOutOfBoundsException.class, () -> copyOfSubArray(objectArray, 2, 5));
-  }
+  
 }

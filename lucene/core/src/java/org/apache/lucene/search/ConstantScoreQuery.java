@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +16,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Objects;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.ToStringUtils;
 
 /**
  * A query that wraps another query and simply returns a constant score equal to
@@ -45,6 +48,10 @@ public final class ConstantScoreQuery extends Query {
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
+
     Query rewritten = query.rewrite(reader);
 
     if (rewritten != query) {
@@ -62,16 +69,11 @@ public final class ConstantScoreQuery extends Query {
     return super.rewrite(reader);
   }
 
-  @Override
-  public void visit(QueryVisitor visitor) {
-    query.visit(visitor.getSubVisitor(BooleanClause.Occur.FILTER, this));
-  }
-
   /** We return this as our {@link BulkScorer} so that if the CSQ
    *  wraps a query with its own optimized top-level
    *  scorer (e.g. BooleanScorer) we can use that
    *  top-level scorer. */
-  protected static class ConstantBulkScorer extends BulkScorer {
+  protected class ConstantBulkScorer extends BulkScorer {
     final BulkScorer bulkScorer;
     final Weight weight;
     final float theScore;
@@ -90,12 +92,16 @@ public final class ConstantScoreQuery extends Query {
     private LeafCollector wrapCollector(LeafCollector collector) {
       return new FilterLeafCollector(collector) {
         @Override
-        public void setScorer(Scorable scorer) throws IOException {
+        public void setScorer(Scorer scorer) throws IOException {
           // we must wrap again here, but using the scorer passed in as parameter:
-          in.setScorer(new FilterScorable(scorer) {
+          in.setScorer(new FilterScorer(scorer) {
             @Override
-            public float score() {
+            public float score() throws IOException {
               return theScore;
+            }
+            @Override
+            public int freq() throws IOException {
+              return 1;
             }
           });
         }
@@ -109,15 +115,13 @@ public final class ConstantScoreQuery extends Query {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    final Weight innerWeight = searcher.createWeight(query, ScoreMode.COMPLETE_NO_SCORES, 1f);
-    if (scoreMode.needsScores()) {
-      return new ConstantScoreWeight(this, boost) {
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    final Weight innerWeight = searcher.createWeight(query, false);
+    if (needsScores) {
+      return new ConstantScoreWeight(this) {
+
         @Override
         public BulkScorer bulkScorer(LeafReaderContext context) throws IOException {
-          if (scoreMode == ScoreMode.TOP_SCORES) {
-            return super.bulkScorer(context);
-          }
           final BulkScorer innerScorer = innerWeight.bulkScorer(context);
           if (innerScorer == null) {
             return null;
@@ -126,47 +130,26 @@ public final class ConstantScoreQuery extends Query {
         }
 
         @Override
-        public ScorerSupplier scorerSupplier(LeafReaderContext context) throws IOException {
-          ScorerSupplier innerScorerSupplier = innerWeight.scorerSupplier(context);
-          if (innerScorerSupplier == null) {
+        public Scorer scorer(LeafReaderContext context) throws IOException {
+          final Scorer innerScorer = innerWeight.scorer(context);
+          if (innerScorer == null) {
             return null;
           }
-          return new ScorerSupplier() {
+          final float score = score();
+          return new FilterScorer(innerScorer) {
             @Override
-            public Scorer get(long leadCost) throws IOException {
-              final Scorer innerScorer = innerScorerSupplier.get(leadCost);
-              final TwoPhaseIterator twoPhaseIterator = innerScorer.twoPhaseIterator();
-              if (twoPhaseIterator == null) {
-                return new ConstantScoreScorer(innerWeight, score(), scoreMode, innerScorer.iterator());
-              } else {
-                return new ConstantScoreScorer(innerWeight, score(), scoreMode, twoPhaseIterator);
-              }
+            public float score() throws IOException {
+              return score;
             }
-
             @Override
-            public long cost() {
-              return innerScorerSupplier.cost();
+            public int freq() throws IOException {
+              return 1;
+            }
+            @Override
+            public Collection<ChildScorer> getChildren() {
+              return Collections.singleton(new ChildScorer(innerScorer, "constant"));
             }
           };
-        }
-
-        @Override
-        public Matches matches(LeafReaderContext context, int doc) throws IOException {
-          return innerWeight.matches(context, doc);
-        }
-
-        @Override
-        public Scorer scorer(LeafReaderContext context) throws IOException {
-          ScorerSupplier scorerSupplier = scorerSupplier(context);
-          if (scorerSupplier == null) {
-            return null;
-          }
-          return scorerSupplier.get(Long.MAX_VALUE);
-        }
-
-        @Override
-        public boolean isCacheable(LeafReaderContext ctx) {
-          return innerWeight.isCacheable(ctx);
         }
 
       };
@@ -180,17 +163,25 @@ public final class ConstantScoreQuery extends Query {
     return new StringBuilder("ConstantScore(")
       .append(query.toString(field))
       .append(')')
+      .append(ToStringUtils.boost(getBoost()))
       .toString();
   }
 
   @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           query.equals(((ConstantScoreQuery) other).query);
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!super.equals(o))
+      return false;
+    if (o instanceof ConstantScoreQuery) {
+      final ConstantScoreQuery other = (ConstantScoreQuery) o;
+      return this.query.equals(other.query);
+    }
+    return false;
   }
 
   @Override
   public int hashCode() {
-    return 31 * classHash() + query.hashCode();
+    return 31 * super.hashCode() + query.hashCode();
   }
+
 }

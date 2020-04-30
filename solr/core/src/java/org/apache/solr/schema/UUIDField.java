@@ -1,3 +1,5 @@
+package org.apache.solr.schema;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
 
 import java.io.IOException;
 import java.util.Locale;
@@ -38,7 +39,7 @@ import org.apache.solr.update.processor.UUIDUpdateProcessorFactory; // jdoc
  * configured as the unique key field) since the result will be that each 
  * replica of each document will get a unique UUID value.  
  * Using {@link UUIDUpdateProcessorFactory} to generate UUID values when 
- * documents are added is recommended instead.
+ * documents are added is recomended instead.
  * </p>
  * 
  * @see UUID#toString
@@ -100,13 +101,5 @@ public class UUIDField extends StrField {
   @Override
   public UUID toObject(IndexableField f) {
     return UUID.fromString(f.stringValue());
-  }
-
-  @Override
-  public Object toNativeType(Object val) {
-    if (val instanceof CharSequence) {
-      return UUID.fromString(val.toString());
-    }
-    return val;
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -64,7 +64,7 @@ final class BugReproTokenStream extends TokenStream {
   private final CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);
   private final OffsetAttribute offsetAtt = addAttribute(OffsetAttribute.class);
   private final PositionIncrementAttribute posIncAtt = addAttribute(PositionIncrementAttribute.class);
-  private static final int TOKEN_COUNT = 4;
+  private final int tokenCount = 4;
   private int nextTokenIndex = 0;
   private final String terms[] = new String[]{"six", "six", "drunken", "drunken"};
   private final int starts[] = new int[]{0, 0, 4, 4};
@@ -73,7 +73,7 @@ final class BugReproTokenStream extends TokenStream {
 
   @Override
   public boolean incrementToken() {
-    if (nextTokenIndex < TOKEN_COUNT) {
+    if (nextTokenIndex < tokenCount) {
       termAtt.setEmpty().append(terms[nextTokenIndex]);
       offsetAtt.setOffset(starts[nextTokenIndex], ends[nextTokenIndex]);
       posIncAtt.setPositionIncrement(incs[nextTokenIndex]);

@@ -33,8 +33,6 @@ limitations under the License.
 #content #plugins #navigation .PLUGINCHANGES { margin-top: 20px; }
 #content #plugins #navigation .PLUGINCHANGES a { background-image: url( ../../img/ico/eye.png ); }
 #content #plugins #navigation .RELOAD a { background-image: url( ../../img/ico/arrow-circle.png ); }
-#content #plugins #navigation .NOTE { margin-top: 20px; }
-#content #plugins #navigation .NOTE p { color: #4D4D4D; font-style: italic; }
 
 
 #content #plugins #navigation a
@@ -127,14 +125,14 @@ limitations under the License.
 #content #plugins #frame .entry .stats span
 {
   float: left;
-  width: 9%;
+  width: 11%;
 }
 
 #content #plugins #frame .entry dd,
 #content #plugins #frame .entry .stats ul
 {
   float: right;
-  width: 90%;
+  width: 88%;
 }
 
 #content #plugins #frame .entry .stats ul
@@ -146,12 +144,12 @@ limitations under the License.
 
 #content #plugins #frame .entry .stats dt
 {
-  width: 40%;
+  width: 27%;
 }
 
 #content #plugins #frame .entry .stats dd
 {
-  width: 59%;
+  width: 72%;
 }
 
 #content #plugins #frame .entry.expanded a.linker {
@@ -164,12 +162,6 @@ limitations under the License.
 
 #content #plugins #frame .entry.expanded a.linker:hover {
   background-color:#F0F3FF;
-}
-
-#content #plugins .active a
-{
-  background-color: #d0d0d0;
-  border-color: #d0d0d0;
 }
 
 #recording #blockUI

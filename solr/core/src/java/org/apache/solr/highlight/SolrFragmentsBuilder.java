@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.highlight;
 
 import org.apache.lucene.search.vectorhighlight.BoundaryScanner;
@@ -21,11 +22,11 @@ import org.apache.lucene.search.vectorhighlight.FragmentsBuilder;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.HighlightParams;
 import org.apache.solr.common.params.SolrParams;
-import org.apache.solr.core.SolrInfoBean;
+import org.apache.solr.core.SolrInfoMBean;
 import org.apache.solr.util.plugin.NamedListInitializedPlugin;
 
 public abstract class SolrFragmentsBuilder extends HighlightingPluginBase
-  implements SolrInfoBean, NamedListInitializedPlugin {
+  implements SolrInfoMBean, NamedListInitializedPlugin {
   
   public static final String DEFAULT_PRE_TAGS = "<em>";
   public static final String DEFAULT_POST_TAGS = "</em>";
@@ -37,7 +38,7 @@ public abstract class SolrFragmentsBuilder extends HighlightingPluginBase
    * @return An appropriate {@link org.apache.lucene.search.vectorhighlight.FragmentsBuilder}.
    */
   public FragmentsBuilder getFragmentsBuilder(SolrParams params, BoundaryScanner bs) {
-    numRequests.inc();
+    numRequests++;
     params = SolrParams.wrapDefaults(params, defaults);
 
     return getFragmentsBuilder( params, getPreTags( params, null ), getPostTags( params, null ), bs );

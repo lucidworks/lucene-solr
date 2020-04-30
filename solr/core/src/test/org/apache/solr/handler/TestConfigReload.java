@@ -1,3 +1,5 @@
+package org.apache.solr.handler;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler;
+
+import static java.util.Arrays.asList;
+import static org.apache.solr.common.util.Utils.getObjectByPath;
 
 import java.io.StringReader;
 import java.lang.invoke.MethodHandles;
@@ -22,14 +26,15 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.util.EntityUtils;
+import org.apache.solr.client.solrj.SolrClient;
+import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.cloud.AbstractFullDistribZkTestBase;
-import org.apache.solr.common.LinkedHashMapWriter;
-import org.apache.solr.common.MapWriter;
 import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.Slice;
@@ -37,28 +42,52 @@ import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.common.cloud.ZkConfigManager;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.util.StrUtils;
-import org.apache.solr.common.util.Utils;
 import org.apache.solr.core.SolrConfig;
+import org.apache.solr.util.RESTfulServerProvider;
+import org.apache.solr.util.RestTestHarness;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.data.Stat;
 import org.junit.Test;
+import org.noggit.JSONParser;
+import org.noggit.ObjectBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static java.util.Arrays.asList;
 
 public class TestConfigReload extends AbstractFullDistribZkTestBase {
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private List<RestTestHarness> restTestHarnesses = new ArrayList<>();
+
+  private void setupHarnesses() {
+    for (final SolrClient client : clients) {
+      RestTestHarness harness = new RestTestHarness(new RESTfulServerProvider() {
+        @Override
+        public String getBaseURL() {
+          return ((HttpSolrClient)client).getBaseURL();
+        }
+      });
+      restTestHarnesses.add(harness);
+    }
+  }
+  
+  @Override
+  public void distribTearDown() throws Exception {
+    super.distribTearDown();
+    for (RestTestHarness h : restTestHarnesses) {
+      h.close();
+    }
+  }
 
   @Test
   public void test() throws Exception {
-    setupRestTestHarnesses();
+    setupHarnesses();
     try {
       reloadTest();
     } finally {
-      closeRestTestHarnesses();
+      for (RestTestHarness h : restTestHarnesses) {
+        h.close();
+      }
     }
   }
 
@@ -87,7 +116,7 @@ public class TestConfigReload extends AbstractFullDistribZkTestBase {
     assertTrue(newStat.getVersion() > stat.getVersion());
     log.info("new_version "+ newStat.getVersion());
     Integer newVersion = newStat.getVersion();
-    long maxTimeoutSeconds = 60;
+    long maxTimeoutSeconds = 20;
     DocCollection coll = cloudClient.getZkStateReader().getClusterState().getCollection("collection1");
     List<String> urls = new ArrayList<>();
     for (Slice slice : coll.getSlices()) {
@@ -99,8 +128,8 @@ public class TestConfigReload extends AbstractFullDistribZkTestBase {
     while ( TimeUnit.SECONDS.convert(System.nanoTime() - startTime, TimeUnit.NANOSECONDS) < maxTimeoutSeconds){
       Thread.sleep(50);
       for (String url : urls) {
-        MapWriter respMap = getAsMap(url + uri);
-        if (String.valueOf(newVersion).equals(respMap._getStr(asList(name, "znodeVersion"), null))) {
+        Map respMap = getAsMap(url+uri+"?wt=json");
+        if(String.valueOf(newVersion).equals(String.valueOf( getObjectByPath(respMap, true, asList(name, "znodeVersion"))))){
           succeeded.add(url);
         }
       }
@@ -110,13 +139,13 @@ public class TestConfigReload extends AbstractFullDistribZkTestBase {
     assertEquals(StrUtils.formatString("tried these servers {0} succeeded only in {1} ", urls, succeeded) , urls.size(), succeeded.size());
   }
 
-  private LinkedHashMapWriter getAsMap(String uri) throws Exception {
+  private  Map getAsMap(String uri) throws Exception {
     HttpGet get = new HttpGet(uri) ;
     HttpEntity entity = null;
     try {
       entity = cloudClient.getLbClient().getHttpClient().execute(get).getEntity();
       String response = EntityUtils.toString(entity, StandardCharsets.UTF_8);
-      return (LinkedHashMapWriter) Utils.MAPWRITEROBJBUILDER.apply(Utils.getJSONParser(new StringReader(response))).getVal();
+      return (Map) ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
     } finally {
       EntityUtils.consumeQuietly(entity);
     }

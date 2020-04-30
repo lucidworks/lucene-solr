@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function.docvalues;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function.docvalues;
-
-import java.io.IOException;
 
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -35,20 +34,20 @@ public abstract class StrDocValues extends FunctionValues {
   }
 
   @Override
-  public abstract String strVal(int doc) throws IOException;
+  public abstract String strVal(int doc);
 
   @Override
-  public Object objectVal(int doc) throws IOException {
+  public Object objectVal(int doc) {
     return exists(doc) ? strVal(doc) : null;
   }
 
   @Override
-  public boolean boolVal(int doc) throws IOException {
+  public boolean boolVal(int doc) {
     return exists(doc);
   }
 
   @Override
-  public String toString(int doc) throws IOException {
+  public String toString(int doc) {
     return vs.description() + "='" + strVal(doc) + "'";
   }
 
@@ -63,7 +62,7 @@ public abstract class StrDocValues extends FunctionValues {
       }
 
       @Override
-      public void fillValue(int doc) throws IOException {
+      public void fillValue(int doc) {
         mval.exists = bytesVal(doc, mval.value);
       }
     };

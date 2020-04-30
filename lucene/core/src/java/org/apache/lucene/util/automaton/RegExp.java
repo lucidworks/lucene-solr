@@ -380,7 +380,7 @@ public class RegExp {
    * <code>RegExp(s, ALL)</code>.
    * 
    * @param s regexp string
-   * @exception IllegalArgumentException if an error occurred while parsing the
+   * @exception IllegalArgumentException if an error occured while parsing the
    *              regular expression
    */
   public RegExp(String s) throws IllegalArgumentException {
@@ -393,7 +393,7 @@ public class RegExp {
    * @param s regexp string
    * @param syntax_flags boolean 'or' of optional syntax constructs to be
    *          enabled
-   * @exception IllegalArgumentException if an error occurred while parsing the
+   * @exception IllegalArgumentException if an error occured while parsing the
    *              regular expression
    */
   public RegExp(String s, int syntax_flags) throws IllegalArgumentException {
@@ -542,21 +542,19 @@ public class RegExp {
         a = MinimizationOperations.minimize(a, maxDeterminizedStates);
         break;
       case REGEXP_REPEAT_MIN:
-        a = exp1.toAutomatonInternal(automata, automaton_provider, maxDeterminizedStates);
-        int minNumStates = (a.getNumStates() - 1) * min;
-        if (minNumStates > maxDeterminizedStates) {
-          throw new TooComplexToDeterminizeException(a, minNumStates);
-        }
-        a = Operations.repeat(a, min);
+        a = Operations.repeat(
+          exp1.toAutomatonInternal(automata, automaton_provider,
+            maxDeterminizedStates),
+          min);
         a = MinimizationOperations.minimize(a, maxDeterminizedStates);
         break;
       case REGEXP_REPEAT_MINMAX:
-        a = exp1.toAutomatonInternal(automata, automaton_provider, maxDeterminizedStates);
-        int minMaxNumStates = (a.getNumStates() - 1) * max;
-        if (minMaxNumStates > maxDeterminizedStates) {
-          throw new TooComplexToDeterminizeException(a, minMaxNumStates);
-        }
-        a = Operations.repeat(a, min, max);
+        a = Operations.repeat(
+          exp1.toAutomatonInternal(automata, automaton_provider,
+            maxDeterminizedStates),
+          min,
+          max);
+        a = MinimizationOperations.minimize(a, maxDeterminizedStates);
         break;
       case REGEXP_COMPLEMENT:
         a = Operations.complement(

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -76,9 +76,6 @@ public class AutomatonTermsEnum extends FilteredTermsEnum {
    */
   public AutomatonTermsEnum(TermsEnum tenum, CompiledAutomaton compiled) {
     super(tenum);
-    if (compiled.type != CompiledAutomaton.AUTOMATON_TYPE.NORMAL) {
-      throw new IllegalArgumentException("please use CompiledAutomaton.getTermsEnum instead");
-    }
     this.finite = compiled.finite;
     this.runAutomaton = compiled.runAutomaton;
     assert this.runAutomaton != null;
@@ -113,7 +110,7 @@ public class AutomatonTermsEnum extends FilteredTermsEnum {
     if (term == null) {
       assert seekBytesRef.length() == 0;
       // return the empty term, as it's valid
-      if (runAutomaton.isAccept(0)) {   
+      if (runAutomaton.isAccept(runAutomaton.getInitialState())) {   
         return seekBytesRef.get();
       }
     } else {
@@ -138,7 +135,7 @@ public class AutomatonTermsEnum extends FilteredTermsEnum {
   private void setLinear(int position) {
     assert linear == false;
     
-    int state = 0;
+    int state = runAutomaton.getInitialState();
     assert state == 0;
     int maxInterval = 0xff;
     //System.out.println("setLinear pos=" + position + " seekbytesRef=" + seekBytesRef);
@@ -185,7 +182,7 @@ public class AutomatonTermsEnum extends FilteredTermsEnum {
     int state;
     int pos = 0;
     savedStates.grow(seekBytesRef.length()+1);
-    savedStates.setIntAt(0, 0);
+    savedStates.setIntAt(0, runAutomaton.getInitialState());
     
     while (true) {
       curGen++;

@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
-
 
 import java.util.Map;
 
@@ -31,13 +31,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * See
  * {@link FingerprintFilter} for an explanation of its use.
  * </pre>
- * @since 5.4.0
- * @lucene.spi {@value #NAME}
  */
 public class FingerprintFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "fingerprint";
 
   public static final String MAX_OUTPUT_TOKEN_SIZE_KEY = "maxOutputTokenSize";
   public static final String SEPARATOR_KEY = "separator";

@@ -1,3 +1,5 @@
+package org.apache.solr.client.solrj.io;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.io;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.lang.invoke.MethodHandles;
 import java.util.Map;
-import java.util.Optional;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
-
-import org.apache.http.client.HttpClient;
+import java.util.Iterator;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
@@ -41,29 +38,14 @@ public class SolrClientCache implements Serializable {
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  private final Map<String, SolrClient> solrClients = new HashMap<>();
-  private final HttpClient httpClient;
-
-  public SolrClientCache() {
-    httpClient = null;
-  }
-
-  public SolrClientCache(HttpClient httpClient) {
-    this.httpClient = httpClient;
-  }
+  private Map<String, SolrClient> solrClients = new HashMap();
 
   public synchronized CloudSolrClient getCloudSolrClient(String zkHost) {
-    CloudSolrClient client;
+    CloudSolrClient client = null;
     if (solrClients.containsKey(zkHost)) {
       client = (CloudSolrClient) solrClients.get(zkHost);
     } else {
-      final List<String> hosts = new ArrayList<String>();
-      hosts.add(zkHost);
-      CloudSolrClient.Builder builder = new CloudSolrClient.Builder(hosts, Optional.empty()).withSocketTimeout(30000).withConnectionTimeout(15000);
-      if (httpClient != null) {
-        builder = builder.withHttpClient(httpClient);
-      }
-      client = builder.build();
+      client = new CloudSolrClient(zkHost);
       client.connect();
       solrClients.put(zkHost, client);
     }
@@ -72,28 +54,24 @@ public class SolrClientCache implements Serializable {
   }
 
   public synchronized HttpSolrClient getHttpSolrClient(String host) {
-    HttpSolrClient client;
+    HttpSolrClient client = null;
     if (solrClients.containsKey(host)) {
       client = (HttpSolrClient) solrClients.get(host);
     } else {
-      HttpSolrClient.Builder builder = new HttpSolrClient.Builder(host);
-      if (httpClient != null) {
-        builder = builder.withHttpClient(httpClient);
-      }
-      client = builder.build();
+      client = new HttpSolrClient(host);
       solrClients.put(host, client);
     }
     return client;
   }
 
-  public synchronized void close() {
-    for(Map.Entry<String, SolrClient> entry : solrClients.entrySet()) {
+  public void close() {
+    Iterator<SolrClient> it = solrClients.values().iterator();
+    while(it.hasNext()) {
       try {
-        entry.getValue().close();
+        it.next().close();
       } catch (IOException e) {
-        log.error("Error closing SolrClient for " + entry.getKey(), e);
+        log.error(e.getMessage(), e);
       }
     }
-    solrClients.clear();
   }
 }

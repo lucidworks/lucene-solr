@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.analyzing;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.analyzing;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -28,9 +29,9 @@ import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.BinaryDocValues;
+import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.MultiDocValues;
-import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.BooleanClause;
@@ -41,6 +42,7 @@ import org.apache.lucene.search.TopFieldDocs;
 import org.apache.lucene.search.suggest.Lookup;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.Version;
 
 // TODO:
 // - allow to use the search score
@@ -60,8 +62,6 @@ public class BlendedInfixSuggester extends AnalyzingInfixSuggester {
    * Coefficient used for linear blending
    */
   protected static double LINEAR_COEF = 0.10;
-
-  private Double exponent = 2.0;
 
   /**
    * Default factor
@@ -89,8 +89,6 @@ public class BlendedInfixSuggester extends AnalyzingInfixSuggester {
     POSITION_LINEAR,
     /** weight/(1+position) */
     POSITION_RECIPROCAL,
-    /** weight/pow(1+position, exponent) */
-    POSITION_EXPONENTIAL_RECIPROCAL
     // TODO:
     //SCORE
   }
@@ -100,7 +98,15 @@ public class BlendedInfixSuggester extends AnalyzingInfixSuggester {
    * directory, if it exists.
    */
   public BlendedInfixSuggester(Directory dir, Analyzer analyzer) throws IOException {
-    super(dir, analyzer);
+    this(analyzer.getVersion(), dir, analyzer);
+  }
+
+  /**
+   * @deprecated Use {@link #BlendedInfixSuggester(Directory, Analyzer)}
+   */
+  @Deprecated
+  public BlendedInfixSuggester(Version matchVersion, Directory dir, Analyzer analyzer) throws IOException {
+    super(matchVersion, dir, analyzer);
     this.blenderType = BlenderType.POSITION_LINEAR;
     this.numFactor = DEFAULT_NUM_FACTOR;
   }
@@ -117,18 +123,26 @@ public class BlendedInfixSuggester extends AnalyzingInfixSuggester {
    */
   public BlendedInfixSuggester(Directory dir, Analyzer indexAnalyzer, Analyzer queryAnalyzer,
                                int minPrefixChars, BlenderType blenderType, int numFactor, boolean commitOnBuild) throws IOException {
-    super(dir, indexAnalyzer, queryAnalyzer, minPrefixChars, commitOnBuild);
+    this(indexAnalyzer.getVersion(), dir, indexAnalyzer, queryAnalyzer, minPrefixChars, blenderType, numFactor, commitOnBuild);
+  }
+
+  /**
+   * @deprecated Use {@link #BlendedInfixSuggester(Directory, Analyzer, Analyzer, int, BlendedInfixSuggester.BlenderType, int, boolean)}
+   */
+  @Deprecated
+  public BlendedInfixSuggester(Version matchVersion, Directory dir, Analyzer indexAnalyzer, Analyzer queryAnalyzer,
+                               int minPrefixChars, BlenderType blenderType, int numFactor, boolean commitOnBuild) throws IOException {
+    super(matchVersion, dir, indexAnalyzer, queryAnalyzer, minPrefixChars, commitOnBuild);
     this.blenderType = blenderType;
     this.numFactor = numFactor;
   }
-
+  
   /**
    * Create a new instance, loading from a previously built
    * directory, if it exists.
    *
    * @param blenderType Type of blending strategy, see BlenderType for more precisions
    * @param numFactor   Factor to multiply the number of searched elements before ponderate
-   * @param exponent exponent used only when blenderType is  BlenderType.POSITION_EXPONENTIAL_RECIPROCAL
    * @param commitOnBuild Call commit after the index has finished building. This would persist the
    *                      suggester index to disk and future instances of this suggester can use this pre-built dictionary.
    * @param allTermsRequired All terms in the suggest query must be matched.
@@ -136,16 +150,13 @@ public class BlendedInfixSuggester extends AnalyzingInfixSuggester {
    * @throws IOException If there are problems opening the underlying Lucene index.
    */
   public BlendedInfixSuggester(Directory dir, Analyzer indexAnalyzer, Analyzer queryAnalyzer,
-                               int minPrefixChars, BlenderType blenderType, int numFactor, Double exponent,
+                               int minPrefixChars, BlenderType blenderType, int numFactor, 
                                boolean commitOnBuild, boolean allTermsRequired, boolean highlight) throws IOException {
     super(dir, indexAnalyzer, queryAnalyzer, minPrefixChars, commitOnBuild, allTermsRequired, highlight);
     this.blenderType = blenderType;
     this.numFactor = numFactor;
-    if(exponent != null) {
-      this.exponent = exponent;
-    }
   }
-
+  
   @Override
   public List<Lookup.LookupResult> lookup(CharSequence key, Set<BytesRef> contexts, boolean onlyMorePopular, int num) throws IOException {
     // Don't * numFactor here since we do it down below, once, in the call chain:
@@ -186,6 +197,13 @@ public class BlendedInfixSuggester extends AnalyzingInfixSuggester {
                                                     boolean doHighlight, Set<String> matchedTokens, String prefixToken)
       throws IOException {
 
+    BinaryDocValues textDV = MultiDocValues.getBinaryValues(searcher.getIndexReader(), TEXT_FIELD_NAME);
+    assert textDV != null;
+
+    // This will just be null if app didn't pass payloads to build():
+    // TODO: maybe just stored fields?  they compress...
+    BinaryDocValues payloadsDV = MultiDocValues.getBinaryValues(searcher.getIndexReader(), "payloads");
+
     TreeSet<Lookup.LookupResult> results = new TreeSet<>(LOOKUP_COMP);
 
     // we reduce the num to the one initially requested
@@ -194,25 +212,12 @@ public class BlendedInfixSuggester extends AnalyzingInfixSuggester {
     for (int i = 0; i < hits.scoreDocs.length; i++) {
       FieldDoc fd = (FieldDoc) hits.scoreDocs[i];
 
-      BinaryDocValues textDV = MultiDocValues.getBinaryValues(searcher.getIndexReader(), TEXT_FIELD_NAME);
-      assert textDV != null;
-
-      textDV.advance(fd.doc);
-
-      final String text = textDV.binaryValue().utf8ToString();
+      final String text = textDV.get(fd.doc).utf8ToString();
       long weight = (Long) fd.fields[0];
-
-      // This will just be null if app didn't pass payloads to build():
-      // TODO: maybe just stored fields?  they compress...
-      BinaryDocValues payloadsDV = MultiDocValues.getBinaryValues(searcher.getIndexReader(), "payloads");
 
       BytesRef payload;
       if (payloadsDV != null) {
-        if (payloadsDV.advance(fd.doc) == fd.doc) {
-          payload = BytesRef.deepCopyOf(payloadsDV.binaryValue());
-        } else {
-          payload = new BytesRef(BytesRef.EMPTY_BYTES);
-        }
+        payload = BytesRef.deepCopyOf(payloadsDV.get(fd.doc));
       } else {
         payload = null;
       }
@@ -224,12 +229,7 @@ public class BlendedInfixSuggester extends AnalyzingInfixSuggester {
       } else {
         coefficient = createCoefficient(searcher, fd.doc, matchedTokens, prefixToken);
       }
-      if (weight == 0) {
-        weight = 1;
-      }
-      if (weight < 1 / LINEAR_COEF && weight > -1 / LINEAR_COEF) {
-        weight *= 1 / LINEAR_COEF;
-      }
+
       long score = (long) (weight * coefficient);
 
       LookupResult result;
@@ -319,10 +319,6 @@ public class BlendedInfixSuggester extends AnalyzingInfixSuggester {
 
       case POSITION_RECIPROCAL:
         coefficient = 1. / (position + 1);
-        break;
-
-      case POSITION_EXPONENTIAL_RECIPROCAL:
-        coefficient = 1. / Math.pow((position + 1.0), exponent);
         break;
 
       default:

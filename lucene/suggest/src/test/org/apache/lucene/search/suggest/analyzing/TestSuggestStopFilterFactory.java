@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.analyzing;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.analyzing;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.en.EnglishAnalyzer;
+import org.apache.lucene.analysis.core.StopAnalyzer;
+import org.apache.lucene.analysis.util.CharArraySet;
 import org.apache.lucene.analysis.util.ClasspathResourceLoader;
 import org.apache.lucene.analysis.util.ResourceLoader;
 import org.apache.lucene.util.Version;
@@ -63,39 +64,43 @@ public class TestSuggestStopFilterFactory extends BaseTokenStreamTestCase {
 
     // defaults
     factory = createFactory();
-    assertEquals(EnglishAnalyzer.ENGLISH_STOP_WORDS_SET, factory.getStopWords());
+    assertEquals(StopAnalyzer.ENGLISH_STOP_WORDS_SET, factory.getStopWords());
     assertEquals(false, factory.isIgnoreCase());
   }
 
   /** Test that bogus arguments result in exception */
   public void testBogusArguments() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       createFactory("bogusArg", "bogusValue");
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
   }
 
   /** Test that bogus arguments result in exception */
   public void testBogusFormats() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       createFactory("words", "stop-snowball.txt",
           "format", "bogus");
-    });
-
-    String msg = expected.getMessage();
-    assertTrue(msg, msg.contains("Unknown"));
-    assertTrue(msg, msg.contains("format"));
-    assertTrue(msg, msg.contains("bogus"));
-    
-    expected = expectThrows(IllegalArgumentException.class, () -> {
+      fail();
+    } catch (IllegalArgumentException expected) {
+      String msg = expected.getMessage();
+      assertTrue(msg, msg.contains("Unknown"));
+      assertTrue(msg, msg.contains("format"));
+      assertTrue(msg, msg.contains("bogus"));
+    }
+    try {
       createFactory(
           // implicit default words file
           "format", "bogus");
-    });
-    msg = expected.getMessage();
-    assertTrue(msg, msg.contains("can not be specified"));
-    assertTrue(msg, msg.contains("format"));
-    assertTrue(msg, msg.contains("bogus"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      String msg = expected.getMessage();
+      assertTrue(msg, msg.contains("can not be specified"));
+      assertTrue(msg, msg.contains("format"));
+      assertTrue(msg, msg.contains("bogus"));
+    }
   }                                             
 
   private SuggestStopFilterFactory createFactory(String ... params) throws IOException {

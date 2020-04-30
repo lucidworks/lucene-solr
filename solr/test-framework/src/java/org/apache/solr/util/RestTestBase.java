@@ -1,3 +1,4 @@
+package org.apache.solr.util;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util;
+
 import org.apache.solr.JSONTestUtil;
 import org.apache.solr.SolrJettyTestBase;
 import org.apache.solr.common.SolrException;
@@ -49,9 +50,14 @@ abstract public class RestTestBase extends SolrJettyTestBase {
       (String solrHome, String configFile, String schemaFile, String context,
        boolean stopAtShutdown, SortedMap<ServletHolder,String> extraServlets) throws Exception {
 
-    createAndStartJetty(solrHome, configFile, schemaFile, context, stopAtShutdown, extraServlets);
+    createJetty(solrHome, configFile, schemaFile, context, stopAtShutdown, extraServlets);
 
-    restTestHarness = new RestTestHarness(() -> jetty.getBaseUrl().toString() + "/" + DEFAULT_TEST_CORENAME);
+    restTestHarness = new RestTestHarness(new RESTfulServerProvider() {
+      @Override
+      public String getBaseURL() {
+        return jetty.getBaseUrl().toString() + "/" + DEFAULT_TEST_CORENAME;
+      }
+    });
   }
 
   /** Validates an update XML String is successful
@@ -498,7 +504,7 @@ abstract public class RestTestBase extends SolrJettyTestBase {
    *
    * The passed-in valueToSet should NOT be URL encoded, as it will be URL encoded by this method.
    *
-   * @param query The query portion of a request URL, e.g. "wt=xml&indent=off&fl=id,_version_"
+   * @param query The query portion of a request URL, e.g. "wt=json&indent=on&fl=id,_version_"
    * @param paramToSet The parameter name to insure the presence of in the returned request 
    * @param valueToSet The parameter value to insure in the returned request
    * @return The query with the given param set to the given value 

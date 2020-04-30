@@ -1,3 +1,4 @@
+package org.apache.solr.spelling;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +15,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling;
+
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.lucene.analysis.Token;
 import org.apache.lucene.index.IndexReader;
 import org.apache.solr.common.params.CommonParams;
-import org.apache.solr.common.params.CursorMarkParams;
 import org.apache.solr.common.params.DisMaxParams;
 import org.apache.solr.common.params.GroupParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
@@ -40,10 +41,8 @@ import org.apache.solr.search.SolrIndexSearcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.solr.common.params.CommonParams.ID;
-
 public class SpellCheckCollator {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   private int maxCollations = 1;
   private int maxCollationTries = 0;
   private int maxCollationEvaluations = 10000;
@@ -73,7 +72,7 @@ public class SpellCheckCollator {
       verifyCandidateWithQuery = false;
     }
     if (queryComponent == null && verifyCandidateWithQuery) {
-      log.info("Could not find an instance of QueryComponent.  Disabling collation verification against the index.");
+      LOG.info("Could not find an instance of QueryComponent.  Disabling collation verification against the index.");
       maxTries = 1;
       verifyCandidateWithQuery = false;
     }
@@ -92,7 +91,7 @@ public class SpellCheckCollator {
 
       PossibilityIterator.RankedSpellPossibility possibility = possibilityIter.next();
       String collationQueryStr = getCollation(originalQuery, possibility.corrections);
-      long hits = 0;
+      int hits = 0;
 
       if (verifyCandidateWithQuery) {
         tryNo++;
@@ -117,11 +116,9 @@ public class SpellCheckCollator {
         params.remove(CommonParams.START);
         params.set(CommonParams.ROWS, "" + docCollectionLimit);
         // we don't want any stored fields
-        params.set(CommonParams.FL, ID);
+        params.set(CommonParams.FL, "id");
         // we'll sort by doc id to ensure no scoring is done.
         params.set(CommonParams.SORT, "_docid_ asc");
-        // CursorMark does not like _docid_ sorting, and we don't need it.
-        params.remove(CursorMarkParams.CURSOR_MARK_PARAM);
         // If a dismax query, don't add unnecessary clauses for scoring
         params.remove(DisMaxParams.TIE);
         params.remove(DisMaxParams.PF);
@@ -131,19 +128,6 @@ public class SpellCheckCollator {
         params.remove(DisMaxParams.BF);
         // Collate testing does not support Grouping (see SOLR-2577)
         params.remove(GroupParams.GROUP);
-        
-        // Collate testing does not support the Collapse QParser (See SOLR-8807)
-        params.remove("expand");
-        String[] filters = params.getParams(CommonParams.FQ);
-        if (filters != null) {
-          List<String> filtersToApply = new ArrayList<>(filters.length);
-          for (String fq : filters) {
-            if (!fq.startsWith("{!collapse")) {
-              filtersToApply.add(fq);
-            }
-          }
-          params.set("fq", filtersToApply.toArray(new String[filtersToApply.size()]));
-        }      
 
         // creating a request here... make sure to close it!
         ResponseBuilder checkResponse = new ResponseBuilder(
@@ -161,7 +145,7 @@ public class SpellCheckCollator {
             checkResponse.setFieldFlags(f |= SolrIndexSearcher.TERMINATE_EARLY);            
           }
           queryComponent.process(checkResponse);
-          hits = ((Number) checkResponse.rsp.getToLog().get("hits")).longValue();
+          hits = (Integer) checkResponse.rsp.getToLog().get("hits");
         } catch (EarlyTerminatingCollectorException etce) {
           assert (docCollectionLimit > 0);
           assert 0 < etce.getNumberScanned();
@@ -170,11 +154,11 @@ public class SpellCheckCollator {
           if (etce.getNumberScanned() == maxDocId) {
             hits = etce.getNumberCollected();
           } else {
-            hits = (long) ( ((float)( maxDocId * etce.getNumberCollected() )) 
+            hits = (int) ( ((float)( maxDocId * etce.getNumberCollected() )) 
                            / (float)etce.getNumberScanned() );
           }
         } catch (Exception e) {
-          log.warn("Exception trying to re-query to check if a spell check possibility would return any hits.", e);
+          LOG.warn("Exception trying to re-query to check if a spell check possibility would return any hits.", e);
         } finally {
           checkResponse.req.close();  
         }
@@ -193,8 +177,8 @@ public class SpellCheckCollator {
         collation.setMisspellingsAndCorrections(misspellingsAndCorrections);
         collations.add(collation);
       }
-      if (log.isDebugEnabled()) {
-        log.debug("Collation: " + collationQueryStr + (verifyCandidateWithQuery ? (" will return " + hits + " hits.") : ""));
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Collation: " + collationQueryStr + (verifyCandidateWithQuery ? (" will return " + hits + " hits.") : ""));
       }
     }
     return collations;
@@ -221,7 +205,8 @@ public class SpellCheckCollator {
       
       //If the correction contains whitespace (because it involved breaking a word in 2+ words),
       //then be sure all of the new words have the same optional/required/prohibited status in the query.
-      while(indexOfSpace>-1 && indexOfSpace<corr.length()-1) {        
+      while(indexOfSpace>-1 && indexOfSpace<corr.length()-1) {
+        addParenthesis = true;
         char previousChar = tok.startOffset()>0 ? origQuery.charAt(tok.startOffset()-1) : ' ';
         if(previousChar=='-' || previousChar=='+') {
           corrSb.insert(indexOfSpace + bump, previousChar);
@@ -230,7 +215,6 @@ public class SpellCheckCollator {
           }
           bump++;
         } else if ((tok.getFlags() & QueryConverter.TERM_IN_BOOLEAN_QUERY_FLAG) == QueryConverter.TERM_IN_BOOLEAN_QUERY_FLAG) {
-          addParenthesis = true;
           corrSb.insert(indexOfSpace + bump, "AND ");
           bump += 4;
         }

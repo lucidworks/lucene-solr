@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -43,39 +43,31 @@ public class TestScoreCachingWrappingScorer extends LuceneTestCase {
       return idx == scores.length ? Float.NaN : scores[idx++];
     }
     
-    @Override
-    public float getMaxScore(int upTo) throws IOException {
-      return Float.POSITIVE_INFINITY;
+    @Override public int freq() throws IOException {
+      return 1;
     }
 
     @Override public int docID() { return doc; }
 
+    @Override public int nextDoc() {
+      return ++doc < scores.length ? doc : NO_MORE_DOCS;
+    }
+    
+    @Override public int advance(int target) {
+      doc = target;
+      return doc < scores.length ? doc : NO_MORE_DOCS;
+    }
+
     @Override
-    public DocIdSetIterator iterator() {
-      return new DocIdSetIterator() {
-        @Override public int docID() { return doc; }
-
-        @Override public int nextDoc() {
-          return ++doc < scores.length ? doc : NO_MORE_DOCS;
-        }
-        
-        @Override public int advance(int target) {
-          doc = target;
-          return doc < scores.length ? doc : NO_MORE_DOCS;
-        }
-
-        @Override
-        public long cost() {
-          return scores.length;
-        }
-      };
+    public long cost() {
+      return scores.length;
     }
   }
   
   private static final class ScoreCachingCollector extends SimpleCollector {
 
     private int idx = 0;
-    private Scorable scorer;
+    private Scorer scorer;
     float[] mscores;
     
     public ScoreCachingCollector(int numToCollect) {
@@ -95,13 +87,13 @@ public class TestScoreCachingWrappingScorer extends LuceneTestCase {
       ++idx;
     }
 
-    @Override public void setScorer(Scorable scorer) {
+    @Override public void setScorer(Scorer scorer) {
       this.scorer = new ScoreCachingWrappingScorer(scorer);
     }
     
     @Override
-    public ScoreMode scoreMode() {
-      return ScoreMode.COMPLETE;
+    public boolean needsScores() {
+      return true;
     }
 
   }
@@ -117,14 +109,14 @@ public class TestScoreCachingWrappingScorer extends LuceneTestCase {
     IndexReader ir = writer.getReader();
     writer.close();
     IndexSearcher searcher = newSearcher(ir);
-    Weight fake = new TermQuery(new Term("fake", "weight")).createWeight(searcher, ScoreMode.COMPLETE, 1f);
+    Weight fake = new TermQuery(new Term("fake", "weight")).createWeight(searcher, true);
     Scorer s = new SimpleScorer(fake);
     ScoreCachingCollector scc = new ScoreCachingCollector(scores.length);
     scc.setScorer(s);
     
     // We need to iterate on the scorer so that its doc() advances.
     int doc;
-    while ((doc = s.iterator().nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
+    while ((doc = s.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
       scc.collect(doc);
     }
     

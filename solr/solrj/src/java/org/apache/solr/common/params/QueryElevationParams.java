@@ -1,3 +1,5 @@
+package org.apache.solr.common.params;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.params;
+
 
 /**
  * Parameters used with the QueryElevationComponent
@@ -34,7 +36,6 @@ public interface QueryElevationParams {
    * See http://wiki.apache.org/solr/DocTransformers
    */
   String EDITORIAL_MARKER_FIELD_NAME = "editorialMarkerFieldName";
-
   /**
    * The name of the field that excluded editorial results will be written out as when using the QueryElevationComponent, which
    * automatically configures the EditorialMarkerFactory.  The default name is "excluded".  This is only used
@@ -49,10 +50,4 @@ public interface QueryElevationParams {
    * as excluded.
    */
   String MARK_EXCLUDES = "markExcludes";
-
-  /**
-   * When multiple docs are elevated, should their relative order be the order in the configuration file or should
-   * they be subject to whatever the sort criteria is?  True by default.
-   */
-  String USE_CONFIGURED_ELEVATED_ORDER = "useConfiguredElevatedOrder";
 }

@@ -1,3 +1,11 @@
+package org.apache.lucene.document;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+import org.apache.lucene.util.LuceneTestCase;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +22,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.document;
-
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.*;
-
-import org.apache.lucene.util.LuceneTestCase;
-
 public class TestDateTools extends LuceneTestCase {
   public void testStringToDate() throws ParseException {
     
@@ -35,17 +35,19 @@ public class TestDateTools extends LuceneTestCase {
     d = DateTools.stringToDate("20040705091055990");
     assertEquals("2004-07-05 09:10:55:990", isoFormat(d));
 
-    expectThrows(ParseException.class, () -> {
-      DateTools.stringToDate("97");    // no date
-    });
+    try {
+      d = DateTools.stringToDate("97");    // no date
+      fail();
+    } catch(ParseException e) { /* expected exception */ }
+    try {
+      d = DateTools.stringToDate("200401011235009999");    // no date
+      fail();
+    } catch(ParseException e) { /* expected exception */ }
+    try {
+      d = DateTools.stringToDate("aaaa");    // no date
+      fail();
+    } catch(ParseException e) { /* expected exception */ }
 
-    expectThrows(ParseException.class, () -> {
-      DateTools.stringToDate("200401011235009999");    // no date
-    });
-
-    expectThrows(ParseException.class, () -> {
-      DateTools.stringToDate("aaaa");    // no date
-    });
   }
   
   public void testStringtoTime() throws ParseException {

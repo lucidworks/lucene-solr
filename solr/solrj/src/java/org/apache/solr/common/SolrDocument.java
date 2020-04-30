@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.common;
 
-import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -40,9 +41,9 @@ import org.apache.solr.common.util.NamedList;
  *
  * @since solr 1.3
  */
-public class SolrDocument extends SolrDocumentBase<Object, SolrDocument> implements Iterable<Map.Entry<String, Object>>
+public class SolrDocument implements Map<String,Object>, Iterable<Map.Entry<String, Object>>, Serializable
 {
-  protected final Map<String,Object> _fields;
+  private final Map<String,Object> _fields;
   
   private List<SolrDocument> _childDocuments;
   
@@ -51,20 +52,10 @@ public class SolrDocument extends SolrDocumentBase<Object, SolrDocument> impleme
     _fields = new LinkedHashMap<>();
   }
 
-  @Override
-  public void writeMap(EntryWriter ew) throws IOException {
-    _fields.forEach(ew.getBiConsumer());
-  }
-
-  public SolrDocument(Map<String, Object> fields) {
-    this._fields = fields;
-  }
-
   /**
    * @return a list of field names defined in this document - this Collection is directly backed by this SolrDocument.
    * @see #keySet
    */
-  @Override
   public Collection<String> getFieldNames() {
     return this.keySet();
   }
@@ -111,7 +102,7 @@ public class SolrDocument extends SolrDocumentBase<Object, SolrDocument> impleme
     else if( value instanceof NamedList ) {
       // nothing
     }
-    else if( value instanceof Iterable && !(value instanceof SolrDocumentBase)) {
+    else if( value instanceof Iterable ) {
       ArrayList<Object> lst = new ArrayList<>();
       for( Object o : (Iterable)value ) {
         lst.add( o );
@@ -133,7 +124,6 @@ public class SolrDocument extends SolrDocumentBase<Object, SolrDocument> impleme
    * @param value Value of the field, should be of same class type as defined by "type" attribute of the corresponding field in schema.xml. 
    */
   @SuppressWarnings("unchecked")
-  @Override
   public void addField(String name, Object value) 
   { 
     Object existing = _fields.get(name);
@@ -160,7 +150,7 @@ public class SolrDocument extends SolrDocumentBase<Object, SolrDocument> impleme
     }
     
     // Add the values to the collection
-    if( value instanceof Iterable && !(value instanceof SolrDocumentBase)) {
+    if( value instanceof Iterable ) {
       for( Object o : (Iterable<Object>)value ) {
         vals.add( o );
       }
@@ -196,7 +186,6 @@ public class SolrDocument extends SolrDocumentBase<Object, SolrDocument> impleme
   /**
    * Get the value or collection of values for a given field.  
    */
-  @Override
   public Object getFieldValue(String name) {
     return _fields.get( name );
   }
@@ -205,7 +194,6 @@ public class SolrDocument extends SolrDocumentBase<Object, SolrDocument> impleme
    * Get a collection of values for a given field name
    */
   @SuppressWarnings("unchecked")
-  @Override
   public Collection<Object> getFieldValues(String name) {
     Object v = _fields.get( name );
     if( v instanceof Collection ) {
@@ -287,7 +275,7 @@ public class SolrDocument extends SolrDocumentBase<Object, SolrDocument> impleme
       /** Get the field Value */
       @Override
       public Object get(Object key) { 
-        return getFirstValue( (String)key);
+        return getFirstValue( (String)key ); 
       }
       
       // Easily Supported methods
@@ -378,8 +366,7 @@ public class SolrDocument extends SolrDocumentBase<Object, SolrDocument> impleme
   public Collection<Object> values() {
     return _fields.values();
   }
-
-  @Override
+  
   public void addChildDocument(SolrDocument child) {
     if (_childDocuments == null) {
       _childDocuments = new ArrayList<>();
@@ -387,27 +374,23 @@ public class SolrDocument extends SolrDocumentBase<Object, SolrDocument> impleme
      _childDocuments.add(child);
    }
    
-  @Override
-   public void addChildDocuments(Collection<SolrDocument> children) {
-     for (SolrDocument child : children) {
+   public void addChildDocuments(Collection<SolrDocument> childs) {
+     for (SolrDocument child : childs) {
        addChildDocument(child);
      }
    }
 
-   @Override
+   /** Returns the list of child documents, or null if none. */
    public List<SolrDocument> getChildDocuments() {
      return _childDocuments;
    }
    
-   @Override
    public boolean hasChildDocuments() {
      boolean isEmpty = (_childDocuments == null || _childDocuments.isEmpty());
      return !isEmpty;
    }
 
-  @Override
   public int getChildDocumentCount() {
-    if (_childDocuments == null) return 0;
     return _childDocuments.size();
   }
 }

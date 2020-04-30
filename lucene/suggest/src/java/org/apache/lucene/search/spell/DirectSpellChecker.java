@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spell;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spell;
 
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.search.BoostAttribute;
@@ -26,7 +27,9 @@ import org.apache.lucene.search.MaxNonCompetitiveBoostAttribute;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.AttributeSource;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.CharsRefBuilder;
+import org.apache.lucene.util.UnicodeUtil;
 import org.apache.lucene.util.automaton.LevenshteinAutomata;
 
 import java.io.IOException;
@@ -402,7 +405,7 @@ public class DirectSpellChecker {
     AttributeSource atts = new AttributeSource();
     MaxNonCompetitiveBoostAttribute maxBoostAtt =
       atts.addAttribute(MaxNonCompetitiveBoostAttribute.class);
-    Terms terms = MultiTerms.getTerms(ir, term.field());
+    Terms terms = MultiFields.getTerms(ir, term.field());
     if (terms == null) {
       return Collections.emptyList();
     }
@@ -415,42 +418,40 @@ public class DirectSpellChecker {
     BoostAttribute boostAtt =
       e.attributes().addAttribute(BoostAttribute.class);
     while ((candidateTerm = e.next()) != null) {
-      // For FuzzyQuery, boost is the score:
-      float score = boostAtt.getBoost();
+      final float boost = boostAtt.getBoost();
       // ignore uncompetitive hits
-      if (stQueue.size() >= numSug && score <= stQueue.peek().boost) {
+      if (stQueue.size() >= numSug && boost <= stQueue.peek().boost)
         continue;
-      }
       
       // ignore exact match of the same term
-      if (queryTerm.bytesEquals(candidateTerm)) {
+      if (queryTerm.bytesEquals(candidateTerm))
         continue;
-      }
       
       int df = e.docFreq();
       
       // check docFreq if required
-      if (df <= docfreq) {
+      if (df <= docfreq)
         continue;
-      }
       
+      final float score;
       final String termAsString;
       if (distance == INTERNAL_LEVENSHTEIN) {
         // delay creating strings until the end
         termAsString = null;
+        // undo FuzzyTermsEnum's scale factor for a real scaled lev score
+        score = boost / e.getScaleFactor() + e.getMinSimilarity();
       } else {
         spare.copyUTF8Bytes(candidateTerm);
         termAsString = spare.toString();
         score = distance.getDistance(term.text(), termAsString);
       }
       
-      if (score < accuracy) {
+      if (score < accuracy)
         continue;
-      }
       
       // add new entry in PQ
       st.term = BytesRef.deepCopyOf(candidateTerm);
-      st.boost = score;
+      st.boost = boost;
       st.docfreq = df;
       st.termAsString = termAsString;
       st.score = score;

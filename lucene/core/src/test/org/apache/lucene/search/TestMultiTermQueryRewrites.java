@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -183,11 +183,6 @@ public class TestMultiTermQueryRewrites extends LuceneTestCase {
       public String toString(String field) {
         return "dummy";
       }
-
-      @Override
-      public void visit(QueryVisitor visitor) {
-
-      }
     };
     mtq.setRewriteMethod(method);
     final Query q1 = searcher.rewrite(mtq);
@@ -201,15 +196,9 @@ public class TestMultiTermQueryRewrites extends LuceneTestCase {
     }
     assertEquals("The multi-segment case must produce same rewritten query", q1, q2);
     assertEquals("The multi-segment case with duplicates must produce same rewritten query", q1, q3);
-    if (q1 instanceof MatchNoDocsQuery) {
-      assertTrue(q1 instanceof MatchNoDocsQuery);
-      assertTrue(q3 instanceof MatchNoDocsQuery);
-    } else {
-      checkBooleanQueryBoosts((BooleanQuery) q1);
-      checkBooleanQueryBoosts((BooleanQuery) q2);
-      checkBooleanQueryBoosts((BooleanQuery) q3);
-      assert false;
-    }
+    checkBooleanQueryBoosts((BooleanQuery) q1);
+    checkBooleanQueryBoosts((BooleanQuery) q2);
+    checkBooleanQueryBoosts((BooleanQuery) q3);
   }
   
   public void testBoosts() throws Exception {
@@ -226,12 +215,12 @@ public class TestMultiTermQueryRewrites extends LuceneTestCase {
     final MultiTermQuery mtq = TermRangeQuery.newStringRange("data", "2", "7", true, true);
     mtq.setRewriteMethod(method);
     try {
-      BooleanQuery.TooManyClauses expected = expectThrows(BooleanQuery.TooManyClauses.class, () -> {
-        multiSearcherDupls.rewrite(mtq);
-      });
+      multiSearcherDupls.rewrite(mtq);
+      fail("Should throw BooleanQuery.TooManyClauses");
+    } catch (BooleanQuery.TooManyClauses e) {
       //  Maybe remove this assert in later versions, when internal API changes:
       assertEquals("Should throw BooleanQuery.TooManyClauses with a stacktrace containing checkMaxClauseCount()",
-        "checkMaxClauseCount", expected.getStackTrace()[0].getMethodName());
+        "checkMaxClauseCount", e.getStackTrace()[0].getMethodName());
     } finally {
       BooleanQuery.setMaxClauseCount(savedMaxClauseCount);
     }

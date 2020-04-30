@@ -1,3 +1,5 @@
+package org.apache.solr.store.hdfs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.store.hdfs;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -43,8 +42,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class HdfsDirectory extends BaseDirectory {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-  public static final int DEFAULT_BUFFER_SIZE = 4096;
+  private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  
+  public static final int BUFFER_SIZE = 8192;
   
   private static final String LF_EXT = ".lf";
   protected final Path hdfsDirPath;
@@ -52,26 +52,23 @@ public class HdfsDirectory extends BaseDirectory {
   
   private final FileSystem fileSystem;
   private final FileContext fileContext;
-
-  private final int bufferSize;
   
   public HdfsDirectory(Path hdfsDirPath, Configuration configuration) throws IOException {
-    this(hdfsDirPath, HdfsLockFactory.INSTANCE, configuration, DEFAULT_BUFFER_SIZE);
+    this(hdfsDirPath, HdfsLockFactory.INSTANCE, configuration);
   }
-  
-  public HdfsDirectory(Path hdfsDirPath, LockFactory lockFactory, Configuration configuration, int bufferSize)
+
+  public HdfsDirectory(Path hdfsDirPath, LockFactory lockFactory, Configuration configuration)
       throws IOException {
     super(lockFactory);
     this.hdfsDirPath = hdfsDirPath;
     this.configuration = configuration;
-    this.bufferSize = bufferSize;
     fileSystem = FileSystem.get(hdfsDirPath.toUri(), configuration);
     fileContext = FileContext.getFileContext(hdfsDirPath.toUri(), configuration);
     
     if (fileSystem instanceof DistributedFileSystem) {
       // Make sure dfs is not in safe mode
       while (((DistributedFileSystem) fileSystem).setSafeMode(SafeModeAction.SAFEMODE_GET, true)) {
-        log.warn("The NameNode is in SafeMode - Solr will wait 5 seconds and try again.");
+        LOG.warn("The NameNode is in SafeMode - Solr will wait 5 seconds and try again.");
         try {
           Thread.sleep(5000);
         } catch (InterruptedException e) {
@@ -96,7 +93,7 @@ public class HdfsDirectory extends BaseDirectory {
   
   @Override
   public void close() throws IOException {
-    log.info("Closing hdfs directory {}", hdfsDirPath);
+    LOG.info("Closing hdfs directory {}", hdfsDirPath);
     fileSystem.close();
     isOpen = false;
   }
@@ -111,12 +108,7 @@ public class HdfsDirectory extends BaseDirectory {
   
   @Override
   public IndexOutput createOutput(String name, IOContext context) throws IOException {
-    return new HdfsFileWriter(getFileSystem(), new Path(hdfsDirPath, name), name);
-  }
-
-  @Override
-  public IndexOutput createTempOutput(String prefix, String suffix, IOContext context) throws IOException {
-    throw new UnsupportedOperationException();
+    return new HdfsFileWriter(getFileSystem(), new Path(hdfsDirPath, name));
   }
   
   private String[] getNormalNames(List<String> files) {
@@ -138,33 +130,32 @@ public class HdfsDirectory extends BaseDirectory {
   @Override
   public IndexInput openInput(String name, IOContext context)
       throws IOException {
+    return openInput(name, BUFFER_SIZE);
+  }
+  
+  private IndexInput openInput(String name, int bufferSize) throws IOException {
     return new HdfsIndexInput(name, getFileSystem(), new Path(
-        hdfsDirPath, name), bufferSize);
+        hdfsDirPath, name), BUFFER_SIZE);
   }
   
   @Override
   public void deleteFile(String name) throws IOException {
     Path path = new Path(hdfsDirPath, name);
-    log.debug("Deleting {}", path);
+    LOG.debug("Deleting {}", path);
     getFileSystem().delete(path, false);
   }
   
   @Override
-  public void rename(String source, String dest) throws IOException {
+  public void renameFile(String source, String dest) throws IOException {
     Path sourcePath = new Path(hdfsDirPath, source);
     Path destPath = new Path(hdfsDirPath, dest);
     fileContext.rename(sourcePath, destPath);
   }
 
   @Override
-  public void syncMetaData() throws IOException {
-    // TODO: how?
-  }
-
-  @Override
   public long fileLength(String name) throws IOException {
-    FileStatus fileStatus = fileSystem.getFileStatus(new Path(hdfsDirPath, name));
-    return fileStatus.getLen();
+    return HdfsFileReader.getLength(getFileSystem(),
+        new Path(hdfsDirPath, name));
   }
   
   public long fileModified(String name) throws IOException {
@@ -197,14 +188,9 @@ public class HdfsDirectory extends BaseDirectory {
   public Configuration getConfiguration() {
     return configuration;
   }
-
-  @Override
-  public Set<String> getPendingDeletions() {
-    return Collections.emptySet();
-  }
-
-  public static class HdfsIndexInput extends CustomBufferedIndexInput {
-    private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  
+  static class HdfsIndexInput extends CustomBufferedIndexInput {
+    private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
     
     private final Path path;
     private final FSDataInputStream inputStream;
@@ -213,9 +199,9 @@ public class HdfsDirectory extends BaseDirectory {
     
     public HdfsIndexInput(String name, FileSystem fileSystem, Path path,
         int bufferSize) throws IOException {
-      super(name, bufferSize);
+      super(name);
       this.path = path;
-      log.debug("Opening normal index input on {}", path);
+      LOG.debug("Opening normal index input on {}", path);
       FileStatus fileStatus = fileSystem.getFileStatus(path);
       length = fileStatus.getLen();
       inputStream = fileSystem.open(path, bufferSize);
@@ -234,7 +220,7 @@ public class HdfsDirectory extends BaseDirectory {
     
     @Override
     protected void closeInternal() throws IOException {
-      log.debug("Closing normal index input on {}", path);
+      LOG.debug("Closing normal index input on {}", path);
       if (!clone) {
         inputStream.close();
       }
@@ -255,7 +241,7 @@ public class HdfsDirectory extends BaseDirectory {
   
   @Override
   public void sync(Collection<String> names) throws IOException {
-    log.debug("Sync called on {}", Arrays.toString(names.toArray()));
+    LOG.debug("Sync called on {}", Arrays.toString(names.toArray()));
   }
   
   @Override
@@ -275,10 +261,5 @@ public class HdfsDirectory extends BaseDirectory {
       return false;
     }
     return this.hdfsDirPath.equals(((HdfsDirectory) obj).hdfsDirPath);
-  }
-
-  @Override
-  public String toString() {
-    return this.getClass().getSimpleName() + "@" + hdfsDirPath + " lockFactory=" + lockFactory;
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.*;
-import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -35,7 +34,6 @@ import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.util.InfoStream;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util.TestUtil;
 
 /*
   Verify we can read the pre-2.1 file format, do searches
@@ -46,6 +44,11 @@ public class TestIndexFileDeleter extends LuceneTestCase {
   
   public void testDeleteLeftoverFiles() throws IOException {
     Directory dir = newDirectory();
+    if (dir instanceof MockDirectoryWrapper) {
+      ((MockDirectoryWrapper)dir).setPreventDoubleWrite(false);
+      // ensure we actually delete files
+      ((MockDirectoryWrapper)dir).setEnableVirusScanner(false);
+    }
 
     MergePolicy mergePolicy = newLogMergePolicy(true, 10);
     
@@ -217,9 +220,9 @@ public class TestIndexFileDeleter extends LuceneTestCase {
   }
   
   public void testVirusScannerDoesntCorruptIndex() throws IOException {
-    Path path = createTempDir();
-    Directory dir = newFSDirectory(addVirusChecker(path));
-    TestUtil.disableVirusChecker(dir);
+    MockDirectoryWrapper dir = newMockDirectory();
+    dir.setPreventDoubleWrite(false); // we arent trying to test this
+    dir.setEnableVirusScanner(false); // we have our own to make test reproduce always
     
     // add empty commit
     new IndexWriter(dir, new IndexWriterConfig(null)).close();
@@ -227,12 +230,25 @@ public class TestIndexFileDeleter extends LuceneTestCase {
     dir.createOutput("_0.si", IOContext.DEFAULT).close();
 
     // start virus scanner
-    TestUtil.enableVirusChecker(dir);
+    final AtomicBoolean stopScanning = new AtomicBoolean();
+    dir.failOn(new MockDirectoryWrapper.Failure() {
+      @Override
+      public void eval(MockDirectoryWrapper dir) throws IOException {
+        if (stopScanning.get()) {
+          return;
+        }
+        for (StackTraceElement f : new Exception().getStackTrace()) {
+          if ("deleteFile".equals(f.getMethodName())) {
+            throw new IOException("temporarily cannot delete file");
+          }
+        }
+      }
+    });
     
     IndexWriter iw = new IndexWriter(dir, new IndexWriterConfig(null));
     iw.addDocument(new Document());
     // stop virus scanner
-    TestUtil.disableVirusChecker(dir);
+    stopScanning.set(true);
     iw.commit();
     iw.close();
     dir.close();
@@ -480,81 +496,5 @@ public class TestIndexFileDeleter extends LuceneTestCase {
     doFailExc.set(false);
     w.close();
     dir.close();
-  }
-
-  // LUCENE-6835: make sure best-effort to not create an "apparently but not really" corrupt index is working:
-  public void testExcInDeleteFile() throws Throwable {
-    int iters = atLeast(10);
-    for(int iter=0;iter<iters;iter++) {
-      if (VERBOSE) {
-        System.out.println("TEST: iter=" + iter);
-      }
-      MockDirectoryWrapper dir = newMockDirectory();
-
-      final AtomicBoolean doFailExc = new AtomicBoolean();
-
-      dir.failOn(new MockDirectoryWrapper.Failure() {
-          @Override
-          public void eval(MockDirectoryWrapper dir) throws IOException {
-            if (doFailExc.get() && random().nextInt(4) == 1) {
-              Exception e = new Exception();
-              StackTraceElement stack[] = e.getStackTrace();
-              for (int i = 0; i < stack.length; i++) {
-                if (stack[i].getClassName().equals(MockDirectoryWrapper.class.getName()) && stack[i].getMethodName().equals("deleteFile")) {
-                  throw new MockDirectoryWrapper.FakeIOException();
-                }
-              }
-            }
-          }
-        });
-
-      IndexWriterConfig iwc = newIndexWriterConfig();
-      iwc.setMergeScheduler(new SerialMergeScheduler());
-      RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc);
-      w.addDocument(new Document());
-
-      // makes segments_1
-      if (VERBOSE) {
-        System.out.println("TEST: now commit");
-      }
-      w.commit();
-
-      w.addDocument(new Document());
-      doFailExc.set(true);
-      if (VERBOSE) {
-        System.out.println("TEST: now close");
-      }
-      try {
-        w.close();
-        if (VERBOSE) {
-          System.out.println("TEST: no exception (ok)");
-        }
-      } catch (RuntimeException re) {
-        assertTrue(re.getCause() instanceof MockDirectoryWrapper.FakeIOException);
-        // good
-        if (VERBOSE) {
-          System.out.println("TEST: got expected exception:");
-          re.printStackTrace(System.out);
-        }
-      } catch (MockDirectoryWrapper.FakeIOException fioe) {
-        // good
-        if (VERBOSE) {
-          System.out.println("TEST: got expected exception:");
-          fioe.printStackTrace(System.out);
-        }
-      }
-      doFailExc.set(false);
-      assertFalse(w.w.isOpen());
-
-      for(String name : dir.listAll()) {
-        if (name.startsWith(IndexFileNames.SEGMENTS)) {
-          if (VERBOSE) {
-            System.out.println("TEST: now read " + name);
-          }
-          SegmentInfos.readCommit(dir, name);
-        }
-      }
-      dir.close();
-    }
   }
 }

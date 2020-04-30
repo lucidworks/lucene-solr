@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.tokenattributes;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.tokenattributes;
-
 
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.TokenStream;
@@ -82,7 +82,6 @@ public class TestPackedTokenAttributeImpl extends LuceneTestCase {
     t.setPositionIncrement(3);
     t.setPositionLength(11);
     t.setType("foobar");
-    t.setTermFrequency(42);
     TestUtil.assertAttributeReflection(t,
         new HashMap<String, Object>() {{
           put(CharTermAttribute.class.getName() + "#term", "foobar");
@@ -92,7 +91,6 @@ public class TestPackedTokenAttributeImpl extends LuceneTestCase {
           put(PositionIncrementAttribute.class.getName() + "#positionIncrement", 3);
           put(PositionLengthAttribute.class.getName() + "#positionLength", 11);
           put(TypeAttribute.class.getName() + "#type", "foobar");
-          put(TermFrequencyAttribute.class.getName() + "#termFrequency", 42);
         }});
   }
 }

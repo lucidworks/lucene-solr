@@ -14,10 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
 import org.apache.solr.common.SolrInputDocument;
 
+import org.apache.solr.update.processor.UpdateRequestProcessor;
+import org.apache.solr.update.processor.UpdateRequestProcessorChain;
+import org.apache.solr.update.processor.UpdateRequestProcessorFactory;
 import org.apache.solr.update.UpdateCommand;
 import org.apache.solr.update.CommitUpdateCommand;
 import org.apache.solr.update.DeleteUpdateCommand;
@@ -25,7 +29,6 @@ import org.apache.solr.update.DeleteUpdateCommand;
 import org.junit.BeforeClass;
 
 import java.util.Date;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -165,13 +168,13 @@ public class DocExpirationUpdateProcessorFactoryTest extends UpdateProcessorTest
 
     assertNotNull(chain);
 
-    List<UpdateRequestProcessorFactory> factories = chain.getProcessors();
+    UpdateRequestProcessorFactory[] factories = chain.getFactories();
     assertEquals("did number of processors configured in chain get changed?", 
-                 5, factories.size());
-    assertTrue("Expected [1] RecordingUpdateProcessorFactory: " + factories.get(1).getClass(),
-               factories.get(1) instanceof RecordingUpdateProcessorFactory);
+                 5, factories.length);
+    assertTrue("Expected [1] RecordingUpdateProcessorFactory: " + factories[1].getClass(),
+               factories[1] instanceof RecordingUpdateProcessorFactory);
     RecordingUpdateProcessorFactory recorder = 
-      (RecordingUpdateProcessorFactory) factories.get(1);
+      (RecordingUpdateProcessorFactory) factories[1];
 
     // now start recording, and monitor for the expected commands
 

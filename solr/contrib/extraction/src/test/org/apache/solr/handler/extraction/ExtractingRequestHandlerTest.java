@@ -1,3 +1,4 @@
+package org.apache.solr.handler.extraction;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +15,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.extraction;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.TimeZone;
 
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrException;
@@ -44,14 +43,8 @@ public class ExtractingRequestHandlerTest extends SolrTestCaseJ4 {
 
   @BeforeClass
   public static void beforeClass() throws Exception {
-    // Is the JDK/env affected by a known bug?
-    final String tzDisplayName = TimeZone.getDefault().getDisplayName(false, TimeZone.SHORT, Locale.US);
-    if (!tzDisplayName.matches("[A-Za-z]{3,}([+-]\\d\\d(:\\d\\d)?)?")) {
-      assertTrue("Is some other JVM affected?  Or bad regex? TzDisplayName: " + tzDisplayName,
-          System.getProperty("java.version").startsWith("11"));
-      assumeTrue("SOLR-12759 JDK 11 (1st release) and Tika 1.x can result in extracting dates in a bad format.", false);
-    }
-
+    assumeFalse("This test fails on UNIX with Turkish default locale (https://issues.apache.org/jira/browse/SOLR-6387)",
+        new Locale("tr").getLanguage().equals(Locale.getDefault().getLanguage()));
     initCore("solrconfig.xml", "schema.xml", getFile("extraction/solr").getAbsolutePath());
   }
 
@@ -121,7 +114,7 @@ public class ExtractingRequestHandlerTest extends SolrTestCaseJ4 {
     assertQ(req("+id:simple2 +t_content:serif"), "//*[@numFound='0']"); // make sure <style> content is excluded
     assertQ(req("+id:simple2 +t_content:blur"), "//*[@numFound='0']"); // make sure <script> content is excluded
 
-    // make sure the fact there is an index-time boost does not fail the parsing
+    // load again in the exact same way, but boost one field
     loadLocal("extraction/simple.html",
       "literal.id","simple3",
       "uprefix", "t_",
@@ -133,7 +126,7 @@ public class ExtractingRequestHandlerTest extends SolrTestCaseJ4 {
     );
 
     assertQ(req("t_href:http"), "//*[@numFound='2']");
-    assertQ(req("t_href:http"), "//doc[2]/str[.='simple3']");
+    assertQ(req("t_href:http"), "//doc[1]/str[.='simple3']");
     assertQ(req("+id:simple3 +t_content_type:[* TO *]"), "//*[@numFound='1']");//test lowercase and then uprefix
 
     loadLocal("extraction/version_control.xml", "fmap.created", "extractedDate", "fmap.producer", "extractedProducer",
@@ -227,20 +220,20 @@ public class ExtractingRequestHandlerTest extends SolrTestCaseJ4 {
   @Test
   public void testDefaultField() throws Exception {
     ExtractingRequestHandler handler = (ExtractingRequestHandler) h.getCore().getRequestHandler("/update/extract");
-    assertNotNull("handler is null and it shouldn't be", handler);
-
+    assertTrue("handler is null and it shouldn't be", handler != null);
     try {
       ignoreException("unknown field 'a'");
       ignoreException("unknown field 'meta'");  // TODO: should this exception be happening?
-      expectThrows(SolrException.class, () -> {
-        loadLocal("extraction/simple.html",
-            "literal.id", "simple2",
-            "lowernames", "true",
-            "captureAttr", "true",
-            //"fmap.content_type", "abcxyz",
-            "commit", "true"  // test immediate commit
-        );
-      });
+      loadLocal("extraction/simple.html",
+      "literal.id","simple2",
+      "lowernames", "true",
+        "captureAttr", "true",
+        //"fmap.content_type", "abcxyz",
+        "commit", "true"  // test immediate commit
+      );
+      fail("Should throw SolrException");
+    } catch (SolrException e) {
+      //do nothing
     } finally {
       resetExceptionIgnores();
     }
@@ -296,17 +289,16 @@ public class ExtractingRequestHandlerTest extends SolrTestCaseJ4 {
     assertQ(req("extractionLiteralMV:two"), "//*[@numFound='1']");
 
     try {
-      // TODO: original author did not specify why an exception should be thrown... how to fix?
       loadLocal("extraction/version_control.xml", "fmap.created", "extractedDate", "fmap.producer", "extractedProducer",
-          "fmap.creator", "extractedCreator", "fmap.Keywords", "extractedKeywords",
-          "fmap.Author", "extractedAuthor",
-          "fmap.content", "extractedContent",
-          "literal.id", "two",
-          "fmap.language", "extractedLanguage",
-          "literal.extractionLiteral", "one",
-          "literal.extractionLiteral", "two",
-          "fmap.X-Parsed-By", "ignored_parser",
-          "fmap.Last-Modified", "extractedDate"
+              "fmap.creator", "extractedCreator", "fmap.Keywords", "extractedKeywords",
+              "fmap.Author", "extractedAuthor",
+              "fmap.content", "extractedContent",
+              "literal.id", "two",
+              "fmap.language", "extractedLanguage",
+              "literal.extractionLiteral", "one",
+              "literal.extractionLiteral", "two",
+              "fmap.X-Parsed-By", "ignored_parser",
+              "fmap.Last-Modified", "extractedDate"
       );
       // TODO: original author did not specify why an exception should be thrown... how to fix?
       // assertTrue("Exception should have been thrown", false);
@@ -550,9 +542,12 @@ public class ExtractingRequestHandlerTest extends SolrTestCaseJ4 {
       h.getCore().getRequestHandler("/update/extract");
     assertTrue("handler is null and it shouldn't be", handler != null);
 
-    expectThrows(Exception.class, () -> {
-      loadLocal("extraction/password-is-solrcell.docx", "literal.id", "one");
-    });
+    try{
+      loadLocal("extraction/password-is-solrcell.docx",
+          "literal.id", "one");
+      fail("TikaException is expected because of trying to extract text from password protected word file without supplying a password.");
+    }
+    catch(Exception expected){}
     assertU(commit());
     assertQ(req("*:*"), "//result[@numFound=0]");
 
@@ -579,21 +574,25 @@ public class ExtractingRequestHandlerTest extends SolrTestCaseJ4 {
     ExtractingRequestHandler handler = (ExtractingRequestHandler) h.getCore().getRequestHandler("/update/extract");
     assertTrue("handler is null and it shouldn't be", handler != null);
 
-    expectThrows(Exception.class, () -> {
+    try{
       // Load plain text specifying another mime type, should fail
-      loadLocal("extraction/version_control.txt",
-          "literal.id", "one",
-          ExtractingParams.STREAM_TYPE, "application/pdf"
+      loadLocal("extraction/version_control.txt", 
+              "literal.id", "one",
+              ExtractingParams.STREAM_TYPE, "application/pdf"
       );
-    });
+      fail("SolrException is expected because wrong parser specified for the file type");
+    }
+    catch(Exception expected){}
 
-    expectThrows(Exception.class, () -> {
+    try{
       // Load plain text specifying non existing mimetype, should fail
-      loadLocal("extraction/version_control.txt",
-          "literal.id", "one",
-          ExtractingParams.STREAM_TYPE, "foo/bar"
+      loadLocal("extraction/version_control.txt", 
+              "literal.id", "one",
+              ExtractingParams.STREAM_TYPE, "foo/bar"
       );
-    });
+      fail("SolrException is expected because nonexsisting parser specified");
+    }
+    catch(Exception expected){}
   }
 
   public void testLiteralsOverride() throws Exception {

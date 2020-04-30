@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.en;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.en;
-
 
 import java.io.Reader;
 import java.io.StringReader;
 
+import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.util.BaseTokenStreamFactoryTestCase;
 
@@ -39,9 +40,11 @@ public class TestPorterStemFilterFactory extends BaseTokenStreamFactoryTestCase 
   
   /** Test that bogus arguments result in exception */
   public void testBogusArguments() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       tokenFilterFactory("PorterStem", "bogusArg", "bogusValue");
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
   }
 }

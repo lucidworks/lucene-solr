@@ -1,3 +1,4 @@
+package org.apache.solr.core;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
+
 import java.io.IOException;
 
 import org.apache.lucene.index.DirectoryReader;
@@ -26,6 +27,7 @@ import org.apache.lucene.store.Directory;
  * {@link DirectoryReader}.
  * 
  * @see DirectoryReader#open(Directory)
+ * @see DirectoryReader#open(IndexWriter, boolean)
  */
 public class StandardIndexReaderFactory extends IndexReaderFactory {
   
@@ -36,6 +38,6 @@ public class StandardIndexReaderFactory extends IndexReaderFactory {
 
   @Override
   public DirectoryReader newReader(IndexWriter writer, SolrCore core) throws IOException {
-    return DirectoryReader.open(writer);
+    return DirectoryReader.open(writer, true);
   }
 }

@@ -20,8 +20,8 @@
 <config>
   <luceneMatchVersion>${tests.luceneMatchVersion:LATEST}</luceneMatchVersion>
   <xi:include href="solrconfig.snippet.randomindexconfig.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
-  <requestHandler name="/select"
-     class="solr.SearchHandler"></requestHandler>
+  <requestHandler name="standard"
+     class="solr.StandardRequestHandler"></requestHandler>
 
   <!-- Used to specify an alternate directory to hold all index data.
        It defaults to "index" if not present, and should probably
@@ -32,30 +32,23 @@
         solr.StandardDirectoryFactory, the default, is filesystem based.
         solr.RAMDirectoryFactory is memory based and not persistent. -->
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
 
   <searchComponent name="responselog" class="org.apache.solr.handler.component.ResponseLogComponent" />
 
   <!-- Log retrievedDocs -->
-  <requestHandler name="/withlog" class="org.apache.solr.handler.component.SearchHandler">
-    <lst name="defaults">
-      <str name="defType">dismax</str>
-    </lst>
+  <requestHandler name="withlog" class="org.apache.solr.handler.component.SearchHandler">
+  <lst name="defaults">
+    <str name="defType">dismax</str>
+  </lst>
     <arr name="last-components">
       <str>responselog</str>
     </arr>
   </requestHandler>
   
-  <requestHandler name="/nolog" class="org.apache.solr.handler.component.SearchHandler">
+  <requestHandler name="nolog" class="org.apache.solr.handler.component.SearchHandler">
     <lst name="defaults">
       <str name="defType">dismax</str>
     </lst>
   </requestHandler>
-
-  <initParams path="/withlog,/nolog">
-    <lst name="defaults">
-      <str name="df">text</str>
-    </lst>
-  </initParams>
 
 </config>

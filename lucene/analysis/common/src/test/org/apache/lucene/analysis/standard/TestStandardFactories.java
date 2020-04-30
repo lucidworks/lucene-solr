@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.standard;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.standard;
-
 
 import java.io.Reader;
 import java.io.StringReader;
 
+import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.util.BaseTokenStreamFactoryTestCase;
@@ -126,6 +127,17 @@ public class TestStandardFactories extends BaseTokenStreamFactoryTestCase {
   }
   
   /**
+   * Test LowerCaseTokenizerFactory
+   */
+  public void testLowerCaseTokenizer() throws Exception {
+    Reader reader = new StringReader("What's this thing do?");
+    Tokenizer stream = tokenizerFactory("LowerCase").create(newAttributeFactory());
+    stream.setReader(reader);
+    assertTokenStreamContents(stream, 
+        new String[] { "what", "s", "this", "thing", "do" });
+  }
+  
+  /**
    * Ensure the ASCIIFoldingFilterFactory works
    */
   public void testASCIIFolding() throws Exception {
@@ -137,34 +149,60 @@ public class TestStandardFactories extends BaseTokenStreamFactoryTestCase {
   
   /** Test that bogus arguments result in exception */
   public void testBogusArguments() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       tokenizerFactory("Standard", "bogusArg", "bogusValue");
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
     
-    expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       tokenizerFactory("Classic", "bogusArg", "bogusValue");
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
     
-    expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       tokenizerFactory("Whitespace", "bogusArg", "bogusValue");
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
     
-    expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       tokenizerFactory("Letter", "bogusArg", "bogusValue");
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
     
-    expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
+      tokenizerFactory("LowerCase", "bogusArg", "bogusValue");
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
+    
+    try {
       tokenFilterFactory("ASCIIFolding", "bogusArg", "bogusValue");
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
     
-    expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
+      tokenFilterFactory("Standard", "bogusArg", "bogusValue");
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
+    
+    try {
       tokenFilterFactory("Classic", "bogusArg", "bogusValue");
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
   }
 }

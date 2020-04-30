@@ -1,3 +1,5 @@
+package org.apache.solr.handler.component;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -124,11 +125,11 @@ public class DistributedSpellCheckComponentTest extends BaseDistributedSearchTes
     handle.put("grouped", SKIP);
     
     //Randomly select either IndexBasedSpellChecker or DirectSolrSpellChecker
-    String requestHandlerName = "/spellCheckCompRH_Direct";
-    String reqHandlerWithWordbreak = "/spellCheckWithWordbreak_Direct";
+    String requestHandlerName = "spellCheckCompRH_Direct";
+    String reqHandlerWithWordbreak = "spellCheckWithWordbreak_Direct";
     if(random().nextBoolean()) {
-      requestHandlerName = "/spellCheckCompRH";
-      reqHandlerWithWordbreak = "/spellCheckWithWordbreak";
+      requestHandlerName = "spellCheckCompRH";
+      reqHandlerWithWordbreak = "spellCheckWithWordbreak";   
     } 
     
     //Shortcut names
@@ -143,7 +144,7 @@ public class DistributedSpellCheckComponentTest extends BaseDistributedSearchTes
     String maxResults = SpellingParams.SPELLCHECK_MAX_RESULTS_FOR_SUGGEST;
      
     //Build the dictionary for IndexBasedSpellChecker
-    q(buildRequest("*:*", false, "/spellCheckCompRH", false, build, "true"));
+    q(buildRequest("*:*", false, "spellCheckCompRH", false, build, "true"));
     
     //Test Basic Functionality
     query(buildRequest("toyata", true, requestHandlerName, random().nextBoolean(), (String[]) null));
@@ -172,10 +173,6 @@ public class DistributedSpellCheckComponentTest extends BaseDistributedSearchTes
         false, requestHandlerName, random().nextBoolean(), extended, "true", count, "10", 
         collate, "true", maxCollationTries, "10", maxCollations, "1", collateExtended, "false",
         altTermCount, "5", maxResults, "10"));
-    query(buildRequest("lowerfilt:(\"rod fix\")", 
-        false, requestHandlerName, random().nextBoolean(), extended, "true", count, "10", 
-        collate, "true", maxCollationTries, "10", maxCollations, "1", collateExtended, "false",
-        altTermCount, "5", maxResults, ".10", "fq", "id:[13 TO 22]"));
     
     //Test word-break spellchecker
     query(buildRequest("lowerfilt:(+quock +redfox +jum +ped)", 

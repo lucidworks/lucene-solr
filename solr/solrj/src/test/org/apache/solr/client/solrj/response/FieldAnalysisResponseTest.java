@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.response;
 
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.common.util.NamedList;
 import org.junit.Test;
 
@@ -31,7 +32,7 @@ import java.util.List;
  * @since solr 1.4
  */
 @SuppressWarnings("unchecked")
-public class FieldAnalysisResponseTest extends SolrTestCase {
+public class FieldAnalysisResponseTest extends LuceneTestCase {
 
   /**
    * Tests the {@link FieldAnalysisResponse#setResponse(org.apache.solr.common.util.NamedList)} method.
@@ -48,7 +49,7 @@ public class FieldAnalysisResponseTest extends SolrTestCase {
     NamedList responseNL = buildResponse();
     FieldAnalysisResponse response = new FieldAnalysisResponse() {
       @Override
-      protected List<AnalysisPhase> buildPhases(NamedList<Object> phaseNL) {
+      protected List<AnalysisPhase> buildPhases(NamedList<List<NamedList<Object>>> phaseNL) {
         return phases;
       }
     };

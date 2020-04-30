@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.embedded;
 
 import org.apache.solr.client.solrj.MergeIndexesExampleTestBase;
@@ -52,7 +53,7 @@ public class MergeIndexesEmbeddedTest extends MergeIndexesExampleTestBase {
 
   @Override
   protected SolrClient getSolrAdmin() {
-    return new EmbeddedSolrServer(cores, null);
+    return new EmbeddedSolrServer(cores, "core0");
   }
 
   @Override

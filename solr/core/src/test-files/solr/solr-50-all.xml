@@ -26,8 +26,6 @@
   <str name="sharedLib">testSharedLib</str>
   <str name="shareSchema">${shareSchema:true}</str>
   <int name="transientCacheSize">66</int>
-  <int name="replayUpdatesThreads">100</int>
-  <int name="maxBooleanClauses">42</int>
 
   <solrcloud>
     <int name="distribUpdateConnTimeout">22</int>
@@ -57,9 +55,5 @@
     <int name="socketTimeout">${socketTimeout:100}</int>
     <int name="connTimeout">${connTimeout:110}</int>
   </shardHandlerFactory>
-
-  <backup>
-    <repository name="local" class="a.b.C" default="true"/>
-  </backup>
 
 </solr>

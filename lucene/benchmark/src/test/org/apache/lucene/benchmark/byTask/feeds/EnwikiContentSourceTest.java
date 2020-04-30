@@ -1,3 +1,5 @@
+package org.apache.lucene.benchmark.byTask.feeds;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.feeds;
-
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -56,12 +56,15 @@ public class EnwikiContentSourceTest extends LuceneTestCase {
   }
   
   private void assertNoMoreDataException(EnwikiContentSource stdm) throws Exception {
-    expectThrows(NoMoreDataException.class, () -> {
+    try {
       stdm.getNextDocData(null);
-    });
+      fail("Expecting NoMoreDataException");
+    } catch (NoMoreDataException e) {
+      // expected
+    }
   }
   
-  private static final String PAGE1 =
+  private final String PAGE1 = 
       "  <page>\r\n" + 
       "    <title>Title1</title>\r\n" + 
       "    <ns>0</ns>\r\n" + 
@@ -80,7 +83,7 @@ public class EnwikiContentSourceTest extends LuceneTestCase {
       "    </revision>\r\n" + 
       "  </page>\r\n";
 
-  private static final String PAGE2 =
+  private final String PAGE2 = 
       "  <page>\r\n" + 
           "    <title>Title2</title>\r\n" + 
           "    <ns>0</ns>\r\n" + 

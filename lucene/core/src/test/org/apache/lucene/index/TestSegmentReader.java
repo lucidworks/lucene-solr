@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 
@@ -30,7 +29,6 @@ import org.apache.lucene.store.IOContext;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
-import org.apache.lucene.util.Version;
 
 public class TestSegmentReader extends LuceneTestCase {
   private Directory dir;
@@ -44,7 +42,7 @@ public class TestSegmentReader extends LuceneTestCase {
     dir = newDirectory();
     DocHelper.setupDoc(testDoc);
     SegmentCommitInfo info = DocHelper.writeDoc(random(), dir, testDoc);
-    reader = new SegmentReader(info, Version.LATEST.major, false, IOContext.READ, Collections.emptyMap());
+    reader = new SegmentReader(info, IOContext.READ);
   }
   
   @Override
@@ -116,9 +114,9 @@ public class TestSegmentReader extends LuceneTestCase {
   } 
   
   public void testTerms() throws IOException {
-    final Collection<String> fields = FieldInfos.getIndexedFields(reader);
+    Fields fields = MultiFields.getFields(reader);
     for (String field : fields) {
-      Terms terms = MultiTerms.getTerms(reader, field);
+      Terms terms = fields.terms(field);
       assertNotNull(terms);
       TermsEnum termsEnum = terms.iterator();
       while(termsEnum.next() != null) {
@@ -145,7 +143,7 @@ public class TestSegmentReader extends LuceneTestCase {
     assertTrue(termDocs.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
 
     
-    PostingsEnum positions = MultiTerms.getTermPostingsEnum(reader,
+    PostingsEnum positions = MultiFields.getTermPositionsEnum(reader,
                                                                       DocHelper.TEXT_FIELD_1_KEY,
                                                                       new BytesRef("field"));
     // NOTE: prior rev of this test was failing to first
@@ -206,21 +204,25 @@ public class TestSegmentReader extends LuceneTestCase {
   
   public void testOutOfBoundsAccess() throws IOException {
     int numDocs = reader.maxDoc();
-
-    expectThrows(IndexOutOfBoundsException.class, () -> {
+    try {
       reader.document(-1);
-    });
+      fail();
+    } catch (IndexOutOfBoundsException expected) {}
     
-    expectThrows(IndexOutOfBoundsException.class, () -> {
+    try {
       reader.getTermVectors(-1);
-    });
+      fail();
+    } catch (IndexOutOfBoundsException expected) {}
     
-    expectThrows(IndexOutOfBoundsException.class, () -> {
+    try {
       reader.document(numDocs);
-    });
+      fail();
+    } catch (IndexOutOfBoundsException expected) {}
     
-    expectThrows(IndexOutOfBoundsException.class, () -> {
+    try {
       reader.getTermVectors(numDocs);
-    });    
+      fail();
+    } catch (IndexOutOfBoundsException expected) {}
+    
   }
 }

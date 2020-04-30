@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -37,10 +37,10 @@ public class PositiveScoresOnlyCollector extends FilterCollector {
       throws IOException {
     return new FilterLeafCollector(super.getLeafCollector(context)) {
 
-      private Scorable scorer;
+      private Scorer scorer;
 
       @Override
-      public void setScorer(Scorable scorer) throws IOException {
+      public void setScorer(Scorer scorer) throws IOException {
         this.scorer = new ScoreCachingWrappingScorer(scorer);
         in.setScorer(this.scorer);
       }

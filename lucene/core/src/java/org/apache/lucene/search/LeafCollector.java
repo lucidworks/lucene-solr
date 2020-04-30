@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -76,7 +76,7 @@ public interface LeafCollector {
    * {@link #collect(int)}), should save the passed-in Scorer and call
    * scorer.score() when needed.
    */
-  void setScorer(Scorable scorer) throws IOException;
+  void setScorer(Scorer scorer) throws IOException;
   
   /**
    * Called once for every document matching a query, with the unbased document

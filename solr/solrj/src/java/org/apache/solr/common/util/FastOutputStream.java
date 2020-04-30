@@ -14,12 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.common.util;
 
-import java.io.DataOutput;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
+import java.io.*;
 
 /** Single threaded buffered OutputStream
  *  Internal Solr use only, subject to change.
@@ -232,18 +230,4 @@ public class FastOutputStream extends OutputStream implements DataOutput {
     this.written = written;
   }
 
-  /**Copies a {@link Utf8CharSequence} without making extra copies
-   */
-  public void writeUtf8CharSeq(Utf8CharSequence utf8) throws IOException {
-    int start = 0;
-    int totalWritten = 0;
-    for (; ; ) {
-      if (totalWritten >= utf8.size()) break;
-      if (pos >= buf.length) flushBuffer();
-      int sz = utf8.write(start, buf, pos);
-      pos += sz;
-      totalWritten += sz;
-      start += sz;
-    }
-  }
 }

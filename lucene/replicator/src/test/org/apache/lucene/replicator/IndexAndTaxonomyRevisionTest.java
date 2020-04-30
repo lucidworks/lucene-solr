@@ -1,3 +1,5 @@
+package org.apache.lucene.replicator;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.replicator;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,6 +35,7 @@ import org.apache.lucene.replicator.IndexAndTaxonomyRevision.SnapshotDirectoryTa
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
+import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.util.IOUtils;
 import org.junit.Test;
 
@@ -55,13 +57,15 @@ public class IndexAndTaxonomyRevisionTest extends ReplicatorTestCase {
     
     Directory taxoDir = newDirectory();
     SnapshotDirectoryTaxonomyWriter taxoWriter = new SnapshotDirectoryTaxonomyWriter(taxoDir);
-    // should fail when there are no commits to snapshot
-    expectThrows(IllegalStateException.class, () -> {
-      new IndexAndTaxonomyRevision(indexWriter, taxoWriter);
-    });
-
-    indexWriter.close();
-    IOUtils.close(taxoWriter, taxoDir, indexDir);
+    try {
+      assertNotNull(new IndexAndTaxonomyRevision(indexWriter, taxoWriter));
+      fail("should have failed when there are no commits to snapshot");
+    } catch (IllegalStateException e) {
+      // expected
+    } finally {
+      indexWriter.close();
+      IOUtils.close(taxoWriter, taxoDir, indexDir);
+    }
   }
   
   @Test
@@ -73,6 +77,10 @@ public class IndexAndTaxonomyRevisionTest extends ReplicatorTestCase {
     
     Directory taxoDir = newDirectory();
     SnapshotDirectoryTaxonomyWriter taxoWriter = new SnapshotDirectoryTaxonomyWriter(taxoDir);
+    // we look to see that certain files are deleted:
+    if (indexDir instanceof MockDirectoryWrapper) {
+      ((MockDirectoryWrapper)indexDir).setEnableVirusScanner(false);
+    }
     try {
       indexWriter.addDocument(newDocument(taxoWriter));
       indexWriter.commit();
@@ -93,6 +101,10 @@ public class IndexAndTaxonomyRevisionTest extends ReplicatorTestCase {
       indexWriter.close();
     } finally {
       IOUtils.close(indexWriter, taxoWriter, taxoDir, indexDir);
+      if (indexDir instanceof MockDirectoryWrapper) {
+        // set back to on for other tests
+        ((MockDirectoryWrapper)indexDir).setEnableVirusScanner(true);
+      }
     }
   }
   

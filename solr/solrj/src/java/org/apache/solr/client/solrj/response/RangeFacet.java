@@ -1,3 +1,5 @@
+package org.apache.solr.client.solrj.response;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.response;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -95,12 +96,6 @@ public abstract class RangeFacet<B, G> {
       super(name, start, end, gap, before, after, between);
     }
 
-  }
-
-  public static class Currency extends RangeFacet<String, String> {
-    public Currency(String name, String start, String end, String gap, Number before, Number after, Number between) {
-      super(name, start, end, gap, before, after, between);
-    }
   }
 
   public static class Count {

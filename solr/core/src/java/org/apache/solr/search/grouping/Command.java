@@ -1,3 +1,5 @@
+package org.apache.solr.search.grouping;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.grouping;
 
 import org.apache.lucene.search.Collector;
-import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Sort;
+import org.apache.solr.schema.SchemaField;
+
 import java.io.IOException;
 import java.util.List;
 
@@ -41,18 +43,12 @@ public interface Command<T> {
   List<Collector> create() throws IOException;
 
   /**
-   * Run post-collection steps.
-   * @throws IOException If I/O related errors occur
-   */
-  default void postCollect(IndexSearcher searcher) throws IOException {}
-
-  /**
    * Returns the results that the collectors created
    * by {@link #create()} contain after a search has been executed.
    *
    * @return The results of the collectors
    */
-  T result() throws IOException;
+  T result();
 
   /**
    * @return The key of this command to uniquely identify itself
@@ -67,6 +63,6 @@ public interface Command<T> {
   /**
    * @return The sort inside a group
    */
-  Sort getWithinGroupSort();
+  Sort getSortWithinGroup();
 
 }

@@ -14,18 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.util.hll;
 
 import java.util.Locale;
 
-import org.apache.solr.SolrTestCase;
-import org.apache.solr.util.LongIterator;
+import org.apache.lucene.util.LuceneTestCase;
 import org.junit.Test;
 
 /**
  * Unit tests for {@link BitVector}.
  */
-public class BitVectorTest extends SolrTestCase {
+public class BitVectorTest extends LuceneTestCase {
     /**
      * Tests {@link BitVector#getRegister(long)} and {@link BitVector#setRegister(long, long)}.
      */

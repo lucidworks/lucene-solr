@@ -1,3 +1,5 @@
+package org.apache.solr.common.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.cloud;
 
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
@@ -48,24 +49,33 @@ public abstract class DocRouter {
     throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Unknown document router '"+ routerName + "'");
   }
 
-  public String getRouteField(DocCollection coll) {
-    if (coll == null) return null;
-    Map m = (Map) coll.get(DOC_ROUTER);
-    if (m == null) return null;
+  protected String getRouteField(DocCollection coll){
+    if(coll == null) return null;
+    Object o = coll.get(DOC_ROUTER);
+    if (o instanceof String) {
+      return null;
+      //old format. cannot have a routefield. Ignore it
+    }
+    Map m = (Map) o;
+    if(m == null) return null;
     return (String) m.get("field");
+
   }
 
-  public static Map<String, Object> getRouterSpec(ZkNodeProps props) {
-    Map<String, Object> map = new LinkedHashMap<>();
+  public static Map<String,Object> getRouterSpec(ZkNodeProps props){
+    Map<String,Object> map =  new LinkedHashMap<>();
     for (String s : props.keySet()) {
-      if (s.startsWith("router.")) {
+      if(s.startsWith("router.")){
         map.put(s.substring(7), props.get(s));
       }
     }
-    if (map.get("name") == null)  {
+    Object o = props.get("router");
+    if (o instanceof String) {
+      map.put("name", o);
+    } else if (map.get("name") == null) {
       map.put("name", DEFAULT_NAME);
     }
-    return map;
+    return  map;
   }
 
   // currently just an implementation detail...
@@ -134,8 +144,8 @@ public abstract class DocRouter {
 
     @Override
     public int compareTo(Range that) {
-      int mincomp = Integer.compare(this.min, that.min);
-      return mincomp == 0 ? Integer.compare(this.max, that.max) : mincomp;
+      int mincomp = Integer.valueOf(this.min).compareTo(that.min);
+      return mincomp == 0 ? Integer.valueOf(this.max).compareTo(that.max) : mincomp;
     }
   }
 
@@ -153,53 +163,24 @@ public abstract class DocRouter {
   }
 
   /**
-   * Split the range into partitions.
-   * @param partitions number of partitions
-   * @param range range to split
+   * Returns the range for each partition
    */
   public List<Range> partitionRange(int partitions, Range range) {
-    return partitionRange(partitions, range, 0.0f);
-  }
-
-  /**
-   * Split the range into partitions with inexact sizes.
-   * @param partitions number of partitions
-   * @param range range to split
-   * @param fuzz value between 0 (inclusive) and 0.5 (exclusive) indicating inexact split, i.e. percentage
-   *        of variation in resulting ranges - odd ranges will be larger and even ranges will be smaller
-   *        by up to that percentage.
-   */
-  public List<Range> partitionRange(int partitions, Range range, float fuzz) {
     int min = range.min;
     int max = range.max;
 
     assert max >= min;
-    if (fuzz > 0.5f) {
-      throw new IllegalArgumentException("'fuzz' parameter must be <= 0.5f but was " + fuzz);
-    } else if (fuzz < 0.0f) {
-      fuzz = 0.0f;
-    }
     if (partitions == 0) return Collections.EMPTY_LIST;
     long rangeSize = (long)max - (long)min;
     long rangeStep = Math.max(1, rangeSize / partitions);
-    long fuzzStep = Math.round(rangeStep * (double)fuzz / 2.0);
 
     List<Range> ranges = new ArrayList<>(partitions);
 
     long start = min;
     long end = start;
-    boolean odd = true;
 
     while (end < max) {
       end = start + rangeStep;
-      if (fuzzStep > 0) {
-        if (odd) {
-          end = end + fuzzStep;
-        } else {
-          end = end - fuzzStep;
-        }
-        odd = !odd;
-      }
       // make last range always end exactly on MAX_VALUE
       if (ranges.size() == partitions - 1) {
         end = max;
@@ -221,17 +202,8 @@ public abstract class DocRouter {
    **/
   public abstract Collection<Slice> getSearchSlicesSingle(String shardKey, SolrParams params, DocCollection collection);
 
-  /** This method is consulted to determine what search range (the part of the hash ring) should be queried for a request when
-   *  an explicit shards parameter was not used.
-   *  This method only accepts a single shard key (or null).
-   */
-  public Range getSearchRangeSingle(String shardKey, SolrParams params, DocCollection collection) {
-    throw new UnsupportedOperationException();
-  }
-
   public abstract boolean isTargetSlice(String id, SolrInputDocument sdoc, SolrParams params, String shardId, DocCollection collection);
 
-  public abstract String getName();
 
   /** This method is consulted to determine what slices should be queried for a request when
    *  an explicit shards parameter was not used.

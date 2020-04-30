@@ -1,3 +1,12 @@
+package org.apache.lucene.queryparser.xml;
+
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.queryparser.xml.builders.TermsFilterBuilder;
+import org.apache.lucene.queryparser.xml.builders.BooleanFilterBuilder;
+import org.apache.lucene.queryparser.xml.builders.LikeThisQueryBuilder;
+import org.apache.lucene.queryparser.xml.builders.BoostingQueryBuilder;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +23,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.xml;
-
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.queryparser.classic.QueryParser;
-import org.apache.lucene.queryparser.xml.builders.LikeThisQueryBuilder;
 
 /**
  * Assembles a QueryBuilder which uses Query objects from
@@ -47,8 +51,11 @@ public class CorePlusQueriesParser extends CoreParser {
 
   protected CorePlusQueriesParser(String defaultField, Analyzer analyzer, QueryParser parser) {
     super(defaultField, analyzer, parser);
+    filterFactory.addBuilder("TermsFilter", new TermsFilterBuilder(analyzer));
+    filterFactory.addBuilder("BooleanFilter", new BooleanFilterBuilder(filterFactory));
     String fields[] = {"contents"};
     queryFactory.addBuilder("LikeThisQuery", new LikeThisQueryBuilder(analyzer, fields));
+    queryFactory.addBuilder("BoostingQuery", new BoostingQueryBuilder(queryFactory));
 
   }
 }

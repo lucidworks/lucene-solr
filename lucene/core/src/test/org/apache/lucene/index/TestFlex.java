@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
-
-import org.apache.lucene.analysis.MockAnalyzer;
-import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util.TestUtil;
+import org.apache.lucene.store.*;
+import org.apache.lucene.analysis.*;
+import org.apache.lucene.document.*;
+import org.apache.lucene.util.*;
 
 public class TestFlex extends LuceneTestCase {
 
@@ -55,7 +52,7 @@ public class TestFlex extends LuceneTestCase {
 
       IndexReader r = w.getReader();
       
-      TermsEnum terms = MultiTerms.getTerms(r, "field3").iterator();
+      TermsEnum terms = MultiFields.getTerms(r, "field3").iterator();
       assertEquals(TermsEnum.SeekStatus.END, terms.seekCeil(new BytesRef("abc")));
       r.close();
     }
@@ -73,7 +70,7 @@ public class TestFlex extends LuceneTestCase {
     w.addDocument(doc);
     w.forceMerge(1);
     DirectoryReader r = w.getReader();
-    TermsEnum terms = getOnlyLeafReader(r).terms("f").iterator();
+    TermsEnum terms = getOnlySegmentReader(r).fields().terms("f").iterator();
     assertTrue(terms.next() != null);
     try {
       assertEquals(0, terms.ord());

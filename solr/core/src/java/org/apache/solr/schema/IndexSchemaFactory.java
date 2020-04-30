@@ -1,3 +1,4 @@
+package org.apache.solr.schema;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +15,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
-
-import java.io.File;
-import java.io.InputStream;
-import java.lang.invoke.MethodHandles;
 
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.core.PluginInfo;
-import org.apache.solr.core.SolrConfig;
+import org.apache.solr.core.SolrConfig;         
 import org.apache.solr.core.SolrResourceLoader;
 import org.apache.solr.util.SystemIdResolver;
 import org.apache.solr.util.plugin.NamedListInitializedPlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.InputSource;
+
+import java.io.File;
+import java.io.InputStream;
+import java.lang.invoke.MethodHandles;
 
 /** Base class for factories for IndexSchema implementations */
 public abstract class IndexSchemaFactory implements NamedListInitializedPlugin {
@@ -53,7 +53,7 @@ public abstract class IndexSchemaFactory implements NamedListInitializedPlugin {
     }
     InputSource inputSource = new InputSource(schemaInputStream);
     inputSource.setSystemId(SystemIdResolver.createSystemIdFromResourceName(resourceName));
-    IndexSchema schema = new IndexSchema(resourceName, inputSource, config.luceneMatchVersion, loader);
+    IndexSchema schema = new IndexSchema(config, resourceName, inputSource);
     return schema;
   }
 
@@ -65,7 +65,7 @@ public abstract class IndexSchemaFactory implements NamedListInitializedPlugin {
       factory = config.getResourceLoader().newInstance(info.className, IndexSchemaFactory.class);
       factory.init(info.initArgs);
     } else {
-      factory = config.getResourceLoader().newInstance(ManagedIndexSchemaFactory.class.getName(), IndexSchemaFactory.class);
+      factory = new ClassicIndexSchemaFactory();
     }
     IndexSchema schema = factory.create(resourceName, config);
     return schema;

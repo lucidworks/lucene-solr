@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,23 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.NoSuchFileException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.HashSet;
 
 import org.apache.lucene.util.IOUtils;
+
 
 /**
  * Expert: A Directory instance that switches files between
@@ -55,12 +52,8 @@ public class FileSwitchDirectory extends Directory {
   private final Directory primaryDir;
   private final Set<String> primaryExtensions;
   private boolean doClose;
-  private static final Pattern EXT_PATTERN = Pattern.compile("\\.([a-zA-Z]+)");
 
   public FileSwitchDirectory(Set<String> primaryExtensions, Directory primaryDir, Directory secondaryDir, boolean doClose) {
-    if (primaryExtensions.contains("tmp")) {
-      throw new IllegalArgumentException("tmp is a reserved extension");
-    }
     this.primaryExtensions = primaryExtensions;
     this.primaryDir = primaryDir;
     this.secondaryDir = secondaryDir;
@@ -92,7 +85,7 @@ public class FileSwitchDirectory extends Directory {
   
   @Override
   public String[] listAll() throws IOException {
-    List<String> files = new ArrayList<>();
+    Set<String> files = new HashSet<>();
     // LUCENE-3380: either or both of our dirs could be FSDirs,
     // but if one underlying delegate is an FSDir and mkdirs() has not
     // yet been called, because so far everything is written to the other,
@@ -100,24 +93,14 @@ public class FileSwitchDirectory extends Directory {
     NoSuchFileException exc = null;
     try {
       for(String f : primaryDir.listAll()) {
-        String ext = getExtension(f);
-        // we should respect the extension here as well to ensure that we don't list a file that is already
-        // deleted or rather in the one of the directories pending deletions if both directories point
-        // to the same filesystem path. This is quite common for instance to use NIOFS as a primary
-        // and MMap as a secondary to only mmap files like docvalues or term dictionaries.
-        if (primaryExtensions.contains(ext)) {
-          files.add(f);
-        }
+        files.add(f);
       }
     } catch (NoSuchFileException e) {
       exc = e;
     }
     try {
       for(String f : secondaryDir.listAll()) {
-        String ext = getExtension(f);
-        if (primaryExtensions.contains(ext) == false) {
-          files.add(f);
-        }
+        files.add(f);
       }
     } catch (NoSuchFileException e) {
       // we got NoSuchFileException from both dirs
@@ -136,9 +119,7 @@ public class FileSwitchDirectory extends Directory {
     if (exc != null && files.isEmpty()) {
       throw exc;
     }
-    String[] result = files.toArray(new String[files.size()]);
-    Arrays.sort(result);
-    return result;
+    return files.toArray(new String[files.size()]);
   }
 
   /** Utility method to return a file's extension. */
@@ -147,14 +128,7 @@ public class FileSwitchDirectory extends Directory {
     if (i == -1) {
       return "";
     }
-    String ext = name.substring(i + 1);
-    if (ext.equals("tmp")) {
-      Matcher matcher = EXT_PATTERN.matcher(name.substring(0, i + 1));
-      if (matcher.find()) {
-        return matcher.group(1);
-      }
-    }
-    return ext;
+    return name.substring(i+1, name.length());
   }
 
   private Directory getDirectory(String name) {
@@ -168,11 +142,7 @@ public class FileSwitchDirectory extends Directory {
 
   @Override
   public void deleteFile(String name) throws IOException {
-    if (getDirectory(name) == primaryDir) {
-      primaryDir.deleteFile(name);
-    } else {
-      secondaryDir.deleteFile(name);
-    }
+    getDirectory(name).deleteFile(name);
   }
 
   @Override
@@ -186,64 +156,33 @@ public class FileSwitchDirectory extends Directory {
   }
 
   @Override
-  public IndexOutput createTempOutput(String prefix, String suffix, IOContext context) throws IOException {
-    // this is best effort - it's ok to create a tmp file with any prefix and suffix. Yet if this file is then
-    // in-turn used to rename they must match to the same directory hence we use the full file-name to find
-    // the right directory. Here we can't make a decision but we need to ensure that all other operations
-    // map to the right directory.
-    String tmpFileName = getTempFileName(prefix, suffix, 0);
-    return getDirectory(tmpFileName).createTempOutput(prefix, suffix, context);
-  }
-
-  @Override
   public void sync(Collection<String> names) throws IOException {
     List<String> primaryNames = new ArrayList<>();
     List<String> secondaryNames = new ArrayList<>();
 
     for (String name : names)
-      if (primaryExtensions.contains(getExtension(name))) {
+      if (primaryExtensions.contains(getExtension(name)))
         primaryNames.add(name);
-      } else {
+      else
         secondaryNames.add(name);
-      }
 
     primaryDir.sync(primaryNames);
     secondaryDir.sync(secondaryNames);
   }
 
   @Override
-  public void rename(String source, String dest) throws IOException {
+  public void renameFile(String source, String dest) throws IOException {
     Directory sourceDir = getDirectory(source);
     // won't happen with standard lucene index files since pending and commit will
     // always have the same extension ("")
     if (sourceDir != getDirectory(dest)) {
       throw new AtomicMoveNotSupportedException(source, dest, "source and dest are in different directories");
     }
-    sourceDir.rename(source, dest);
-  }
-
-  @Override
-  public void syncMetaData() throws IOException {
-    primaryDir.syncMetaData();
-    secondaryDir.syncMetaData();
+    sourceDir.renameFile(source, dest);
   }
 
   @Override
   public IndexInput openInput(String name, IOContext context) throws IOException {
     return getDirectory(name).openInput(name, context);
-  }
-
-  @Override
-  public Set<String> getPendingDeletions() throws IOException {
-    Set<String> primaryDeletions = primaryDir.getPendingDeletions();
-    Set<String> secondaryDeletions = secondaryDir.getPendingDeletions();
-    if (primaryDeletions.isEmpty() && secondaryDeletions.isEmpty()) {
-      return Collections.emptySet();
-    } else {
-      HashSet<String> combined = new HashSet<>();
-      combined.addAll(primaryDeletions);
-      combined.addAll(secondaryDeletions);
-      return Collections.unmodifiableSet(combined);
-    }
   }
 }

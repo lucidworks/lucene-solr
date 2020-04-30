@@ -14,12 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.response;
 
-import java.io.IOException;
-
 import org.apache.solr.client.solrj.SolrResponse;
-import org.apache.solr.common.MapWriter;
 import org.apache.solr.common.util.NamedList;
 
 /**
@@ -27,17 +25,12 @@ import org.apache.solr.common.util.NamedList;
  *
  * @since solr 1.3
  */
-public class SolrResponseBase extends SolrResponse implements MapWriter
+public class SolrResponseBase extends SolrResponse
 {
   private long elapsedTime = -1;
   private NamedList<Object> response = null;
   private String requestUrl = null;
-
-  @Override
-  public void writeMap(EntryWriter ew) throws IOException {
-    if (response != null) response.writeMap(ew);
-  }
-
+  
   @Override
   public long getElapsedTime() {
     return elapsedTime;

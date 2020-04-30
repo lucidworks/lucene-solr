@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,24 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
 
-
-import java.io.EOFException;
 import java.io.IOException;
+import java.io.EOFException;
 
-import static org.apache.lucene.store.RAMOutputStream.BUFFER_SIZE;
-
-/** 
- * A memory-resident {@link IndexInput} implementation. 
- *
- * @lucene.internal 
- * @deprecated This class uses inefficient synchronization and is discouraged
- * in favor of {@link MMapDirectory}. It will be removed in future versions 
- * of Lucene.
- */
-@Deprecated
+/** A memory-resident {@link IndexInput} implementation. 
+ *  
+ *  @lucene.internal */
 public class RAMInputStream extends IndexInput implements Cloneable {
+  static final int BUFFER_SIZE = RAMOutputStream.BUFFER_SIZE;
 
   private final RAMFile file;
   private final long length;
@@ -40,6 +33,7 @@ public class RAMInputStream extends IndexInput implements Cloneable {
   private int currentBufferIndex;
   
   private int bufferPosition;
+  private long bufferStart;
   private int bufferLength;
 
   public RAMInputStream(String name, RAMFile f) throws IOException {
@@ -54,7 +48,10 @@ public class RAMInputStream extends IndexInput implements Cloneable {
       throw new IOException("RAMInputStream too large length=" + length + ": " + name); 
     }
 
-    setCurrentBuffer();
+    // make sure that we switch to the
+    // first needed buffer lazily
+    currentBufferIndex = -1;
+    currentBuffer = null;
   }
 
   @Override
@@ -69,25 +66,19 @@ public class RAMInputStream extends IndexInput implements Cloneable {
 
   @Override
   public byte readByte() throws IOException {
-    if (bufferPosition == bufferLength) {
-      nextBuffer();
+    if (bufferPosition >= bufferLength) {
+      currentBufferIndex++;
+      switchCurrentBuffer(true);
     }
-    if (currentBuffer == null) {
-      throw new EOFException();
-    } else {
-      return currentBuffer[bufferPosition++];
-    }
+    return currentBuffer[bufferPosition++];
   }
 
   @Override
   public void readBytes(byte[] b, int offset, int len) throws IOException {
     while (len > 0) {
-      if (bufferPosition == bufferLength) {
-        nextBuffer();
-      }
-
-      if (currentBuffer == null) {
-        throw new EOFException();
+      if (bufferPosition >= bufferLength) {
+        currentBufferIndex++;
+        switchCurrentBuffer(true);
       }
 
       int remainInBuffer = bufferLength - bufferPosition;
@@ -99,58 +90,45 @@ public class RAMInputStream extends IndexInput implements Cloneable {
     }
   }
 
+  private final void switchCurrentBuffer(boolean enforceEOF) throws IOException {
+    bufferStart = (long) BUFFER_SIZE * (long) currentBufferIndex;
+    if (bufferStart > length || currentBufferIndex >= file.numBuffers()) {
+      // end of file reached, no more buffers left
+      if (enforceEOF) {
+        throw new EOFException("read past EOF: " + this);
+      } else {
+        // Force EOF if a read takes place at this position
+        currentBufferIndex--;
+        bufferPosition = BUFFER_SIZE;
+      }
+    } else {
+      currentBuffer = file.getBuffer(currentBufferIndex);
+      bufferPosition = 0;
+      long buflen = length - bufferStart;
+      bufferLength = buflen > BUFFER_SIZE ? BUFFER_SIZE : (int) buflen;
+    }
+  }
+
   @Override
   public long getFilePointer() {
-    return (long) currentBufferIndex * BUFFER_SIZE + bufferPosition;
+    return currentBufferIndex < 0 ? 0 : bufferStart + bufferPosition;
   }
 
   @Override
   public void seek(long pos) throws IOException {
-    int newBufferIndex = (int) (pos / BUFFER_SIZE);
-
-    if (newBufferIndex != currentBufferIndex) {
-      // we seek'd to a different buffer:
-      currentBufferIndex = newBufferIndex;
-      setCurrentBuffer();
+    if (currentBuffer == null || pos < bufferStart || pos >= bufferStart + BUFFER_SIZE) {
+      currentBufferIndex = (int) (pos / BUFFER_SIZE);
+      switchCurrentBuffer(false);
     }
-
     bufferPosition = (int) (pos % BUFFER_SIZE);
-
-    // This is not >= because seeking to exact end of file is OK: this is where
-    // you'd also be if you did a readBytes of all bytes in the file
-    if (getFilePointer() > length()) {
-      throw new EOFException("seek beyond EOF: pos=" + getFilePointer() + " vs length=" + length() + ": " + this);
-    }
-  }
-
-  private void nextBuffer() throws IOException {
-    // This is >= because we are called when there is at least 1 more byte to read:
-    if (getFilePointer() >= length()) {
-      throw new EOFException("cannot read another byte at EOF: pos=" + getFilePointer() + " vs length=" + length() + ": " + this);
-    }
-    currentBufferIndex++;
-    setCurrentBuffer();
-    assert currentBuffer != null;
-    bufferPosition = 0;
-  }
-
-  private final void setCurrentBuffer() throws IOException {
-    if (currentBufferIndex < file.numBuffers()) {
-      currentBuffer = file.getBuffer(currentBufferIndex);
-      assert currentBuffer != null;
-      long bufferStart = (long) BUFFER_SIZE * (long) currentBufferIndex;
-      bufferLength = (int) Math.min(BUFFER_SIZE, length - bufferStart);
-    } else {
-      currentBuffer = null;
-    }
   }
 
   @Override
-  public IndexInput slice(String sliceDescription, final long offset, final long sliceLength) throws IOException {
-    if (offset < 0 || sliceLength < 0 || offset + sliceLength > this.length) {
+  public IndexInput slice(String sliceDescription, final long offset, final long length) throws IOException {
+    if (offset < 0 || length < 0 || offset + length > this.length) {
       throw new IllegalArgumentException("slice() " + sliceDescription + " out of bounds: "  + this);
     }
-    return new RAMInputStream(getFullSliceDescription(sliceDescription), file, offset + sliceLength) {
+    return new RAMInputStream(getFullSliceDescription(sliceDescription), file, offset + length) {
       {
         seek(0L);
       }
@@ -170,7 +148,7 @@ public class RAMInputStream extends IndexInput implements Cloneable {
 
       @Override
       public long length() {
-        return sliceLength;
+        return super.length() - offset;
       }
 
       @Override

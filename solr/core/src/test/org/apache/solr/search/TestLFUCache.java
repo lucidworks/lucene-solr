@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,35 +16,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
+
+import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.common.util.ExecutorUtil;
+import org.apache.solr.common.util.NamedList;
+import org.apache.solr.util.ConcurrentLFUCache;
+import org.apache.solr.util.DefaultSolrThreadFactory;
+import org.apache.solr.util.RefCounted;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-
-import org.apache.lucene.index.Term;
-import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.search.WildcardQuery;
-import org.apache.lucene.util.RamUsageEstimator;
-import org.apache.lucene.util.TestUtil;
-import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.common.util.ExecutorUtil;
-import org.apache.solr.common.util.TimeSource;
-import org.apache.solr.metrics.SolrMetricManager;
-import org.apache.solr.util.ConcurrentLFUCache;
-import org.apache.solr.util.DefaultSolrThreadFactory;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 
 /**
@@ -62,10 +55,12 @@ public class TestLFUCache extends SolrTestCaseJ4 {
 
   @Test
   public void testTimeDecayParams() throws IOException {
-    h.getCore().withSearcher(searcher -> {
+    RefCounted<SolrIndexSearcher> holder = h.getCore().getSearcher();
+    try {
+      SolrIndexSearcher searcher = holder.get();
       LFUCache cacheDecayTrue = (LFUCache) searcher.getCache("lfuCacheDecayTrue");
       assertNotNull(cacheDecayTrue);
-      Map<String,Object> stats = cacheDecayTrue.getMetricsMap().getValue();
+      NamedList stats = cacheDecayTrue.getStatistics();
       assertTrue((Boolean) stats.get("timeDecay"));
       addCache(cacheDecayTrue, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
       for (int idx = 0; idx < 64; ++idx) {
@@ -76,7 +71,7 @@ public class TestLFUCache extends SolrTestCaseJ4 {
 
       LFUCache cacheDecayDefault = (LFUCache) searcher.getCache("lfuCacheDecayDefault");
       assertNotNull(cacheDecayDefault);
-      stats = cacheDecayDefault.getMetricsMap().getValue();
+      stats = cacheDecayDefault.getStatistics();
       assertTrue((Boolean) stats.get("timeDecay"));
       addCache(cacheDecayDefault, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
       assertCache(cacheDecayDefault, 1, 2, 3, 4, 5);
@@ -90,7 +85,7 @@ public class TestLFUCache extends SolrTestCaseJ4 {
 
       LFUCache cacheDecayFalse = (LFUCache) searcher.getCache("lfuCacheDecayFalse");
       assertNotNull(cacheDecayFalse);
-      stats = cacheDecayFalse.getMetricsMap().getValue();
+      stats = cacheDecayFalse.getStatistics();
       assertFalse((Boolean) stats.get("timeDecay"));
       addCache(cacheDecayFalse, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
       assertCache(cacheDecayFalse, 1, 2, 3, 4, 5);
@@ -105,8 +100,10 @@ public class TestLFUCache extends SolrTestCaseJ4 {
         addCache(cacheDecayFalse, idx);
       }
       assertCache(cacheDecayFalse, 1, 2, 3, 4, 5);
-      return null;
-    });
+
+    } finally {
+      holder.decref();
+    }
   }
 
   private void addCache(LFUCache cache, int... inserts) {
@@ -134,17 +131,10 @@ public class TestLFUCache extends SolrTestCaseJ4 {
 
 
   @Test
-  public void testSimple() throws Exception {
-    SolrMetricManager metricManager = new SolrMetricManager();
-    Random r = random();
-    String registry = TestUtil.randomSimpleString(r, 2, 10);
-    String scope = TestUtil.randomSimpleString(r, 2, 10);
+  public void testSimple() throws IOException {
     LFUCache lfuCache = new LFUCache();
     LFUCache newLFUCache = new LFUCache();
     LFUCache noWarmLFUCache = new LFUCache();
-    lfuCache.initializeMetrics(metricManager, registry, "foo", scope + ".lfuCache");
-    newLFUCache.initializeMetrics(metricManager, registry, "foo", scope + ".newLFUCache");
-    noWarmLFUCache.initializeMetrics(metricManager, registry, "foo", scope + ".noWarmLFUCache");
     try {
       Map params = new HashMap();
       params.put("size", "100");
@@ -159,7 +149,7 @@ public class TestLFUCache extends SolrTestCaseJ4 {
       assertEquals("15", lfuCache.get(15));
       assertEquals("75", lfuCache.get(75));
       assertEquals(null, lfuCache.get(110));
-      Map<String,Object> nl = lfuCache.getMetricsMap().getValue();
+      NamedList nl = lfuCache.getStatistics();
       assertEquals(3L, nl.get("lookups"));
       assertEquals(2L, nl.get("hits"));
       assertEquals(101L, nl.get("inserts"));
@@ -175,7 +165,7 @@ public class TestLFUCache extends SolrTestCaseJ4 {
       assertEquals("15", newLFUCache.get(15));
       assertEquals("75", newLFUCache.get(75));
       assertEquals(null, newLFUCache.get(50));
-      nl = newLFUCache.getMetricsMap().getValue();
+      nl = newLFUCache.getStatistics();
       assertEquals(3L, nl.get("lookups"));
       assertEquals(2L, nl.get("hits"));
       assertEquals(1L, nl.get("inserts"));
@@ -396,11 +386,14 @@ public class TestLFUCache extends SolrTestCaseJ4 {
      * design, the cache eviction doesn't work right.
      */
     for (int i = 0; i < atLeast(2_000_000); ++i) {
-      executorService.submit(() -> {
-        try {
-          cache.put(random().nextInt(100), random().nextLong());
-        } catch (Throwable t) {
-          error.compareAndSet(null, t);
+      executorService.submit(new Runnable() {
+        @Override
+        public void run() {
+          try {
+            cache.put(random().nextInt(100), random().nextLong());
+          } catch (Throwable t) {
+            error.compareAndSet(null, t);
+          }
         }
       });
     }
@@ -410,120 +403,6 @@ public class TestLFUCache extends SolrTestCaseJ4 {
     
     // then:
     assertNull("Exception during concurrent access: " + error.get(), error.get());
-  }
-
-  @Test
-  public void testAccountable() throws Exception {
-    SolrMetricManager metricManager = new SolrMetricManager();
-    Random r = random();
-    String registry = TestUtil.randomSimpleString(r, 2, 10);
-    String scope = TestUtil.randomSimpleString(r, 2, 10);
-    LFUCache lfuCache = new LFUCache();
-    lfuCache.initializeMetrics(metricManager, registry, "foo", scope + ".lfuCache");
-    try {
-      Map params = new HashMap();
-      params.put("size", "100");
-      params.put("initialSize", "10");
-      params.put("autowarmCount", "25");
-      NoOpRegenerator regenerator = new NoOpRegenerator();
-      Object initObj = lfuCache.init(params, null, regenerator);
-      lfuCache.setState(SolrCache.State.LIVE);
-
-      long initialBytes = lfuCache.ramBytesUsed();
-      WildcardQuery q = new WildcardQuery(new Term("foo", "bar"));
-      DocSet docSet = new BitDocSet();
-
-      // 1 insert
-      lfuCache.put(q, docSet);
-      long updatedBytes = lfuCache.ramBytesUsed();
-      assertTrue(updatedBytes > initialBytes);
-      long estimated = initialBytes + q.ramBytesUsed() + docSet.ramBytesUsed() + ConcurrentLFUCache.CacheEntry.BASE_RAM_BYTES_USED
-          + RamUsageEstimator.HASHTABLE_RAM_BYTES_PER_ENTRY;
-      assertEquals(estimated, updatedBytes);
-
-      TermQuery tq = new TermQuery(new Term("foo", "bar"));
-      lfuCache.put(tq, docSet);
-      estimated += RamUsageEstimator.sizeOfObject(tq, RamUsageEstimator.QUERY_DEFAULT_RAM_BYTES_USED) +
-          docSet.ramBytesUsed() + ConcurrentLFUCache.CacheEntry.BASE_RAM_BYTES_USED +
-          RamUsageEstimator.HASHTABLE_RAM_BYTES_PER_ENTRY;
-      updatedBytes = lfuCache.ramBytesUsed();
-      assertEquals(estimated, updatedBytes);
-      lfuCache.clear();
-      long clearedBytes = lfuCache.ramBytesUsed();
-      assertEquals(initialBytes, clearedBytes);
-    } finally {
-      lfuCache.close();
-    }
-
-  }
-
-  public void testSetLimits() throws Exception {
-    SolrMetricManager metricManager = new SolrMetricManager();
-    Random r = random();
-    String registry = TestUtil.randomSimpleString(r, 2, 10);
-    String scope = TestUtil.randomSimpleString(r, 2, 10);
-    LFUCache<String, String> cache = new LFUCache<>();
-    cache.initializeMetrics(metricManager, registry, "foo", scope + ".lfuCache");
-
-    Map<String, String> params = new HashMap<>();
-    params.put("size", "6");
-    CacheRegenerator cr = new NoOpRegenerator();
-    Object o = cache.init(params, null, cr);
-    for (int i = 0; i < 6; i++) {
-      cache.put("" + i, "foo " + i);
-    }
-    // no evictions yet
-    assertEquals(6, cache.size());
-    // this sets minSize = 4, evictions will target minSize
-    cache.setMaxSize(5);
-    // should not happen yet - evictions are triggered by put
-    assertEquals(6, cache.size());
-    cache.put("6", "foo 6");
-    // should evict to minSize
-    assertEquals(4, cache.size());
-    // should allow adding 1 more item before hitting "size" limit
-    cache.put("7", "foo 7");
-    assertEquals(5, cache.size());
-    // should evict down to minSize = 4
-    cache.put("8", "foo 8");
-    assertEquals(4, cache.size());
-
-    // scale up
-
-    cache.setMaxSize(10);
-    for (int i = 0; i < 6; i++) {
-      cache.put("new" + i, "bar " + i);
-    }
-    assertEquals(10, cache.size());
-  }
-
-  @Test
-  public void testMaxIdleTimeEviction() throws Exception {
-    int IDLE_TIME_SEC = 5;
-    long IDLE_TIME_NS = TimeUnit.NANOSECONDS.convert(IDLE_TIME_SEC, TimeUnit.SECONDS);
-    CountDownLatch sweepFinished = new CountDownLatch(1);
-    final AtomicLong numSweepsStarted = new AtomicLong(0);
-    ConcurrentLFUCache<String, String> cache = new ConcurrentLFUCache(6, 5, 5, 6, false, false, null, false, IDLE_TIME_SEC) {
-      @Override
-      public void markAndSweep() {
-        numSweepsStarted.incrementAndGet();
-        super.markAndSweep();
-        sweepFinished.countDown();
-      }
-    };
-    for (int i = 0; i < 4; i++) {
-      cache.put("" + i, "foo " + i);
-    }
-    // no evictions yet
-    assertEquals(4, cache.size());
-    assertEquals("markAndSweep spurious run", 0, numSweepsStarted.get());
-    long currentTime = TimeSource.NANO_TIME.getEpochTimeNs();
-    cache.putCacheEntry(new ConcurrentLFUCache.CacheEntry<>("4", "foo5",
-        currentTime - IDLE_TIME_NS * 2));
-    boolean await = sweepFinished.await(10, TimeUnit.SECONDS);
-    assertTrue("did not evict entries in time", await);
-    assertEquals(4, cache.size());
-    assertNull(cache.get("4"));
   }
 
 // From the original LRU cache tests, they're commented out there too because they take a while.

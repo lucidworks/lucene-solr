@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.util.Arrays;
 import java.util.regex.Matcher;
@@ -42,7 +42,7 @@ import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
  * so you get &gt; Integer.MAX_VALUE postings data for the term
  * @lucene.experimental
  */
-@SuppressCodecs({ "SimpleText", "Direct" })
+@SuppressCodecs({ "SimpleText", "Memory", "Direct" })
 @Monster("takes ~20GB-30GB of space and 10 minutes")
 public class Test2BPostingsBytes extends LuceneTestCase {
 

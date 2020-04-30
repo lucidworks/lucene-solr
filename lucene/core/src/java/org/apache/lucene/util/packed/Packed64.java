@@ -1,3 +1,5 @@
+package org.apache.lucene.util.packed;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.packed;
-
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -27,7 +27,7 @@ import org.apache.lucene.util.RamUsageEstimator;
  * Space optimized random access capable array of values with a fixed number of
  * bits/value. Values are packed contiguously.
  * <p>
- * The implementation strives to perform as fast as possible under the
+ * The implementation strives to perform af fast as possible under the
  * constraint of contiguous bits, by avoiding expensive operations. This comes
  * at the cost of code clarity.
  * <p>
@@ -246,8 +246,8 @@ class Packed64 extends PackedInts.MutableImpl {
   public long ramBytesUsed() {
     return RamUsageEstimator.alignObjectSize(
         RamUsageEstimator.NUM_BYTES_OBJECT_HEADER
-        + 3 * Integer.BYTES   // bpvMinusBlockSize,valueCount,bitsPerValue
-        + Long.BYTES          // maskRight
+        + 3 * RamUsageEstimator.NUM_BYTES_INT     // bpvMinusBlockSize,valueCount,bitsPerValue
+        + RamUsageEstimator.NUM_BYTES_LONG        // maskRight
         + RamUsageEstimator.NUM_BYTES_OBJECT_REF) // blocks ref
         + RamUsageEstimator.sizeOf(blocks);
   }

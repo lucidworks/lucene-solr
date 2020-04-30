@@ -1,3 +1,4 @@
+package org.apache.solr.rest.schema.analysis;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.rest.schema.analysis;
+
 import java.io.IOException;
 import java.io.Reader;
 import java.lang.invoke.MethodHandles;
@@ -28,13 +29,11 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.core.FlattenGraphFilterFactory;  // javadocs
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.synonym.SynonymFilterFactory;
 import org.apache.lucene.analysis.synonym.SynonymMap;
 import org.apache.lucene.analysis.util.ResourceLoader;
 import org.apache.lucene.util.CharsRef;
-import org.apache.lucene.util.CharsRefBuilder;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.util.NamedList;
@@ -51,17 +50,8 @@ import org.slf4j.LoggerFactory;
 /**
  * TokenFilterFactory and ManagedResource implementation for 
  * doing CRUD on synonyms using the REST API.
- * 
- * @deprecated Use {@link ManagedSynonymGraphFilterFactory} instead, but be sure to also
- * use {@link FlattenGraphFilterFactory} at index time (not at search time) as well.
- * @since 4.8.0
- * @lucene.spi {@value #NAME}
  */
-@Deprecated
 public class ManagedSynonymFilterFactory extends BaseManagedTokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "managedSynonym";
   
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   
@@ -142,8 +132,7 @@ public class ManagedSynonymFilterFactory extends BaseManagedTokenFilterFactory {
       synonymMappings = new TreeMap<>();
       if (managedData != null) {
         Map<String,Object> storedSyns = (Map<String,Object>)managedData;
-        for (Map.Entry<String, Object> entry : storedSyns.entrySet()) {
-          String key = entry.getKey();
+        for (String key : storedSyns.keySet()) {
 
           String caseKey = applyCaseSetting(ignoreCase, key);
           CasePreservedSynonymMappings cpsm = synonymMappings.get(caseKey);
@@ -154,14 +143,15 @@ public class ManagedSynonymFilterFactory extends BaseManagedTokenFilterFactory {
           
           // give the nature of our JSON parsing solution, we really have
           // no guarantees on what is in the file
-          Object mapping = entry.getValue();
+          Object mapping = storedSyns.get(key);
           if (!(mapping instanceof List)) {
             throw new SolrException(ErrorCode.SERVER_ERROR, 
                 "Invalid synonym file format! Expected a list of synonyms for "+key+
                 " but got "+mapping.getClass().getName());
           }
-
-          Set<String> sortedVals = new TreeSet<>((List<String>) entry.getValue());
+                    
+          Set<String> sortedVals = new TreeSet<>();
+          sortedVals.addAll((List<String>)storedSyns.get(key));          
           cpsm.mappings.put(key, sortedVals);        
         }
       }
@@ -194,7 +184,9 @@ public class ManagedSynonymFilterFactory extends BaseManagedTokenFilterFactory {
         if (cpsm == null)
           cpsm = new CasePreservedSynonymMappings();
 
-        Set<String> treeTerms = new TreeSet<>(jsonList);
+        Set<String> treeTerms = new TreeSet<>();
+        treeTerms.addAll(jsonList);
+        treeTerms.remove(origTerm);
         cpsm.mappings.put(origTerm, treeTerms);
         madeChanges = true;
         // only add the cpsm to the synonymMappings if it has valid data
@@ -268,8 +260,8 @@ public class ManagedSynonymFilterFactory extends BaseManagedTokenFilterFactory {
     protected Map<String,Set<String>> getStoredView() {
       Map<String,Set<String>> storedView = new TreeMap<>();
       for (CasePreservedSynonymMappings cpsm : synonymMappings.values()) {
-        for (Map.Entry<String, Set<String>> entry : cpsm.mappings.entrySet()) {
-          storedView.put(entry.getKey(), entry.getValue());
+        for (String key : cpsm.mappings.keySet()) {
+          storedView.put(key, cpsm.mappings.get(key));
         }
       }
       return storedView;
@@ -365,12 +357,12 @@ public class ManagedSynonymFilterFactory extends BaseManagedTokenFilterFactory {
     public void parse(Reader in) throws IOException, ParseException {
       boolean ignoreCase = synonymManager.getIgnoreCase();
       for (CasePreservedSynonymMappings cpsm : synonymManager.synonymMappings.values()) {
-        for (Map.Entry<String, Set<String>> entry : cpsm.mappings.entrySet()) {
-          for (String mapping : entry.getValue()) {
+        for (String term : cpsm.mappings.keySet()) {
+          for (String mapping : cpsm.mappings.get(term)) {
             // apply the case setting to match the behavior of the SynonymMap builder
-            CharsRef casedTerm = analyze(synonymManager.applyCaseSetting(ignoreCase, entry.getKey()), new CharsRefBuilder());
-            CharsRef casedMapping = analyze(synonymManager.applyCaseSetting(ignoreCase, mapping), new CharsRefBuilder());
-            add(casedTerm, casedMapping, false);
+            String casedTerm = synonymManager.applyCaseSetting(ignoreCase, term);
+            String casedMapping = synonymManager.applyCaseSetting(ignoreCase, mapping);
+            add(new CharsRef(casedTerm), new CharsRef(casedMapping), false);
           }          
         }
       }      

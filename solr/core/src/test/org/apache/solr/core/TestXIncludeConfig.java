@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,21 +16,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.update.processor.RegexReplaceProcessorFactory;
 import org.apache.solr.update.processor.UpdateRequestProcessorChain;
-import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.util.AbstractSolrTestCase;
 import org.junit.Assume;
 import org.junit.BeforeClass;
 
 /** 
  * Test both XInclude as well as more old school "entity includes"
  */
-public class TestXIncludeConfig extends SolrTestCaseJ4 {
+public class TestXIncludeConfig extends AbstractSolrTestCase {
 
   @BeforeClass
   public static void beforeClass() throws Exception {
@@ -52,16 +53,16 @@ public class TestXIncludeConfig extends SolrTestCaseJ4 {
     SolrCore core = h.getCore();
 
     assertNotNull("includedHandler is null", 
-                  core.getRequestHandler("/includedHandler"));
+                  core.getRequestHandler("includedHandler"));
 
     UpdateRequestProcessorChain chain 
       = core.getUpdateProcessingChain("special-include");
     assertNotNull("chain is missing included processor", chain);
     assertEquals("chain with inclued processor is wrong size", 
-                 1, chain.getProcessors().size());
+                 1, chain.getFactories().length);
     assertEquals("chain has wrong included processor",
                  RegexReplaceProcessorFactory.class,
-                 chain.getProcessors().get(0).getClass());
+                 chain.getFactories()[0].getClass());
 
     IndexSchema schema = core.getLatestSchema();
     

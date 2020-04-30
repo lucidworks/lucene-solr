@@ -22,8 +22,6 @@
 
   <property name="build.dir" location="../build/core"/>
 
-  <!-- lucene core can use the minimal JDK profile -->
-  <property name="javac.profile.args" value="-profile compact1"/>
   <import file="../common-build.xml"/>
 
   <property name="moman.commit-hash" value="5c5c2a1e4dea" />
@@ -31,25 +29,17 @@
 
   <path id="classpath"/>
   
-  <!-- if we run with Java 9+, we refer to the java9 classes directory and insert this before the main classpath (to "emulate" a MR-JAR): -->
-  <condition property="-test.classpath.java9.addon" value="${build.dir}/classes/java9" else="${build.dir}/classes/java">
-    <and>
-      <not><equals arg1="${build.java.runtime}" arg2="1.8"/></not>
-      <istrue value="${tests.withJava9Patches}"/>
-    </and>
-  </condition>
-
   <path id="test.classpath">
     <pathelement location="${common.dir}/build/codecs/classes/java"/>
     <pathelement location="${common.dir}/build/test-framework/classes/java"/>
     <path refid="junit-path"/>
-    <pathelement location="${-test.classpath.java9.addon}"/><!-- if it's a duplicate it gets removed by Ant! -->
     <pathelement location="${build.dir}/classes/java"/>
     <pathelement location="${build.dir}/classes/test"/>
   </path>
 
   <path id="junit.classpath">
     <path refid="test.classpath"/>
+    <pathelement path="${java.class.path}"/>
   </path>
 
   <target name="test-core" depends="common.test"/>
@@ -71,8 +61,6 @@
   </target>
 
   <target name="-dist-maven" depends="-dist-maven-src-java"/>
-
-  <target name="-install-to-maven-local-repo" depends="-install-src-java-to-maven-local-repo"/>
 
   <macrodef name="createLevAutomaton">
       <attribute name="n"/>
@@ -143,7 +131,7 @@
     <delete file="${build.dir}/moman.zip"/>
   </target>
 
-  <target name="regenerate" depends="createLevAutomata,createPackedIntSources,jflex"/>
+  <target name="regenerate" depends="createLevAutomata,createPackedIntSources"/>
   
   <macrodef name="startLockStressTestClient">
     <attribute name="clientId"/>
@@ -232,21 +220,5 @@
   </target>
   
   <target name="test" depends="common.test, test-lock-factory"/>
-
-  <target name="clean-jflex">
-    <delete>
-      <fileset dir="src/java/org/apache/lucene/analysis/standard" includes="**/*.java">
-        <containsregexp expression="generated.*by.*JFlex"/>
-      </fileset>
-    </delete>
-  </target>
-
-  <target name="jflex" depends="-install-jflex,clean-jflex,-jflex-StandardAnalyzer"/>
-  
-  <target name="-jflex-StandardAnalyzer" depends="init,-install-jflex">
-    <run-jflex-and-disable-buffer-expansion 
-        dir="src/java/org/apache/lucene/analysis/standard" name="StandardTokenizerImpl"/>
-  </target>
-
 
 </project>

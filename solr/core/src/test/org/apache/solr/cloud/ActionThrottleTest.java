@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,20 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.common.util.TimeSource;
+import org.apache.solr.cloud.ActionThrottle.NanoTimeSource;
 import org.junit.Test;
 
 public class ActionThrottleTest extends SolrTestCaseJ4 {
-
-  static class TestNanoTimeSource extends TimeSource {
-
+  
+  static class TestNanoTimeSource implements NanoTimeSource {
+    
     private List<Long> returnValues;
     private int index = 0;
 
@@ -36,65 +37,41 @@ public class ActionThrottleTest extends SolrTestCaseJ4 {
     }
 
     @Override
-    public long getTimeNs() {
+    public long getTime() {
       return returnValues.get(index++);
     }
-
-    @Override
-    public long getEpochTimeNs() {
-      return getTimeNs();
-    }
-
-    @Override
-    public long[] getTimeAndEpochNs() {
-      long time = getTimeNs();
-      return new long[]{time, time};
-    }
-
-    @Override
-    public void sleep(long ms) throws InterruptedException {
-      TimeSource.NANO_TIME.sleep(ms);
-    }
-
-    @Override
-    public long convertDelay(TimeUnit fromUnit, long value, TimeUnit toUnit) {
-      throw new UnsupportedOperationException();
-    }
-
+    
   }
-
-  // use the same time source as ActionThrottle
-  private static final TimeSource timeSource = TimeSource.NANO_TIME;
-
+  
   @Test
   public void testBasics() throws Exception {
 
     ActionThrottle at = new ActionThrottle("test", 1000);
-    long start = timeSource.getTimeNs();
-
+    long start = System.nanoTime();
+    
     at.minimumWaitBetweenActions();
-
+    
     // should be no wait
-    assertTrue(TimeUnit.MILLISECONDS.convert(timeSource.getTimeNs() - start, TimeUnit.NANOSECONDS) < 1000);
+    assertTrue(TimeUnit.MILLISECONDS.convert(System.nanoTime() - start, TimeUnit.NANOSECONDS) < 1000);
     at.markAttemptingAction();
-
+    
     if (random().nextBoolean()) Thread.sleep(100);
-
+    
     at.minimumWaitBetweenActions();
-
-    long elaspsedTime = TimeUnit.MILLISECONDS.convert(timeSource.getTimeNs() - start, TimeUnit.NANOSECONDS);
-
+    
+    long elaspsedTime = TimeUnit.MILLISECONDS.convert(System.nanoTime() - start, TimeUnit.NANOSECONDS);
+    
     assertTrue(elaspsedTime + "ms", elaspsedTime >= 995);
-
-    start = timeSource.getTimeNs();
-
+    
+    start = System.nanoTime();
+    
     at.markAttemptingAction();
     at.minimumWaitBetweenActions();
-
+    
     Thread.sleep(random().nextInt(1000));
-
-    elaspsedTime = TimeUnit.MILLISECONDS.convert(timeSource.getTimeNs() - start, TimeUnit.NANOSECONDS);
-
+    
+    elaspsedTime = TimeUnit.MILLISECONDS.convert(System.nanoTime() - start, TimeUnit.NANOSECONDS);
+    
     assertTrue(elaspsedTime + "ms", elaspsedTime >= 995);
   }
   
@@ -102,23 +79,16 @@ public class ActionThrottleTest extends SolrTestCaseJ4 {
   public void testAZeroNanoTimeReturnInWait() throws Exception {
 
     ActionThrottle at = new ActionThrottle("test", 1000, new TestNanoTimeSource(Arrays.asList(new Long[]{0L, 10L})));
-    long start = timeSource.getTimeNs();
+    long start = System.nanoTime();
     
     at.markAttemptingAction();
     
     at.minimumWaitBetweenActions();
     
-    long elaspsedTime = TimeUnit.MILLISECONDS.convert(timeSource.getTimeNs() - start, TimeUnit.NANOSECONDS);
+    long elaspsedTime = TimeUnit.MILLISECONDS.convert(System.nanoTime() - start, TimeUnit.NANOSECONDS);
     
     assertTrue(elaspsedTime + "ms", elaspsedTime >= 995);
 
   }
 
-  public void testCreateNewThrottleWithLastValue() throws Exception {
-    ActionThrottle throttle = new ActionThrottle("xyz", 1000, new TestNanoTimeSource(Arrays.asList(new Long[]{10L, 20L})));
-    throttle.markAttemptingAction();
-    assertEquals((Long)10L, throttle.getLastActionStartedAt());
-    throttle = new ActionThrottle("new_xyz", 1000, throttle.getLastActionStartedAt());
-    assertEquals((Long)10L, throttle.getLastActionStartedAt());
-  }
 }

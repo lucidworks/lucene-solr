@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.standard.processors;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.standard.processors;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 import org.apache.lucene.queryparser.flexible.core.QueryNodeException;

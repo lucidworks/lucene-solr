@@ -1,3 +1,5 @@
+package org.apache.lucene.expressions;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.expressions;
-
 
 import org.apache.lucene.expressions.js.JavascriptCompiler;
 import org.apache.lucene.search.SortField;
@@ -42,39 +42,47 @@ public class TestExpressionValidation extends LuceneTestCase {
     SimpleBindings bindings = new SimpleBindings();
     bindings.add(new SortField("valid", SortField.Type.INT));
     bindings.add("invalid", JavascriptCompiler.compile("badreference"));
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       bindings.validate();
-    });
-    assertTrue(expected.getMessage().contains("Invalid reference"));
+      fail("didn't get expected exception");
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Invalid reference"));
+    }
   }
   
   public void testInvalidExternal2() throws Exception {
     SimpleBindings bindings = new SimpleBindings();
     bindings.add(new SortField("valid", SortField.Type.INT));
     bindings.add("invalid", JavascriptCompiler.compile("valid + badreference"));
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       bindings.validate();
-    });
-    assertTrue(expected.getMessage().contains("Invalid reference"));
+      fail("didn't get expected exception");
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Invalid reference"));
+    }
   }
   
   public void testSelfRecursion() throws Exception {
     SimpleBindings bindings = new SimpleBindings();
     bindings.add("cycle0", JavascriptCompiler.compile("cycle0"));
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       bindings.validate();
-    });
-    assertTrue(expected.getMessage().contains("Cycle detected"));
+      fail("didn't get expected exception");
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Cycle detected"));
+    }
   }
   
   public void testCoRecursion() throws Exception {
     SimpleBindings bindings = new SimpleBindings();
     bindings.add("cycle0", JavascriptCompiler.compile("cycle1"));
     bindings.add("cycle1", JavascriptCompiler.compile("cycle0"));
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       bindings.validate();
-    });
-    assertTrue(expected.getMessage().contains("Cycle detected"));
+      fail("didn't get expected exception");
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Cycle detected"));
+    }
   }
   
   public void testCoRecursion2() throws Exception {
@@ -82,10 +90,12 @@ public class TestExpressionValidation extends LuceneTestCase {
     bindings.add("cycle0", JavascriptCompiler.compile("cycle1"));
     bindings.add("cycle1", JavascriptCompiler.compile("cycle2"));
     bindings.add("cycle2", JavascriptCompiler.compile("cycle0"));
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       bindings.validate();
-    });
-    assertTrue(expected.getMessage().contains("Cycle detected"));
+      fail("didn't get expected exception");
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Cycle detected"));
+    }
   }
   
   public void testCoRecursion3() throws Exception {
@@ -93,10 +103,12 @@ public class TestExpressionValidation extends LuceneTestCase {
     bindings.add("cycle0", JavascriptCompiler.compile("100"));
     bindings.add("cycle1", JavascriptCompiler.compile("cycle0 + cycle2"));
     bindings.add("cycle2", JavascriptCompiler.compile("cycle0 + cycle1"));
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       bindings.validate();
-    });
-    assertTrue(expected.getMessage().contains("Cycle detected"));
+      fail("didn't get expected exception");
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Cycle detected"));
+    }
   }
   
   public void testCoRecursion4() throws Exception {
@@ -105,9 +117,11 @@ public class TestExpressionValidation extends LuceneTestCase {
     bindings.add("cycle1", JavascriptCompiler.compile("100"));
     bindings.add("cycle2", JavascriptCompiler.compile("cycle1 + cycle0 + cycle3"));
     bindings.add("cycle3", JavascriptCompiler.compile("cycle0 + cycle1 + cycle2"));
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       bindings.validate();
-    });
-    assertTrue(expected.getMessage().contains("Cycle detected"));
+      fail("didn't get expected exception");
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Cycle detected"));
+    }
   }
 }

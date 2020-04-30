@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.core.nodes;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.core.nodes;
 
 import java.util.List;
 
@@ -150,7 +151,8 @@ public class ProximityQueryNode extends BooleanQueryNode {
           + "' type='" + this.proximityType.toString() + "'" + distanceSTR
           + "/>";
     StringBuilder sb = new StringBuilder();
-    sb.append("<proximity field='").append(this.field).append("' inorder='").append(this.inorder).append("' type='").append(this.proximityType.toString()).append("'").append(distanceSTR).append(">");
+    sb.append("<proximity field='" + this.field + "' inorder='" + this.inorder
+        + "' type='" + this.proximityType.toString() + "'" + distanceSTR + ">");
     for (QueryNode child : getChildren()) {
       sb.append("\n");
       sb.append(child.toString());

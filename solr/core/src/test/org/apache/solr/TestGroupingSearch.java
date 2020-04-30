@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr;
 
 import java.io.ByteArrayInputStream;
@@ -30,23 +31,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.apache.lucene.index.LogDocMergePolicy;
 import org.apache.solr.client.solrj.impl.BinaryResponseParser;
-import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.GroupParams;
-import org.apache.solr.common.params.ModifiableSolrParams;
-import org.apache.solr.common.util.Utils;
-import org.apache.solr.index.LogDocMergePolicyFactory;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.response.BinaryResponseWriter;
 import org.apache.solr.response.ResultContext;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.schema.IndexSchema;
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.noggit.JSONUtil;
+import org.noggit.ObjectBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,27 +54,19 @@ public class TestGroupingSearch extends SolrTestCaseJ4 {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   public static final String FOO_STRING_FIELD = "foo_s1";
-  public static final String FOO_STRING_DOCVAL_FIELD = "foo_sdv";
   public static final String SMALL_STRING_FIELD = "small_s1";
   public static final String SMALL_INT_FIELD = "small_i";
-  static final String EMPTY_FACETS = "'facet_ranges':{},'facet_intervals':{},'facet_heatmaps':{}";
+  static final String EMPTY_FACETS = "'facet_dates':{},'facet_ranges':{},'facet_intervals':{},'facet_heatmaps':{}";
 
   @BeforeClass
   public static void beforeTests() throws Exception {
-    // we need DVs on point fields to compute stats & facets
-    if (Boolean.getBoolean(NUMERIC_POINTS_SYSPROP)) System.setProperty(NUMERIC_DOCVALUES_SYSPROP,"true");
-    
     // force LogDocMergePolicy so that we get a predictable doc order
     // when doing unsorted group collection
-    systemSetPropertySolrTestsMergePolicyFactory(LogDocMergePolicyFactory.class.getName());
+    System.setProperty("solr.tests.mergePolicy", 
+                       LogDocMergePolicy.class.getName());
 
     System.setProperty("enable.update.log", "false"); // schema12 doesn't support _version_
     initCore("solrconfig.xml", "schema12.xml");
-  }
-
-  @AfterClass
-  public static void afterTests() {
-    systemClearPropertySolrTestsMergePolicyFactory();
   }
 
   @Before
@@ -86,30 +77,31 @@ public class TestGroupingSearch extends SolrTestCaseJ4 {
 
   @Test
   public void testGroupingGroupSortingScore_basic() {
-    assertU(add(doc("id", "1", "id_i", "1", "name", "author1", "title", "a book title", "group_i", "1")));
-    assertU(add(doc("id", "2", "id_i", "2", "name", "author1", "title", "the title", "group_i", "2")));
-    assertU(add(doc("id", "3", "id_i", "3", "name", "author2", "title", "a book title", "group_i", "1")));
-    assertU(add(doc("id", "4", "id_i", "4", "name", "author2", "title", "title", "group_i", "2")));
-    assertU(add(doc("id", "5", "id_i", "5", "name", "author3", "title", "the title of a title", "group_i", "1")));
+    assertU(add(doc("id", "1","name", "author1", "title", "a book title", "group_i", "1")));
+    assertU(add(doc("id", "2","name", "author1", "title", "the title", "group_i", "2")));
+    assertU(add(doc("id", "3","name", "author2", "title", "a book title", "group_i", "1")));
+    assertU(add(doc("id", "4","name", "author2", "title", "title", "group_i", "2")));
+    assertU(add(doc("id", "5","name", "author3", "title", "the title of a title", "group_i", "1")));
     assertU(commit());
-
-    // function based query for predictable scores not affect by similarity
-    assertQ(req("q","{!func}id_i", "group", "true", "group.field","name", "fl", "id, score")
+    
+    assertQ(req("q","title:title", "group", "true", "group.field","name")
             ,"//lst[@name='grouped']/lst[@name='name']"
             ,"*[count(//arr[@name='groups']/lst) = 3]"
 
-            ,"//arr[@name='groups']/lst[1]/str[@name='groupValue'][.='author3']"
-            ,"//arr[@name='groups']/lst[1]/result[@numFound='1']"
-            ,"//arr[@name='groups']/lst[1]/result/doc/*[@name='id'][.='5']"
+            ,"//arr[@name='groups']/lst[1]/str[@name='groupValue'][.='author2']"
+    //        ,"//arr[@name='groups']/lst[1]/int[@name='matches'][.='2']"
+            ,"//arr[@name='groups']/lst[1]/result[@numFound='2']"
+            ,"//arr[@name='groups']/lst[1]/result/doc/*[@name='id'][.='4']"
 
-            ,"//arr[@name='groups']/lst[2]/str[@name='groupValue'][.='author2']"
+            ,"//arr[@name='groups']/lst[2]/str[@name='groupValue'][.='author1']"
+    //       ,"//arr[@name='groups']/lst[2]/int[@name='matches'][.='2']"
             ,"//arr[@name='groups']/lst[2]/result[@numFound='2']"
-            ,"//arr[@name='groups']/lst[2]/result/doc/*[@name='id'][.='4']"
+            ,"//arr[@name='groups']/lst[2]/result/doc/*[@name='id'][.='2']"
 
-            ,"//arr[@name='groups']/lst[3]/str[@name='groupValue'][.='author1']"
-            ,"//arr[@name='groups']/lst[3]/result[@numFound='2']"
-            ,"//arr[@name='groups']/lst[3]/result/doc/*[@name='id'][.='2']"
-
+            ,"//arr[@name='groups']/lst[3]/str[@name='groupValue'][.='author3']"
+    //        ,"//arr[@name='groups']/lst[3]/int[@name='matches'][.='1']"
+            ,"//arr[@name='groups']/lst[3]/result[@numFound='1']"
+            ,"//arr[@name='groups']/lst[3]/result/doc/*[@name='id'][.='5']"
             );
 
     assertQ(req("q", "title:title", "group", "true", "group.field", "group_i")
@@ -124,92 +116,75 @@ public class TestGroupingSearch extends SolrTestCaseJ4 {
         , "//arr[@name='groups']/lst[2]/result[@numFound='3']"
         , "//arr[@name='groups']/lst[2]/result/doc/*[@name='id'][.='5']"
     );
-
-    SolrException exception = expectThrows(SolrException.class, () -> {
-      h.query(req("q", "title:title", "group", "true", "group.field", "group_i", "group.offset", "-1"));
-    });
-    assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, exception.code());
-    assertEquals("'group.offset' parameter cannot be negative", exception.getMessage());
-
-    // for group.main=true and group.format=simple, group.offset is not consumed
-    assertQ(req("q", "title:title", "group", "true", "group.field", "group_i",
-        "group.offset", "-1", "group.format", "simple"));
-    assertQ(req("q", "title:title", "group", "true", "group.field", "group_i",
-        "group.offset", "-1", "group.main", "true"));
   }
 
   @Test
   public void testGroupingGroupSortingScore_withTotalGroupCount() {
-    assertU(add(doc("id", "1", "id_i", "1", "name", "author1", "title", "a book title", "group_i", "1")));
-    assertU(add(doc("id", "2", "id_i", "2", "name", "author1", "title", "the title", "group_i", "2")));
-    assertU(add(doc("id", "3", "id_i", "3", "name", "author2", "title", "a book title", "group_i", "1")));
-    assertU(add(doc("id", "4", "id_i", "4", "name", "author2", "title", "title", "group_i", "2")));
-    assertU(add(doc("id", "5", "id_i", "5", "name", "author3", "title", "the title of a title", "group_i", "1")));
+    assertU(add(doc("id", "1","name", "author1", "title", "a book title", "group_i", "1")));
+    assertU(add(doc("id", "2","name", "author1", "title", "the title", "group_i", "2")));
+    assertU(add(doc("id", "3","name", "author2", "title", "a book title", "group_i", "1")));
+    assertU(add(doc("id", "4","name", "author2", "title", "title", "group_i", "2")));
+    assertU(add(doc("id", "5","name", "author3", "title", "the title of a title", "group_i", "1")));
     assertU(commit());
 
-    // function based query for predictable scores not affect by similarity
-    assertQ(req("q","{!func}id_i", "group", "true", "group.field","name", "group.ngroups", "true")
+    assertQ(req("q","title:title", "group", "true", "group.field","name", "group.ngroups", "true")
             ,"//lst[@name='grouped']/lst[@name='name']"
             ,"//lst[@name='grouped']/lst[@name='name']/int[@name='matches'][.='5']"
             ,"//lst[@name='grouped']/lst[@name='name']/int[@name='ngroups'][.='3']"
             ,"*[count(//arr[@name='groups']/lst) = 3]"
 
-            ,"//arr[@name='groups']/lst[1]/str[@name='groupValue'][.='author3']"
-            ,"//arr[@name='groups']/lst[1]/result[@numFound='1']"
-            ,"//arr[@name='groups']/lst[1]/result/doc/*[@name='id'][.='5']"
-            
-            ,"//arr[@name='groups']/lst[2]/str[@name='groupValue'][.='author2']"
+            ,"//arr[@name='groups']/lst[1]/str[@name='groupValue'][.='author2']"
+            ,"//arr[@name='groups']/lst[1]/result[@numFound='2']"
+            ,"//arr[@name='groups']/lst[1]/result/doc/*[@name='id'][.='4']"
+
+            ,"//arr[@name='groups']/lst[2]/str[@name='groupValue'][.='author1']"
             ,"//arr[@name='groups']/lst[2]/result[@numFound='2']"
-            ,"//arr[@name='groups']/lst[2]/result/doc/*[@name='id'][.='4']"
+            ,"//arr[@name='groups']/lst[2]/result/doc/*[@name='id'][.='2']"
 
-            ,"//arr[@name='groups']/lst[3]/str[@name='groupValue'][.='author1']"
-            ,"//arr[@name='groups']/lst[3]/result[@numFound='2']"
-            ,"//arr[@name='groups']/lst[3]/result/doc/*[@name='id'][.='2']"
-
+            ,"//arr[@name='groups']/lst[3]/str[@name='groupValue'][.='author3']"
+            ,"//arr[@name='groups']/lst[3]/result[@numFound='1']"
+            ,"//arr[@name='groups']/lst[3]/result/doc/*[@name='id'][.='5']"
             );
 
-    // function based query for predictable scores not affect by similarity
-    assertQ(req("q", "{!func}id_i", "group", "true", "group.field", "group_i", "group.ngroups", "true")
+    assertQ(req("q", "title:title", "group", "true", "group.field", "group_i", "group.ngroups", "true")
         , "//lst[@name='grouped']/lst[@name='group_i']/int[@name='matches'][.='5']"
         , "//lst[@name='grouped']/lst[@name='group_i']/int[@name='ngroups'][.='2']"
         , "*[count(//arr[@name='groups']/lst) = 2]"
 
-        , "//arr[@name='groups']/lst[1]/int[@name='groupValue'][.='1']"
-        , "//arr[@name='groups']/lst[1]/result[@numFound='3']"
-        , "//arr[@name='groups']/lst[1]/result/doc/*[@name='id'][.='5']"
-            
-        , "//arr[@name='groups']/lst[2]/int[@name='groupValue'][.='2']"
-        , "//arr[@name='groups']/lst[2]/result[@numFound='2']"
-        , "//arr[@name='groups']/lst[2]/result/doc/*[@name='id'][.='4']"
+        , "//arr[@name='groups']/lst[1]/int[@name='groupValue'][.='2']"
+        , "//arr[@name='groups']/lst[1]/result[@numFound='2']"
+        , "//arr[@name='groups']/lst[1]/result/doc/*[@name='id'][.='4']"
 
+        , "//arr[@name='groups']/lst[2]/int[@name='groupValue'][.='1']"
+        , "//arr[@name='groups']/lst[2]/result[@numFound='3']"
+        , "//arr[@name='groups']/lst[2]/result/doc/*[@name='id'][.='5']"
     );
   }
 
   @Test
   public void testGroupingGroupSortingScore_basicWithGroupSortEqualToSort() {
-    assertU(add(doc("id", "1", "id_i", "1", "name", "author1", "title", "a book title")));
-    assertU(add(doc("id", "2", "id_i", "2", "name", "author1", "title", "the title")));
-    assertU(add(doc("id", "3", "id_i", "3", "name", "author2", "title", "a book title")));
-    assertU(add(doc("id", "4", "id_i", "4", "name", "author2", "title", "title")));
-    assertU(add(doc("id", "5", "id_i", "5", "name", "author3", "title", "the title of a title")));
+    assertU(add(doc("id", "1","name", "author1", "title", "a book title")));
+    assertU(add(doc("id", "2","name", "author1", "title", "the title")));
+    assertU(add(doc("id", "3","name", "author2", "title", "a book title")));
+    assertU(add(doc("id", "4","name", "author2", "title", "title")));
+    assertU(add(doc("id", "5","name", "author3", "title", "the title of a title")));
     assertU(commit());
 
-    // function based query for predictable scores not affect by similarity
-    assertQ(req("q", "{!func}id_i", "group", "true", "group.field", "name",
-                "sort", "score desc", "group.sort", "score desc")
-            
-        , "//arr[@name='groups']/lst[1]/str[@name='groupValue'][.='author3']"
-        , "//arr[@name='groups']/lst[1]/result[@numFound='1']"
-        , "//arr[@name='groups']/lst[1]/result/doc/*[@name='id'][.='5']"
-            
-        , "//arr[@name='groups']/lst[2]/str[@name='groupValue'][.='author2']"
+    assertQ(req("q", "title:title", "group", "true", "group.field", "name", "sort", "score desc", "group.sort", "score desc")
+        , "//arr[@name='groups']/lst[1]/str[@name='groupValue'][.='author2']"
+        //        ,"//arr[@name='groups']/lst[1]/int[@name='matches'][.='2']"
+        , "//arr[@name='groups']/lst[1]/result[@numFound='2']"
+        , "//arr[@name='groups']/lst[1]/result/doc/*[@name='id'][.='4']"
+
+        , "//arr[@name='groups']/lst[2]/str[@name='groupValue'][.='author1']"
+        //        ,"//arr[@name='groups']/lst[2]/int[@name='matches'][.='2']"
         , "//arr[@name='groups']/lst[2]/result[@numFound='2']"
-        , "//arr[@name='groups']/lst[2]/result/doc/*[@name='id'][.='4']"
+        , "//arr[@name='groups']/lst[2]/result/doc/*[@name='id'][.='2']"
 
-        , "//arr[@name='groups']/lst[3]/str[@name='groupValue'][.='author1']"
-        , "//arr[@name='groups']/lst[3]/result[@numFound='2']"
-        , "//arr[@name='groups']/lst[3]/result/doc/*[@name='id'][.='2']"
-
+        , "//arr[@name='groups']/lst[3]/str[@name='groupValue'][.='author3']"
+        //        ,"//arr[@name='groups']/lst[3]/int[@name='matches'][.='1']"
+        , "//arr[@name='groups']/lst[3]/result[@numFound='1']"
+        , "//arr[@name='groups']/lst[3]/result/doc/*[@name='id'][.='5']"
     );
   }
 
@@ -294,7 +269,7 @@ public class TestGroupingSearch extends SolrTestCaseJ4 {
       SolrRequestInfo.clearRequestInfo();
     }
 
-    assertEquals(6, ((ResultContext) response.getResponse()).getDocList().matches());
+    assertEquals(6, ((ResultContext) response.getValues().get("response")).docs.matches());
     new BinaryResponseParser().processResponse(new ByteArrayInputStream(out.toByteArray()), "");
     out.close();
   }
@@ -549,6 +524,13 @@ public class TestGroupingSearch extends SolrTestCaseJ4 {
       ,"/facet_counts/facet_fields/"+f+"==['1',3, '2',3, '3',2, '4',1, '5',1]"
     );
 
+    // test that grouping works with highlighting
+    assertJQ(req("fq",filt,  "q","{!func}"+f2, "group","true", "group.field",f, "fl","id"
+                 ,"hl","true", "hl.fl",f)
+      ,"/grouped/"+f+"/matches==10"
+      ,"/highlighting=={'_ORDERED_':'', '8':{},'3':{},'4':{},'1':{},'2':{}}"
+    );
+
     // test that grouping works with debugging
     assertJQ(req("fq",filt,  "q","{!func}"+f2, "group","true", "group.field",f, "fl","id"
                  ,"debugQuery","true")
@@ -573,21 +555,6 @@ public class TestGroupingSearch extends SolrTestCaseJ4 {
                  "group.limit","3")
              ,"/grouped/id:[2 TO 5]=={'matches':10,'doclist':{'numFound':4,'start':0,'docs':[{'id':'3'},{'id':'4'},{'id':'2'}]}}"
              ,"/grouped/id:1000=={'matches':10,'doclist':{'numFound':0,'start':0,'docs':[]}}"
-    );
-
-    // group.query and sort
-    assertJQ(req("fq",filt,  "q","{!func}"+f2, "group","true", "group.query",f+":1", "fl","id,score", "rows","2", "group.limit","2", "sort",f+" desc, score desc", "indent","off")
-        ,"/grouped/"+f+":1==" +
-            "{'matches':10,'doclist':{'numFound':3,'start':0,'maxScore':10.0,'docs':[{'id':'8','score':10.0},{'id':'10','score':3.0}]}},"
-    );
-    // group.query with fl=score and default sort
-    assertJQ(req("fq",filt,  "q","{!func}"+f2, "group","true", "group.query",f+":1", "fl","id,score", "rows","2", "group.limit","2", "sort", "score desc", "indent","off")
-        ,"/grouped/"+f+":1==" +
-            "{'matches':10,'doclist':{'numFound':3,'start':0,'maxScore':10.0,'docs':[{'id':'8','score':10.0},{'id':'10','score':3.0}]}},"
-    );
-    assertJQ(req("fq",filt,  "q","{!func}"+f2, "group","true", "group.query",f+":1", "fl","id", "rows","2", "group.limit","2", "indent","off")
-        ,"/grouped/"+f+":1==" +
-            "{'matches':10,'doclist':{'numFound':3,'start':0,'docs':[{'id':'8'},{'id':'10'}]}},"
     );
 
     // group.query and offset
@@ -687,56 +654,11 @@ public class TestGroupingSearch extends SolrTestCaseJ4 {
              ,"/grouped/id:1000=={'matches':0,'doclist':{'numFound':0,'start':0,'docs':[]}}"
     );
 
+
+
   }
 
-  @Test
-  public void testGroupingNonIndexedOrStoredDocValues() throws Exception {
-    // test-case from SOLR-4647
-    assertU(add(doc("id", "1", FOO_STRING_DOCVAL_FIELD, "a", "bday", "2012-11-20T00:00:00Z")));
-    assertU(add(doc("id", "2", FOO_STRING_DOCVAL_FIELD, "b", "bday", "2012-11-21T00:00:00Z")));
-    assertU(add(doc("id", "3", FOO_STRING_DOCVAL_FIELD, "a", "bday", "2012-11-20T00:00:00Z")));
-    assertU(add(doc("id", "4", FOO_STRING_DOCVAL_FIELD, "b", "bday", "2013-01-15T00:00:00Z")));
-    assertU(add(doc("id", "5", FOO_STRING_DOCVAL_FIELD, "a", "bday", "2013-01-14T00:00:00Z")));
-    assertU(commit());
 
-    // Facet counts based on groups
-    SolrQueryRequest req = req("q", "*:*", "rows", "1", "group", "true", "group.field", FOO_STRING_DOCVAL_FIELD,
-        "sort", FOO_STRING_DOCVAL_FIELD + " asc", "fl", "id",
-        "fq", "{!tag=chk}bday:[2012-12-18T00:00:00Z TO 2013-01-17T23:59:59Z]",
-        "facet", "true", "group.truncate", "true", "group.sort", "bday desc",
-        "facet.query", "{!ex=chk key=LW1}bday:[2013-01-11T00:00:00Z TO 2013-01-17T23:59:59Z]",
-        "facet.query", "{!ex=chk key=LM1}bday:[2012-12-18T00:00:00Z TO 2013-01-17T23:59:59Z]",
-        "facet.query", "{!ex=chk key=LM3}bday:[2012-10-18T00:00:00Z TO 2013-01-17T23:59:59Z]");
-    assertJQ(
-        req,
-        "/grouped=={'"+FOO_STRING_DOCVAL_FIELD+"':{'matches':2,'groups':[{'groupValue':'a','doclist':{'numFound':1,'start':0,'docs':[{'id':'5'}]}}]}}",
-        "/facet_counts=={'facet_queries':{'LW1':2,'LM1':2,'LM3':2},'facet_fields':{}," + EMPTY_FACETS + "}"
-    );
-  }
-
-  @Test
-  public void testGroupingOnDateField() throws Exception {
-    assertU(add(doc("id", "1",  "date_dt", "2012-11-20T00:00:00Z")));
-    assertU(add(doc("id", "2",  "date_dt", "2012-11-21T00:00:00Z")));
-    assertU(commit());
-
-    assertU(add(doc("id", "3",  "date_dt", "2012-11-20T00:00:00Z")));
-    assertU(add(doc("id", "4",  "date_dt", "2013-01-15T00:00:00Z")));
-    assertU(add(doc("id", "5")));
-    assertU(commit());
-
-    ModifiableSolrParams params = params("q", "*:*", "group.limit", "10",
-        "group", "true", "fl", "id", "group.ngroups", "true");
-
-    assertJQ(req(params, "group.field", "date_dt", "sort", "id asc"),
-        "/grouped=={'date_dt':{'matches':5,'ngroups':4, 'groups':" +
-            "[{'groupValue':'2012-11-20T00:00:00Z','doclist':{'numFound':2,'start':0,'docs':[{'id':'1'},{'id':'3'}]}}," +
-            "{'groupValue':'2012-11-21T00:00:00Z','doclist':{'numFound':1,'start':0,'docs':[{'id':'2'}]}}," +
-            "{'groupValue':'2013-01-15T00:00:00Z','doclist':{'numFound':1,'start':0,'docs':[{'id':'4'}]}}," +
-            "{'groupValue':null,'doclist':{'numFound':1,'start':0,'docs':[{'id':'5'}]}}" +
-            "]}}"
-    );
-  }
 
   @Test
   public void testRandomGrouping() throws Exception {
@@ -764,12 +686,6 @@ public class TestGroupingSearch extends SolrTestCaseJ4 {
       types.add(new FldType(FOO_STRING_FIELD,ONE_ONE, new SVal('a','z',1,2)));
       types.add(new FldType(SMALL_STRING_FIELD,ZERO_ONE, new SVal('a',(char)('c'+indexSize/10),1,1)));
       types.add(new FldType(SMALL_INT_FIELD,ZERO_ONE, new IRange(0,5+indexSize/10)));
-
-      // non-stored non-indexed docValue enabled fields
-      types.add(new FldType("score_ff",ONE_ONE, new FVal(1,100)));
-      types.add(new FldType("foo_ii",ZERO_ONE, new IRange(0,indexSize)));
-      types.add(new FldType(FOO_STRING_DOCVAL_FIELD,ONE_ONE, new SVal('a','z',3,7)));
-      types.add(new FldType("foo_bdv", ZERO_ONE, new BVal()));
 
       clearIndex();
       Map<Comparable, Doc> model = indexDocs(types, null, indexSize);
@@ -905,7 +821,7 @@ public class TestGroupingSearch extends SolrTestCaseJ4 {
         int randomPercentage = random().nextInt(101);
         // TODO: create a random filter too
         SolrQueryRequest req = req("group","true","wt","json","indent","true", "echoParams","all", "q","{!func}score_f", "group.field",groupField
-            ,sortStr==null ? "nosort":"sort", sortStr ==null ? "": sortStr, "fl", "*,score_ff,foo_ii,foo_bdv," + FOO_STRING_DOCVAL_FIELD // only docValued fields are not returned by default
+            ,sortStr==null ? "nosort":"sort", sortStr ==null ? "": sortStr
             ,(groupSortStr == null || groupSortStr == sortStr) ? "noGroupsort":"group.sort", groupSortStr==null ? "": groupSortStr
             ,"rows",""+rows, "start",""+start, "group.offset",""+group_offset, "group.limit",""+group_limit,
             GroupParams.GROUP_CACHE_PERCENTAGE, Integer.toString(randomPercentage), GroupParams.GROUP_TOTAL_COUNT, includeNGroups ? "true" : "false",
@@ -915,13 +831,13 @@ public class TestGroupingSearch extends SolrTestCaseJ4 {
 
         String strResponse = h.query(req);
 
-        Object realResponse = Utils.fromJSONString(strResponse);
+        Object realResponse = ObjectBuilder.fromJSON(strResponse);
         String err = JSONTestUtil.matchObj("/grouped/" + groupField, realResponse, modelResponse);
         if (err != null) {
-          log.error("GROUPING MISMATCH (" + queryIter + "): " + err
+          log.error("GROUPING MISMATCH: " + err
            + "\n\trequest="+req
            + "\n\tresult="+strResponse
-           + "\n\texpected="+ Utils.toJSONString(modelResponse)
+           + "\n\texpected="+ JSONUtil.toJSON(modelResponse)
            + "\n\tsorted_model="+ sortedGroups
           );
 
@@ -934,10 +850,10 @@ public class TestGroupingSearch extends SolrTestCaseJ4 {
         // assert post / pre grouping facets
         err = JSONTestUtil.matchObj("/facet_counts/facet_fields/"+FOO_STRING_FIELD, realResponse, expectedFacetResponse);
         if (err != null) {
-          log.error("GROUPING MISMATCH (" + queryIter + "): " + err
+          log.error("GROUPING MISMATCH: " + err
            + "\n\trequest="+req
            + "\n\tresult="+strResponse
-           + "\n\texpected="+ Utils.toJSONString(expectedFacetResponse)
+           + "\n\texpected="+ JSONUtil.toJSON(expectedFacetResponse)
           );
 
           // re-execute the request... good for putting a breakpoint here for debugging
@@ -988,20 +904,26 @@ public class TestGroupingSearch extends SolrTestCaseJ4 {
 
 
   public static Comparator<Grp> createMaxDocComparator(final Comparator<Doc> docComparator) {
-    return (o1, o2) -> {
-      // all groups should have at least one doc
-      Doc d1 = o1.maxDoc;
-      Doc d2 = o2.maxDoc;
-      return docComparator.compare(d1, d2);
+    return new Comparator<Grp>() {
+      @Override
+      public int compare(Grp o1, Grp o2) {
+        // all groups should have at least one doc
+        Doc d1 = o1.maxDoc;
+        Doc d2 = o2.maxDoc;
+        return docComparator.compare(d1, d2);
+      }
     };
   }
 
   public static Comparator<Grp> createFirstDocComparator(final Comparator<Doc> docComparator) {
-    return (o1, o2) -> {
-      // all groups should have at least one doc
-      Doc d1 = o1.docs.get(0);
-      Doc d2 = o2.docs.get(0);
-      return docComparator.compare(d1, d2);
+    return new Comparator<Grp>() {
+      @Override
+      public int compare(Grp o1, Grp o2) {
+        // all groups should have at least one doc
+        Doc d1 = o1.docs.get(0);
+        Doc d2 = o2.docs.get(0);
+        return docComparator.compare(d1, d2);
+      }
     };
   }
 

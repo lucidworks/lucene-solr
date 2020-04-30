@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -34,9 +34,10 @@ import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
-import org.apache.lucene.search.similarities.ClassicSimilarity;
+import org.apache.lucene.index.TermContext;
+import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.similarities.Similarity.SimScorer;
+import org.apache.lucene.search.similarities.Similarity.SimWeight;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
@@ -86,9 +87,14 @@ public class TestMinShouldMatch2 extends LuceneTestCase {
     iw.forceMerge(1);
     iw.close();
     r = DirectoryReader.open(dir);
-    reader = getOnlyLeafReader(r);
+    reader = getOnlySegmentReader(r);
     searcher = new IndexSearcher(reader);
-    searcher.setSimilarity(new ClassicSimilarity());
+    searcher.setSimilarity(new DefaultSimilarity() {
+      @Override
+      public float queryNorm(float sumOfSquaredWeights) {
+        return 1; // we disable queryNorm, both for debugging and ease of impl
+      }
+    });
   }
   
   @AfterClass
@@ -118,7 +124,7 @@ public class TestMinShouldMatch2 extends LuceneTestCase {
     }
     bq.setMinimumNumberShouldMatch(minShouldMatch);
 
-    BooleanWeight weight = (BooleanWeight) searcher.createWeight(searcher.rewrite(bq.build()), ScoreMode.COMPLETE, 1);
+    BooleanWeight weight = (BooleanWeight) searcher.createNormalizedWeight(bq.build(), true);
     
     switch (mode) {
     case DOC_VALUES:
@@ -126,7 +132,7 @@ public class TestMinShouldMatch2 extends LuceneTestCase {
     case SCORER:
       return weight.scorer(reader.getContext());
     case BULK_SCORER:
-      final BulkScorer bulkScorer = weight.optionalBulkScorer(reader.getContext());
+      final BulkScorer bulkScorer = weight.booleanScorer(reader.getContext());
       if (bulkScorer == null) {
         if (weight.scorer(reader.getContext()) != null) {
           throw new AssertionError("BooleanScorer should be applicable for this query");
@@ -141,38 +147,36 @@ public class TestMinShouldMatch2 extends LuceneTestCase {
   
   private void assertNext(Scorer expected, Scorer actual) throws Exception {
     if (actual == null) {
-      assertEquals(DocIdSetIterator.NO_MORE_DOCS, expected.iterator().nextDoc());
+      assertEquals(DocIdSetIterator.NO_MORE_DOCS, expected.nextDoc());
       return;
     }
     int doc;
-    DocIdSetIterator expectedIt = expected.iterator();
-    DocIdSetIterator actualIt = actual.iterator();
-    while ((doc = expectedIt.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
-      assertEquals(doc, actualIt.nextDoc());
+    while ((doc = expected.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
+      assertEquals(doc, actual.nextDoc());
+      assertEquals(expected.freq(), actual.freq());
       float expectedScore = expected.score();
       float actualScore = actual.score();
-      assertEquals(expectedScore, actualScore, 0d);
+      assertEquals(expectedScore, actualScore, CheckHits.explainToleranceDelta(expectedScore, actualScore));
     }
-    assertEquals(DocIdSetIterator.NO_MORE_DOCS, actualIt.nextDoc());
+    assertEquals(DocIdSetIterator.NO_MORE_DOCS, actual.nextDoc());
   }
   
   private void assertAdvance(Scorer expected, Scorer actual, int amount) throws Exception {
     if (actual == null) {
-      assertEquals(DocIdSetIterator.NO_MORE_DOCS, expected.iterator().nextDoc());
+      assertEquals(DocIdSetIterator.NO_MORE_DOCS, expected.nextDoc());
       return;
     }
-    DocIdSetIterator expectedIt = expected.iterator();
-    DocIdSetIterator actualIt = actual.iterator();
     int prevDoc = 0;
     int doc;
-    while ((doc = expectedIt.advance(prevDoc+amount)) != DocIdSetIterator.NO_MORE_DOCS) {
-      assertEquals(doc, actualIt.advance(prevDoc+amount));
+    while ((doc = expected.advance(prevDoc+amount)) != DocIdSetIterator.NO_MORE_DOCS) {
+      assertEquals(doc, actual.advance(prevDoc+amount));
+      assertEquals(expected.freq(), actual.freq());
       float expectedScore = expected.score();
       float actualScore = actual.score();
-      assertEquals(expectedScore, actualScore, 0d);
+      assertEquals(expectedScore, actualScore, CheckHits.explainToleranceDelta(expectedScore, actualScore));
       prevDoc = doc;
     }
-    assertEquals(DocIdSetIterator.NO_MORE_DOCS, actualIt.advance(prevDoc+amount));
+    assertEquals(DocIdSetIterator.NO_MORE_DOCS, actual.advance(prevDoc+amount));
   }
   
   /** simple test for next(): minShouldMatch=2 on 3 terms (one common, one medium, one rare) */
@@ -309,7 +313,7 @@ public class TestMinShouldMatch2 extends LuceneTestCase {
     final int maxDoc;
 
     final Set<Long> ords = new HashSet<>();
-    final LeafSimScorer[] sims;
+    final SimScorer[] sims;
     final int minNrShouldMatch;
     
     double score = Float.NaN;
@@ -320,7 +324,7 @@ public class TestMinShouldMatch2 extends LuceneTestCase {
       this.maxDoc = reader.maxDoc();
       BooleanQuery bq = (BooleanQuery) weight.getQuery();
       this.minNrShouldMatch = bq.getMinimumNumberShouldMatch();
-      this.sims = new LeafSimScorer[(int)dv.getValueCount()];
+      this.sims = new SimScorer[(int)dv.getValueCount()];
       for (BooleanClause clause : bq.clauses()) {
         assert !clause.isProhibited();
         assert !clause.isRequired();
@@ -329,11 +333,13 @@ public class TestMinShouldMatch2 extends LuceneTestCase {
         if (ord >= 0) {
           boolean success = ords.add(ord);
           assert success; // no dups
-          TermStates ts = TermStates.build(reader.getContext(), term, true);
-          SimScorer w = weight.similarity.scorer(1f,
+          TermContext context = TermContext.build(reader.getContext(), term);
+          SimWeight w = weight.similarity.computeWeight(
                         searcher.collectionStatistics("field"),
-                        searcher.termStatistics(term, ts.docFreq(), ts.totalTermFreq()));
-          sims[(int)ord] = new LeafSimScorer(w, reader, "field", true);
+                        searcher.termStatistics(term, context));
+          w.getValueForNormalization(); // ignored
+          w.normalize(1F, 1F);
+          sims[(int)ord] = weight.similarity.simScorer(w, reader.getContext());
         }
       }
     }
@@ -341,66 +347,51 @@ public class TestMinShouldMatch2 extends LuceneTestCase {
     @Override
     public float score() throws IOException {
       assert score != 0 : currentMatched;
-      return (float)score;
+      return (float)score * ((BooleanWeight) weight).coord(currentMatched, ((BooleanWeight) weight).maxCoord);
     }
 
     @Override
-    public float getMaxScore(int upTo) throws IOException {
-      return Float.POSITIVE_INFINITY;
+    public int freq() throws IOException {
+      return currentMatched;
     }
 
+    @Override
     public int docID() {
       return currentDoc;
     }
 
     @Override
-    public DocIdSetIterator iterator() {
-      return new DocIdSetIterator() {
-        
-        @Override
-        public int nextDoc() throws IOException {
-          assert currentDoc != NO_MORE_DOCS;
-          for (currentDoc = currentDoc+1; currentDoc < maxDoc; currentDoc++) {
-            currentMatched = 0;
-            score = 0;
-            if (currentDoc > dv.docID()) {
-              dv.advance(currentDoc);
-            }
-            if (currentDoc != dv.docID()) {
-              continue;
-            }
-            long ord;
-            while ((ord = dv.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
-              if (ords.contains(ord)) {
-                currentMatched++;
-                score += sims[(int)ord].score(currentDoc, 1);
-              }
-            }
-            if (currentMatched >= minNrShouldMatch) {
-              return currentDoc;
-            }
+    public int nextDoc() throws IOException {
+      assert currentDoc != NO_MORE_DOCS;
+      for (currentDoc = currentDoc+1; currentDoc < maxDoc; currentDoc++) {
+        currentMatched = 0;
+        score = 0;
+        dv.setDocument(currentDoc);
+        long ord;
+        while ((ord = dv.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
+          if (ords.contains(ord)) {
+            currentMatched++;
+            score += sims[(int)ord].score(currentDoc, 1);
           }
-          return currentDoc = NO_MORE_DOCS;
         }
-
-        @Override
-        public int advance(int target) throws IOException {
-          int doc;
-          while ((doc = nextDoc()) < target) {
-          }
-          return doc;
-        }
-
-        @Override
-        public long cost() {
-          return maxDoc;
-        }
-        
-        @Override
-        public int docID() {
+        if (currentMatched >= minNrShouldMatch) {
           return currentDoc;
         }
-      };
+      }
+      return currentDoc = NO_MORE_DOCS;
+    }
+
+    @Override
+    public int advance(int target) throws IOException {
+      int doc;
+      while ((doc = nextDoc()) < target) {
+      }
+      return doc;
+    }
+
+    @Override
+    public long cost() {
+      return maxDoc;
     }
   }
 }

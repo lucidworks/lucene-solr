@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.core;
-
 
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.core.UpperCaseFilter;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
@@ -36,13 +39,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * upper case character represents more than one lower case character. Use this filter
  * when you require uppercase tokens.  Use the {@link LowerCaseFilterFactory} for 
  * general search matching
- * @since 4.7.0
- * @lucene.spi {@value #NAME}
  */
-public class UpperCaseFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "uppercase";
+public class UpperCaseFilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
   
   /** Creates a new UpperCaseFilterFactory */
   public UpperCaseFilterFactory(Map<String,String> args) {
@@ -53,12 +51,12 @@ public class UpperCaseFilterFactory extends TokenFilterFactory {
   }
 
   @Override
-  public TokenStream create(TokenStream input) {
+  public UpperCaseFilter create(TokenStream input) {
     return new UpperCaseFilter(input);
   }
 
   @Override
-  public TokenStream normalize(TokenStream input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

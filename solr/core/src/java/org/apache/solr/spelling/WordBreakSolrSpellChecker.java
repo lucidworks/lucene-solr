@@ -1,3 +1,5 @@
+package org.apache.solr.spelling;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
+import org.apache.lucene.analysis.Token;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.spell.CombineSuggestion;
@@ -197,8 +199,8 @@ public class WordBreakSolrSpellChecker extends SolrSpellChecker {
     
     StringBuilder sb = new StringBuilder();
     Token[] tokenArr = options.tokens.toArray(new Token[options.tokens.size()]);
-    List<Token> tokenArrWithSeparators = new ArrayList<>(options.tokens.size() + 2);
     List<Term> termArr = new ArrayList<>(options.tokens.size() + 2);
+    
     List<ResultEntry> breakSuggestionList = new ArrayList<>();
     List<ResultEntry> noBreakSuggestionList = new ArrayList<>();
     boolean lastOneProhibited = false;
@@ -217,7 +219,6 @@ public class WordBreakSolrSpellChecker extends SolrSpellChecker {
       if (i > 0
           && (prohibited != lastOneProhibited || required != lastOneRequired || lastOneprocedesNewBooleanOp)) {
         termArr.add(WordBreakSpellChecker.SEPARATOR_TERM);
-        tokenArrWithSeparators.add(null);
       }
       lastOneProhibited = prohibited;
       lastOneRequired = required;
@@ -225,7 +226,6 @@ public class WordBreakSolrSpellChecker extends SolrSpellChecker {
       
       Term thisTerm = new Term(field, tokenArr[i].toString());
       termArr.add(thisTerm);
-      tokenArrWithSeparators.add(tokenArr[i]);
       if (breakWords) {
         SuggestWord[][] breakSuggestions = wbsp.suggestWordBreaks(thisTerm,
             numSuggestions, ir, options.suggestMode, sortMethod);
@@ -269,10 +269,10 @@ public class WordBreakSolrSpellChecker extends SolrSpellChecker {
           if (i > firstTermIndex) {
             sb.append(" ");
           }
-          sb.append(tokenArrWithSeparators.get(i).toString());
+          sb.append(tokenArr[i].toString());
         }
-        Token token = new Token(sb.toString(), tokenArrWithSeparators.get(firstTermIndex)
-            .startOffset(), tokenArrWithSeparators.get(lastTermIndex).endOffset());
+        Token token = new Token(sb.toString(), tokenArr[firstTermIndex]
+            .startOffset(), tokenArr[lastTermIndex].endOffset());
         combineSuggestionList.add(new ResultEntry(token, cs.suggestion.string,
             cs.suggestion.freq));
       }

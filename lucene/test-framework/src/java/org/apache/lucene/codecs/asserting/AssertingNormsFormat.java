@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.asserting;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.asserting;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -29,8 +30,6 @@ import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.TestUtil;
-
-import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
 
 /**
  * Just like the default but with additional asserts.
@@ -50,7 +49,7 @@ public class AssertingNormsFormat extends NormsFormat {
     assert state.fieldInfos.hasNorms();
     NormsProducer producer = in.normsProducer(state);
     assert producer != null;
-    return new AssertingNormsProducer(producer, state.segmentInfo.maxDoc(), false);
+    return new AssertingNormsProducer(producer, state.segmentInfo.maxDoc());
   }
   
   static class AssertingNormsConsumer extends NormsConsumer {
@@ -63,19 +62,15 @@ public class AssertingNormsFormat extends NormsFormat {
     }
 
     @Override
-    public void addNormsField(FieldInfo field, NormsProducer valuesProducer) throws IOException {
-      NumericDocValues values = valuesProducer.getNorms(field);
-
-      int docID;
-      int lastDocID = -1;
-      while ((docID = values.nextDoc()) != NO_MORE_DOCS) {
-        assert docID >= 0 && docID < maxDoc;
-        assert docID > lastDocID;
-        lastDocID = docID;
-        long value = values.longValue();
+    public void addNormsField(FieldInfo field, Iterable<Number> values) throws IOException {
+      int count = 0;
+      for (Number v : values) {
+        assert v != null;
+        count++;
       }
-
-      in.addNormsField(field, valuesProducer);
+      assert count == maxDoc;
+      TestUtil.checkIterator(values.iterator(), maxDoc, false);
+      in.addNormsField(field, values);
     }
     
     @Override
@@ -88,14 +83,10 @@ public class AssertingNormsFormat extends NormsFormat {
   static class AssertingNormsProducer extends NormsProducer {
     private final NormsProducer in;
     private final int maxDoc;
-    private final boolean merging;
-    private final Thread creationThread;
     
-    AssertingNormsProducer(NormsProducer in, int maxDoc, boolean merging) {
+    AssertingNormsProducer(NormsProducer in, int maxDoc) {
       this.in = in;
       this.maxDoc = maxDoc;
-      this.merging = merging;
-      this.creationThread = Thread.currentThread();
       // do a few simple checks on init
       assert toString() != null;
       assert ramBytesUsed() >= 0;
@@ -104,9 +95,6 @@ public class AssertingNormsFormat extends NormsFormat {
 
     @Override
     public NumericDocValues getNorms(FieldInfo field) throws IOException {
-      if (merging) {
-        AssertingCodec.assertThread("NormsProducer", creationThread);
-      }
       assert field.hasNorms();
       NumericDocValues values = in.getNorms(field);
       assert values != null;
@@ -139,8 +127,8 @@ public class AssertingNormsFormat extends NormsFormat {
     }
     
     @Override
-    public NormsProducer getMergeInstance() {
-      return new AssertingNormsProducer(in.getMergeInstance(), maxDoc, true);
+    public NormsProducer getMergeInstance() throws IOException {
+      return new AssertingNormsProducer(in.getMergeInstance(), maxDoc);
     }
     
     @Override

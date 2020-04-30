@@ -1,3 +1,4 @@
+package org.apache.lucene.expressions;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,49 +15,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.expressions;
 
-import org.apache.lucene.expressions.js.JavascriptCompiler;
-import org.apache.lucene.search.DoubleValues;
-import org.apache.lucene.search.DoubleValuesSource;
+import org.apache.lucene.expressions.js.JavascriptCompiler; // javadocs
+import org.apache.lucene.queries.function.FunctionValues;
+import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.search.Rescorer;
 import org.apache.lucene.search.SortField;
 
 /**
  * Base class that computes the value of an expression for a document.
  * <p>
- * Example that sorts based on an expression:
+ * Example usage:
  * <pre class="prettyprint">
  *   // compile an expression:
  *   Expression expr = JavascriptCompiler.compile("sqrt(_score) + ln(popularity)");
  *   
  *   // SimpleBindings just maps variables to SortField instances
- *   SimpleBindings bindings = new SimpleBindings();
+ *   SimpleBindings bindings = new SimpleBindings();    
  *   bindings.add(new SortField("_score", SortField.Type.SCORE));
  *   bindings.add(new SortField("popularity", SortField.Type.INT));
  *   
  *   // create a sort field and sort by it (reverse order)
  *   Sort sort = new Sort(expr.getSortField(bindings, true));
  *   Query query = new TermQuery(new Term("body", "contents"));
- *   searcher.search(query, 10, sort);
- * </pre>
- * <p>
- * Example that modifies the scores produced by the query:
- * <pre class="prettyprint">
- *   // compile an expression:
- *   Expression expr = JavascriptCompiler.compile("sqrt(_score) + ln(popularity)");
- *
- *   // SimpleBindings just maps variables to SortField instances
- *   SimpleBindings bindings = new SimpleBindings();
- *   bindings.add(new SortField("_score", SortField.Type.SCORE));
- *   bindings.add(new SortField("popularity", SortField.Type.INT));
- *
- *   // create a query that matches based on body:contents but
- *   // scores using expr
- *   Query query = new FunctionScoreQuery(
- *       new TermQuery(new Term("body", "contents")),
- *       expr.getDoubleValuesSource(bindings));
- *   searcher.search(query, 10);
+ *   searcher.search(query, null, 10, sort);
  * </pre>
  * @see JavascriptCompiler#compile
  * @lucene.experimental
@@ -81,25 +63,26 @@ public abstract class Expression {
   }
 
   /**
-   * Evaluates the expression for the current document.
+   * Evaluates the expression for the given document.
    *
-   * @param functionValues {@link DoubleValues} for each element of {@link #variables}.
+   * @param document <code>docId</code> of the document to compute a value for
+   * @param functionValues {@link FunctionValues} for each element of {@link #variables}.
    * @return The computed value of the expression for the given document.
    */
-  public abstract double evaluate(DoubleValues[] functionValues);
+  public abstract double evaluate(int document, FunctionValues[] functionValues);
 
   /**
-   * Get a DoubleValuesSource which can compute the value of this expression in the context of the given bindings.
+   * Get a value source which can compute the value of this expression in the context of the given bindings.
    * @param bindings Bindings to use for external values in this expression
-   * @return A DoubleValuesSource which will evaluate this expression when used
+   * @return A value source which will evaluate this expression when used
    */
-  public DoubleValuesSource getDoubleValuesSource(Bindings bindings) {
+  public ValueSource getValueSource(Bindings bindings) {
     return new ExpressionValueSource(bindings, this);
   }
   
   /** Get a sort field which can be used to rank documents by this expression. */
   public SortField getSortField(Bindings bindings, boolean reverse) {
-    return getDoubleValuesSource(bindings).getSortField(reverse);
+    return getValueSource(bindings).getSortField(reverse);
   }
 
   /** Get a {@link Rescorer}, to rescore first-pass hits

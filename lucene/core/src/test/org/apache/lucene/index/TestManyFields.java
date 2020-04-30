@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -107,7 +107,7 @@ public class TestManyFields extends LuceneTestCase {
 
     IndexReader reader = DirectoryReader.open(dir);
     IndexSearcher searcher = newSearcher(reader);
-    long totalHits = searcher.count(new TermQuery(new Term("field", "aaa")));
+    int totalHits = searcher.search(new TermQuery(new Term("field", "aaa")), 1).totalHits;
     assertEquals(n*100, totalHits);
     reader.close();
 

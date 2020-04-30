@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ngram;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ngram;
-
 
 
 import java.io.IOException;
@@ -29,7 +29,6 @@ import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionLengthAttribute;
-import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.TestUtil;
 
 import com.carrotsearch.randomizedtesting.generators.RandomStrings;
@@ -47,16 +46,25 @@ public class NGramTokenizerTest extends BaseTokenStreamTestCase {
   }
   
   public void testInvalidInput() throws Exception {
-    expectThrows(IllegalArgumentException.class, () -> {
+    boolean gotException = false;
+    try {
       NGramTokenizer tok = new NGramTokenizer(2, 1);
-    });
+      tok.setReader(input);
+    } catch (IllegalArgumentException e) {
+      gotException = true;
+    }
+    assertTrue(gotException);
   }
   
   public void testInvalidInput2() throws Exception {
-    expectThrows(IllegalArgumentException.class, () -> {
+    boolean gotException = false;
+    try {
       NGramTokenizer tok = new NGramTokenizer(0, 1);
       tok.setReader(input);
-    });
+    } catch (IllegalArgumentException e) {
+      gotException = true;
+    }
+    assertTrue(gotException);
   }
   
   public void testUnigrams() throws Exception {
@@ -180,7 +188,7 @@ public class NGramTokenizerTest extends BaseTokenStreamTestCase {
           }
         }
         assertTrue(grams.incrementToken());
-        assertArrayEquals(ArrayUtil.copyOfSubArray(codePoints, start, end), toCodePoints(termAtt));
+        assertArrayEquals(Arrays.copyOfRange(codePoints, start, end), toCodePoints(termAtt));
         assertEquals(1, posIncAtt.getPositionIncrement());
         assertEquals(1, posLenAtt.getPositionLength());
         assertEquals(offsets[start], offsetAtt.startOffset());
@@ -239,4 +247,10 @@ public class NGramTokenizerTest extends BaseTokenStreamTestCase {
     testNGrams(minGram, maxGram, s, "");
     testNGrams(minGram, maxGram, s, "abcdef");
   }
+
+  public void test43Tokenizer() {
+    // TODO: do more than instantiate (ie check the old broken behavior)
+    new Lucene43NGramTokenizer(1, 1);
+  }
+
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs;
-
 
 import java.io.IOException;
 
@@ -53,13 +53,13 @@ import org.apache.lucene.util.MathUtil;
 
 public abstract class MultiLevelSkipListWriter {
   /** number of levels in this skip list */
-  protected final int numberOfSkipLevels;
+  protected int numberOfSkipLevels;
   
   /** the skip interval in the list with level = 0 */
-  private final int skipInterval;
+  private int skipInterval;
 
   /** skipInterval used for level &gt; 0 */
-  private final int skipMultiplier;
+  private int skipMultiplier;
   
   /** for every skip level a different buffer is used  */
   private RAMOutputStream[] skipBuffer;
@@ -69,7 +69,6 @@ public abstract class MultiLevelSkipListWriter {
     this.skipInterval = skipInterval;
     this.skipMultiplier = skipMultiplier;
     
-    int numberOfSkipLevels;
     // calculate the maximum number of skip levels for this document frequency
     if (df <= skipInterval) {
       numberOfSkipLevels = 1;
@@ -81,7 +80,6 @@ public abstract class MultiLevelSkipListWriter {
     if (numberOfSkipLevels > maxSkipLevels) {
       numberOfSkipLevels = maxSkipLevels;
     }
-    this.numberOfSkipLevels = numberOfSkipLevels;
   }
   
   /** Creates a {@code MultiLevelSkipListWriter}, where

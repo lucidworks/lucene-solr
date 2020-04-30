@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
 
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.search.SolrIndexSearcher;
+import org.apache.solr.util.RefCounted;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -65,20 +67,20 @@ public class TestQuerySenderNoQuery extends SolrTestCaseJ4 {
     assertTrue("Not an instance of QuerySenderListener", newSearcherListener instanceof QuerySenderListener);
     QuerySenderListener qsl = (QuerySenderListener) newSearcherListener;
 
-    h.getCore().withSearcher(currentSearcher -> {
-      SolrIndexSearcher dummy = null;
-      qsl.newSearcher(currentSearcher, dummy);//test first Searcher (since param is null)
-      MockQuerySenderListenerReqHandler mock = (MockQuerySenderListenerReqHandler) core.getRequestHandler("/mock");
-      assertNotNull("Mock is null", mock);
-      assertNull("Req (firstsearcher) is not null", mock.req);
+    RefCounted<SolrIndexSearcher> currentSearcherRef = core.getSearcher();
+    SolrIndexSearcher currentSearcher = currentSearcherRef.get();
+    SolrIndexSearcher dummy = null;
+    qsl.newSearcher(currentSearcher, dummy);//test first Searcher (since param is null)
+    MockQuerySenderListenerReqHandler mock = (MockQuerySenderListenerReqHandler) core.getRequestHandler("mock");
+    assertNotNull("Mock is null", mock);
+    assertNull("Req (firstsearcher) is not null", mock.req);
 
-      SolrIndexSearcher newSearcher = new SolrIndexSearcher(core, core.getNewIndexDir(), core.getLatestSchema(), core.getSolrConfig().indexConfig, "testQuerySenderNoQuery", false, core.getDirectoryFactory());
+    SolrIndexSearcher newSearcher = new SolrIndexSearcher(core, core.getNewIndexDir(), core.getLatestSchema(), core.getSolrConfig().indexConfig, "testQuerySenderNoQuery", false, core.getDirectoryFactory());
 
-      qsl.newSearcher(newSearcher, currentSearcher); // get newSearcher.
-      assertNull("Req (newsearcher) is not null", mock.req);
-      newSearcher.close();
-      return null;
-    });
+    qsl.newSearcher(newSearcher, currentSearcher); // get newSearcher.
+    assertNull("Req (newsearcher) is not null", mock.req);
+    newSearcher.close();
+    currentSearcherRef.decref();
   }
 
 }

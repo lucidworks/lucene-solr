@@ -1,3 +1,4 @@
+package org.apache.solr.core;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,37 +15,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
+
 import java.io.IOException;
-import java.lang.invoke.MethodHandles;
 
 import org.apache.lucene.store.Directory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Directory provider for implementations that do not persist over reboots.
  * 
  */
 public abstract class EphemeralDirectoryFactory extends CachingDirectoryFactory {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   
   @Override
   public boolean exists(String path) throws IOException {
     String fullPath = normalize(path);
     synchronized (this) {
-      final CacheValue cacheValue = byPathCache.get(fullPath);
-      if (null == cacheValue) {
-        return false;
+      CacheValue cacheValue = byPathCache.get(fullPath);
+      Directory directory = null;
+      if (cacheValue != null) {
+        directory = cacheValue.directory;
       }
-      final Directory directory = cacheValue.directory;
-      if (null == directory) {
+      if (directory == null) {
         return false;
-      }
-      if (0 < directory.listAll().length) {
+      } else {
         return true;
-      } 
-      return false;
+      }
     }
   }
   
@@ -66,10 +61,6 @@ public abstract class EphemeralDirectoryFactory extends CachingDirectoryFactory 
   @Override
   public void remove(String path) throws IOException {
     // ram dir does not persist its dir anywhere
-  }
-  
-  public void cleanupOldIndexDirectories(final String dataDirPath, final String currentIndexDirPath, boolean reload) {
-    // currently a no-op
   }
 
 }

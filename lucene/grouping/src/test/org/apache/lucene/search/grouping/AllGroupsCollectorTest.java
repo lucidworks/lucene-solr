@@ -1,9 +1,11 @@
+package org.apache.lucene.search.grouping;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
+ * (the "License")); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -14,9 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.grouping;
-
-import java.util.HashMap;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
@@ -30,9 +29,13 @@ import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.valuesource.BytesRefFieldSource;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.grouping.function.FunctionAllGroupsCollector;
+import org.apache.lucene.search.grouping.term.TermAllGroupsCollector;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
+
+import java.util.HashMap;
 
 public class AllGroupsCollectorTest extends LuceneTestCase {
 
@@ -100,7 +103,7 @@ public class AllGroupsCollectorTest extends LuceneTestCase {
     IndexSearcher indexSearcher = newSearcher(w.getReader());
     w.close();
 
-    AllGroupsCollector<?> allGroupsCollector = createRandomCollector(groupField);
+    AbstractAllGroupsCollector<?> allGroupsCollector = createRandomCollector(groupField);
     indexSearcher.search(new TermQuery(new Term("content", "random")), allGroupsCollector);
     assertEquals(4, allGroupsCollector.getGroupCount());
 
@@ -121,14 +124,20 @@ public class AllGroupsCollectorTest extends LuceneTestCase {
     doc.add(new SortedDocValuesField(groupField, new BytesRef(value)));
   }
 
-  private AllGroupsCollector<?> createRandomCollector(String groupField) {
+  private AbstractAllGroupsCollector<?> createRandomCollector(String groupField) {
+    AbstractAllGroupsCollector<?> selected;
     if (random().nextBoolean()) {
-      return new AllGroupsCollector<>(new TermGroupSelector(groupField));
-    }
-    else {
+      selected = new TermAllGroupsCollector(groupField);
+    } else {
       ValueSource vs = new BytesRefFieldSource(groupField);
-      return new AllGroupsCollector<>(new ValueSourceGroupSelector(vs, new HashMap<>()));
+      selected = new FunctionAllGroupsCollector(vs, new HashMap<>());
     }
+
+    if (VERBOSE) {
+      System.out.println("Selected implementation: " + selected.getClass().getName());
+    }
+
+    return selected;
   }
 
 }

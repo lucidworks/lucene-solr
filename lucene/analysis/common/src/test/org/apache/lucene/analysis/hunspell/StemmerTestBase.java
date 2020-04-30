@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.hunspell;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.hunspell;
-
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -24,7 +24,6 @@ import java.text.ParseException;
 import java.util.Arrays;
 import java.util.List;
 
-import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase;
@@ -62,7 +61,7 @@ public abstract class StemmerTestBase extends LuceneTestCase {
     }
     
     try {
-      Dictionary dictionary = new Dictionary(new RAMDirectory(), "dictionary", affixStream, Arrays.asList(dictStreams), ignoreCase);
+      Dictionary dictionary = new Dictionary(affixStream, Arrays.asList(dictStreams), ignoreCase);
       stemmer = new Stemmer(dictionary);
     } finally {
       IOUtils.closeWhileHandlingException(affixStream);

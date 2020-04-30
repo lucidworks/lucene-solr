@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs;
-
 
 import java.util.Objects;
-import java.util.ServiceLoader; // javadocs
 import java.util.Set;
+import java.util.ServiceLoader; // javadocs
 
 import org.apache.lucene.index.IndexWriterConfig; // javadocs
 import org.apache.lucene.util.NamedSPILoader;
@@ -57,7 +57,7 @@ public abstract class Codec implements NamedSPILoader.NamedSPI {
     }
     
     // TODO: should we use this, or maybe a system property is better?
-    static Codec defaultCodec = LOADER.lookup("Lucene84");
+    static Codec defaultCodec = LOADER.lookup("Lucene54");
   }
 
   private final String name;
@@ -107,9 +107,6 @@ public abstract class Codec implements NamedSPILoader.NamedSPI {
   
   /** Encodes/decodes compound files */
   public abstract CompoundFormat compoundFormat();
-
-  /** Encodes/decodes points index */
-  public abstract PointsFormat pointsFormat();
   
   /** looks up a codec by name */
   public static Codec forName(String name) {

@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.document;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -25,7 +26,6 @@ import java.util.Set;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.search.suggest.BitsProducer;
 import org.apache.lucene.util.IntsRef;
@@ -143,13 +143,10 @@ public class FuzzyCompletionQuery extends PrefixCompletionQuery {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    final Automaton originalAutomata;
-    try (CompletionTokenStream stream = (CompletionTokenStream) analyzer.tokenStream(getField(), getTerm().text()) ) {
-      originalAutomata = stream.toAutomaton(unicodeAware);
-    }
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    CompletionTokenStream stream = (CompletionTokenStream) analyzer.tokenStream(getField(), getTerm().text());
     Set<IntsRef> refs = new HashSet<>();
-    Automaton automaton = toLevenshteinAutomata(originalAutomata, refs);
+    Automaton automaton = toLevenshteinAutomata(stream.toAutomaton(unicodeAware), refs);
     if (unicodeAware) {
       Automaton utf8automaton = new UTF32ToUTF8().convert(automaton);
       utf8automaton = Operations.determinize(utf8automaton, maxDeterminizedStates);
@@ -198,48 +195,6 @@ public class FuzzyCompletionQuery extends PrefixCompletionQuery {
       // this only happens if you have multiple paths anyway (e.g. synonyms)
       return Operations.determinize(a, maxDeterminizedStates);
     }
-  }
-
-  /**
-   * Get the maximum edit distance for fuzzy matches
-   */
-  public int getMaxEdits() {
-    return maxEdits;
-  }
-
-  /**
-   * Return whether transpositions count as a single edit
-   */
-  public boolean isTranspositions() {
-    return transpositions;
-  }
-
-  /**
-   * Get the length of a prefix where no edits are permitted
-   */
-  public int getNonFuzzyPrefix() {
-    return nonFuzzyPrefix;
-  }
-
-  /**
-   * Get the minimum length of a term considered for matching
-   */
-  public int getMinFuzzyLength() {
-    return minFuzzyLength;
-  }
-
-  /**
-   * Return true if lengths are measured in unicode code-points rather than bytes
-   */
-  public boolean isUnicodeAware() {
-    return unicodeAware;
-  }
-
-  /**
-   * Get the maximum number of determinized states permitted
-   */
-  public int getMaxDeterminizedStates() {
-    return maxDeterminizedStates;
   }
 
   @Override

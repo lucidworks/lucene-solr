@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.util.Random;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.codecs.Codec;
-import org.apache.lucene.codecs.memory.DirectPostingsFormat;
+import org.apache.lucene.codecs.memory.MemoryPostingsFormat;
 import org.apache.lucene.document.*;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.TermQuery;
@@ -39,12 +39,16 @@ public class TestRollingUpdates extends LuceneTestCase {
   public void testRollingUpdates() throws Exception {
     Random random = new Random(random().nextLong());
     final BaseDirectoryWrapper dir = newDirectory();
+    // test checks for no unref'ed files with the IW helper method, which isn't aware of "tried to delete files"
+    if (dir instanceof MockDirectoryWrapper) {
+      ((MockDirectoryWrapper)dir).setEnableVirusScanner(false);
+    }
     
-    final LineFileDocs docs = new LineFileDocs(random);
+    final LineFileDocs docs = new LineFileDocs(random, true);
 
+    //provider.register(new MemoryCodec());
     if (random().nextBoolean()) {
-      Codec.setDefault(TestUtil.alwaysPostingsFormat(
-          new DirectPostingsFormat()));
+      Codec.setDefault(TestUtil.alwaysPostingsFormat(new MemoryPostingsFormat(random().nextBoolean(), random.nextFloat())));
     }
 
     MockAnalyzer analyzer = new MockAnalyzer(random());
@@ -79,8 +83,8 @@ public class TestRollingUpdates extends LuceneTestCase {
       final boolean doUpdate;
       if (s != null && updateCount < SIZE) {
         TopDocs hits = s.search(new TermQuery(idTerm), 1);
-        assertEquals(1, hits.totalHits.value);
-        doUpdate = w.tryDeleteDocument(r, hits.scoreDocs[0].doc) == -1;
+        assertEquals(1, hits.totalHits);
+        doUpdate = !w.tryDeleteDocument(r, hits.scoreDocs[0].doc);
         if (VERBOSE) {
           if (doUpdate) {
             System.out.println("  tryDeleteDocument failed");
@@ -120,7 +124,7 @@ public class TestRollingUpdates extends LuceneTestCase {
           System.out.println("TEST: reopen applyDeletions=" + applyDeletions);
         }
 
-        r = w.getReader(applyDeletions, false);
+        r = w.getReader(applyDeletions);
         if (applyDeletions) {
           s = newSearcher(r);
         } else {
@@ -136,7 +140,7 @@ public class TestRollingUpdates extends LuceneTestCase {
     }
 
     w.commit();
-    assertEquals(SIZE, w.getDocStats().numDocs);
+    assertEquals(SIZE, w.numDocs());
 
     w.close();
 
@@ -214,7 +218,7 @@ public class TestRollingUpdates extends LuceneTestCase {
           writer.updateDocument(new Term("id", br), doc);
           if (random().nextInt(3) == 0) {
             if (open == null) {
-              open = DirectoryReader.open(writer);
+              open = DirectoryReader.open(writer, true);
             }
             DirectoryReader reader = DirectoryReader.openIfChanged(open);
             if (reader != null) {

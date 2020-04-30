@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.compound;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.compound;
 
-import java.io.IOException;
-
-import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.compound.hyphenation.Hyphenation;
 import org.apache.lucene.analysis.compound.hyphenation.HyphenationTree;
+import org.apache.lucene.analysis.util.CharArraySet;
 import org.xml.sax.InputSource;
+
+import java.io.File;
+import java.io.IOException;
 
 /**
  * A {@link org.apache.lucene.analysis.TokenFilter} that decomposes compound words found in many Germanic languages.
@@ -81,7 +83,7 @@ public class HyphenationCompoundWordTokenFilter extends
   /**
    * Create a HyphenationCompoundWordTokenFilter with no dictionary.
    * <p>
-   * Calls {@link #HyphenationCompoundWordTokenFilter(org.apache.lucene.analysis.TokenStream, org.apache.lucene.analysis.compound.hyphenation.HyphenationTree, org.apache.lucene.analysis.CharArraySet, int, int, int, boolean)
+   * Calls {@link #HyphenationCompoundWordTokenFilter(org.apache.lucene.analysis.TokenStream, org.apache.lucene.analysis.compound.hyphenation.HyphenationTree, org.apache.lucene.analysis.util.CharArraySet, int, int, int, boolean)
    * HyphenationCompoundWordTokenFilter(matchVersion, input, hyphenator,
    * null, minWordSize, minSubwordSize, maxSubwordSize }
    */

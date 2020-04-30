@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spell;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spell;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -126,7 +127,7 @@ public class SpellChecker implements java.io.Closeable {
   }
   /**
    * Use the given directory as a spell checker index with a
-   * {@link LevenshteinDistance} as the default {@link StringDistance}. The
+   * {@link LevensteinDistance} as the default {@link StringDistance}. The
    * directory is created if it doesn't exist yet.
    * 
    * @param spellIndex
@@ -135,7 +136,7 @@ public class SpellChecker implements java.io.Closeable {
    *           if spellchecker can not open the directory
    */
   public SpellChecker(Directory spellIndex) throws IOException {
-    this(spellIndex, new LevenshteinDistance());
+    this(spellIndex, new LevensteinDistance());
   }
 
   /**

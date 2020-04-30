@@ -1,3 +1,4 @@
+package org.apache.solr.rest.schema;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +15,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.rest.schema;
+
 import org.apache.solr.rest.SolrRestletTestBase;
 import org.junit.Test;
 
 public class TestSchemaSimilarityResource extends SolrRestletTestBase {
-
-  /**
-   * NOTE: schema used by parent class doesn't define a global sim, so we get the implicit default
-   * which causes the FQN of the class to be returned
-   * 
-   */
   @Test
   public void testGetSchemaSimilarity() throws Exception {
-    assertQ("/schema/similarity?wt=xml",
+    assertQ("/schema/similarity?indent=on&wt=xml",
             "count(/response/lst[@name='similarity']) = 1",
-            "/response/lst[@name='similarity']/str[@name='class'][.='org.apache.solr.search.similarities.SchemaSimilarityFactory']");
+            "/response/lst[@name='similarity']/str[@name='class'][.='solr.SchemaSimilarityFactory']");
   }
 }
 

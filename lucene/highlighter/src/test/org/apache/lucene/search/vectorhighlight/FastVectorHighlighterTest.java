@@ -1,3 +1,4 @@
+package org.apache.lucene.search.vectorhighlight;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.vectorhighlight;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Map;
@@ -38,16 +38,14 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queries.CommonTermsQuery;
-import org.apache.lucene.queries.function.FunctionScoreQuery;
+import org.apache.lucene.queries.CustomScoreQuery;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BoostQuery;
-import org.apache.lucene.search.DoubleValuesSource;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.SynonymQuery;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.highlight.DefaultEncoder;
@@ -76,7 +74,7 @@ public class FastVectorHighlighterTest extends LuceneTestCase {
     writer.addDocument(doc);
     FastVectorHighlighter highlighter = new FastVectorHighlighter();
     
-    IndexReader reader = DirectoryReader.open(writer);
+    IndexReader reader = DirectoryReader.open(writer, true);
     int docId = 0;
     FieldQuery fieldQuery  = highlighter.getFieldQuery( new TermQuery(new Term("field", "foo")), reader );
     String[] bestFragments = highlighter.getBestFragments(fieldQuery, reader, docId, "field", 54, 1);
@@ -91,7 +89,7 @@ public class FastVectorHighlighterTest extends LuceneTestCase {
     dir.close();
   }
 
-  public void testFunctionScoreQueryHighlight() throws IOException {
+  public void testCustomScoreQueryHighlight() throws IOException {
     Directory dir = newDirectory();
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random())));
     Document doc = new Document();
@@ -106,9 +104,9 @@ public class FastVectorHighlighterTest extends LuceneTestCase {
     writer.addDocument(doc);
     FastVectorHighlighter highlighter = new FastVectorHighlighter();
 
-    IndexReader reader = DirectoryReader.open(writer);
+    IndexReader reader = DirectoryReader.open(writer, true);
     int docId = 0;
-    FieldQuery fieldQuery  = highlighter.getFieldQuery( new FunctionScoreQuery(new TermQuery(new Term("field", "foo")), DoubleValuesSource.constant(1)), reader );
+    FieldQuery fieldQuery  = highlighter.getFieldQuery( new CustomScoreQuery(new TermQuery(new Term("field", "foo"))), reader );
     String[] bestFragments = highlighter.getBestFragments(fieldQuery, reader, docId, "field", 54, 1);
     // highlighted results are centered
     assertEquals("This is a test where <b>foo</b> is highlighed and should be highlighted", bestFragments[0]);
@@ -135,7 +133,7 @@ public class FastVectorHighlighterTest extends LuceneTestCase {
     doc.add(text);
     writer.addDocument(doc);
     FastVectorHighlighter highlighter = new FastVectorHighlighter();
-    IndexReader reader = DirectoryReader.open(writer);
+    IndexReader reader = DirectoryReader.open(writer, true);
     int docId = 0;
     String field = "text";
     {
@@ -181,7 +179,7 @@ public class FastVectorHighlighterTest extends LuceneTestCase {
     doc.add(noLongTermField);
     writer.addDocument(doc);
     FastVectorHighlighter highlighter = new FastVectorHighlighter();
-    IndexReader reader = DirectoryReader.open(writer);
+    IndexReader reader = DirectoryReader.open(writer, true);
     int docId = 0;
     String field = "no_long_term";
     {
@@ -297,7 +295,7 @@ public class FastVectorHighlighterTest extends LuceneTestCase {
     doc.add( new Field( "text", text.toString().trim(), type ) );
     writer.addDocument(doc);
     FastVectorHighlighter highlighter = new FastVectorHighlighter();
-    IndexReader reader = DirectoryReader.open(writer);
+    IndexReader reader = DirectoryReader.open(writer, true);
 
     // This mimics what some query parsers do to <highlight words together>
     BooleanQuery.Builder terms = new BooleanQuery.Builder();
@@ -324,9 +322,7 @@ public class FastVectorHighlighterTest extends LuceneTestCase {
 
   public void testCommonTermsQueryHighlight() throws IOException {
     Directory dir = newDirectory();
-    IndexWriter writer = new IndexWriter(dir,
-        newIndexWriterConfig(new MockAnalyzer(random(), MockTokenizer.SIMPLE, true, MockTokenFilter.ENGLISH_STOPSET))
-        .setMergePolicy(newLogMergePolicy())); // don't reorder doc ids
+    IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random(), MockTokenizer.SIMPLE, true, MockTokenFilter.ENGLISH_STOPSET)));
     FieldType type = new FieldType(TextField.TYPE_STORED);
     type.setStoreTermVectorOffsets(true);
     type.setStoreTermVectorPositions(true);
@@ -350,16 +346,16 @@ public class FastVectorHighlighterTest extends LuceneTestCase {
     query.add(new Term("field", "very"));
    
     FastVectorHighlighter highlighter = new FastVectorHighlighter();
-    IndexReader reader = DirectoryReader.open(writer);
+    IndexReader reader = DirectoryReader.open(writer, true);
     IndexSearcher searcher = newSearcher(reader);
     TopDocs hits = searcher.search(query, 10);
-    assertEquals(2, hits.totalHits.value);
+    assertEquals(2, hits.totalHits);
     FieldQuery fieldQuery  = highlighter.getFieldQuery(query, reader);
-    String[] bestFragments = highlighter.getBestFragments(fieldQuery, reader, 1, "field", 1000, 1);
+    String[] bestFragments = highlighter.getBestFragments(fieldQuery, reader, hits.scoreDocs[0].doc, "field", 1000, 1);
     assertEquals("This piece of <b>text</b> refers to Kennedy at the beginning then has a longer piece of <b>text</b> that is <b>very</b> <b>long</b> in the middle and finally ends with another reference to Kennedy", bestFragments[0]);
 
     fieldQuery  = highlighter.getFieldQuery(query, reader);
-    bestFragments = highlighter.getBestFragments(fieldQuery, reader, 0, "field", 1000, 1);
+    bestFragments = highlighter.getBestFragments(fieldQuery, reader, hits.scoreDocs[1].doc, "field", 1000, 1);
     assertEquals("Hello this is a piece of <b>text</b> that is <b>very</b> <b>long</b> and contains too much preamble and the meat is really here which says kennedy has been shot", bestFragments[0]);
 
     reader.close();
@@ -497,7 +493,7 @@ public class FastVectorHighlighterTest extends LuceneTestCase {
     
     ScoreOrderFragmentsBuilder fragmentsBuilder = new ScoreOrderFragmentsBuilder();    
     fragmentsBuilder.setDiscreteMultiValueHighlighting( true );
-    IndexReader reader = DirectoryReader.open(writer);
+    IndexReader reader = DirectoryReader.open(writer, true );
     String[] preTags = new String[] { "<b>" };
     String[] postTags = new String[] { "</b>" };
     Encoder encoder = new DefaultEncoder();
@@ -520,46 +516,6 @@ public class FastVectorHighlighterTest extends LuceneTestCase {
           fragListBuilder, fragmentsBuilder, preTags, postTags, encoder );
       assertEquals("<b>hero</b> <b>of</b> <b>legend</b>", bestFragments[0]);
     }
-
-    reader.close();
-    writer.close();
-    dir.close();
-  }
-
-  public void testWithSynonym() throws IOException {
-    Directory dir = newDirectory();
-    IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random())));
-    FieldType type = new FieldType(TextField.TYPE_STORED);
-    type.setStoreTermVectorOffsets(true);
-    type.setStoreTermVectorPositions(true);
-    type.setStoreTermVectors(true);
-    type.freeze();
-
-    Document doc = new Document();
-    doc.add( new Field("field", "the quick brown fox", type ));
-    writer.addDocument(doc);
-    FastVectorHighlighter highlighter = new FastVectorHighlighter();
-
-    IndexReader reader = DirectoryReader.open(writer);
-    int docId = 0;
-
-    // query1: simple synonym query
-    SynonymQuery synQuery = new SynonymQuery.Builder("field")
-        .addTerm(new Term("field", "quick"))
-        .addTerm(new Term("field", "fast"))
-        .build();
-    FieldQuery fieldQuery  = highlighter.getFieldQuery(synQuery, reader);
-    String[] bestFragments = highlighter.getBestFragments(fieldQuery, reader, docId, "field", 54, 1);
-    assertEquals("the <b>quick</b> brown fox", bestFragments[0]);
-
-    // query2: boolean query with synonym query
-    BooleanQuery.Builder bq =
-        new BooleanQuery.Builder()
-            .add(new BooleanClause(synQuery, Occur.MUST))
-            .add(new BooleanClause(new TermQuery(new Term("field", "fox")), Occur.MUST));
-    fieldQuery  = highlighter.getFieldQuery(bq.build(), reader);
-    bestFragments = highlighter.getBestFragments(fieldQuery, reader, docId, "field", 54, 1);
-    assertEquals("the <b>quick</b> brown <b>fox</b>", bestFragments[0]);
 
     reader.close();
     writer.close();
@@ -591,7 +547,7 @@ public class FastVectorHighlighterTest extends LuceneTestCase {
     writer.addDocument(doc);
     FastVectorHighlighter highlighter = new FastVectorHighlighter();
     
-    IndexReader reader = DirectoryReader.open(writer);
+    IndexReader reader = DirectoryReader.open(writer, true);
     int docId = 0;
     
     // query1: match
@@ -645,7 +601,7 @@ public class FastVectorHighlighterTest extends LuceneTestCase {
     BaseFragmentsBuilder fragmentsBuilder = new SimpleFragmentsBuilder();
     fragmentsBuilder.setDiscreteMultiValueHighlighting(true);
     FastVectorHighlighter highlighter = new FastVectorHighlighter(true, true, fragListBuilder, fragmentsBuilder);
-    IndexReader reader = DirectoryReader.open(writer);
+    IndexReader reader = DirectoryReader.open(writer, true);
     int docId = 0;
 
     // Phrase that spans a field value
@@ -734,7 +690,7 @@ public class FastVectorHighlighterTest extends LuceneTestCase {
     FastVectorHighlighter highlighter = new FastVectorHighlighter();
     FragListBuilder fragListBuilder = new SimpleFragListBuilder();
     FragmentsBuilder fragmentsBuilder = new ScoreOrderFragmentsBuilder();
-    IndexReader reader = DirectoryReader.open(writer);
+    IndexReader reader = DirectoryReader.open( writer, true );
     String[] preTags = new String[] { "<b>" };
     String[] postTags = new String[] { "</b>" };
     Encoder encoder = new DefaultEncoder();

@@ -16,10 +16,7 @@
  */
 package org.apache.solr.spelling;
 
-import java.io.IOException;
-import java.util.Collection;
-import java.util.HashSet;
-
+import org.apache.lucene.analysis.Token;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
@@ -28,6 +25,11 @@ import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PayloadAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.apache.lucene.analysis.tokenattributes.TypeAttribute;
+import org.apache.lucene.util.LuceneTestCase;
+
+import java.util.Collection;
+import java.util.HashSet;
+import java.io.IOException;
 
 
 /**
@@ -39,8 +41,9 @@ class SimpleQueryConverter extends SpellingQueryConverter {
   @Override
   public Collection<Token> convert(String origQuery) {
     Collection<Token> result = new HashSet<>();
-
-    try (WhitespaceAnalyzer analyzer = new WhitespaceAnalyzer(); TokenStream ts = analyzer.tokenStream("", origQuery)) {
+    WhitespaceAnalyzer analyzer = new WhitespaceAnalyzer();
+    
+    try (TokenStream ts = analyzer.tokenStream("", origQuery)) {
       // TODO: support custom attributes
       CharTermAttribute termAtt = ts.addAttribute(CharTermAttribute.class);
       OffsetAttribute offsetAtt = ts.addAttribute(OffsetAttribute.class);

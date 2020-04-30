@@ -1,3 +1,5 @@
+package org.apache.lucene.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,38 +16,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.document;
-
 
 import java.io.IOException;
 import java.io.Reader;
 
 import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.NumericTokenStream;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.BytesTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
+import org.apache.lucene.document.FieldType.NumericType;
 import org.apache.lucene.index.IndexOptions;
+import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.index.IndexableFieldType;
 import org.apache.lucene.util.BytesRef;
 
 /**
  * Expert: directly create a field for a document.  Most
- * users should use one of the sugar subclasses: 
- * <ul>
- *    <li>{@link TextField}: {@link Reader} or {@link String} indexed for full-text search
- *    <li>{@link StringField}: {@link String} indexed verbatim as a single token
- *    <li>{@link IntPoint}: {@code int} indexed for exact/range queries.
- *    <li>{@link LongPoint}: {@code long} indexed for exact/range queries.
- *    <li>{@link FloatPoint}: {@code float} indexed for exact/range queries.
- *    <li>{@link DoublePoint}: {@code double} indexed for exact/range queries.
- *    <li>{@link SortedDocValuesField}: {@code byte[]} indexed column-wise for sorting/faceting
- *    <li>{@link SortedSetDocValuesField}: {@code SortedSet<byte[]>} indexed column-wise for sorting/faceting
- *    <li>{@link NumericDocValuesField}: {@code long} indexed column-wise for sorting/faceting
- *    <li>{@link SortedNumericDocValuesField}: {@code SortedSet<long>} indexed column-wise for sorting/faceting
- *    <li>{@link StoredField}: Stored-only value for retrieving in summary results
- * </ul>
+ * users should use one of the sugar subclasses: {@link
+ * IntField}, {@link LongField}, {@link FloatField}, {@link
+ * DoubleField}, {@link BinaryDocValuesField}, {@link
+ * NumericDocValuesField}, {@link SortedDocValuesField}, {@link
+ * StringField}, {@link TextField}, {@link StoredField}.
  *
  * <p> A field is a section of a Document. Each field has three
  * parts: name, type and value. Values may be text
@@ -64,8 +58,7 @@ public class Field implements IndexableField {
   /**
    * Field's type
    */
-  protected final IndexableFieldType type;
-
+  protected final FieldType type;
   /**
    * Field's name
    */
@@ -81,6 +74,12 @@ public class Field implements IndexableField {
   protected TokenStream tokenStream;
 
   /**
+   * Field's boost
+   * @see #boost()
+   */
+  protected float boost = 1.0f;
+
+  /**
    * Expert: creates a field with no initial value.
    * Intended only for custom Field subclasses.
    * @param name field name
@@ -88,13 +87,13 @@ public class Field implements IndexableField {
    * @throws IllegalArgumentException if either the name or type
    *         is null.
    */
-  protected Field(String name, IndexableFieldType type) {
+  protected Field(String name, FieldType type) {
     if (name == null) {
-      throw new IllegalArgumentException("name must not be null");
+      throw new IllegalArgumentException("name cannot be null");
     }
     this.name = name;
     if (type == null) {
-      throw new IllegalArgumentException("type must not be null");
+      throw new IllegalArgumentException("type cannot be null");
     }
     this.type = type;
   }
@@ -109,15 +108,15 @@ public class Field implements IndexableField {
    *         if tokenized() is false.
    * @throws NullPointerException if the reader is null
    */
-  public Field(String name, Reader reader, IndexableFieldType type) {
+  public Field(String name, Reader reader, FieldType type) {
     if (name == null) {
-      throw new IllegalArgumentException("name must not be null");
+      throw new IllegalArgumentException("name cannot be null");
     }
     if (type == null) {
-      throw new IllegalArgumentException("type must not be null");
+      throw new IllegalArgumentException("type cannot be null");
     }
     if (reader == null) {
-      throw new NullPointerException("reader must not be null");
+      throw new NullPointerException("reader cannot be null");
     }
     if (type.stored()) {
       throw new IllegalArgumentException("fields with a Reader value cannot be stored");
@@ -141,12 +140,12 @@ public class Field implements IndexableField {
    *         if tokenized() is false, or if indexed() is false.
    * @throws NullPointerException if the tokenStream is null
    */
-  public Field(String name, TokenStream tokenStream, IndexableFieldType type) {
+  public Field(String name, TokenStream tokenStream, FieldType type) {
     if (name == null) {
-      throw new IllegalArgumentException("name must not be null");
+      throw new IllegalArgumentException("name cannot be null");
     }
     if (tokenStream == null) {
-      throw new NullPointerException("tokenStream must not be null");
+      throw new NullPointerException("tokenStream cannot be null");
     }
     if (type.indexOptions() == IndexOptions.NONE || !type.tokenized()) {
       throw new IllegalArgumentException("TokenStream fields must be indexed and tokenized");
@@ -169,10 +168,11 @@ public class Field implements IndexableField {
    * @param name field name
    * @param value byte array pointing to binary content (not copied)
    * @param type field type
-   * @throws IllegalArgumentException if the field name, value or type
-   *         is null, or the field's type is indexed().
+   * @throws IllegalArgumentException if the field name is null,
+   *         or the field's type is indexed()
+   * @throws NullPointerException if the type is null
    */
-  public Field(String name, byte[] value, IndexableFieldType type) {
+  public Field(String name, byte[] value, FieldType type) {
     this(name, value, 0, value.length, type);
   }
 
@@ -186,11 +186,12 @@ public class Field implements IndexableField {
    * @param offset starting position of the byte array
    * @param length valid length of the byte array
    * @param type field type
-   * @throws IllegalArgumentException if the field name, value or type
-   *         is null, or the field's type is indexed().
+   * @throws IllegalArgumentException if the field name is null,
+   *         or the field's type is indexed()
+   * @throws NullPointerException if the type is null
    */
-  public Field(String name, byte[] value, int offset, int length, IndexableFieldType type) {
-    this(name, value != null ? new BytesRef(value, offset, length) : null, type);
+  public Field(String name, byte[] value, int offset, int length, FieldType type) {
+    this(name, new BytesRef(value, offset, length), type);
   }
 
   /**
@@ -201,22 +202,20 @@ public class Field implements IndexableField {
    * @param name field name
    * @param bytes BytesRef pointing to binary content (not copied)
    * @param type field type
-   * @throws IllegalArgumentException if the field name, bytes or type
-   *         is null, or the field's type is indexed().
+   * @throws IllegalArgumentException if the field name is null,
+   *         or the field's type is indexed()
+   * @throws NullPointerException if the type is null
    */
-  public Field(String name, BytesRef bytes, IndexableFieldType type) {
+  public Field(String name, BytesRef bytes, FieldType type) {
     if (name == null) {
-      throw new IllegalArgumentException("name must not be null");
+      throw new IllegalArgumentException("name cannot be null");
     }
     if (bytes == null) {
-      throw new IllegalArgumentException("bytes must not be null");
+      throw new IllegalArgumentException("bytes cannot be null");
     }
-    if (type == null) {
-      throw new IllegalArgumentException("type must not be null");
-    }
-    this.name = name;
     this.fieldsData = bytes;
     this.type = type;
+    this.name = name;
   }
 
   // TODO: allow direct construction of int, long, float, double value too..?
@@ -226,53 +225,45 @@ public class Field implements IndexableField {
    * @param name field name
    * @param value string value
    * @param type field type
-   * @throws IllegalArgumentException if either the name, value or type
+   * @throws IllegalArgumentException if either the name or value
    *         is null, or if the field's type is neither indexed() nor stored(), 
    *         or if indexed() is false but storeTermVectors() is true.
+   * @throws NullPointerException if the type is null
    */
-  public Field(String name, CharSequence value, IndexableFieldType type) {
+  public Field(String name, String value, FieldType type) {
     if (name == null) {
-      throw new IllegalArgumentException("name must not be null");
+      throw new IllegalArgumentException("name cannot be null");
     }
     if (value == null) {
-      throw new IllegalArgumentException("value must not be null");
-    }
-    if (type == null) {
-      throw new IllegalArgumentException("type must not be null");
+      throw new IllegalArgumentException("value cannot be null");
     }
     if (!type.stored() && type.indexOptions() == IndexOptions.NONE) {
       throw new IllegalArgumentException("it doesn't make sense to have a field that "
         + "is neither indexed nor stored");
     }
+    this.type = type;
     this.name = name;
     this.fieldsData = value;
-    this.type = type;
   }
 
   /**
    * The value of the field as a String, or null. If null, the Reader value or
    * binary value is used. Exactly one of stringValue(), readerValue(), and
-   * binaryValue() must be set.
+   * getBinaryValue() must be set.
    */
   @Override
   public String stringValue() {
-    if (fieldsData instanceof CharSequence || fieldsData instanceof Number) {
+    if (fieldsData instanceof String || fieldsData instanceof Number) {
       return fieldsData.toString();
     } else {
       return null;
     }
   }
-
-  @Override
-  public CharSequence getCharSequenceValue() {
-    return fieldsData instanceof CharSequence ?
-        (CharSequence) fieldsData : stringValue();
-  }
-
+  
   /**
    * The value of the field as a Reader, or null. If null, the String value or
    * binary value is used. Exactly one of stringValue(), readerValue(), and
-   * binaryValue() must be set.
+   * getBinaryValue() must be set.
    */
   @Override
   public Reader readerValue() {
@@ -308,7 +299,7 @@ public class Field implements IndexableField {
       throw new IllegalArgumentException("cannot change value type from " + fieldsData.getClass().getSimpleName() + " to String");
     }
     if (value == null) {
-      throw new IllegalArgumentException("value must not be null");
+      throw new IllegalArgumentException("value cannot be null");
     }
     fieldsData = value;
   }
@@ -347,7 +338,7 @@ public class Field implements IndexableField {
       throw new IllegalArgumentException("cannot set a BytesRef value on an indexed field");
     }
     if (value == null) {
-      throw new IllegalArgumentException("value must not be null");
+      throw new IllegalArgumentException("value cannot be null");
     }
     fieldsData = value;
   }
@@ -421,11 +412,14 @@ public class Field implements IndexableField {
   /**
    * Expert: sets the token stream to be used for indexing and causes
    * isIndexed() and isTokenized() to return true. May be combined with stored
-   * values from stringValue() or binaryValue()
+   * values from stringValue() or getBinaryValue()
    */
   public void setTokenStream(TokenStream tokenStream) {
     if (type.indexOptions() == IndexOptions.NONE || !type.tokenized()) {
       throw new IllegalArgumentException("TokenStream fields must be indexed and tokenized");
+    }
+    if (type.numericType() != null) {
+      throw new IllegalArgumentException("cannot set private TokenStream on numeric fields");
     }
     this.tokenStream = tokenStream;
   }
@@ -433,6 +427,32 @@ public class Field implements IndexableField {
   @Override
   public String name() {
     return name;
+  }
+  
+  /** 
+   * {@inheritDoc}
+   * <p>
+   * The default value is <code>1.0f</code> (no boost).
+   * @see #setBoost(float)
+   */
+  @Override
+  public float boost() {
+    return boost;
+  }
+
+  /** 
+   * Sets the boost factor on this field.
+   * @throws IllegalArgumentException if this field is not indexed, 
+   *         or if it omits norms. 
+   * @see #boost()
+   */
+  public void setBoost(float boost) {
+    if (boost != 1.0f) {
+      if (type.indexOptions() == IndexOptions.NONE || type.omitNorms()) {
+        throw new IllegalArgumentException("You cannot set an index-time boost on an unindexed field, or one that omits norms");
+      }
+    }
+    this.boost = boost;
   }
 
   @Override
@@ -452,7 +472,7 @@ public class Field implements IndexableField {
       return null;
     }
   }
-
+  
   /** Prints a Field for human consumption. */
   @Override
   public String toString() {
@@ -472,15 +492,44 @@ public class Field implements IndexableField {
   
   /** Returns the {@link FieldType} for this field. */
   @Override
-  public IndexableFieldType fieldType() {
+  public FieldType fieldType() {
     return type;
   }
 
   @Override
-  public TokenStream tokenStream(Analyzer analyzer, TokenStream reuse) {
+  public TokenStream tokenStream(Analyzer analyzer, TokenStream reuse) throws IOException {
     if (fieldType().indexOptions() == IndexOptions.NONE) {
       // Not indexed
       return null;
+    }
+
+    final NumericType numericType = fieldType().numericType();
+    if (numericType != null) {
+      if (!(reuse instanceof NumericTokenStream && ((NumericTokenStream)reuse).getPrecisionStep() == type.numericPrecisionStep())) {
+        // lazy init the TokenStream as it is heavy to instantiate
+        // (attributes,...) if not needed (stored field loading)
+        reuse = new NumericTokenStream(type.numericPrecisionStep());
+      }
+      final NumericTokenStream nts = (NumericTokenStream) reuse;
+      // initialize value in TokenStream
+      final Number val = (Number) fieldsData;
+      switch (numericType) {
+      case INT:
+        nts.setIntValue(val.intValue());
+        break;
+      case LONG:
+        nts.setLongValue(val.longValue());
+        break;
+      case FLOAT:
+        nts.setFloatValue(val.floatValue());
+        break;
+      case DOUBLE:
+        nts.setDoubleValue(val.doubleValue());
+        break;
+      default:
+        throw new AssertionError("Should never get here");
+      }
+      return reuse;
     }
 
     if (!fieldType().tokenized()) {
@@ -612,7 +661,425 @@ public class Field implements IndexableField {
      */
     YES,
 
-    /** Do not store the field value in the index. */
+    /** Do not store the field's value in the index. */
     NO
+  }
+
+  //
+  // Deprecated transition API below:
+  //
+
+  /** Specifies whether and how a field should be indexed.
+   *
+   *  @deprecated This is here only to ease transition from
+   *  the pre-4.0 APIs. */
+  @Deprecated
+  public static enum Index {
+
+    /** Do not index the field value. This field can thus not be searched,
+     * but one can still access its contents provided it is
+     * {@link Field.Store stored}. */
+    NO {
+      @Override
+      public boolean isIndexed()  { return false; }
+      @Override
+      public boolean isAnalyzed() { return false; }
+      @Override
+      public boolean omitNorms()  { return true;  }   
+    },
+
+    /** Index the tokens produced by running the field's
+     * value through an Analyzer.  This is useful for
+     * common text. */
+    ANALYZED {
+      @Override
+      public boolean isIndexed()  { return true;  }
+      @Override
+      public boolean isAnalyzed() { return true;  }
+      @Override
+      public boolean omitNorms()  { return false; }
+    },
+
+    /** Index the field's value without using an Analyzer, so it can be searched.
+     * As no analyzer is used the value will be stored as a single term. This is
+     * useful for unique Ids like product numbers.
+     */
+    NOT_ANALYZED {
+      @Override
+      public boolean isIndexed()  { return true;  }
+      @Override
+      public boolean isAnalyzed() { return false; }
+      @Override
+      public boolean omitNorms()  { return false; }
+    },
+
+    /** Expert: Index the field's value without an Analyzer,
+     * and also disable the indexing of norms.  Note that you
+     * can also separately enable/disable norms by calling
+     * {@link FieldType#setOmitNorms}.  No norms means that
+     * index-time field and document boosting and field
+     * length normalization are disabled.  The benefit is
+     * less memory usage as norms take up one byte of RAM
+     * per indexed field for every document in the index,
+     * during searching.  Note that once you index a given
+     * field <i>with</i> norms enabled, disabling norms will
+     * have no effect.  In other words, for this to have the
+     * above described effect on a field, all instances of
+     * that field must be indexed with NOT_ANALYZED_NO_NORMS
+     * from the beginning. */
+    NOT_ANALYZED_NO_NORMS {
+      @Override
+      public boolean isIndexed()  { return true;  }
+      @Override
+      public boolean isAnalyzed() { return false; }
+      @Override
+      public boolean omitNorms()  { return true;  }
+    },
+
+    /** Expert: Index the tokens produced by running the
+     *  field's value through an Analyzer, and also
+     *  separately disable the storing of norms.  See
+     *  {@link #NOT_ANALYZED_NO_NORMS} for what norms are
+     *  and why you may want to disable them. */
+    ANALYZED_NO_NORMS {
+      @Override
+      public boolean isIndexed()  { return true;  }
+      @Override
+      public boolean isAnalyzed() { return true;  }
+      @Override
+      public boolean omitNorms()  { return true;  }
+    };
+
+    /** Get the best representation of the index given the flags. */
+    public static Index toIndex(boolean indexed, boolean analyzed) {
+      return toIndex(indexed, analyzed, false);
+    }
+
+    /** Expert: Get the best representation of the index given the flags. */
+    public static Index toIndex(boolean indexed, boolean analyzed, boolean omitNorms) {
+
+      // If it is not indexed nothing else matters
+      if (!indexed) {
+        return Index.NO;
+      }
+
+      // typical, non-expert
+      if (!omitNorms) {
+        if (analyzed) {
+          return Index.ANALYZED;
+        }
+        return Index.NOT_ANALYZED;
+      }
+
+      // Expert: Norms omitted
+      if (analyzed) {
+        return Index.ANALYZED_NO_NORMS;
+      }
+      return Index.NOT_ANALYZED_NO_NORMS;
+    }
+
+    public abstract boolean isIndexed();
+    public abstract boolean isAnalyzed();
+    public abstract boolean omitNorms();
+  }
+
+  /** Specifies whether and how a field should have term vectors.
+   *
+   *  @deprecated This is here only to ease transition from
+   *  the pre-4.0 APIs. */
+  @Deprecated
+  public static enum TermVector {
+    
+    /** Do not store term vectors. 
+     */
+    NO {
+      @Override
+      public boolean isStored()      { return false; }
+      @Override
+      public boolean withPositions() { return false; }
+      @Override
+      public boolean withOffsets()   { return false; }
+    },
+    
+    /** Store the term vectors of each document. A term vector is a list
+     * of the document's terms and their number of occurrences in that document. */
+    YES {
+      @Override
+      public boolean isStored()      { return true;  }
+      @Override
+      public boolean withPositions() { return false; }
+      @Override
+      public boolean withOffsets()   { return false; }
+    },
+    
+    /**
+     * Store the term vector + token position information
+     * 
+     * @see #YES
+     */ 
+    WITH_POSITIONS {
+      @Override
+      public boolean isStored()      { return true;  }
+      @Override
+      public boolean withPositions() { return true;  }
+      @Override
+      public boolean withOffsets()   { return false; }
+    },
+    
+    /**
+     * Store the term vector + Token offset information
+     * 
+     * @see #YES
+     */ 
+    WITH_OFFSETS {
+      @Override
+      public boolean isStored()      { return true;  }
+      @Override
+      public boolean withPositions() { return false; }
+      @Override
+      public boolean withOffsets()   { return true;  }
+    },
+    
+    /**
+     * Store the term vector + Token position and offset information
+     * 
+     * @see #YES
+     * @see #WITH_POSITIONS
+     * @see #WITH_OFFSETS
+     */ 
+    WITH_POSITIONS_OFFSETS {
+      @Override
+      public boolean isStored()      { return true;  }
+      @Override
+      public boolean withPositions() { return true;  }
+      @Override
+      public boolean withOffsets()   { return true;  }
+    };
+
+    /** Get the best representation of a TermVector given the flags. */
+    public static TermVector toTermVector(boolean stored, boolean withOffsets, boolean withPositions) {
+
+      // If it is not stored, nothing else matters.
+      if (!stored) {
+        return TermVector.NO;
+      }
+
+      if (withOffsets) {
+        if (withPositions) {
+          return Field.TermVector.WITH_POSITIONS_OFFSETS;
+        }
+        return Field.TermVector.WITH_OFFSETS;
+      }
+
+      if (withPositions) {
+        return Field.TermVector.WITH_POSITIONS;
+      }
+      return Field.TermVector.YES;
+    }
+
+    public abstract boolean isStored();
+    public abstract boolean withPositions();
+    public abstract boolean withOffsets();
+  }
+
+  /** Translates the pre-4.0 enums for specifying how a
+   *  field should be indexed into the 4.0 {@link FieldType}
+   *  approach.
+   *
+   * @deprecated This is here only to ease transition from
+   * the pre-4.0 APIs.
+   */
+  @Deprecated
+  public static final FieldType translateFieldType(Store store, Index index, TermVector termVector) {
+    final FieldType ft = new FieldType();
+
+    ft.setStored(store == Store.YES);
+
+    switch(index) {
+    case ANALYZED:
+      ft.setIndexOptions(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS);
+      ft.setTokenized(true);
+      break;
+    case ANALYZED_NO_NORMS:
+      ft.setIndexOptions(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS);
+      ft.setTokenized(true);
+      ft.setOmitNorms(true);
+      break;
+    case NOT_ANALYZED:
+      ft.setIndexOptions(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS);
+      ft.setTokenized(false);
+      break;
+    case NOT_ANALYZED_NO_NORMS:
+      ft.setIndexOptions(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS);
+      ft.setTokenized(false);
+      ft.setOmitNorms(true);
+      break;
+    case NO:
+      break;
+    }
+
+    switch(termVector) {
+    case NO:
+      break;
+    case YES:
+      ft.setStoreTermVectors(true);
+      break;
+    case WITH_POSITIONS:
+      ft.setStoreTermVectors(true);
+      ft.setStoreTermVectorPositions(true);
+      break;
+    case WITH_OFFSETS:
+      ft.setStoreTermVectors(true);
+      ft.setStoreTermVectorOffsets(true);
+      break;
+    case WITH_POSITIONS_OFFSETS:
+      ft.setStoreTermVectors(true);
+      ft.setStoreTermVectorPositions(true);
+      ft.setStoreTermVectorOffsets(true);
+      break;
+    }
+    ft.freeze();
+    return ft;
+  }
+
+  /**
+   * Create a field by specifying its name, value and how it will
+   * be saved in the index. Term vectors will not be stored in the index.
+   * 
+   * @param name The name of the field
+   * @param value The string to process
+   * @param store Whether <code>value</code> should be stored in the index
+   * @param index Whether the field should be indexed, and if so, if it should
+   *  be tokenized before indexing 
+   * @throws NullPointerException if name or value is <code>null</code>
+   * @throws IllegalArgumentException if the field is neither stored nor indexed 
+   *
+   * @deprecated Use {@link StringField}, {@link TextField} instead. */
+  @Deprecated
+  public Field(String name, String value, Store store, Index index) {
+    this(name, value, translateFieldType(store, index, TermVector.NO));
+  }
+
+  /**
+   * Create a field by specifying its name, value and how it will
+   * be saved in the index.
+   * 
+   * @param name The name of the field
+   * @param value The string to process
+   * @param store Whether <code>value</code> should be stored in the index
+   * @param index Whether the field should be indexed, and if so, if it should
+   *  be tokenized before indexing 
+   * @param termVector Whether term vector should be stored
+   * @throws NullPointerException if name or value is <code>null</code>
+   * @throws IllegalArgumentException in any of the following situations:
+   * <ul> 
+   *  <li>the field is neither stored nor indexed</li> 
+   *  <li>the field is not indexed but termVector is <code>TermVector.YES</code></li>
+   * </ul> 
+   *
+   * @deprecated Use {@link StringField}, {@link TextField} instead. */
+  @Deprecated
+  public Field(String name, String value, Store store, Index index, TermVector termVector) {  
+    this(name, value, translateFieldType(store, index, termVector));
+  }
+
+  /**
+   * Create a tokenized and indexed field that is not stored. Term vectors will
+   * not be stored.  The Reader is read only when the Document is added to the index,
+   * i.e. you may not close the Reader until {@link IndexWriter#addDocument}
+   * has been called.
+   * 
+   * @param name The name of the field
+   * @param reader The reader with the content
+   * @throws NullPointerException if name or reader is <code>null</code>
+   *
+   * @deprecated Use {@link TextField} instead.
+   */
+  @Deprecated
+  public Field(String name, Reader reader) {
+    this(name, reader, TermVector.NO);
+  }
+
+  /**
+   * Create a tokenized and indexed field that is not stored, optionally with 
+   * storing term vectors.  The Reader is read only when the Document is added to the index,
+   * i.e. you may not close the Reader until {@link IndexWriter#addDocument}
+   * has been called.
+   * 
+   * @param name The name of the field
+   * @param reader The reader with the content
+   * @param termVector Whether term vector should be stored
+   * @throws NullPointerException if name or reader is <code>null</code>
+   *
+   * @deprecated Use {@link TextField} instead.
+   */ 
+  @Deprecated
+  public Field(String name, Reader reader, TermVector termVector) {
+    this(name, reader, translateFieldType(Store.NO, Index.ANALYZED, termVector));
+  }
+
+  /**
+   * Create a tokenized and indexed field that is not stored. Term vectors will
+   * not be stored. This is useful for pre-analyzed fields.
+   * The TokenStream is read only when the Document is added to the index,
+   * i.e. you may not close the TokenStream until {@link IndexWriter#addDocument}
+   * has been called.
+   * 
+   * @param name The name of the field
+   * @param tokenStream The TokenStream with the content
+   * @throws NullPointerException if name or tokenStream is <code>null</code>
+   *
+   * @deprecated Use {@link TextField} instead
+   */ 
+  @Deprecated
+  public Field(String name, TokenStream tokenStream) {
+    this(name, tokenStream, TermVector.NO);
+  }
+
+  /**
+   * Create a tokenized and indexed field that is not stored, optionally with 
+   * storing term vectors.  This is useful for pre-analyzed fields.
+   * The TokenStream is read only when the Document is added to the index,
+   * i.e. you may not close the TokenStream until {@link IndexWriter#addDocument}
+   * has been called.
+   * 
+   * @param name The name of the field
+   * @param tokenStream The TokenStream with the content
+   * @param termVector Whether term vector should be stored
+   * @throws NullPointerException if name or tokenStream is <code>null</code>
+   *
+   * @deprecated Use {@link TextField} instead
+   */ 
+  @Deprecated
+  public Field(String name, TokenStream tokenStream, TermVector termVector) {
+    this(name, tokenStream, translateFieldType(Store.NO, Index.ANALYZED, termVector));
+  }
+
+  /**
+   * Create a stored field with binary value. Optionally the value may be compressed.
+   * 
+   * @param name The name of the field
+   * @param value The binary value
+   *
+   * @deprecated Use {@link StoredField} instead.
+   */
+  @Deprecated
+  public Field(String name, byte[] value) {
+    this(name, value, translateFieldType(Store.YES, Index.NO, TermVector.NO));
+  }
+
+  /**
+   * Create a stored field with binary value. Optionally the value may be compressed.
+   * 
+   * @param name The name of the field
+   * @param value The binary value
+   * @param offset Starting offset in value where this Field's bytes are
+   * @param length Number of bytes to use for this Field, starting at offset
+   *
+   * @deprecated Use {@link StoredField} instead.
+   */
+  @Deprecated
+  public Field(String name, byte[] value, int offset, int length) {
+    this(name, value, offset, length, translateFieldType(Store.YES, Index.NO, TermVector.NO));
   }
 }

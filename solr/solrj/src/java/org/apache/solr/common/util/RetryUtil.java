@@ -1,3 +1,9 @@
+package org.apache.solr.common.util;
+
+import java.lang.invoke.MethodHandles;
+import java.util.Collections;
+import java.util.Set;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +20,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.util;
 
-import java.lang.invoke.MethodHandles;
-import java.util.Collections;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.solr.common.SolrException;
@@ -29,12 +31,12 @@ import org.slf4j.LoggerFactory;
 public class RetryUtil {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   
-  public interface RetryCmd {
-    void execute() throws Throwable;
+  public static interface RetryCmd {
+    public void execute() throws Throwable;
   }
   
-  public interface BooleanRetryCmd {
-    boolean execute();
+  public static interface BooleanRetryCmd {
+    public boolean execute();
   }
   
   public static void retryOnThrowable(Class clazz, long timeoutms, long intervalms, RetryCmd cmd) throws Throwable {
@@ -66,16 +68,6 @@ public class RetryUtil {
       }
     }
     return false;
-  }
-
-  public static void retryUntil(String errorMessage, int retries, long pauseTime, TimeUnit pauseUnit, BooleanRetryCmd cmd)
-      throws InterruptedException {
-    while (retries-- > 0) {
-      if (cmd.execute())
-        return;
-      pauseUnit.sleep(pauseTime);
-    }
-    throw new SolrException(ErrorCode.SERVER_ERROR, errorMessage);
   }
   
   public static void retryOnBoolean(long timeoutms, long intervalms, BooleanRetryCmd cmd) {

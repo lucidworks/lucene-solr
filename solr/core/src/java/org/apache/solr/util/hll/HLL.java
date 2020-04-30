@@ -1,3 +1,5 @@
+package org.apache.solr.util.hll;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util.hll;
 
 import java.util.Arrays;
 
@@ -22,7 +23,6 @@ import com.carrotsearch.hppc.IntByteHashMap;
 import com.carrotsearch.hppc.LongHashSet;
 import com.carrotsearch.hppc.cursors.IntByteCursor;
 import com.carrotsearch.hppc.cursors.LongCursor;
-import org.apache.solr.util.LongIterator;
 
 /**
  * A probabilistic set of hashed <code>long</code> elements. Useful for computing

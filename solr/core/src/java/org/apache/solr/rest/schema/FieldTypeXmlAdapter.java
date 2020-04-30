@@ -1,3 +1,5 @@
+package org.apache.solr.rest.schema;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.rest.schema;
 
 import java.util.List;
 import java.util.Map;
@@ -25,9 +26,7 @@ import javax.xml.parsers.ParserConfigurationException;
 
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
-import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.schema.IndexSchema;
-import org.apache.solr.schema.SimilarityFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -85,29 +84,8 @@ public class FieldTypeXmlAdapter {
           jsonFieldName+" not a "+jsonField.getClass().getName());
 
     Element similarity = doc.createElement("similarity");
-    Map<String,?> config = (Map<String,?>)jsonField;
-    similarity.setAttribute(SimilarityFactory.CLASS_NAME, (String)config.remove(SimilarityFactory.CLASS_NAME));
-    for (Map.Entry<String,?> entry : config.entrySet()) {
-      Object val = entry.getValue();
-      if (val != null) {
-        Element child = doc.createElement(classToXmlTag(val.getClass()));
-        child.setAttribute(CommonParams.NAME, entry.getKey());
-        child.setTextContent(entry.getValue().toString());
-        similarity.appendChild(child);
-      }
-    }
+    appendAttrs(similarity, (Map<String,?>)jsonField);
     return similarity;
-  }
-
-  /** Convert types produced by noggit's ObjectBuilder (Boolean, Double, Long, String) to plugin param XML tags. */
-  protected static String classToXmlTag(Class<?> clazz) {
-    switch (clazz.getSimpleName()) {
-      case "Boolean": return "bool";
-      case "Double":  return "double";
-      case "Long":    return "long";
-      case "String":  return "str";
-    }
-    throw new SolrException(ErrorCode.BAD_REQUEST, "Unsupported object type '" + clazz.getSimpleName() + "'");
   }
   
   @SuppressWarnings("unchecked")

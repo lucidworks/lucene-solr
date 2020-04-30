@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.synonym;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.synonym;
-
 
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
@@ -30,15 +31,15 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.LowerCaseFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
-import org.apache.lucene.analysis.core.FlattenGraphFilterFactory;
+import org.apache.lucene.analysis.core.LowerCaseFilter;
 import org.apache.lucene.analysis.core.WhitespaceTokenizer;
 import org.apache.lucene.analysis.util.ResourceLoader;
 import org.apache.lucene.analysis.util.ResourceLoaderAware;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 import org.apache.lucene.analysis.util.TokenizerFactory;
+import org.apache.lucene.util.Version;
 
 /**
  * Factory for {@link SynonymFilter}.
@@ -52,7 +53,7 @@ import org.apache.lucene.analysis.util.TokenizerFactory;
  *             [optional tokenizer factory parameters]/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- *
+ * 
  * <p>
  * An optional param name prefix of "tokenizerFactory." may be used for any 
  * init params that the SynonymFilterFactory needs to pass to the specified 
@@ -73,19 +74,8 @@ import org.apache.lucene.analysis.util.TokenizerFactory;
  *   <li><code>{@link Analyzer} analyzer</code> - an analyzer used for each raw synonym</li>
  * </ul>
  * @see SolrSynonymParser SolrSynonymParser: default format
- *
- * @deprecated Use {@link SynonymGraphFilterFactory} instead, but be sure to also
- * use {@link FlattenGraphFilterFactory} at index time (not at search time) as well.
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
-@Deprecated
 public class SynonymFilterFactory extends TokenFilterFactory implements ResourceLoaderAware {
-
-  /** SPI name */
-  public static final String NAME = "synonym";
-
   private final boolean ignoreCase;
   private final String tokenizerFactory;
   private final String synonyms;
@@ -181,9 +171,7 @@ public class SynonymFilterFactory extends TokenFilterFactory implements Resource
     List<String> files = splitFileNames(synonyms);
     for (String file : files) {
       decoder.reset();
-      try (final Reader isr = new InputStreamReader(loader.openResource(file), decoder)) {
-        parser.parse(isr);
-      }
+      parser.parse(new InputStreamReader(loader.openResource(file), decoder));
     }
     return parser.build();
   }

@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
 import org.apache.lucene.search.FieldDoc;
@@ -56,10 +57,15 @@ public final class CursorMark {
    * The raw, unmarshalled, sort values (that corrispond with the SortField's in the 
    * SortSpec) for knowing which docs this cursor should "search after".  If this 
    * list is null, then we have no specific values to "search after" and we 
-   * should start from the very beginning of the sorted list of documents matching 
+   * should start from the very begining of the sorted list of documents matching 
    * the query.
    */
   private List<Object> values = null;
+
+  /**
+   * for serializing this CursorMark as a String
+   */
+  private final JavaBinCodec codec = new JavaBinCodec();
 
   /**
    * Generates an empty CursorMark bound for use with the 
@@ -183,8 +189,9 @@ public final class CursorMark {
     List<Object> pieces = null;
     try {
       final byte[] rawData = Base64.base64ToByteArray(serialized);
-      try (JavaBinCodec jbc = new JavaBinCodec(); ByteArrayInputStream in = new ByteArrayInputStream(rawData)){
-        pieces = (List<Object>) jbc.unmarshal(in);
+      ByteArrayInputStream in = new ByteArrayInputStream(rawData);
+      try {
+        pieces = (List<Object>) codec.unmarshal(in);
         boolean b = false;
         for (Object o : pieces) {
           if (o instanceof BytesRefBuilder || o instanceof BytesRef || o instanceof String) {
@@ -193,8 +200,10 @@ public final class CursorMark {
         }
         if (b) {
           in.reset();
-          pieces = (List<Object>) new JavaBinCodec().unmarshal(in);
+          pieces = (List<Object>) codec.unmarshal(in);
         }
+      } finally {
+        in.close();
       }
     } catch (Exception ex) {
       throw new SolrException(ErrorCode.BAD_REQUEST,
@@ -256,13 +265,19 @@ public final class CursorMark {
     // the type/name/dir from the SortFields (or a hashCode to act as a checksum) 
     // could help provide more validation beyond just the number of clauses.
 
-    try (JavaBinCodec jbc = new JavaBinCodec(); ByteArrayOutputStream out = new ByteArrayOutputStream(256)) {
-      jbc.marshal(marshalledValues, out);
-      byte[] rawData = out.toByteArray();
-      return Base64.byteArrayToBase64(rawData, 0, rawData.length);
+    try {
+      ByteArrayOutputStream out = new ByteArrayOutputStream(256);
+      try {
+        codec.marshal(marshalledValues, out);
+        byte[] rawData = out.toByteArray();
+        return Base64.byteArrayToBase64(rawData, 0, rawData.length);
+      } finally {
+        out.close();
+      }
     } catch (Exception ex) {
       throw new SolrException(ErrorCode.SERVER_ERROR,
                               "Unable to format search after totem", ex);
+      
     }
   }
 

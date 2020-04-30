@@ -1,3 +1,5 @@
+package org.apache.solr.search.grouping.distributed.shardresultserializer;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.grouping.distributed.shardresultserializer;
 
 import org.apache.lucene.search.Sort;
 import org.apache.solr.common.util.NamedList;
@@ -44,10 +45,10 @@ public interface ShardResultTransformer<T, R> {
    *
    * @param shardResponse The shard response containing data in a {@link NamedList} structure
    * @param groupSort The group sort
-   * @param withinGroupSort The sort inside a group
+   * @param sortWithinGroup The sort inside a group
    * @param shard The shard address where the response originated from
    * @return native structure of the data
    */
-  R transformToNative(NamedList<NamedList> shardResponse, Sort groupSort, Sort withinGroupSort, String shard);
+  R transformToNative(NamedList<NamedList> shardResponse, Sort groupSort, Sort sortWithinGroup, String shard);
 
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
@@ -90,7 +90,7 @@ public class TestRegexpRandom extends LuceneTestCase {
   private void assertPatternHits(String pattern, int numHits) throws Exception {
     Query wq = new RegexpQuery(new Term("field", fillPattern(pattern)));
     TopDocs docs = searcher.search(wq, 25);
-    assertEquals("Incorrect hits for pattern: " + pattern, numHits, docs.totalHits.value);
+    assertEquals("Incorrect hits for pattern: " + pattern, numHits, docs.totalHits);
   }
 
   @Override

@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.io.stream;
 
 import java.io.IOException;
@@ -27,44 +28,37 @@ import java.util.PriorityQueue;
 
 import org.apache.solr.client.solrj.io.Tuple;
 import org.apache.solr.client.solrj.io.comp.FieldComparator;
-import org.apache.solr.client.solrj.io.comp.StreamComparator;
-import org.apache.solr.client.solrj.io.stream.expr.Explanation;
-import org.apache.solr.client.solrj.io.stream.expr.Explanation.ExpressionType;
-import org.apache.solr.client.solrj.io.stream.expr.Expressible;
-import org.apache.solr.client.solrj.io.stream.expr.StreamExplanation;
+import org.apache.solr.client.solrj.io.comp.ExpressibleComparator;
 import org.apache.solr.client.solrj.io.stream.expr.StreamExpression;
 import org.apache.solr.client.solrj.io.stream.expr.StreamExpressionNamedParameter;
 import org.apache.solr.client.solrj.io.stream.expr.StreamExpressionValue;
 import org.apache.solr.client.solrj.io.stream.expr.StreamFactory;
 
-import static org.apache.solr.common.params.CommonParams.SORT;
-
 
 /**
 *  Iterates over a TupleStream and Ranks the topN tuples based on a Comparator.
-* @since 5.1.0
 **/
 
-public class RankStream extends TupleStream implements Expressible {
+public class RankStream extends TupleStream implements ExpressibleStream {
 
   private static final long serialVersionUID = 1;
 
-  private TupleStream stream;
-  private StreamComparator comp;
+  private TupleStream tupleStream;
+  private Comparator<Tuple> comp;
   private int size;
   private transient PriorityQueue<Tuple> top;
   private transient boolean finished = false;
   private transient LinkedList<Tuple> topList;
 
-  public RankStream(TupleStream tupleStream, int size, StreamComparator comp) throws IOException {
+  public RankStream(TupleStream tupleStream, int size, Comparator<Tuple> comp) {
     init(tupleStream,size,comp);
   }
   
   public RankStream(StreamExpression expression, StreamFactory factory) throws IOException {
     // grab all parameters out
-    List<StreamExpression> streamExpressions = factory.getExpressionOperandsRepresentingTypes(expression, Expressible.class, TupleStream.class);
+    List<StreamExpression> streamExpressions = factory.getExpressionOperandsRepresentingTypes(expression, ExpressibleStream.class, TupleStream.class);
     StreamExpressionNamedParameter nParam = factory.getNamedOperand(expression, "n");
-    StreamExpressionNamedParameter sortExpression = factory.getNamedOperand(expression, SORT);
+    StreamExpressionNamedParameter sortExpression = factory.getNamedOperand(expression, "sort");
     
     // validate expression contains only what we want.
     if(expression.getParameters().size() != streamExpressions.size() + 2){
@@ -93,92 +87,72 @@ public class RankStream extends TupleStream implements Expressible {
     }
     
     TupleStream stream = factory.constructStream(streamExpressions.get(0));
-    StreamComparator comp = factory.constructComparator(((StreamExpressionValue)sortExpression.getParameter()).getValue(), FieldComparator.class);
+    Comparator<Tuple> comp = factory.constructComparator(((StreamExpressionValue)sortExpression.getParameter()).getValue(), FieldComparator.class);
     
     init(stream,nInt,comp);    
   }
   
-  private void init(TupleStream tupleStream, int size, StreamComparator comp) throws IOException{
-    this.stream = tupleStream;
+  private void init(TupleStream tupleStream, int size, Comparator<Tuple> comp){
+    this.tupleStream = tupleStream;
     this.comp = comp;
     this.size = size;
-    
-    // Rank stream does not demand that its order is derivable from the order of the incoming stream. No derivation check required
   }
   
   @Override
-  public StreamExpression toExpression(StreamFactory factory) throws IOException{
-    return toExpression(factory, true);
-  }
-  
-  private StreamExpression toExpression(StreamFactory factory, boolean includeStreams) throws IOException {
+  public StreamExpression toExpression(StreamFactory factory) throws IOException {    
     // function name
     StreamExpression expression = new StreamExpression(factory.getFunctionName(this.getClass()));
     
     // n
     expression.addParameter(new StreamExpressionNamedParameter("n", Integer.toString(size)));
     
-    if(includeStreams){
-      // stream
-      if(stream instanceof Expressible){
-        expression.addParameter(((Expressible)stream).toExpression(factory));
-      }
-      else{
-        throw new IOException("This RankStream contains a non-expressible TupleStream - it cannot be converted to an expression");
-      }
+    // stream
+    if(tupleStream instanceof ExpressibleStream){
+      expression.addParameter(((ExpressibleStream)tupleStream).toExpression(factory));
     }
     else{
-      expression.addParameter("<stream>");
+      throw new IOException("This RankStream contains a non-expressible TupleStream - it cannot be converted to an expression");
     }
         
     // sort
-    expression.addParameter(new StreamExpressionNamedParameter(SORT, comp.toExpression(factory)));
+    if(comp instanceof ExpressibleComparator){
+      expression.addParameter(new StreamExpressionNamedParameter("sort",((ExpressibleComparator)comp).toExpression(factory)));
+    }
+    else{
+      throw new IOException("This RankStream contains a non-expressible comparator - it cannot be converted to an expression");
+    }
     
     return expression;   
   }
   
-  @Override
-  public Explanation toExplanation(StreamFactory factory) throws IOException {
-
-    return new StreamExplanation(getStreamNodeId().toString())
-      .withChildren(new Explanation[]{
-        stream.toExplanation(factory)
-      })
-      .withFunctionName(factory.getFunctionName(this.getClass()))
-      .withImplementingClass(this.getClass().getName())
-      .withExpressionType(ExpressionType.STREAM_DECORATOR)
-      .withExpression(toExpression(factory, false).toString())
-      .withHelper(comp.toExplanation(factory));
-  }
-  
   public void setStreamContext(StreamContext context) {
-    this.stream.setStreamContext(context);
+    this.tupleStream.setStreamContext(context);
   }
 
   public List<TupleStream> children() {
-    List<TupleStream> l =  new ArrayList<TupleStream>();
-    l.add(stream);
+    List<TupleStream> l =  new ArrayList();
+    l.add(tupleStream);
     return l;
   }
 
   public void open() throws IOException {
-    this.top = new PriorityQueue<Tuple>(size, new ReverseComp(comp));
-    this.topList = new LinkedList<Tuple>();
-    stream.open();
+    this.top = new PriorityQueue(size, new ReverseComp(comp));
+    this.topList = new LinkedList();
+    tupleStream.open();
   }
 
   public void close() throws IOException {
-    stream.close();
+    tupleStream.close();
   }
   
-  public StreamComparator getComparator(){
+  public Comparator<Tuple> getComparator(){
     return this.comp;
   }
 
   public Tuple read() throws IOException {
     if(!finished) {
       while(true) {
-        Tuple tuple = stream.read();
+        Tuple tuple = tupleStream.read();
         if(tuple.EOF) {
           finished = true;
           int s = top.size();
@@ -189,8 +163,8 @@ public class RankStream extends TupleStream implements Expressible {
           topList.addLast(tuple);
           break;
         } else {
+          Tuple peek = top.peek();
           if(top.size() >= size) {
-            Tuple peek = top.peek();
             if(comp.compare(tuple, peek) < 0) {
               top.poll();
               top.add(tuple);
@@ -204,29 +178,21 @@ public class RankStream extends TupleStream implements Expressible {
 
     return topList.pollFirst();
   }
-  
-  /** Return the stream sort - ie, the order in which records are returned */
-  public StreamComparator getStreamSort(){
-    return comp;
-  }
 
   public int getCost() {
     return 0;
   }
 
-  static class ReverseComp implements Comparator<Tuple>, Serializable {
+  class ReverseComp implements Comparator<Tuple>, Serializable {
 
-    private static final long serialVersionUID = 1L;
-    private StreamComparator comp;
+    private Comparator<Tuple> comp;
 
-    public ReverseComp(StreamComparator comp) {
+    public ReverseComp(Comparator<Tuple> comp) {
       this.comp = comp;
     }
 
     public int compare(Tuple t1, Tuple t2) {
       return comp.compare(t1, t2)*(-1);
     }
-    
-    
   }
 }

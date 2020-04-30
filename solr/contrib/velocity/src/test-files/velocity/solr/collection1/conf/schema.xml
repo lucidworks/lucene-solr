@@ -16,11 +16,21 @@
  limitations under the License.
 -->
 
-<schema name="minimal-velocity" version="1.6">
-  <fieldType name="string" class="solr.StrField" sortMissingLast="true"/>
+<schema name="minimal-velocity" version="1.5">
+  <types>
+    <fieldType name="string" class="solr.StrField" sortMissingLast="true" />
+ </types>
 
-  <field name="id" type="string" indexed="true" stored="true" required="true"/>
-  <dynamicField name="*_s" type="string" indexed="true" stored="true"/>
 
-  <uniqueKey>id</uniqueKey>
+ <fields>
+   <field name="id" type="string" indexed="true" stored="true" required="true" />
+   <dynamicField name="*_s"  type="string"  indexed="true"  stored="true"/>
+ </fields>
+
+ <uniqueKey>id</uniqueKey>
+
+ <defaultSearchField>id</defaultSearchField>
+
+ <solrQueryParser defaultOperator="OR"/>
+
 </schema>

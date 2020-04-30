@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,23 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Arrays;
 
 import org.apache.lucene.util.Accountable;
 
 /** 
  * Represents a file in RAM as a list of byte[] buffers.
- * 
- * @lucene.internal 
- * @deprecated This class uses inefficient synchronization and is discouraged
- * in favor of {@link MMapDirectory}. It will be removed in future versions 
- * of Lucene.
- */
-@Deprecated
+ * @lucene.internal */
 public class RAMFile implements Accountable {
   protected final ArrayList<byte[]> buffers = new ArrayList<>();
   long length;
@@ -87,6 +83,11 @@ public class RAMFile implements Accountable {
   @Override
   public synchronized long ramBytesUsed() {
     return sizeInBytes;
+  }
+  
+  @Override
+  public Collection<Accountable> getChildResources() {
+    return Collections.emptyList();
   }
 
   @Override

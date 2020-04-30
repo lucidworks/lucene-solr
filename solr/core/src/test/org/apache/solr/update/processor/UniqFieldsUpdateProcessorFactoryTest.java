@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
 import java.util.ArrayList;
@@ -28,6 +29,7 @@ import org.apache.solr.common.util.ContentStream;
 import org.apache.solr.common.util.ContentStreamBase;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.handler.UpdateRequestHandler;
+import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequestBase;
 import org.apache.solr.response.SolrQueryResponse;
 import org.junit.Before;
@@ -58,7 +60,8 @@ public class UniqFieldsUpdateProcessorFactoryTest extends SolrTestCaseJ4 {
     SolrCore core = h.getCore();
     UpdateRequestProcessorChain chained = core
       .getUpdateProcessingChain("uniq-fields");
-    UniqFieldsUpdateProcessorFactory factory = ((UniqFieldsUpdateProcessorFactory) chained.getProcessors().get(0));
+    UniqFieldsUpdateProcessorFactory factory = ((UniqFieldsUpdateProcessorFactory) chained
+        .getFactories()[0]);
     assertNotNull(chained);
 
     addDoc(adoc("id", "1a", 

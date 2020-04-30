@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.document;
 
 import java.io.IOException;
 import java.util.Set;
@@ -132,16 +133,6 @@ public class CompletionWeight extends Weight {
     throw new UnsupportedOperationException();
   }
 
-  /**
-   * This object can be cached
-   * 
-   * @see org.apache.lucene.search.SegmentCacheable#isCacheable(LeafReaderContext)
-   */
-  @Override
-  public boolean isCacheable(LeafReaderContext ctx) {
-    return true;
-  }
-
   @Override
   public void extractTerms(Set<Term> terms) {
     // no-op
@@ -153,4 +144,12 @@ public class CompletionWeight extends Weight {
     return null;
   }
 
+  @Override
+  public float getValueForNormalization() throws IOException {
+    return 0;
+  }
+
+  @Override
+  public void normalize(float norm, float boost) {
+  }
 }

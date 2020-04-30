@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.IOException;
 import java.nio.file.AccessDeniedException;
@@ -111,7 +111,7 @@ public final class SimpleFSLockFactory extends FSLockFactory {
       // if it differs, someone deleted our lock file (and we are ineffective)
       FileTime ctime = Files.readAttributes(path, BasicFileAttributes.class).creationTime(); 
       if (!creationTime.equals(ctime)) {
-        throw new AlreadyClosedException("Underlying file changed by an external force at " + ctime + ", (lock=" + this + ")");
+        throw new AlreadyClosedException("Underlying file changed by an external force at " + creationTime + ", (lock=" + this + ")");
       }
     }
 
@@ -144,7 +144,7 @@ public final class SimpleFSLockFactory extends FSLockFactory {
 
     @Override
     public String toString() {
-      return "SimpleFSLock(path=" + path + ",creationTime=" + creationTime + ")";
+      return "SimpleFSLock(path=" + path + ",ctime=" + creationTime + ")";
     }
   }
 }

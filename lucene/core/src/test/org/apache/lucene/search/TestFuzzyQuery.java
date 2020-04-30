@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,34 +16,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.MultiReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.similarities.ClassicSimilarity;
+import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.IOUtils;
-import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util.TestUtil;
 import org.apache.lucene.util.automaton.LevenshteinAutomata;
 
 /**
@@ -267,7 +258,7 @@ public class TestFuzzyQuery extends LuceneTestCase {
 
     IndexReader reader = writer.getReader();
     IndexSearcher searcher = newSearcher(reader);
-    searcher.setSimilarity(new ClassicSimilarity()); //avoid randomisation of similarity algo by test framework
+    searcher.setSimilarity(new DefaultSimilarity()); //avoid randomisation of similarity algo by test framework
     writer.close();
     String searchTerms[] = { "smith", "smythe", "smdssasd" };
     for (String searchTerm : searchTerms) {
@@ -304,7 +295,7 @@ public class TestFuzzyQuery extends LuceneTestCase {
 
     IndexReader reader = writer.getReader();
     IndexSearcher searcher = newSearcher(reader);
-    searcher.setSimilarity(new ClassicSimilarity()); //avoid randomisation of similarity algo by test framework
+    searcher.setSimilarity(new DefaultSimilarity()); //avoid randomisation of similarity algo by test framework
 
     writer.close();
 
@@ -367,7 +358,7 @@ public class TestFuzzyQuery extends LuceneTestCase {
     IndexSearcher searcher = newSearcher(mr);
     FuzzyQuery fq = new FuzzyQuery(new Term("field", "z123456"), 1, 0, 2, false);
     TopDocs docs = searcher.search(fq, 2);
-    assertEquals(5, docs.totalHits.value); // 5 docs, from the a and b's
+    assertEquals(5, docs.totalHits); // 5 docs, from the a and b's
     mr.close();
     ir1.close();
     ir2.close();
@@ -458,251 +449,57 @@ public class TestFuzzyQuery extends LuceneTestCase {
     assertEquals(1, hits.length);
     assertEquals("foobar", searcher.doc(hits[0].doc).get("field"));
     
-    expectThrows(IllegalArgumentException.class, () -> {
-      new FuzzyQuery(new Term("field", "t"), 3);
-    });
-
+    try {
+      q = new FuzzyQuery(new Term("field", "t"), 3);
+      fail();
+    } catch (IllegalArgumentException expected) {
+      // expected
+    }
+      
     reader.close();
     index.close();
   }
 
   public void testValidation() {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new FuzzyQuery(new Term("field", "foo"), -1, 0, 1, false);
-    });
-    assertTrue(expected.getMessage().contains("maxEdits"));
+      fail("Expected error for illegal max edits value");
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().contains("maxEdits"));
+    }
 
-    expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new FuzzyQuery(new Term("field", "foo"), LevenshteinAutomata.MAXIMUM_SUPPORTED_DISTANCE + 1, 0, 1, false);
-    });
-    assertTrue(expected.getMessage().contains("maxEdits must be between"));
+      fail("Expected error for illegal max edits value");
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().contains("maxEdits must be between"));
+    }
 
-    expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new FuzzyQuery(new Term("field", "foo"), 1, -1, 1, false);
-    });
-    assertTrue(expected.getMessage().contains("prefixLength cannot be negative"));
+      fail("Expected error for illegal prefix length value");
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().contains("prefixLength cannot be negative"));
+    }
 
-    expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new FuzzyQuery(new Term("field", "foo"), 1, 0, -1, false);
-    });
-    assertTrue(expected.getMessage().contains("maxExpansions must be positive"));
+      fail("Expected error for illegal max expansions value");
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().contains("maxExpansions must be positive"));
+    }
 
-    expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new FuzzyQuery(new Term("field", "foo"), 1, 0, -1, false);
-    });
-    assertTrue(expected.getMessage().contains("maxExpansions must be positive"));
+      fail("Expected error for illegal max expansions value");
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().contains("maxExpansions must be positive"));
+    }
   }
   
   private void addDoc(String text, RandomIndexWriter writer) throws IOException {
     Document doc = new Document();
     doc.add(newTextField("field", text, Field.Store.YES));
     writer.addDocument(doc);
-  }
-
-  private String randomSimpleString(int digits) {
-    int termLength = TestUtil.nextInt(random(), 1, 8);
-    char[] chars = new char[termLength];
-    for(int i=0;i<termLength;i++) {
-      chars[i] = (char) ('a' + random().nextInt(digits));
-    }
-    return new String(chars);
-  }
-
-  @SuppressWarnings({"unchecked","rawtypes"})
-  public void testRandom() throws Exception {
-    int digits = TestUtil.nextInt(random(), 2, 3);
-    // underestimated total number of unique terms that randomSimpleString
-    // maybe generate, it assumes all terms have a length of 7
-    int vocabularySize = digits << 7;
-    int numTerms = Math.min(atLeast(100), vocabularySize);
-    Set<String> terms = new HashSet<>();
-    while (terms.size() < numTerms) {
-      terms.add(randomSimpleString(digits));
-    }
-
-    Directory dir = newDirectory();
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
-    for(String term : terms) {
-      Document doc = new Document();
-      doc.add(new StringField("field", term, Field.Store.YES));
-      w.addDocument(doc);
-    }
-    DirectoryReader r = w.getReader();
-    //System.out.println("TEST: reader=" + r);
-    IndexSearcher s = newSearcher(r);
-    int iters = atLeast(1000);
-    for(int iter=0;iter<iters;iter++) {
-      String queryTerm = randomSimpleString(digits);
-      int prefixLength = random().nextInt(queryTerm.length());
-      String queryPrefix = queryTerm.substring(0, prefixLength);
-
-      // we don't look at scores here:
-      List<TermAndScore>[] expected = new List[3];
-      for(int ed=0;ed<3;ed++) {
-        expected[ed] = new ArrayList<TermAndScore>();
-      }
-      for(String term : terms) {
-        if (term.startsWith(queryPrefix) == false) {
-          continue;
-        }
-        int ed = getDistance(term, queryTerm);
-        float score = 1f - (float) ed / (float) Math.min(queryTerm.length(), term.length());
-        while (ed < 3) {
-          expected[ed].add(new TermAndScore(term, score));
-          ed++;
-        }
-      }
-
-      for(int ed=0;ed<3;ed++) {
-        Collections.sort(expected[ed]);
-        int queueSize = TestUtil.nextInt(random(), 1, terms.size());
-        /*
-        System.out.println("\nTEST: query=" + queryTerm + " ed=" + ed + " queueSize=" + queueSize + " vs expected match size=" + expected[ed].size() + " prefixLength=" + prefixLength);
-        for(TermAndScore ent : expected[ed]) {
-          System.out.println("  " + ent);
-        }
-        */
-        FuzzyQuery query = new FuzzyQuery(new Term("field", queryTerm), ed, prefixLength, queueSize, true);
-        TopDocs hits = s.search(query, terms.size());
-        Set<String> actual = new HashSet<>();
-        for(ScoreDoc hit : hits.scoreDocs) {
-          Document doc = s.doc(hit.doc);
-          actual.add(doc.get("field"));
-          //System.out.println("   actual: " + doc.get("field") + " score=" + hit.score);
-        }
-        Set<String> expectedTop = new HashSet<>();
-        int limit = Math.min(queueSize, expected[ed].size());
-        for(int i=0;i<limit;i++) {
-          expectedTop.add(expected[ed].get(i).term);
-        }
-        
-        if (actual.equals(expectedTop) == false) {
-          StringBuilder sb = new StringBuilder();
-          sb.append("FAILED: query=" + queryTerm + " ed=" + ed + " queueSize=" + queueSize + " vs expected match size=" + expected[ed].size() + " prefixLength=" + prefixLength + "\n");
-
-          boolean first = true;
-          for(String term : actual) {
-            if (expectedTop.contains(term) == false) {
-              if (first) {
-                sb.append("  these matched but shouldn't:\n");
-                first = false;
-              }
-              sb.append("    " + term + "\n");
-            }
-          }
-          first = true;
-          for(String term : expectedTop) {
-            if (actual.contains(term) == false) {
-              if (first) {
-                sb.append("  these did not match but should:\n");
-                first = false;
-              }
-              sb.append("    " + term + "\n");
-            }
-          }
-          throw new AssertionError(sb.toString());
-        }
-      }
-    }
-    
-    IOUtils.close(r, w, dir);
-  }
-
-  private static class TermAndScore implements Comparable<TermAndScore> {
-    final String term;
-    final float score;
-    
-    public TermAndScore(String term, float score) {
-      this.term = term;
-      this.score = score;
-    }
-
-    @Override
-    public int compareTo(TermAndScore other) {
-      // higher score sorts first, and if scores are tied, lower term sorts first
-      if (score > other.score) {
-        return -1;
-      } else if (score < other.score) {
-        return 1;
-      } else {
-        return term.compareTo(other.term);
-      }
-    }
-
-    @Override
-    public String toString() {
-      return term + " score=" + score;
-    }
-  }
-
-  // Poached from LuceneLevenshteinDistance.java (from suggest module): it supports transpositions (treats them as ed=1, not ed=2)
-  private static int getDistance(String target, String other) {
-    IntsRef targetPoints;
-    IntsRef otherPoints;
-    int n;
-    int d[][]; // cost array
-    
-    // NOTE: if we cared, we could 3*m space instead of m*n space, similar to 
-    // what LevenshteinDistance does, except cycling thru a ring of three 
-    // horizontal cost arrays... but this comparator is never actually used by 
-    // DirectSpellChecker, it's only used for merging results from multiple shards 
-    // in "distributed spellcheck", and it's inefficient in other ways too...
-
-    // cheaper to do this up front once
-    targetPoints = toIntsRef(target);
-    otherPoints = toIntsRef(other);
-    n = targetPoints.length;
-    final int m = otherPoints.length;
-    d = new int[n+1][m+1];
-    
-    if (n == 0 || m == 0) {
-      if (n == m) {
-        return 0;
-      }
-      else {
-        return Math.max(n, m);
-      }
-    } 
-
-    // indexes into strings s and t
-    int i; // iterates through s
-    int j; // iterates through t
-
-    int t_j; // jth character of t
-
-    int cost; // cost
-
-    for (i = 0; i<=n; i++) {
-      d[i][0] = i;
-    }
-    
-    for (j = 0; j<=m; j++) {
-      d[0][j] = j;
-    }
-
-    for (j = 1; j<=m; j++) {
-      t_j = otherPoints.ints[j-1];
-
-      for (i=1; i<=n; i++) {
-        cost = targetPoints.ints[i-1]==t_j ? 0 : 1;
-        // minimum of cell to the left+1, to the top+1, diagonally left and up +cost
-        d[i][j] = Math.min(Math.min(d[i-1][j]+1, d[i][j-1]+1), d[i-1][j-1]+cost);
-        // transposition
-        if (i > 1 && j > 1 && targetPoints.ints[i-1] == otherPoints.ints[j-2] && targetPoints.ints[i-2] == otherPoints.ints[j-1]) {
-          d[i][j] = Math.min(d[i][j], d[i-2][j-2] + cost);
-        }
-      }
-    }
-    
-    return d[n][m];
-  }
-  
-  private static IntsRef toIntsRef(String s) {
-    IntsRef ref = new IntsRef(s.length()); // worst case
-    int utf16Len = s.length();
-    for (int i = 0, cp = 0; i < utf16Len; i += Character.charCount(cp)) {
-      cp = ref.ints[ref.length++] = Character.codePointAt(s, i);
-    }
-    return ref;
   }
 }

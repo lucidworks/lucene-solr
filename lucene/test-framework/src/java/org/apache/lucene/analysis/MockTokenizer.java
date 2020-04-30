@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis;
 
 import java.io.IOException;
 import java.nio.CharBuffer;
@@ -92,7 +93,7 @@ public class MockTokenizer extends Tokenizer {
     super(factory);
     this.runAutomaton = runAutomaton;
     this.lowerCase = lowerCase;
-    this.state = 0;
+    this.state = runAutomaton.getInitialState();
     this.maxTokenLength = maxTokenLength;
   }
 
@@ -103,7 +104,6 @@ public class MockTokenizer extends Tokenizer {
   public MockTokenizer(CharacterRunAutomaton runAutomaton, boolean lowerCase) {
     this(runAutomaton, lowerCase, DEFAULT_MAX_TOKEN_LENGTH);
   }
-
   /** Calls {@link #MockTokenizer(CharacterRunAutomaton, boolean) MockTokenizer(Reader, WHITESPACE, true)} */
   public MockTokenizer() {
     this(WHITESPACE, true);
@@ -253,7 +253,7 @@ public class MockTokenizer extends Tokenizer {
 
   protected boolean isTokenChar(int c) {
     if (state < 0) {
-      state = 0;
+      state = runAutomaton.getInitialState();
     }
     state = runAutomaton.step(state, c);
     if (state < 0) {
@@ -271,7 +271,7 @@ public class MockTokenizer extends Tokenizer {
   public void reset() throws IOException {
     try {
       super.reset();
-      state = 0;
+      state = runAutomaton.getInitialState();
       lastOffset = off = 0;
       bufferedCodePoint = -1;
       if (streamState == State.RESET) {
@@ -317,7 +317,7 @@ public class MockTokenizer extends Tokenizer {
       // some tokenizers, such as limiting tokenizers, call end() before incrementToken() returns false.
       // these tests should disable this check (in general you should consume the entire stream)
       if (streamState != State.INCREMENT_FALSE) {
-        fail("end() called in wrong state=" + streamState + "!");
+        fail("end() called before incrementToken() returned false!");
       }
     } finally {
       streamState = State.END;

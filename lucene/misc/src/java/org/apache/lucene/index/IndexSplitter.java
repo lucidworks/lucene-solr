@@ -24,7 +24,7 @@ import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 
@@ -49,7 +49,7 @@ import org.apache.lucene.util.SuppressForbidden;
  * careful!
  */
 public class IndexSplitter {
-  public final SegmentInfos infos;
+  public SegmentInfos infos;
 
   FSDirectory fsDir;
 
@@ -133,15 +133,15 @@ public class IndexSplitter {
   public void split(Path destDir, String[] segs) throws IOException {
     Files.createDirectories(destDir);
     FSDirectory destFSDir = FSDirectory.open(destDir);
-    SegmentInfos destInfos = new SegmentInfos(infos.getIndexCreatedVersionMajor());
+    SegmentInfos destInfos = new SegmentInfos();
     destInfos.counter = infos.counter;
     for (String n : segs) {
       SegmentCommitInfo infoPerCommit = getInfo(n);
       SegmentInfo info = infoPerCommit.info;
       // Same info just changing the dir:
-      SegmentInfo newInfo = new SegmentInfo(destFSDir, info.getVersion(), info.getMinVersion(), info.name, info.maxDoc(),
-                                            info.getUseCompoundFile(), info.getCodec(), info.getDiagnostics(), info.getId(), Collections.emptyMap(), null);
-      destInfos.add(new SegmentCommitInfo(newInfo, infoPerCommit.getDelCount(), infoPerCommit.getSoftDelCount(),
+      SegmentInfo newInfo = new SegmentInfo(destFSDir, info.getVersion(), info.name, info.maxDoc(),
+                                            info.getUseCompoundFile(), info.getCodec(), info.getDiagnostics(), info.getId(), new HashMap<String,String>());
+      destInfos.add(new SegmentCommitInfo(newInfo, infoPerCommit.getDelCount(),
           infoPerCommit.getDelGen(), infoPerCommit.getFieldInfosGen(),
           infoPerCommit.getDocValuesGen()));
       // now copy files over

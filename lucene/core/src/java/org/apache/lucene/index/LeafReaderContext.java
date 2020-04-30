@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.util.Collections;
 import java.util.List;
@@ -24,9 +24,9 @@ import java.util.List;
  * {@link IndexReaderContext} for {@link LeafReader} instances.
  */
 public final class LeafReaderContext extends IndexReaderContext {
-  /** The reader's ord in the top-level's leaves array */
+  /** The readers ord in the top-level's leaves array */
   public final int ord;
-  /** The reader's absolute doc base */
+  /** The readers absolute doc base */
   public final int docBase;
   
   private final LeafReader reader;

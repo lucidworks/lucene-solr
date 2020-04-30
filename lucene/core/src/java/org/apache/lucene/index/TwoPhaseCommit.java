@@ -1,3 +1,7 @@
+package org.apache.lucene.index;
+
+import java.io.IOException;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +18,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
-import java.io.IOException;
-
 
 /**
  * An interface for implementations that support 2-phase commit. You can use
@@ -34,7 +34,7 @@ public interface TwoPhaseCommit {
    * 2-phase commit fails, {@link #rollback()} is called to discard all changes
    * since last successful commit.
    */
-  public long prepareCommit() throws IOException;
+  public void prepareCommit() throws IOException;
 
   /**
    * The second phase of a 2-phase commit. Implementations should ideally do
@@ -42,7 +42,7 @@ public interface TwoPhaseCommit {
    * after it returns, the caller can assume that the changes were successfully
    * committed to the underlying storage.
    */
-  public long commit() throws IOException;
+  public void commit() throws IOException;
 
   /**
    * Discards any changes that have occurred since the last commit. In a 2-phase
@@ -51,4 +51,5 @@ public interface TwoPhaseCommit {
    * back to their previous state.
    */
   public void rollback() throws IOException;
+
 }

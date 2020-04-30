@@ -1,3 +1,7 @@
+package org.apache.solr.cloud;
+
+import java.lang.invoke.MethodHandles;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +18,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
-
-import java.lang.invoke.MethodHandles;
 
 import java.util.concurrent.TimeUnit;
 
-import org.apache.solr.common.util.TimeSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,45 +32,44 @@ public class ActionThrottle {
   private volatile Long minMsBetweenActions;
 
   private final String name;
-  private final TimeSource timeSource;
 
-  public ActionThrottle(String name, long minMsBetweenActions) {
-    this(name, minMsBetweenActions, TimeSource.NANO_TIME);
+  private final NanoTimeSource nanoTimeSource;
+  
+  public interface NanoTimeSource {
+    long getTime();
   }
   
-  public ActionThrottle(String name, long minMsBetweenActions, TimeSource timeSource) {
+  private static class DefaultNanoTimeSource implements NanoTimeSource {
+    @Override
+    public long getTime() {
+      return System.nanoTime();
+    }
+  }
+  
+  public ActionThrottle(String name, long minMsBetweenActions) {
     this.name = name;
     this.minMsBetweenActions = minMsBetweenActions;
-    this.timeSource = timeSource;
+    this.nanoTimeSource = new DefaultNanoTimeSource();
   }
-
-  public ActionThrottle(String name, long minMsBetweenActions, long lastActionStartedAt)  {
-    this(name, minMsBetweenActions, lastActionStartedAt, TimeSource.NANO_TIME);
-  }
-
-  public ActionThrottle(String name, long minMsBetweenActions, long lastActionStartedAt, TimeSource timeSource)  {
+  
+  public ActionThrottle(String name, long minMsBetweenActions, NanoTimeSource nanoTimeSource) {
     this.name = name;
     this.minMsBetweenActions = minMsBetweenActions;
-    this.lastActionStartedAt = lastActionStartedAt;
-    this.timeSource = timeSource;
+    this.nanoTimeSource = nanoTimeSource;
   }
-
-  public void reset() {
-    lastActionStartedAt = null;
-  }
-
+  
   public void markAttemptingAction() {
-    lastActionStartedAt = timeSource.getTimeNs();
+    lastActionStartedAt = nanoTimeSource.getTime();
   }
   
   public void minimumWaitBetweenActions() {
     if (lastActionStartedAt == null) {
       return;
     }
-    long diff = timeSource.getTimeNs() - lastActionStartedAt;
+    long diff = nanoTimeSource.getTime() - lastActionStartedAt;
     int diffMs = (int) TimeUnit.MILLISECONDS.convert(diff, TimeUnit.NANOSECONDS);
     long minNsBetweenActions = TimeUnit.NANOSECONDS.convert(minMsBetweenActions, TimeUnit.MILLISECONDS);
-    log.debug("The last {} attempt started {}ms ago.", name, diffMs);
+    log.info("The last {} attempt started {}ms ago.", name, diffMs);
     int sleep = 0;
     
     if (diffMs > 0 && diff < minNsBetweenActions) {
@@ -82,14 +81,10 @@ public class ActionThrottle {
     if (sleep > 0) {
       log.info("Throttling {} attempts - waiting for {}ms", name, sleep);
       try {
-        timeSource.sleep(sleep);
+        Thread.sleep(sleep);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
       }
     }
-  }
-
-  public Long getLastActionStartedAt() {
-    return lastActionStartedAt;
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ar;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ar;
-
 
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.ar.ArabicNormalizationFilter;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
@@ -31,14 +34,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  *     &lt;filter class="solr.ArabicNormalizationFilterFactory"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
-public class ArabicNormalizationFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "arabicNormalization";
+public class ArabicNormalizationFilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
 
   /** Creates a new ArabicNormalizationFilterFactory */
   public ArabicNormalizationFilterFactory(Map<String,String> args) {
@@ -49,12 +46,12 @@ public class ArabicNormalizationFilterFactory extends TokenFilterFactory {
   }
 
   @Override
-  public TokenStream create(TokenStream input) {
+  public ArabicNormalizationFilter create(TokenStream input) {
     return new ArabicNormalizationFilter(input);
   }
 
   @Override
-  public TokenStream normalize(TokenStream input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

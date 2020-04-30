@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.standard.processors;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.standard.processors;
 
 import java.io.IOException;
 
@@ -47,7 +48,7 @@ import org.apache.lucene.queryparser.flexible.standard.config.StandardQueryConfi
 import org.apache.lucene.queryparser.flexible.standard.config.StandardQueryConfigHandler.Operator;
 import org.apache.lucene.queryparser.flexible.standard.nodes.MultiPhraseQueryNode;
 import org.apache.lucene.queryparser.flexible.standard.nodes.RegexpQueryNode;
-import org.apache.lucene.queryparser.flexible.standard.nodes.SynonymQueryNode;
+import org.apache.lucene.queryparser.flexible.standard.nodes.StandardBooleanQueryNode;
 import org.apache.lucene.queryparser.flexible.standard.nodes.WildcardQueryNode;
 
 /**
@@ -209,10 +210,10 @@ public class AnalyzerQueryNodeProcessor extends QueryNodeProcessorImpl {
                 
               }
               return new GroupQueryNode(
-                  new SynonymQueryNode(children));
+                  new StandardBooleanQueryNode(children, positionCount==1));
             } else {
               // multiple positions
-              QueryNode q = new BooleanQueryNode(Collections.<QueryNode>emptyList());
+              QueryNode q = new StandardBooleanQueryNode(Collections.<QueryNode>emptyList(),false);
               QueryNode currentQuery = null;
               for (int i = 0; i < numTokens; i++) {
                 String term = null;
@@ -226,7 +227,7 @@ public class AnalyzerQueryNodeProcessor extends QueryNodeProcessorImpl {
                 if (posIncrAtt != null && posIncrAtt.getPositionIncrement() == 0) {
                   if (!(currentQuery instanceof BooleanQueryNode)) {
                     QueryNode t = currentQuery;
-                    currentQuery = new SynonymQueryNode(Collections.<QueryNode>emptyList());
+                    currentQuery = new StandardBooleanQueryNode(Collections.<QueryNode>emptyList(), true);
                     ((BooleanQueryNode)currentQuery).add(t);
                   }
                   ((BooleanQueryNode)currentQuery).add(new FieldQueryNode(field, term, -1, -1));

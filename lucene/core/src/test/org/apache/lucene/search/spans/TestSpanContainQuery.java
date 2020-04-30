@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
@@ -25,7 +25,6 @@ import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.search.CheckHits;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
 
@@ -48,10 +47,9 @@ public class TestSpanContainQuery extends LuceneTestCase {
       doc.add(newTextField(field, docFields[i], Field.Store.YES));
       writer.addDocument(doc);
     }
-    writer.forceMerge(1);
     reader = writer.getReader();
     writer.close();
-    searcher = newSearcher(getOnlyLeafReader(reader));
+    searcher = newSearcher(reader);
   }
 
   @Override
@@ -73,7 +71,7 @@ public class TestSpanContainQuery extends LuceneTestCase {
   }
 
   Spans makeSpans(SpanQuery sq) throws Exception {
-    return sq.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    return MultiSpansWrapper.wrap(searcher.getIndexReader(), sq);
   }
 
   void tstEqualSpans(String mes, SpanQuery expectedQ, SpanQuery actualQ) throws Exception {

@@ -16,18 +16,16 @@
  */
 package org.apache.solr.client.solrj.impl;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.util.Collection;
-
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.request.JavaBinUpdateRequestCodec;
 import org.apache.solr.client.solrj.request.RequestWriter;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.common.util.ContentStream;
 
-import static org.apache.solr.common.params.CommonParams.JAVABIN_MIME;
+import java.io.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 /**
  * A RequestWriter which writes requests in the javabin format
@@ -39,42 +37,69 @@ import static org.apache.solr.common.params.CommonParams.JAVABIN_MIME;
 public class BinaryRequestWriter extends RequestWriter {
 
   @Override
-  public ContentWriter getContentWriter(SolrRequest req) {
-    if (req instanceof UpdateRequest) {
-      UpdateRequest updateRequest = (UpdateRequest) req;
-      if (isEmpty(updateRequest)) return null;
-      return new ContentWriter() {
-        @Override
-        public void write(OutputStream os) throws IOException {
-          new JavaBinUpdateRequestCodec().marshal(updateRequest, os);
-        }
-
-        @Override
-        public String getContentType() {
-          return JAVABIN_MIME;
-        }
-      };
-    } else {
-      return req.getContentWriter(JAVABIN_MIME);
-    }
-  }
-
-  @Override
   public Collection<ContentStream> getContentStreams(SolrRequest req) throws IOException {
     if (req instanceof UpdateRequest) {
       UpdateRequest updateRequest = (UpdateRequest) req;
-      if (isEmpty(updateRequest) ) return null;
-      throw new RuntimeException("This Should not happen");
+      if (isNull(updateRequest.getDocuments()) &&
+              isNull(updateRequest.getDeleteByIdMap()) &&
+              isNull(updateRequest.getDeleteQuery())
+              && (updateRequest.getDocIterator() == null) ) {
+        return null;
+      }
+      List<ContentStream> l = new ArrayList<>();
+      l.add(new LazyContentStream(updateRequest));
+      return l;
     } else {
       return super.getContentStreams(req);
     }
+
   }
 
 
   @Override
   public String getUpdateContentType() {
-    return JAVABIN_MIME;
+    return "application/javabin";
   }
+
+  @Override
+  public ContentStream getContentStream(final UpdateRequest request) throws IOException {
+    final BAOS baos = new BAOS();
+    new JavaBinUpdateRequestCodec().marshal(request, baos);
+    
+    return new ContentStream() {
+      @Override
+      public String getName() {
+        return null;
+      }
+
+      @Override
+      public String getSourceInfo() {
+        return "javabin";
+      }
+
+      @Override
+      public String getContentType() {
+        return "application/javabin";
+      }
+
+      @Override
+      public Long getSize() // size if we know it, otherwise null
+      {
+        return new Long(baos.size());
+      }
+
+      @Override
+      public InputStream getStream() {
+        return new ByteArrayInputStream(baos.getbuf(), 0, baos.size());
+      }
+
+      @Override
+      public Reader getReader() {
+        throw new RuntimeException("No reader available . this is a binarystream");
+      }
+    };
+  }
+
 
   @Override
   public void write(SolrRequest request, OutputStream os) throws IOException {
@@ -87,8 +112,8 @@ public class BinaryRequestWriter extends RequestWriter {
   /*
    * A hack to get access to the protected internal buffer and avoid an additional copy
    */
-  public static class BAOS extends ByteArrayOutputStream {
-    public byte[] getbuf() {
+  class BAOS extends ByteArrayOutputStream {
+    byte[] getbuf() {
       return super.buf;
     }
   }

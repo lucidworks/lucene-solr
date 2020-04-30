@@ -1,3 +1,5 @@
+package org.apache.lucene.replicator;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.replicator;
 
 /**
  * Describes a file in a {@link Revision}. A file has a source, which allows a
@@ -34,7 +35,7 @@ public class RevisionFile {
   /** Constructor with the given file name. */
   public RevisionFile(String fileName) {
     if (fileName == null || fileName.isEmpty()) {
-      throw new IllegalArgumentException("fileName must not be null or empty");
+      throw new IllegalArgumentException("fileName cannot be null or empty");
     }
     this.fileName = fileName;
   }

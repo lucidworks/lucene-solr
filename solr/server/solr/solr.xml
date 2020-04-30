@@ -28,8 +28,6 @@
 
 <solr>
 
-  <int name="maxBooleanClauses">${solr.max.booleanClauses:1024}</int>
-  
   <solrcloud>
 
     <str name="host">${host:}</str>
@@ -41,8 +39,6 @@
     <int name="zkClientTimeout">${zkClientTimeout:30000}</int>
     <int name="distribUpdateSoTimeout">${distribUpdateSoTimeout:600000}</int>
     <int name="distribUpdateConnTimeout">${distribUpdateConnTimeout:60000}</int>
-    <str name="zkCredentialsProvider">${zkCredentialsProvider:org.apache.solr.common.cloud.DefaultZkCredentialsProvider}</str>
-    <str name="zkACLProvider">${zkACLProvider:org.apache.solr.common.cloud.DefaultZkACLProvider}</str>
 
   </solrcloud>
 
@@ -50,7 +46,6 @@
     class="HttpShardHandlerFactory">
     <int name="socketTimeout">${socketTimeout:600000}</int>
     <int name="connTimeout">${connTimeout:60000}</int>
-    <str name="shardsWhitelist">${solr.shardsWhitelist:}</str>
   </shardHandlerFactory>
 
 </solr>

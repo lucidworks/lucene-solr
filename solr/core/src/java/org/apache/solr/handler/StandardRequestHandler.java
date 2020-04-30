@@ -14,11 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler;
 
 import org.apache.solr.handler.component.*;
 
-@Deprecated
+import java.net.MalformedURLException;
+import java.net.URL;
+
+/**
+ *
+ *
+ * All of the following options may be configured for this handler
+ * in the solrconfig as defaults, and may be overriden as request parameters.
+ * (TODO: complete documentation of request parameters here, rather than only
+ * on the wiki).
+ *
+ * <ul>
+ * <li> highlight - Set to any value not .equal() to "false" to enable highlight
+ * generation</li>
+ * <li> highlightFields - Set to a comma- or space-delimited list of fields to
+ * highlight.  If unspecified, uses the default query field</li>
+ * <li> maxSnippets - maximum number of snippets to generate per field-highlight.
+ * </li>
+ * </ul>
+ *
+ */
 public class StandardRequestHandler extends SearchHandler 
 {
   //////////////////////// SolrInfoMBeans methods //////////////////////
@@ -26,6 +47,14 @@ public class StandardRequestHandler extends SearchHandler
   @Override
   public String getDescription() {
     return "The standard Solr request handler";
+  }
+
+  @Override
+  public URL[] getDocs() {
+    try {
+      return new URL[] { new URL("http://wiki.apache.org/solr/StandardRequestHandler") };
+    }
+    catch( MalformedURLException ex ) { return null; }
   }
 }
 

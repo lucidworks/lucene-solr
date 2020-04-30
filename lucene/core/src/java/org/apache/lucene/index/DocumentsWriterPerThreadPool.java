@@ -1,12 +1,13 @@
+package org.apache.lucene.index;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,13 +15,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
+
+import org.apache.lucene.util.ThreadInterruptedException;
+import org.apache.lucene.util.ThreadInterruptedException;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
-
-import org.apache.lucene.util.ThreadInterruptedException;
 
 /**
  * {@link DocumentsWriterPerThreadPool} controls {@link ThreadState} instances
@@ -59,9 +60,6 @@ final class DocumentsWriterPerThreadPool {
     // TODO this should really be part of DocumentsWriterFlushControl
     // write access guarded by DocumentsWriterFlushControl
     long bytesUsed = 0;
-
-    // set by DocumentsWriter after each indexing op finishes
-    volatile long lastSeqNo;
 
     ThreadState(DocumentsWriterPerThread dpwt) {
       this.dwpt = dpwt;
@@ -111,7 +109,7 @@ final class DocumentsWriterPerThreadPool {
 
   private final List<ThreadState> freeList = new ArrayList<>();
 
-  private int takenThreadStatePermits = 0;
+  private boolean aborted;
 
   /**
    * Returns the active number of {@link ThreadState} instances.
@@ -120,21 +118,15 @@ final class DocumentsWriterPerThreadPool {
     return threadStates.size();
   }
 
-  synchronized void lockNewThreadStates() {
-    // this is similar to a semaphore - we need to acquire all permits ie. takenThreadStatePermits must be == 0
-    // any call to lockNewThreadStates() must be followed by unlockNewThreadStates() otherwise we will deadlock at some
-    // point
-    assert takenThreadStatePermits >= 0;
-    takenThreadStatePermits++;
+  synchronized void setAbort() {
+    aborted = true;
   }
 
-  synchronized void unlockNewThreadStates() {
-    assert takenThreadStatePermits > 0;
-    takenThreadStatePermits--;
-    if (takenThreadStatePermits == 0) {
-      notifyAll();
-    }
+  synchronized void clearAbort() {
+    aborted = false;
+    notifyAll();
   }
+
   /**
    * Returns a new {@link ThreadState} iff any new state is available otherwise
    * <code>null</code>.
@@ -146,20 +138,18 @@ final class DocumentsWriterPerThreadPool {
    *         <code>null</code>
    */
   private synchronized ThreadState newThreadState() {
-    assert takenThreadStatePermits >= 0;
-    while (takenThreadStatePermits > 0) {
-      // we can't create new thread-states while not all permits are available
+    while (aborted) {
       try {
         wait();
       } catch (InterruptedException ie) {
-        throw new ThreadInterruptedException(ie);
+        throw new ThreadInterruptedException(ie);        
       }
     }
     ThreadState threadState = new ThreadState(null);
     threadState.lock(); // lock so nobody else will get this ThreadState
     threadStates.add(threadState);
     return threadState;
-}
+  }
 
   DocumentsWriterPerThread reset(ThreadState threadState) {
     assert threadState.isHeldByCurrentThread();
@@ -172,11 +162,8 @@ final class DocumentsWriterPerThreadPool {
     // don't recycle DWPT by default
   }
 
-  // TODO: maybe we should try to do load leveling here: we want roughly even numbers
-  // of items (docs, deletes, DV updates) to most take advantage of concurrency while flushing
-
   /** This method is used by DocumentsWriter/FlushControl to obtain a ThreadState to do an indexing operation (add/updateDocument). */
-  ThreadState getAndLock() {
+  ThreadState getAndLock(Thread requestingThread, DocumentsWriter documentsWriter) {
     ThreadState threadState = null;
     synchronized (this) {
       if (freeList.isEmpty()) {
@@ -220,6 +207,9 @@ final class DocumentsWriterPerThreadPool {
     state.unlock();
     synchronized (this) {
       freeList.add(state);
+      // In case any thread is waiting, wake one of them up since we just released a thread state; notify() should be sufficient but we do
+      // notifyAll defensively:
+      notifyAll();
     }
   }
   
@@ -236,8 +226,22 @@ final class DocumentsWriterPerThreadPool {
     return threadStates.get(ord);
   }
 
-  // TODO: merge this with getActiveThreadStateCount: they are the same!
   synchronized int getMaxThreadStates() {
     return threadStates.size();
+  }
+
+  /**
+   * Returns the ThreadState with the minimum estimated number of threads
+   * waiting to acquire its lock or <code>null</code> if no {@link ThreadState}
+   * is yet visible to the calling thread.
+   */
+  ThreadState minContendedThreadState() {
+    ThreadState minThreadState = null;
+    for (ThreadState state : threadStates) {
+      if (minThreadState == null || state.getQueueLength() < minThreadState.getQueueLength()) {
+        minThreadState = state;
+      }
+    }
+    return minThreadState;
   }
 }

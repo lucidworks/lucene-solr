@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -82,7 +82,7 @@ public class TestBlendedTermQuery extends LuceneTestCase {
     assertEquals("Blended(foo:bar)", new BlendedTermQuery.Builder().add(t1).build().toString());
     Term t2 = new Term("foo", "baz");
     assertEquals("Blended(foo:bar foo:baz)", new BlendedTermQuery.Builder().add(t1).add(t2).build().toString());
-    assertEquals("Blended((foo:bar)^4.0 (foo:baz)^3.0)", new BlendedTermQuery.Builder().add(t1, 4).add(t2, 3).build().toString());
+    assertEquals("Blended(foo:bar^4.0 foo:baz^3.0)", new BlendedTermQuery.Builder().add(t1, 4).add(t2, 3).build().toString());
   }
 
   public void testBlendedScores() throws IOException {
@@ -108,7 +108,7 @@ public class TestBlendedTermQuery extends LuceneTestCase {
         .build();
 
     TopDocs topDocs = searcher.search(query, 20);
-    assertEquals(11, topDocs.totalHits.value);
+    assertEquals(11, topDocs.totalHits);
     // All docs must have the same score
     for (int i = 0; i < topDocs.scoreDocs.length; ++i) {
       assertEquals(topDocs.scoreDocs[0].score, topDocs.scoreDocs[i].score, 0.0f);

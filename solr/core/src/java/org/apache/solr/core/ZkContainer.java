@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
 
-import java.io.File;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.nio.file.Files;
@@ -27,12 +27,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Predicate;
 
 import org.apache.solr.cloud.CurrentCoreDescriptorProvider;
 import org.apache.solr.cloud.SolrZkServer;
 import org.apache.solr.cloud.ZkController;
-import org.apache.solr.common.AlreadyClosedException;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.ZkConfigManager;
@@ -80,9 +78,9 @@ public class ZkContainer {
     System.setProperty("zookeeper.jmx.log4j.disable", "true");
 
     if (zkRun != null) {
-      String zkDataHome = System.getProperty("zkServerDataDir", Paths.get(solrHome).resolve("zoo_data").toString());
+      String zkDataHome = System.getProperty("zkServerDataDir", solrHome + "zoo_data");
       String zkConfHome = System.getProperty("zkServerConfDir", solrHome);
-      zkServer = new SolrZkServer(stripChroot(zkRun), stripChroot(config.getZkHost()), new File(zkDataHome), zkConfHome, config.getSolrHostPort());
+      zkServer = new SolrZkServer(stripChroot(zkRun), stripChroot(config.getZkHost()), zkDataHome, zkConfHome, config.getSolrHostPort());
       zkServer.parseConfig();
       zkServer.start();
       
@@ -118,7 +116,7 @@ public class ZkContainer {
               @Override
               public List<CoreDescriptor> getCurrentDescriptors() {
                 List<CoreDescriptor> descriptors = new ArrayList<>(
-                    cc.getLoadedCoreNames().size());
+                    cc.getCoreNames().size());
                 Collection<SolrCore> cores = cc.getCores();
                 for (SolrCore core : cores) {
                   descriptors.add(core.getCoreDescriptor());
@@ -176,51 +174,43 @@ public class ZkContainer {
     return zkRun.substring(0, zkRun.lastIndexOf('/'));
   }
 
-  public static volatile Predicate<CoreDescriptor> testing_beforeRegisterInZk;
-
-  public void registerInZk(final SolrCore core, boolean background, boolean skipRecovery) {
-    CoreDescriptor cd = core.getCoreDescriptor(); // save this here - the core may not have it later
-    Runnable r = () -> {
-      MDCLoggingContext.setCore(core);
-      try {
+  public void registerInZk(final SolrCore core, boolean background) {
+    Thread thread = new Thread() {
+      @Override
+      public void run() {
+        MDCLoggingContext.setCore(core);
         try {
-          if (testing_beforeRegisterInZk != null) {
-            testing_beforeRegisterInZk.test(cd);
-          }
-          if (!core.getCoreContainer().isShutDown()) {
-            zkController.register(core.getName(), cd, skipRecovery);
-          }
-        } catch (InterruptedException e) {
-          // Restore the interrupted status
-          Thread.currentThread().interrupt();
-          SolrException.log(log, "", e);
-        } catch (KeeperException e) {
-          SolrException.log(log, "", e);
-        } catch (AlreadyClosedException e) {
-
-        } catch (Exception e) {
           try {
-            zkController.publish(cd, Replica.State.DOWN);
-          } catch (InterruptedException e1) {
+            zkController.register(core.getName(), core.getCoreDescriptor());
+          } catch (InterruptedException e) {
+            // Restore the interrupted status
             Thread.currentThread().interrupt();
-            log.error("", e1);
-          } catch (Exception e1) {
-            log.error("", e1);
+            SolrException.log(log, "", e);
+          } catch (Exception e) {
+            try {
+              zkController.publish(core.getCoreDescriptor(), Replica.State.DOWN);
+            } catch (InterruptedException e1) {
+              Thread.currentThread().interrupt();
+              log.error("", e1);
+            } catch (Exception e1) {
+              log.error("", e1);
+            }
+            SolrException.log(log, "", e);
           }
-          SolrException.log(log, "", e);
+        } finally {
+          MDCLoggingContext.clear();
         }
-      } finally {
-        MDCLoggingContext.clear();
       }
+      
     };
-
+    
     if (zkController != null) {
       if (background) {
-        coreZkRegister.execute(r);
+        coreZkRegister.execute(thread);
       } else {
         MDCLoggingContext.setCore(core);
         try {
-          r.run();
+          thread.run();
         } finally {
           MDCLoggingContext.clear();
         }
@@ -230,6 +220,20 @@ public class ZkContainer {
   
   public ZkController getZkController() {
     return zkController;
+  }
+  
+  public void publishCoresAsDown(List<SolrCore> cores) {
+    
+    for (SolrCore core : cores) {
+      try {
+        zkController.publish(core.getCoreDescriptor(), Replica.State.DOWN);
+      } catch (KeeperException e) {
+        ZkContainer.log.error("", e);
+      } catch (InterruptedException e) {
+        Thread.interrupted();
+        ZkContainer.log.error("", e);
+      }
+    }
   }
 
   public void close() {

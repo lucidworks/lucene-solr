@@ -28,16 +28,17 @@ grant {
   // should be enclosed within common.dir, but just in case:
   permission java.io.FilePermission "${junit4.childvm.cwd}", "read";
 
+  // jenkins wants to read outside its sandbox, to use a special linedocs file.
+  // this is best effort and not really supported.
+  permission java.io.FilePermission "/home/jenkins/lucene-data/enwiki.random.lines.txt", "read";
+
   // write only to sandbox
   permission java.io.FilePermission "${junit4.childvm.cwd}${/}temp", "read,write,delete";
   permission java.io.FilePermission "${junit4.childvm.cwd}${/}temp${/}-", "read,write,delete";
   permission java.io.FilePermission "${junit4.childvm.cwd}${/}jacoco.db", "write";
   permission java.io.FilePermission "${junit4.tempDir}${/}*", "read,write,delete";
   permission java.io.FilePermission "${clover.db.dir}${/}-", "read,write,delete";
-  permission java.io.FilePermission "${tests.linedocsfile}", "read";
-
-  // misc HardlinkCopyDirectoryWrapper needs this to test if hardlinks can be created
-  permission java.nio.file.LinkPermission "hard";
+  
   // needed by SSD detection tests in TestIOUtils (creates symlinks)
   permission java.nio.file.LinkPermission "symbolic";
 
@@ -58,19 +59,18 @@ grant {
   permission java.lang.RuntimePermission "fileSystemProvider";
   // needed for test of IOUtils.spins (maybe it can be avoided)
   permission java.lang.RuntimePermission "getFileStoreAttributes";
-  // analyzers/uima: needed by lucene expressions' JavascriptCompiler
+  // analyzers/uima: needed by UIMA message localization... (?)
+  permission java.lang.RuntimePermission "createSecurityManager";
   permission java.lang.RuntimePermission "createClassLoader";
+  // expressions TestCustomFunctions (only on java7?)
+  permission java.lang.RuntimePermission "getClassLoader";
   // needed to test unmap hack on platforms that support it
   permission java.lang.RuntimePermission "accessClassInPackage.sun.misc";
   // needed by cyberneko usage by benchmarks on J9
   permission java.lang.RuntimePermission "accessClassInPackage.org.apache.xerces.util";
   // needed by jacoco to dump coverage
   permission java.lang.RuntimePermission "shutdownHooks";
-  // needed by org.apache.logging.log4j
-  permission java.lang.RuntimePermission "getenv.*";
-  permission java.lang.RuntimePermission "getClassLoader";
-  permission java.lang.RuntimePermission "setContextClassLoader";
-
+  
   // read access to all system properties:
   permission java.util.PropertyPermission "*", "read";
   // write access to only these:

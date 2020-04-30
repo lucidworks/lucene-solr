@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.core.Diagnostics;
+import org.apache.solr.update.SolrCmdDistributor;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -37,19 +40,23 @@ public class ChaosMonkeySafeLeaderTest extends AbstractFullDistribZkTestBase {
   @BeforeClass
   public static void beforeSuperClass() {
     schemaString = "schema15.xml";      // we need a string id
-    System.setProperty("solr.autoCommit.maxTime", "15000");
-    System.clearProperty("solr.httpclient.retries");
-    System.clearProperty("solr.retries.on.forward");
-    System.clearProperty("solr.retries.to.followers"); 
-    setErrorHook();
+    SolrCmdDistributor.testing_errorHook = new Diagnostics.Callable() {
+      @Override
+      public void call(Object... data) {
+        Exception e = (Exception) data[0];
+        if (e == null) return;
+        if (e.getMessage().contains("Timeout")) {
+          Diagnostics.logThreadDumps("REQUESTING THREAD DUMP DUE TO TIMEOUT: " + e.getMessage());
+        }
+      }
+    };
   }
   
   @AfterClass
   public static void afterSuperClass() {
-    System.clearProperty("solr.autoCommit.maxTime");
-    clearErrorHook();
+    SolrCmdDistributor.testing_errorHook = null;
   }
-
+  
   protected static final String[] fieldNames = new String[]{"f_i", "f_f", "f_d", "f_l", "f_dt"};
   protected static final RandVal[] randVals = new RandVal[]{rint, rfloat, rdouble, rlong, rdate};
   
@@ -172,7 +179,7 @@ public class ChaosMonkeySafeLeaderTest extends AbstractFullDistribZkTestBase {
     if (random().nextBoolean()) {
       zkServer.shutdown();
       zkServer = new ZkTestServer(zkServer.getZkDir(), zkServer.getPort());
-      zkServer.run(false);
+      zkServer.run();
     }
 
     try (CloudSolrClient client = createCloudClient("collection1")) {

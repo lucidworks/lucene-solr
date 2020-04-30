@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +16,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
+
+import java.util.*;
 
 import org.apache.lucene.analysis.CannedBinaryTokenStream;
 import org.apache.lucene.document.Document;
+import org.apache.lucene.document.DoubleField;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.FloatField;
+import org.apache.lucene.document.IntField;
+import org.apache.lucene.document.LongField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.util.NumericUtils;
 import org.apache.lucene.util.TestUtil;
 
 public class TestTerms extends LuceneTestCase {
@@ -34,7 +42,7 @@ public class TestTerms extends LuceneTestCase {
     doc.add(newTextField("field", "a b c cc ddd", Field.Store.NO));
     w.addDocument(doc);
     IndexReader r = w.getReader();
-    Terms terms = MultiTerms.getTerms(r, "field");
+    Terms terms = MultiFields.getTerms(r, "field");
     assertEquals(new BytesRef("a"), terms.getMin());
     assertEquals(new BytesRef("ddd"), terms.getMax());
     r.close();
@@ -74,7 +82,7 @@ public class TestTerms extends LuceneTestCase {
     }
 
     IndexReader r = w.getReader();
-    Terms terms = MultiTerms.getTerms(r, "field");
+    Terms terms = MultiFields.getTerms(r, "field");
     assertEquals(minTerm, terms.getMin());
     assertEquals(maxTerm, terms.getMax());
     
@@ -82,4 +90,132 @@ public class TestTerms extends LuceneTestCase {
     w.close();
     dir.close();
   }
+
+  public void testEmptyIntFieldMinMax() throws Exception {
+    assertNull(NumericUtils.getMinInt(EMPTY_TERMS));
+    assertNull(NumericUtils.getMaxInt(EMPTY_TERMS));
+  }
+  
+  public void testIntFieldMinMax() throws Exception {
+    Directory dir = newDirectory();
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
+    int numDocs = atLeast(100);
+    int minValue = Integer.MAX_VALUE;
+    int maxValue = Integer.MIN_VALUE;
+    for(int i=0;i<numDocs;i++ ){
+      Document doc = new Document();
+      int num = random().nextInt();
+      minValue = Math.min(num, minValue);
+      maxValue = Math.max(num, maxValue);
+      doc.add(new IntField("field", num, Field.Store.NO));
+      w.addDocument(doc);
+    }
+    
+    IndexReader r = w.getReader();
+    Terms terms = MultiFields.getTerms(r, "field");
+    assertEquals(new Integer(minValue), NumericUtils.getMinInt(terms));
+    assertEquals(new Integer(maxValue), NumericUtils.getMaxInt(terms));
+
+    r.close();
+    w.close();
+    dir.close();
+  }
+
+  public void testEmptyLongFieldMinMax() throws Exception {
+    assertNull(NumericUtils.getMinLong(EMPTY_TERMS));
+    assertNull(NumericUtils.getMaxLong(EMPTY_TERMS));
+  }
+  
+  public void testLongFieldMinMax() throws Exception {
+    Directory dir = newDirectory();
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
+    int numDocs = atLeast(100);
+    long minValue = Long.MAX_VALUE;
+    long maxValue = Long.MIN_VALUE;
+    for(int i=0;i<numDocs;i++ ){
+      Document doc = new Document();
+      long num = random().nextLong();
+      minValue = Math.min(num, minValue);
+      maxValue = Math.max(num, maxValue);
+      doc.add(new LongField("field", num, Field.Store.NO));
+      w.addDocument(doc);
+    }
+    
+    IndexReader r = w.getReader();
+
+    Terms terms = MultiFields.getTerms(r, "field");
+    assertEquals(new Long(minValue), NumericUtils.getMinLong(terms));
+    assertEquals(new Long(maxValue), NumericUtils.getMaxLong(terms));
+
+    r.close();
+    w.close();
+    dir.close();
+  }
+
+  public void testFloatFieldMinMax() throws Exception {
+    Directory dir = newDirectory();
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
+    int numDocs = atLeast(100);
+    float minValue = Float.POSITIVE_INFINITY;
+    float maxValue = Float.NEGATIVE_INFINITY;
+    for(int i=0;i<numDocs;i++ ){
+      Document doc = new Document();
+      float num = random().nextFloat();
+      minValue = Math.min(num, minValue);
+      maxValue = Math.max(num, maxValue);
+      doc.add(new FloatField("field", num, Field.Store.NO));
+      w.addDocument(doc);
+    }
+    
+    IndexReader r = w.getReader();
+    Terms terms = MultiFields.getTerms(r, "field");
+    assertEquals(minValue, NumericUtils.sortableIntToFloat(NumericUtils.getMinInt(terms)), 0.0f);
+    assertEquals(maxValue, NumericUtils.sortableIntToFloat(NumericUtils.getMaxInt(terms)), 0.0f);
+
+    r.close();
+    w.close();
+    dir.close();
+  }
+
+  public void testDoubleFieldMinMax() throws Exception {
+    Directory dir = newDirectory();
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
+    int numDocs = atLeast(100);
+    double minValue = Double.POSITIVE_INFINITY;
+    double maxValue = Double.NEGATIVE_INFINITY;
+    for(int i=0;i<numDocs;i++ ){
+      Document doc = new Document();
+      double num = random().nextDouble();
+      minValue = Math.min(num, minValue);
+      maxValue = Math.max(num, maxValue);
+      doc.add(new DoubleField("field", num, Field.Store.NO));
+      w.addDocument(doc);
+    }
+    
+    IndexReader r = w.getReader();
+
+    Terms terms = MultiFields.getTerms(r, "field");
+
+    assertEquals(minValue, NumericUtils.sortableLongToDouble(NumericUtils.getMinLong(terms)), 0.0);
+    assertEquals(maxValue, NumericUtils.sortableLongToDouble(NumericUtils.getMaxLong(terms)), 0.0);
+
+    r.close();
+    w.close();
+    dir.close();
+  }
+
+  /**
+   * A complete empty Terms instance that has no terms in it and supports no optional statistics
+   */
+  private static Terms EMPTY_TERMS = new Terms() {
+    public TermsEnum iterator() { return TermsEnum.EMPTY; }
+    public long size() { return -1; }
+    public long getSumTotalTermFreq() { return -1; }
+    public long getSumDocFreq() { return -1; }
+    public int getDocCount() { return -1; }
+    public boolean hasFreqs() { return false; }
+    public boolean hasOffsets() { return false; }
+    public boolean hasPositions() { return false; }
+    public boolean hasPayloads() { return false; }
+  };
 }

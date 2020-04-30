@@ -1,3 +1,5 @@
+package org.apache.solr.cloud.overseer;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,21 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud.overseer;
 
-import java.lang.invoke.MethodHandles;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import com.codahale.metrics.Timer;
 import org.apache.solr.cloud.Overseer;
-import org.apache.solr.cloud.Stats;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.util.Utils;
+import org.apache.solr.util.stats.TimerContext;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.data.Stat;
@@ -37,17 +36,19 @@ import org.slf4j.LoggerFactory;
 
 import static java.util.Collections.singletonMap;
 
+import java.lang.invoke.MethodHandles;
+
 /**
  * ZkStateWriter is responsible for writing updates to the cluster state stored in ZooKeeper for
  * both stateFormat=1 collection (stored in shared /clusterstate.json in ZK) and stateFormat=2 collections
  * each of which get their own individual state.json in ZK.
  *
  * Updates to the cluster state are specified using the
- * {@link #enqueueUpdate(ClusterState, List, ZkWriteCallback)} method. The class buffers updates
+ * {@link #enqueueUpdate(ClusterState, ZkWriteCommand, ZkWriteCallback)} method. The class buffers updates
  * to reduce the number of writes to ZK. The buffered updates are flushed during <code>enqueueUpdate</code>
  * automatically if necessary. The {@link #writePendingUpdates()} can be used to force flush any pending updates.
  *
- * If either {@link #enqueueUpdate(ClusterState, List, ZkWriteCallback)} or {@link #writePendingUpdates()}
+ * If either {@link #enqueueUpdate(ClusterState, ZkWriteCommand, ZkWriteCallback)} or {@link #writePendingUpdates()}
  * throws a {@link org.apache.zookeeper.KeeperException.BadVersionException} then the internal buffered state of the
  * class is suspect and the current instance of the class should be discarded and a new instance should be created
  * and used for any future updates.
@@ -62,13 +63,16 @@ public class ZkStateWriter {
   public static ZkWriteCommand NO_OP = ZkWriteCommand.noop();
 
   protected final ZkStateReader reader;
-  protected final Stats stats;
+  protected final Overseer.Stats stats;
 
   protected Map<String, DocCollection> updates = new HashMap<>();
-  private int numUpdates = 0;
   protected ClusterState clusterState = null;
   protected boolean isClusterStateModified = false;
   protected long lastUpdatedTime = 0;
+
+  // state information which helps us batch writes
+  protected int lastStateFormat = -1; // sentinel value
+  protected String lastCollectionName = null;
 
   /**
    * Set to true if we ever get a BadVersionException so that we can disallow future operations
@@ -76,12 +80,11 @@ public class ZkStateWriter {
    */
   protected boolean invalidState = false;
 
-  public ZkStateWriter(ZkStateReader zkStateReader, Stats stats) {
+  public ZkStateWriter(ZkStateReader zkStateReader, Overseer.Stats stats) {
     assert zkStateReader != null;
 
     this.reader = zkStateReader;
     this.stats = stats;
-    this.clusterState = zkStateReader.getClusterState();
   }
 
   /**
@@ -95,7 +98,7 @@ public class ZkStateWriter {
    * be used to force an immediate flush of pending cluster state changes.
    *
    * @param prevState the cluster state information on which the given <code>cmd</code> is applied
-   * @param cmds       the list of {@link ZkWriteCommand} which specifies the change to be applied to cluster state in atomic
+   * @param cmd       the {@link ZkWriteCommand} which specifies the change to be applied to cluster state
    * @param callback  a {@link org.apache.solr.cloud.overseer.ZkStateWriter.ZkWriteCallback} object to be used
    *                  for any callbacks
    * @return modified cluster state created after applying <code>cmd</code> to <code>prevState</code>. If
@@ -106,27 +109,48 @@ public class ZkStateWriter {
    *                               in a {@link org.apache.zookeeper.KeeperException.BadVersionException} this instance becomes unusable and
    *                               must be discarded
    */
-  public ClusterState enqueueUpdate(ClusterState prevState, List<ZkWriteCommand> cmds, ZkWriteCallback callback) throws IllegalStateException, Exception {
+  public ClusterState enqueueUpdate(ClusterState prevState, ZkWriteCommand cmd, ZkWriteCallback callback) throws IllegalStateException, Exception {
     if (invalidState) {
       throw new IllegalStateException("ZkStateWriter has seen a tragic error, this instance can no longer be used");
     }
-    if (cmds.isEmpty()) return prevState;
-    if (isNoOps(cmds)) return prevState;
+    if (cmd == NO_OP) return prevState;
 
-    for (ZkWriteCommand cmd : cmds) {
-      if (cmd == NO_OP) continue;
-      if (!isClusterStateModified && clusterStateGetModifiedWith(cmd, prevState)) {
-        isClusterStateModified = true;
-      }
-      prevState = prevState.copyWith(cmd.name, cmd.collection);
-      if (cmd.collection == null || cmd.collection.getStateFormat() != 1) {
-        updates.put(cmd.name, cmd.collection);
-        numUpdates++;
+    if (maybeFlushBefore(cmd)) {
+      // we must update the prev state to the new one
+      prevState = clusterState = writePendingUpdates();
+      if (callback != null) {
+        callback.onWrite();
       }
     }
-    clusterState = prevState;
 
-    if (maybeFlushAfter()) {
+    if (callback != null) {
+      callback.onEnqueue();
+    }
+
+    /*
+    We need to know if the collection has moved from stateFormat=1 to stateFormat=2 (as a result of MIGRATECLUSTERSTATE)
+     */
+    DocCollection previousCollection = prevState.getCollectionOrNull(cmd.name);
+    boolean wasPreviouslyStateFormat1 = previousCollection != null && previousCollection.getStateFormat() == 1;
+    boolean isCurrentlyStateFormat1 = cmd.collection != null && cmd.collection.getStateFormat() == 1;
+
+    if (cmd.collection == null) {
+      if (wasPreviouslyStateFormat1) {
+        isClusterStateModified = true;
+      }
+      clusterState = prevState.copyWith(cmd.name, null);
+      updates.put(cmd.name, null);
+    } else {
+      if (!isCurrentlyStateFormat1) {
+        updates.put(cmd.name, cmd.collection);
+      }
+      if (isCurrentlyStateFormat1 || wasPreviouslyStateFormat1) {
+        isClusterStateModified = true;
+      }
+      clusterState = prevState.copyWith(cmd.name, cmd.collection);
+    }
+
+    if (maybeFlushAfter(cmd)) {
       ClusterState state = writePendingUpdates();
       if (callback != null) {
         callback.onWrite();
@@ -137,33 +161,42 @@ public class ZkStateWriter {
     return clusterState;
   }
 
-  private boolean isNoOps(List<ZkWriteCommand> cmds) {
-    for (ZkWriteCommand cmd : cmds) {
-      if (cmd != NO_OP) return false;
+  /**
+   * Logic to decide a flush before processing a ZkWriteCommand
+   *
+   * @param cmd the ZkWriteCommand instance
+   * @return true if a flush is required, false otherwise
+   */
+  protected boolean maybeFlushBefore(ZkWriteCommand cmd) {
+    if (lastUpdatedTime == 0) {
+      // first update, make sure we go through
+      return false;
     }
-    return true;
+    if (cmd.collection == null) {
+      return false;
+    }
+    if (cmd.collection.getStateFormat() != lastStateFormat) {
+      return true;
+    }
+    return cmd.collection.getStateFormat() > 1 && !cmd.name.equals(lastCollectionName);
   }
 
   /**
-   * Check whether {@value ZkStateReader#CLUSTER_STATE} (for stateFormat = 1) get changed given command
-   */
-  private boolean clusterStateGetModifiedWith(ZkWriteCommand command, ClusterState state) {
-    DocCollection previousCollection = state.getCollectionOrNull(command.name);
-    boolean wasPreviouslyStateFormat1 = previousCollection != null && previousCollection.getStateFormat() == 1;
-    boolean isCurrentlyStateFormat1 = command.collection != null && command.collection.getStateFormat() == 1;
-    return wasPreviouslyStateFormat1 || isCurrentlyStateFormat1;
-  }
-  /**
-   * Logic to decide a flush after processing a list of ZkWriteCommand
+   * Logic to decide a flush after processing a ZkWriteCommand
    *
+   * @param cmd the ZkWriteCommand instance
    * @return true if a flush to ZK is required, false otherwise
    */
-  private boolean maybeFlushAfter() {
-    return System.nanoTime() - lastUpdatedTime > MAX_FLUSH_INTERVAL || numUpdates > Overseer.STATE_UPDATE_BATCH_SIZE;
+  protected boolean maybeFlushAfter(ZkWriteCommand cmd) {
+    if (cmd.collection == null)
+      return false;
+    lastCollectionName = cmd.name;
+    lastStateFormat = cmd.collection.getStateFormat();
+    return System.nanoTime() - lastUpdatedTime > MAX_FLUSH_INTERVAL;
   }
 
   public boolean hasPendingUpdates() {
-    return numUpdates != 0 || isClusterStateModified;
+    return !updates.isEmpty() || isClusterStateModified;
   }
 
   /**
@@ -179,7 +212,7 @@ public class ZkStateWriter {
       throw new IllegalStateException("ZkStateWriter has seen a tragic error, this instance can no longer be used");
     }
     if (!hasPendingUpdates()) return clusterState;
-    Timer.Context timerContext = stats.time("update_state");
+    TimerContext timerContext = stats.time("update_state");
     boolean success = false;
     try {
       if (!updates.isEmpty()) {
@@ -189,18 +222,19 @@ public class ZkStateWriter {
           DocCollection c = entry.getValue();
 
           if (c == null) {
-            // let's clean up the state.json of this collection only, the rest should be clean by delete collection cmd
-            log.debug("going to delete state.json {}", path);
-            reader.getZkClient().clean(path);
+            // let's clean up the collections path for this collection
+            log.info("going to delete_collection {}", path);
+            reader.getZkClient().clean("/collections/" + name);
           } else if (c.getStateFormat() > 1) {
             byte[] data = Utils.toJSON(singletonMap(c.getName(), c));
             if (reader.getZkClient().exists(path, true)) {
-              log.debug("going to update_collection {} version: {}", path, c.getZNodeVersion());
+              assert c.getZNodeVersion() >= 0;
+              log.info("going to update_collection {} version: {}", path, c.getZNodeVersion());
               Stat stat = reader.getZkClient().setData(path, data, c.getZNodeVersion(), true);
               DocCollection newCollection = new DocCollection(name, c.getSlicesMap(), c.getProperties(), c.getRouter(), stat.getVersion(), path);
               clusterState = clusterState.copyWith(name, newCollection);
             } else {
-              log.debug("going to create_collection {}", path);
+              log.info("going to create_collection {}", path);
               reader.getZkClient().create(path, data, CreateMode.PERSISTENT, true);
               DocCollection newCollection = new DocCollection(name, c.getSlicesMap(), c.getProperties(), c.getRouter(), 0, path);
               clusterState = clusterState.copyWith(name, newCollection);
@@ -211,16 +245,19 @@ public class ZkStateWriter {
         }
 
         updates.clear();
-        numUpdates = 0;
       }
 
       if (isClusterStateModified) {
         assert clusterState.getZkClusterStateVersion() >= 0;
         byte[] data = Utils.toJSON(clusterState);
         Stat stat = reader.getZkClient().setData(ZkStateReader.CLUSTER_STATE, data, clusterState.getZkClusterStateVersion(), true);
-        Map<String, DocCollection> collections = clusterState.getCollectionsMap();
+        Set<String> collectionNames = clusterState.getCollections();
+        Map<String, DocCollection> collectionStates = new HashMap<>(collectionNames.size());
+        for (String c : collectionNames) {
+          collectionStates.put(c, clusterState.getCollection(c));
+        }
         // use the reader's live nodes because our cluster state's live nodes may be stale
-        clusterState = new ClusterState(stat.getVersion(), reader.getClusterState().getLiveNodes(), collections);
+        clusterState = new ClusterState(stat.getVersion(), reader.getClusterState().getLiveNodes(), collectionStates);
         isClusterStateModified = false;
       }
       lastUpdatedTime = System.nanoTime();
@@ -238,8 +275,15 @@ public class ZkStateWriter {
       }
     }
 
-    log.trace("New Cluster State is: {}", clusterState);
     return clusterState;
+  }
+
+  /**
+   * @return time returned by System.nanoTime at which the main cluster state was last written to ZK or 0 if
+   * never
+   */
+  public long getLastUpdatedTime() {
+    return lastUpdatedTime;
   }
 
   /**
@@ -251,9 +295,14 @@ public class ZkStateWriter {
 
   public interface ZkWriteCallback {
     /**
+     * Called by ZkStateWriter if a ZkWriteCommand is queued
+     */
+    public void onEnqueue() throws Exception;
+
+    /**
      * Called by ZkStateWriter if state is flushed to ZK
      */
-    void onWrite() throws Exception;
+    public void onWrite() throws Exception;
   }
 }
 

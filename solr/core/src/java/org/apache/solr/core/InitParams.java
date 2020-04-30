@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -94,7 +95,7 @@ public class InitParams {
       //if this is a component implicitly defined in code it should be overridden by initPrams
       merge(defaults, (NamedList) info.initArgs.get(DEFAULTS), info.initArgs, DEFAULTS, false);
     } else {
-      //if the args is initialized from solrconfig.xml inside the requestHandler it should be taking precedence over  initParams
+      //if the args is initialized from solrconfig.xml inside the requesthHandler it should be taking precedence over  initParams
       merge((NamedList) info.initArgs.get(DEFAULTS), defaults, info.initArgs, DEFAULTS, false);
     }
     merge((NamedList) info.initArgs.get(INVARIANTS), invariants, info.initArgs, INVARIANTS, false);
@@ -103,7 +104,7 @@ public class InitParams {
     if (pluginInfo.initArgs != null) {
       for (int i = 0; i < pluginInfo.initArgs.size(); i++) {
         String name = pluginInfo.initArgs.getName(i);
-        if (KNOWN_KEYS.contains(name)) continue;//already taken care of
+        if (KNOWN_KEYS.contains(name)) continue;//aready taken care of
         Object val = info.initArgs.get(name);
         if (val != null) continue; //this is explicitly specified in the reqhandler , ignore
         info.initArgs.add(name, pluginInfo.initArgs.getVal(i));

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
-
+import java.io.IOException;
 import java.io.Reader;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.search.similarities.DefaultSimilarity; // javadocs
+import org.apache.lucene.search.similarities.Similarity; // javadocs
 import org.apache.lucene.util.BytesRef;
 
 // TODO: how to handle versioning here...?
@@ -38,6 +41,40 @@ public interface IndexableField {
   /** {@link IndexableFieldType} describing the properties
    * of this field. */
   public IndexableFieldType fieldType();
+  
+  /** 
+   * Returns the field's index-time boost.
+   * <p>
+   * Only fields can have an index-time boost, if you want to simulate
+   * a "document boost", then you must pre-multiply it across all the
+   * relevant fields yourself. 
+   * <p>The boost is used to compute the norm factor for the field.  By
+   * default, in the {@link Similarity#computeNorm(FieldInvertState)} method, 
+   * the boost value is multiplied by the length normalization factor and then
+   * rounded by {@link DefaultSimilarity#encodeNormValue(float)} before it is stored in the
+   * index.  One should attempt to ensure that this product does not overflow
+   * the range of that encoding.
+   * <p>
+   * It is illegal to return a boost other than 1.0f for a field that is not
+   * indexed ({@link IndexableFieldType#indexOptions()} is IndexOptions.NONE) or
+   * omits normalization values ({@link IndexableFieldType#omitNorms()} returns true).
+   *
+   * @see Similarity#computeNorm(FieldInvertState)
+   * @see DefaultSimilarity#encodeNormValue(float)
+   */
+  public float boost();
+
+  /** Non-null if this field has a binary value */
+  public BytesRef binaryValue();
+
+  /** Non-null if this field has a string value */
+  public String stringValue();
+
+  /** Non-null if this field has a Reader value */
+  public Reader readerValue();
+
+  /** Non-null if this field has a numeric value */
+  public Number numericValue();
 
   /**
    * Creates the TokenStream used for indexing this field.  If appropriate,
@@ -48,29 +85,11 @@ public interface IndexableField {
    *              custom field types (like StringField and NumericField) that do not use
    *              the analyzer to still have good performance. Note: the passed-in type
    *              may be inappropriate, for example if you mix up different types of Fields
-   *              for the same field name. So it's the responsibility of the implementation to
+   *              for the same field name. So its the responsibility of the implementation to
    *              check.
    * @return TokenStream value for indexing the document.  Should always return
    *         a non-null value if the field is to be indexed
+   * @throws IOException Can be thrown while creating the TokenStream
    */
-  public TokenStream tokenStream(Analyzer analyzer, TokenStream reuse);
-
-  /** Non-null if this field has a binary value */
-  public BytesRef binaryValue();
-
-  /** Non-null if this field has a string value */
-  public String stringValue();
-
-  /**
-   * Non-null if this field has a string value
-   */
-  default CharSequence getCharSequenceValue() {
-    return stringValue();
-  }
-
-  /** Non-null if this field has a Reader value */
-  public Reader readerValue();
-
-  /** Non-null if this field has a numeric value */
-  public Number numericValue();
+  public TokenStream tokenStream(Analyzer analyzer, TokenStream reuse) throws IOException;
 }

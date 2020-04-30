@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.request;
 
 import org.apache.solr.client.solrj.SolrClient;
@@ -21,6 +22,9 @@ import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.response.SolrPingResponse;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.util.ContentStream;
+
+import java.util.Collection;
 
 /**
  * Verify that there is a working Solr core at the URL of a {@link org.apache.solr.client.solrj.SolrClient}.
@@ -45,6 +49,11 @@ public class SolrPing extends SolrRequest<SolrPingResponse> {
     params = new ModifiableSolrParams();
   }
   
+  @Override
+  public Collection<ContentStream> getContentStreams() {
+    return null;
+  }
+
   @Override
   protected SolrPingResponse createResponse(SolrClient client) {
     return new SolrPingResponse();

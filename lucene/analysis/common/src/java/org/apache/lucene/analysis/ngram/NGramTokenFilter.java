@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ngram;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ngram;
-
 
 import java.io.IOException;
 
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.miscellaneous.CodepointCountFilter;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
+import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
+import org.apache.lucene.analysis.tokenattributes.PositionLengthAttribute;
+import org.apache.lucene.analysis.util.CharacterUtils;
 
 /**
  * Tokenizes the input into n-grams of the given size(s).
@@ -33,47 +37,46 @@ import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
  * <li>sorts n-grams by their offset in the original token first, then
  * increasing length (meaning that "abc" will give "a", "ab", "abc", "b", "bc",
  * "c").</li></ul>
+ * <p>You can make this filter use the old behavior by using
+ * {@link org.apache.lucene.analysis.ngram.Lucene43NGramTokenFilter} but this is not recommended as
+ * it will lead to broken {@link TokenStream}s that will cause highlighting
+ * bugs.
  * <p>If you were using this {@link TokenFilter} to perform partial highlighting,
  * this won't work anymore since this filter doesn't update offsets. You should
  * modify your analysis chain to use {@link NGramTokenizer}, and potentially
  * override {@link NGramTokenizer#isTokenChar(int)} to perform pre-tokenization.
  */
 public final class NGramTokenFilter extends TokenFilter {
-  public static final boolean DEFAULT_PRESERVE_ORIGINAL = false;
+  public static final int DEFAULT_MIN_NGRAM_SIZE = 1;
+  public static final int DEFAULT_MAX_NGRAM_SIZE = 2;
 
-  private final int minGram;
-  private final int maxGram;
-  private final boolean preserveOriginal;
+  private final int minGram, maxGram;
 
   private char[] curTermBuffer;
   private int curTermLength;
-  private int curTermCodePointCount;
+  private int curCodePointCount;
   private int curGramSize;
   private int curPos;
-  private int curPosIncr;
-  private State state;
+  private int curPosInc, curPosLen;
+  private int tokStart;
+  private int tokEnd;
+  private boolean hasIllegalOffsets; // only if the length changed before this filter
 
+  private final CharacterUtils charUtils;
   private final CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);
-  private final PositionIncrementAttribute posIncrAtt = addAttribute(PositionIncrementAttribute.class);
+  private final PositionIncrementAttribute posIncAtt;
+  private final PositionLengthAttribute posLenAtt;
+  private final OffsetAttribute offsetAtt = addAttribute(OffsetAttribute.class);
 
   /**
-   * Creates an NGramTokenFilter that, for a given input term, produces all
-   * contained n-grams with lengths &gt;= minGram and &lt;= maxGram. Will
-   * optionally preserve the original term when its length is outside of the
-   * defined range.
-   * 
-   * Note: Care must be taken when choosing minGram and maxGram; depending
-   * on the input token size, this filter potentially produces a huge number
-   * of terms.
-   * 
+   * Creates NGramTokenFilter with given min and max n-grams.
    * @param input {@link TokenStream} holding the input to be tokenized
-   * @param minGram the minimum length of the generated n-grams
-   * @param maxGram the maximum length of the generated n-grams
-   * @param preserveOriginal Whether or not to keep the original term when it
-   * is shorter than minGram or longer than maxGram
+   * @param minGram the smallest n-gram to generate
+   * @param maxGram the largest n-gram to generate
    */
-  public NGramTokenFilter(TokenStream input, int minGram, int maxGram, boolean preserveOriginal) {
-    super(input);
+  public NGramTokenFilter(TokenStream input, int minGram, int maxGram) {
+    super(new CodepointCountFilter(input, minGram, Integer.MAX_VALUE));
+    this.charUtils = CharacterUtils.getInstance();
     if (minGram < 1) {
       throw new IllegalArgumentException("minGram must be greater than zero");
     }
@@ -82,69 +85,59 @@ public final class NGramTokenFilter extends TokenFilter {
     }
     this.minGram = minGram;
     this.maxGram = maxGram;
-    this.preserveOriginal = preserveOriginal;
-  }
-  
-  /**
-   * Creates an NGramTokenFilter that produces n-grams of the indicated size.
-   * 
-   * @param input {@link TokenStream} holding the input to be tokenized
-   * @param gramSize the size of n-grams to generate.
-   */
-  public NGramTokenFilter(TokenStream input, int gramSize) {
-    this(input, gramSize, gramSize, DEFAULT_PRESERVE_ORIGINAL);
+
+    posIncAtt = addAttribute(PositionIncrementAttribute.class);
+    posLenAtt = addAttribute(PositionLengthAttribute.class);
   }
 
+  /**
+   * Creates NGramTokenFilter with default min and max n-grams.
+   * @param input {@link TokenStream} holding the input to be tokenized
+   */
+  public NGramTokenFilter(TokenStream input) {
+    this(input, DEFAULT_MIN_NGRAM_SIZE, DEFAULT_MAX_NGRAM_SIZE);
+  }
+
+  /** Returns the next token in the stream, or null at EOS. */
   @Override
   public final boolean incrementToken() throws IOException {
     while (true) {
       if (curTermBuffer == null) {
         if (!input.incrementToken()) {
           return false;
+        } else {
+          curTermBuffer = termAtt.buffer().clone();
+          curTermLength = termAtt.length();
+          curCodePointCount = charUtils.codePointCount(termAtt);
+          curGramSize = minGram;
+          curPos = 0;
+          curPosInc = posIncAtt.getPositionIncrement();
+          curPosLen = posLenAtt.getPositionLength();
+          tokStart = offsetAtt.startOffset();
+          tokEnd = offsetAtt.endOffset();
+          // if length by start + end offsets doesn't match the term text then assume
+          // this is a synonym and don't adjust the offsets.
+          hasIllegalOffsets = (tokStart + curTermLength) != tokEnd;
         }
-        state = captureState();
-        
-        curTermLength = termAtt.length();
-        curTermCodePointCount = Character.codePointCount(termAtt, 0, termAtt.length());
-        curPosIncr += posIncrAtt.getPositionIncrement();
-        curPos = 0;
-        
-        if (preserveOriginal && curTermCodePointCount < minGram) {
-          // Token is shorter than minGram, but we'd still like to keep it.
-          posIncrAtt.setPositionIncrement(curPosIncr);
-          curPosIncr = 0;
-          return true;
-        }
-        
-        curTermBuffer = termAtt.buffer().clone();
-        curGramSize = minGram;
       }
 
-      if (curGramSize > maxGram || (curPos + curGramSize) > curTermCodePointCount) {
+      if (curGramSize > maxGram || (curPos + curGramSize) > curCodePointCount) {
         ++curPos;
         curGramSize = minGram;
       }
-      if ((curPos + curGramSize) <= curTermCodePointCount) {
-        restoreState(state);
-        final int start = Character.offsetByCodePoints(curTermBuffer, 0, curTermLength, 0, curPos);
-        final int end = Character.offsetByCodePoints(curTermBuffer, 0, curTermLength, start, curGramSize);
+      if ((curPos + curGramSize) <= curCodePointCount) {
+        clearAttributes();
+        final int start = charUtils.offsetByCodePoints(curTermBuffer, 0, curTermLength, 0, curPos);
+        final int end = charUtils.offsetByCodePoints(curTermBuffer, 0, curTermLength, start, curGramSize);
         termAtt.copyBuffer(curTermBuffer, start, end - start);
-        posIncrAtt.setPositionIncrement(curPosIncr);
-        curPosIncr = 0;
+        posIncAtt.setPositionIncrement(curPosInc);
+        curPosInc = 0;
+        posLenAtt.setPositionLength(curPosLen);
+        offsetAtt.setOffset(tokStart, tokEnd);
         curGramSize++;
         return true;
       }
-      else if (preserveOriginal && curTermCodePointCount > maxGram) {
-        // Token is longer than maxGram, but we'd still like to keep it.
-        restoreState(state);
-        posIncrAtt.setPositionIncrement(0);
-        termAtt.copyBuffer(curTermBuffer, 0, curTermLength);
-        curTermBuffer = null;
-        return true;
-      }
-      
-      // Done with this input token, get next token on next iteration.
-      curTermBuffer = null;  
+      curTermBuffer = null;
     }
   }
 
@@ -152,12 +145,5 @@ public final class NGramTokenFilter extends TokenFilter {
   public void reset() throws IOException {
     super.reset();
     curTermBuffer = null;
-    curPosIncr = 0;
-  }
-
-  @Override
-  public void end() throws IOException {
-    super.end();
-    posIncrAtt.setPositionIncrement(curPosIncr);
   }
 }

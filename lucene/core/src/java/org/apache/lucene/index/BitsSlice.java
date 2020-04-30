@@ -1,3 +1,7 @@
+package org.apache.lucene.index;
+
+import org.apache.lucene.util.Bits;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +18,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
-import org.apache.lucene.util.Bits;
-import org.apache.lucene.util.FutureObjects;
-
 
 /**
  * Exposes a slice of an existing Bits as a new Bits.
@@ -40,7 +39,10 @@ final class BitsSlice implements Bits {
     
   @Override
   public boolean get(int doc) {
-    FutureObjects.checkIndex(doc, length);
+    if (doc >= length) {
+      throw new RuntimeException("doc " + doc + " is out of bounds 0 .. " + (length-1));
+    }
+    assert doc < length: "doc=" + doc + " length=" + length;
     return parent.get(doc+start);
   }
 

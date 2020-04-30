@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
+import org.apache.lucene.util.TestUtil;
+import org.apache.lucene.store.BufferedIndexInput;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.ByteArrayDataOutput;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.RAMDirectory;
+
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
@@ -139,16 +143,22 @@ public class TestIndexInput extends LuceneTestCase {
     assertEquals("\u0000",is.readString());
     assertEquals("Lu\u0000ce\u0000ne",is.readString());
     
-    Exception expected = expectThrows(expectedEx, () -> {
+    try {
       is.readVInt();
-    });
-    assertTrue(expected.getMessage().startsWith("Invalid vInt"));
+      fail("Should throw " + expectedEx.getName());
+    } catch (Exception e) {
+      assertTrue(e.getMessage().startsWith("Invalid vInt"));
+      assertTrue(expectedEx.isInstance(e));
+    }
     assertEquals(1, is.readVInt()); // guard value
     
-    expected = expectThrows(expectedEx, () -> {
+    try {
       is.readVLong();
-    });
-    assertTrue(expected.getMessage().startsWith("Invalid vLong"));
+      fail("Should throw " + expectedEx.getName());
+    } catch (Exception e) {
+      assertTrue(e.getMessage().startsWith("Invalid vLong"));
+      assertTrue(expectedEx.isInstance(e));
+    }
     assertEquals(1L, is.readVLong()); // guard value
   }
   

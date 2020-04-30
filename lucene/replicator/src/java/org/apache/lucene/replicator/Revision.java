@@ -1,3 +1,5 @@
+package org.apache.lucene.replicator;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.replicator;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,7 +31,7 @@ import org.apache.lucene.store.IndexInput;
  * revision will contain files from a single source. However, some applications
  * may require to treat a collection of indexes as a single entity so that the
  * files from all sources are replicated together, to guarantee consistency
- * between them. For example, an application which indexes facets will need to
+ * beween them. For example, an application which indexes facets will need to
  * replicate both the search and taxonomy indexes together, to guarantee that
  * they match at the client side.
  * 
@@ -60,7 +61,7 @@ public interface Revision extends Comparable<Revision> {
   
   /**
    * Returns an {@link IndexInput} for the given fileName and source. It is the
-   * caller's responsibility to close the {@link IndexInput} when it has been
+   * caller's respnsibility to close the {@link IndexInput} when it has been
    * consumed.
    */
   public InputStream open(String source, String fileName) throws IOException;

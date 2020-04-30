@@ -1,3 +1,4 @@
+package org.apache.solr.common.luke;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.luke;
+
+
 /**
  *
  * @since solr 1.3
@@ -24,7 +26,6 @@ public enum FieldFlag {
   TOKENIZED('T', "Tokenized"), 
   STORED('S', "Stored"), 
   DOC_VALUES('D', "DocValues"),
-  UNINVERTIBLE('U', "UnInvertible"),
   MULTI_VALUED('M', "Multivalued"),
   TERM_VECTOR_STORED('V', "TermVector Stored"), 
   TERM_VECTOR_OFFSET('o', "Store Offset With TermVector"),
@@ -66,9 +67,5 @@ public enum FieldFlag {
 
   public String getDisplay() {
     return display;
-  }
-
-  public String toString() {
-    return abbreviation + " - " + display;
   }
 }

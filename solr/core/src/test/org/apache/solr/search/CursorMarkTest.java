@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
 import org.apache.lucene.analysis.Analyzer;
@@ -230,15 +231,15 @@ public class CursorMarkTest extends SolrTestCaseJ4 {
           random().nextBytes(randBytes);
           val = new BytesRef(randBytes);
         } else if (fieldName.contains("int")) {
-          val = random().nextInt();
+          val = random().nextInt();                         // TrieIntField
         } else if (fieldName.contains("long")) {
-          val = random().nextLong();
+          val = random().nextLong();                        // TrieLongField
         } else if (fieldName.contains("float")) {
-          val = random().nextFloat() * random().nextInt();
+          val = random().nextFloat() * random().nextInt();  // TrieFloatField
         } else if (fieldName.contains("double")) {
-          val = random().nextDouble() * random().nextInt();
+          val = random().nextDouble() * random().nextInt(); // TrieDoubleField
         } else if (fieldName.contains("date")) {
-          val = random().nextLong();
+          val = random().nextLong();                        // TrieDateField
         } else if (fieldName.startsWith("currency")) {
           val = random().nextDouble();
         } else if (fieldName.startsWith("uuid")) {

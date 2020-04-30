@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
 import org.apache.lucene.search.*;
 import org.apache.solr.SolrTestCaseJ4;
@@ -36,10 +37,6 @@ public class TestOverriddenPrefixQueryForCustomFieldType extends SolrTestCaseJ4 
 
   @BeforeClass
   public static void beforeClass() throws Exception {
-    System.setProperty("solr.tests.CustomIntFieldType",
-                       (Boolean.getBoolean(NUMERIC_POINTS_SYSPROP)
-                        ? "solr.IntPointPrefixActsAsRangeQueryFieldType"
-                        : "solr.TrieIntPrefixActsAsRangeQueryFieldType"));
     initCore("solrconfig-basic.xml", "schema-customfield.xml");
   }
 
@@ -51,8 +48,6 @@ public class TestOverriddenPrefixQueryForCustomFieldType extends SolrTestCaseJ4 
     super.setUp();
     clearIndex();
     assertU(commit());
-    otherCounts=0;
-    counts = new int[2];
   }
 
   public void createIndex(int nDocs) {
@@ -139,7 +134,7 @@ public class TestOverriddenPrefixQueryForCustomFieldType extends SolrTestCaseJ4 
       SolrQueryResponse rsp = new SolrQueryResponse();
       SolrRequestInfo.setRequestInfo(new SolrRequestInfo(req, rsp));
       for (int i = 0; i < inputs.length; i++) {
-        queries[i] = (QParser.getParser(inputs[i], req).getQuery());
+        queries[i] = (QParser.getParser(inputs[i], null, req).getQuery());
       }
     } finally {
       SolrRequestInfo.clearRequestInfo();

@@ -24,22 +24,21 @@
   </indexConfig>
   <dataDir>${solr.data.dir:}</dataDir>
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
 
   <updateHandler class="solr.DirectUpdateHandler2">
   </updateHandler>
 
-  <requestHandler name="/select" class="solr.SearchHandler">
+  <requestHandler name="standard" class="solr.StandardRequestHandler">
     <bool name="httpCaching">true</bool>
   </requestHandler>
 
   <!-- test query parameter defaults -->
-  <requestHandler name="/defaults" class="solr.SearchHandler">
+  <requestHandler name="defaults" class="solr.StandardRequestHandler">
 
   </requestHandler>
 
   <!-- test query parameter defaults -->
-  <requestHandler name="/lazy" class="solr.SearchHandler" startup="lazy">
+  <requestHandler name="lazy" class="solr.StandardRequestHandler" startup="lazy">
   </requestHandler>
 
   <requestHandler name="/replication" class="solr.ReplicationHandler">
@@ -47,8 +46,9 @@
   </requestHandler>
 
 
-  <requestDispatcher>
-    <requestParsers enableRemoteStreaming="false" multipartUploadLimitInKB="-1"/>
+  <!-- enable streaming for testing... -->
+  <requestDispatcher handleSelect="true">
+    <requestParsers enableRemoteStreaming="true" multipartUploadLimitInKB="2048"/>
     <httpCaching lastModifiedFrom="openTime" etagSeed="Solr" never304="false">
       <cacheControl>max-age=30, public</cacheControl>
     </httpCaching>

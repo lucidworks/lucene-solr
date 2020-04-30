@@ -1,3 +1,5 @@
+package org.apache.lucene.search.highlight;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.highlight;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -26,17 +27,14 @@ import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.IndexOptions;
-import org.apache.lucene.index.LeafMetaData;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.NumericDocValues;
-import org.apache.lucene.index.PointValues;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.index.SortedNumericDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.index.StoredFieldVisitor;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.util.Bits;
-import org.apache.lucene.util.Version;
 
 /**
  * Wraps a Terms with a {@link org.apache.lucene.index.LeafReader}, typically from term vectors.
@@ -48,7 +46,7 @@ public class TermVectorLeafReader extends LeafReader {
   private final Fields fields;
   private final FieldInfos fieldInfos;
 
-  public TermVectorLeafReader(String field, Terms terms) {
+  public TermVectorLeafReader(final String field, final Terms terms) {
     fields = new Fields() {
       @Override
       public Iterator<String> iterator() {
@@ -80,9 +78,19 @@ public class TermVectorLeafReader extends LeafReader {
       indexOptions = IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS;
     }
     FieldInfo fieldInfo = new FieldInfo(field, 0,
-                                        true, true, terms.hasPayloads(),
-                                        indexOptions, DocValuesType.NONE, -1, Collections.emptyMap(), 0, 0, 0, false);
+        true, true, terms.hasPayloads(),
+        indexOptions, DocValuesType.NONE, -1, Collections.<String,String>emptyMap());
     fieldInfos = new FieldInfos(new FieldInfo[]{fieldInfo});
+  }
+
+  @Override
+  public void addCoreClosedListener(CoreClosedListener listener) {
+    addCoreClosedListenerAsReaderClosedListener(this, listener);
+  }
+
+  @Override
+  public void removeCoreClosedListener(CoreClosedListener listener) {
+    removeCoreClosedListenerAsReaderClosedListener(this, listener);
   }
 
   @Override
@@ -90,8 +98,8 @@ public class TermVectorLeafReader extends LeafReader {
   }
 
   @Override
-  public Terms terms(String field) throws IOException {
-    return fields.terms(field);
+  public Fields fields() throws IOException {
+    return fields;
   }
 
   @Override
@@ -120,6 +128,11 @@ public class TermVectorLeafReader extends LeafReader {
   }
 
   @Override
+  public Bits getDocsWithField(String field) throws IOException {
+    return null;
+  }
+
+  @Override
   public NumericDocValues getNormValues(String field) throws IOException {
     return null;//Is this needed?  See MemoryIndex for a way to do it.
   }
@@ -135,11 +148,6 @@ public class TermVectorLeafReader extends LeafReader {
   }
 
   @Override
-  public PointValues getPointValues(String fieldName) {
-    return null;
-  }
-
-  @Override
   public void checkIntegrity() throws IOException {
   }
 
@@ -148,7 +156,7 @@ public class TermVectorLeafReader extends LeafReader {
     if (docID != 0) {
       return null;
     }
-    return fields;
+    return fields();
   }
 
   @Override
@@ -165,18 +173,4 @@ public class TermVectorLeafReader extends LeafReader {
   public void document(int docID, StoredFieldVisitor visitor) throws IOException {
   }
 
-  @Override
-  public LeafMetaData getMetaData() {
-    return new LeafMetaData(Version.LATEST.major, null, null);
-  }
-
-  @Override
-  public CacheHelper getCoreCacheHelper() {
-    return null;
-  }
-
-  @Override
-  public CacheHelper getReaderCacheHelper() {
-    return null;
-  }
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
-
-import java.util.Map;
 
 import org.apache.lucene.analysis.Analyzer; // javadocs
 
@@ -29,7 +27,7 @@ public interface IndexableFieldType {
 
   /** True if the field's value should be stored */
   public boolean stored();
-  
+
   /** 
    * True if this field's value should be analyzed by the
    * {@link Analyzer}.
@@ -97,30 +95,5 @@ public interface IndexableFieldType {
    * DocValues {@link DocValuesType}: how the field's value will be indexed
    * into docValues.
    */
-  public DocValuesType docValuesType();
-
-  /**
-   * If this is positive (representing the number of point data dimensions), the field is indexed as a point.
-   */
-  public int pointDataDimensionCount();
-
-  /**
-   * The number of dimensions used for the index key
-   */
-  public int pointIndexDimensionCount();
-
-  /**
-   * The number of bytes in each dimension's values.
-   */
-  public int pointNumBytes();
-
-  /**
-   * Attributes for the field type.
-   *
-   * Attributes are not thread-safe, user must not add attributes while other threads are indexing documents
-   * with this field type.
-   *
-   * @return Map
-   */
-  public Map<String, String> getAttributes();
+  public DocValuesType docValuesType();  
 }

@@ -14,12 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler;
 
 import java.io.IOException;
 
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.request.SolrRequestHandler;
 import org.apache.solr.response.SolrQueryResponse;
 
 /**
@@ -42,10 +44,6 @@ public class ThrowErrorOnInitRequestHandler extends RequestHandlerBase
 
   @Override
   public void init(NamedList args) {
-    String errorMessage = (String) args.get("error");
-    if (errorMessage != null) {
-      throw new Error(errorMessage);
-    }
     throw new Error("Doing my job, throwing a java.lang.Error");
   }
 }

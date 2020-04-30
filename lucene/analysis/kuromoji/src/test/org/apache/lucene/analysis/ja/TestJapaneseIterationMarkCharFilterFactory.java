@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ja;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ja;
-
 
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
+import org.apache.lucene.analysis.CharFilter;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
 
 import java.io.IOException;
-import java.io.Reader;
 import java.io.StringReader;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,7 +36,7 @@ public class TestJapaneseIterationMarkCharFilterFactory extends BaseTokenStreamT
   public void testIterationMarksWithKeywordTokenizer() throws IOException {
     final String text = "時々馬鹿々々しいところゞゝゝミスヾ";
     JapaneseIterationMarkCharFilterFactory filterFactory = new JapaneseIterationMarkCharFilterFactory(new HashMap<String,String>());
-    Reader filter = filterFactory.create(new StringReader(text));
+    CharFilter filter = filterFactory.create(new StringReader(text));
     TokenStream tokenStream = new MockTokenizer(MockTokenizer.KEYWORD, false);
     ((Tokenizer)tokenStream).setReader(filter);
     assertTokenStreamContents(tokenStream, new String[]{"時時馬鹿馬鹿しいところどころミスズ"});
@@ -47,7 +47,7 @@ public class TestJapaneseIterationMarkCharFilterFactory extends BaseTokenStreamT
     tokenizerFactory.inform(new StringMockResourceLoader(""));
 
     JapaneseIterationMarkCharFilterFactory filterFactory = new JapaneseIterationMarkCharFilterFactory(new HashMap<String,String>());
-    Reader filter = filterFactory.create(
+    CharFilter filter = filterFactory.create(
         new StringReader("時々馬鹿々々しいところゞゝゝミスヾ")
     );
     TokenStream tokenStream = tokenizerFactory.create(newAttributeFactory());
@@ -64,7 +64,7 @@ public class TestJapaneseIterationMarkCharFilterFactory extends BaseTokenStreamT
     filterArgs.put("normalizeKana", "false");
     JapaneseIterationMarkCharFilterFactory filterFactory = new JapaneseIterationMarkCharFilterFactory(filterArgs);
     
-    Reader filter = filterFactory.create(
+    CharFilter filter = filterFactory.create(
         new StringReader("時々馬鹿々々しいところゞゝゝミスヾ")
     );
     TokenStream tokenStream = tokenizerFactory.create(newAttributeFactory());
@@ -81,7 +81,7 @@ public class TestJapaneseIterationMarkCharFilterFactory extends BaseTokenStreamT
     filterArgs.put("normalizeKana", "true");
     JapaneseIterationMarkCharFilterFactory filterFactory = new JapaneseIterationMarkCharFilterFactory(filterArgs);
 
-    Reader filter = filterFactory.create(
+    CharFilter filter = filterFactory.create(
         new StringReader("時々馬鹿々々しいところゞゝゝミスヾ")
     );
     TokenStream tokenStream = tokenizerFactory.create(newAttributeFactory());
@@ -91,11 +91,13 @@ public class TestJapaneseIterationMarkCharFilterFactory extends BaseTokenStreamT
   
   /** Test that bogus arguments result in exception */
   public void testBogusArguments() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new JapaneseIterationMarkCharFilterFactory(new HashMap<String,String>() {{
         put("bogusArg", "bogusValue");
       }});
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
   }
 }

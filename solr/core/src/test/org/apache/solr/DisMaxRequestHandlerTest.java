@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr;
 
 import org.apache.solr.common.params.CommonParams;
@@ -30,7 +31,7 @@ public class DisMaxRequestHandlerTest extends SolrTestCaseJ4 {
   public static void beforeClass() throws Exception {
     initCore("solrconfig.xml","schema.xml");
     lrf = h.getRequestFactory
-      ("/dismax", 0, 20,
+      ("dismax", 0, 20,
        CommonParams.VERSION,"2.2",
        "facet", "true",
        "facet.field","t_s"
@@ -69,7 +70,7 @@ public class DisMaxRequestHandlerTest extends SolrTestCaseJ4 {
 
   @Test
   public void testSomeStuff() throws Exception {
-    doTestSomeStuff("/dismax");
+    doTestSomeStuff("dismax");
   }
   public void doTestSomeStuff(final String qt) throws Exception {
 
@@ -85,9 +86,9 @@ public class DisMaxRequestHandlerTest extends SolrTestCaseJ4 {
     assertQ("basic cross field matching, boost on same field matching",
             req("cool stuff")
             ,"//*[@numFound='3']"
-            ,"//result/doc[1]/str[@name='id'][.='42']"
-            ,"//result/doc[2]/str[@name='id'][.='8675309']"
-            ,"//result/doc[3]/str[@name='id'][.='666']"
+            ,"//result/doc[1]/int[@name='id'][.='42']"
+            ,"//result/doc[2]/int[@name='id'][.='8675309']"
+            ,"//result/doc[3]/int[@name='id'][.='666']"
             );
 
     assertQ("multi qf",
@@ -99,11 +100,6 @@ public class DisMaxRequestHandlerTest extends SolrTestCaseJ4 {
                 )
             ,"//*[@numFound='3']"
             );
-    
-    assertQ("multi qf as local params",
-            req("q", "{!dismax qf=subject qf=features_t}cool")
-            ,"//*[@numFound='3']"
-            );
 
     assertQ("boost query",
             req("q", "cool stuff"
@@ -112,9 +108,9 @@ public class DisMaxRequestHandlerTest extends SolrTestCaseJ4 {
                 ,"bq", "subject:hell^400"
                 )
             ,"//*[@numFound='3']"
-            ,"//result/doc[1]/str[@name='id'][.='666']"
-            ,"//result/doc[2]/str[@name='id'][.='42']"
-            ,"//result/doc[3]/str[@name='id'][.='8675309']"
+            ,"//result/doc[1]/int[@name='id'][.='666']"
+            ,"//result/doc[2]/int[@name='id'][.='42']"
+            ,"//result/doc[3]/int[@name='id'][.='8675309']"
             );
 
     assertQ("multi boost query",
@@ -126,16 +122,16 @@ public class DisMaxRequestHandlerTest extends SolrTestCaseJ4 {
                 , CommonParams.DEBUG_QUERY, "true"
                 )
             ,"//*[@numFound='3']"
-            ,"//result/doc[1]/str[@name='id'][.='666']"
-            ,"//result/doc[2]/str[@name='id'][.='8675309']"
-            ,"//result/doc[3]/str[@name='id'][.='42']"
+            ,"//result/doc[1]/int[@name='id'][.='666']"
+            ,"//result/doc[2]/int[@name='id'][.='8675309']"
+            ,"//result/doc[3]/int[@name='id'][.='42']"
             );
     
     assertQ("minimum mm is three",
             req("cool stuff traveling")
             ,"//*[@numFound='2']"
-            ,"//result/doc[1]/str[@name='id'][. ='42']"
-            ,"//result/doc[2]/str[@name='id'][. ='666']"
+            ,"//result/doc[1]/int[@name='id'][. ='42']"
+            ,"//result/doc[2]/int[@name='id'][. ='666']"
             );
     
     assertQ("at 4 mm allows one missing ",
@@ -169,26 +165,6 @@ public class DisMaxRequestHandlerTest extends SolrTestCaseJ4 {
                  "q", "\"cool chick\"" )
             ,"//*[@numFound='1']"
             );
-
-  }
-
-  @Test
-  public void testSubQueriesNotSupported() {
-    // See org.apache.solr.search.TestSolrQueryParser.testNestedQueryModifiers()
-    assertQ("don't parse subqueries",
-        req("defType", "dismax",
-            "df", "doesnotexist_s",
-            "q", "_query_:\"{!v=$qq}\"",
-            "qq", "features_t:cool")
-        ,"//*[@numFound='0']"
-    );
-    assertQ("don't parse subqueries",
-        req("defType", "dismax",
-            "df", "doesnotexist_s",
-            "q", "{!v=$qq}",
-            "qq", "features_t:cool")
-        ,"//*[@numFound='0']"
-    );
   }
 
   @Test
@@ -199,7 +175,7 @@ public class DisMaxRequestHandlerTest extends SolrTestCaseJ4 {
     Pattern p = Pattern.compile("subject:hell\\s*subject:cool");
     Pattern p_bool = Pattern.compile("\\(subject:hell\\s*subject:cool\\)");
     String resp = h.query(req("q", "cool stuff"
-                ,"qt", "/dismax"
+                ,"qt", "dismax"
                 ,CommonParams.VERSION, "2.2"
                 ,"bq", "subject:hell OR subject:cool"
                 ,CommonParams.DEBUG_QUERY, "true"
@@ -208,7 +184,7 @@ public class DisMaxRequestHandlerTest extends SolrTestCaseJ4 {
     assertFalse(p_bool.matcher(resp).find());
 
     resp = h.query(req("q", "cool stuff"
-                ,"qt", "/dismax"
+                ,"qt", "dismax"
                 ,CommonParams.VERSION, "2.2"
                 ,"bq", "subject:hell OR subject:cool"
                 ,"bq",""

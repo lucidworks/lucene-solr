@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.idversion;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.idversion;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -23,7 +24,6 @@ import java.util.List;
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
-import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsWriterBase;
 import org.apache.lucene.codecs.blocktree.BlockTreeTermsWriter;
 import org.apache.lucene.index.FieldInfo;
@@ -51,6 +51,7 @@ import org.apache.lucene.util.fst.PairOutputs.Pair;
 import org.apache.lucene.util.fst.PairOutputs;
 import org.apache.lucene.util.fst.PositiveIntOutputs;
 import org.apache.lucene.util.fst.Util;
+import org.apache.lucene.util.packed.PackedInts;
 
 /*
   TODO:
@@ -162,7 +163,7 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
   }
 
   private final List<FieldMetaData> fields = new ArrayList<>();
-  private final String segment;
+  // private final String segment;
 
   /** Create a new writer.  The number of items (terms or
    *  sub-blocks) per block will aim to be between
@@ -176,7 +177,6 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
     throws IOException
   {
     BlockTreeTermsWriter.validateSettings(minItemsInBlock, maxItemsInBlock);
-    segment = state.segmentInfo.name;
 
     maxDoc = state.segmentInfo.maxDoc();
 
@@ -222,7 +222,7 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
   }
 
   @Override
-  public void write(Fields fields, NormsProducer norms) throws IOException {
+  public void write(Fields fields) throws IOException {
 
     String lastField = null;
     for(String field : fields) {
@@ -242,7 +242,7 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
         if (term == null) {
           break;
         }
-        termsWriter.write(term, termsEnum, norms);
+        termsWriter.write(term, termsEnum);
       }
 
       termsWriter.finish();
@@ -355,7 +355,8 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
 
       final Builder<Pair<BytesRef,Long>> indexBuilder = new Builder<>(FST.INPUT_TYPE.BYTE1,
                                                                       0, 0, true, false, Integer.MAX_VALUE,
-                                                                      FST_OUTPUTS, true, 15);
+                                                                      FST_OUTPUTS, false,
+                                                                      PackedInts.COMPACT, true, 15);
       //if (DEBUG) {
       //  System.out.println("  compile index for prefix=" + prefix);
       //}
@@ -730,8 +731,9 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
     }
     
     /** Writes one term's worth of postings. */
-    public void write(BytesRef text, TermsEnum termsEnum, NormsProducer norms) throws IOException {
-      BlockTermState state = postingsWriter.writeTerm(text, termsEnum, docsSeen, norms);
+    public void write(BytesRef text, TermsEnum termsEnum) throws IOException {
+
+      BlockTermState state = postingsWriter.writeTerm(text, termsEnum, docsSeen);
       // TODO: LUCENE-5693: we don't need this check if we fix IW to not send deleted docs to us on flush:
       if (state != null && ((IDVersionPostingsWriter) postingsWriter).lastDocID != -1) {
         assert state.docFreq != 0;

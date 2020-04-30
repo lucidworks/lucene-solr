@@ -1,3 +1,5 @@
+package org.apache.solr.request;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,21 +16,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.request;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.DocValues;
+import org.apache.lucene.index.MultiDocValues.MultiSortedDocValues;
 import org.apache.lucene.index.MultiDocValues.MultiSortedSetDocValues;
-import org.apache.lucene.index.MultiDocValues;
-import org.apache.lucene.index.OrdinalMap;
+import org.apache.lucene.index.MultiDocValues.OrdinalMap;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.search.DocIdSet;
 import org.apache.lucene.search.DocIdSetIterator;
+import org.apache.lucene.search.Filter;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LongValues;
 import org.apache.solr.common.SolrException;
@@ -39,7 +41,6 @@ import org.apache.solr.handler.component.StatsValuesFactory;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.DocSet;
-import org.apache.solr.search.Filter;
 import org.apache.solr.search.SolrIndexSearcher;
 
 /**
@@ -83,16 +84,16 @@ public class DocValuesStats {
     SortedSetDocValues si; // for term lookups only
     OrdinalMap ordinalMap = null; // for mapping per-segment ords to global ones
     if (multiValued) {
-      si = searcher.getSlowAtomicReader().getSortedSetDocValues(fieldName);
+      si = searcher.getLeafReader().getSortedSetDocValues(fieldName);
       
       if (si instanceof MultiSortedSetDocValues) {
-        ordinalMap = ((MultiDocValues.MultiSortedSetDocValues)si).mapping;
+        ordinalMap = ((MultiSortedSetDocValues)si).mapping;
       }
     } else {
-      SortedDocValues single = searcher.getSlowAtomicReader().getSortedDocValues(fieldName);
+      SortedDocValues single = searcher.getLeafReader().getSortedDocValues(fieldName);
       si = single == null ? null : DocValues.singleton(single);
-      if (single instanceof MultiDocValues.MultiSortedDocValues) {
-        ordinalMap = ((MultiDocValues.MultiSortedDocValues)single).mapping;
+      if (single instanceof MultiSortedDocValues) {
+        ordinalMap = ((MultiSortedDocValues)single).mapping;
       }
     }
     if (si == null) {
@@ -127,7 +128,7 @@ public class DocValuesStats {
           if (sub == null) {
             sub = DocValues.emptySortedSet();
           }
-          SortedDocValues singleton = DocValues.unwrapSingleton(sub);
+          final SortedDocValues singleton = DocValues.unwrapSingleton(sub);
           if (singleton != null) {
             // some codecs may optimize SORTED_SET storage for single-valued fields
             missingDocCountTotal += accumSingle(counts, docBase, facetStats, singleton, disi, subIndex, ordinalMap);
@@ -174,11 +175,8 @@ public class DocValuesStats {
     int missingDocCount = 0;
     int doc;
     while ((doc = disi.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
-      if (doc > si.docID()) {
-        si.advance(doc);
-      }
-      if (doc == si.docID()) {
-        int term = si.ordValue();
+      int term = si.getOrd(doc);
+      if (term >= 0) {
         if (map != null) {
           term = (int) ordMap.get(term);
         }
@@ -204,22 +202,21 @@ public class DocValuesStats {
     int missingDocCount = 0;
     int doc;
     while ((doc = disi.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
-      if (doc > si.docID()) {
-        si.advance(doc);
-      }
-      if (doc == si.docID()) {
-        long ord;
-        while ((ord = si.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
-          int term = (int) ord;
-          if (map != null) {
-            term = (int) ordMap.get(term);
-          }
-          counts[term]++;
-          for (FieldFacetStats f : facetStats) {
-            f.facetTermNum(docBase + doc, term);
-          }
+      si.setDocument(doc);
+      long ord;
+      boolean emptyTerm = true;
+      while ((ord = si.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
+        emptyTerm = false;
+        int term = (int) ord;
+        if (map != null) {
+          term = (int) ordMap.get(term);
         }
-      } else {
+        counts[term]++;
+        for (FieldFacetStats f : facetStats) {
+          f.facetTermNum(docBase + doc, term);
+        }
+      }
+      if (emptyTerm){
         for (FieldFacetStats f : facetStats) {
           f.facetMissingNum(docBase + doc);
         }

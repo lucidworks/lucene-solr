@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.analysis.cn.smart;
 
 /**
@@ -61,10 +62,5 @@ public class CharType {
    * Other (not fitting any of the other categories)
    */
   public final static int OTHER = 7;
-
-  /**
-   * Surrogate character
-   */
-  public final static int SURROGATE = 8;
 
 }

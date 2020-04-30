@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.hunspell;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.hunspell;
-
 
 import java.io.BufferedWriter;
 import java.io.InputStream;
@@ -24,7 +24,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.LuceneTestCase;
 
@@ -52,8 +51,8 @@ public class Test64kAffixes extends LuceneTestCase {
     dictWriter.write("1\ndrink/2\n");
     dictWriter.close();
     
-    try (InputStream affStream = Files.newInputStream(affix); InputStream dictStream = Files.newInputStream(dict); Directory tempDir2 = newDirectory()) {
-      Dictionary dictionary = new Dictionary(tempDir2, "dictionary", affStream, dictStream);
+    try (InputStream affStream = Files.newInputStream(affix); InputStream dictStream = Files.newInputStream(dict)) {
+      Dictionary dictionary = new Dictionary(affStream, dictStream);
       Stemmer stemmer = new Stemmer(dictionary);
       // drinks should still stem to drink
       List<CharsRef> stems = stemmer.stem("drinks");

@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ja;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ja;
-
 
 import org.apache.lucene.analysis.CharFilter;
 import org.apache.lucene.analysis.util.RollingCharBuffer;
@@ -166,6 +166,9 @@ public class JapaneseIterationMarkCharFilter extends CharFilter {
     buffer.reset(input);
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public int read(char[] buffer, int offset, int length) throws IOException {
     int read = 0;
@@ -182,6 +185,9 @@ public class JapaneseIterationMarkCharFilter extends CharFilter {
     return read == 0 ? -1 : read;
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public int read() throws IOException {
     int ic = buffer.get(bufferPosition);

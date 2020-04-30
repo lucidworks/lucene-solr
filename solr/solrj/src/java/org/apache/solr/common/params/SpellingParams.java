@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.common.params;
 
 /**
@@ -51,10 +52,8 @@ public interface SpellingParams {
   /**
    * <p>
    * The maximum number of hits the request can return in order to both 
-   * generate spelling suggestions and set the "correctlySpelled" element to "false". This can be specified
-   * either as a whole number number of documents, or it can be expressed as a fractional percentage
-   * of documents returned by a chosen filter query.  By default, the chosen filter is the most restrictive
-   * fq clause.  This can be overridden with {@link SpellingParams#SPELLCHECK_MAX_RESULTS_FOR_SUGGEST_FQ} .
+   * generate spelling suggestions and set the "correctlySpelled" element to "false".   
+   * Note that this parameter is typically of use only in conjunction with "spellcheck.alternativeTermCount".
    * </p>
    * <p>
    * If left unspecified, the default behavior will prevail.  That is, "correctlySpelled" will be false and suggestions
@@ -66,14 +65,6 @@ public interface SpellingParams {
    * </p>
    */
   public static final String SPELLCHECK_MAX_RESULTS_FOR_SUGGEST = SPELLCHECK_PREFIX + "maxResultsForSuggest";
-  
-  /**
-   *<p>
-   * To be used when {@link SpellingParams#SPELLCHECK_MAX_RESULTS_FOR_SUGGEST} is expressed as a fractional percentage.
-   * Specify a filter query whose result count is used to determine the maximum number of documents.
-   *</p>   
-   */
-  public static final String SPELLCHECK_MAX_RESULTS_FOR_SUGGEST_FQ = SPELLCHECK_MAX_RESULTS_FOR_SUGGEST + ".fq";
   
   /**
    * When this parameter is set to true and the misspelled word exists in the

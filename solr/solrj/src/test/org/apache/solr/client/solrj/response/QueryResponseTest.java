@@ -14,25 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.response;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.util.Date;
 import java.util.List;
-import java.util.Map;
 
 import junit.framework.Assert;
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestRuleLimitSysouts.Limit;
-import org.apache.solr.SolrTestCase;
 import org.apache.solr.client.solrj.impl.XMLResponseParser;
 import org.apache.solr.common.SolrDocumentList;
+import org.apache.solr.common.util.DateUtil;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.core.SolrResourceLoader;
 import org.junit.Test;
 
@@ -42,20 +39,39 @@ import org.junit.Test;
  * @since solr 1.3
  */
 @Limit(bytes=20000)
-public class QueryResponseTest extends SolrTestCase {
+public class QueryResponseTest extends LuceneTestCase {
   @Test
-  // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 20-Sep-2018
+  public void testDateFacets() throws Exception   {
+    XMLResponseParser parser = new XMLResponseParser();
+    InputStream is = new SolrResourceLoader().openResource("solrj/sampleDateFacetResponse.xml");
+    assertNotNull(is);
+    Reader in = new InputStreamReader(is, StandardCharsets.UTF_8);
+    NamedList<Object> response = parser.processResponse(in);
+    in.close();
+    
+    QueryResponse qr = new QueryResponse(response, null);
+    Assert.assertNotNull(qr);
+    
+    Assert.assertNotNull(qr.getFacetDates());
+    
+    for (FacetField f : qr.getFacetDates()) {
+      Assert.assertNotNull(f);
+
+      // TODO - test values?
+      // System.out.println(f.toString());
+      // System.out.println("GAP: " + f.getGap());
+      // System.out.println("END: " + f.getEnd());
+    }
+  }
+
+  @Test
   public void testRangeFacets() throws Exception {
     XMLResponseParser parser = new XMLResponseParser();
-    NamedList<Object> response = null;
-    try (SolrResourceLoader loader = new SolrResourceLoader();
-         InputStream is = loader.openResource("solrj/sampleRangeFacetResponse.xml")) {
-      assertNotNull(is);
-
-      try (Reader in = new InputStreamReader(is, StandardCharsets.UTF_8)) {
-        response = parser.processResponse(in);
-      }
-    }
+    InputStream is = new SolrResourceLoader().openResource("solrj/sampleDateFacetResponse.xml");
+    assertNotNull(is);
+    Reader in = new InputStreamReader(is, StandardCharsets.UTF_8);
+    NamedList<Object> response = parser.processResponse(in);
+    in.close();
 
     QueryResponse qr = new QueryResponse(response, null);
     Assert.assertNotNull(qr);
@@ -91,8 +107,8 @@ public class QueryResponseTest extends SolrTestCase {
     assertEquals("4.0", price.getCounts().get(4).getValue());
     assertEquals(0, price.getCounts().get(4).getCount());
 
-    assertEquals(new Date(Instant.parse("2005-02-13T15:26:37Z").toEpochMilli()), manufacturedateDt.getStart());
-    assertEquals(new Date(Instant.parse("2008-02-13T15:26:37Z").toEpochMilli()), manufacturedateDt.getEnd());
+    assertEquals(DateUtil.parseDate("2005-02-13T15:26:37Z"), manufacturedateDt.getStart());
+    assertEquals(DateUtil.parseDate("2008-02-13T15:26:37Z"), manufacturedateDt.getEnd());
     assertEquals("+1YEAR", manufacturedateDt.getGap());
     assertEquals("2005-02-13T15:26:37Z", manufacturedateDt.getCounts().get(0).getValue());
     assertEquals(4, manufacturedateDt.getCounts().get(0).getCount());
@@ -106,17 +122,13 @@ public class QueryResponseTest extends SolrTestCase {
   }
 
   @Test
-  // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 20-Sep-2018
   public void testGroupResponse() throws Exception {
     XMLResponseParser parser = new XMLResponseParser();
-    NamedList<Object> response = null;
-    try (SolrResourceLoader loader = new SolrResourceLoader();
-         InputStream is = loader.openResource("solrj/sampleGroupResponse.xml")) {
-      assertNotNull(is);
-      try (Reader in = new InputStreamReader(is, StandardCharsets.UTF_8)) {
-        response = parser.processResponse(in);
-      }
-    }
+    InputStream is = new SolrResourceLoader().openResource("solrj/sampleGroupResponse.xml");
+    assertNotNull(is);
+    Reader in = new InputStreamReader(is, StandardCharsets.UTF_8);
+    NamedList<Object> response = parser.processResponse(in);
+    in.close();
 
     QueryResponse qr = new QueryResponse(response, null);
     assertNotNull(qr);
@@ -212,18 +224,13 @@ public class QueryResponseTest extends SolrTestCase {
   }
 
   @Test
-  // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 20-Sep-2018
   public void testSimpleGroupResponse() throws Exception {
     XMLResponseParser parser = new XMLResponseParser();
-    NamedList<Object> response = null;
-
-    try (SolrResourceLoader loader = new SolrResourceLoader();
-         InputStream is = loader.openResource("solrj/sampleSimpleGroupResponse.xml")) {
-      assertNotNull(is);
-      try (Reader in = new InputStreamReader(is, StandardCharsets.UTF_8)) {
-        response = parser.processResponse(in);
-      }
-    }
+    InputStream is = new SolrResourceLoader().openResource("solrj/sampleSimpleGroupResponse.xml");
+    assertNotNull(is);
+    Reader in = new InputStreamReader(is, StandardCharsets.UTF_8);
+    NamedList<Object> response = parser.processResponse(in);
+    in.close();
 
     QueryResponse qr = new QueryResponse(response, null);
     assertNotNull(qr);
@@ -257,8 +264,7 @@ public class QueryResponseTest extends SolrTestCase {
     assertEquals("708_HI", documents.get(9).getFieldValue("acco_id"));
   }
   
-  @Test
-  // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 20-Sep-2018
+  
   public void testIntervalFacetsResponse() throws Exception {
     XMLResponseParser parser = new XMLResponseParser();
     try(SolrResourceLoader loader = new SolrResourceLoader()) {
@@ -300,30 +306,6 @@ public class QueryResponseTest extends SolrTestCase {
       
     }
     
-  }
-
-  @Test
-  public void testExplainMapResponse() throws IOException {
-    XMLResponseParser parser = new XMLResponseParser();
-    NamedList<Object> response;
-
-    try (SolrResourceLoader loader = new SolrResourceLoader();
-         InputStream is = loader.openResource("solrj/sampleDebugResponse.xml")) {
-          assertNotNull(is);
-      try (Reader in = new InputStreamReader(is, StandardCharsets.UTF_8)) {
-          response = parser.processResponse(in);
-      }
-    }
-
-    QueryResponse qr = new QueryResponse(response, null);
-    assertNotNull(qr);
-
-    Map<String, Object> explainMap = qr.getExplainMap();
-    assertNotNull(explainMap);
-    assertEquals(2, explainMap.size());
-    Object[] values = explainMap.values().toArray();
-    assertTrue(values[0] instanceof SimpleOrderedMap);
-    assertTrue(values[1] instanceof SimpleOrderedMap);
   }
 
 }

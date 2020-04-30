@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
+import org.apache.lucene.index.Term;
+import org.apache.lucene.search.PrefixQuery;
+import org.apache.lucene.search.Query;
 import org.apache.solr.SolrTestCaseJ4;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -63,8 +67,8 @@ public class TestSimpleQParserPlugin extends SolrTestCaseJ4 {
 
   @Test
   public void testDefaultField() throws Exception {
-    assertJQ(req("defType", "simple", "df", "text0", "q", "t2 t9 t12"), "/response/numFound==1");
-    assertJQ(req("defType", "simple", "df", "text0", "q", "t3"), "/response/numFound==0");
+    assertJQ(req("defType", "simple", "q", "t2 t9 t12"), "/response/numFound==1");
+    assertJQ(req("defType", "simple", "q", "t3"), "/response/numFound==0");
     assertJQ(req("defType", "simple", "df", "text1", "q", "t2 t9 t12"), "/response/numFound==3");
     assertJQ(req("defType", "simple", "df", "text1", "q", "t3"), "/response/numFound==1");
     assertJQ(req("defType", "simple", "df", "text-keyword0", "q", "\"kw9 kw10 kw11\""), "/response/numFound==1");
@@ -214,14 +218,6 @@ public class TestSimpleQParserPlugin extends SolrTestCaseJ4 {
     assertJQ(req("defType", "simple", "qf", "text0", "q", "Fóóbar*"), "/response/numFound==1");
     assertJQ(req("defType", "simple", "qf", "text0", "q", "FOO*"), "/response/numFound==1");
     assertJQ(req("defType", "simple", "qf", "text0", "q", "BAR*"), "/response/numFound==0");
-  }
-
-  /** Test that multiterm analysis chain is used for fuzzy. */
-  public void testFuzzyChain() throws Exception {
-    assertJQ(req("defType", "simple", "qf", "text0", "q", "FOOBAT~1"), "/response/numFound==1");
-    assertJQ(req("defType", "simple", "qf", "text0", "q", "Fóóba~1"), "/response/numFound==1");
-    assertJQ(req("defType", "simple", "qf", "text0", "q", "FOOB~2"), "/response/numFound==1");
-    assertJQ(req("defType", "simple", "qf", "text0", "q", "BAR~1"), "/response/numFound==0");
   }
 
   public void testQueryAnalyzerIsUsed() throws Exception {

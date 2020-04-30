@@ -1,3 +1,10 @@
+package org.apache.lucene.queryparser.xml;
+
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.queryparser.xml.builders.DuplicateFilterBuilder;
+import org.apache.lucene.queryparser.xml.builders.FuzzyLikeThisQueryBuilder;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +21,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.xml;
-
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.queryparser.classic.QueryParser;
-import org.apache.lucene.queryparser.xml.builders.FuzzyLikeThisQueryBuilder;
 
 /**
  * Assembles a QueryBuilder which uses Query objects from
@@ -48,6 +50,7 @@ public class CorePlusExtensionsParser extends CorePlusQueriesParser {
 
   private CorePlusExtensionsParser(String defaultField, Analyzer analyzer, QueryParser parser) {
     super(defaultField, analyzer, parser);
+    filterFactory.addBuilder("DuplicateFilter", new DuplicateFilterBuilder());
     queryFactory.addBuilder("FuzzyLikeThisQuery", new FuzzyLikeThisQueryBuilder(analyzer));
 
   }

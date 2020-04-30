@@ -1,3 +1,4 @@
+package org.apache.lucene.search;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
 
 import java.io.IOException;
 
@@ -23,15 +23,16 @@ import java.io.IOException;
  * the provided iterators.
  * @lucene.internal
  */
-public class DisjunctionDISIApproximation extends DocIdSetIterator {
+public class DisjunctionDISIApproximation<Iter extends DocIdSetIterator>
+extends DocIdSetIterator {
 
-  final DisiPriorityQueue subIterators;
+  final DisiPriorityQueue<Iter> subIterators;
   final long cost;
 
-  public DisjunctionDISIApproximation(DisiPriorityQueue subIterators) {
+  public DisjunctionDISIApproximation(DisiPriorityQueue<Iter> subIterators) {
     this.subIterators = subIterators;
     long cost = 0;
-    for (DisiWrapper w : subIterators) {
+    for (DisiWrapper<Iter> w : subIterators) {
       cost += w.cost;
     }
     this.cost = cost;
@@ -49,7 +50,7 @@ public class DisjunctionDISIApproximation extends DocIdSetIterator {
 
   @Override
   public int nextDoc() throws IOException {
-    DisiWrapper top = subIterators.top();
+    DisiWrapper<Iter> top = subIterators.top();
     final int doc = top.doc;
     do {
       top.doc = top.approximation.nextDoc();
@@ -61,7 +62,7 @@ public class DisjunctionDISIApproximation extends DocIdSetIterator {
 
   @Override
   public int advance(int target) throws IOException {
-    DisiWrapper top = subIterators.top();
+    DisiWrapper<Iter> top = subIterators.top();
     do {
       top.doc = top.approximation.advance(target);
       top = subIterators.updateTop();

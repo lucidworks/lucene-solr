@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.icu.segmentation;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.icu.segmentation;
-
 
 import java.text.CharacterIterator;
 
@@ -86,9 +86,12 @@ public class TestCharArrayIterator extends LuceneTestCase {
   public void testSetIndex() {
     CharArrayIterator ci = new CharArrayIterator();
     ci.setText("test".toCharArray(), 0, "test".length());
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       ci.setIndex(5);
-    });
+      fail();
+    } catch (Exception e) {
+      assertTrue(e instanceof IllegalArgumentException);
+    }
   }
   
   public void testClone() {

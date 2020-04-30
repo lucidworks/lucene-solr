@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
 
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -46,19 +47,19 @@ public class SolrCoreCheckLockOnStartupTest extends SolrTestCaseJ4 {
     // test tests native and simple in the same jvm in the same exact directory:
     // the file will remain after the native test (it cannot safely be deleted without the risk of deleting another guys lock)
     // it's ok, these aren't "compatible" anyway: really this test should not re-use the same directory at all.
-    Files.deleteIfExists(new File(new File(initAndGetDataDir(), "index"), IndexWriter.WRITE_LOCK_NAME).toPath());
+    Files.deleteIfExists(new File(new File(initCoreDataDir, "index"), IndexWriter.WRITE_LOCK_NAME).toPath());
   }
 
   @Test
   public void testSimpleLockErrorOnStartup() throws Exception {
 
-    Directory directory = newFSDirectory(new File(initAndGetDataDir(), "index").toPath(), SimpleFSLockFactory.INSTANCE);
+    Directory directory = newFSDirectory(new File(initCoreDataDir, "index").toPath(), SimpleFSLockFactory.INSTANCE);
     //creates a new IndexWriter without releasing the lock yet
     IndexWriter indexWriter = new IndexWriter(directory, new IndexWriterConfig(null));
 
     ignoreException("locked");
     try {
-      System.setProperty("solr.tests.lockType",DirectoryFactory.LOCK_TYPE_SIMPLE);
+      System.setProperty("solr.tests.lockType","simple");
       //opening a new core on the same index
       initCore("solrconfig-basic.xml", "schema.xml");
       if (checkForCoreInitException(LockObtainFailedException.class))
@@ -76,7 +77,7 @@ public class SolrCoreCheckLockOnStartupTest extends SolrTestCaseJ4 {
   @Test
   public void testNativeLockErrorOnStartup() throws Exception {
 
-    File indexDir = new File(initAndGetDataDir(), "index");
+    File indexDir = new File(initCoreDataDir, "index");
     log.info("Acquiring lock on {}", indexDir.getAbsolutePath());
     Directory directory = newFSDirectory(indexDir.toPath(), NativeFSLockFactory.INSTANCE);
     //creates a new IndexWriter without releasing the lock yet
@@ -84,7 +85,7 @@ public class SolrCoreCheckLockOnStartupTest extends SolrTestCaseJ4 {
 
     ignoreException("locked");
     try {
-      System.setProperty("solr.tests.lockType",DirectoryFactory.LOCK_TYPE_NATIVE);
+      System.setProperty("solr.tests.lockType","native");
       //opening a new core on the same index
       initCore("solrconfig-basic.xml", "schema.xml");
       CoreContainer cc = h.getCoreContainer();

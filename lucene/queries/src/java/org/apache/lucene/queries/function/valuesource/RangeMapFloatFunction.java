@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.queries.function.valuesource;
 
 import org.apache.lucene.index.LeafReaderContext;
@@ -64,12 +65,12 @@ public class RangeMapFloatFunction extends ValueSource {
     final FunctionValues defaults = (this.defaultVal == null) ? null : defaultVal.getValues(context, readerContext);
     return new FloatDocValues(this) {
       @Override
-      public float floatVal(int doc) throws IOException {
+      public float floatVal(int doc) {
         float val = vals.floatVal(doc);
         return (val>=min && val<=max) ? targets.floatVal(doc) : (defaultVal == null ? val : defaults.floatVal(doc));
       }
       @Override
-      public String toString(int doc) throws IOException {
+      public String toString(int doc) {
         return "map(" + vals.toString(doc) + ",min=" + min + ",max=" + max + ",target=" + targets.toString(doc) + ",defaultVal=" + (defaults == null ? "null" : (defaults.toString(doc))) + ")";
       }
     };

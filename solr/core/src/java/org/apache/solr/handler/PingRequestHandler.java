@@ -14,13 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler;
 
 import java.io.File;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.nio.file.Files;
-import java.time.Instant;
+import java.util.Date;
 import java.util.Locale;
 
 import org.apache.commons.io.FileUtils;
@@ -34,11 +35,10 @@ import org.apache.solr.core.SolrCore;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestHandler;
 import org.apache.solr.response.SolrQueryResponse;
+import org.apache.solr.util.DateFormatUtil;
 import org.apache.solr.util.plugin.SolrCoreAware;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static org.apache.solr.common.params.CommonParams.DISTRIB;
 
 /**
  * Ping Request Handler for reporting SolrCore health to a Load Balancer.
@@ -182,10 +182,10 @@ public class PingRequestHandler extends RequestHandlerBase implements SolrCoreAw
     
     // in this case, we want to default distrib to false so
     // we only ping the single node
-    Boolean distrib = params.getBool(DISTRIB);
+    Boolean distrib = params.getBool("distrib");
     if (distrib == null)   {
       ModifiableSolrParams mparams = new ModifiableSolrParams(params);
-      mparams.set(DISTRIB, false);
+      mparams.set("distrib", false);
       req.setParams(mparams);
     }
     
@@ -279,12 +279,7 @@ public class PingRequestHandler extends RequestHandlerBase implements SolrCoreAw
       try {
         SolrQueryResponse pingrsp = new SolrQueryResponse();
         core.execute(handler, req, pingrsp );
-        ex = pingrsp.getException(); 
-        NamedList<Object> headers = rsp.getResponseHeader();
-        if(headers != null) {
-          headers.add("zkConnected", pingrsp.getResponseHeader().get("zkConnected"));
-        }
-        
+        ex = pingrsp.getException();       
       }
       catch( Exception e ) {
         ex = e;
@@ -309,7 +304,8 @@ public class PingRequestHandler extends RequestHandlerBase implements SolrCoreAw
     if ( enable ) {
       try {
         // write out when the file was created
-        FileUtils.write(healthcheck, Instant.now().toString(), "UTF-8");
+        FileUtils.write(healthcheck, 
+                        DateFormatUtil.formatExternal(new Date()), "UTF-8");
       } catch (IOException e) {
         throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, 
                                 "Unable to write healthcheck flag file", e);
@@ -329,15 +325,5 @@ public class PingRequestHandler extends RequestHandlerBase implements SolrCoreAw
   @Override
   public String getDescription() {
     return "Reports application health to a load-balancer";
-  }
-
-  @Override
-  public Boolean registerV2() {
-    return Boolean.TRUE;
-  }
-
-  @Override
-  public Category getCategory() {
-    return Category.ADMIN;
   }
 }

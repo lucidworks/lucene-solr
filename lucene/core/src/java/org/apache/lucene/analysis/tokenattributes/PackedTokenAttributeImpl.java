@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.tokenattributes;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.tokenattributes;
-
 
 import org.apache.lucene.util.AttributeImpl;
 import org.apache.lucene.util.AttributeReflector;
@@ -26,18 +26,15 @@ import org.apache.lucene.util.AttributeReflector;
  * <li>{@link PositionIncrementAttribute}
  * <li>{@link PositionLengthAttribute}
  * <li>{@link OffsetAttribute}
- * <li>{@link TermFrequencyAttribute}
  * </ul>*/
 public class PackedTokenAttributeImpl extends CharTermAttributeImpl 
                    implements TypeAttribute, PositionIncrementAttribute,
-                              PositionLengthAttribute, OffsetAttribute,
-                              TermFrequencyAttribute {
+                              PositionLengthAttribute, OffsetAttribute {
 
   private int startOffset,endOffset;
   private String type = DEFAULT_TYPE;
   private int positionIncrement = 1;
   private int positionLength = 1;
-  private int termFrequency = 1;
 
   /** Constructs the attribute implementation. */
   public PackedTokenAttributeImpl() {
@@ -49,9 +46,9 @@ public class PackedTokenAttributeImpl extends CharTermAttributeImpl
    */
   @Override
   public void setPositionIncrement(int positionIncrement) {
-    if (positionIncrement < 0) {
-      throw new IllegalArgumentException("Increment must be zero or greater: " + positionIncrement);
-    }
+    if (positionIncrement < 0)
+      throw new IllegalArgumentException
+        ("Increment must be zero or greater: " + positionIncrement);
     this.positionIncrement = positionIncrement;
   }
 
@@ -70,9 +67,6 @@ public class PackedTokenAttributeImpl extends CharTermAttributeImpl
    */
   @Override
   public void setPositionLength(int positionLength) {
-    if (positionLength < 1) {
-      throw new IllegalArgumentException("Position length must be 1 or greater: got " + positionLength);
-    }
     this.positionLength = positionLength;
   }
 
@@ -110,7 +104,7 @@ public class PackedTokenAttributeImpl extends CharTermAttributeImpl
   @Override
   public void setOffset(int startOffset, int endOffset) {
     if (startOffset < 0 || endOffset < startOffset) {
-      throw new IllegalArgumentException("startOffset must be non-negative, and endOffset must be >= startOffset; got "
+      throw new IllegalArgumentException("startOffset must be non-negative, and endOffset must be >= startOffset, "
           + "startOffset=" + startOffset + ",endOffset=" + endOffset);
     }
     this.startOffset = startOffset;
@@ -135,37 +129,14 @@ public class PackedTokenAttributeImpl extends CharTermAttributeImpl
     this.type = type;
   }
 
-  @Override
-  public final void setTermFrequency(int termFrequency) {
-    if (termFrequency < 1) {
-      throw new IllegalArgumentException("Term frequency must be 1 or greater; got " + termFrequency);
-    }
-    this.termFrequency = termFrequency;
-  }
-
-  @Override
-  public final int getTermFrequency() {
-    return termFrequency;
-  }
-
   /** Resets the attributes
    */
   @Override
   public void clear() {
     super.clear();
     positionIncrement = positionLength = 1;
-    termFrequency = 1;
     startOffset = endOffset = 0;
     type = DEFAULT_TYPE;
-  }
-  
-  /** Resets the attributes at end
-   */
-  @Override
-  public void end() {
-    super.end();
-    // super.end already calls this.clear, so we only set values that are different from clear:
-    positionIncrement = 0;
   }
 
   @Override
@@ -185,7 +156,6 @@ public class PackedTokenAttributeImpl extends CharTermAttributeImpl
           positionIncrement == other.positionIncrement &&
           positionLength == other.positionLength &&
           (type == null ? other.type == null : type.equals(other.type)) &&
-          termFrequency == other.termFrequency &&
           super.equals(obj)
       );
     } else
@@ -201,7 +171,6 @@ public class PackedTokenAttributeImpl extends CharTermAttributeImpl
     code = code * 31 + positionLength;
     if (type != null)
       code = code * 31 + type.hashCode();
-    code = code * 31 + termFrequency;;
     return code;
   }
 
@@ -215,14 +184,12 @@ public class PackedTokenAttributeImpl extends CharTermAttributeImpl
       to.startOffset = startOffset;
       to.endOffset = endOffset;
       to.type = type;
-      to.termFrequency = termFrequency;
     } else {
       super.copyTo(target);
       ((OffsetAttribute) target).setOffset(startOffset, endOffset);
       ((PositionIncrementAttribute) target).setPositionIncrement(positionIncrement);
       ((PositionLengthAttribute) target).setPositionLength(positionLength);
       ((TypeAttribute) target).setType(type);
-      ((TermFrequencyAttribute) target).setTermFrequency(termFrequency);
     }
   }
 
@@ -234,6 +201,6 @@ public class PackedTokenAttributeImpl extends CharTermAttributeImpl
     reflector.reflect(PositionIncrementAttribute.class, "positionIncrement", positionIncrement);
     reflector.reflect(PositionLengthAttribute.class, "positionLength", positionLength);
     reflector.reflect(TypeAttribute.class, "type", type);
-    reflector.reflect(TermFrequencyAttribute.class, "termFrequency", termFrequency);
   }
+
 }

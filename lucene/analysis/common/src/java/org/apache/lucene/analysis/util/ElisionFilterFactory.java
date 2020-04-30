@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.util;
-
 
 import java.io.IOException;
 import java.util.Map;
 
-import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.fr.FrenchAnalyzer;
 
@@ -35,15 +34,8 @@ import org.apache.lucene.analysis.fr.FrenchAnalyzer;
  *       articles="stopwordarticles.txt" ignoreCase="true"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
-public class ElisionFilterFactory extends TokenFilterFactory implements ResourceLoaderAware {
-
-  /** SPI name */
-  public static final String NAME = "elision";
-
+public class ElisionFilterFactory extends TokenFilterFactory implements ResourceLoaderAware, MultiTermAwareComponent {
   private final String articlesFile;
   private final boolean ignoreCase;
   private CharArraySet articles;
@@ -68,13 +60,13 @@ public class ElisionFilterFactory extends TokenFilterFactory implements Resource
   }
 
   @Override
-  public TokenStream create(TokenStream input) {
+  public ElisionFilter create(TokenStream input) {
     return new ElisionFilter(input, articles);
   }
 
   @Override
-  public TokenStream normalize(TokenStream input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }
 

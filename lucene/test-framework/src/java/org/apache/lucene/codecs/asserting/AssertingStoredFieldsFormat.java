@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.asserting;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.asserting;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -40,7 +41,7 @@ public class AssertingStoredFieldsFormat extends StoredFieldsFormat {
 
   @Override
   public StoredFieldsReader fieldsReader(Directory directory, SegmentInfo si, FieldInfos fn, IOContext context) throws IOException {
-    return new AssertingStoredFieldsReader(in.fieldsReader(directory, si, fn, context), si.maxDoc(), false);
+    return new AssertingStoredFieldsReader(in.fieldsReader(directory, si, fn, context), si.maxDoc());
   }
 
   @Override
@@ -51,14 +52,10 @@ public class AssertingStoredFieldsFormat extends StoredFieldsFormat {
   static class AssertingStoredFieldsReader extends StoredFieldsReader {
     private final StoredFieldsReader in;
     private final int maxDoc;
-    private final boolean merging;
-    private final Thread creationThread;
     
-    AssertingStoredFieldsReader(StoredFieldsReader in, int maxDoc, boolean merging) {
+    AssertingStoredFieldsReader(StoredFieldsReader in, int maxDoc) {
       this.in = in;
       this.maxDoc = maxDoc;
-      this.merging = merging;
-      this.creationThread = Thread.currentThread();
       // do a few simple checks on init
       assert toString() != null;
       assert ramBytesUsed() >= 0;
@@ -73,15 +70,13 @@ public class AssertingStoredFieldsFormat extends StoredFieldsFormat {
 
     @Override
     public void visitDocument(int n, StoredFieldVisitor visitor) throws IOException {
-      AssertingCodec.assertThread("StoredFieldsReader", creationThread);
       assert n >= 0 && n < maxDoc;
       in.visitDocument(n, visitor);
     }
 
     @Override
     public StoredFieldsReader clone() {
-      assert merging == false : "Merge instances do not support cloning";
-      return new AssertingStoredFieldsReader(in.clone(), maxDoc, false);
+      return new AssertingStoredFieldsReader(in.clone(), maxDoc);
     }
 
     @Override
@@ -104,8 +99,8 @@ public class AssertingStoredFieldsFormat extends StoredFieldsFormat {
     }
 
     @Override
-    public StoredFieldsReader getMergeInstance() {
-      return new AssertingStoredFieldsReader(in.getMergeInstance(), maxDoc, true);
+    public StoredFieldsReader getMergeInstance() throws IOException {
+      return new AssertingStoredFieldsReader(in.getMergeInstance(), maxDoc);
     }
 
     @Override

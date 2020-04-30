@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.standard;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.standard;
-
 
 import java.io.IOException;
 import java.io.Reader;
 
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.LowerCaseFilter;
-import org.apache.lucene.analysis.StopFilter;
-import org.apache.lucene.analysis.StopwordAnalyzerBase;
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.WordlistLoader;
-import org.apache.lucene.analysis.en.EnglishAnalyzer;
+import org.apache.lucene.analysis.core.LowerCaseFilter;
+import org.apache.lucene.analysis.core.StopAnalyzer;
+import org.apache.lucene.analysis.core.StopFilter;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.analysis.util.StopwordAnalyzerBase;
+import org.apache.lucene.analysis.util.WordlistLoader;
 
 /**
  * Filters {@link ClassicTokenizer} with {@link ClassicFilter}, {@link
@@ -36,8 +36,6 @@ import org.apache.lucene.analysis.en.EnglishAnalyzer;
  * ClassicAnalyzer was named StandardAnalyzer in Lucene versions prior to 3.1. 
  * As of 3.1, {@link StandardAnalyzer} implements Unicode text segmentation,
  * as specified by UAX#29.
- *
- * @since 3.1
  */
 public final class ClassicAnalyzer extends StopwordAnalyzerBase {
 
@@ -48,7 +46,7 @@ public final class ClassicAnalyzer extends StopwordAnalyzerBase {
 
   /** An unmodifiable set containing some common English words that are usually not
   useful for searching. */
-  public static final CharArraySet STOP_WORDS_SET = EnglishAnalyzer.ENGLISH_STOP_WORDS_SET;
+  public static final CharArraySet STOP_WORDS_SET = StopAnalyzer.ENGLISH_STOP_WORDS_SET; 
 
   /** Builds an analyzer with the given stop words.
    * @param stopWords stop words */
@@ -94,14 +92,12 @@ public final class ClassicAnalyzer extends StopwordAnalyzerBase {
     TokenStream tok = new ClassicFilter(src);
     tok = new LowerCaseFilter(tok);
     tok = new StopFilter(tok, stopwords);
-    return new TokenStreamComponents(r -> {
-      src.setMaxTokenLength(ClassicAnalyzer.this.maxTokenLength);
-      src.setReader(r);
-    }, tok);
-  }
-
-  @Override
-  protected TokenStream normalize(String fieldName, TokenStream in) {
-    return new LowerCaseFilter(in);
+    return new TokenStreamComponents(src, tok) {
+      @Override
+      protected void setReader(final Reader reader) {
+        src.setMaxTokenLength(ClassicAnalyzer.this.maxTokenLength);
+        super.setReader(reader);
+      }
+    };
   }
 }

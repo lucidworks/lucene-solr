@@ -1,3 +1,5 @@
+package org.apache.lucene.util.automaton;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.automaton;
-
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -325,9 +325,12 @@ public class TestAutomaton extends LuceneTestCase {
     int s2 = a.createState();
     a.addTransition(s1, s2, 'a');
     a.addTransition(s2, s2, 'a');
-    expectThrows(IllegalStateException.class, () -> {
+    try {
       a.addTransition(s1, s2, 'b');
-    });
+      fail("didn't hit expected exception");
+    } catch (IllegalStateException ise) {
+      // expected
+    }
   }
 
   public void testBuilderRandom() throws Exception {

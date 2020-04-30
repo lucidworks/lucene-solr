@@ -16,8 +16,11 @@
  */
 package org.apache.solr.search;
 
+import org.apache.lucene.index.Term;
+import org.apache.lucene.search.PrefixQuery;
 import org.apache.lucene.search.Query;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.schema.SchemaField;
 
@@ -30,6 +33,10 @@ import org.apache.solr.schema.SchemaField;
  */
 public class PrefixQParserPlugin extends QParserPlugin {
   public static final String NAME = "prefix";
+
+  @Override
+  public void init(NamedList args) {
+  }
 
   @Override
   public QParser createParser(String qstr, SolrParams localParams, SolrParams params, SolrQueryRequest req) {

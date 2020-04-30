@@ -14,20 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
-import java.io.IOException;
-import java.io.Reader;
-import java.io.StringReader;
-import java.io.StringWriter;
-
-import org.apache.commons.io.IOUtils;
-import org.apache.lucene.analysis.charfilter.HTMLStripCharFilter;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 
-import static org.apache.solr.update.processor.FieldValueMutatingUpdateProcessor.valueMutator;
+import org.apache.lucene.analysis.charfilter.HTMLStripCharFilter;
+
+import org.apache.commons.io.IOUtils;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
+import java.io.StringWriter;
 
 /**
  * Strips all HTML Markup in any CharSequence values 
@@ -44,7 +44,6 @@ import static org.apache.solr.update.processor.FieldValueMutatingUpdateProcessor
  * &lt;processor class="solr.HTMLStripFieldUpdateProcessorFactory"&gt;
  *   &lt;str name="typeClass"&gt;solr.StrField&lt;/str&gt;
  * &lt;/processor&gt;</pre>
- * @since 4.0.0
  */
 public final class HTMLStripFieldUpdateProcessorFactory extends FieldMutatingUpdateProcessorFactory {
 
@@ -60,25 +59,29 @@ public final class HTMLStripFieldUpdateProcessorFactory extends FieldMutatingUpd
   public UpdateRequestProcessor getInstance(SolrQueryRequest req,
                                             SolrQueryResponse rsp,
                                             UpdateRequestProcessor next) {
-    return valueMutator(getSelector(), next, src -> {
-      if (src instanceof CharSequence) {
-        CharSequence s = (CharSequence) src;
-        StringWriter result = new StringWriter(s.length());
-        Reader in = null;
-        try {
-          in = new HTMLStripCharFilter
+    return new FieldValueMutatingUpdateProcessor(getSelector(), next) {
+      @Override
+      protected Object mutateValue(final Object src) {
+        if (src instanceof CharSequence) {
+          CharSequence s = (CharSequence)src;
+          StringWriter result = new StringWriter(s.length());
+          Reader in = null;
+          try {
+            in = new HTMLStripCharFilter
               (new StringReader(s.toString()));
-          IOUtils.copy(in, result);
-          return result.toString();
-        } catch (IOException e) {
-          // we tried and failed
-          return s;
-        } finally {
-          IOUtils.closeQuietly(in);
+            IOUtils.copy(in, result);
+            return result.toString();
+          } catch (IOException e) {
+            // we tried and failed
+            return s;
+          } finally {
+            IOUtils.closeQuietly(in);
+          }
+
         }
+        return src;
       }
-      return src;
-    });
+    };
   }
 }
 

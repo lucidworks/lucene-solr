@@ -1,3 +1,9 @@
+package org.apache.lucene.util;
+
+import java.util.Set;
+
+import org.apache.lucene.codecs.Codec;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +20,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
-import java.util.Set;
-
-import org.apache.lucene.codecs.Codec;
-
 
 // TODO: maybe we should test this with mocks, but it's easy
 // enough to test the basics via Codec
@@ -33,9 +33,10 @@ public class TestNamedSPILoader extends LuceneTestCase {
   
   // we want an exception if it's not found.
   public void testBogusLookup() {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       Codec.forName("dskfdskfsdfksdfdsf");
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {}
   }
   
   public void testAvailableServices() {

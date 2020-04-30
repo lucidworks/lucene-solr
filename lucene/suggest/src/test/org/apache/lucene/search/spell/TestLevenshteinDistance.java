@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spell;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spell;
 
 import org.apache.lucene.util.LuceneTestCase;
 
 public class TestLevenshteinDistance extends LuceneTestCase {
 
-  private StringDistance sd = new LevenshteinDistance();
+  private StringDistance sd = new LevensteinDistance();
   
   public void testGetDistance() {
     float d = sd.getDistance("al", "al");

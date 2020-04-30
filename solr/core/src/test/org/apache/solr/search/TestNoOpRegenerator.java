@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
 import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.util.RefCounted;
 import org.junit.BeforeClass;
 
 /** Tests that NoOpRegenerator does what it should */
@@ -34,27 +36,32 @@ public class TestNoOpRegenerator extends SolrTestCaseJ4 {
     assertU(commit());
     
     // add some items
-    h.getCore().withSearcher(searcher -> {
+    RefCounted<SolrIndexSearcher> ref = h.getCore().getSearcher();
+    try {
+      SolrIndexSearcher searcher = ref.get();
       assertEquals(2, searcher.maxDoc());
       SolrCache<Object,Object> cache = searcher.getCache("myPerSegmentCache");
       assertEquals(0, cache.size());
       cache.put("key1", "value1");
       cache.put("key2", "value2");
       assertEquals(2, cache.size());
-      return null;
-    });
+    } finally {
+      ref.decref();
+    }
     
     // add a doc and commit: we should see our cached items still there
     assertU(adoc("id", "3"));
     assertU(commit());
-
-    h.getCore().withSearcher(searcher -> {
+    ref = h.getCore().getSearcher();
+    try {
+      SolrIndexSearcher searcher = ref.get();
       assertEquals(3, searcher.maxDoc());
       SolrCache<Object,Object> cache = searcher.getCache("myPerSegmentCache");
       assertEquals(2, cache.size());
       assertEquals("value1", cache.get("key1"));
       assertEquals("value2", cache.get("key2"));
-      return null;
-    });
+    } finally {
+      ref.decref();
+    }
   }
 }

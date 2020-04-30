@@ -1,3 +1,5 @@
+package org.apache.solr.response;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.response;
+
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -30,9 +32,7 @@ public class SmileResponseWriter extends BinaryResponseWriter {
 
   @Override
   public void write(OutputStream out, SolrQueryRequest request, SolrQueryResponse response) throws IOException {
-    try (SmileWriter sw = new SmileWriter(out, request, response)) {
-      sw.writeResponse();
-    }
+    new SmileWriter(out, request, response).writeResponse();
   }
 
   @Override
@@ -67,7 +67,7 @@ public class SmileResponseWriter extends BinaryResponseWriter {
     }
 
     @Override
-    public void writeNumber(String name, Number val) throws IOException {
+    protected void writeNumber(String name, Number val) throws IOException {
       if (val instanceof Integer) {
         gen.writeNumber(val.intValue());
       } else if (val instanceof Long) {
@@ -156,7 +156,7 @@ public class SmileResponseWriter extends BinaryResponseWriter {
     }
 
     @Override
-    public void writeKey(String fname, boolean needsEscaping) throws IOException {
+    protected void writeKey(String fname, boolean needsEscaping) throws IOException {
       gen.writeFieldName(fname);
     }
 
@@ -194,11 +194,6 @@ public class SmileResponseWriter extends BinaryResponseWriter {
     @Override
     public int decLevel() {
       return 0;
-    }
-
-    @Override
-    public void close() throws IOException {
-      gen.close();
     }
   }
 }

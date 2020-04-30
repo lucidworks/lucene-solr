@@ -1,3 +1,5 @@
+package org.apache.solr.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.lucene.analysis.util.ResourceLoader;
 
@@ -23,6 +27,7 @@ import org.xml.sax.EntityResolver;
 import org.xml.sax.ext.EntityResolver2;
 import java.io.File;
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
 import java.net.URI;
 import java.net.URISyntaxException;
 import javax.xml.transform.Source;
@@ -51,6 +56,7 @@ import javax.xml.stream.XMLStreamException;
  * </pre>
  */
 public final class SystemIdResolver implements EntityResolver, EntityResolver2 {
+  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   public static final String RESOURCE_LOADER_URI_SCHEME = "solrres";
   public static final String RESOURCE_LOADER_AUTHORITY_ABSOLUTE = "@";
@@ -121,9 +127,8 @@ public final class SystemIdResolver implements EntityResolver, EntityResolver2 {
   
   @Override
   public InputSource resolveEntity(String name, String publicId, String baseURI, String systemId) throws IOException {
-    if (systemId == null) {
+    if (systemId == null)
       return null;
-    }
     try {
       final URI uri = resolveRelativeURI(baseURI, systemId);
       
@@ -143,10 +148,12 @@ public final class SystemIdResolver implements EntityResolver, EntityResolver2 {
           throw new IOException(re.getMessage(), re);
         }
       } else {
-        throw new IOException("Cannot resolve absolute systemIDs / external entities (only relative paths work): " + systemId);
+        // resolve all other URIs using the standard resolver
+        return null;
       }
     } catch (URISyntaxException use) {
-      throw new IOException("An URI syntax problem occurred during resolving systemId: " + systemId, use);
+      log.warn("An URI systax problem occurred during resolving SystemId, falling back to default resolver", use);
+      return null;
     }
   }
 

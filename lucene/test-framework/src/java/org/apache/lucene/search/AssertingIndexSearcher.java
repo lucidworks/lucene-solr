@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
 
 import java.io.IOException;
 import java.util.List;
@@ -50,11 +51,30 @@ public class AssertingIndexSearcher extends IndexSearcher {
     super(context, ex);
     this.random = new Random(random.nextLong());
   }
+  
+  /** Ensures, that the returned {@code Weight} is not normalized again, which may produce wrong scores. */
+  @Override
+  public Weight createNormalizedWeight(Query query, boolean needsScores) throws IOException {
+    final Weight w = super.createNormalizedWeight(query, needsScores);
+    return new AssertingWeight(random, w, needsScores) {
+
+      @Override
+      public void normalize(float norm, float boost) {
+        throw new IllegalStateException("Weight already normalized.");
+      }
+
+      @Override
+      public float getValueForNormalization() {
+        throw new IllegalStateException("Weight already normalized.");
+      }
+
+    };
+  }
 
   @Override
-  public Weight createWeight(Query query, ScoreMode scoreMode, float boost) throws IOException {
+  public Weight createWeight(Query query, boolean needsScores) throws IOException {
     // this adds assertions to the inner weights/scorers too
-    return new AssertingWeight(random, super.createWeight(query, scoreMode, boost), scoreMode);
+    return new AssertingWeight(random, super.createWeight(query, needsScores), needsScores);
   }
 
   @Override
@@ -69,7 +89,7 @@ public class AssertingIndexSearcher extends IndexSearcher {
   @Override
   protected void search(List<LeafReaderContext> leaves, Weight weight, Collector collector) throws IOException {
     assert weight instanceof AssertingWeight;
-    super.search(leaves, weight, AssertingCollector.wrap(collector));
+    super.search(leaves, weight, AssertingCollector.wrap(random, collector));
   }
 
   @Override

@@ -14,16 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.OutputStreamWriter;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Properties;
+package org.apache.solr.client.solrj;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.http.HttpResponse;
@@ -32,14 +24,21 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.InputStreamEntity;
 import org.apache.solr.client.solrj.impl.BinaryRequestWriter;
 import org.apache.solr.client.solrj.impl.BinaryResponseParser;
-import org.apache.solr.client.solrj.impl.HttpClientUtil;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
-import org.apache.solr.common.util.Utils;
 import org.apache.solr.util.ExternalPaths;
 import org.junit.BeforeClass;
 import org.junit.Test;
+
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.OutputStreamWriter;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Properties;
+import java.util.Set;
 
 public class SolrSchemalessExampleTest extends SolrExampleTestsBase {
 
@@ -52,13 +51,12 @@ public class SolrSchemalessExampleTest extends SolrExampleTestsBase {
     FileUtils.copyFileToDirectory(new File(ExternalPaths.SERVER_HOME, "solr.xml"), tempSolrHome);
     File collection1Dir = new File(tempSolrHome, "collection1");
     FileUtils.forceMkdir(collection1Dir);
-    FileUtils.copyDirectoryToDirectory(new File(ExternalPaths.DEFAULT_CONFIGSET), collection1Dir);
+    FileUtils.copyDirectoryToDirectory(new File(ExternalPaths.SCHEMALESS_CONFIGSET), collection1Dir);
     Properties props = new Properties();
     props.setProperty("name","collection1");
     OutputStreamWriter writer = null;
     try {
-      writer = new OutputStreamWriter(FileUtils.openOutputStream(
-          new File(collection1Dir, "core.properties")), StandardCharsets.UTF_8);
+      writer = new OutputStreamWriter(FileUtils.openOutputStream(new File(collection1Dir, "core.properties")), "UTF-8");
       props.store(writer, null);
     } finally {
       if (writer != null) {
@@ -67,7 +65,7 @@ public class SolrSchemalessExampleTest extends SolrExampleTestsBase {
         } catch (Exception ignore){}
       }
     }
-    createAndStartJetty(tempSolrHome.getAbsolutePath());
+    createJetty(tempSolrHome.getAbsolutePath());
   }
   @Test
   public void testArbitraryJsonIndexing() throws Exception  {
@@ -81,10 +79,8 @@ public class SolrSchemalessExampleTest extends SolrExampleTestsBase {
     HttpClient httpClient = client.getHttpClient();
     HttpPost post = new HttpPost(client.getBaseURL() + "/update/json/docs");
     post.setHeader("Content-Type", "application/json");
-    post.setEntity(new InputStreamEntity(
-        new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)), -1));
-    HttpResponse response = httpClient.execute(post, HttpClientUtil.createNewHttpClientRequestContext());
-    Utils.consumeFully(response.getEntity());
+    post.setEntity(new InputStreamEntity(new ByteArrayInputStream(json.getBytes("UTF-8")), -1));
+    HttpResponse response = httpClient.execute(post);
     assertEquals(200, response.getStatusLine().getStatusCode());
     client.commit();
     assertNumFound("*:*", 2);
@@ -108,8 +104,7 @@ public class SolrSchemalessExampleTest extends SolrExampleTestsBase {
     HttpClient httpClient = client.getHttpClient();
     HttpPost post = new HttpPost(client.getBaseURL() + "/update/json/docs");
     post.setHeader("Content-Type", "application/json");
-    post.setEntity(new InputStreamEntity(
-        new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)), -1));
+    post.setEntity(new InputStreamEntity(new ByteArrayInputStream(json.getBytes("UTF-8")), -1));
     HttpResponse response = httpClient.execute(post);
     assertEquals(200, response.getStatusLine().getStatusCode());
     client.commit();
@@ -137,7 +132,10 @@ public class SolrSchemalessExampleTest extends SolrExampleTestsBase {
     try {
       // setup the server...
       String url = jetty.getBaseUrl().toString() + "/collection1";
-      HttpSolrClient client = getHttpSolrClient(url, DEFAULT_CONNECTION_TIMEOUT);
+      HttpSolrClient client = new HttpSolrClient(url);
+      client.setConnectionTimeout(DEFAULT_CONNECTION_TIMEOUT);
+      client.setDefaultMaxConnectionsPerHost(100);
+      client.setMaxTotalConnections(100);
       client.setUseMultiPartPost(random().nextBoolean());
       
       if (random().nextBoolean()) {

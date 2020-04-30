@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function.valuesource;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function.valuesource;
 
 import java.io.IOException;
 import java.util.Map;
 
+import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.BinaryDocValues;
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.FieldInfo;
-import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.docvalues.DocTermsIndexDocValues;
-import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.mutable.MutableValue;
 import org.apache.lucene.util.mutable.MutableValueStr;
@@ -48,42 +49,21 @@ public class BytesRefFieldSource extends FieldCacheSource {
     // TODO: do it cleaner?
     if (fieldInfo != null && fieldInfo.getDocValuesType() == DocValuesType.BINARY) {
       final BinaryDocValues binaryValues = DocValues.getBinary(readerContext.reader(), field);
+      final Bits docsWithField = DocValues.getDocsWithField(readerContext.reader(), field);
       return new FunctionValues() {
-        int lastDocID = -1;
 
-        private BytesRef getValueForDoc(int doc) throws IOException {
-          if (doc < lastDocID) {
-            throw new IllegalArgumentException("docs were sent out-of-order: lastDocID=" + lastDocID + " vs docID=" + doc);
-          }
-          lastDocID = doc;
-          int curDocID = binaryValues.docID();
-          if (doc > curDocID) {
-            curDocID = binaryValues.advance(doc);
-          }
-          if (doc == curDocID) {
-            return binaryValues.binaryValue();
-          } else {
-            return null;
-          }
+        @Override
+        public boolean exists(int doc) {
+          return docsWithField.get(doc);
         }
 
         @Override
-        public boolean exists(int doc) throws IOException {
-          return getValueForDoc(doc) != null;
+        public boolean bytesVal(int doc, BytesRefBuilder target) {
+          target.copyBytes(binaryValues.get(doc));
+          return target.length() > 0;
         }
 
-        @Override
-        public boolean bytesVal(int doc, BytesRefBuilder target) throws IOException {
-          BytesRef value = getValueForDoc(doc);
-          if (value == null || value.length == 0) {
-            return false;
-          } else {
-            target.copyBytes(value);
-            return true;
-          }
-        }
-
-        public String strVal(int doc) throws IOException {
+        public String strVal(int doc) {
           final BytesRefBuilder bytes = new BytesRefBuilder();
           return bytesVal(doc, bytes)
               ? bytes.get().utf8ToString()
@@ -91,12 +71,12 @@ public class BytesRefFieldSource extends FieldCacheSource {
         }
 
         @Override
-        public Object objectVal(int doc) throws IOException {
+        public Object objectVal(int doc) {
           return strVal(doc);
         }
 
         @Override
-        public String toString(int doc) throws IOException {
+        public String toString(int doc) {
           return description() + '=' + strVal(doc);
         }
 
@@ -111,13 +91,10 @@ public class BytesRefFieldSource extends FieldCacheSource {
             }
 
             @Override
-            public void fillValue(int doc) throws IOException {
-              BytesRef value = getValueForDoc(doc);
-              mval.exists = value != null;
+            public void fillValue(int doc) {
+              mval.exists = docsWithField.get(doc);
               mval.value.clear();
-              if (value != null) {
-                mval.value.copyBytes(value);
-              }
+              mval.value.copyBytes(binaryValues.get(doc));
             }
           };
         }
@@ -132,12 +109,12 @@ public class BytesRefFieldSource extends FieldCacheSource {
         }
 
         @Override
-        public Object objectVal(int doc) throws IOException {
+        public Object objectVal(int doc) {
           return strVal(doc);
         }
 
         @Override
-        public String toString(int doc) throws IOException {
+        public String toString(int doc) {
           return description() + '=' + strVal(doc);
         }
       };

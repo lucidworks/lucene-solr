@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.solr.cloud.ZkController.ContextKey;
-import org.apache.solr.common.AlreadyClosedException;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.common.cloud.ZkCmdExecutor;
@@ -104,36 +106,55 @@ public  class LeaderElector {
     // get all other numbers...
     final String holdElectionPath = context.electionPath + ELECTION_NODE;
     List<String> seqs = zkClient.getChildren(holdElectionPath, null, true);
-    sortSeqs(seqs);
 
-    String leaderSeqNodeName = context.leaderSeqPath.substring(context.leaderSeqPath.lastIndexOf('/') + 1);
-    if (!seqs.contains(leaderSeqNodeName)) {
+    sortSeqs(seqs);
+    List<Integer> intSeqs = getSeqs(seqs);
+    if (intSeqs.size() == 0) {
       log.warn("Our node is no longer in line to be leader");
       return;
     }
+    // We can't really rely on the sequence number stored in the old watcher, it may be stale, thus this check.
 
-    // If any double-registrations exist for me, remove all but this latest one!
-    // TODO: can we even get into this state?
-    String prefix = zkClient.getSolrZooKeeper().getSessionId() + "-" + context.id + "-";
-    Iterator<String> it = seqs.iterator();
-    while (it.hasNext()) {
-      String elec = it.next();
-      if (!elec.equals(leaderSeqNodeName) && elec.startsWith(prefix)) {
-        try {
-          String toDelete = holdElectionPath + "/" + elec;
-          log.warn("Deleting duplicate registration: {}", toDelete);
-          zkClient.delete(toDelete, -1, true);
-        } catch (KeeperException.NoNodeException e) {
-          // ignore
-        }
-        it.remove();
+    int seq = -1;
+
+    // See if we've already been re-added, and this is an old context. In which case, use our current sequence number.
+    String newLeaderSeq = "";
+    for (String elec : seqs) {
+      if (getNodeName(elec).equals(getNodeName(context.leaderSeqPath)) && seq < getSeq(elec)) {
+        seq = getSeq(elec); // so use the current sequence number.
+        newLeaderSeq = elec;
+        break;
       }
     }
 
-    if (leaderSeqNodeName.equals(seqs.get(0))) {
-      // I am the leader
+    // Now, if we've been re-added, presumably we've also set up watchers and all that kind of thing, so we're done
+    if (StringUtils.isNotBlank(newLeaderSeq) && seq > getSeq(context.leaderSeqPath)) {
+      log.info("Node " + context.leaderSeqPath + " already in queue as " + newLeaderSeq + " nothing to do.");
+      return;
+    }
+
+    // Fallback in case we're all coming in here fresh and there is no node for this core already in the election queue.
+    if (seq == -1) {
+      seq = getSeq(context.leaderSeqPath);
+    }
+
+    if (seq <= intSeqs.get(0)) {
+      if (seq == intSeqs.get(0) && !context.leaderSeqPath.equals(holdElectionPath + "/" + seqs.get(0))) {//somebody else already  became the leader with the same sequence id , not me
+        log.info("was going to be leader {} , seq(0) {}", context.leaderSeqPath, holdElectionPath + "/" + seqs.get(0));//but someone else jumped the line
+
+        // The problem is that deleting the ZK node that's watched by others
+        // results in an unpredictable sequencing of the events and sometime the context that comes in for checking
+        // this happens to be after the node has already taken over leadership. So just leave out of here.
+        // This caused one of the tests to fail on having two nodes with the same name in the queue. I'm not sure
+        // the assumption that this is a bad state is valid.
+        if (getNodeName(context.leaderSeqPath).equals(getNodeName(seqs.get(0)))) {
+          return;
+        }
+        retryElection(context, false);//join at the tail again
+        return;
+      }
+
       try {
-        if (zkClient.isClosed()) return; // but our zkClient is already closed
         runIamLeaderProcess(context, replacement);
       } catch (KeeperException.NodeExistsException e) {
         log.error("node exists",e);
@@ -142,25 +163,30 @@ public  class LeaderElector {
       }
     } else {
       // I am not the leader - watch the node below me
-      String toWatch = seqs.get(0);
-      for (String node : seqs) {
-        if (leaderSeqNodeName.equals(node)) {
+      int toWatch = -1;
+      for (int idx = 0; idx < intSeqs.size(); idx++) {
+        if (intSeqs.get(idx) < seq && ! getNodeName(context.leaderSeqPath).equals(getNodeName(seqs.get(idx)))) {
+          toWatch = idx;
+        }
+        if (intSeqs.get(idx) >= seq) {
           break;
         }
-        toWatch = node;
+      }
+      if (toWatch < 0) {
+        log.warn("Our node is no longer in line to be leader");
+        return;
       }
       try {
-        String watchedNode = holdElectionPath + "/" + toWatch;
-        zkClient.getData(watchedNode, watcher = new ElectionWatcher(context.leaderSeqPath, watchedNode, getSeq(context.leaderSeqPath), context), null, true);
-        log.debug("Watching path {} to know if I could be the leader", watchedNode);
+        String watchedNode = holdElectionPath + "/" + seqs.get(toWatch);
+
+        zkClient.getData(watchedNode, watcher = new ElectionWatcher(context.leaderSeqPath , watchedNode,seq, context) , null, true);
+        log.info("Watching path {} to know if I could be the leader", watchedNode);
       } catch (KeeperException.SessionExpiredException e) {
         throw e;
-      } catch (KeeperException.NoNodeException e) {
-        // the previous node disappeared, check if we are the leader again
-        checkIfIamLeader(context, true);
       } catch (KeeperException e) {
-        // we couldn't set our watch for some other reason, retry
         log.warn("Failed setting watch", e);
+        // we couldn't set our watch - the node before us may already be down?
+        // we need to check if we are the leader again
         checkIfIamLeader(context, true);
       }
     }
@@ -214,6 +240,18 @@ public  class LeaderElector {
 
   }
   
+  /**
+   * Returns int list given list of form n_0000000001, n_0000000003, etc.
+   * 
+   * @return int seqs
+   */
+  private List<Integer> getSeqs(List<String> seqs) {
+    List<Integer> intSeqs = new ArrayList<>(seqs.size());
+    for (String seq : seqs) {
+      intSeqs.add(getSeq(seq));
+    }
+    return intSeqs;
+  }
   public int joinElection(ElectionContext context, boolean replacement) throws KeeperException, InterruptedException, IOException {
     return joinElection(context,replacement, false);
   }
@@ -240,14 +278,14 @@ public  class LeaderElector {
     while (cont) {
       try {
         if(joinAtHead){
-          log.debug("Node {} trying to join election at the head", id);
+          log.info("Node {} trying to join election at the head", id);
           List<String> nodes = OverseerTaskProcessor.getSortedElectionNodes(zkClient, shardsElectZkPath);
           if(nodes.size() <2){
             leaderSeqPath = zkClient.create(shardsElectZkPath + "/" + id + "-n_", null,
                 CreateMode.EPHEMERAL_SEQUENTIAL, false);
           } else {
             String firstInLine = nodes.get(1);
-            log.debug("The current head: {}", firstInLine);
+            log.info("The current head: {}", firstInLine);
             Matcher m = LEADER_SEQ.matcher(firstInLine);
             if (!m.matches()) {
               throw new IllegalStateException("Could not find regex match in:"
@@ -261,7 +299,7 @@ public  class LeaderElector {
               CreateMode.EPHEMERAL_SEQUENTIAL, false);
         }
 
-        log.debug("Joined leadership election with path: {}", leaderSeqPath);
+        log.info("Joined leadership election with path: {}", leaderSeqPath);
         context.leaderSeqPath = leaderSeqPath;
         cont = false;
       } catch (ConnectionLossException e) {
@@ -330,12 +368,13 @@ public  class LeaderElector {
 
     @Override
     public void process(WatchedEvent event) {
-      // session events are not change events, and do not remove the watcher
+      // session events are not change events,
+      // and do not remove the watcher
       if (EventType.None.equals(event.getType())) {
         return;
       }
       if (canceled) {
-        log.debug("This watcher is not active anymore {}", myNode);
+        log.info("This watcher is not active anymore {}", myNode);
         try {
           zkClient.delete(myNode, -1, true);
         } catch (KeeperException.NoNodeException nne) {
@@ -348,12 +387,8 @@ public  class LeaderElector {
       try {
         // am I the next leader?
         checkIfIamLeader(context, true);
-      } catch (AlreadyClosedException e) {
-
       } catch (Exception e) {
-        if (!zkClient.isClosed()) {
-          log.warn("", e);
-        }
+        log.warn("", e);
       }
     }
   }
@@ -364,13 +399,8 @@ public  class LeaderElector {
   public void setup(final ElectionContext context) throws InterruptedException,
       KeeperException {
     String electZKPath = context.electionPath + LeaderElector.ELECTION_NODE;
-    if (context instanceof OverseerElectionContext) {
-      zkCmdExecutor.ensureExists(electZKPath, zkClient);
-    } else {
-      // we use 2 param so that replica won't create /collection/{collection} if it doesn't exist
-      zkCmdExecutor.ensureExists(electZKPath, (byte[])null, CreateMode.PERSISTENT, zkClient, 2);
-    }
-
+    
+    zkCmdExecutor.ensureExists(electZKPath, zkClient);
     this.context = context;
   }
   
@@ -378,9 +408,14 @@ public  class LeaderElector {
    * Sort n string sequence list.
    */
   public static void sortSeqs(List<String> seqs) {
-    Collections.sort(seqs, (o1, o2) -> {
-      int i = getSeq(o1) - getSeq(o2);
-      return i == 0 ? o1.compareTo(o2) : i;
+    Collections.sort(seqs, new Comparator<String>() {
+      
+      @Override
+      public int compare(String o1, String o2) {
+        int i = Integer.valueOf(getSeq(o1)).compareTo(
+            Integer.valueOf(getSeq(o2)));
+        return i == 0 ? o1.compareTo(o2) : i ;
+      }
     });
   }
 
@@ -392,7 +427,6 @@ public  class LeaderElector {
     }
     if (watcher != null) watcher.cancel();
     this.context.cancelElection();
-    this.context.close();
     this.context = ctx;
     joinElection(ctx, true, joinAtHead);
   }

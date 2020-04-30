@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.util.Random;
 
@@ -37,7 +37,7 @@ public class TestSetOnce extends LuceneTestCase {
     public void run() {
       try {
         sleep(RAND.nextInt(10)); // sleep for a short time
-        set.set(Integer.valueOf(getName().substring(2)));
+        set.set(new Integer(Integer.parseInt(getName().substring(2))));
         success = true;
       } catch (InterruptedException e) {
         // ignore
@@ -57,26 +57,17 @@ public class TestSetOnce extends LuceneTestCase {
   
   @Test(expected=AlreadySetException.class)
   public void testSettingCtor() throws Exception {
-    SetOnce<Integer> set = new SetOnce<>(5);
+    SetOnce<Integer> set = new SetOnce<>(new Integer(5));
     assertEquals(5, set.get().intValue());
-    set.set(7);
+    set.set(new Integer(7));
   }
   
   @Test(expected=AlreadySetException.class)
   public void testSetOnce() throws Exception {
     SetOnce<Integer> set = new SetOnce<>();
-    set.set(5);
+    set.set(new Integer(5));
     assertEquals(5, set.get().intValue());
-    set.set(7);
-  }
-
-  @Test
-  public void testTrySet() {
-    SetOnce<Integer> set = new SetOnce<>();
-    assertTrue(set.trySet(5));
-    assertEquals(5, set.get().intValue());
-    assertFalse(set.trySet(7));
-    assertEquals(5, set.get().intValue());
+    set.set(new Integer(7));
   }
   
   @Test

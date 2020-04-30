@@ -14,15 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.schema;
 
 import org.apache.lucene.spatial.prefix.TermQueryPrefixTreeStrategy;
 
 /**
  * @see TermQueryPrefixTreeStrategy
- * @deprecated use {@link org.apache.lucene.spatial.prefix.RecursivePrefixTreeStrategy} or {@link RptWithGeometrySpatialField}
+ * @lucene.experimental
  */
-@Deprecated
 public class SpatialTermQueryPrefixTreeFieldType extends AbstractSpatialPrefixTreeFieldType<TermQueryPrefixTreeStrategy> {
 
   @Override

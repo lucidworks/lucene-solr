@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.dataimport;
 
 import org.apache.solr.common.SolrException;
@@ -50,8 +51,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class DocBuilder {
 
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-  private static final AtomicBoolean WARNED_ABOUT_INDEX_TIME_BOOSTS = new AtomicBoolean();
+  private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   private static final Date EPOCH = new Date(0);
   public static final String DELETE_DOC_BY_ID = "$deleteDocById";
@@ -265,7 +265,7 @@ public class DocBuilder {
         statusMessages.put(DataImporter.MSG.TOTAL_FAILED_DOCS, ""+ importStatistics.failedDocCount.get());
 
       statusMessages.put("Time taken", getTimeElapsedSince(startTime.get()));
-      log.info("Time taken = " + getTimeElapsedSince(startTime.get()));
+      LOG.info("Time taken = " + getTimeElapsedSince(startTime.get()));
     } catch(Exception e)
     {
       throw new RuntimeException(e);
@@ -294,7 +294,7 @@ public class DocBuilder {
 
   @SuppressWarnings("unchecked")
   private void finish(Map<String,Object> lastIndexTimeProps) {
-    log.info("Import completed successfully");
+    LOG.info("Import completed successfully");
     statusMessages.put("", "Indexing completed. Added/Updated: "
             + importStatistics.docCount + " documents. Deleted "
             + importStatistics.deletedDocCount + " documents.");
@@ -307,14 +307,14 @@ public class DocBuilder {
     try {
       propWriter.persist(lastIndexTimeProps);
     } catch (Exception e) {
-      log.error("Could not write property file", e);
+      LOG.error("Could not write property file", e);
       statusMessages.put("error", "Could not write property file. Delta imports will not work. " +
           "Make sure your conf directory is writable");
     }
   }
 
   void handleError(String message, Exception e) {
-    if (!dataImporter.getCore().getCoreContainer().isZooKeeperAware()) {
+    if (!dataImporter.getCore().getCoreDescriptor().getCoreContainer().isZooKeeperAware()) {
       writer.rollback();
     }
 
@@ -340,7 +340,7 @@ public class DocBuilder {
     }
 
     addStatusMessage("Identifying Delta");
-    log.info("Starting delta collection.");
+    LOG.info("Starting delta collection.");
     Set<Map<String, Object>> deletedKeys = new HashSet<>();
     Set<Map<String, Object>> allPks = collectDelta(currentEntityProcessorWrapper, resolver, deletedKeys);
     if (stop.get())
@@ -369,12 +369,12 @@ public class DocBuilder {
     }
 
     if (!stop.get()) {
-      log.info("Delta Import completed successfully");
+      LOG.info("Delta Import completed successfully");
     }
   }
 
   private void deleteAll(Set<Map<String, Object>> deletedKeys) {
-    log.info("Deleting stale documents ");
+    LOG.info("Deleting stale documents ");
     Iterator<Map<String, Object>> iter = deletedKeys.iterator();
     while (iter.hasNext()) {
       Map<String, Object> map = iter.next();
@@ -385,7 +385,7 @@ public class DocBuilder {
         key = map.get(keyName);
       }
       if(key == null) {
-        log.warn("no key was available for deleted pk query. keyName = " + keyName);
+        LOG.warn("no key was available for deleted pk query. keyName = " + keyName);
         continue;
       }
       writer.deleteDoc(key);
@@ -483,7 +483,7 @@ public class DocBuilder {
             if (seenDocCount <= reqParams.getStart())
               continue;
             if (seenDocCount > reqParams.getStart() + reqParams.getRows()) {
-              log.info("Indexing stopped at docCount = " + importStatistics.docCount);
+              LOG.info("Indexing stopped at docCount = " + importStatistics.docCount);
               break;
             }
           }
@@ -502,9 +502,7 @@ public class DocBuilder {
               doc.addChildDocument(childDoc);
             } else {
               handleSpecialCommands(arow, doc);
-              vr.addNamespace(epw.getEntity().getName(), arow);
               addFields(epw.getEntity(), doc, arow, vr);
-              vr.removeNamespace(epw.getEntity().getName());
             }
           }
           if (epw.getEntity().getChildren() != null) {
@@ -548,7 +546,7 @@ public class DocBuilder {
               importStatistics.skipDocCount.getAndIncrement();
               doc = null;
             } else {
-              SolrException.log(log, "Exception while processing: "
+              SolrException.log(LOG, "Exception while processing: "
                       + epw.getEntity().getName() + " document : " + doc, e);
             }
             if (e.getErrCode() == DataImportHandlerException.SEVERE)
@@ -618,12 +616,13 @@ public class DocBuilder {
     }
     value = arow.get(DOC_BOOST);
     if (value != null) {
-      String message = "Ignoring document boost: " + value + " as index-time boosts are not supported anymore";
-      if (WARNED_ABOUT_INDEX_TIME_BOOSTS.compareAndSet(false, true)) {
-        log.warn(message);
+      float value1 = 1.0f;
+      if (value instanceof Number) {
+        value1 = ((Number) value).floatValue();
       } else {
-        log.debug(message);
+        value1 = Float.parseFloat(value.toString());
       }
+      doc.setDocumentBoost(value1);
     }
 
     value = arow.get(SKIP_DOC);
@@ -659,7 +658,7 @@ public class DocBuilder {
           sf = config.getSchemaField(key);
         }
         if (sf != null) {
-          addFieldToDoc(entry.getValue(), sf.getName(), sf.multiValued(), doc);
+          addFieldToDoc(entry.getValue(), sf.getName(), 1.0f, sf.multiValued(), doc);
         }
         //else do nothing. if we add it it may fail
       } else {
@@ -679,7 +678,7 @@ public class DocBuilder {
               }
             }
             if (toWrite) {
-              addFieldToDoc(entry.getValue(), name, multiValued, doc);
+              addFieldToDoc(entry.getValue(), name, f.getBoost(), multiValued, doc);
             }
           }
         }
@@ -687,30 +686,30 @@ public class DocBuilder {
     }
   }
 
-  private void addFieldToDoc(Object value, String name, boolean multiValued, DocWrapper doc) {
+  private void addFieldToDoc(Object value, String name, float boost, boolean multiValued, DocWrapper doc) {
     if (value instanceof Collection) {
       Collection collection = (Collection) value;
       if (multiValued) {
         for (Object o : collection) {
           if (o != null)
-            doc.addField(name, o);
+            doc.addField(name, o, boost);
         }
       } else {
         if (doc.getField(name) == null)
           for (Object o : collection) {
             if (o != null)  {
-              doc.addField(name, o);
+              doc.addField(name, o, boost);
               break;
             }
           }
       }
     } else if (multiValued) {
       if (value != null)  {
-        doc.addField(name, value);
+        doc.addField(name, value, boost);
       }
     } else {
       if (doc.getField(name) == null && value != null)
-        doc.addField(name, value);
+        doc.addField(name, value, boost);
     }
   }
 
@@ -759,7 +758,7 @@ public class DocBuilder {
                   "deltaQuery has no column to resolve to declared primary key pk='%s'",
                   pk));
     }
-    log.info(String.format(Locale.ROOT,
+    LOG.info(String.format(Locale.ROOT,
         "Resolving deltaQuery column '%s' to match entity's declared pk '%s'",
         resolvedPk, pk));
     return resolvedPk;
@@ -796,7 +795,7 @@ public class DocBuilder {
     
     // identifying the modified rows for this entity
     Map<String, Map<String, Object>> deltaSet = new HashMap<>();
-    log.info("Running ModifiedRowKey() for Entity: " + epw.getEntity().getName());
+    LOG.info("Running ModifiedRowKey() for Entity: " + epw.getEntity().getName());
     //get the modified rows in this entity
     String pk = epw.getEntity().getPk();
     while (true) {
@@ -844,8 +843,8 @@ public class DocBuilder {
         return new HashSet();
     }
 
-    log.info("Completed ModifiedRowKey for Entity: " + epw.getEntity().getName() + " rows obtained : " + deltaSet.size());
-    log.info("Completed DeletedRowKey for Entity: " + epw.getEntity().getName() + " rows obtained : " + deletedSet.size());
+    LOG.info("Completed ModifiedRowKey for Entity: " + epw.getEntity().getName() + " rows obtained : " + deltaSet.size());
+    LOG.info("Completed DeletedRowKey for Entity: " + epw.getEntity().getName() + " rows obtained : " + deletedSet.size());
 
     myModifiedPks.addAll(deltaSet.values());
     Set<Map<String, Object>> parentKeyList = new HashSet<>();
@@ -870,7 +869,7 @@ public class DocBuilder {
           return new HashSet();
       }
     }
-    log.info("Completed parentDeltaQuery for Entity: " + epw.getEntity().getName());
+    LOG.info("Completed parentDeltaQuery for Entity: " + epw.getEntity().getName());
     if (epw.getEntity().isDocRoot())
       deletedRows.addAll(deletedSet);
 

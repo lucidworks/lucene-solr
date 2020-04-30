@@ -14,12 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update;
 
 import org.apache.solr.common.cloud.DocRouter;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.response.SolrQueryResponse;
 
 import java.util.List;
 
@@ -30,26 +30,22 @@ import java.util.List;
  *
  */
 public class SplitIndexCommand extends UpdateCommand {
-  public final SolrQueryResponse rsp;
-  public final List<String> paths;
-  public final List<SolrCore> cores;  // either paths or cores should be specified
-  public final List<DocRouter.Range> ranges;
-  public final DocRouter router;
-  public final String routeFieldName;
-  public final String splitKey;
-  public final SolrIndexSplitter.SplitMethod splitMethod;
+  // public List<Directory> dirs;
+  public List<String> paths;
+  public List<SolrCore> cores;  // either paths or cores should be specified
+  public List<DocRouter.Range> ranges;
+  public DocRouter router;
+  public String routeFieldName;
+  public String splitKey;
 
-  public SplitIndexCommand(SolrQueryRequest req, SolrQueryResponse rsp, List<String> paths, List<SolrCore> cores, List<DocRouter.Range> ranges,
-                           DocRouter router, String routeFieldName, String splitKey, SolrIndexSplitter.SplitMethod splitMethod) {
+  public SplitIndexCommand(SolrQueryRequest req, List<String> paths, List<SolrCore> cores, List<DocRouter.Range> ranges, DocRouter router, String routeFieldName, String splitKey) {
     super(req);
-    this.rsp = rsp;
     this.paths = paths;
     this.cores = cores;
     this.ranges = ranges;
     this.router = router;
     this.routeFieldName = routeFieldName;
     this.splitKey = splitKey;
-    this.splitMethod = splitMethod;
   }
 
   @Override
@@ -60,17 +56,16 @@ public class SplitIndexCommand extends UpdateCommand {
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder(super.toString());
-    sb.append(",paths=").append(paths);
-    sb.append(",cores=").append(cores);
-    sb.append(",ranges=").append(ranges);
-    sb.append(",router=").append(router);
+    sb.append(",paths=" + paths);
+    sb.append(",cores=" + cores);
+    sb.append(",ranges=" + ranges);
+    sb.append(",router=" + router);
     if (routeFieldName != null) {
-      sb.append(",routeFieldName=").append(routeFieldName);
+      sb.append(",routeFieldName=" + routeFieldName);
     }
     if (splitKey != null) {
-      sb.append(",split.key=").append(splitKey);
+      sb.append(",split.key=" + splitKey);
     }
-    sb.append(",method=").append(splitMethod.toLower());
     sb.append('}');
     return sb.toString();
   }

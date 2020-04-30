@@ -1,3 +1,5 @@
+package org.apache.lucene.demo.facet;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.demo.facet;
-
 
 
 import org.apache.lucene.facet.FacetResult;
@@ -36,7 +36,7 @@ public class TestDistanceFacetsExample extends LuceneTestCase {
     DistanceFacetsExample example = new DistanceFacetsExample();
     example.index();
     TopDocs hits = example.drillDown(example.FIVE_KM);
-    assertEquals(2, hits.totalHits.value);
+    assertEquals(2, hits.totalHits);
     example.close();
   }
 }

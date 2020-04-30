@@ -1,3 +1,4 @@
+package org.apache.solr.handler.component;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,25 +15,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
 
-import java.util.Collections;
-import java.util.Locale;
 
 import com.google.common.collect.ImmutableMap;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.core.PluginInfo;
 import org.apache.solr.core.SolrResourceLoader;
-import org.apache.solr.security.HttpClientBuilderPlugin;
 import org.apache.solr.util.plugin.PluginInfoInitialized;
+
+import java.util.Collections;
+import java.util.Locale;
 
 public abstract class ShardHandlerFactory {
 
   public abstract ShardHandler getShardHandler();
 
   public abstract void close();
-
-  public void setSecurityBuilder(HttpClientBuilderPlugin clientBuilderPlugin){};
 
   /**
    * Create a new ShardHandlerFactory instance
@@ -54,7 +52,7 @@ public abstract class ShardHandlerFactory {
     catch (Exception e) {
       throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
           String.format(Locale.ROOT, "Error instantiating shardHandlerFactory class [%s]: %s",
-                        info.className, e.getMessage()), e);
+              info.className, e.getMessage()));
     }
 
   }

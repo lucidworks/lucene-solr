@@ -1,3 +1,5 @@
+package org.apache.lucene.search.join;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.join;
-
-import java.io.IOException;
 
 import org.apache.lucene.index.DocValues;
-import org.apache.lucene.index.FilterNumericDocValues;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.index.SortedDocValues;
@@ -28,7 +26,10 @@ import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.search.FieldComparator;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.util.BitSet;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.NumericUtils;
+
+import java.io.IOException;
 
 /**
  * A special sort field that allows sorting parent docs based on nested / child level fields.
@@ -87,7 +88,7 @@ public class ToParentBlockJoinSortField extends SortField {
   }
 
   @Override
-  public FieldComparator<?> getComparator(int numHits, int sortPos) {
+  public FieldComparator<?> getComparator(int numHits, int sortPos) throws IOException {
     switch (getType()) {
       case STRING:
         return getStringComparator(numHits);
@@ -139,6 +140,16 @@ public class ToParentBlockJoinSortField extends SortField {
         }
         return BlockJoinSelector.wrap(sortedNumeric, type, parents, children);
       }
+      @Override
+      protected Bits getDocsWithValue(LeafReaderContext context, String field) throws IOException {
+        final Bits docsWithValue = DocValues.getDocsWithField(context.reader(), field);
+        final BitSet parents = parentFilter.getBitSet(context);
+        final BitSet children = childFilter.getBitSet(context);
+        if (children == null) {
+          return new Bits.MatchNoBits(context.reader().maxDoc());
+        }
+        return BlockJoinSelector.wrap(docsWithValue, parents, children);
+      }
     };
   }
 
@@ -157,6 +168,16 @@ public class ToParentBlockJoinSortField extends SortField {
         }
         return BlockJoinSelector.wrap(sortedNumeric, type, parents, children);
       }
+      @Override
+      protected Bits getDocsWithValue(LeafReaderContext context, String field) throws IOException {
+        final Bits docsWithValue = DocValues.getDocsWithField(context.reader(), field);
+        final BitSet parents = parentFilter.getBitSet(context);
+        final BitSet children = childFilter.getBitSet(context);
+        if (children == null) {
+          return new Bits.MatchNoBits(context.reader().maxDoc());
+        }
+        return BlockJoinSelector.wrap(docsWithValue, parents, children);
+      }
     };
   }
 
@@ -173,11 +194,12 @@ public class ToParentBlockJoinSortField extends SortField {
         if (children == null) {
           return DocValues.emptyNumeric();
         }
-        return new FilterNumericDocValues(BlockJoinSelector.wrap(sortedNumeric, type, parents, children)) {
+        final NumericDocValues view = BlockJoinSelector.wrap(sortedNumeric, type, parents, children);
+        // undo the numericutils sortability
+        return new NumericDocValues() {
           @Override
-          public long longValue() throws IOException {
-            // undo the numericutils sortability
-            return NumericUtils.sortableFloatBits((int) super.longValue());
+          public long get(int docID) {
+            return NumericUtils.sortableFloatBits((int) view.get(docID));
           }
         };
       }
@@ -197,40 +219,25 @@ public class ToParentBlockJoinSortField extends SortField {
         if (children == null) {
           return DocValues.emptyNumeric();
         }
-        return new FilterNumericDocValues(BlockJoinSelector.wrap(sortedNumeric, type, parents, children)) {
+        final NumericDocValues view = BlockJoinSelector.wrap(sortedNumeric, type, parents, children);
+        // undo the numericutils sortability
+        return new NumericDocValues() {
           @Override
-          public long longValue() throws IOException {
-            // undo the numericutils sortability
-            return NumericUtils.sortableDoubleBits(super.longValue());
+          public long get(int docID) {
+            return NumericUtils.sortableDoubleBits(view.get(docID));
           }
         };
       }
+      @Override
+      protected Bits getDocsWithValue(LeafReaderContext context, String field) throws IOException {
+        final Bits docsWithValue = DocValues.getDocsWithField(context.reader(), field);
+        final BitSet parents = parentFilter.getBitSet(context);
+        final BitSet children = childFilter.getBitSet(context);
+        if (children == null) {
+          return new Bits.MatchNoBits(context.reader().maxDoc());
+        }
+        return BlockJoinSelector.wrap(docsWithValue, parents, children);
+      }
     };
-  }
-
-  @Override
-  public int hashCode() {
-    final int prime = 31;
-    int result = super.hashCode();
-    result = prime * result + ((childFilter == null) ? 0 : childFilter.hashCode());
-    result = prime * result + (order ? 1231 : 1237);
-    result = prime * result + ((parentFilter == null) ? 0 : parentFilter.hashCode());
-    return result;
-  }
-
-  @Override
-  public boolean equals(Object obj) {
-    if (this == obj) return true;
-    if (!super.equals(obj)) return false;
-    if (getClass() != obj.getClass()) return false;
-    ToParentBlockJoinSortField other = (ToParentBlockJoinSortField) obj;
-    if (childFilter == null) {
-      if (other.childFilter != null) return false;
-    } else if (!childFilter.equals(other.childFilter)) return false;
-    if (order != other.order) return false;
-    if (parentFilter == null) {
-      if (other.parentFilter != null) return false;
-    } else if (!parentFilter.equals(other.parentFilter)) return false;
-    return true;
   }
 }

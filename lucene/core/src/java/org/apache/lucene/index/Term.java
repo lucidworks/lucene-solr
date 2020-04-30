@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
@@ -23,10 +23,8 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 
-import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
-import org.apache.lucene.util.RamUsageEstimator;
 
 /**
   A Term represents a word from text.  This is the unit of search.  It is
@@ -36,10 +34,7 @@ import org.apache.lucene.util.RamUsageEstimator;
   Note that terms may represent more than words from text fields, but also
   things like dates, email addresses, urls, etc.  */
 
-public final class Term implements Comparable<Term>, Accountable {
-  private static final long BASE_RAM_BYTES = RamUsageEstimator.shallowSizeOfInstance(Term.class) +
-      RamUsageEstimator.shallowSizeOfInstance(BytesRef.class);
-
+public final class Term implements Comparable<Term> {
   String field;
   BytesRef bytes;
 
@@ -167,11 +162,4 @@ public final class Term implements Comparable<Term>, Accountable {
 
   @Override
   public final String toString() { return field + ":" + text(); }
-
-  @Override
-  public long ramBytesUsed() {
-    return BASE_RAM_BYTES +
-        RamUsageEstimator.sizeOfObject(field) +
-        (bytes != null ? RamUsageEstimator.alignObjectSize(bytes.bytes.length + RamUsageEstimator.NUM_BYTES_ARRAY_HEADER) : 0L);
-  }
 }

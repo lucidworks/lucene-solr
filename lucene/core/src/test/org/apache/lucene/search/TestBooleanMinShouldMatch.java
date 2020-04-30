@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,23 +16,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
 
+import org.apache.lucene.document.Field;
+import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.RandomIndexWriter;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.search.similarities.DefaultSimilarity;
+import org.apache.lucene.search.similarities.Similarity;
+import org.apache.lucene.store.Directory;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.Locale;
 import java.util.Random;
-
-import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.RandomIndexWriter;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.LuceneTestCase;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
 
 /** Test that BooleanQuery.setMinimumNumberShouldMatch works.
  */
@@ -91,7 +93,7 @@ public class TestBooleanMinShouldMatch extends LuceneTestCase {
         assertEquals("result count", expected, h.length);
         //System.out.println("TEST: now check");
         // bs2
-        TopScoreDocCollector collector = TopScoreDocCollector.create(1000, Integer.MAX_VALUE);
+        TopScoreDocCollector collector = TopScoreDocCollector.create(1000);
         s.search(q, collector);
         ScoreDoc[] h2 = collector.topDocs().scoreDocs;
         if (expected != h2.length) {
@@ -359,19 +361,19 @@ public class TestBooleanMinShouldMatch extends LuceneTestCase {
     private void assertSubsetOfSameScores(Query q, TopDocs top1, TopDocs top2) {
       // The constrained query
       // should be a subset to the unconstrained query.
-      if (top2.totalHits.value > top1.totalHits.value) {
+      if (top2.totalHits > top1.totalHits) {
         fail("Constrained results not a subset:\n"
                       + CheckHits.topdocsString(top1,0,0)
                       + CheckHits.topdocsString(top2,0,0)
                       + "for query:" + q.toString());
       }
 
-      for (int hit=0; hit<top2.totalHits.value; hit++) {
+      for (int hit=0; hit<top2.totalHits; hit++) {
         int id = top2.scoreDocs[hit].doc;
         float score = top2.scoreDocs[hit].score;
         boolean found=false;
         // find this doc in other hits
-        for (int other=0; other<top1.totalHits.value; other++) {
+        for (int other=0; other<top1.totalHits; other++) {
           if (top1.scoreDocs[other].doc == id) {
             found=true;
             float otherScore = top1.scoreDocs[other].score;
@@ -380,15 +382,7 @@ public class TestBooleanMinShouldMatch extends LuceneTestCase {
                 + CheckHits.topdocsString(top1,0,0)
                 + CheckHits.topdocsString(top2,0,0)
                 + "for query:" + q.toString(),
-                score, otherScore,
-                // If there is at least one MUST/FILTER clause and if
-                // minShouldMatch is equal to the number of SHOULD clauses,
-                // then a query that was previously executed with
-                // ReqOptSumScorer is now executed with ConjunctionScorer.
-                // We need to introduce some leniency because ReqOptSumScorer
-                // casts intermediate values to floats before summing up again
-                // which hurts accuracy.
-                Math.ulp(score));
+                score, otherScore, CheckHits.explainToleranceDelta(score, otherScore));
           }
         }
 
@@ -400,26 +394,48 @@ public class TestBooleanMinShouldMatch extends LuceneTestCase {
       }
     }
 
-    public void testRewriteMSM1() throws Exception {
-      BooleanQuery.Builder q1 = new BooleanQuery.Builder();
-      q1.add(new TermQuery(new Term("data", "1")), BooleanClause.Occur.SHOULD);
-      BooleanQuery.Builder q2 = new BooleanQuery.Builder();
-      q2.add(new TermQuery(new Term("data", "1")), BooleanClause.Occur.SHOULD);
-      q2.setMinimumNumberShouldMatch(1);
-      TopDocs top1 = s.search(q1.build(),100);
-      TopDocs top2 = s.search(q2.build(),100);
-      assertSubsetOfSameScores(q2.build(), top1, top2);
+    public void testRewriteCoord1() throws Exception {
+      final Similarity oldSimilarity = s.getSimilarity(true);
+      try {
+        s.setSimilarity(new DefaultSimilarity() {
+          @Override
+          public float coord(int overlap, int maxOverlap) {
+            return overlap / ((float)maxOverlap + 1);
+          }
+        });
+        BooleanQuery.Builder q1 = new BooleanQuery.Builder();
+        q1.add(new TermQuery(new Term("data", "1")), BooleanClause.Occur.SHOULD);
+        BooleanQuery.Builder q2 = new BooleanQuery.Builder();
+        q2.add(new TermQuery(new Term("data", "1")), BooleanClause.Occur.SHOULD);
+        q2.setMinimumNumberShouldMatch(1);
+        TopDocs top1 = s.search(q1.build(),100);
+        TopDocs top2 = s.search(q2.build(),100);
+        assertSubsetOfSameScores(q2.build(), top1, top2);
+      } finally {
+        s.setSimilarity(oldSimilarity);
+      }
     }
     
     public void testRewriteNegate() throws Exception {
-      BooleanQuery.Builder q1 = new BooleanQuery.Builder();
-      q1.add(new TermQuery(new Term("data", "1")), BooleanClause.Occur.SHOULD);
-      BooleanQuery.Builder q2 = new BooleanQuery.Builder();
-      q2.add(new TermQuery(new Term("data", "1")), BooleanClause.Occur.SHOULD);
-      q2.add(new TermQuery(new Term("data", "Z")), BooleanClause.Occur.MUST_NOT);
-      TopDocs top1 = s.search(q1.build(),100);
-      TopDocs top2 = s.search(q2.build(),100);
-      assertSubsetOfSameScores(q2.build(), top1, top2);
+      final Similarity oldSimilarity = s.getSimilarity(true);
+      try {
+        s.setSimilarity(new DefaultSimilarity() {
+          @Override
+          public float coord(int overlap, int maxOverlap) {
+            return overlap / ((float)maxOverlap + 1);
+          }
+        });
+        BooleanQuery.Builder q1 = new BooleanQuery.Builder();
+        q1.add(new TermQuery(new Term("data", "1")), BooleanClause.Occur.SHOULD);
+        BooleanQuery.Builder q2 = new BooleanQuery.Builder();
+        q2.add(new TermQuery(new Term("data", "1")), BooleanClause.Occur.SHOULD);
+        q2.add(new TermQuery(new Term("data", "Z")), BooleanClause.Occur.MUST_NOT);
+        TopDocs top1 = s.search(q1.build(),100);
+        TopDocs top2 = s.search(q2.build(),100);
+        assertSubsetOfSameScores(q2.build(), top1, top2);
+      } finally {
+        s.setSimilarity(oldSimilarity);
+      }
     }
 
     protected void printHits(String test, ScoreDoc[] h, IndexSearcher searcher) throws Exception {

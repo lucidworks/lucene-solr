@@ -14,11 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.response;
 
-import java.io.IOException;
 import java.io.Writer;
-import java.util.List;
+import java.io.IOException;
 
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
@@ -78,11 +78,6 @@ class PHPWriter extends JSONWriter {
   }
 
   @Override
-  public void writeArray(String name, List l) throws IOException {
-    writeArray(name,l.iterator());
-  }
-
-  @Override
   public void writeArrayCloser() throws IOException {
     writer.write(')');
   }
@@ -93,7 +88,7 @@ class PHPWriter extends JSONWriter {
   }
 
   @Override
-  public void writeKey(String fname, boolean needsEscaping) throws IOException {
+  protected void writeKey(String fname, boolean needsEscaping) throws IOException {
     writeStr(null, fname, needsEscaping);
     writer.write('=');
     writer.write('>');

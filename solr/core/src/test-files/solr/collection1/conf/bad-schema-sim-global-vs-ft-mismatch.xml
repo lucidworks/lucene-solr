@@ -17,18 +17,21 @@
 -->
 
 <schema name="bad-schema-sim-global-vs-ft-mismatch" version="1.0">
+  <types>
+    <fieldType name="sim1" class="solr.TextField">
+      <analyzer>
+        <tokenizer class="solr.MockTokenizerFactory"/>
+      </analyzer>
+      <!-- BAD: similarity here but no global sim that allows it -->
+      <similarity class="org.apache.lucene.misc.SweetSpotSimilarity"/>
+    </fieldType>
+ </types>
 
-  <similarity class="solr.BM25SimilarityFactory"/> <!-- global sim -->
+ <fields>
+   <field name="sim1text" type="sim1" indexed="true" stored="true"/>
+   <dynamicField name="*" type="sim1" />
+ </fields>
 
-  <fieldType name="sim1" class="solr.TextField">
-    <analyzer>
-      <tokenizer class="solr.MockTokenizerFactory"/>
-    </analyzer>
-    <!-- BAD: similarity here but global sim does not allow it -->
-    <similarity class="org.apache.lucene.misc.SweetSpotSimilarity"/>
-  </fieldType>
-
-  <field name="sim1text" type="sim1" indexed="true" stored="true"/>
-  <dynamicField name="*" type="sim1"/>
+ <defaultSearchField>sim1text</defaultSearchField>
 
 </schema>

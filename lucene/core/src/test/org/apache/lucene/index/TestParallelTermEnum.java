@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
+import java.util.Iterator;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
@@ -57,8 +59,8 @@ public class TestParallelTermEnum extends LuceneTestCase {
 
     iw2.close();
 
-    this.ir1 = getOnlyLeafReader(DirectoryReader.open(rd1));
-    this.ir2 = getOnlyLeafReader(DirectoryReader.open(rd2));
+    this.ir1 = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(rd1));
+    this.ir2 = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(rd2));
   }
 
   @Override
@@ -89,10 +91,21 @@ public class TestParallelTermEnum extends LuceneTestCase {
   public void test1() throws IOException {
     ParallelLeafReader pr = new ParallelLeafReader(ir1, ir2);
 
-    assertEquals(3, pr.getFieldInfos().size());
+    Fields fields = pr.fields();
+    Iterator<String> fe = fields.iterator();
 
-    checkTerms(pr.terms("field1"), "brown", "fox", "jumps", "quick", "the");
-    checkTerms(pr.terms("field2"), "brown", "fox", "jumps", "quick", "the");
-    checkTerms(pr.terms("field3"), "dog", "fox", "jumps", "lazy", "over", "the");
+    String f = fe.next();
+    assertEquals("field1", f);
+    checkTerms(fields.terms(f), "brown", "fox", "jumps", "quick", "the");
+
+    f = fe.next();
+    assertEquals("field2", f);
+    checkTerms(fields.terms(f), "brown", "fox", "jumps", "quick", "the");
+
+    f = fe.next();
+    assertEquals("field3", f);
+    checkTerms(fields.terms(f), "dog", "fox", "jumps", "lazy", "over", "the");
+
+    assertFalse(fe.hasNext());
   }
 }

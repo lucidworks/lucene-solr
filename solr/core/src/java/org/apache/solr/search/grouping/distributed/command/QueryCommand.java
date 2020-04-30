@@ -1,3 +1,5 @@
+package org.apache.solr.search.grouping.distributed.command;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,29 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.grouping.distributed.command;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-
-import org.apache.lucene.search.Collector;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.MultiCollector;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.Sort;
-import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.search.TopDocsCollector;
-import org.apache.lucene.search.TopFieldCollector;
-import org.apache.lucene.search.TopScoreDocCollector;
+import org.apache.lucene.search.*;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.search.DocSet;
-import org.apache.solr.search.MaxScoreCollector;
 import org.apache.solr.search.QParser;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.apache.solr.search.SyntaxError;
 import org.apache.solr.search.grouping.Command;
 import org.apache.solr.search.grouping.collector.FilterCollector;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  *
@@ -48,7 +40,6 @@ public class QueryCommand implements Command<QueryCommandResult> {
     private Sort sort;
     private String queryString;
     private Query query;
-    private Query mainQuery;
     private DocSet docSet;
     private Integer docsToCollect;
     private boolean needScores;
@@ -58,25 +49,8 @@ public class QueryCommand implements Command<QueryCommandResult> {
       return this;
     }
 
-    /**
-     * Sets the group query.
-     *
-     * @param query The {@link Query} used for grouping
-     * @return this
-     */
     public Builder setQuery(Query query) {
       this.query = query;
-      return this;
-    }
-
-    /**
-     * Sets the main query used for fetching results. This is mainly used for computing the scores.
-     *
-     * @param mainQuery The top-level query
-     * @return this
-     */
-    public Builder setMainQuery(Query mainQuery) {
-      this.mainQuery = mainQuery;
       return this;
     }
 
@@ -89,7 +63,7 @@ public class QueryCommand implements Command<QueryCommandResult> {
      * @return this
      */
     public Builder setQuery(String groupQueryString, SolrQueryRequest request) throws SyntaxError {
-      QParser parser = QParser.getParser(groupQueryString, request);
+      QParser parser = QParser.getParser(groupQueryString, null, request);
       this.queryString = groupQueryString;
       return setQuery(parser.getQuery());
     }
@@ -121,11 +95,11 @@ public class QueryCommand implements Command<QueryCommandResult> {
     }
 
     public QueryCommand build() {
-      if (sort == null || query == null || docSet == null || docsToCollect == null || mainQuery == null) {
+      if (sort == null || query == null || docSet == null || docsToCollect == null) {
         throw new IllegalStateException("All fields must be set");
       }
 
-      return new QueryCommand(sort, query, docsToCollect, needScores, docSet, queryString, mainQuery);
+      return new QueryCommand(sort, query, docsToCollect, needScores, docSet, queryString);
     }
 
   }
@@ -136,65 +110,33 @@ public class QueryCommand implements Command<QueryCommandResult> {
   private final int docsToCollect;
   private final boolean needScores;
   private final String queryString;
-  private final Query mainQuery;
 
-  private TopDocsCollector topDocsCollector;
+  private TopDocsCollector collector;
   private FilterCollector filterCollector;
-  private MaxScoreCollector maxScoreCollector;
-  private TopDocs topDocs;
 
-  private QueryCommand(Sort sort,
-                       Query query,
-                       int docsToCollect,
-                       boolean needScores,
-                       DocSet docSet,
-                       String queryString,
-                       Query mainQuery) {
+  private QueryCommand(Sort sort, Query query, int docsToCollect, boolean needScores, DocSet docSet, String queryString) {
     this.sort = sort;
     this.query = query;
     this.docsToCollect = docsToCollect;
     this.needScores = needScores;
     this.docSet = docSet;
     this.queryString = queryString;
-    this.mainQuery = mainQuery;
   }
 
   @Override
   public List<Collector> create() throws IOException {
-    Collector subCollector;
-    if (sort == null || sort.equals(Sort.RELEVANCE)) {
-      subCollector = topDocsCollector = TopScoreDocCollector.create(docsToCollect, Integer.MAX_VALUE);
+    if (sort == null || sort == Sort.RELEVANCE) {
+      collector = TopScoreDocCollector.create(docsToCollect);
     } else {
-      topDocsCollector = TopFieldCollector.create(sort, docsToCollect, Integer.MAX_VALUE);
-      if (needScores) {
-        maxScoreCollector = new MaxScoreCollector();
-        subCollector = MultiCollector.wrap(topDocsCollector, maxScoreCollector);
-      } else {
-        subCollector = topDocsCollector;
-      }
+      collector = TopFieldCollector.create(sort, docsToCollect, true, needScores, needScores);
     }
-    filterCollector = new FilterCollector(docSet, subCollector);
+    filterCollector = new FilterCollector(docSet, collector);
     return Arrays.asList((Collector) filterCollector);
   }
 
   @Override
-  public void postCollect(IndexSearcher searcher) throws IOException {
-    topDocs = topDocsCollector.topDocs();
-    if (needScores) {
-      // use mainQuery to populate the scores
-      TopFieldCollector.populateScores(topDocs.scoreDocs, searcher, mainQuery);
-    }
-  }
-
-  @Override
-  public QueryCommandResult result() throws IOException {
-    float maxScore;
-    if (sort == null) {
-      maxScore = topDocs.scoreDocs.length == 0 ? Float.NaN : topDocs.scoreDocs[0].score;
-    } else {
-      maxScore = maxScoreCollector == null ? Float.NaN : maxScoreCollector.getMaxScore();
-    }
-    return new QueryCommandResult(topDocs, filterCollector.getMatches(), maxScore);
+  public QueryCommandResult result() {
+    return new QueryCommandResult(collector.topDocs(), filterCollector.getMatches());
   }
 
   @Override
@@ -208,7 +150,7 @@ public class QueryCommand implements Command<QueryCommandResult> {
   }
 
   @Override
-  public Sort getWithinGroupSort() {
+  public Sort getSortWithinGroup() {
     return null;
   }
 }

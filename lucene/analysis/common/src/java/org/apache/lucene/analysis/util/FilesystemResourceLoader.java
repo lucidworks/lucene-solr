@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.util;
-
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -46,25 +46,9 @@ public final class FilesystemResourceLoader implements ResourceLoader {
    * base directory (may be {@code null} to refer to CWD).
    * Files not found in file system and class lookups are delegated to context
    * classloader.
-   * 
-   * @deprecated You should not use this ctor, because it uses the thread's context
-   * class loader as fallback for resource lookups, which is bad programming style.
-   * Please specify a {@link ClassLoader} instead.
-   * @see #FilesystemResourceLoader(Path, ClassLoader)
    */
-  @Deprecated
   public FilesystemResourceLoader(Path baseDirectory) {
     this(baseDirectory, new ClasspathResourceLoader());
-  }
-
-  /**
-   * Creates a resource loader that resolves resources against the given
-   * base directory (may be {@code null} to refer to CWD).
-   * Files not found in file system and class lookups are delegated to context
-   * classloader.
-   */
-  public FilesystemResourceLoader(Path baseDirectory, ClassLoader delegate) {
-    this(baseDirectory, new ClasspathResourceLoader(delegate));
   }
 
   /**

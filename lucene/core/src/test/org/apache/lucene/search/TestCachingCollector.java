@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -25,14 +25,31 @@ public class TestCachingCollector extends LuceneTestCase {
 
   private static final double ONE_BYTE = 1.0 / (1024 * 1024); // 1 byte out of MB
   
-  private static class MockScorable extends Scorable {
+  private static class MockScorer extends Scorer {
+    
+    private MockScorer() {
+      super((Weight) null);
+    }
     
     @Override
-    public float score() { return 0; }
+    public float score() throws IOException { return 0; }
+    
+    @Override
+    public int freq() throws IOException { return 0; }
 
     @Override
     public int docID() { return 0; }
 
+    @Override
+    public int nextDoc() throws IOException { return 0; }
+
+    @Override
+    public int advance(int target) throws IOException { return 0; }
+
+    @Override
+    public long cost() {
+      return 1;
+    } 
   }
   
   private static class NoOpCollector extends SimpleCollector {
@@ -41,8 +58,8 @@ public class TestCachingCollector extends LuceneTestCase {
     public void collect(int doc) throws IOException {}
     
     @Override
-    public ScoreMode scoreMode() {
-      return ScoreMode.COMPLETE_NO_SCORES;
+    public boolean needsScores() {
+      return false;
     }
 
   }
@@ -51,7 +68,7 @@ public class TestCachingCollector extends LuceneTestCase {
     for (boolean cacheScores : new boolean[] { false, true }) {
       CachingCollector cc = CachingCollector.create(new NoOpCollector(), cacheScores, 1.0);
       LeafCollector acc = cc.getLeafCollector(null);
-      acc.setScorer(new MockScorable());
+      acc.setScorer(new MockScorer());
 
       // collect 1000 docs
       for (int i = 0; i < 1000; i++) {
@@ -69,8 +86,8 @@ public class TestCachingCollector extends LuceneTestCase {
         }
         
         @Override
-        public ScoreMode scoreMode() {
-          return ScoreMode.COMPLETE_NO_SCORES;
+        public boolean needsScores() {
+          return false;
         }
       });
     }
@@ -79,7 +96,7 @@ public class TestCachingCollector extends LuceneTestCase {
   public void testIllegalStateOnReplay() throws Exception {
     CachingCollector cc = CachingCollector.create(new NoOpCollector(), true, 50 * ONE_BYTE);
     LeafCollector acc = cc.getLeafCollector(null);
-    acc.setScorer(new MockScorable());
+    acc.setScorer(new MockScorer());
     
     // collect 130 docs, this should be enough for triggering cache abort.
     for (int i = 0; i < 130; i++) {
@@ -88,9 +105,12 @@ public class TestCachingCollector extends LuceneTestCase {
     
     assertFalse("CachingCollector should not be cached due to low memory limit", cc.isCached());
     
-    expectThrows(IllegalStateException.class, () -> {
+    try {
       cc.replay(new NoOpCollector());
-    });
+      fail("replay should fail if CachingCollector is not cached");
+    } catch (IllegalStateException e) {
+      // expected
+    }
   }
   
   public void testCachedArraysAllocation() throws Exception {
@@ -104,7 +124,7 @@ public class TestCachingCollector extends LuceneTestCase {
       CachingCollector cc = CachingCollector.create(new NoOpCollector(),
           cacheScores, bytesPerDoc * ONE_BYTE * numDocs);
       LeafCollector acc = cc.getLeafCollector(null);
-      acc.setScorer(new MockScorable());
+      acc.setScorer(new MockScorer());
       for (int i = 0; i < numDocs; i++) acc.collect(i);
       assertTrue(cc.isCached());
 
@@ -119,7 +139,7 @@ public class TestCachingCollector extends LuceneTestCase {
       // create w/ null wrapped collector, and test that the methods work
       CachingCollector cc = CachingCollector.create(cacheScores, 50 * ONE_BYTE);
       LeafCollector acc = cc.getLeafCollector(null);
-      acc.setScorer(new MockScorable());
+      acc.setScorer(new MockScorer());
       acc.collect(0);
       
       assertTrue(cc.isCached());

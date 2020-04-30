@@ -1,3 +1,5 @@
+package org.apache.lucene.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.document;
-
 
 import java.util.*;
 
@@ -44,7 +44,7 @@ public final class Document implements Iterable<IndexableField> {
 
   /** Constructs a new document with no fields. */
   public Document() {}
-  
+
   @Override
   public Iterator<IndexableField> iterator() {
     return fields.iterator();
@@ -168,7 +168,7 @@ public final class Document implements Iterable<IndexableField> {
    * matching fields.  It never returns null.
    *
    * @param name the name of the field
-   * @return a <code>Field[]</code> array
+   * @return a <code>IndexableField[]</code> array
    */
   public IndexableField[] getFields(String name) {
     List<IndexableField> result = new ArrayList<>();
@@ -186,20 +186,19 @@ public final class Document implements Iterable<IndexableField> {
    * <i>not</i> available in documents retrieved from the
    * index, e.g. {@link IndexSearcher#doc(int)} or {@link
    * IndexReader#document(int)}.
-   * 
-   * @return an immutable <code>List&lt;Field&gt;</code> 
    */
   public final List<IndexableField> getFields() {
-    return Collections.unmodifiableList(fields);
+    return fields;
   }
   
-  private final static String[] NO_STRINGS = new String[0];
+   private final static String[] NO_STRINGS = new String[0];
 
   /**
    * Returns an array of values of the field specified as the method parameter.
    * This method returns an empty array when there are no
    * matching fields.  It never returns null.
-   * For a numeric {@link StoredField} it returns the string value of the number. If you want
+   * For {@link IntField}, {@link LongField}, {@link
+   * FloatField} and {@link DoubleField} it returns the string value of the number. If you want
    * the actual numeric field instances back, use {@link #getFields}.
    * @param name the name of the field
    * @return a <code>String[]</code> of field values
@@ -223,7 +222,8 @@ public final class Document implements Iterable<IndexableField> {
    * this document, or null.  If multiple fields exist with this name, this
    * method returns the first value added. If only binary fields with this name
    * exist, returns null.
-   * For a numeric {@link StoredField} it returns the string value of the number. If you want
+   * For {@link IntField}, {@link LongField}, {@link
+   * FloatField} and {@link DoubleField} it returns the string value of the number. If you want
    * the actual numeric field instance back, use {@link #getField}.
    */
   public final String get(String name) {
@@ -249,10 +249,5 @@ public final class Document implements Iterable<IndexableField> {
     }
     buffer.append(">");
     return buffer.toString();
-  }
-
-  /** Removes all the fields from document. */
-  public void clear() {
-    fields.clear();
   }
 }

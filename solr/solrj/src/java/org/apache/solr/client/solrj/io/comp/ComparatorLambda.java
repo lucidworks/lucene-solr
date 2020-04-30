@@ -1,3 +1,9 @@
+package org.apache.solr.client.solrj.io.comp;
+
+import java.io.Serializable;
+
+import org.apache.solr.client.solrj.io.Tuple;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +20,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.io.comp;
-
-import java.io.Serializable;
-
-import org.apache.solr.client.solrj.io.Tuple;
 
 /**
  * Interface for use with a comparator lambda

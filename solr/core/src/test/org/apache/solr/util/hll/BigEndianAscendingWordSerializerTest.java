@@ -14,45 +14,54 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.util.hll;
 
 import java.util.Arrays;
 
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 import org.junit.Test;
 
 /**
  * Unit tests for {@link BigEndianAscendingWordSerializer}.
  */
-public class BigEndianAscendingWordSerializerTest extends SolrTestCase {
+public class BigEndianAscendingWordSerializerTest extends LuceneTestCase {
     /**
      * Error checking tests for constructor.
      */
     @Test
     public void constructorErrorTest() {
         // word length too small
-        IllegalArgumentException e = expectThrows(IllegalArgumentException.class,  () -> {
-            new BigEndianAscendingWordSerializer(0/*wordLength, below minimum of 1*/, 1/*wordCount, arbitrary*/, 0/*bytePadding, arbitrary*/);;
-        });
-        assertTrue(e.getMessage().contains("Word length must be"));
+        try {
+            new BigEndianAscendingWordSerializer(0/*wordLength, below minimum of 1*/, 1/*wordCount, arbitrary*/, 0/*bytePadding, arbitrary*/);
+            fail("Should complain about too-short words.");
+        } catch(final IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("Word length must be"));
+        }
 
         // word length too large
-        e = expectThrows(IllegalArgumentException.class,  () -> {
+        try {
             new BigEndianAscendingWordSerializer(65/*wordLength, above max of 64*/, 1/*wordCount, arbitrary*/, 0/*bytePadding, arbitrary*/);
-        });
-        assertTrue(e.getMessage().contains("Word length must be"));
+            fail("Should complain about too-long words.");
+        } catch(final IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("Word length must be"));
+        }
 
         // word count negative
-        e = expectThrows(IllegalArgumentException.class,  () -> {
+        try {
             new BigEndianAscendingWordSerializer(5/*wordLength, arbitrary*/, -1/*wordCount, too small*/, 0/*bytePadding, arbitrary*/);
-        });
-        assertTrue(e.getMessage().contains("Word count must be"));
+            fail("Should complain about negative word count.");
+        } catch(final IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("Word count must be"));
+        }
 
         // byte padding negative
-        e = expectThrows(IllegalArgumentException.class,  () -> {
+        try {
             new BigEndianAscendingWordSerializer(5/*wordLength, arbitrary*/, 1/*wordCount, arbitrary*/, -1/*bytePadding, too small*/);
-        });
-        assertTrue(e.getMessage().contains("Byte padding must be"));
+            fail("Should complain about negative byte padding.");
+        } catch(final IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("Byte padding must be"));
+        }
     }
 
     /**
@@ -66,8 +75,12 @@ public class BigEndianAscendingWordSerializerTest extends SolrTestCase {
                                                  0/*bytePadding, arbitrary*/);
 
         // getBytes without enough writeWord should throw
-        RuntimeException e = expectThrows(RuntimeException.class, serializer::getBytes);
-        assertTrue(e.getMessage().contains("Not all words"));
+        try {
+            serializer.getBytes();
+            fail("Should throw.");
+        } catch(final RuntimeException e) {
+            assertTrue(e.getMessage().contains("Not all words"));
+        }
     }
 
     /**

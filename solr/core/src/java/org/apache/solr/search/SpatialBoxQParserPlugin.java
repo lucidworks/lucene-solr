@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 
 public class SpatialBoxQParserPlugin extends SpatialFilterQParserPlugin {
@@ -27,6 +29,11 @@ public class SpatialBoxQParserPlugin extends SpatialFilterQParserPlugin {
                               SolrParams params, SolrQueryRequest req) {
 
     return new SpatialFilterQParser(qstr, localParams, params, req, true);
+  }
+
+  @Override
+  public void init(NamedList args) {
+
   }
 
 }

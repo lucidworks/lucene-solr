@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spell;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spell;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -149,7 +150,7 @@ public class TestSpellChecker extends LuceneTestCase {
   public void testComparator() throws Exception {
     IndexReader r = DirectoryReader.open(userindex);
     Directory compIdx = newDirectory();
-    SpellChecker compareSP = new SpellCheckerMock(compIdx, new LevenshteinDistance(), new SuggestWordFrequencyComparator());
+    SpellChecker compareSP = new SpellCheckerMock(compIdx, new LevensteinDistance(), new SuggestWordFrequencyComparator());
     addwords(r, compareSP, "field3");
 
     String[] similar = compareSP.suggestSimilar("fvie", 2, r, "field3",
@@ -167,7 +168,7 @@ public class TestSpellChecker extends LuceneTestCase {
   public void testBogusField() throws Exception {
     IndexReader r = DirectoryReader.open(userindex);
     Directory compIdx = newDirectory();
-    SpellChecker compareSP = new SpellCheckerMock(compIdx, new LevenshteinDistance(), new SuggestWordFrequencyComparator());
+    SpellChecker compareSP = new SpellCheckerMock(compIdx, new LevensteinDistance(), new SuggestWordFrequencyComparator());
     addwords(r, compareSP, "field3");
 
     String[] similar = compareSP.suggestSimilar("fvie", 2, r,
@@ -310,8 +311,12 @@ public class TestSpellChecker extends LuceneTestCase {
     assertEquals(2, similar.length);
     assertEquals(similar[0], "ninety");
     assertEquals(similar[1], "one");
-    // should not throw exception
-    spellChecker.suggestSimilar("tousand", 10, r, null, SuggestMode.SUGGEST_WHEN_NOT_IN_INDEX);
+    try {
+      similar = spellChecker.suggestSimilar("tousand", 10, r, null,
+          SuggestMode.SUGGEST_WHEN_NOT_IN_INDEX);
+    } catch (NullPointerException e) {
+      assertTrue("threw an NPE, and it shouldn't have", false);
+    }
   }
 
   private void checkJaroWinklerSuggestions() throws IOException {
@@ -357,27 +362,39 @@ public class TestSpellChecker extends LuceneTestCase {
     assertLastSearcherOpen(4);
     spellChecker.close();
     assertSearchersClosed();
-
-    expectThrows(AlreadyClosedException.class, () -> {
+    try {
       spellChecker.close();
-    });
-
-    expectThrows(AlreadyClosedException.class, () -> {
+      fail("spellchecker was already closed");
+    } catch (AlreadyClosedException e) {
+      // expected
+    }
+    try {
       checkCommonSuggestions(r);
-    });
+      fail("spellchecker was already closed");
+    } catch (AlreadyClosedException e) {
+      // expected
+    }
     
-    expectThrows(AlreadyClosedException.class, () -> {
+    try {
       spellChecker.clearIndex();
-    });
+      fail("spellchecker was already closed");
+    } catch (AlreadyClosedException e) {
+      // expected
+    }
     
-    expectThrows(AlreadyClosedException.class, () -> {
+    try {
       spellChecker.indexDictionary(new LuceneDictionary(r, field), newIndexWriterConfig(null), false);
-    });
+      fail("spellchecker was already closed");
+    } catch (AlreadyClosedException e) {
+      // expected
+    }
     
-    expectThrows(AlreadyClosedException.class, () -> {
+    try {
       spellChecker.setSpellIndex(spellindex);
-    });
-
+      fail("spellchecker was already closed");
+    } catch (AlreadyClosedException e) {
+      // expected
+    }
     assertEquals(4, searchers.size());
     assertSearchersClosed();
     r.close();

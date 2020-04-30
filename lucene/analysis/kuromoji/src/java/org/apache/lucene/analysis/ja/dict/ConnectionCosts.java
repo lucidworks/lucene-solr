@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ja.dict;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ja.dict;
-
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -24,6 +24,7 @@ import java.io.InputStream;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.InputStreamDataInput;
+import org.apache.lucene.util.BitUtil;
 import org.apache.lucene.util.IOUtils;
 
 /**
@@ -37,16 +38,12 @@ public final class ConnectionCosts {
   
   private final short[][] costs; // array is backward IDs first since get is called using the same backward ID consecutively. maybe doesn't matter.
   
-  /**
-   * @param scheme - scheme for loading resources (FILE or CLASSPATH).
-   * @param path - where to load resources from, without the ".dat" suffix
-   */
-  public ConnectionCosts(BinaryDictionary.ResourceScheme scheme, String path) throws IOException {
+  private ConnectionCosts() throws IOException {
     InputStream is = null;
     short[][] costs = null;
     boolean success = false;
     try {
-      is = BinaryDictionary.getResource(scheme, path.replace('.', '/') + FILENAME_SUFFIX);
+      is = BinaryDictionary.getClassResource(getClass(), FILENAME_SUFFIX);
       is = new BufferedInputStream(is);
       final DataInput in = new InputStreamDataInput(is);
       CodecUtil.checkHeader(in, HEADER, VERSION, VERSION);
@@ -72,11 +69,7 @@ public final class ConnectionCosts {
     
     this.costs = costs;
   }
-
-  private ConnectionCosts() throws IOException {
-    this(BinaryDictionary.ResourceScheme.CLASSPATH, ConnectionCosts.class.getName());
-  }
-
+  
   public int get(int forwardId, int backwardId) {
     return costs[backwardId][forwardId];
   }

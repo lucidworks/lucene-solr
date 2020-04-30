@@ -1,3 +1,5 @@
+package org.apache.solr.search.facet;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.facet;
+
 
 import java.io.IOException;
 
@@ -24,6 +26,7 @@ import org.apache.solr.search.BitDocSet;
 import org.apache.solr.search.DocIterator;
 import org.apache.solr.search.DocSet;
 import org.apache.solr.search.DocSetCollector;
+import org.apache.solr.search.DocSetUtil;
 import org.apache.solr.search.QueryContext;
 
 /** @lucene.experimental */

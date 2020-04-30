@@ -1,3 +1,5 @@
+package org.apache.solr.common.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,32 +16,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.util;
-
-import java.io.Closeable;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.lang.invoke.MethodHandles;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class ObjectReleaseTracker {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   public static Map<Object,String> OBJECTS = new ConcurrentHashMap<>();
   
   public static boolean track(Object object) {
     StringWriter sw = new StringWriter();
     PrintWriter pw = new PrintWriter(sw);
-    new ObjectTrackerException(object.getClass().getName()).printStackTrace(pw);
+    new ObjectTrackerException().printStackTrace(pw);
     OBJECTS.put(object, sw.toString());
     return true;
   }
@@ -49,58 +41,33 @@ public class ObjectReleaseTracker {
     return true;
   }
   
-  public static void clear() {
-    OBJECTS.clear();
-  }
-  
   /**
    * @return null if ok else error message
    */
-  public static String checkEmpty() {
+  public static String clearObjectTrackerAndCheckEmpty() {
     String error = null;
     Set<Entry<Object,String>> entries = OBJECTS.entrySet();
-
+    boolean empty = entries.isEmpty();
     if (entries.size() > 0) {
-      List<String> objects = new ArrayList<>();
+      Set<String> objects = new HashSet<>();
       for (Entry<Object,String> entry : entries) {
         objects.add(entry.getKey().getClass().getSimpleName());
       }
       
-      error = "ObjectTracker found " + entries.size() + " object(s) that were not released!!! " + objects + "\n";
+      error = "ObjectTracker found " + entries.size() + " object(s) that were not released!!! " + objects;
+      
+      System.err.println(error);
       for (Entry<Object,String> entry : entries) {
-        error += entry.getValue() + "\n";
+        System.err.println(entry.getValue());
       }
     }
+    
+    OBJECTS.clear();
     
     return error;
   }
   
-  public static void tryClose() {
-    Set<Entry<Object,String>> entries = OBJECTS.entrySet();
-
-    if (entries.size() > 0) {
-      for (Entry<Object,String> entry : entries) {
-        if (entry.getKey() instanceof Closeable) {
-          try {
-            ((Closeable)entry.getKey()).close();
-          } catch (Throwable t) {
-            log.error("", t);
-          }
-        } else if (entry.getKey() instanceof ExecutorService) {
-          try {
-            ExecutorUtil.shutdownAndAwaitTermination((ExecutorService)entry.getKey());
-          } catch (Throwable t) {
-            log.error("", t);
-          }
-        }
-      }
-    }
-  }
-  
   private static class ObjectTrackerException extends RuntimeException {
-    ObjectTrackerException(String msg) {
-      super(msg);
-    }
+    
   }
-
 }

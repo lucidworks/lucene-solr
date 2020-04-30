@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.standard;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.standard;
-
-
-import java.io.IOException;
-import java.util.Arrays;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
@@ -26,15 +23,18 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.MultiTerms;
-import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.BytesRef;
+
+import java.io.IOException;
+import java.util.Arrays;
 
 /** tests for classicanalyzer */
 public class TestClassicAnalyzer extends BaseTokenStreamTestCase {
@@ -299,7 +299,7 @@ public class TestClassicAnalyzer extends BaseTokenStreamTestCase {
 
     // Make sure position is still incremented when
     // massive term is skipped:
-    PostingsEnum tps = MultiTerms.getTermPostingsEnum(reader,
+    PostingsEnum tps = MultiFields.getTermPositionsEnum(reader,
                                                                 "content",
                                                                 new BytesRef("another"));
     assertTrue(tps.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);

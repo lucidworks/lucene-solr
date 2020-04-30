@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.document.SortedDocValuesField;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.index.IndexReader;
@@ -91,6 +88,10 @@ public class TestIndexSearcher extends LuceneTestCase {
         null,
         new Sort(new SortField("field2", SortField.Type.STRING))
     };
+    Filter filters[] = new Filter[] {
+        null,
+        new QueryWrapperFilter(new TermQuery(new Term("field2", "true")))
+    };
     ScoreDoc afters[] = new ScoreDoc[] {
         null,
         new FieldDoc(0, 0f, new Object[] { new BytesRef("boo!") })
@@ -100,15 +101,24 @@ public class TestIndexSearcher extends LuceneTestCase {
       for (ScoreDoc after : afters) {
         for (Query query : queries) {
           for (Sort sort : sorts) {
-            searcher.search(query, Integer.MAX_VALUE);
-            searcher.searchAfter(after, query, Integer.MAX_VALUE);
-            if (sort != null) {
-              searcher.search(query, Integer.MAX_VALUE, sort);
-              searcher.search(query, Integer.MAX_VALUE, sort, true);
-              searcher.search(query, Integer.MAX_VALUE, sort, false);
-              searcher.searchAfter(after, query, Integer.MAX_VALUE, sort);
-              searcher.searchAfter(after, query, Integer.MAX_VALUE, sort, true);
-              searcher.searchAfter(after, query, Integer.MAX_VALUE, sort, false);
+            for (Filter filter : filters) {
+              searcher.search(query, Integer.MAX_VALUE);
+              searcher.searchAfter(after, query, Integer.MAX_VALUE);
+              searcher.search(query, filter, Integer.MAX_VALUE);
+              searcher.searchAfter(after, query, filter, Integer.MAX_VALUE);
+              if (sort != null) {
+                searcher.search(query, Integer.MAX_VALUE, sort);
+                searcher.search(query, filter, Integer.MAX_VALUE, sort);
+                searcher.search(query, filter, Integer.MAX_VALUE, sort, true, true);
+                searcher.search(query, filter, Integer.MAX_VALUE, sort, true, false);
+                searcher.search(query, filter, Integer.MAX_VALUE, sort, false, true);
+                searcher.search(query, filter, Integer.MAX_VALUE, sort, false, false);
+                searcher.searchAfter(after, query, filter, Integer.MAX_VALUE, sort);
+                searcher.searchAfter(after, query, filter, Integer.MAX_VALUE, sort, true, true);
+                searcher.searchAfter(after, query, filter, Integer.MAX_VALUE, sort, true, false);
+                searcher.searchAfter(after, query, filter, Integer.MAX_VALUE, sort, false, true);
+                searcher.searchAfter(after, query, filter, Integer.MAX_VALUE, sort, false, false);
+              }
             }
           }
         }
@@ -128,11 +138,14 @@ public class TestIndexSearcher extends LuceneTestCase {
     w.close();
 
     IndexSearcher s = new IndexSearcher(r);
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       s.searchAfter(new ScoreDoc(r.maxDoc(), 0.54f), new MatchAllDocsQuery(), 10);
-    });
-
-    IOUtils.close(r, dir);
+      fail("should have hit IllegalArgumentException when searchAfter exceeds maxDoc");
+    } catch (IllegalArgumentException e) {
+      // ok
+    } finally {
+      IOUtils.close(r, dir);
+    }
   }
 
   public void testCount() throws IOException {
@@ -169,7 +182,7 @@ public class TestIndexSearcher extends LuceneTestCase {
             .add(new TermQuery(new Term("foo", "baz")), Occur.SHOULD)
             .build()
           )) {
-        assertEquals(searcher.count(query), searcher.search(query, 1).totalHits.value);
+        assertEquals(searcher.count(query), searcher.search(query, 1).totalHits);
       }
       reader.close();
     }
@@ -206,7 +219,7 @@ public class TestIndexSearcher extends LuceneTestCase {
     assertEquals(IndexSearcher.getDefaultQueryCachingPolicy(), searcher.getQueryCachingPolicy());
     QueryCachingPolicy dummyPolicy = new QueryCachingPolicy() {
       @Override
-      public boolean shouldCache(Query query) throws IOException {
+      public boolean shouldCache(Query query, LeafReaderContext context) throws IOException {
         return false;
       }
       @Override
@@ -218,51 +231,5 @@ public class TestIndexSearcher extends LuceneTestCase {
     IndexSearcher.setDefaultQueryCachingPolicy(dummyPolicy);
     searcher = new IndexSearcher(new MultiReader());
     assertEquals(dummyPolicy, searcher.getQueryCachingPolicy());
-  }
-
-  public void testGetSlices() throws Exception {
-    assertNull(new IndexSearcher(new MultiReader()).getSlices());
-
-    Directory dir = newDirectory();
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
-    w.addDocument(new Document());
-    IndexReader r = w.getReader();
-    w.close();
-
-    ExecutorService service = new ThreadPoolExecutor(4, 4, 0L, TimeUnit.MILLISECONDS,
-                                   new LinkedBlockingQueue<Runnable>(),
-                                   new NamedThreadFactory("TestIndexSearcher"));
-    IndexSearcher s = new IndexSearcher(r, service);
-    IndexSearcher.LeafSlice[] slices = s.getSlices();
-    assertNotNull(slices);
-    assertEquals(1, slices.length);
-    assertEquals(1, slices[0].leaves.length);
-    assertTrue(slices[0].leaves[0] == r.leaves().get(0));
-    service.shutdown();
-    IOUtils.close(r, dir);
-  }
-
-  public void testOneSegmentExecutesOnTheCallerThread() throws IOException {
-    List<LeafReaderContext> leaves = reader.leaves();
-    AtomicInteger numExecutions = new AtomicInteger(0);
-    IndexSearcher searcher = new IndexSearcher(reader, task -> {
-      numExecutions.incrementAndGet();
-      task.run();
-    }) {
-      @Override
-      protected LeafSlice[] slices(List<LeafReaderContext> leaves) {
-        ArrayList<LeafSlice> slices = new ArrayList<>();
-        for (LeafReaderContext ctx : leaves) {
-          slices.add(new LeafSlice(ctx));
-        }
-        return slices.toArray(new LeafSlice[0]);
-      }
-    };
-    searcher.search(new MatchAllDocsQuery(), 10);
-    if (leaves.size() <= 1) {
-      assertEquals(0, numExecutions.get());
-    } else {
-      assertEquals(leaves.size() - 1, numExecutions.get());
-    }
   }
 }

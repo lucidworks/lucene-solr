@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
-
+import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.Map;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
@@ -42,7 +42,7 @@ import org.apache.lucene.util.TestUtil;
 
 public class TestIndexableField extends LuceneTestCase {
 
-  private static class MyField implements IndexableField {
+  private class MyField implements IndexableField {
 
     private final int counter;
     private final IndexableFieldType fieldType = new IndexableFieldType() {
@@ -90,26 +90,6 @@ public class TestIndexableField extends LuceneTestCase {
       public DocValuesType docValuesType() {
         return DocValuesType.NONE;
       }
-
-      @Override
-      public int pointDataDimensionCount() {
-        return 0;
-      }
-
-      @Override
-      public int pointIndexDimensionCount() {
-        return 0;
-      }
-
-      @Override
-      public int pointNumBytes() {
-        return 0;
-      }
-
-      @Override
-      public Map<String, String> getAttributes() {
-        return null;
-      }
     };
 
     public MyField(int counter) {
@@ -119,6 +99,11 @@ public class TestIndexableField extends LuceneTestCase {
     @Override
     public String name() {
       return "f" + counter;
+    }
+
+    @Override
+    public float boost() {
+      return 1.0f + random().nextFloat();
     }
 
     @Override
@@ -164,7 +149,7 @@ public class TestIndexableField extends LuceneTestCase {
     }
 
     @Override
-    public TokenStream tokenStream(Analyzer analyzer, TokenStream previous) {
+    public TokenStream tokenStream(Analyzer analyzer, TokenStream previous) throws IOException {
       return readerValue() != null ? analyzer.tokenStream(name(), readerValue()) :
         analyzer.tokenStream(name(), new StringReader(stringValue()));
     }
@@ -196,7 +181,7 @@ public class TestIndexableField extends LuceneTestCase {
       final int finalBaseCount = baseCount;
       baseCount += fieldCount-1;
 
-      Iterable<IndexableField> d = new Iterable<IndexableField>() {
+      w.addDocument(new Iterable<IndexableField>() {
         @Override
         public Iterator<IndexableField> iterator() {
           return new Iterator<IndexableField>() {
@@ -224,8 +209,7 @@ public class TestIndexableField extends LuceneTestCase {
             }
           };
         }
-        };
-      w.addDocument(d);
+        });
     }
 
     final IndexReader r = w.getReader();
@@ -237,9 +221,8 @@ public class TestIndexableField extends LuceneTestCase {
       if (VERBOSE) {
         System.out.println("TEST: verify doc id=" + id + " (" + fieldsPerDoc[id] + " fields) counter=" + counter);
       }
-
       final TopDocs hits = s.search(new TermQuery(new Term("id", ""+id)), 1);
-      assertEquals(1, hits.totalHits.value);
+      assertEquals(1, hits.totalHits);
       final int docID = hits.scoreDocs[0].doc;
       final Document doc = s.doc(docID);
       final int endCounter = counter + fieldsPerDoc[id];
@@ -309,14 +292,14 @@ public class TestIndexableField extends LuceneTestCase {
           bq.add(new TermQuery(new Term("id", ""+id)), BooleanClause.Occur.MUST);
           bq.add(new TermQuery(new Term(name, "text")), BooleanClause.Occur.MUST);
           final TopDocs hits2 = s.search(bq.build(), 1);
-          assertEquals(1, hits2.totalHits.value);
+          assertEquals(1, hits2.totalHits);
           assertEquals(docID, hits2.scoreDocs[0].doc);
 
           bq = new BooleanQuery.Builder();
           bq.add(new TermQuery(new Term("id", ""+id)), BooleanClause.Occur.MUST);
           bq.add(new TermQuery(new Term(name, ""+counter)), BooleanClause.Occur.MUST);
           final TopDocs hits3 = s.search(bq.build(), 1);
-          assertEquals(1, hits3.totalHits.value);
+          assertEquals(1, hits3.totalHits);
           assertEquals(docID, hits3.scoreDocs[0].doc);
         }
 
@@ -342,6 +325,11 @@ public class TestIndexableField extends LuceneTestCase {
     @Override
     public Reader readerValue() {
       return null;
+    }
+
+    @Override
+    public float boost() {
+      return 1.0f;
     }
 
     @Override
@@ -372,7 +360,12 @@ public class TestIndexableField extends LuceneTestCase {
   public void testNotIndexedTermVectors() throws Exception {
     Directory dir = newDirectory();
     RandomIndexWriter w = new RandomIndexWriter(random(), dir);
-    expectThrows(IllegalArgumentException.class, () -> w.addDocument(Collections.singletonList(new CustomField())));
+    try {
+      w.addDocument(Collections.<IndexableField>singletonList(new CustomField()));
+      fail("didn't hit exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
     w.close();
     dir.close();
   }

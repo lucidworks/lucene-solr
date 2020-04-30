@@ -1,3 +1,5 @@
+package org.apache.solr.spelling.suggest.fst;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling.suggest.fst;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.search.suggest.Lookup;
@@ -133,7 +134,7 @@ public class FuzzyLookupFactory extends LookupFactory {
     ? Boolean.valueOf(params.get(UNICODE_AWARE).toString())
     : FuzzySuggester.DEFAULT_UNICODE_AWARE;
     
-    return new FuzzySuggester(getTempDir(), "suggester", indexAnalyzer, queryAnalyzer, options, maxSurfaceFormsPerAnalyzedForm,
+    return new FuzzySuggester(indexAnalyzer, queryAnalyzer, options, maxSurfaceFormsPerAnalyzedForm,
         maxGraphExpansions, preservePositionIncrements, maxEdits, transpositions, nonFuzzyPrefix,
         minFuzzyLength, unicodeAware);
   }

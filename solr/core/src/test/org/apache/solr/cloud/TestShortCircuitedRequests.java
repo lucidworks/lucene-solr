@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrClient;
@@ -45,7 +46,7 @@ public class TestShortCircuitedRequests extends AbstractFullDistribZkTestBase {
     doQuery("a!doc1", "q", "*:*", ShardParams._ROUTE_, "a!"); // can go to any random node
 
     // query shard3 directly with _route_=a! so that we trigger the short circuited request path
-    Replica shard3 = cloudClient.getZkStateReader().getClusterState().getCollection(DEFAULT_COLLECTION).getLeader("shard3");
+    Replica shard3 = cloudClient.getZkStateReader().getClusterState().getLeader(DEFAULT_COLLECTION, "shard3");
     String nodeName = shard3.getNodeName();
     SolrClient shard3Client = getClient(nodeName);
     QueryResponse response = shard3Client.query(new SolrQuery("*:*").add(ShardParams._ROUTE_, "a!").add(ShardParams.SHARDS_INFO, "true"));

@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,36 +16,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 import org.apache.lucene.index.BinaryDocValues;
-import org.apache.lucene.index.DocIDMerger;
-import org.apache.lucene.index.DocValues;
-import org.apache.lucene.index.DocValuesType;
-import org.apache.lucene.index.EmptyDocValuesProducer;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FilteredTermsEnum;
 import org.apache.lucene.index.MergeState;
+import org.apache.lucene.index.DocValuesType;
+import org.apache.lucene.index.MultiDocValues.OrdinalMap;
+import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.NumericDocValues;
-import org.apache.lucene.index.OrdinalMap;
 import org.apache.lucene.index.SegmentWriteState; // javadocs
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.index.SortedNumericDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LongBitSet;
 import org.apache.lucene.util.LongValues;
 import org.apache.lucene.util.packed.PackedInts;
-
-import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
 
 /** 
  * Abstract API that consumes numeric, binary and
@@ -76,42 +75,51 @@ public abstract class DocValuesConsumer implements Closeable {
   /**
    * Writes numeric docvalues for a field.
    * @param field field information
-   * @param valuesProducer Numeric values to write.
+   * @param values Iterable of numeric values (one for each document). {@code null} indicates
+   *               a missing value.
    * @throws IOException if an I/O error occurred.
    */
-  public abstract void addNumericField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException;    
+  public abstract void addNumericField(FieldInfo field, Iterable<Number> values) throws IOException;    
 
   /**
    * Writes binary docvalues for a field.
    * @param field field information
-   * @param valuesProducer Binary values to write.
+   * @param values Iterable of binary values (one for each document). {@code null} indicates
+   *               a missing value.
    * @throws IOException if an I/O error occurred.
    */
-  public abstract void addBinaryField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException;
+  public abstract void addBinaryField(FieldInfo field, Iterable<BytesRef> values) throws IOException;
 
   /**
    * Writes pre-sorted binary docvalues for a field.
    * @param field field information
-   * @param valuesProducer produces the values and ordinals to write
+   * @param values Iterable of binary values in sorted order (deduplicated).
+   * @param docToOrd Iterable of ordinals (one for each document). {@code -1} indicates
+   *                 a missing value.
    * @throws IOException if an I/O error occurred.
    */
-  public abstract void addSortedField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException;
+  public abstract void addSortedField(FieldInfo field, Iterable<BytesRef> values, Iterable<Number> docToOrd) throws IOException;
   
   /**
    * Writes pre-sorted numeric docvalues for a field
    * @param field field information
-   * @param valuesProducer produces the values to write
+   * @param docToValueCount Iterable of the number of values for each document. A zero
+   *                        count indicates a missing value.
+   * @param values Iterable of numeric values in sorted order (not deduplicated).
    * @throws IOException if an I/O error occurred.
    */
-  public abstract void addSortedNumericField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException;
+  public abstract void addSortedNumericField(FieldInfo field, Iterable<Number> docToValueCount, Iterable<Number> values) throws IOException;
 
   /**
    * Writes pre-sorted set docvalues for a field
    * @param field field information
-   * @param valuesProducer produces the values to write
+   * @param values Iterable of binary values in sorted order (deduplicated).
+   * @param docToOrdCount Iterable of the number of values for each document. A zero ordinal
+   *                      count indicates a missing value.
+   * @param ords Iterable of ordinal occurrences (docToOrdCount*maxDoc total).
    * @throws IOException if an I/O error occurred.
    */
-  public abstract void addSortedSetField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException;
+  public abstract void addSortedSetField(FieldInfo field, Iterable<BytesRef> values, Iterable<Number> docToOrdCount, Iterable<Number> ords) throws IOException;
   
   /** Merges in the fields from the readers in 
    *  <code>mergeState</code>. The default implementation 
@@ -132,232 +140,267 @@ public abstract class DocValuesConsumer implements Closeable {
       DocValuesType type = mergeFieldInfo.getDocValuesType();
       if (type != DocValuesType.NONE) {
         if (type == DocValuesType.NUMERIC) {
-          mergeNumericField(mergeFieldInfo, mergeState);
+          List<NumericDocValues> toMerge = new ArrayList<>();
+          List<Bits> docsWithField = new ArrayList<>();
+          for (int i=0;i<mergeState.docValuesProducers.length;i++) {
+            NumericDocValues values = null;
+            Bits bits = null;
+            DocValuesProducer docValuesProducer = mergeState.docValuesProducers[i];
+            if (docValuesProducer != null) {
+              FieldInfo fieldInfo = mergeState.fieldInfos[i].fieldInfo(mergeFieldInfo.name);
+              if (fieldInfo != null && fieldInfo.getDocValuesType() == DocValuesType.NUMERIC) {
+                values = docValuesProducer.getNumeric(fieldInfo);
+                bits = docValuesProducer.getDocsWithField(fieldInfo);
+              }
+            }
+            if (values == null) {
+              values = DocValues.emptyNumeric();
+              bits = new Bits.MatchNoBits(mergeState.maxDocs[i]);
+            }
+            toMerge.add(values);
+            docsWithField.add(bits);
+          }
+          mergeNumericField(mergeFieldInfo, mergeState, toMerge, docsWithField);
         } else if (type == DocValuesType.BINARY) {
-          mergeBinaryField(mergeFieldInfo, mergeState);
+          List<BinaryDocValues> toMerge = new ArrayList<>();
+          List<Bits> docsWithField = new ArrayList<>();
+          for (int i=0;i<mergeState.docValuesProducers.length;i++) {
+            BinaryDocValues values = null;
+            Bits bits = null;
+            DocValuesProducer docValuesProducer = mergeState.docValuesProducers[i];
+            if (docValuesProducer != null) {
+              FieldInfo fieldInfo = mergeState.fieldInfos[i].fieldInfo(mergeFieldInfo.name);
+              if (fieldInfo != null && fieldInfo.getDocValuesType() == DocValuesType.BINARY) {
+                values = docValuesProducer.getBinary(fieldInfo);
+                bits = docValuesProducer.getDocsWithField(fieldInfo);
+              }
+            }
+            if (values == null) {
+              values = DocValues.emptyBinary();
+              bits = new Bits.MatchNoBits(mergeState.maxDocs[i]);
+            }
+            toMerge.add(values);
+            docsWithField.add(bits);
+          }
+          mergeBinaryField(mergeFieldInfo, mergeState, toMerge, docsWithField);
         } else if (type == DocValuesType.SORTED) {
-          mergeSortedField(mergeFieldInfo, mergeState);
+          List<SortedDocValues> toMerge = new ArrayList<>();
+          for (int i=0;i<mergeState.docValuesProducers.length;i++) {
+            SortedDocValues values = null;
+            DocValuesProducer docValuesProducer = mergeState.docValuesProducers[i];
+            if (docValuesProducer != null) {
+              FieldInfo fieldInfo = mergeState.fieldInfos[i].fieldInfo(mergeFieldInfo.name);
+              if (fieldInfo != null && fieldInfo.getDocValuesType() == DocValuesType.SORTED) {
+                values = docValuesProducer.getSorted(fieldInfo);
+              }
+            }
+            if (values == null) {
+              values = DocValues.emptySorted();
+            }
+            toMerge.add(values);
+          }
+          mergeSortedField(mergeFieldInfo, mergeState, toMerge);
         } else if (type == DocValuesType.SORTED_SET) {
-          mergeSortedSetField(mergeFieldInfo, mergeState);
+          List<SortedSetDocValues> toMerge = new ArrayList<>();
+          for (int i=0;i<mergeState.docValuesProducers.length;i++) {
+            SortedSetDocValues values = null;
+            DocValuesProducer docValuesProducer = mergeState.docValuesProducers[i];
+            if (docValuesProducer != null) {
+              FieldInfo fieldInfo = mergeState.fieldInfos[i].fieldInfo(mergeFieldInfo.name);
+              if (fieldInfo != null && fieldInfo.getDocValuesType() == DocValuesType.SORTED_SET) {
+                values = docValuesProducer.getSortedSet(fieldInfo);
+              }
+            }
+            if (values == null) {
+              values = DocValues.emptySortedSet();
+            }
+            toMerge.add(values);
+          }
+          mergeSortedSetField(mergeFieldInfo, mergeState, toMerge);
         } else if (type == DocValuesType.SORTED_NUMERIC) {
-          mergeSortedNumericField(mergeFieldInfo, mergeState);
+          List<SortedNumericDocValues> toMerge = new ArrayList<>();
+          for (int i=0;i<mergeState.docValuesProducers.length;i++) {
+            SortedNumericDocValues values = null;
+            DocValuesProducer docValuesProducer = mergeState.docValuesProducers[i];
+            if (docValuesProducer != null) {
+              FieldInfo fieldInfo = mergeState.fieldInfos[i].fieldInfo(mergeFieldInfo.name);
+              if (fieldInfo != null && fieldInfo.getDocValuesType() == DocValuesType.SORTED_NUMERIC) {
+                values = docValuesProducer.getSortedNumeric(fieldInfo);
+              }
+            }
+            if (values == null) {
+              values = DocValues.emptySortedNumeric(mergeState.maxDocs[i]);
+            }
+            toMerge.add(values);
+          }
+          mergeSortedNumericField(mergeFieldInfo, mergeState, toMerge);
         } else {
           throw new AssertionError("type=" + type);
         }
       }
     }
   }
-
-  /** Tracks state of one numeric sub-reader that we are merging */
-  private static class NumericDocValuesSub extends DocIDMerger.Sub {
-
-    final NumericDocValues values;
-
-    public NumericDocValuesSub(MergeState.DocMap docMap, NumericDocValues values) {
-      super(docMap);
-      this.values = values;
-      assert values.docID() == -1;
-    }
-
-    @Override
-    public int nextDoc() throws IOException {
-      return values.nextDoc();
-    }
-  }
   
   /**
-   * Merges the numeric docvalues from <code>MergeState</code>.
+   * Merges the numeric docvalues from <code>toMerge</code>.
    * <p>
    * The default implementation calls {@link #addNumericField}, passing
-   * a DocValuesProducer that merges and filters deleted documents on the fly.
+   * an Iterable that merges and filters deleted documents on the fly.
    */
-  public void mergeNumericField(final FieldInfo mergeFieldInfo, final MergeState mergeState) throws IOException {
-    addNumericField(mergeFieldInfo,
-                    new EmptyDocValuesProducer() {
+  public void mergeNumericField(final FieldInfo fieldInfo, final MergeState mergeState, final List<NumericDocValues> toMerge, final List<Bits> docsWithField) throws IOException {
+
+    addNumericField(fieldInfo,
+                    new Iterable<Number>() {
                       @Override
-                      public NumericDocValues getNumeric(FieldInfo fieldInfo) throws IOException {
-                        if (fieldInfo != mergeFieldInfo) {
-                          throw new IllegalArgumentException("wrong fieldInfo");
-                        }
-
-                        List<NumericDocValuesSub> subs = new ArrayList<>();
-                        assert mergeState.docMaps.length == mergeState.docValuesProducers.length;
-                        long cost = 0;
-                        for (int i=0;i<mergeState.docValuesProducers.length;i++) {
-                          NumericDocValues values = null;
-                          DocValuesProducer docValuesProducer = mergeState.docValuesProducers[i];
-                          if (docValuesProducer != null) {
-                            FieldInfo readerFieldInfo = mergeState.fieldInfos[i].fieldInfo(mergeFieldInfo.name);
-                            if (readerFieldInfo != null && readerFieldInfo.getDocValuesType() == DocValuesType.NUMERIC) {
-                              values = docValuesProducer.getNumeric(readerFieldInfo);
-                            }
-                          }
-                          if (values != null) {
-                            cost += values.cost();
-                            subs.add(new NumericDocValuesSub(mergeState.docMaps[i], values));
-                          }
-                        }
-
-                        final DocIDMerger<NumericDocValuesSub> docIDMerger = DocIDMerger.of(subs, mergeState.needsIndexSort);
-
-                        final long finalCost = cost;
-                        
-                        return new NumericDocValues() {
-                          private int docID = -1;
-                          private NumericDocValuesSub current;
+                      public Iterator<Number> iterator() {
+                        return new Iterator<Number>() {
+                          int readerUpto = -1;
+                          int docIDUpto;
+                          long nextValue;
+                          boolean nextHasValue;
+                          int currentMaxDoc;
+                          NumericDocValues currentValues;
+                          Bits currentLiveDocs;
+                          Bits currentDocsWithField;
+                          boolean nextIsSet;
 
                           @Override
-                          public int docID() {
-                            return docID;
+                          public boolean hasNext() {
+                            return nextIsSet || setNext();
                           }
 
                           @Override
-                          public int nextDoc() throws IOException {
-                            current = docIDMerger.next();
-                            if (current == null) {
-                              docID = NO_MORE_DOCS;
-                            } else {
-                              docID = current.mappedDocID;
-                            }
-                            return docID;
-                          }
-
-                          @Override
-                          public int advance(int target) throws IOException {
+                          public void remove() {
                             throw new UnsupportedOperationException();
                           }
 
                           @Override
-                          public boolean advanceExact(int target) throws IOException {
-                            throw new UnsupportedOperationException();
+                          public Number next() {
+                            if (!hasNext()) {
+                              throw new NoSuchElementException();
+                            }
+                            assert nextIsSet;
+                            nextIsSet = false;
+                            return nextHasValue ? nextValue : null;
                           }
 
-                          @Override
-                          public long cost() {
-                            return finalCost;
-                          }
+                          private boolean setNext() {
+                            while (true) {
+                              if (readerUpto == toMerge.size()) {
+                                return false;
+                              }
 
-                          @Override
-                          public long longValue() throws IOException {
-                            return current.values.longValue();
+                              if (docIDUpto == currentMaxDoc) {
+                                readerUpto++;
+                                if (readerUpto < toMerge.size()) {
+                                  currentValues = toMerge.get(readerUpto);
+                                  currentDocsWithField = docsWithField.get(readerUpto);
+                                  currentLiveDocs = mergeState.liveDocs[readerUpto];
+                                  currentMaxDoc = mergeState.maxDocs[readerUpto];
+                                }
+                                docIDUpto = 0;
+                                continue;
+                              }
+
+                              if (currentLiveDocs == null || currentLiveDocs.get(docIDUpto)) {
+                                nextIsSet = true;
+                                nextValue = currentValues.get(docIDUpto);
+                                if (nextValue == 0 && currentDocsWithField.get(docIDUpto) == false) {
+                                  nextHasValue = false;
+                                } else {
+                                  nextHasValue = true;
+                                }
+                                docIDUpto++;
+                                return true;
+                              }
+
+                              docIDUpto++;
+                            }
                           }
                         };
                       }
                     });
   }
   
-  /** Tracks state of one binary sub-reader that we are merging */
-  private static class BinaryDocValuesSub extends DocIDMerger.Sub {
-
-    final BinaryDocValues values;
-
-    public BinaryDocValuesSub(MergeState.DocMap docMap, BinaryDocValues values) {
-      super(docMap);
-      this.values = values;
-      assert values.docID() == -1;
-    }
-
-    @Override
-    public int nextDoc() throws IOException {
-      return values.nextDoc();
-    }
-  }
-
   /**
-   * Merges the binary docvalues from <code>MergeState</code>.
+   * Merges the binary docvalues from <code>toMerge</code>.
    * <p>
    * The default implementation calls {@link #addBinaryField}, passing
-   * a DocValuesProducer that merges and filters deleted documents on the fly.
+   * an Iterable that merges and filters deleted documents on the fly.
    */
-  public void mergeBinaryField(FieldInfo mergeFieldInfo, final MergeState mergeState) throws IOException {
-    addBinaryField(mergeFieldInfo,
-                   new EmptyDocValuesProducer() {
+  public void mergeBinaryField(FieldInfo fieldInfo, final MergeState mergeState, final List<BinaryDocValues> toMerge, final List<Bits> docsWithField) throws IOException {
+
+    addBinaryField(fieldInfo,
+                   new Iterable<BytesRef>() {
                      @Override
-                     public BinaryDocValues getBinary(FieldInfo fieldInfo) throws IOException {
-                       if (fieldInfo != mergeFieldInfo) {
-                         throw new IllegalArgumentException("wrong fieldInfo");
-                       }
-                   
-                       List<BinaryDocValuesSub> subs = new ArrayList<>();
-
-                       long cost = 0;
-                       for (int i=0;i<mergeState.docValuesProducers.length;i++) {
-                         BinaryDocValues values = null;
-                         DocValuesProducer docValuesProducer = mergeState.docValuesProducers[i];
-                         if (docValuesProducer != null) {
-                           FieldInfo readerFieldInfo = mergeState.fieldInfos[i].fieldInfo(mergeFieldInfo.name);
-                           if (readerFieldInfo != null && readerFieldInfo.getDocValuesType() == DocValuesType.BINARY) {
-                             values = docValuesProducer.getBinary(readerFieldInfo);
-                           }
-                         }
-                         if (values != null) {
-                           cost += values.cost();
-                           subs.add(new BinaryDocValuesSub(mergeState.docMaps[i], values));
-                         }
-                       }
-
-                       final DocIDMerger<BinaryDocValuesSub> docIDMerger = DocIDMerger.of(subs, mergeState.needsIndexSort);
-                       final long finalCost = cost;
-                       
-                       return new BinaryDocValues() {
-                         private BinaryDocValuesSub current;
-                         private int docID = -1;
+                     public Iterator<BytesRef> iterator() {
+                       return new Iterator<BytesRef>() {
+                         int readerUpto = -1;
+                         int docIDUpto;
+                         BytesRef nextValue;
+                         BytesRef nextPointer; // points to null if missing, or nextValue
+                         int currentMaxDoc;
+                         BinaryDocValues currentValues;
+                         Bits currentLiveDocs;
+                         Bits currentDocsWithField;
+                         boolean nextIsSet;
 
                          @Override
-                         public int docID() {
-                           return docID;
+                         public boolean hasNext() {
+                           return nextIsSet || setNext();
                          }
 
                          @Override
-                         public int nextDoc() throws IOException {
-                           current = docIDMerger.next();
-                           if (current == null) {
-                             docID = NO_MORE_DOCS;
-                           } else {
-                             docID = current.mappedDocID;
-                           }
-                           return docID;
-                         }
-
-                         @Override
-                         public int advance(int target) throws IOException {
+                         public void remove() {
                            throw new UnsupportedOperationException();
                          }
 
                          @Override
-                         public boolean advanceExact(int target) throws IOException {
-                           throw new UnsupportedOperationException();
+                         public BytesRef next() {
+                           if (!hasNext()) {
+                             throw new NoSuchElementException();
+                           }
+                           assert nextIsSet;
+                           nextIsSet = false;
+                           return nextPointer;
                          }
 
-                         @Override
-                         public long cost() {
-                           return finalCost;
-                         }
+                         private boolean setNext() {
+                           while (true) {
+                             if (readerUpto == toMerge.size()) {
+                               return false;
+                             }
 
-                         @Override
-                         public BytesRef binaryValue() throws IOException {
-                           return current.values.binaryValue();
+                             if (docIDUpto == currentMaxDoc) {
+                               readerUpto++;
+                               if (readerUpto < toMerge.size()) {
+                                 currentValues = toMerge.get(readerUpto);
+                                 currentDocsWithField = docsWithField.get(readerUpto);
+                                 currentLiveDocs = mergeState.liveDocs[readerUpto];
+                                 currentMaxDoc = mergeState.maxDocs[readerUpto];
+                               }
+                               docIDUpto = 0;
+                               continue;
+                             }
+
+                             if (currentLiveDocs == null || currentLiveDocs.get(docIDUpto)) {
+                               nextIsSet = true;
+                               if (currentDocsWithField.get(docIDUpto)) {
+                                 nextValue = currentValues.get(docIDUpto);
+                                 nextPointer = nextValue;
+                               } else {
+                                 nextPointer = null;
+                               }
+                               docIDUpto++;
+                               return true;
+                             }
+
+                             docIDUpto++;
+                           }
                          }
                        };
                      }
                    });
-  }
-
-  /** Tracks state of one sorted numeric sub-reader that we are merging */
-  private static class SortedNumericDocValuesSub extends DocIDMerger.Sub {
-
-    final SortedNumericDocValues values;
-
-    public SortedNumericDocValuesSub(MergeState.DocMap docMap, SortedNumericDocValues values) {
-      super(docMap);
-      this.values = values;
-      assert values.docID() == -1;
-    }
-
-    @Override
-    public int nextDoc() throws IOException {
-      return values.nextDoc();
-    }
   }
 
   /**
@@ -366,107 +409,149 @@ public abstract class DocValuesConsumer implements Closeable {
    * The default implementation calls {@link #addSortedNumericField}, passing
    * iterables that filter deleted documents.
    */
-  public void mergeSortedNumericField(FieldInfo mergeFieldInfo, final MergeState mergeState) throws IOException {
+  public void mergeSortedNumericField(FieldInfo fieldInfo, final MergeState mergeState, List<SortedNumericDocValues> toMerge) throws IOException {
+    final int numReaders = toMerge.size();
+    final SortedNumericDocValues dvs[] = toMerge.toArray(new SortedNumericDocValues[numReaders]);
     
-    addSortedNumericField(mergeFieldInfo,
-                          new EmptyDocValuesProducer() {
-                            @Override
-                            public SortedNumericDocValues getSortedNumeric(FieldInfo fieldInfo) throws IOException {
-                              if (fieldInfo != mergeFieldInfo) {
-                                throw new IllegalArgumentException("wrong FieldInfo");
-                              }
-                              
-                              // We must make new iterators + DocIDMerger for each iterator:
-                              List<SortedNumericDocValuesSub> subs = new ArrayList<>();
-                              long cost = 0;
-                              for (int i=0;i<mergeState.docValuesProducers.length;i++) {
-                                DocValuesProducer docValuesProducer = mergeState.docValuesProducers[i];
-                                SortedNumericDocValues values = null;
-                                if (docValuesProducer != null) {
-                                  FieldInfo readerFieldInfo = mergeState.fieldInfos[i].fieldInfo(mergeFieldInfo.name);
-                                  if (readerFieldInfo != null && readerFieldInfo.getDocValuesType() == DocValuesType.SORTED_NUMERIC) {
-                                    values = docValuesProducer.getSortedNumeric(readerFieldInfo);
-                                  }
-                                }
-                                if (values == null) {
-                                  values = DocValues.emptySortedNumeric(mergeState.maxDocs[i]);
-                                }
-                                cost += values.cost();
-                                subs.add(new SortedNumericDocValuesSub(mergeState.docMaps[i], values));
-                              }
+    // step 3: add field
+    addSortedNumericField(fieldInfo,
+        // doc -> value count
+        new Iterable<Number>() {
+          @Override
+          public Iterator<Number> iterator() {
+            return new Iterator<Number>() {
+              int readerUpto = -1;
+              int docIDUpto;
+              int nextValue;
+              int currentMaxDoc;
+              Bits currentLiveDocs;
+              boolean nextIsSet;
 
-                              final long finalCost = cost;
+              @Override
+              public boolean hasNext() {
+                return nextIsSet || setNext();
+              }
 
-                              final DocIDMerger<SortedNumericDocValuesSub> docIDMerger = DocIDMerger.of(subs, mergeState.needsIndexSort);
+              @Override
+              public void remove() {
+                throw new UnsupportedOperationException();
+              }
 
-                              return new SortedNumericDocValues() {
+              @Override
+              public Number next() {
+                if (!hasNext()) {
+                  throw new NoSuchElementException();
+                }
+                assert nextIsSet;
+                nextIsSet = false;
+                return nextValue;
+              }
 
-                                private int docID = -1;
-                                private SortedNumericDocValuesSub currentSub;
+              private boolean setNext() {
+                while (true) {
+                  if (readerUpto == numReaders) {
+                    return false;
+                  }
 
-                                @Override
-                                public int docID() {
-                                  return docID;
-                                }
-                                
-                                @Override
-                                public int nextDoc() throws IOException {
-                                  currentSub = docIDMerger.next();
-                                  if (currentSub == null) {
-                                    docID = NO_MORE_DOCS;
-                                  } else {
-                                    docID = currentSub.mappedDocID;
-                                  }
+                  if (docIDUpto == currentMaxDoc) {
+                    readerUpto++;
+                    if (readerUpto < numReaders) {
+                      currentLiveDocs = mergeState.liveDocs[readerUpto];
+                      currentMaxDoc = mergeState.maxDocs[readerUpto];
+                    }
+                    docIDUpto = 0;
+                    continue;
+                  }
 
-                                  return docID;
-                                }
+                  if (currentLiveDocs == null || currentLiveDocs.get(docIDUpto)) {
+                    nextIsSet = true;
+                    SortedNumericDocValues dv = dvs[readerUpto];
+                    dv.setDocument(docIDUpto);
+                    nextValue = dv.count();
+                    docIDUpto++;
+                    return true;
+                  }
 
-                                @Override
-                                public int advance(int target) throws IOException {
-                                  throw new UnsupportedOperationException();
-                                }
+                  docIDUpto++;
+                }
+              }
+            };
+          }
+        },
+        // values
+        new Iterable<Number>() {
+          @Override
+          public Iterator<Number> iterator() {
+            return new Iterator<Number>() {
+              int readerUpto = -1;
+              int docIDUpto;
+              long nextValue;
+              int currentMaxDoc;
+              Bits currentLiveDocs;
+              boolean nextIsSet;
+              int valueUpto;
+              int valueLength;
 
-                                @Override
-                                public boolean advanceExact(int target) throws IOException {
-                                  throw new UnsupportedOperationException();
-                                }
+              @Override
+              public boolean hasNext() {
+                return nextIsSet || setNext();
+              }
 
-                                @Override
-                                public int docValueCount() {
-                                  return currentSub.values.docValueCount();
-                                }
+              @Override
+              public void remove() {
+                throw new UnsupportedOperationException();
+              }
 
-                                @Override
-                                public long cost() {
-                                  return finalCost;
-                                }
+              @Override
+              public Number next() {
+                if (!hasNext()) {
+                  throw new NoSuchElementException();
+                }
+                assert nextIsSet;
+                nextIsSet = false;
+                return nextValue;
+              }
 
-                                @Override
-                                public long nextValue() throws IOException {
-                                  return currentSub.values.nextValue();
-                                }
-                              };
-                            }
-                          });
-  }
+              private boolean setNext() {
+                while (true) {
+                  if (readerUpto == numReaders) {
+                    return false;
+                  }
+                  
+                  if (valueUpto < valueLength) {
+                    nextValue = dvs[readerUpto].valueAt(valueUpto);
+                    valueUpto++;
+                    nextIsSet = true;
+                    return true;
+                  }
 
-  /** Tracks state of one sorted sub-reader that we are merging */
-  private static class SortedDocValuesSub extends DocIDMerger.Sub {
+                  if (docIDUpto == currentMaxDoc) {
+                    readerUpto++;
+                    if (readerUpto < numReaders) {
+                      currentLiveDocs = mergeState.liveDocs[readerUpto];
+                      currentMaxDoc = mergeState.maxDocs[readerUpto];
+                    }
+                    docIDUpto = 0;
+                    continue;
+                  }
+                  
+                  if (currentLiveDocs == null || currentLiveDocs.get(docIDUpto)) {
+                    assert docIDUpto < currentMaxDoc;
+                    SortedNumericDocValues dv = dvs[readerUpto];
+                    dv.setDocument(docIDUpto);
+                    valueUpto = 0;
+                    valueLength = dv.count();
+                    docIDUpto++;
+                    continue;
+                  }
 
-    final SortedDocValues values;
-    final LongValues map;
-    
-    public SortedDocValuesSub(MergeState.DocMap docMap, SortedDocValues values, LongValues map) {
-      super(docMap);
-      this.values = values;
-      this.map = map;
-      assert values.docID() == -1;
-    }
-
-    @Override
-    public int nextDoc() throws IOException {
-      return values.nextDoc();
-    }
+                  docIDUpto++;
+                }
+              }
+            };
+          }
+        }
+     );
   }
 
   /**
@@ -475,23 +560,7 @@ public abstract class DocValuesConsumer implements Closeable {
    * The default implementation calls {@link #addSortedField}, passing
    * an Iterable that merges ordinals and values and filters deleted documents .
    */
-  public void mergeSortedField(FieldInfo fieldInfo, final MergeState mergeState) throws IOException {
-    List<SortedDocValues> toMerge = new ArrayList<>();
-    for (int i=0;i<mergeState.docValuesProducers.length;i++) {
-      SortedDocValues values = null;
-      DocValuesProducer docValuesProducer = mergeState.docValuesProducers[i];
-      if (docValuesProducer != null) {
-        FieldInfo readerFieldInfo = mergeState.fieldInfos[i].fieldInfo(fieldInfo.name);
-        if (readerFieldInfo != null && readerFieldInfo.getDocValuesType() == DocValuesType.SORTED) {
-          values = docValuesProducer.getSorted(fieldInfo);
-        }
-      }
-      if (values == null) {
-        values = DocValues.emptySorted();
-      }
-      toMerge.add(values);
-    }
-
+  public void mergeSortedField(FieldInfo fieldInfo, final MergeState mergeState, List<SortedDocValues> toMerge) throws IOException {
     final int numReaders = toMerge.size();
     final SortedDocValues dvs[] = toMerge.toArray(new SortedDocValues[numReaders]);
     
@@ -501,15 +570,15 @@ public abstract class DocValuesConsumer implements Closeable {
     for (int sub=0;sub<numReaders;sub++) {
       SortedDocValues dv = dvs[sub];
       Bits liveDocs = mergeState.liveDocs[sub];
+      int maxDoc = mergeState.maxDocs[sub];
       if (liveDocs == null) {
         liveTerms[sub] = dv.termsEnum();
         weights[sub] = dv.getValueCount();
       } else {
         LongBitSet bitset = new LongBitSet(dv.getValueCount());
-        int docID;
-        while ((docID = dv.nextDoc()) != NO_MORE_DOCS) {
-          if (liveDocs.get(docID)) {
-            int ord = dv.ordValue();
+        for (int i = 0; i < maxDoc; i++) {
+          if (liveDocs.get(i)) {
+            int ord = dv.getOrd(i);
             if (ord >= 0) {
               bitset.set(ord);
             }
@@ -521,162 +590,134 @@ public abstract class DocValuesConsumer implements Closeable {
     }
     
     // step 2: create ordinal map (this conceptually does the "merging")
-    final OrdinalMap map = OrdinalMap.build(null, liveTerms, weights, PackedInts.COMPACT);
+    final OrdinalMap map = OrdinalMap.build(this, liveTerms, weights, PackedInts.COMPACT);
     
     // step 3: add field
     addSortedField(fieldInfo,
-                   new EmptyDocValuesProducer() {
-                     @Override
-                     public SortedDocValues getSorted(FieldInfo fieldInfoIn) throws IOException {
-                       if (fieldInfoIn != fieldInfo) {
-                         throw new IllegalArgumentException("wrong FieldInfo");
-                       }
+        // ord -> value
+        new Iterable<BytesRef>() {
+          @Override
+          public Iterator<BytesRef> iterator() {
+            return new Iterator<BytesRef>() {
+              int currentOrd;
 
-                       // We must make new iterators + DocIDMerger for each iterator:
+              @Override
+              public boolean hasNext() {
+                return currentOrd < map.getValueCount();
+              }
 
-                       List<SortedDocValuesSub> subs = new ArrayList<>();
-                       long cost = 0;
-                       for (int i=0;i<mergeState.docValuesProducers.length;i++) {
-                         SortedDocValues values = null;
-                         DocValuesProducer docValuesProducer = mergeState.docValuesProducers[i];
-                         if (docValuesProducer != null) {
-                           FieldInfo readerFieldInfo = mergeState.fieldInfos[i].fieldInfo(fieldInfo.name);
-                           if (readerFieldInfo != null && readerFieldInfo.getDocValuesType() == DocValuesType.SORTED) {
-                             values = docValuesProducer.getSorted(readerFieldInfo);
-                           }
-                         }
-                         if (values == null) {
-                           values = DocValues.emptySorted();
-                         }
-                         cost += values.cost();
-                         
-                         subs.add(new SortedDocValuesSub(mergeState.docMaps[i], values, map.getGlobalOrds(i)));
-                       }
+              @Override
+              public BytesRef next() {
+                if (!hasNext()) {
+                  throw new NoSuchElementException();
+                }
+                int segmentNumber = map.getFirstSegmentNumber(currentOrd);
+                int segmentOrd = (int)map.getFirstSegmentOrd(currentOrd);
+                final BytesRef term = dvs[segmentNumber].lookupOrd(segmentOrd);
+                currentOrd++;
+                return term;
+              }
 
-                       final long finalCost = cost;
+              @Override
+              public void remove() {
+                throw new UnsupportedOperationException();
+              }
+            };
+          }
+        },
+        // doc -> ord
+        new Iterable<Number>() {
+          @Override
+          public Iterator<Number> iterator() {
+            return new Iterator<Number>() {
+              int readerUpto = -1;
+              int docIDUpto;
+              int nextValue;
+              int currentMaxDoc;
+              Bits currentLiveDocs;
+              LongValues currentMap;
+              boolean nextIsSet;
 
-                       final DocIDMerger<SortedDocValuesSub> docIDMerger = DocIDMerger.of(subs, mergeState.needsIndexSort);
-                       
-                       return new SortedDocValues() {
-                         private int docID = -1;
-                         private int ord;
+              @Override
+              public boolean hasNext() {
+                return nextIsSet || setNext();
+              }
 
-                         @Override
-                         public int docID() {
-                           return docID;
-                         }
+              @Override
+              public void remove() {
+                throw new UnsupportedOperationException();
+              }
 
-                         @Override
-                         public int nextDoc() throws IOException {
-                           SortedDocValuesSub sub = docIDMerger.next();
-                           if (sub == null) {
-                             return docID = NO_MORE_DOCS;
-                           }
-                           int subOrd = sub.values.ordValue();
-                           assert subOrd != -1;
-                           ord = (int) sub.map.get(subOrd);
-                           docID = sub.mappedDocID;
-                           return docID;
-                         }
+              @Override
+              public Number next() {
+                if (!hasNext()) {
+                  throw new NoSuchElementException();
+                }
+                assert nextIsSet;
+                nextIsSet = false;
+                // TODO make a mutable number
+                return nextValue;
+              }
 
-                         @Override
-                         public int ordValue() {
-                           return ord;
-                         }
-                         
-                         @Override
-                         public int advance(int target) {
-                           throw new UnsupportedOperationException();
-                         }
+              private boolean setNext() {
+                while (true) {
+                  if (readerUpto == numReaders) {
+                    return false;
+                  }
 
-                         @Override
-                         public boolean advanceExact(int target) throws IOException {
-                           throw new UnsupportedOperationException();
-                         }
+                  if (docIDUpto == currentMaxDoc) {
+                    readerUpto++;
+                    if (readerUpto < numReaders) {
+                      currentMap = map.getGlobalOrds(readerUpto);
+                      currentLiveDocs = mergeState.liveDocs[readerUpto];
+                      currentMaxDoc = mergeState.maxDocs[readerUpto];
+                    }
+                    docIDUpto = 0;
+                    continue;
+                  }
 
-                         @Override
-                         public long cost() {
-                           return finalCost;
-                         }
+                  if (currentLiveDocs == null || currentLiveDocs.get(docIDUpto)) {
+                    nextIsSet = true;
+                    int segOrd = dvs[readerUpto].getOrd(docIDUpto);
+                    nextValue = segOrd == -1 ? -1 : (int) currentMap.get(segOrd);
+                    docIDUpto++;
+                    return true;
+                  }
 
-                         @Override
-                         public int getValueCount() {
-                           return (int) map.getValueCount();
-                         }
-                         
-                         @Override
-                         public BytesRef lookupOrd(int ord) throws IOException {
-                           int segmentNumber = map.getFirstSegmentNumber(ord);
-                           int segmentOrd = (int) map.getFirstSegmentOrd(ord);
-                           return dvs[segmentNumber].lookupOrd(segmentOrd);
-                         }
-                       };
-                     }
-                   });
+                  docIDUpto++;
+                }
+              }
+            };
+          }
+        }
+    );
   }
   
-  /** Tracks state of one sorted set sub-reader that we are merging */
-  private static class SortedSetDocValuesSub extends DocIDMerger.Sub {
-
-    final SortedSetDocValues values;
-    final LongValues map;
-    
-    public SortedSetDocValuesSub(MergeState.DocMap docMap, SortedSetDocValues values, LongValues map) {
-      super(docMap);
-      this.values = values;
-      this.map = map;
-      assert values.docID() == -1;
-    }
-
-    @Override
-    public int nextDoc() throws IOException {
-      return values.nextDoc();
-    }
-
-    @Override
-    public String toString() {
-      return "SortedSetDocValuesSub(mappedDocID=" + mappedDocID + " values=" + values + ")";
-    }
-  }
-
   /**
    * Merges the sortedset docvalues from <code>toMerge</code>.
    * <p>
    * The default implementation calls {@link #addSortedSetField}, passing
    * an Iterable that merges ordinals and values and filters deleted documents .
    */
-  public void mergeSortedSetField(FieldInfo mergeFieldInfo, final MergeState mergeState) throws IOException {
-
-    List<SortedSetDocValues> toMerge = new ArrayList<>();
-    for (int i=0;i<mergeState.docValuesProducers.length;i++) {
-      SortedSetDocValues values = null;
-      DocValuesProducer docValuesProducer = mergeState.docValuesProducers[i];
-      if (docValuesProducer != null) {
-        FieldInfo fieldInfo = mergeState.fieldInfos[i].fieldInfo(mergeFieldInfo.name);
-        if (fieldInfo != null && fieldInfo.getDocValuesType() == DocValuesType.SORTED_SET) {
-          values = docValuesProducer.getSortedSet(fieldInfo);
-        }
-      }
-      if (values == null) {
-        values = DocValues.emptySortedSet();
-      }
-      toMerge.add(values);
-    }
+  public void mergeSortedSetField(FieldInfo fieldInfo, final MergeState mergeState, List<SortedSetDocValues> toMerge) throws IOException {
+    final SortedSetDocValues dvs[] = toMerge.toArray(new SortedSetDocValues[toMerge.size()]);
+    final int numReaders = mergeState.maxDocs.length;
 
     // step 1: iterate thru each sub and mark terms still in use
-    TermsEnum liveTerms[] = new TermsEnum[toMerge.size()];
+    TermsEnum liveTerms[] = new TermsEnum[dvs.length];
     long[] weights = new long[liveTerms.length];
     for (int sub = 0; sub < liveTerms.length; sub++) {
-      SortedSetDocValues dv = toMerge.get(sub);
+      SortedSetDocValues dv = dvs[sub];
       Bits liveDocs = mergeState.liveDocs[sub];
+      int maxDoc = mergeState.maxDocs[sub];
       if (liveDocs == null) {
         liveTerms[sub] = dv.termsEnum();
         weights[sub] = dv.getValueCount();
       } else {
         LongBitSet bitset = new LongBitSet(dv.getValueCount());
-        int docID;
-        while ((docID = dv.nextDoc()) != NO_MORE_DOCS) {
-          if (liveDocs.get(docID)) {
+        for (int i = 0; i < maxDoc; i++) {
+          if (liveDocs.get(i)) {
+            dv.setDocument(i);
             long ord;
             while ((ord = dv.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
               bitset.set(ord);
@@ -689,101 +730,193 @@ public abstract class DocValuesConsumer implements Closeable {
     }
     
     // step 2: create ordinal map (this conceptually does the "merging")
-    final OrdinalMap map = OrdinalMap.build(null, liveTerms, weights, PackedInts.COMPACT);
+    final OrdinalMap map = OrdinalMap.build(this, liveTerms, weights, PackedInts.COMPACT);
     
     // step 3: add field
-    addSortedSetField(mergeFieldInfo,
-                      new EmptyDocValuesProducer() {
-                        @Override
-                        public SortedSetDocValues getSortedSet(FieldInfo fieldInfo) throws IOException {
-                          if (fieldInfo != mergeFieldInfo) {
-                            throw new IllegalArgumentException("wrong FieldInfo");
-                          }
+    addSortedSetField(fieldInfo,
+        // ord -> value
+        new Iterable<BytesRef>() {
+          @Override
+          public Iterator<BytesRef> iterator() {
+            return new Iterator<BytesRef>() {
+              long currentOrd;
 
-                          // We must make new iterators + DocIDMerger for each iterator:
-                          List<SortedSetDocValuesSub> subs = new ArrayList<>();
+              @Override
+              public boolean hasNext() {
+                return currentOrd < map.getValueCount();
+              }
 
-                          long cost = 0;
-                          
-                          for (int i=0;i<mergeState.docValuesProducers.length;i++) {
-                            SortedSetDocValues values = null;
-                            DocValuesProducer docValuesProducer = mergeState.docValuesProducers[i];
-                            if (docValuesProducer != null) {
-                              FieldInfo readerFieldInfo = mergeState.fieldInfos[i].fieldInfo(mergeFieldInfo.name);
-                              if (readerFieldInfo != null && readerFieldInfo.getDocValuesType() == DocValuesType.SORTED_SET) {
-                                values = docValuesProducer.getSortedSet(readerFieldInfo);
-                              }
-                            }
-                            if (values == null) {
-                              values = DocValues.emptySortedSet();
-                            }
-                            cost += values.cost();
-                            subs.add(new SortedSetDocValuesSub(mergeState.docMaps[i], values, map.getGlobalOrds(i)));
-                          }
-            
-                          final DocIDMerger<SortedSetDocValuesSub> docIDMerger = DocIDMerger.of(subs, mergeState.needsIndexSort);
-                          
-                          final long finalCost = cost;
+              @Override
+              public BytesRef next() {
+                if (!hasNext()) {
+                  throw new NoSuchElementException();
+                }
+                int segmentNumber = map.getFirstSegmentNumber(currentOrd);
+                long segmentOrd = map.getFirstSegmentOrd(currentOrd);
+                final BytesRef term = dvs[segmentNumber].lookupOrd(segmentOrd);
+                currentOrd++;
+                return term;
+              }
 
-                          return new SortedSetDocValues() {
-                            private int docID = -1;
-                            private SortedSetDocValuesSub currentSub;
+              @Override
+              public void remove() {
+                throw new UnsupportedOperationException();
+              }
+            };
+          }
+        },
+        // doc -> ord count
+        new Iterable<Number>() {
+          @Override
+          public Iterator<Number> iterator() {
+            return new Iterator<Number>() {
+              int readerUpto = -1;
+              int docIDUpto;
+              int nextValue;
+              int currentMaxDoc;
+              Bits currentLiveDocs;
+              boolean nextIsSet;
 
-                            @Override
-                            public int docID() {
-                              return docID;
-                            }
+              @Override
+              public boolean hasNext() {
+                return nextIsSet || setNext();
+              }
 
-                            @Override
-                            public int nextDoc() throws IOException {
-                              currentSub = docIDMerger.next();
-                              if (currentSub == null) {
-                                docID = NO_MORE_DOCS;
-                              } else {
-                                docID = currentSub.mappedDocID;
-                              }
+              @Override
+              public void remove() {
+                throw new UnsupportedOperationException();
+              }
 
-                              return docID;
-                            }
+              @Override
+              public Number next() {
+                if (!hasNext()) {
+                  throw new NoSuchElementException();
+                }
+                assert nextIsSet;
+                nextIsSet = false;
+                // TODO make a mutable number
+                return nextValue;
+              }
 
-                            @Override
-                            public int advance(int target) throws IOException {
-                              throw new UnsupportedOperationException();
-                            }
+              private boolean setNext() {
+                while (true) {
+                  if (readerUpto == numReaders) {
+                    return false;
+                  }
 
-                            @Override
-                            public boolean advanceExact(int target) throws IOException {
-                              throw new UnsupportedOperationException();
-                            }
+                  if (docIDUpto == currentMaxDoc) {
+                    readerUpto++;
+                    if (readerUpto < numReaders) {
+                      currentLiveDocs = mergeState.liveDocs[readerUpto];
+                      currentMaxDoc = mergeState.maxDocs[readerUpto];
+                    }
+                    docIDUpto = 0;
+                    continue;
+                  }
 
-                            @Override
-                            public long nextOrd() throws IOException {
-                              long subOrd = currentSub.values.nextOrd();
-                              if (subOrd == NO_MORE_ORDS) {
-                                return NO_MORE_ORDS;
-                              }
-                              return currentSub.map.get(subOrd);
-                            }
+                  if (currentLiveDocs == null || currentLiveDocs.get(docIDUpto)) {
+                    nextIsSet = true;
+                    SortedSetDocValues dv = dvs[readerUpto];
+                    dv.setDocument(docIDUpto);
+                    nextValue = 0;
+                    while (dv.nextOrd() != SortedSetDocValues.NO_MORE_ORDS) {
+                      nextValue++;
+                    }
+                    docIDUpto++;
+                    return true;
+                  }
 
-                            @Override
-                            public long cost() {
-                              return finalCost;
-                            }
+                  docIDUpto++;
+                }
+              }
+            };
+          }
+        },
+        // ords
+        new Iterable<Number>() {
+          @Override
+          public Iterator<Number> iterator() {
+            return new Iterator<Number>() {
+              int readerUpto = -1;
+              int docIDUpto;
+              long nextValue;
+              int currentMaxDoc;
+              Bits currentLiveDocs;
+              LongValues currentMap;
+              boolean nextIsSet;
+              long ords[] = new long[8];
+              int ordUpto;
+              int ordLength;
 
-                            @Override
-                            public BytesRef lookupOrd(long ord) throws IOException {
-                              int segmentNumber = map.getFirstSegmentNumber(ord);
-                              long segmentOrd = map.getFirstSegmentOrd(ord);
-                              return toMerge.get(segmentNumber).lookupOrd(segmentOrd);
-                            }
+              @Override
+              public boolean hasNext() {
+                return nextIsSet || setNext();
+              }
 
-                            @Override
-                            public long getValueCount() {
-                              return map.getValueCount();
-                            }
-                          };
-                        }
-                      });
+              @Override
+              public void remove() {
+                throw new UnsupportedOperationException();
+              }
+
+              @Override
+              public Number next() {
+                if (!hasNext()) {
+                  throw new NoSuchElementException();
+                }
+                assert nextIsSet;
+                nextIsSet = false;
+                // TODO make a mutable number
+                return nextValue;
+              }
+
+              private boolean setNext() {
+                while (true) {
+                  if (readerUpto == numReaders) {
+                    return false;
+                  }
+                  
+                  if (ordUpto < ordLength) {
+                    nextValue = ords[ordUpto];
+                    ordUpto++;
+                    nextIsSet = true;
+                    return true;
+                  }
+
+                  if (docIDUpto == currentMaxDoc) {
+                    readerUpto++;
+                    if (readerUpto < numReaders) {
+                      currentMap = map.getGlobalOrds(readerUpto);
+                      currentLiveDocs = mergeState.liveDocs[readerUpto];
+                      currentMaxDoc = mergeState.maxDocs[readerUpto];
+                    }
+                    docIDUpto = 0;
+                    continue;
+                  }
+                  
+                  if (currentLiveDocs == null || currentLiveDocs.get(docIDUpto)) {
+                    assert docIDUpto < currentMaxDoc;
+                    SortedSetDocValues dv = dvs[readerUpto];
+                    dv.setDocument(docIDUpto);
+                    ordUpto = ordLength = 0;
+                    long ord;
+                    while ((ord = dv.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
+                      if (ordLength == ords.length) {
+                        ords = ArrayUtil.grow(ords, ordLength+1);
+                      }
+                      ords[ordLength] = currentMap.get(ord);
+                      ordLength++;
+                    }
+                    docIDUpto++;
+                    continue;
+                  }
+
+                  docIDUpto++;
+                }
+              }
+            };
+          }
+        }
+     );
   }
   
   // TODO: seek-by-ord to nextSetBit

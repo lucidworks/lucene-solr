@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,23 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
-
-import java.io.IOException;
 
 import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.automaton.CompiledAutomaton;
 
 /**
- * A multi-valued version of {@link SortedDocValues}.
+ * A per-document set of presorted byte[] values.
  * <p>
- * Per-Document values in a SortedSetDocValues are deduplicated, dereferenced,
+ * Per-Document values in a SortedDocValues are deduplicated, dereferenced,
  * and sorted into a dictionary of unique values. A pointer to the
  * dictionary value (ordinal) can be retrieved for each document. Ordinals
  * are dense and in increasing sorted order.
  */
-public abstract class SortedSetDocValues extends DocValuesIterator {
+public abstract class SortedSetDocValues {
   
   /** Sole constructor. (For invocation by subclass 
    * constructors, typically implicit.) */
@@ -42,17 +39,20 @@ public abstract class SortedSetDocValues extends DocValuesIterator {
   public static final long NO_MORE_ORDS = -1;
 
   /** 
-   * Returns the next ordinal for the current document.
-   * It is illegal to call this method after {@link #advanceExact(int)}
-   * returned {@code false}.
+   * Returns the next ordinal for the current document (previously
+   * set by {@link #setDocument(int)}.
    * @return next ordinal for the document, or {@link #NO_MORE_ORDS}. 
    *         ordinals are dense, start at 0, then increment by 1 for 
    *         the next value in sorted order. 
    */
-  public abstract long nextOrd() throws IOException;
-
-  // TODO: should we have a docValueCount, like SortedNumeric?
+  public abstract long nextOrd();
   
+  /** 
+   * Sets iteration to the specified docID 
+   * @param docID document ID 
+   */
+  public abstract void setDocument(int docID);
+
   /** Retrieves the value for the specified ordinal. The returned
    * {@link BytesRef} may be re-used across calls to lookupOrd so make sure to
    * {@link BytesRef#deepCopyOf(BytesRef) copy it} if you want to keep it
@@ -60,7 +60,7 @@ public abstract class SortedSetDocValues extends DocValuesIterator {
    * @param ord ordinal to lookup
    * @see #nextOrd
    */
-  public abstract BytesRef lookupOrd(long ord) throws IOException;
+  public abstract BytesRef lookupOrd(long ord);
 
   /**
    * Returns the number of unique values.
@@ -75,7 +75,7 @@ public abstract class SortedSetDocValues extends DocValuesIterator {
    *
    *  @param key Key to look up
    **/
-  public long lookupTerm(BytesRef key) throws IOException {
+  public long lookupTerm(BytesRef key) {
     long low = 0;
     long high = getValueCount()-1;
 
@@ -100,28 +100,7 @@ public abstract class SortedSetDocValues extends DocValuesIterator {
    * Returns a {@link TermsEnum} over the values.
    * The enum supports {@link TermsEnum#ord()} and {@link TermsEnum#seekExact(long)}.
    */
-  public TermsEnum termsEnum() throws IOException {
+  public TermsEnum termsEnum() {
     return new SortedSetDocValuesTermsEnum(this);
-  }
-
-  /**
-   * Returns a {@link TermsEnum} over the values, filtered by a {@link CompiledAutomaton}
-   * The enum supports {@link TermsEnum#ord()}.
-   */
-  public TermsEnum intersect(CompiledAutomaton automaton) throws IOException {
-    TermsEnum in = termsEnum();
-    switch (automaton.type) {
-      case NONE:
-        return TermsEnum.EMPTY;
-      case ALL:
-        return in;
-      case SINGLE:
-        return new SingleTermsEnum(in, automaton.term);
-      case NORMAL:
-        return new AutomatonTermsEnum(in, automaton);
-      default:
-        // unreachable
-        throw new RuntimeException("unhandled case");
-    }
   }
 }

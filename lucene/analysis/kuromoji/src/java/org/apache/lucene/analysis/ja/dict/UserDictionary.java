@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ja.dict;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ja.dict;
-
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import org.apache.lucene.analysis.ja.util.CSVUtil;
+import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.IntsRefBuilder;
 import org.apache.lucene.util.fst.Builder;
 import org.apache.lucene.util.fst.FST;
@@ -104,8 +105,6 @@ public final class UserDictionary implements Dictionary {
     long ord = 0;
     
     for (String[] values : featureEntries) {
-      String surface = values[0].replaceAll("\\s", "");
-      String concatenatedSegment = values[1].replaceAll("\\s", "");
       String[] segmentation = values[1].replaceAll("  *", " ").split(" ");
       String[] readings = values[2].replaceAll("  *", " ").split(" ");
       String pos = values[3];
@@ -114,12 +113,6 @@ public final class UserDictionary implements Dictionary {
         throw new RuntimeException("Illegal user dictionary entry " + values[0] +
                                    " - the number of segmentations (" + segmentation.length + ")" +
                                    " does not the match number of readings (" + readings.length + ")");
-      }
-
-      if (concatenatedSegment.length() > surface.length()) {
-        throw new RuntimeException("Illegal user dictionary entry " + values[0] +
-            " - the concatenated segmentation (" + concatenatedSegment + ")" +
-            " is longer than the surface form (" + surface + ")");
       }
       
       int[] wordIdAndLength = new int[segmentation.length + 1]; // wordId offset, length, length....
@@ -170,9 +163,9 @@ public final class UserDictionary implements Dictionary {
         if (fst.findTargetArc(ch, arc, arc, i == 0, fstReader) == null) {
           break; // continue to next position
         }
-        output += arc.output().intValue();
+        output += arc.output.intValue();
         if (arc.isFinal()) {
-          final int finalOutput = output + arc.nextFinalOutput().intValue();
+          final int finalOutput = output + arc.nextFinalOutput.intValue();
           result.put(startOffset-off, segmentations[finalOutput]);
           found = true;
         }
@@ -194,11 +187,11 @@ public final class UserDictionary implements Dictionary {
    */
   private int[][] toIndexArray(Map<Integer, int[]> input) {
     ArrayList<int[]> result = new ArrayList<>();
-    for (Map.Entry<Integer, int[]> entry : input.entrySet()) {
-      int[] wordIdAndLength = entry.getValue();
+    for (int i : input.keySet()) {
+      int[] wordIdAndLength = input.get(i);
       int wordId = wordIdAndLength[0];
       // convert length to index
-      int current = entry.getKey();
+      int current = i;
       for (int j = 1; j < wordIdAndLength.length; j++) { // first entry is wordId offset
         int[] token = { wordId + j - 1, current, wordIdAndLength[j] };
         result.add(token);

@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
 
 import java.io.IOException;
 
@@ -30,7 +31,7 @@ import org.apache.lucene.util.TestUtil;
 public abstract class BaseDirectoryWrapper extends FilterDirectory {
   
   private boolean checkIndexOnClose = true;
-  private boolean doSlowChecksOnClose = true;
+  private boolean crossCheckTermVectorsOnClose = true;
   protected volatile boolean isOpen = true;
 
   protected BaseDirectoryWrapper(Directory delegate) {
@@ -42,7 +43,7 @@ public abstract class BaseDirectoryWrapper extends FilterDirectory {
     if (isOpen) {
       isOpen = false;
       if (checkIndexOnClose && DirectoryReader.indexExists(this)) {
-        TestUtil.checkIndex(this, doSlowChecksOnClose);
+        TestUtil.checkIndex(this, crossCheckTermVectorsOnClose);
       }
     }
     super.close();
@@ -65,10 +66,10 @@ public abstract class BaseDirectoryWrapper extends FilterDirectory {
   }
 
   public void setCrossCheckTermVectorsOnClose(boolean value) {
-    this.doSlowChecksOnClose = value;
+    this.crossCheckTermVectorsOnClose = value;
   }
 
   public boolean getCrossCheckTermVectorsOnClose() {
-    return doSlowChecksOnClose;
+    return crossCheckTermVectorsOnClose;
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.IOException;
 import java.util.Collection;
@@ -30,11 +30,7 @@ import org.apache.lucene.util.Accountables;
  * A memory-resident {@link IndexOutput} implementation.
  *
  * @lucene.internal
- * @deprecated This class uses inefficient synchronization and is discouraged
- * in favor of {@link MMapDirectory}. It will be removed in future versions 
- * of Lucene.
  */
-@Deprecated
 public class RAMOutputStream extends IndexOutput implements Accountable {
   static final int BUFFER_SIZE = 1024;
 
@@ -61,7 +57,7 @@ public class RAMOutputStream extends IndexOutput implements Accountable {
 
   /** Creates this, with specified name. */
   public RAMOutputStream(String name, RAMFile f, boolean checksum) {
-    super("RAMOutputStream(name=\"" + name + "\")", name);
+    super("RAMOutputStream(name=\"" + name + "\")");
     file = f;
 
     // make sure that we switch to the
@@ -75,7 +71,7 @@ public class RAMOutputStream extends IndexOutput implements Accountable {
     }
   }
 
-  /** Copy the current contents of this buffer to the provided {@link DataOutput}. */
+  /** Copy the current contents of this buffer to the named output. */
   public void writeTo(DataOutput out) throws IOException {
     flush();
     final long end = file.length;

@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -25,13 +25,14 @@ import java.util.Objects;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.TermState;
-import org.apache.lucene.index.TermStates;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.DocIdSetBuilder;
+import org.apache.lucene.util.ToStringUtils;
 
 /**
  * This class also provides the functionality behind
@@ -87,29 +88,29 @@ final class MultiTermQueryConstantScoreWrapper<Q extends MultiTermQuery> extends
   @Override
   public String toString(String field) {
     // query.toString should be ok for the filter, too, if the query boost is 1.0f
-    return query.toString(field);
+    return query.toString(field) + ToStringUtils.boost(getBoost());
   }
 
   @Override
-  public final boolean equals(final Object other) {
-    return sameClassAs(other) &&
-           query.equals(((MultiTermQueryConstantScoreWrapper<?>) other).query);
+  public final boolean equals(final Object o) {
+    if (super.equals(o) == false) {
+      return false;
+    }
+    final MultiTermQueryConstantScoreWrapper<?> that = (MultiTermQueryConstantScoreWrapper<?>) o;
+    return this.query.equals(that.query);
   }
 
   @Override
   public final int hashCode() {
-    return 31 * classHash() + query.hashCode();
+    return 31 * super.hashCode() + query.hashCode();
   }
 
-  /** Returns the encapsulated query */
-  public Q getQuery() { return query; }
-  
   /** Returns the field name for this query */
   public final String getField() { return query.getField(); }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    return new ConstantScoreWeight(this, boost) {
+  public Weight createWeight(final IndexSearcher searcher, final boolean needsScores) throws IOException {
+    return new ConstantScoreWeight(this) {
 
       /** Try to collect terms from the given terms enum and return true iff all
        *  terms could be collected. If {@code false} is returned, the enum is
@@ -122,6 +123,10 @@ final class MultiTermQueryConstantScoreWrapper<Q extends MultiTermQuery> extends
             return true;
           }
           TermState state = termsEnum.termState();
+          if (state.isRealTerm() == false) {
+            // TermQuery does not accept fake terms for now
+            return false;
+          }
           terms.add(new TermAndState(BytesRef.deepCopyOf(term), state, termsEnum.docFreq(), termsEnum.totalTermFreq()));
         }
         return termsEnum.next() == null;
@@ -148,17 +153,18 @@ final class MultiTermQueryConstantScoreWrapper<Q extends MultiTermQuery> extends
           // build a boolean query
           BooleanQuery.Builder bq = new BooleanQuery.Builder();
           for (TermAndState t : collectedTerms) {
-            final TermStates termStates = new TermStates(searcher.getTopReaderContext());
-            termStates.register(t.state, context.ord, t.docFreq, t.totalTermFreq);
-            bq.add(new TermQuery(new Term(query.field, t.term), termStates), Occur.SHOULD);
+            final TermContext termContext = new TermContext(searcher.getTopReaderContext());
+            termContext.register(t.state, context.ord, t.docFreq, t.totalTermFreq);
+            bq.add(new TermQuery(new Term(query.field, t.term), termContext), Occur.SHOULD);
           }
           Query q = new ConstantScoreQuery(bq.build());
-          final Weight weight = searcher.rewrite(q).createWeight(searcher, scoreMode, score());
+          final Weight weight = searcher.rewrite(q).createWeight(searcher, needsScores);
+          weight.normalize(1f, score());
           return new WeightOrDocIdSet(weight);
         }
 
         // Too many terms: go back to the terms we already collected and start building the bit set
-        DocIdSetBuilder builder = new DocIdSetBuilder(context.reader().maxDoc(), terms);
+        DocIdSetBuilder builder = new DocIdSetBuilder(context.reader().maxDoc());
         if (collectedTerms.isEmpty() == false) {
           TermsEnum termsEnum2 = terms.iterator();
           for (TermAndState t : collectedTerms) {
@@ -185,7 +191,7 @@ final class MultiTermQueryConstantScoreWrapper<Q extends MultiTermQuery> extends
         if (disi == null) {
           return null;
         }
-        return new ConstantScoreScorer(this, score(), scoreMode, disi);
+        return new ConstantScoreScorer(this, score(), disi);
       }
 
       @Override
@@ -203,18 +209,6 @@ final class MultiTermQueryConstantScoreWrapper<Q extends MultiTermQuery> extends
       }
 
       @Override
-      public Matches matches(LeafReaderContext context, int doc) throws IOException {
-        final Terms terms = context.reader().terms(query.field);
-        if (terms == null) {
-          return null;
-        }
-        if (terms.hasPositions() == false) {
-          return super.matches(context, doc);
-        }
-        return MatchesUtils.forField(query.field, () -> DisjunctionMatchesIterator.fromTermsEnum(context, doc, query, query.field, query.getTermsEnum(terms)));
-      }
-
-      @Override
       public Scorer scorer(LeafReaderContext context) throws IOException {
         final WeightOrDocIdSet weightOrBitSet = rewrite(context);
         if (weightOrBitSet.weight != null) {
@@ -223,19 +217,6 @@ final class MultiTermQueryConstantScoreWrapper<Q extends MultiTermQuery> extends
           return scorer(weightOrBitSet.set);
         }
       }
-
-      @Override
-      public boolean isCacheable(LeafReaderContext ctx) {
-        return true;
-      }
-
     };
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    if (visitor.acceptField(getField())) {
-      query.visit(visitor.getSubVisitor(Occur.FILTER, this));
-    }
   }
 }

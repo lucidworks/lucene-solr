@@ -89,7 +89,7 @@ public class TestBuiltInEvaluators extends AbstractDataImportHandlerTestCase {
         return null;
       }
     }).parseParams(" 1 , a.b, 'hello!', 'ds,o,u\'za',",vr);
-    assertEquals(1d,l.get(0));
+    assertEquals(new Double(1),l.get(0));
     assertEquals("B",((Evaluator.VariableWrapper)l.get(1)).resolve());
     assertEquals("hello!",l.get(2));
     assertEquals("ds,o,u'za",l.get(3));
@@ -135,14 +135,14 @@ public class TestBuiltInEvaluators extends AbstractDataImportHandlerTestCase {
       SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd HH", defaultLocale);
       String sdf = sdfDate.format(twoDaysAgo(defaultLocale, TimeZone.getDefault()));
       String dfe = dateFormatEval.evaluate(
-          "'NOW-2DAYS','yyyy-MM-dd HH','" + defaultLocale.toLanguageTag() + "'", context);
+          "'NOW-2DAYS','yyyy-MM-dd HH','" + defaultLocale + "'", context);
       assertEquals(sdf,dfe);
       for(String tzStr : TimeZone.getAvailableIDs()) {  
         TimeZone tz = TimeZone.getTimeZone(tzStr);
         sdfDate.setTimeZone(tz);
         sdf = sdfDate.format(twoDaysAgo(defaultLocale, tz));
         dfe = dateFormatEval.evaluate(
-            "'NOW-2DAYS','yyyy-MM-dd HH','" + defaultLocale.toLanguageTag() + "','" + tzStr + "'", context);
+            "'NOW-2DAYS','yyyy-MM-dd HH','" + defaultLocale + "','" + tzStr + "'", context);
         assertEquals(sdf,dfe);          
       }
     }
@@ -157,7 +157,7 @@ public class TestBuiltInEvaluators extends AbstractDataImportHandlerTestCase {
         dateFormatEval.evaluate("A.key, 'yyyy-MM-dd HH:mm'", context));
     assertEquals(
         new SimpleDateFormat("yyyy-MM-dd HH:mm", defaultLocale).format(d),
-        dateFormatEval.evaluate("A.key, 'yyyy-MM-dd HH:mm','" + defaultLocale.toLanguageTag() + "'", context));
+        dateFormatEval.evaluate("A.key, 'yyyy-MM-dd HH:mm','" + defaultLocale + "'", context));
     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm", defaultLocale);
     for(String tzStr : TimeZone.getAvailableIDs()) {
       TimeZone tz = TimeZone.getTimeZone(tzStr);
@@ -165,7 +165,7 @@ public class TestBuiltInEvaluators extends AbstractDataImportHandlerTestCase {
       assertEquals(
           sdf.format(d),
           dateFormatEval.evaluate(
-              "A.key, 'yyyy-MM-dd HH:mm','" + defaultLocale.toLanguageTag() + "', '" + tzStr + "'", context));     
+              "A.key, 'yyyy-MM-dd HH:mm','" + defaultLocale + "', '" + tzStr + "'", context));     
       
     }
     

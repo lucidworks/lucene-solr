@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
 
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Properties;
-import java.util.Set;
 
 import org.apache.solr.common.SolrException;
 import org.apache.solr.logging.LogWatcherConfig;
@@ -33,10 +31,6 @@ public class NodeConfig {
 
   private final Path coreRootDirectory;
 
-  private final Path solrDataHome;
-
-  private final Integer booleanQueryMaxClauseCount;
-  
   private final Path configSetBaseDirectory;
 
   private final String sharedLibDirectory;
@@ -49,8 +43,6 @@ public class NodeConfig {
 
   private final String collectionsAdminHandlerClass;
 
-  private final String healthCheckHandlerClass;
-
   private final String infoHandlerClass;
 
   private final String configSetsHandlerClass;
@@ -59,63 +51,41 @@ public class NodeConfig {
 
   private final CloudConfig cloudConfig;
 
-  private final Integer coreLoadThreads;
+  private final int coreLoadThreads;
 
-  private final int replayUpdatesThreads;
-
-  @Deprecated
-  // This should be part of the transientCacheConfig, remove in 7.0
   private final int transientCacheSize;
 
   private final boolean useSchemaCache;
 
   private final String managementPath;
 
-  private final PluginInfo[] backupRepositoryPlugins;
-
-  private final MetricsConfig metricsConfig;
-
-  private final PluginInfo transientCacheConfig;
-
-  private final PluginInfo tracerConfig;
-
-  private NodeConfig(String nodeName, Path coreRootDirectory, Path solrDataHome, Integer booleanQueryMaxClauseCount,
-                     Path configSetBaseDirectory, String sharedLibDirectory,
+  private NodeConfig(String nodeName, Path coreRootDirectory, Path configSetBaseDirectory, String sharedLibDirectory,
                      PluginInfo shardHandlerFactoryConfig, UpdateShardHandlerConfig updateShardHandlerConfig,
                      String coreAdminHandlerClass, String collectionsAdminHandlerClass,
-                     String healthCheckHandlerClass, String infoHandlerClass, String configSetsHandlerClass,
-                     LogWatcherConfig logWatcherConfig, CloudConfig cloudConfig, Integer coreLoadThreads, int replayUpdatesThreads,
-                     int transientCacheSize, boolean useSchemaCache, String managementPath, SolrResourceLoader loader,
-                     Properties solrProperties, PluginInfo[] backupRepositoryPlugins,
-                     MetricsConfig metricsConfig, PluginInfo transientCacheConfig, PluginInfo tracerConfig) {
+                     String infoHandlerClass, String configSetsHandlerClass,
+                     LogWatcherConfig logWatcherConfig, CloudConfig cloudConfig, int coreLoadThreads,
+                     int transientCacheSize, boolean useSchemaCache, String managementPath,
+                     SolrResourceLoader loader, Properties solrProperties) {
     this.nodeName = nodeName;
     this.coreRootDirectory = coreRootDirectory;
-    this.solrDataHome = solrDataHome;
-    this.booleanQueryMaxClauseCount = booleanQueryMaxClauseCount;
     this.configSetBaseDirectory = configSetBaseDirectory;
     this.sharedLibDirectory = sharedLibDirectory;
     this.shardHandlerFactoryConfig = shardHandlerFactoryConfig;
     this.updateShardHandlerConfig = updateShardHandlerConfig;
     this.coreAdminHandlerClass = coreAdminHandlerClass;
     this.collectionsAdminHandlerClass = collectionsAdminHandlerClass;
-    this.healthCheckHandlerClass = healthCheckHandlerClass;
     this.infoHandlerClass = infoHandlerClass;
     this.configSetsHandlerClass = configSetsHandlerClass;
     this.logWatcherConfig = logWatcherConfig;
     this.cloudConfig = cloudConfig;
     this.coreLoadThreads = coreLoadThreads;
-    this.replayUpdatesThreads = replayUpdatesThreads;
     this.transientCacheSize = transientCacheSize;
     this.useSchemaCache = useSchemaCache;
     this.managementPath = managementPath;
     this.loader = loader;
     this.solrProperties = solrProperties;
-    this.backupRepositoryPlugins = backupRepositoryPlugins;
-    this.metricsConfig = metricsConfig;
-    this.transientCacheConfig = transientCacheConfig;
-    this.tracerConfig = tracerConfig;
 
-    if (this.cloudConfig != null && this.getCoreLoadThreadCount(false) < 2) {
+    if (this.cloudConfig != null && this.coreLoadThreads < 2) {
       throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
           "SolrCloud requires a value of at least 2 for coreLoadThreads (configured value = " + this.coreLoadThreads + ")");
     }
@@ -129,19 +99,6 @@ public class NodeConfig {
     return coreRootDirectory;
   }
 
-  public Path getSolrDataHome() {
-    return solrDataHome;
-  }
-
-  /** 
-   * If null, the lucene default will not be overridden
-   *
-   * @see org.apache.lucene.search.BooleanQuery#setMaxClauseCount
-   */
-  public Integer getBooleanQueryMaxClauseCount() {
-    return booleanQueryMaxClauseCount;
-  }
-  
   public PluginInfo getShardHandlerFactoryPluginInfo() {
     return shardHandlerFactoryConfig;
   }
@@ -150,14 +107,28 @@ public class NodeConfig {
     return updateShardHandlerConfig;
   }
 
-  public int getCoreLoadThreadCount(boolean zkAware) {
-    return coreLoadThreads == null ?
-        (zkAware ? NodeConfigBuilder.DEFAULT_CORE_LOAD_THREADS_IN_CLOUD : NodeConfigBuilder.DEFAULT_CORE_LOAD_THREADS)
-        : coreLoadThreads;
+  @Deprecated
+  public int getDistributedConnectionTimeout() {
+    return updateShardHandlerConfig.getDistributedConnectionTimeout();
   }
 
-  public int getReplayUpdatesThreads() {
-    return replayUpdatesThreads;
+  @Deprecated
+  public int getDistributedSocketTimeout() {
+    return updateShardHandlerConfig.getDistributedSocketTimeout();
+  }
+
+  @Deprecated
+  public int getMaxUpdateConnections() {
+    return updateShardHandlerConfig.getMaxUpdateConnections();
+  }
+
+  @Deprecated
+  public int getMaxUpdateConnectionsPerHost() {
+    return updateShardHandlerConfig.getMaxUpdateConnectionsPerHost();
+  }
+
+  public int getCoreLoadThreadCount() {
+    return coreLoadThreads;
   }
 
   public String getSharedLibDirectory() {
@@ -170,10 +141,6 @@ public class NodeConfig {
   
   public String getCollectionsHandlerClass() {
     return collectionsAdminHandlerClass;
-  }
-
-  public String getHealthCheckHandlerClass() {
-    return healthCheckHandlerClass;
   }
 
   public String getInfoHandlerClass() {
@@ -219,100 +186,46 @@ public class NodeConfig {
     return loader;
   }
 
-  public PluginInfo[] getBackupRepositoryPlugins() {
-    return backupRepositoryPlugins;
-  }
-
-  public MetricsConfig getMetricsConfig() {
-    return metricsConfig;
-  }
-
-  public PluginInfo getTransientCachePluginInfo() { return transientCacheConfig; }
-
-  public PluginInfo getTracerConfiguratorPluginInfo() {
-    return tracerConfig;
-  }
-
   public static class NodeConfigBuilder {
 
     private Path coreRootDirectory;
-    private Path solrDataHome;
-    private Integer booleanQueryMaxClauseCount;
     private Path configSetBaseDirectory;
     private String sharedLibDirectory = "lib";
     private PluginInfo shardHandlerFactoryConfig;
     private UpdateShardHandlerConfig updateShardHandlerConfig = UpdateShardHandlerConfig.DEFAULT;
     private String coreAdminHandlerClass = DEFAULT_ADMINHANDLERCLASS;
     private String collectionsAdminHandlerClass = DEFAULT_COLLECTIONSHANDLERCLASS;
-    private String healthCheckHandlerClass = DEFAULT_HEALTHCHECKHANDLERCLASS;
     private String infoHandlerClass = DEFAULT_INFOHANDLERCLASS;
     private String configSetsHandlerClass = DEFAULT_CONFIGSETSHANDLERCLASS;
     private LogWatcherConfig logWatcherConfig = new LogWatcherConfig(true, null, null, 50);
     private CloudConfig cloudConfig;
     private int coreLoadThreads = DEFAULT_CORE_LOAD_THREADS;
-    private int replayUpdatesThreads = Runtime.getRuntime().availableProcessors();
-    @Deprecated
-    //Remove in 7.0 and put it all in the transientCache element in solrconfig.xml
     private int transientCacheSize = DEFAULT_TRANSIENT_CACHE_SIZE;
     private boolean useSchemaCache = false;
     private String managementPath;
     private Properties solrProperties = new Properties();
-    private PluginInfo[] backupRepositoryPlugins;
-    private MetricsConfig metricsConfig;
-    private PluginInfo transientCacheConfig;
-    private PluginInfo tracerConfig;
 
     private final SolrResourceLoader loader;
     private final String nodeName;
 
-    public static final int DEFAULT_CORE_LOAD_THREADS = 3;
-    //No:of core load threads in cloud mode is set to a default of 8
-    public static final int DEFAULT_CORE_LOAD_THREADS_IN_CLOUD = 8;
+    private static final int DEFAULT_CORE_LOAD_THREADS = 3;
 
-    public static final int DEFAULT_TRANSIENT_CACHE_SIZE = Integer.MAX_VALUE;
+    private static final int DEFAULT_TRANSIENT_CACHE_SIZE = Integer.MAX_VALUE;
 
     private static final String DEFAULT_ADMINHANDLERCLASS = "org.apache.solr.handler.admin.CoreAdminHandler";
     private static final String DEFAULT_INFOHANDLERCLASS = "org.apache.solr.handler.admin.InfoHandler";
     private static final String DEFAULT_COLLECTIONSHANDLERCLASS = "org.apache.solr.handler.admin.CollectionsHandler";
-    private static final String DEFAULT_HEALTHCHECKHANDLERCLASS = "org.apache.solr.handler.admin.HealthCheckHandler";
     private static final String DEFAULT_CONFIGSETSHANDLERCLASS = "org.apache.solr.handler.admin.ConfigSetsHandler";
-
-    public static final Set<String> DEFAULT_HIDDEN_SYS_PROPS = new HashSet<>(Arrays.asList(
-        "javax.net.ssl.keyStorePassword",
-        "javax.net.ssl.trustStorePassword",
-        "basicauth",
-        "zkDigestPassword",
-        "zkDigestReadonlyPassword"
-    ));
 
     public NodeConfigBuilder(String nodeName, SolrResourceLoader loader) {
       this.nodeName = nodeName;
       this.loader = loader;
       this.coreRootDirectory = loader.getInstancePath();
-      // always init from sysprop because <solrDataHome> config element may be missing
-      String dataHomeProperty = System.getProperty(SolrXmlConfig.SOLR_DATA_HOME);
-      if (dataHomeProperty != null && !dataHomeProperty.isEmpty()) {
-        solrDataHome = loader.getInstancePath().resolve(dataHomeProperty);
-      }
       this.configSetBaseDirectory = loader.getInstancePath().resolve("configsets");
-      this.metricsConfig = new MetricsConfig.MetricsConfigBuilder().build();
     }
 
     public NodeConfigBuilder setCoreRootDirectory(String coreRootDirectory) {
       this.coreRootDirectory = loader.getInstancePath().resolve(coreRootDirectory);
-      return this;
-    }
-
-    public NodeConfigBuilder setSolrDataHome(String solrDataHomeString) {
-      // keep it null unless explicitly set to non-empty value
-      if (solrDataHomeString != null && !solrDataHomeString.isEmpty()) {
-        this.solrDataHome = loader.getInstancePath().resolve(solrDataHomeString);
-      }
-      return this;
-    }
-    
-    public NodeConfigBuilder setBooleanQueryMaxClauseCount(Integer booleanQueryMaxClauseCount) {
-      this.booleanQueryMaxClauseCount = booleanQueryMaxClauseCount;
       return this;
     }
 
@@ -346,11 +259,6 @@ public class NodeConfig {
       return this;
     }
 
-    public NodeConfigBuilder setHealthCheckHandlerClass(String healthCheckHandlerClass) {
-      this.healthCheckHandlerClass = healthCheckHandlerClass;
-      return this;
-    }
-
     public NodeConfigBuilder setInfoHandlerClass(String infoHandlerClass) {
       this.infoHandlerClass = infoHandlerClass;
       return this;
@@ -376,13 +284,6 @@ public class NodeConfig {
       return this;
     }
 
-    public NodeConfigBuilder setReplayUpdatesThreads(int replayUpdatesThreads) {
-      this.replayUpdatesThreads = replayUpdatesThreads;
-      return this;
-    }
-
-    // Remove in Solr 7.0
-    @Deprecated
     public NodeConfigBuilder setTransientCacheSize(int transientCacheSize) {
       this.transientCacheSize = transientCacheSize;
       return this;
@@ -403,32 +304,10 @@ public class NodeConfig {
       return this;
     }
 
-    public NodeConfigBuilder setBackupRepositoryPlugins(PluginInfo[] backupRepositoryPlugins) {
-      this.backupRepositoryPlugins = backupRepositoryPlugins;
-      return this;
-    }
-
-    public NodeConfigBuilder setMetricsConfig(MetricsConfig metricsConfig) {
-      this.metricsConfig = metricsConfig;
-      return this;
-    }
-    
-    public NodeConfigBuilder setSolrCoreCacheFactoryConfig(PluginInfo transientCacheConfig) {
-      this.transientCacheConfig = transientCacheConfig;
-      return this;
-    }
-
-    public NodeConfigBuilder setTracerConfig(PluginInfo tracerConfig) {
-      this.tracerConfig = tracerConfig;
-      return this;
-    }
-
     public NodeConfig build() {
-      return new NodeConfig(nodeName, coreRootDirectory, solrDataHome, booleanQueryMaxClauseCount,
-                            configSetBaseDirectory, sharedLibDirectory, shardHandlerFactoryConfig,
-                            updateShardHandlerConfig, coreAdminHandlerClass, collectionsAdminHandlerClass, healthCheckHandlerClass, infoHandlerClass, configSetsHandlerClass,
-                            logWatcherConfig, cloudConfig, coreLoadThreads, replayUpdatesThreads, transientCacheSize, useSchemaCache, managementPath, loader, solrProperties,
-                            backupRepositoryPlugins, metricsConfig, transientCacheConfig, tracerConfig);
+      return new NodeConfig(nodeName, coreRootDirectory, configSetBaseDirectory, sharedLibDirectory, shardHandlerFactoryConfig,
+                            updateShardHandlerConfig, coreAdminHandlerClass, collectionsAdminHandlerClass, infoHandlerClass, configSetsHandlerClass,
+                            logWatcherConfig, cloudConfig, coreLoadThreads, transientCacheSize, useSchemaCache, managementPath, loader, solrProperties);
     }
   }
 }

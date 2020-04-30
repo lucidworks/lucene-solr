@@ -24,9 +24,8 @@
 <config>
   <luceneMatchVersion>${tests.luceneMatchVersion:LATEST}</luceneMatchVersion>
   <xi:include href="solrconfig.snippet.randomindexconfig.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
-  <requestHandler name="/select" class="solr.SearchHandler"></requestHandler>
+  <requestHandler name="standard" class="solr.StandardRequestHandler"></requestHandler>
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
 
   <updateRequestProcessorChain name="force-script-engine" default="true">
     <processor class="solr.StatelessScriptUpdateProcessorFactory">

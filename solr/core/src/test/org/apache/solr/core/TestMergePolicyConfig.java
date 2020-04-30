@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -24,18 +25,11 @@ import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.LogByteSizeMergePolicy;
 import org.apache.lucene.index.LogDocMergePolicy;
 import org.apache.lucene.index.LogMergePolicy;
-import org.apache.lucene.index.NoMergePolicy;
 import org.apache.lucene.index.SegmentReader;
 import org.apache.lucene.index.TieredMergePolicy;
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.index.LogByteSizeMergePolicyFactory;
-import org.apache.solr.index.LogDocMergePolicyFactory;
-import org.apache.solr.index.MergePolicyFactory;
-import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.search.SolrIndexSearcher;
-import org.apache.solr.update.CommitUpdateCommand;
 import org.apache.solr.update.SolrIndexConfigTest;
-import org.apache.solr.update.UpdateHandler;
 import org.apache.solr.util.RefCounted;
 import org.junit.After;
 
@@ -53,7 +47,7 @@ public class TestMergePolicyConfig extends SolrTestCaseJ4 {
     final boolean useCompoundFile = random().nextBoolean();
     System.setProperty("testSetNoCFSMergePolicyConfig.useCompoundFile", String.valueOf(useCompoundFile));
     try {
-      initCore("solrconfig-mergepolicyfactory-nocfs.xml","schema-minimal.xml");
+      initCore("solrconfig-mergepolicy-nocfs.xml","schema-minimal.xml");
       IndexWriterConfig iwc = solrConfig.indexConfig.toIndexWriterConfig(h.getCore());
       assertEquals(useCompoundFile, iwc.getUseCompoundFile());
 
@@ -79,16 +73,19 @@ public class TestMergePolicyConfig extends SolrTestCaseJ4 {
   }
 
   public void testLegacyMergePolicyConfig() throws Exception {
-    final boolean expectCFS = Boolean.parseBoolean(System.getProperty("useCompoundFile"));
+    final boolean expectCFS 
+      = Boolean.parseBoolean(System.getProperty("useCompoundFile"));
 
     initCore("solrconfig-mergepolicy-legacy.xml","schema-minimal.xml");
     IndexWriterConfig iwc = solrConfig.indexConfig.toIndexWriterConfig(h.getCore());
     assertEquals(expectCFS, iwc.getUseCompoundFile());
 
-    TieredMergePolicy tieredMP = assertAndCast(TieredMergePolicy.class, iwc.getMergePolicy());
 
-    assertEquals(10, tieredMP.getMaxMergeAtOnce());
-    assertEquals(10.0D, tieredMP.getSegmentsPerTier(), 0.0D);
+    TieredMergePolicy tieredMP = assertAndCast(TieredMergePolicy.class,
+                                               iwc.getMergePolicy());
+
+    assertEquals(7, tieredMP.getMaxMergeAtOnce());
+    assertEquals(7.0D, tieredMP.getSegmentsPerTier(), 0.0D);
 
     assertCommitSomeNewDocs();
     assertCompoundSegments(h.getCore(), expectCFS);
@@ -98,7 +95,7 @@ public class TestMergePolicyConfig extends SolrTestCaseJ4 {
     final boolean expectCFS 
       = Boolean.parseBoolean(System.getProperty("useCompoundFile"));
 
-    initCore("solrconfig-tieredmergepolicyfactory.xml","schema-minimal.xml");
+    initCore("solrconfig-tieredmergepolicy.xml","schema-minimal.xml");
     IndexWriterConfig iwc = solrConfig.indexConfig.toIndexWriterConfig(h.getCore());
     assertEquals(expectCFS, iwc.getUseCompoundFile());
 
@@ -118,7 +115,7 @@ public class TestMergePolicyConfig extends SolrTestCaseJ4 {
     
     assertCommitSomeNewDocs();
     // even though we have a single segment (which is 100% of the size of 
-    // the index which is higher then our 0.6D threshold) the
+    // the index which is higher then our 0.6D threashold) the
     // compound ratio doesn't matter because the segment was never merged
     assertCompoundSegments(h.getCore(), expectCFS);
 
@@ -126,57 +123,20 @@ public class TestMergePolicyConfig extends SolrTestCaseJ4 {
     assertNumSegments(h.getCore(), 2);
     assertCompoundSegments(h.getCore(), expectCFS);
 
-    assertU(optimize("maxSegments", "1"));
+    assertU(optimize());
     assertNumSegments(h.getCore(), 1);
     // we've now forced a merge, and the MP ratio should be in play
     assertCompoundSegments(h.getCore(), false);
   }
 
-  public void testNoMergePolicyFactoryConfig() throws Exception {
-    initCore("solrconfig-nomergepolicyfactory.xml","schema-minimal.xml");
-    IndexWriterConfig iwc = solrConfig.indexConfig.toIndexWriterConfig(h.getCore());
-    NoMergePolicy mergePolicy = assertAndCast(NoMergePolicy.class,
-        iwc.getMergePolicy());
+  public void testLogMergePolicyConfig() throws Exception {
+    
+    final Class<? extends LogMergePolicy> mpClass = random().nextBoolean()
+      ? LogByteSizeMergePolicy.class : LogDocMergePolicy.class;
 
-    assertCommitSomeNewDocs();
+    System.setProperty("solr.test.log.merge.policy", mpClass.getName());
 
-    assertCommitSomeNewDocs();
-    assertNumSegments(h.getCore(), 2);
-
-    assertU(optimize());
-    assertNumSegments(h.getCore(), 2);
-    deleteCore();
-    initCore("solrconfig-nomergepolicyfactory.xml","schema-minimal.xml");
-    iwc = solrConfig.indexConfig.toIndexWriterConfig(h.getCore());
-    assertEquals(mergePolicy, iwc.getMergePolicy());
-
-    UpdateHandler updater = h.getCore().getUpdateHandler();
-    SolrQueryRequest req = req();
-    CommitUpdateCommand cmtCmd = new CommitUpdateCommand(req, true);
-    cmtCmd.maxOptimizeSegments = -1;
-    expectThrows(IllegalArgumentException.class, () -> {
-      updater.commit(cmtCmd);
-    });
-
-  }
-
-  public void testLogMergePolicyFactoryConfig() throws Exception {
-
-    final boolean byteSizeMP = random().nextBoolean();
-    final Class<? extends LogMergePolicy> mpClass = byteSizeMP
-        ? LogByteSizeMergePolicy.class : LogDocMergePolicy.class;
-    final Class<? extends MergePolicyFactory> mpfClass = byteSizeMP
-        ? LogByteSizeMergePolicyFactory.class : LogDocMergePolicyFactory.class;
-
-    System.setProperty("solr.test.log.merge.policy.factory", mpfClass.getName());
-
-    implTestLogMergePolicyConfig("solrconfig-logmergepolicyfactory.xml", mpClass);
-  }
-
-  private void implTestLogMergePolicyConfig(String solrConfigFileName,
-      Class<? extends LogMergePolicy> mpClass) throws Exception {
-
-    initCore(solrConfigFileName, "schema-minimal.xml");
+    initCore("solrconfig-logmergepolicy.xml","schema-minimal.xml");
     IndexWriterConfig iwc = solrConfig.indexConfig.toIndexWriterConfig(h.getCore());
 
     // verify some props set to -1 get lucene internal defaults
@@ -190,8 +150,11 @@ public class TestMergePolicyConfig extends SolrTestCaseJ4 {
 
     LogMergePolicy logMP = assertAndCast(mpClass, iwc.getMergePolicy());
 
+    // set by legacy <mergeFactor> setting
     assertEquals(11, logMP.getMergeFactor());
+    // set by legacy <maxMergeDocs> setting
     assertEquals(456, logMP.getMaxMergeDocs());
+
   }
 
   /**
@@ -267,4 +230,5 @@ public class TestMergePolicyConfig extends SolrTestCaseJ4 {
                    ((SegmentReader)atomic.reader()).getSegmentInfo().info.getUseCompoundFile());
     }
   }
+
 }

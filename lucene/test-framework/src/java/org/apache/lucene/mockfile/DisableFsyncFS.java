@@ -1,3 +1,15 @@
+package org.apache.lucene.mockfile;
+
+import java.io.IOException;
+import java.nio.channels.AsynchronousFileChannel;
+import java.nio.channels.FileChannel;
+import java.nio.file.FileSystem;
+import java.nio.file.OpenOption;
+import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +26,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.mockfile;
-
-import java.io.IOException;
-import java.nio.channels.AsynchronousFileChannel;
-import java.nio.channels.FileChannel;
-import java.nio.file.FileSystem;
-import java.nio.file.OpenOption;
-import java.nio.file.Path;
-import java.nio.file.attribute.FileAttribute;
-import java.util.Set;
-import java.util.concurrent.ExecutorService;
 
 /** 
  * Disables actual calls to fsync.

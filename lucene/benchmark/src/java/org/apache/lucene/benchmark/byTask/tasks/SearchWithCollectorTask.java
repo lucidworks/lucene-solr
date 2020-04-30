@@ -1,3 +1,4 @@
+package org.apache.lucene.benchmark.byTask.tasks;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.tasks;
 
 import org.apache.lucene.benchmark.byTask.PerfRunData;
 import org.apache.lucene.benchmark.byTask.feeds.QueryMaker;
@@ -53,7 +53,7 @@ public class SearchWithCollectorTask extends SearchTask {
   protected Collector createCollector() throws Exception {
     Collector collector = null;
     if (clnName.equalsIgnoreCase("topScoreDoc") == true) {
-      collector = TopScoreDocCollector.create(numHits(), Integer.MAX_VALUE);
+      collector = TopScoreDocCollector.create(numHits());
     } else if (clnName.length() > 0){
       collector = Class.forName(clnName).asSubclass(Collector.class).newInstance();
 

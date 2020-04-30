@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -53,9 +53,9 @@ import com.carrotsearch.randomizedtesting.annotations.TimeoutSuite;
 // disk (but, should run successfully).  Best to run w/
 // -Dtests.codec=<current codec>, and w/ plenty of RAM, eg:
 //
-//   ant test -Dtests.monster=true -Dtests.heapsize=8g -Dtests.codec=Lucene62 -Dtestcase=Test2BTerms
+//   ant test -Dtests.monster=true -Dtests.heapsize=8g -Dtests.codec=Lucene53 -Dtestcase=Test2BTerms
 //
-@SuppressCodecs({ "SimpleText", "Direct" })
+@SuppressCodecs({ "SimpleText", "Memory", "Direct" })
 @Monster("very slow, use 5g minimum heap")
 @TimeoutSuite(millis = 80 * TimeUnits.HOUR) // effectively no limit
 @SuppressSysoutChecks(bugUrl = "Stuff gets printed")
@@ -237,7 +237,7 @@ public class Test2BTerms extends LuceneTestCase {
 
   private List<BytesRef> findTerms(IndexReader r) throws IOException {
     System.out.println("TEST: findTerms");
-    final TermsEnum termsEnum = MultiTerms.getTerms(r, "field").iterator();
+    final TermsEnum termsEnum = MultiFields.getTerms(r, "field").iterator();
     final List<BytesRef> savedTerms = new ArrayList<>();
     int nextSave = TestUtil.nextInt(random(), 500000, 1000000);
     BytesRef term;
@@ -255,13 +255,13 @@ public class Test2BTerms extends LuceneTestCase {
     System.out.println("TEST: run " + terms.size() + " terms on reader=" + r);
     IndexSearcher s = newSearcher(r);
     Collections.shuffle(terms, random());
-    TermsEnum termsEnum = MultiTerms.getTerms(r, "field").iterator();
+    TermsEnum termsEnum = MultiFields.getTerms(r, "field").iterator();
     boolean failed = false;
     for(int iter=0;iter<10*terms.size();iter++) {
       final BytesRef term = terms.get(random().nextInt(terms.size()));
       System.out.println("TEST: search " + term);
       final long t0 = System.currentTimeMillis();
-      final long count = s.count(new TermQuery(new Term("field", term)));
+      final int count = s.search(new TermQuery(new Term("field", term)), 1).totalHits;
       if (count <= 0) {
         System.out.println("  FAILED: count=" + count);
         failed = true;

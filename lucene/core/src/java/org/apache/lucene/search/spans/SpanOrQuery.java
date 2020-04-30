@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -27,17 +27,14 @@ import java.util.Set;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
-import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.search.DisiPriorityQueue;
 import org.apache.lucene.search.DisiWrapper;
 import org.apache.lucene.search.DisjunctionDISIApproximation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.TwoPhaseIterator;
-import org.apache.lucene.search.Weight;
+import org.apache.lucene.util.ToStringUtils;
 
 
 /** Matches the union of its clauses.
@@ -56,8 +53,10 @@ public final class SpanOrQuery extends SpanQuery {
     }
   }
 
-  /** Adds a clause to this query */
-  private final void addClause(SpanQuery clause) {
+  /** Adds a clause to this query
+   *  @deprecated All clauses should be provided at {@link #SpanOrQuery(SpanQuery...) construction-time}. */
+  @Deprecated
+  public final void addClause(SpanQuery clause) {
     if (field == null) {
       field = clause.getField();
     } else if (clause.getField() != null && !clause.getField().equals(field)) {
@@ -76,6 +75,9 @@ public final class SpanOrQuery extends SpanQuery {
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
     SpanOrQuery rewritten = new SpanOrQuery();
     boolean actuallyRewritten = false;
     for (int i = 0 ; i < clauses.size(); i++) {
@@ -91,17 +93,6 @@ public final class SpanOrQuery extends SpanQuery {
   }
 
   @Override
-  public void visit(QueryVisitor visitor) {
-    if (visitor.acceptField(getField()) == false) {
-      return;
-    }
-    QueryVisitor v = visitor.getSubVisitor(BooleanClause.Occur.SHOULD, this);
-    for (SpanQuery q : clauses) {
-      q.visit(v);
-    }
-  }
-
-  @Override
   public String toString(String field) {
     StringBuilder buffer = new StringBuilder();
     buffer.append("spanOr([");
@@ -114,35 +105,40 @@ public final class SpanOrQuery extends SpanQuery {
       }
     }
     buffer.append("])");
+    buffer.append(ToStringUtils.boost(getBoost()));
     return buffer.toString();
   }
 
   @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           clauses.equals(((SpanOrQuery) other).clauses);
+  public boolean equals(Object o) {
+    if (! super.equals(o)) {
+      return false;
+    }
+    final SpanOrQuery that = (SpanOrQuery) o;
+    return clauses.equals(that.clauses);
   }
 
   @Override
   public int hashCode() {
-    return classHash() ^ clauses.hashCode();
+    int h = super.hashCode();
+    h = (h * 7) ^ clauses.hashCode();
+    return h;
   }
 
   @Override
-  public SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
     List<SpanWeight> subWeights = new ArrayList<>(clauses.size());
     for (SpanQuery q : clauses) {
-      subWeights.add(q.createWeight(searcher, scoreMode, boost));
+      subWeights.add(q.createWeight(searcher, false));
     }
-    return new SpanOrWeight(searcher, scoreMode.needsScores() ? getTermStates(subWeights) : null, subWeights, boost);
+    return new SpanOrWeight(searcher, needsScores ? getTermContexts(subWeights) : null, subWeights);
   }
 
   public class SpanOrWeight extends SpanWeight {
-
     final List<SpanWeight> subWeights;
 
-    public SpanOrWeight(IndexSearcher searcher, Map<Term, TermStates> terms, List<SpanWeight> subWeights, float boost) throws IOException {
-      super(SpanOrQuery.this, searcher, terms, boost);
+    public SpanOrWeight(IndexSearcher searcher, Map<Term, TermContext> terms, List<SpanWeight> subWeights) throws IOException {
+      super(SpanOrQuery.this, searcher, terms);
       this.subWeights = subWeights;
     }
 
@@ -154,18 +150,9 @@ public final class SpanOrQuery extends SpanQuery {
     }
 
     @Override
-    public boolean isCacheable(LeafReaderContext ctx) {
-      for (Weight w : subWeights) {
-        if (w.isCacheable(ctx) == false)
-          return false;
-      }
-      return true;
-    }
-
-    @Override
-    public void extractTermStates(Map<Term, TermStates> contexts) {
+    public void extractTermContexts(Map<Term, TermContext> contexts) {
       for (SpanWeight w : subWeights) {
-        w.extractTermStates(contexts);
+        w.extractTermContexts(contexts);
       }
     }
 
@@ -173,7 +160,7 @@ public final class SpanOrQuery extends SpanQuery {
     public Spans getSpans(final LeafReaderContext context, Postings requiredPostings)
         throws IOException {
 
-      ArrayList<Spans> subSpans = new ArrayList<>(clauses.size());
+      final ArrayList<Spans> subSpans = new ArrayList<>(clauses.size());
 
       for (SpanWeight w : subWeights) {
         Spans spans = w.getSpans(context, requiredPostings);
@@ -185,23 +172,23 @@ public final class SpanOrQuery extends SpanQuery {
       if (subSpans.size() == 0) {
         return null;
       } else if (subSpans.size() == 1) {
-        return subSpans.get(0);
+        return new ScoringWrapperSpans(subSpans.get(0), getSimScorer(context));
       }
 
-      DisiPriorityQueue byDocQueue = new DisiPriorityQueue(subSpans.size());
+      final DisiPriorityQueue<Spans> byDocQueue = new DisiPriorityQueue<>(subSpans.size());
       for (Spans spans : subSpans) {
-        byDocQueue.add(new DisiWrapper(spans));
+        byDocQueue.add(new DisiWrapper<>(spans));
       }
 
-      SpanPositionQueue byPositionQueue = new SpanPositionQueue(subSpans.size()); // when empty use -1
+      final SpanPositionQueue byPositionQueue = new SpanPositionQueue(subSpans.size()); // when empty use -1
 
-      return new Spans() {
+      return new Spans(this, getSimScorer(context)) {
         Spans topPositionSpans = null;
 
         @Override
         public int nextDoc() throws IOException {
           topPositionSpans = null;
-          DisiWrapper topDocSpans = byDocQueue.top();
+          DisiWrapper<Spans> topDocSpans = byDocQueue.top();
           int currentDoc = topDocSpans.doc;
           do {
             topDocSpans.doc = topDocSpans.iterator.nextDoc();
@@ -213,7 +200,7 @@ public final class SpanOrQuery extends SpanQuery {
         @Override
         public int advance(int target) throws IOException {
           topPositionSpans = null;
-          DisiWrapper topDocSpans = byDocQueue.top();
+          DisiWrapper<Spans> topDocSpans = byDocQueue.top();
           do {
             topDocSpans.doc = topDocSpans.iterator.advance(target);
             topDocSpans = byDocQueue.updateTop();
@@ -223,7 +210,7 @@ public final class SpanOrQuery extends SpanQuery {
 
         @Override
         public int docID() {
-          DisiWrapper topDocSpans = byDocQueue.top();
+          DisiWrapper<Spans> topDocSpans = byDocQueue.top();
           return topDocSpans.doc;
         }
 
@@ -232,7 +219,7 @@ public final class SpanOrQuery extends SpanQuery {
           float sumMatchCost = 0; // See also DisjunctionScorer.asTwoPhaseIterator()
           long sumApproxCost = 0;
 
-          for (DisiWrapper w : byDocQueue) {
+          for (DisiWrapper<Spans> w : byDocQueue) {
             if (w.twoPhaseView != null) {
               long costWeight = (w.cost <= 1) ? 1 : w.cost;
               sumMatchCost += w.twoPhaseView.matchCost() * costWeight;
@@ -247,7 +234,7 @@ public final class SpanOrQuery extends SpanQuery {
 
           final float matchCost = sumMatchCost / sumApproxCost;
 
-          return new TwoPhaseIterator(new DisjunctionDISIApproximation(byDocQueue)) {
+          return new TwoPhaseIterator(new DisjunctionDISIApproximation<Spans>(byDocQueue)) {
             @Override
             public boolean matches() throws IOException {
               return twoPhaseCurrentDocMatches();
@@ -265,9 +252,9 @@ public final class SpanOrQuery extends SpanQuery {
         void computePositionsCost() {
           float sumPositionsCost = 0;
           long sumCost = 0;
-          for (DisiWrapper w : byDocQueue) {
+          for (DisiWrapper<Spans> w : byDocQueue) {
             long costWeight = (w.cost <= 1) ? 1 : w.cost;
-            sumPositionsCost += w.spans.positionsCost() * costWeight;
+            sumPositionsCost += w.iterator.positionsCost() * costWeight;
             sumCost += costWeight;
           }
           positionsCost = sumPositionsCost / sumCost;
@@ -284,7 +271,7 @@ public final class SpanOrQuery extends SpanQuery {
         int lastDocTwoPhaseMatched = -1;
 
         boolean twoPhaseCurrentDocMatches() throws IOException {
-          DisiWrapper listAtCurrentDoc = byDocQueue.topList();
+          DisiWrapper<Spans> listAtCurrentDoc = byDocQueue.topList();
           // remove the head of the list as long as it does not match
           final int currentDoc = listAtCurrentDoc.doc;
           while (listAtCurrentDoc.twoPhaseView != null) {
@@ -308,9 +295,9 @@ public final class SpanOrQuery extends SpanQuery {
         void fillPositionQueue() throws IOException { // called at first nextStartPosition
           assert byPositionQueue.size() == 0;
           // add all matching Spans at current doc to byPositionQueue
-          DisiWrapper listAtCurrentDoc = byDocQueue.topList();
+          DisiWrapper<Spans> listAtCurrentDoc = byDocQueue.topList();
           while (listAtCurrentDoc != null) {
-            Spans spansAtDoc = listAtCurrentDoc.spans;
+            Spans spansAtDoc = listAtCurrentDoc.iterator;
             if (lastDocTwoPhaseMatched == listAtCurrentDoc.doc) { // matched by DisjunctionDisiApproximation
               if (listAtCurrentDoc.twoPhaseView != null) { // matched by approximation
                 if (listAtCurrentDoc.lastApproxNonMatchDoc == listAtCurrentDoc.doc) { // matches() returned false
@@ -367,13 +354,12 @@ public final class SpanOrQuery extends SpanQuery {
 
         @Override
         public void collect(SpanCollector collector) throws IOException {
-          if (topPositionSpans != null)
-            topPositionSpans.collect(collector);
+          topPositionSpans.collect(collector);
         }
 
         @Override
         public String toString() {
-          return "spanOr(" + SpanOrQuery.this + ")@" + docID() + ": " + startPosition() + " - " + endPosition();
+          return "spanOr("+SpanOrQuery.this+")@"+docID()+": "+startPosition()+" - "+endPosition();
         }
 
         long cost = -1;

@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.util.Arrays;
 
@@ -52,18 +52,18 @@ public class FieldDoc extends ScoreDoc {
 
   /** Expert: Creates one of these objects with empty sort information. */
   public FieldDoc(int doc, float score) {
-    super(doc, score);
+    super (doc, score);
   }
 
   /** Expert: Creates one of these objects with the given sort information. */
   public FieldDoc(int doc, float score, Object[] fields) {
-    super(doc, score);
+    super (doc, score);
     this.fields = fields;
   }
   
   /** Expert: Creates one of these objects with the given sort information. */
   public FieldDoc(int doc, float score, Object[] fields, int shardIndex) {
-    super(doc, score, shardIndex);
+    super (doc, score, shardIndex);
     this.fields = fields;
   }
   

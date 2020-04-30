@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.queries.function.valuesource;
 
 import org.apache.lucene.index.LeafReaderContext;
@@ -43,7 +44,7 @@ public abstract class DualFloatFunction extends ValueSource {
   }
 
   protected abstract String name();
-  protected abstract float func(int doc, FunctionValues aVals, FunctionValues bVals) throws IOException;
+  protected abstract float func(int doc, FunctionValues aVals, FunctionValues bVals);
 
   @Override
   public String description() {
@@ -56,7 +57,7 @@ public abstract class DualFloatFunction extends ValueSource {
     final FunctionValues bVals =  b.getValues(context, readerContext);
     return new FloatDocValues(this) {
       @Override
-      public float floatVal(int doc) throws IOException {
+      public float floatVal(int doc) {
         return func(doc, aVals, bVals);
       }
       /** 
@@ -64,11 +65,11 @@ public abstract class DualFloatFunction extends ValueSource {
        * <code>exists</code> for the specified doc 
        */
       @Override
-      public boolean exists(int doc) throws IOException {
+      public boolean exists(int doc) {
         return MultiFunction.allExists(doc, aVals, bVals);
       }
       @Override
-      public String toString(int doc) throws IOException {
+      public String toString(int doc) {
         return name() + '(' + aVals.toString(doc) + ',' + bVals.toString(doc) + ')';
       }
     };

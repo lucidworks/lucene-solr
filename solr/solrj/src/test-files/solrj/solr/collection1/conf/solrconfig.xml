@@ -27,7 +27,6 @@
   </indexConfig>
    <dataDir>${solr.data.dir:}</dataDir>
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.StandardDirectoryFactory}"/>
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
 
   <updateHandler class="solr.DirectUpdateHandler2">
     <updateLog>
@@ -35,11 +34,11 @@
     </updateLog>
   </updateHandler>
 
-  <requestDispatcher>
-    <requestParsers enableRemoteStreaming="false" multipartUploadLimitInKB="-1" />
+  <requestDispatcher handleSelect="true" >
+    <requestParsers enableRemoteStreaming="false" multipartUploadLimitInKB="2048" />
   </requestDispatcher>
 
-  <requestHandler name="/select" class="solr.SearchHandler"/>
+  <requestHandler name="standard" class="solr.StandardRequestHandler" default="true" />
 
   <requestHandler name="/admin/ping" class="solr.PingRequestHandler">
     <lst name="invariants">

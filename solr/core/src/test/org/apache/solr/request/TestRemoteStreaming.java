@@ -1,3 +1,5 @@
+package org.apache.solr.request;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.request;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.lucene.util.LuceneTestCase;
+import org.apache.solr.SolrJettyTestBase;
+import org.apache.solr.SolrTestCaseJ4.SuppressSSL;
+import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.SolrClient;
+import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.impl.HttpSolrClient;
+import org.apache.solr.client.solrj.request.QueryRequest;
+import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.SolrException.ErrorCode;
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -25,23 +44,6 @@ import java.io.UnsupportedEncodingException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-
-import org.apache.commons.io.IOUtils;
-import org.apache.lucene.util.LuceneTestCase;
-import org.apache.solr.SolrJettyTestBase;
-import org.apache.solr.SolrTestCaseJ4.SuppressSSL;
-import org.apache.solr.client.solrj.SolrClient;
-import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.impl.HttpSolrClient;
-import org.apache.solr.client.solrj.response.QueryResponse;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.SolrException.ErrorCode;
-import org.apache.solr.common.SolrInputDocument;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
 
 /**
  * See SOLR-2854.
@@ -55,7 +57,7 @@ public class TestRemoteStreaming extends SolrJettyTestBase {
     //this one has handleSelect=true which a test here needs
     solrHomeDirectory = createTempDir(LuceneTestCase.getTestClass().getSimpleName()).toFile();
     setupJettyTestHome(solrHomeDirectory, "collection1");
-    createAndStartJetty(solrHomeDirectory.getAbsolutePath());
+    createJetty(solrHomeDirectory.getAbsolutePath());
   }
 
   @AfterClass
@@ -112,10 +114,37 @@ public class TestRemoteStreaming extends SolrJettyTestBase {
     SolrQuery query = new SolrQuery();
     query.setQuery( "*:*" );//for anything
     query.add("stream.url",makeDeleteAllUrl());
-    SolrException se = expectThrows(SolrException.class, () -> getSolrClient().query(query));
-    assertSame(ErrorCode.BAD_REQUEST, ErrorCode.getErrorCode(se.code()));
+    try {
+      getSolrClient().query(query);
+      fail();
+    } catch (SolrException se) {
+      assertSame(ErrorCode.BAD_REQUEST, ErrorCode.getErrorCode(se.code()));
+    }
   }
-  
+
+  /** SOLR-3161
+   * Technically stream.body isn't remote streaming, but there wasn't a better place for this test method. */
+  @Test(expected = SolrException.class)
+  public void testQtUpdateFails() throws SolrServerException, IOException {
+    SolrQuery query = new SolrQuery();
+    query.setQuery( "*:*" );//for anything
+    query.add("echoHandler","true");
+    //sneaky sneaky
+    query.add("qt","/update");
+    query.add("stream.body","<delete><query>*:*</query></delete>");
+
+    QueryRequest queryRequest = new QueryRequest(query) {
+      @Override
+      public String getPath() { //don't let superclass substitute qt for the path
+        return "/select";
+      }
+    };
+    QueryResponse rsp = queryRequest.process(getSolrClient());
+    //!! should *fail* above for security purposes
+    String handler = (String) rsp.getHeader().get("handler");
+    System.out.println(handler);
+  }
+
   /** Compose a url that if you get it, it will delete all the data. */
   private String makeDeleteAllUrl() throws UnsupportedEncodingException {
     HttpSolrClient client = (HttpSolrClient) getSolrClient();

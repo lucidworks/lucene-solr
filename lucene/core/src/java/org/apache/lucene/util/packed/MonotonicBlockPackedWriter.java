@@ -1,3 +1,5 @@
+package org.apache.lucene.util.packed;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.packed;
 
-
+import static org.apache.lucene.util.BitUtil.zigZagEncode;
 import static org.apache.lucene.util.packed.MonotonicBlockPackedReader.expected;
 
 import java.io.IOException;
@@ -48,7 +49,7 @@ import org.apache.lucene.util.BitUtil;
  * <li>Ints: if BitsPerValue is <tt>0</tt>, then there is nothing to read and
  *     all values perfectly match the result of the function. Otherwise, these
  *     are the {@link PackedInts packed} deltas from the expected value
- *     (computed from the function) using exactly BitsPerValue bits per value.
+ *     (computed from the function) using exaclty BitsPerValue bits per value.
  * </ul>
  * @see MonotonicBlockPackedReader
  * @lucene.internal

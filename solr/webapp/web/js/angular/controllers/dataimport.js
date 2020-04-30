@@ -22,7 +22,7 @@ solrAdminApp.controller('DataImportController',
         $scope.resetMenu("dataimport", Constants.IS_COLLECTION_PAGE);
 
         $scope.refresh = function () {
-            Mbeans.info({core: $routeParams.core, cat: 'QUERY'}, function (data) {
+            Mbeans.info({core: $routeParams.core, cat: 'QUERYHANDLER'}, function (data) {
                 var mbeans = data['solr-mbeans'][1];
                 $scope.handlers = [];
                 for (var key in mbeans) {
@@ -39,35 +39,28 @@ solrAdminApp.controller('DataImportController',
                 }
             });
 
-            $scope.handler = $routeParams.handler;
-            if ($scope.handler && $scope.handler[0]=="/") {
-                $scope.handler = $scope.handler.substr(1);
-            }
-            if ($scope.handler) {
-                DataImport.config({core: $routeParams.core, name: $scope.handler}, function (data) {
-                    try {
-                        $scope.config = data.config;
-                        var xml = $.parseXML(data.config);
-                        $scope.entities = [];
-                        $('document > entity', xml).each(function (i, element) {
-                            $scope.entities.push($(element).attr('name'));
-                        });
-                        $scope.refreshStatus();
-                    } catch (err) {
-                        console.log(err);
-                    }
+            DataImport.config({core: $routeParams.core}, function (data) {
+                try {
+                    var xml = $.parseXML(data.config);
+                } catch (err) {
+                    $scope.hasHandlers = false;
+                    return;
+                }
+                $scope.config = data.config;
+                $scope.entities = [];
+                $('document > entity', xml).each(function (i, element) {
+                    $scope.entities.push($(element).attr('name'));
                 });
-            }
+            });
+
             $scope.lastUpdate = "unknown";
             $scope.lastUpdateUTC = "";
+
+            $scope.refreshStatus();
         };
 
         $scope.toggleDebug = function () {
             $scope.isDebugMode = !$scope.isDebugMode;
-            if ($scope.isDebugMode) {
-                // also enable Debug checkbox
-                $scope.form.showDebug = true;
-            }
             $scope.showConfiguration = true;
         }
 
@@ -84,7 +77,7 @@ solrAdminApp.controller('DataImportController',
         }
 
         $scope.reload = function () {
-            DataImport.reload({core: $routeParams.core, name: $scope.handler}, function () {
+            DataImport.reload({core: $routeParams.core}, function () {
                 $scope.reloaded = true;
                 $timeout(function () {
                     $scope.reloaded = false;
@@ -96,8 +89,9 @@ solrAdminApp.controller('DataImportController',
         $scope.form = {
             command: "full-import",
             verbose: false,
-            clean: false,
+            clean: true,
             commit: true,
+            optimize: false,
             showDebug: false,
             custom: "",
             core: $routeParams.core
@@ -106,13 +100,7 @@ solrAdminApp.controller('DataImportController',
         $scope.submit = function () {
             var params = {};
             for (var key in $scope.form) {
-                if (key == "showDebug") {
-                    if ($scope.form.showDebug) {
-                        params["debug"] = true;
-                    }
-                } else {
-                    params[key] = $scope.form[key];
-                }
+                params[key] = $scope.form[key];
             }
             if (params.custom.length) {
                 var customParams = $scope.form.custom.split("&");
@@ -123,12 +111,11 @@ solrAdminApp.controller('DataImportController',
             }
             delete params.custom;
 
-            if ($scope.isDebugMode) {
-                params.dataConfig = $scope.config;
+            if (params.isDebugMode) {
+                params.dataConfig = $scope.rawConfig;
             }
-
+            delete params.showDebug;
             params.core = $routeParams.core;
-            params.name = $scope.handler;
 
             DataImport.post(params, function (data) {
                 $scope.rawResponse = JSON.stringify(data, null, 2);
@@ -138,7 +125,7 @@ solrAdminApp.controller('DataImportController',
 
         $scope.abort = function () {
             $scope.isAborting = true;
-            DataImport.abort({core: $routeParams.core, name: $scope.handler}, function () {
+            DataImport.abort({core: $routeParams.core}, function () {
                 $timeout(function () {
                     $scope.isAborting = false;
                     $scope.refreshStatus();
@@ -151,7 +138,7 @@ solrAdminApp.controller('DataImportController',
             console.log("Refresh Status");
 
             $scope.isStatusLoading = true;
-            DataImport.status({core: $routeParams.core, name: $scope.handler}, function (data) {
+            DataImport.status({core: $routeParams.core}, function (data) {
                 if (data[0] == "<") {
                     $scope.hasHandlers = false;
                     return;

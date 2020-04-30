@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.util;
 
 public class TestCloseableThreadLocal extends LuceneTestCase {
@@ -40,7 +41,7 @@ public class TestCloseableThreadLocal extends LuceneTestCase {
     assertNull(ctl.get());
   }
 
-  public static class InitValueThreadLocal extends CloseableThreadLocal<Object> {
+  public class InitValueThreadLocal extends CloseableThreadLocal<Object> {
     @Override
     protected Object initialValue() {
       return TEST_VALUE;

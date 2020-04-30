@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Collections;
 
 import org.apache.lucene.search.DocIdSetIterator;
 
@@ -25,7 +27,7 @@ import org.apache.lucene.search.DocIdSetIterator;
  * Base implementation for a bit set.
  * @lucene.internal
  */
-public abstract class BitSet implements Bits, Accountable {
+public abstract class BitSet implements MutableBits, Accountable {
 
   /** Build a {@link BitSet} from the content of the provided {@link DocIdSetIterator}.
    *  NOTE: this will fully consume the {@link DocIdSetIterator}. */
@@ -44,9 +46,6 @@ public abstract class BitSet implements Bits, Accountable {
 
   /** Set the bit at <code>i</code>. */
   public abstract void set(int i);
-
-  /** Clear the bit at <code>i</code>. */
-  public abstract void clear(int i);
 
   /** Clears a range of bits.
    *
@@ -82,7 +81,7 @@ public abstract class BitSet implements Bits, Accountable {
   public abstract int nextSetBit(int index);
 
   /** Assert that the current doc is -1. */
-  protected final void checkUnpositioned(DocIdSetIterator iter) {
+  protected final void assertUnpositioned(DocIdSetIterator iter) {
     if (iter.docID() != -1) {
       throw new IllegalStateException("This operation only works with an unpositioned iterator, got current position = " + iter.docID());
     }
@@ -91,10 +90,82 @@ public abstract class BitSet implements Bits, Accountable {
   /** Does in-place OR of the bits provided by the iterator. The state of the
    *  iterator after this operation terminates is undefined. */
   public void or(DocIdSetIterator iter) throws IOException {
-    checkUnpositioned(iter);
+    assertUnpositioned(iter);
     for (int doc = iter.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = iter.nextDoc()) {
       set(doc);
     }
   }
 
+  private static abstract class LeapFrogCallBack {
+    abstract void onMatch(int doc);
+    void finish() {}
+  }
+
+  /** Performs a leap frog between this and the provided iterator in order to find common documents. */
+  private void leapFrog(DocIdSetIterator iter, LeapFrogCallBack callback) throws IOException {
+    final int length = length();
+    int bitSetDoc = -1;
+    int disiDoc = iter.nextDoc();
+    while (true) {
+      // invariant: bitSetDoc <= disiDoc
+      assert bitSetDoc <= disiDoc;
+      if (disiDoc >= length) {
+        callback.finish();
+        return;
+      }
+      if (bitSetDoc < disiDoc) {
+        bitSetDoc = nextSetBit(disiDoc);
+      }
+      if (bitSetDoc == disiDoc) {
+        callback.onMatch(bitSetDoc);
+        disiDoc = iter.nextDoc();
+      } else {
+        disiDoc = iter.advance(bitSetDoc);
+      }
+    }
+  }
+
+  /** Does in-place AND of the bits provided by the iterator. The state of the
+   *  iterator after this operation terminates is undefined. */
+  @Deprecated
+  public void and(DocIdSetIterator iter) throws IOException {
+    assertUnpositioned(iter);
+    leapFrog(iter, new LeapFrogCallBack() {
+      int previous = -1;
+
+      @Override
+      public void onMatch(int doc) {
+        clear(previous + 1, doc);
+        previous = doc;
+      }
+
+      @Override
+      public void finish() {
+        if (previous + 1 < length()) {
+          clear(previous + 1, length());
+        }
+      }
+
+    });
+  }
+
+  /** this = this AND NOT other. The state of the iterator after this operation
+   *  terminates is undefined. */
+  @Deprecated
+  public void andNot(DocIdSetIterator iter) throws IOException {
+    assertUnpositioned(iter);
+    leapFrog(iter, new LeapFrogCallBack() {
+
+      @Override
+      public void onMatch(int doc) {
+        clear(doc);
+      }
+
+    });
+  }
+
+  @Override
+  public Collection<Accountable> getChildResources() {
+    return Collections.emptyList();
+  }
 }

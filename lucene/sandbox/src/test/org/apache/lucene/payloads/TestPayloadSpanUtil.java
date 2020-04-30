@@ -1,3 +1,5 @@
+package org.apache.lucene.payloads;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.payloads;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -37,7 +38,7 @@ import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.search.similarities.ClassicSimilarity;
+import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
@@ -49,7 +50,7 @@ public class TestPayloadSpanUtil extends LuceneTestCase {
   public void testPayloadSpanUtil() throws Exception {
     Directory directory = newDirectory();
     RandomIndexWriter writer = new RandomIndexWriter(random(), directory,
-        newIndexWriterConfig(new PayloadAnalyzer()).setSimilarity(new ClassicSimilarity()));
+        newIndexWriterConfig(new PayloadAnalyzer()).setSimilarity(new DefaultSimilarity()));
 
     Document doc = new Document();
     doc.add(newTextField(FIELD, "xx rr yy mm  pp", Field.Store.YES));
@@ -72,7 +73,7 @@ public class TestPayloadSpanUtil extends LuceneTestCase {
     directory.close();
   }
 
-  final static class PayloadAnalyzer extends Analyzer {
+  final class PayloadAnalyzer extends Analyzer {
 
     @Override
     public TokenStreamComponents createComponents(String fieldName) {
@@ -81,7 +82,7 @@ public class TestPayloadSpanUtil extends LuceneTestCase {
     }
   }
 
-  static final class PayloadFilter extends TokenFilter {
+  final class PayloadFilter extends TokenFilter {
     Set<String> entities = new HashSet<>();
     Set<String> nopayload = new HashSet<>();
     int pos;

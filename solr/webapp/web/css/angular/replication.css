@@ -126,7 +126,7 @@ limitations under the License.
 
 #content #replication #progress #eta .info
 {
-  color: #4D4D4D;
+  color: #c0c0c0;
   height: 30px;
   line-height: 30px;
   padding-top: 0;
@@ -135,7 +135,7 @@ limitations under the License.
 
 #content #replication #progress #speed
 {
-  color: #4D4D4D;
+  color: #c0c0c0;
   position: absolute;
   right: 100px;
   top: 0;
@@ -143,7 +143,7 @@ limitations under the License.
 
 #content #replication #progress #bar #done
 {
-  background-color: #4D4D4D;
+  background-color: #c0c0c0;
   box-shadow: 5px 5px 10px #c0c0c0;
   -moz-box-shadow: 5px 5px 10px #c0c0c0;
   -webkit-box-shadow: 5px 5px 10px #c0c0c0;
@@ -206,7 +206,7 @@ limitations under the License.
 
 #content #replication #current-file .progress
 {
-  color: #4D4D4D;
+  color: #c0c0c0;
   margin-left: 20px;
 }
 
@@ -273,7 +273,7 @@ limitations under the License.
 #content #replication #iterations .iterations a span
 {
   background-position: 0 50%;
-  color: #4D4D4D;
+  color: #c0c0c0;
   padding-left: 21px;
 }
 
@@ -307,7 +307,7 @@ limitations under the License.
 
 #content #replication #details table thead th
 {
-  color: #4D4D4D;
+  color: #c0c0c0;
 }
 
 #content #replication #details table thead th,
@@ -440,7 +440,7 @@ limitations under the License.
 
 #content #replication .timer p .approx
 {
-  color: #4D4D4D;
+  color: #c0c0c0;
   margin-right: 1px;
 }
 
@@ -451,7 +451,7 @@ limitations under the License.
 
 #content #replication .timer small
 {
-  color: #4D4D4D;
+  color: #c0c0c0;
 }
 
 #content #replication #navigation button

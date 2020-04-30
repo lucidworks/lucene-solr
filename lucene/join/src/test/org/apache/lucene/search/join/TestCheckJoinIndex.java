@@ -1,3 +1,5 @@
+package org.apache.lucene.search.join;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.join;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -47,7 +48,10 @@ public class TestCheckJoinIndex extends LuceneTestCase {
     w.close();
     BitSetProducer parentsFilter = new QueryBitSetProducer(new MatchNoDocsQuery());
     try {
-      expectThrows(IllegalStateException.class, () -> CheckJoinIndex.check(reader, parentsFilter));
+      CheckJoinIndex.check(reader, parentsFilter);
+      fail("Invalid index");
+    } catch (IllegalStateException e) {
+      // expected
     } finally {
       reader.close();
       dir.close();
@@ -85,7 +89,10 @@ public class TestCheckJoinIndex extends LuceneTestCase {
     w.close();
     BitSetProducer parentsFilter = new QueryBitSetProducer(new TermQuery(new Term("parent", "true")));
     try {
-      expectThrows(IllegalStateException.class, () -> CheckJoinIndex.check(reader, parentsFilter));
+      CheckJoinIndex.check(reader, parentsFilter);
+      fail("Invalid index");
+    } catch (IllegalStateException e) {
+      // expected
     } finally {
       reader.close();
       dir.close();
@@ -122,7 +129,10 @@ public class TestCheckJoinIndex extends LuceneTestCase {
 
     BitSetProducer parentsFilter = new QueryBitSetProducer(new TermQuery(new Term("parent", "true")));
     try {
-      expectThrows(IllegalStateException.class, () -> CheckJoinIndex.check(reader, parentsFilter));
+      CheckJoinIndex.check(reader, parentsFilter);
+      fail("Invalid index");
+    } catch (IllegalStateException e) {
+      // expected
     } finally {
       reader.close();
       dir.close();

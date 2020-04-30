@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.phonetic;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.phonetic;
-
 
 import java.util.Map;
 import java.util.Set;
@@ -39,14 +39,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  *     &lt;/filter&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- * @since 3.6.0
- * @lucene.spi {@value #NAME}
  */
 public class BeiderMorseFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "beiderMorse";
-
   private final PhoneticEngine engine;
   private final LanguageSet languageSet;
   

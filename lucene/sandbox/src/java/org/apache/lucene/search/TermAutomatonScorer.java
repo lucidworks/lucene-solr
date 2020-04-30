@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
 
 import java.io.IOException;
 import java.util.Map;
 
 import org.apache.lucene.search.TermAutomatonQuery.EnumAndScorer;
 import org.apache.lucene.search.TermAutomatonQuery.TermAutomatonWeight;
+import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.PriorityQueue;
@@ -46,7 +48,7 @@ class TermAutomatonScorer extends Scorer {
   // This is -1 if wildcard (null) terms were not used, else it's the id
   // of the wildcard term:
   private final int anyTermID;
-  private final LeafSimScorer docScorer;
+  private final Similarity.SimScorer docScorer;
 
   private int numSubsOnDoc;
 
@@ -55,7 +57,7 @@ class TermAutomatonScorer extends Scorer {
   private int docID = -1;
   private int freq;
 
-  public TermAutomatonScorer(TermAutomatonWeight weight, EnumAndScorer[] subs, int anyTermID, Map<Integer,BytesRef> idToTerm, LeafSimScorer docScorer) throws IOException {
+  public TermAutomatonScorer(TermAutomatonWeight weight, EnumAndScorer[] subs, int anyTermID, Map<Integer,BytesRef> idToTerm, Similarity.SimScorer docScorer) throws IOException {
     super(weight);
     //System.out.println("  automaton:\n" + weight.automaton.toDot());
     this.runAutomaton = new TermRunAutomaton(weight.automaton, subs.length);
@@ -86,7 +88,7 @@ class TermAutomatonScorer extends Scorer {
    *  the same (lowest) docID. */
   private static class DocIDQueue extends PriorityQueue<EnumAndScorer> {
     public DocIDQueue(int maxSize) {
-      super(maxSize);
+      super(maxSize, false);
     }
 
     @Override
@@ -99,7 +101,7 @@ class TermAutomatonScorer extends Scorer {
    *  position. */
   private static class PositionQueue extends PriorityQueue<EnumAndScorer> {
     public PositionQueue(int maxSize) {
-      super(maxSize);
+      super(maxSize, false);
     }
 
     @Override
@@ -128,86 +130,71 @@ class TermAutomatonScorer extends Scorer {
   }
 
   @Override
-  public DocIdSetIterator iterator() {
-    return new DocIdSetIterator() {
-      @Override
-      public int docID() {
+  public int nextDoc() throws IOException {
+    // we only need to advance docs that are positioned since all docs in the
+    // pq are guaranteed to be beyond the current doc already
+    for(int i=0;i<numSubsOnDoc;i++) {
+      EnumAndScorer sub = subsOnDoc[i];
+      if (sub.posEnum.nextDoc() != NO_MORE_DOCS) {
+        sub.posLeft = sub.posEnum.freq()-1;
+        sub.pos = sub.posEnum.nextPosition();
+      }
+    }
+    pushCurrentDoc();
+    return doNext();
+  }
+
+  @Override
+  public int advance(int target) throws IOException {
+    // Both positioned docs and docs in the pq might be behind target
+
+    // 1. Advance the PQ
+    if (docIDQueue.size() > 0) {
+      EnumAndScorer top = docIDQueue.top();
+      while (top.posEnum.docID() < target) {
+        if (top.posEnum.advance(target) != NO_MORE_DOCS) {
+          top.posLeft = top.posEnum.freq()-1;
+          top.pos = top.posEnum.nextPosition();
+        }
+        top = docIDQueue.updateTop();
+      }
+    }
+
+    // 2. Advance subsOnDoc
+    for(int i=0;i<numSubsOnDoc;i++) {
+      EnumAndScorer sub = subsOnDoc[i];
+      if (sub.posEnum.advance(target) != NO_MORE_DOCS) {
+        sub.posLeft = sub.posEnum.freq()-1;
+        sub.pos = sub.posEnum.nextPosition();
+      }
+    }
+    pushCurrentDoc();
+    return doNext();
+  }
+
+  private int doNext() throws IOException {
+    assert numSubsOnDoc == 0;
+    assert docIDQueue.top().posEnum.docID() > docID;
+    while (true) {
+      //System.out.println("  doNext: cycle");
+      popCurrentDoc();
+      //System.out.println("    docID=" + docID);
+      if (docID == NO_MORE_DOCS) {
         return docID;
       }
-
-      @Override
-      public long cost() {
-        return cost;
+      countMatches();
+      if (freq > 0) {
+        return docID;
       }
-
-      @Override
-      public int nextDoc() throws IOException {
-        // we only need to advance docs that are positioned since all docs in the
-        // pq are guaranteed to be beyond the current doc already
-        for(int i=0;i<numSubsOnDoc;i++) {
-          EnumAndScorer sub = subsOnDoc[i];
-          if (sub.posEnum.nextDoc() != NO_MORE_DOCS) {
-            sub.posLeft = sub.posEnum.freq()-1;
-            sub.pos = sub.posEnum.nextPosition();
-          }
-        }
-        pushCurrentDoc();
-        return doNext();
-      }
-
-      @Override
-      public int advance(int target) throws IOException {
-        // Both positioned docs and docs in the pq might be behind target
-
-        // 1. Advance the PQ
-        if (docIDQueue.size() > 0) {
-          EnumAndScorer top = docIDQueue.top();
-          while (top.posEnum.docID() < target) {
-            if (top.posEnum.advance(target) != NO_MORE_DOCS) {
-              top.posLeft = top.posEnum.freq()-1;
-              top.pos = top.posEnum.nextPosition();
-            }
-            top = docIDQueue.updateTop();
-          }
-        }
-
-        // 2. Advance subsOnDoc
-        for(int i=0;i<numSubsOnDoc;i++) {
-          EnumAndScorer sub = subsOnDoc[i];
-          if (sub.posEnum.advance(target) != NO_MORE_DOCS) {
-            sub.posLeft = sub.posEnum.freq()-1;
-            sub.pos = sub.posEnum.nextPosition();
-          }
-        }
-        pushCurrentDoc();
-        return doNext();
-      }
-
-      private int doNext() throws IOException {
-        assert numSubsOnDoc == 0;
-        assert docIDQueue.top().posEnum.docID() > docID;
-        while (true) {
-          //System.out.println("  doNext: cycle");
-          popCurrentDoc();
-          //System.out.println("    docID=" + docID);
-          if (docID == NO_MORE_DOCS) {
-            return docID;
-          }
-          countMatches();
-          if (freq > 0) {
-            return docID;
-          }
-          for(int i=0;i<numSubsOnDoc;i++) {
-            EnumAndScorer sub = subsOnDoc[i];
-            if (sub.posEnum.nextDoc() != NO_MORE_DOCS) {
-              sub.posLeft = sub.posEnum.freq()-1;
-              sub.pos = sub.posEnum.nextPosition();
-            }
-          }
-          pushCurrentDoc();
+      for(int i=0;i<numSubsOnDoc;i++) {
+        EnumAndScorer sub = subsOnDoc[i];
+        if (sub.posEnum.nextDoc() != NO_MORE_DOCS) {
+          sub.posLeft = sub.posEnum.freq()-1;
+          sub.pos = sub.posEnum.nextPosition();
         }
       }
-    };
+      pushCurrentDoc();
+    }
   }
 
   private PosState getPosition(int pos) {
@@ -349,24 +336,29 @@ class TermAutomatonScorer extends Scorer {
   }
 
   @Override
+  public int freq() {
+    return freq;
+  }
+
+  @Override
   public int docID() {
     return docID;
   }
 
   @Override
-  public float score() throws IOException {
+  public float score() {
     // TODO: we could probably do better here, e.g. look @ freqs of actual terms involved in this doc and score differently
     return docScorer.score(docID, freq);
   }
 
   @Override
-  public float getMaxScore(int upTo) throws IOException {
-    return docScorer.getSimScorer().score(Float.MAX_VALUE, 1L);
+  public long cost() {
+    return cost;
   }
 
   static class TermRunAutomaton extends RunAutomaton {
     public TermRunAutomaton(Automaton a, int termCount) {
-      super(a, termCount);
+      super(a, termCount, true);
     }
   }
 

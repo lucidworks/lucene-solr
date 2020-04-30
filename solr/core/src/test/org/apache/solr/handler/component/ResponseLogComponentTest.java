@@ -1,3 +1,12 @@
+package org.apache.solr.handler.component;
+
+import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.common.util.NamedList;
+import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.response.SolrQueryResponse;
+import org.junit.BeforeClass;
+import org.junit.Test;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +23,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
-
-import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.common.util.NamedList;
-import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.response.SolrQueryResponse;
-import org.junit.BeforeClass;
-import org.junit.Test;
 
 public class ResponseLogComponentTest extends SolrTestCaseJ4 {
 
@@ -38,8 +39,8 @@ public class ResponseLogComponentTest extends SolrTestCaseJ4 {
   public void testToLogIds() throws Exception {
     SolrQueryRequest req = null;
     try {
-      String handler="/withlog";
-      req = req("indent","true", "qt","/withlog",  "q","aa", "rows","2",
+      String handler="withlog";
+      req = req("indent","true", "qt","withlog",  "q","aa", "rows","2",
           "fl","id,subject", "responseLog","true");
       SolrQueryResponse qr = h.queryAndResponse(handler, req);
       NamedList<Object> entries = qr.getToLog();
@@ -55,8 +56,8 @@ public class ResponseLogComponentTest extends SolrTestCaseJ4 {
   public void testToLogScores() throws Exception {
     SolrQueryRequest req = null;
     try {
-      String handler="/withlog";
-      req = req("indent","true", "qt","/withlog",  "q","aa", "rows","2",
+      String handler="withlog";
+      req = req("indent","true", "qt","withlog",  "q","aa", "rows","2",
           "fl","id,subject,score", "responseLog","true");
       SolrQueryResponse qr = h.queryAndResponse(handler, req);
       NamedList<Object> entries = qr.getToLog();
@@ -72,8 +73,8 @@ public class ResponseLogComponentTest extends SolrTestCaseJ4 {
   public void testDisabling() throws Exception {
     SolrQueryRequest req = null;
     try {
-      String handler="/withlog";
-      req = req("indent","true", "qt","/withlog",  "q","aa", "rows","2",
+      String handler="withlog";
+      req = req("indent","true", "qt","withlog",  "q","aa", "rows","2", 
           "fl","id,subject", "responseLog","false");
       SolrQueryResponse qr = h.queryAndResponse(handler, req);
       NamedList<Object> entries = qr.getToLog();

@@ -1,3 +1,4 @@
+package org.apache.solr.handler.component;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +15,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
 
-import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.net.ConnectException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -32,24 +31,18 @@ import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Predicate;
 
-import io.opentracing.Span;
-import io.opentracing.Tracer;
-import io.opentracing.propagation.Format;
+import org.apache.http.client.HttpClient;
+import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrResponse;
-import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.impl.BinaryResponseParser;
-import org.apache.solr.client.solrj.impl.Http2SolrClient;
-import org.apache.solr.client.solrj.impl.LBSolrClient;
+import org.apache.solr.client.solrj.impl.HttpSolrClient;
+import org.apache.solr.client.solrj.impl.LBHttpSolrClient;
 import org.apache.solr.client.solrj.request.QueryRequest;
-import org.apache.solr.client.solrj.routing.ReplicaListTransformer;
 import org.apache.solr.client.solrj.util.ClientUtils;
 import org.apache.solr.cloud.CloudDescriptor;
 import org.apache.solr.cloud.ZkController;
 import org.apache.solr.common.SolrException;
-import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.Replica;
@@ -59,37 +52,26 @@ import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.ShardParams;
 import org.apache.solr.common.params.SolrParams;
-import org.apache.solr.common.util.JavaBinCodec;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.core.CoreDescriptor;
+import org.apache.solr.core.SolrCore;
 import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.request.SolrRequestInfo;
-import org.apache.solr.util.tracing.GlobalTracer;
-import org.apache.solr.util.tracing.SolrRequestCarrier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 public class HttpShardHandler extends ShardHandler {
-  
-  /**
-   * If the request context map has an entry with this key and Boolean.TRUE as value,
-   * {@link #prepDistributed(ResponseBuilder)} will only include {@link org.apache.solr.common.cloud.Replica.Type#NRT} replicas as possible
-   * destination of the distributed request (or a leader replica of type {@link org.apache.solr.common.cloud.Replica.Type#TLOG}). This is used 
-   * by the RealtimeGet handler, since other types of replicas shouldn't respond to RTG requests
-   */
-  public static String ONLY_NRT_REPLICAS = "distribOnlyRealtime";
 
   private HttpShardHandlerFactory httpShardHandlerFactory;
   private CompletionService<ShardResponse> completionService;
   private Set<Future<ShardResponse>> pending;
   private Map<String,List<String>> shardToURLs;
-  private Http2SolrClient httpClient;
+  private HttpClient httpClient;
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  public HttpShardHandler(HttpShardHandlerFactory httpShardHandlerFactory, Http2SolrClient httpClient) {
+  public HttpShardHandler(HttpShardHandlerFactory httpShardHandlerFactory, HttpClient httpClient) {
     this.httpClient = httpClient;
     this.httpShardHandlerFactory = httpShardHandlerFactory;
     completionService = httpShardHandlerFactory.newCompletionService();
@@ -99,6 +81,7 @@ public class HttpShardHandler extends ShardHandler {
     // This is primarily to keep track of what order we should use to query the replicas of a shard
     // so that we use the same replica for all phases of a distributed request.
     shardToURLs = new HashMap<>();
+
   }
 
 
@@ -132,87 +115,110 @@ public class HttpShardHandler extends ShardHandler {
 
   // Not thread safe... don't use in Callable.
   // Don't modify the returned URL list.
-  private List<String> getURLs(String shard) {
+  private List<String> getURLs(String shard, String preferredHostAddress) {
     List<String> urls = shardToURLs.get(shard);
     if (urls == null) {
-      urls = httpShardHandlerFactory.buildURLList(shard);
+      urls = httpShardHandlerFactory.makeURLList(shard);
+      if (preferredHostAddress != null && urls.size() > 1) {
+        preferCurrentHostForDistributedReq(preferredHostAddress, urls);
+      }
       shardToURLs.put(shard, urls);
     }
     return urls;
   }
 
-  private static final BinaryResponseParser READ_STR_AS_CHARSEQ_PARSER = new BinaryResponseParser() {
-    @Override
-    protected JavaBinCodec createCodec() {
-      return new JavaBinCodec(null, stringCache).setReadStringAsCharSeq(true);
+  /**
+   * A distributed request is made via {@link LBHttpSolrClient} to the first live server in the URL list.
+   * This means it is just as likely to choose current host as any of the other hosts.
+   * This function makes sure that the cores of current host are always put first in the URL list.
+   * If all nodes prefer local-cores then a bad/heavily-loaded node will receive less requests from healthy nodes.
+   * This will help prevent a distributed deadlock or timeouts in all the healthy nodes due to one bad node.
+   */
+  private void preferCurrentHostForDistributedReq(final String currentHostAddress, final List<String> urls) {
+    if (log.isDebugEnabled())
+      log.debug("Trying to prefer local shard on {} among the urls: {}",
+          currentHostAddress, Arrays.toString(urls.toArray()));
+
+    ListIterator<String> itr = urls.listIterator();
+    while (itr.hasNext()) {
+      String url = itr.next();
+      if (url.startsWith(currentHostAddress)) {
+        // move current URL to the fore-front
+        itr.remove();
+        urls.add(0, url);
+
+        if (log.isDebugEnabled())
+          log.debug("Applied local shard preference for urls: {}",
+              Arrays.toString(urls.toArray()));
+
+        break;
+      }
     }
-  };
+  }
 
   @Override
-  public void submit(final ShardRequest sreq, final String shard, final ModifiableSolrParams params) {
+  public void submit(final ShardRequest sreq, final String shard, final ModifiableSolrParams params, String preferredHostAddress) {
     // do this outside of the callable for thread safety reasons
-    final List<String> urls = getURLs(shard);
-    final Tracer tracer = GlobalTracer.getTracer();
-    final Span span = tracer != null? tracer.activeSpan() : null;
+    final List<String> urls = getURLs(shard, preferredHostAddress);
 
-    Callable<ShardResponse> task = () -> {
+    Callable<ShardResponse> task = new Callable<ShardResponse>() {
+      @Override
+      public ShardResponse call() throws Exception {
 
-      ShardResponse srsp = new ShardResponse();
-      if (sreq.nodeName != null) {
-        srsp.setNodeName(sreq.nodeName);
+        ShardResponse srsp = new ShardResponse();
+        if (sreq.nodeName != null) {
+          srsp.setNodeName(sreq.nodeName);
+        }
+        srsp.setShardRequest(sreq);
+        srsp.setShard(shard);
+        SimpleSolrResponse ssr = new SimpleSolrResponse();
+        srsp.setSolrResponse(ssr);
+        long startTime = System.nanoTime();
+
+        try {
+          params.remove(CommonParams.WT); // use default (currently javabin)
+          params.remove(CommonParams.VERSION);
+
+          QueryRequest req = makeQueryRequest(sreq, params, shard);
+          req.setMethod(SolrRequest.METHOD.POST);
+
+          // no need to set the response parser as binary is the default
+          // req.setResponseParser(new BinaryResponseParser());
+
+          // if there are no shards available for a slice, urls.size()==0
+          if (urls.size()==0) {
+            // TODO: what's the right error code here? We should use the same thing when
+            // all of the servers for a shard are down.
+            throw new SolrException(SolrException.ErrorCode.SERVICE_UNAVAILABLE, "no servers hosting shard: " + shard);
+          }
+
+          if (urls.size() <= 1) {
+            String url = urls.get(0);
+            srsp.setShardAddress(url);
+            try (SolrClient client = new HttpSolrClient(url, httpClient)) {
+              ssr.nl = client.request(req);
+            }
+          } else {
+            LBHttpSolrClient.Rsp rsp = httpShardHandlerFactory.makeLoadBalancedRequest(req, urls);
+            ssr.nl = rsp.getResponse();
+            srsp.setShardAddress(rsp.getServer());
+          }
+        }
+        catch( ConnectException cex ) {
+          srsp.setException(cex); //????
+        } catch (Exception th) {
+          srsp.setException(th);
+          if (th instanceof SolrException) {
+            srsp.setResponseCode(((SolrException)th).code());
+          } else {
+            srsp.setResponseCode(-1);
+          }
+        }
+
+        ssr.elapsedTime = TimeUnit.MILLISECONDS.convert(System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
+
+        return transfomResponse(sreq, srsp, shard);
       }
-      srsp.setShardRequest(sreq);
-      srsp.setShard(shard);
-      SimpleSolrResponse ssr = new SimpleSolrResponse();
-      srsp.setSolrResponse(ssr);
-      long startTime = System.nanoTime();
-
-      try {
-        params.remove(CommonParams.WT); // use default (currently javabin)
-        params.remove(CommonParams.VERSION);
-
-        QueryRequest req = makeQueryRequest(sreq, params, shard);
-        if (tracer != null && span != null) {
-          tracer.inject(span.context(), Format.Builtin.HTTP_HEADERS, new SolrRequestCarrier(req));
-        }
-        req.setMethod(SolrRequest.METHOD.POST);
-        SolrRequestInfo requestInfo = SolrRequestInfo.getRequestInfo();
-        if (requestInfo != null) req.setUserPrincipal(requestInfo.getReq().getUserPrincipal());
-
-        // no need to set the response parser as binary is the defaultJab
-        // req.setResponseParser(new BinaryResponseParser());
-
-        // if there are no shards available for a slice, urls.size()==0
-        if (urls.size()==0) {
-          // TODO: what's the right error code here? We should use the same thing when
-          // all of the servers for a shard are down.
-          throw new SolrException(SolrException.ErrorCode.SERVICE_UNAVAILABLE, "no servers hosting shard: " + shard);
-        }
-
-        if (urls.size() <= 1) {
-          String url = urls.get(0);
-          srsp.setShardAddress(url);
-          ssr.nl = request(url, req);
-        } else {
-          LBSolrClient.Rsp rsp = httpShardHandlerFactory.makeLoadBalancedRequest(req, urls);
-          ssr.nl = rsp.getResponse();
-          srsp.setShardAddress(rsp.getServer());
-        }
-      }
-      catch( ConnectException cex ) {
-        srsp.setException(cex); //????
-      } catch (Exception th) {
-        srsp.setException(th);
-        if (th instanceof SolrException) {
-          srsp.setResponseCode(((SolrException)th).code());
-        } else {
-          srsp.setResponseCode(-1);
-        }
-      }
-
-      ssr.elapsedTime = TimeUnit.MILLISECONDS.convert(System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
-
-      return transfomResponse(sreq, srsp, shard);
     };
 
     try {
@@ -227,11 +233,6 @@ public class HttpShardHandler extends ShardHandler {
       MDC.remove("ShardRequest.shards");
       MDC.remove("ShardRequest.urlList");
     }
-  }
-
-  protected NamedList<Object> request(String url, SolrRequest req) throws IOException, SolrServerException {
-    req.setBasePath(url);
-    return httpClient.request(req);
   }
   
   /**
@@ -315,9 +316,14 @@ public class HttpShardHandler extends ShardHandler {
     Map<String,Slice> slices = null;
     CoreDescriptor coreDescriptor = req.getCore().getCoreDescriptor();
     CloudDescriptor cloudDescriptor = coreDescriptor.getCloudDescriptor();
-    ZkController zkController = req.getCore().getCoreContainer().getZkController();
+    ZkController zkController = coreDescriptor.getCoreContainer().getZkController();
 
-    final ReplicaListTransformer replicaListTransformer = httpShardHandlerFactory.getReplicaListTransformer(req);
+    if (params.getBool(CommonParams.PREFER_LOCAL_SHARDS, false)) {
+      rb.preferredHostAddress = (zkController != null) ? zkController.getBaseUrl() : null;
+      if (rb.preferredHostAddress == null) {
+        log.warn("Couldn't determine current host address to prefer local shards");
+      }
+    }
 
     if (shards != null) {
       List<String> lst = StrUtils.splitSmart(shards, ",", true);
@@ -376,13 +382,6 @@ public class HttpShardHandler extends ShardHandler {
       rb.shards = new String[rb.slices.length];
     }
 
-    HttpShardHandlerFactory.WhitelistHostChecker hostChecker = httpShardHandlerFactory.getWhitelistHostChecker();
-    if (shards != null && zkController == null && hostChecker.isWhitelistHostCheckingEnabled() && !hostChecker.hasExplicitWhitelist()) {
-      throw new SolrException(ErrorCode.FORBIDDEN, "HttpShardHandlerFactory "+HttpShardHandlerFactory.INIT_SHARDS_WHITELIST
-          +" not configured but required (in lieu of ZkController and ClusterState) when using the '"+ShardParams.SHARDS+"' parameter."
-          +HttpShardHandlerFactory.SET_SOLR_DISABLE_SHARDS_WHITELIST_CLUE);
-    }
-
     //
     // Map slices to shards
     //
@@ -392,12 +391,9 @@ public class HttpShardHandler extends ShardHandler {
       // and make it a non-distributed request.
       String ourSlice = cloudDescriptor.getShardId();
       String ourCollection = cloudDescriptor.getCollectionName();
-      // Some requests may only be fulfilled by replicas of type Replica.Type.NRT
-      boolean onlyNrtReplicas = Boolean.TRUE == req.getContext().get(ONLY_NRT_REPLICAS);
       if (rb.slices.length == 1 && rb.slices[0] != null
           && ( rb.slices[0].equals(ourSlice) || rb.slices[0].equals(ourCollection + "_" + ourSlice) )  // handle the <collection>_<slice> format
-          && cloudDescriptor.getLastPublished() == Replica.State.ACTIVE
-          && (!onlyNrtReplicas || cloudDescriptor.getReplicaType() == Replica.Type.NRT)) {
+          && cloudDescriptor.getLastPublished() == Replica.State.ACTIVE) {
         boolean shortCircuit = params.getBool("shortCircuit", true);       // currently just a debugging parameter to check distrib search on a single node
 
         String targetHandler = params.get(ShardParams.SHARDS_QT);
@@ -406,33 +402,17 @@ public class HttpShardHandler extends ShardHandler {
         if (shortCircuit) {
           rb.isDistrib = false;
           rb.shortCircuitedURL = ZkCoreNodeProps.getCoreUrl(zkController.getBaseUrl(), coreDescriptor.getName());
-          if (hostChecker.isWhitelistHostCheckingEnabled() && hostChecker.hasExplicitWhitelist()) {
-            /*
-             * We only need to check the host whitelist if there is an explicit whitelist (other than all the live nodes)
-             * when the "shards" indicate cluster state elements only
-             */
-            hostChecker.checkWhitelist(clusterState, shards, Arrays.asList(rb.shortCircuitedURL));
-          }
           return;
         }
         // We shouldn't need to do anything to handle "shard.rows" since it was previously meant to be an optimization?
       }
-      
-      if (clusterState == null && zkController != null) {
-        clusterState =  zkController.getClusterState();
-      }
 
 
       for (int i=0; i<rb.shards.length; i++) {
-        if (rb.shards[i] != null) {
-          final List<String> shardUrls = StrUtils.splitSmart(rb.shards[i], "|", true);
-          replicaListTransformer.transform(shardUrls);
-          hostChecker.checkWhitelist(clusterState, shards, shardUrls);
-          // And now recreate the | delimited list of equivalent servers
-          rb.shards[i] = createSliceShardsStr(shardUrls);
-        } else {
-          if (slices == null) {
-            slices = clusterState.getCollection(cloudDescriptor.getCollectionName()).getSlicesMap();
+        if (rb.shards[i] == null) {
+          if (clusterState == null) {
+            clusterState =  zkController.getClusterState();
+            slices = clusterState.getSlicesMap(cloudDescriptor.getCollectionName());
           }
           String sliceName = rb.slices[i];
 
@@ -445,58 +425,37 @@ public class HttpShardHandler extends ShardHandler {
             continue;
             // throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "no such shard: " + sliceName);
           }
-          final Predicate<Replica> isShardLeader = new Predicate<Replica>() {
-            private Replica shardLeader = null;
 
-            @Override
-            public boolean test(Replica replica) {
-              if (shardLeader == null) {
-                try {
-                  shardLeader = zkController.getZkStateReader().getLeaderRetry(cloudDescriptor.getCollectionName(), slice.getName());
-                } catch (InterruptedException e) {
-                  throw new SolrException(SolrException.ErrorCode.SERVICE_UNAVAILABLE, "Exception finding leader for shard " + slice.getName() + " in collection " 
-                      + cloudDescriptor.getCollectionName(), e);
-                } catch (SolrException e) {
-                  if (log.isDebugEnabled()) {
-                    log.debug("Exception finding leader for shard {} in collection {}. Collection State: {}", 
-                        slice.getName(), cloudDescriptor.getCollectionName(), zkController.getZkStateReader().getClusterState().getCollectionOrNull(cloudDescriptor.getCollectionName()));
-                  }
-                  throw e;
-                }
-              }
-              return replica.getName().equals(shardLeader.getName());
+          Map<String, Replica> sliceShards = slice.getReplicasMap();
+
+          // For now, recreate the | delimited list of equivalent servers
+          StringBuilder sliceShardsStr = new StringBuilder();
+          boolean first = true;
+          for (Replica replica : sliceShards.values()) {
+            if (!clusterState.liveNodesContain(replica.getNodeName())
+                || replica.getState() != Replica.State.ACTIVE) {
+              continue;
             }
-          };
-
-          final List<Replica> eligibleSliceReplicas = collectEligibleReplicas(slice, clusterState, onlyNrtReplicas, isShardLeader);
-
-          final List<String> shardUrls = transformReplicasToShardUrls(replicaListTransformer, eligibleSliceReplicas);
-
-          if (hostChecker.isWhitelistHostCheckingEnabled() && hostChecker.hasExplicitWhitelist()) {
-            /*
-             * We only need to check the host whitelist if there is an explicit whitelist (other than all the live nodes)
-             * when the "shards" indicate cluster state elements only
-             */
-            hostChecker.checkWhitelist(clusterState, shards, shardUrls);
+            if (first) {
+              first = false;
+            } else {
+              sliceShardsStr.append('|');
+            }
+            String url = ZkCoreNodeProps.getCoreUrl(replica);
+            sliceShardsStr.append(url);
           }
 
-          // And now recreate the | delimited list of equivalent servers
-          final String sliceShardsStr = createSliceShardsStr(shardUrls);
-          if (sliceShardsStr.isEmpty()) {
-            boolean tolerant = ShardParams.getShardsTolerantAsBool(rb.req.getParams());
+          if (sliceShardsStr.length() == 0) {
+            boolean tolerant = rb.req.getParams().getBool(ShardParams.SHARDS_TOLERANT, false);
             if (!tolerant) {
               // stop the check when there are no replicas available for a shard
               throw new SolrException(SolrException.ErrorCode.SERVICE_UNAVAILABLE,
                   "no servers hosting shard: " + rb.slices[i]);
             }
           }
-          rb.shards[i] = sliceShardsStr;
+
+          rb.shards[i] = sliceShardsStr.toString();
         }
-      }
-    } else {
-      if (shards != null) {
-        // No cloud, verbatim check of shards
-        hostChecker.checkWhitelist(shards, new ArrayList<>(Arrays.asList(shards.split("[,|]"))));
       }
     }
     String shards_rows = params.get(ShardParams.SHARDS_ROWS);
@@ -507,51 +466,6 @@ public class HttpShardHandler extends ShardHandler {
     if(shards_start != null) {
       rb.shards_start = Integer.parseInt(shards_start);
     }
-  }
-
-  private static List<Replica> collectEligibleReplicas(Slice slice, ClusterState clusterState, boolean onlyNrtReplicas, Predicate<Replica> isShardLeader) {
-    final Collection<Replica> allSliceReplicas = slice.getReplicasMap().values();
-    final List<Replica> eligibleSliceReplicas = new ArrayList<>(allSliceReplicas.size());
-    for (Replica replica : allSliceReplicas) {
-      if (!clusterState.liveNodesContain(replica.getNodeName())
-          || replica.getState() != Replica.State.ACTIVE
-          || (onlyNrtReplicas && replica.getType() == Replica.Type.PULL)) {
-        continue;
-      }
-
-      if (onlyNrtReplicas && replica.getType() == Replica.Type.TLOG) {
-        if (!isShardLeader.test(replica)) {
-          continue;
-        }
-      }
-      eligibleSliceReplicas.add(replica);
-    }
-    return eligibleSliceReplicas;
-  }
-
-  private static List<String> transformReplicasToShardUrls(final ReplicaListTransformer replicaListTransformer, final List<Replica> eligibleSliceReplicas) {
-    replicaListTransformer.transform(eligibleSliceReplicas);
-
-    final List<String> shardUrls = new ArrayList<>(eligibleSliceReplicas.size());
-    for (Replica replica : eligibleSliceReplicas) {
-      String url = ZkCoreNodeProps.getCoreUrl(replica);
-      shardUrls.add(url);
-    }
-    return shardUrls;
-  }
-
-  private static String createSliceShardsStr(final List<String> shardUrls) {
-    final StringBuilder sliceShardsStr = new StringBuilder();
-    boolean first = true;
-    for (String shardUrl : shardUrls) {
-      if (first) {
-        first = false;
-      } else {
-        sliceShardsStr.append('|');
-      }
-      sliceShardsStr.append(shardUrl);
-    }
-    return sliceShardsStr.toString();
   }
 
 

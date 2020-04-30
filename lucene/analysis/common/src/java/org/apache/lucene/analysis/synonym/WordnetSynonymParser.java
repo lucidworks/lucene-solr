@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.synonym;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,23 +16,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.synonym;
-
 
 import java.io.IOException;
 import java.io.LineNumberReader;
 import java.io.Reader;
 import java.text.ParseException;
+import java.util.Arrays;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.CharsRefBuilder;
 
 /**
  * Parser for wordnet prolog format
  * <p>
- * See https://wordnet.princeton.edu/documentation/prologdb5wn for a description of the format.
+ * See http://wordnet.princeton.edu/man/prologdb.5WN.html for a description of the format.
  * @lucene.experimental
  */
 // TODO: allow you to specify syntactic categories (e.g. just nouns, etc)
@@ -59,7 +59,10 @@ public class WordnetSynonymParser extends SynonymMap.Parser {
           synsetSize = 0;
         }
 
-        synset = ArrayUtil.grow(synset, synsetSize + 1);
+        if (synset.length <= synsetSize+1) {
+          synset = Arrays.copyOf(synset, synset.length * 2);
+        }
+        
         synset[synsetSize] = parseSynonym(line, new CharsRefBuilder());
         synsetSize++;
         lastSynSetID = synSetID;
@@ -96,9 +99,7 @@ public class WordnetSynonymParser extends SynonymMap.Parser {
     if (expand) {
       for (int i = 0; i < size; i++) {
         for (int j = 0; j < size; j++) {
-          if (i != j) {
-            add(synset[i], synset[j], true);
-          }
+          add(synset[i], synset[j], false);
         }
       }
     } else {

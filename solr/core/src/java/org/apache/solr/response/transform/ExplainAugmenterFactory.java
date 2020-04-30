@@ -33,13 +33,13 @@ import org.apache.solr.util.SolrPluginUtils;
  */
 public class ExplainAugmenterFactory extends TransformerFactory
 {
-  public enum Style {
+  public static enum Style {
     nl,
     text,
     html
-  }
+  };
 
-  protected Style defaultStyle = Style.text;
+  protected Style defaultStyle = null;
 
   @Override
   public void init(NamedList args) {
@@ -47,9 +47,13 @@ public class ExplainAugmenterFactory extends TransformerFactory
     if( defaultUserArgs != null ) {
       defaultStyle = getStyle( defaultUserArgs );
     }
+    else {
+      defaultStyle = Style.nl;
+    }
   }
 
-  public static Style getStyle( String str ) {
+  public static Style getStyle( String str )
+  {
     try {
       return Style.valueOf( str );
     }
@@ -62,28 +66,8 @@ public class ExplainAugmenterFactory extends TransformerFactory
   @Override
   public DocTransformer create(String field, SolrParams params, SolrQueryRequest req) {
     String s = params.get("style");
-    Style style = (s == null) ? defaultStyle : getStyle(s);
+    Style style = (s==null)?defaultStyle:getStyle(s);
     return new ExplainAugmenter( field, style );
-  }
-
-  /** Render an explanation as HTML. */
-  public static String toHtml(Explanation explanation) {
-    StringBuilder buffer = new StringBuilder();
-    buffer.append("<ul>\n");
-
-    buffer.append("<li>");
-    buffer.append(explanation.getValue()).append(" = ").append(explanation.getDescription());
-    buffer.append("<br />\n");
-
-    Explanation[] details = explanation.getDetails();
-    for (int i = 0 ; i < details.length; i++) {
-      buffer.append(toHtml(details[i]));
-    }
-
-    buffer.append("</li>\n");
-    buffer.append("</ul>\n");
-
-    return buffer.toString();
   }
 
   static class ExplainAugmenter extends DocTransformer {
@@ -111,7 +95,7 @@ public class ExplainAugmenterFactory extends TransformerFactory
             doc.setField( name, SolrPluginUtils.explanationToNamedList(exp) );
           }
           else if( style == Style.html ) {
-            doc.setField( name, toHtml(exp));
+            doc.setField( name, exp.toHtml() );
           }
           else {
             doc.setField( name, exp.toString() );
@@ -124,3 +108,6 @@ public class ExplainAugmenterFactory extends TransformerFactory
     }
   }
 }
+
+
+

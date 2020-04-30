@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,24 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
-import java.util.Objects;
 
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.search.DoubleValues;
-import org.apache.lucene.search.DoubleValuesSource;
-import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.FieldComparator;
 import org.apache.lucene.search.FieldComparatorSource;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.LongValues;
-import org.apache.lucene.search.LongValuesSource;
-import org.apache.lucene.search.Scorable;
 import org.apache.lucene.search.SimpleFieldComparator;
 import org.apache.lucene.search.SortField;
 
@@ -46,9 +39,7 @@ public abstract class ValueSource {
 
   /**
    * Gets the values for this reader and the context that was previously
-   * passed to createWeight().  The values must be consumed in a forward
-   * docID manner, and you must call this method again to iterate through
-   * the values again.
+   * passed to createWeight()
    */
   public abstract FunctionValues getValues(Map context, LeafReaderContext readerContext) throws IOException;
 
@@ -86,260 +77,6 @@ public abstract class ValueSource {
     return context;
   }
 
-  private static class ScoreAndDoc extends Scorable {
-
-    int current = -1;
-    float score = 0;
-
-    @Override
-    public int docID() {
-      return current;
-    }
-
-    @Override
-    public float score() {
-      return score;
-    }
-  }
-
-  /**
-   * Expose this ValueSource as a LongValuesSource
-   */
-  public LongValuesSource asLongValuesSource() {
-    return new WrappedLongValuesSource(this);
-  }
-
-  private static class WrappedLongValuesSource extends LongValuesSource {
-
-    private final ValueSource in;
-
-    private WrappedLongValuesSource(ValueSource in) {
-      this.in = in;
-    }
-
-    @Override
-    public LongValues getValues(LeafReaderContext ctx, DoubleValues scores) throws IOException {
-      Map context = new IdentityHashMap<>();
-      ScoreAndDoc scorer = new ScoreAndDoc();
-      context.put("scorer", scorer);
-      final FunctionValues fv = in.getValues(context, ctx);
-      return new LongValues() {
-
-        @Override
-        public long longValue() throws IOException {
-          return fv.longVal(scorer.current);
-        }
-
-        @Override
-        public boolean advanceExact(int doc) throws IOException {
-          scorer.current = doc;
-          if (scores != null && scores.advanceExact(doc))
-            scorer.score = (float) scores.doubleValue();
-          else
-            scorer.score = 0;
-          return fv.exists(doc);
-        }
-      };
-    }
-
-    @Override
-    public boolean isCacheable(LeafReaderContext ctx) {
-      return false;
-    }
-
-    @Override
-    public boolean needsScores() {
-      return false;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) return true;
-      if (o == null || getClass() != o.getClass()) return false;
-      WrappedLongValuesSource that = (WrappedLongValuesSource) o;
-      return Objects.equals(in, that.in);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(in);
-    }
-
-    @Override
-    public String toString() {
-      return in.toString();
-    }
-
-    @Override
-    public LongValuesSource rewrite(IndexSearcher searcher) throws IOException {
-      return this;
-    }
-
-  }
-
-  /**
-   * Expose this ValueSource as a DoubleValuesSource
-   */
-  public DoubleValuesSource asDoubleValuesSource() {
-    return new WrappedDoubleValuesSource(this, null);
-  }
-
-  static class WrappedDoubleValuesSource extends DoubleValuesSource {
-
-    final ValueSource in;
-    final IndexSearcher searcher;
-
-    private WrappedDoubleValuesSource(ValueSource in, IndexSearcher searcher) {
-      this.in = in;
-      this.searcher = searcher;
-    }
-
-    @Override
-    public DoubleValues getValues(LeafReaderContext ctx, DoubleValues scores) throws IOException {
-      Map context = new HashMap<>();
-      ScoreAndDoc scorer = new ScoreAndDoc();
-      context.put("scorer", scorer);
-      context.put("searcher", searcher);
-      FunctionValues fv = in.getValues(context, ctx);
-      return new DoubleValues() {
-
-        @Override
-        public double doubleValue() throws IOException {
-          return fv.doubleVal(scorer.current);
-        }
-
-        @Override
-        public boolean advanceExact(int doc) throws IOException {
-          scorer.current = doc;
-          if (scores != null && scores.advanceExact(doc)) {
-            scorer.score = (float) scores.doubleValue();
-          }
-          else
-            scorer.score = 0;
-          // ValueSource will return values even if exists() is false, generally a default
-          // of some kind.  To preserve this behaviour with the iterator, we need to always
-          // return 'true' here.
-          return true;
-        }
-      };
-    }
-
-    @Override
-    public boolean needsScores() {
-      return true;  // be on the safe side
-    }
-
-    @Override
-    public boolean isCacheable(LeafReaderContext ctx) {
-      return false;
-    }
-
-    @Override
-    public Explanation explain(LeafReaderContext ctx, int docId, Explanation scoreExplanation) throws IOException {
-      Map context = new HashMap<>();
-      ScoreAndDoc scorer = new ScoreAndDoc();
-      scorer.score = scoreExplanation.getValue().floatValue();
-      context.put("scorer", scorer);
-      context.put("searcher", searcher);
-      FunctionValues fv = in.getValues(context, ctx);
-      return fv.explain(docId);
-    }
-
-    @Override
-    public DoubleValuesSource rewrite(IndexSearcher searcher) throws IOException {
-      return new WrappedDoubleValuesSource(in, searcher);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) return true;
-      if (o == null || getClass() != o.getClass()) return false;
-      WrappedDoubleValuesSource that = (WrappedDoubleValuesSource) o;
-      return Objects.equals(in, that.in);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(in);
-    }
-
-    @Override
-    public String toString() {
-      return in.toString();
-    }
-
-  }
-
-  public static ValueSource fromDoubleValuesSource(DoubleValuesSource in) {
-    return new FromDoubleValuesSource(in);
-  }
-
-  private static class FromDoubleValuesSource extends ValueSource {
-
-    final DoubleValuesSource in;
-
-    private FromDoubleValuesSource(DoubleValuesSource in) {
-      this.in = in;
-    }
-
-    @Override
-    public FunctionValues getValues(Map context, LeafReaderContext readerContext) throws IOException {
-      Scorable scorer = (Scorable) context.get("scorer");
-      DoubleValues scores = scorer == null ? null : DoubleValuesSource.fromScorer(scorer);
-
-      IndexSearcher searcher = (IndexSearcher) context.get("searcher");
-      DoubleValues inner;
-      if (searcher != null)
-        inner = in.rewrite(searcher).getValues(readerContext, scores);
-      else
-        inner = in.getValues(readerContext, scores);
-
-      return new FunctionValues() {
-        @Override
-        public String toString(int doc) throws IOException {
-          return in.toString();
-        }
-
-        @Override
-        public float floatVal(int doc) throws IOException {
-          if (inner.advanceExact(doc) == false)
-            return 0;
-          return (float) inner.doubleValue();
-        }
-
-        @Override
-        public double doubleVal(int doc) throws IOException {
-          if (inner.advanceExact(doc) == false)
-            return 0;
-          return inner.doubleValue();
-        }
-
-        @Override
-        public boolean exists(int doc) throws IOException {
-          return inner.advanceExact(doc);
-        }
-      };
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) return true;
-      if (o == null || getClass() != o.getClass()) return false;
-      FromDoubleValuesSource that = (FromDoubleValuesSource) o;
-      return Objects.equals(in, that.in);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(in);
-    }
-
-    @Override
-    public String description() {
-      return in.toString();
-    }
-
-  }
 
   //
   // Sorting by function
@@ -380,7 +117,7 @@ public abstract class ValueSource {
 
     @Override
     public FieldComparator<Double> newComparator(String fieldname, int numHits,
-                                         int sortPos, boolean reversed) {
+                                         int sortPos, boolean reversed) throws IOException {
       return new ValueSourceComparator(context, numHits);
     }
   }
@@ -408,12 +145,12 @@ public abstract class ValueSource {
     }
 
     @Override
-    public int compareBottom(int doc) throws IOException {
+    public int compareBottom(int doc) {
       return Double.compare(bottom, docVals.doubleVal(doc));
     }
 
     @Override
-    public void copy(int slot, int doc) throws IOException {
+    public void copy(int slot, int doc) {
       values[slot] = docVals.doubleVal(doc);
     }
 
@@ -438,7 +175,7 @@ public abstract class ValueSource {
     }
 
     @Override
-    public int compareTop(int doc) throws IOException {
+    public int compareTop(int doc) {
       final double docValue = docVals.doubleVal(doc);
       return Double.compare(topValue, docValue);
     }

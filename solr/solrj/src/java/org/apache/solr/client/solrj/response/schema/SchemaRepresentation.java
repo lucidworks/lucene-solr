@@ -1,3 +1,5 @@
+package org.apache.solr.client.solrj.response.schema;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.response.schema;
 
 import java.util.List;
 import java.util.Map;
@@ -28,6 +29,10 @@ public class SchemaRepresentation {
   private float version;
 
   private String uniqueKey;
+
+  private String defaultSearchField;
+
+  private String defaultOperator;
 
   private Map<String, Object> similarity;
 
@@ -62,6 +67,22 @@ public class SchemaRepresentation {
 
   public void setUniqueKey(String uniqueKey) {
     this.uniqueKey = uniqueKey;
+  }
+
+  public String getDefaultSearchField() {
+    return defaultSearchField;
+  }
+
+  public void setDefaultSearchField(String defaultSearchField) {
+    this.defaultSearchField = defaultSearchField;
+  }
+
+  public String getDefaultOperator() {
+    return defaultOperator;
+  }
+
+  public void setDefaultOperator(String defaultOperator) {
+    this.defaultOperator = defaultOperator;
   }
 
   public Map<String, Object> getSimilarity() {

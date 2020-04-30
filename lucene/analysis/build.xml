@@ -25,9 +25,9 @@
       - icu: Analyzers that use functionality from ICU
       - kuromoji: Japanese Morphological Analyzer
       - morfologik: Morfologik Stemmer
-      - nori: Korean Morphological Analyzer
       - smartcn: Smart Analyzer for Simplified Chinese Text
       - stempel: Algorithmic Stemmer for Polish
+      - uima: UIMA Analysis module
   </description>
 
   <dirname file="${ant.file.analyzers}" property="analyzers.dir"/>
@@ -65,14 +65,6 @@
     <ant dir="morfologik" />
   </target>
 
-  <target name="nori">
-    <ant dir="nori" />
-  </target>
-
-  <target name="opennlp">
-    <ant dir="opennlp" />
-  </target>
-
   <target name="phonetic">
     <ant dir="phonetic" />
   </target>
@@ -85,8 +77,12 @@
     <ant dir="stempel" />
   </target>
 
+  <target name="uima">
+    <ant dir="uima" />
+  </target>
+
   <target name="default" depends="compile"/>
-  <target name="compile" depends="common,icu,kuromoji,morfologik,nori,opennlp,phonetic,smartcn,stempel" />
+  <target name="compile" depends="common,icu,kuromoji,morfologik,phonetic,smartcn,stempel,uima" />
 
   <target name="clean">
     <forall-analyzers target="clean"/>
@@ -109,9 +105,6 @@
   <target name="test">
     <forall-analyzers target="test"/>
   </target>
-  <target name="test-nocompile">
-    <fail message="Target 'test-nocompile' will not run recursively.  First change directory to the module you want to test."/>
-  </target>
   <target name="beast">
     <fail message="The Beast only works inside of individual modules"/>
   </target>
@@ -127,10 +120,6 @@
 
   <target name="-dist-maven">
     <forall-analyzers target="-dist-maven"/>
-  </target>
-
-  <target name="-install-to-maven-local-repo">
-    <forall-analyzers target="-install-to-maven-local-repo"/>
   </target>
 
   <target name="-validate-maven-dependencies">

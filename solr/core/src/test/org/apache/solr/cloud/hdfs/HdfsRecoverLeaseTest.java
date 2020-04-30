@@ -1,3 +1,5 @@
+package org.apache.solr.cloud.hdfs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud.hdfs;
 
 import java.io.IOException;
 import java.net.URI;
@@ -52,11 +53,8 @@ public class HdfsRecoverLeaseTest extends SolrTestCaseJ4 {
 
   @AfterClass
   public static void afterClass() throws Exception {
-    try {
-      HdfsTestUtil.teardownClass(dfsCluster);
-    } finally {
-      dfsCluster = null;
-    }
+    HdfsTestUtil.teardownClass(dfsCluster);
+    dfsCluster = null;
   }
   
   @Before
@@ -75,7 +73,8 @@ public class HdfsRecoverLeaseTest extends SolrTestCaseJ4 {
     
     URI uri = dfsCluster.getURI();
     Path path = new Path(uri);
-    Configuration conf = HdfsTestUtil.getClientConfiguration(dfsCluster);
+    Configuration conf = new Configuration();
+    conf.setBoolean("fs.hdfs.impl.disable.cache", true);
     FileSystem fs1 = FileSystem.get(path.toUri(), conf);
     Path testFile = new Path(uri.toString() + "/testfile");
     FSDataOutputStream out = fs1.create(testFile);
@@ -133,7 +132,8 @@ public class HdfsRecoverLeaseTest extends SolrTestCaseJ4 {
     
     final URI uri = dfsCluster.getURI();
     final Path path = new Path(uri);
-    final Configuration conf = HdfsTestUtil.getClientConfiguration(dfsCluster);
+    final Configuration conf = new Configuration();
+    conf.setBoolean("fs.hdfs.impl.disable.cache", true);
     
     // n threads create files
     class WriterThread extends Thread {

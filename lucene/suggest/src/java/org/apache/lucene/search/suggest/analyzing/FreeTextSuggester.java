@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.analyzing;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.analyzing;
 
 // TODO
 //   - test w/ syns
@@ -49,11 +50,12 @@ import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.suggest.InputIterator;
 import org.apache.lucene.search.suggest.Lookup;
+import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.store.Directory;
@@ -108,8 +110,7 @@ import org.apache.lucene.util.fst.Util.TopResults;
  *
  * @lucene.experimental
  */
-// redundant 'implements Accountable' to workaround javadocs bugs
-public class FreeTextSuggester extends Lookup implements Accountable {
+public class FreeTextSuggester extends Lookup {
 
   /** Codec name used in the header for the saved model. */
   public final static String CODEC_NAME = "freetextsuggest";
@@ -220,6 +221,50 @@ public class FreeTextSuggester extends Lookup implements Accountable {
     }
   }
 
+  private static class AnalyzingComparator implements Comparator<BytesRef> {
+
+    private final ByteArrayDataInput readerA = new ByteArrayDataInput();
+    private final ByteArrayDataInput readerB = new ByteArrayDataInput();
+    private final BytesRef scratchA = new BytesRef();
+    private final BytesRef scratchB = new BytesRef();
+
+    @Override
+    public int compare(BytesRef a, BytesRef b) {
+      readerA.reset(a.bytes, a.offset, a.length);
+      readerB.reset(b.bytes, b.offset, b.length);
+
+      // By token:
+      scratchA.length = readerA.readShort();
+      scratchA.bytes = a.bytes;
+      scratchA.offset = readerA.getPosition();
+
+      scratchB.bytes = b.bytes;
+      scratchB.length = readerB.readShort();
+      scratchB.offset = readerB.getPosition();
+
+      int cmp = scratchA.compareTo(scratchB);
+      if (cmp != 0) {
+        return cmp;
+      }
+      readerA.skipBytes(scratchA.length);
+      readerB.skipBytes(scratchB.length);
+
+      // By length (smaller surface forms sorted first):
+      cmp = a.length - b.length;
+      if (cmp != 0) {
+        return cmp;
+      }
+
+      // By surface form:
+      scratchA.offset = readerA.getPosition();
+      scratchA.length = a.length - scratchA.offset;
+      scratchB.offset = readerB.getPosition();
+      scratchB.length = b.length - scratchB.offset;
+
+      return scratchA.compareTo(scratchB);
+    }
+  }
+
   private Analyzer addShingles(final Analyzer other) {
     if (grams == 1) {
       return other;
@@ -236,7 +281,7 @@ public class FreeTextSuggester extends Lookup implements Accountable {
         protected TokenStreamComponents wrapComponents(String fieldName, TokenStreamComponents components) {
           ShingleFilter shingles = new ShingleFilter(components.getTokenStream(), 2, grams);
           shingles.setTokenSeparator(Character.toString((char) separator));
-          return new TokenStreamComponents(components.getSource(), shingles);
+          return new TokenStreamComponents(components.getTokenizer(), shingles);
         }
       };
     }
@@ -293,9 +338,9 @@ public class FreeTextSuggester extends Lookup implements Accountable {
         writer.addDocument(doc);
         count++;
       }
-      reader = DirectoryReader.open(writer);
+      reader = DirectoryReader.open(writer, false);
 
-      Terms terms = MultiTerms.getTerms(reader, "body");
+      Terms terms = MultiFields.getTerms(reader, "body");
       if (terms == null) {
         throw new IllegalArgumentException("need at least one suggestion");
       }
@@ -599,7 +644,7 @@ public class FreeTextSuggester extends Lookup implements Accountable {
             
             @Override
             protected void addIfCompetitive(Util.FSTPath<Long> path) {
-              if (path.arc.label() != separator) {
+              if (path.arc.label != separator) {
                 //System.out.println("    keep path: " + Util.toBytesRef(path.input, new BytesRef()).utf8ToString() + "; " + path + "; arc=" + path.arc);
                 super.addIfCompetitive(path);
               } else {
@@ -718,7 +763,7 @@ public class FreeTextSuggester extends Lookup implements Accountable {
       if (fst.findTargetArc(bytes[pos++] & 0xff, arc, arc, bytesReader) == null) {
         return null;
       } else {
-        output = fst.outputs.add(output, arc.output());
+        output = fst.outputs.add(output, arc.output);
       }
     }
     

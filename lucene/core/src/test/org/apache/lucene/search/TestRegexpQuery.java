@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -42,7 +42,7 @@ public class TestRegexpQuery extends LuceneTestCase {
   private IndexSearcher searcher;
   private IndexReader reader;
   private Directory directory;
-  private static final String FN = "field";
+  private final String FN = "field";
   
   @Override
   public void setUp() throws Exception {
@@ -68,9 +68,9 @@ public class TestRegexpQuery extends LuceneTestCase {
     return new Term(FN, value);
   }
   
-  private long regexQueryNrHits(String regex) throws IOException {
+  private int regexQueryNrHits(String regex) throws IOException {
     RegexpQuery query = new RegexpQuery(newTerm(regex));
-    return searcher.count(query);
+    return searcher.search(query, 5).totalHits;
   }
   
   public void testRegex1() throws IOException {
@@ -112,7 +112,7 @@ public class TestRegexpQuery extends LuceneTestCase {
     };
     RegexpQuery query = new RegexpQuery(newTerm("<quickBrown>"), RegExp.ALL,
       myProvider, DEFAULT_MAX_DETERMINIZED_STATES);
-    assertEquals(1, searcher.search(query, 5).totalHits.value);
+    assertEquals(1, searcher.search(query, 5).totalHits);
   }
   
   /**

@@ -1,3 +1,17 @@
+package org.apache.solr;
+
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+
+import org.apache.lucene.util.LuceneTestCase.Slow;
+import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.response.IntervalFacet.Count;
+import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.common.params.ModifiableSolrParams;
+import org.junit.BeforeClass;
+import org.junit.Test;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,23 +28,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr;
-
-import java.util.Arrays;
-import java.util.List;
-
-import org.apache.lucene.util.LuceneTestCase.Slow;
-import org.apache.solr.SolrTestCaseJ4.SuppressSSL;
-import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.response.IntervalFacet.Count;
-import org.apache.solr.client.solrj.response.QueryResponse;
-import org.apache.solr.common.params.ModifiableSolrParams;
-import org.junit.BeforeClass;
-import org.junit.Test;
-
 @Slow
-@SuppressSSL(bugUrl="https://issues.apache.org/jira/browse/SOLR-9182 - causes OOM")
-// See: https://issues.apache.org/jira/browse/SOLR-12028 Tests cannot remove files on Windows machines occasionally
 public class DistributedIntervalFacetingTest extends
     BaseDistributedSearchTestCase {
 
@@ -210,7 +208,13 @@ public class DistributedIntervalFacetingTest extends
     values[0] = random().nextInt(max);
     values[1] = random().nextInt(max);
     if ("test_s_dv".equals(fieldName) || "test_ss_dv".equals(fieldName)) {
-      Arrays.sort(values, (o1, o2) -> String.valueOf(o1).compareTo(String.valueOf(o2)));
+      Arrays.sort(values, new Comparator<Integer>() {
+
+        @Override
+        public int compare(Integer o1, Integer o2) {
+          return String.valueOf(o1).compareTo(String.valueOf(o2));
+        }
+      });
     } else {
       Arrays.sort(values);
     }

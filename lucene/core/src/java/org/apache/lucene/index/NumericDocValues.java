@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -15,25 +17,19 @@
  * limitations under the License.
  */
 
-package org.apache.lucene.index;
-
-import java.io.IOException;
-
 /**
  * A per-document numeric value.
  */
-public abstract class NumericDocValues extends DocValuesIterator {
+public abstract class NumericDocValues {
   
   /** Sole constructor. (For invocation by subclass 
    *  constructors, typically implicit.) */
   protected NumericDocValues() {}
 
   /**
-   * Returns the numeric value for the current document ID.
-   * It is illegal to call this method after {@link #advanceExact(int)}
-   * returned {@code false}.
+   * Returns the numeric value for the specified document ID.
+   * @param docID document ID to lookup
    * @return numeric value
    */
-  public abstract long longValue() throws IOException;
-
+  public abstract long get(int docID);
 }

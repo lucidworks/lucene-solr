@@ -14,20 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update;
+
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
-import java.util.Set;
 import java.util.Vector;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.solr.core.DirectoryFactory;
 import org.apache.solr.core.HdfsDirectoryFactory;
 import org.apache.solr.core.PluginInfo;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SolrEventListener;
-import org.apache.solr.core.SolrInfoBean;
+import org.apache.solr.core.SolrInfoMBean;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.util.plugin.SolrCoreAware;
@@ -41,7 +41,8 @@ import org.slf4j.LoggerFactory;
  *
  * @since solr 0.9
  */
-public abstract class UpdateHandler implements SolrInfoBean {
+
+public abstract class UpdateHandler implements SolrInfoMBean {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   protected final SolrCore core;
@@ -54,8 +55,6 @@ public abstract class UpdateHandler implements SolrInfoBean {
   protected Vector<SolrEventListener> optimizeCallbacks = new Vector<>();
 
   protected final UpdateLog ulog;
-
-  protected Set<String> metricNames = ConcurrentHashMap.newKeySet();
 
   private void parseEventListeners() {
     final Class<SolrEventListener> clazz = SolrEventListener.class;
@@ -74,22 +73,6 @@ public abstract class UpdateHandler implements SolrInfoBean {
     }
   }
 
-  /**
-   * Call the {@link SolrCoreAware#inform(SolrCore)} on all the applicable registered listeners.
-   */
-  public void informEventListeners(SolrCore core) {
-    for (SolrEventListener listener: commitCallbacks) {
-      if (listener instanceof SolrCoreAware) {
-        ((SolrCoreAware) listener).inform(core);
-      }
-    }
-    for (SolrEventListener listener: optimizeCallbacks) {
-      if (listener instanceof SolrCoreAware) {
-        ((SolrCoreAware) listener).inform(core);
-      }
-    }
-  }
-
   protected void callPostCommitCallbacks() {
     for (SolrEventListener listener : commitCallbacks) {
       listener.postCommit();
@@ -100,8 +83,8 @@ public abstract class UpdateHandler implements SolrInfoBean {
     for (SolrEventListener listener : softCommitCallbacks) {
       listener.postSoftCommit();
     }
-  }
-
+  }  
+  
   protected void callPostOptimizeCallbacks() {
     for (SolrEventListener listener : optimizeCallbacks) {
       listener.postCommit();
@@ -118,36 +101,53 @@ public abstract class UpdateHandler implements SolrInfoBean {
     idFieldType = idField!=null ? idField.getType() : null;
     parseEventListeners();
     PluginInfo ulogPluginInfo = core.getSolrConfig().getPluginInfo(UpdateLog.class.getName());
+    
 
-    // If this is a replica of type PULL, don't create the update log
-    boolean skipUpdateLog = core.getCoreDescriptor().getCloudDescriptor() != null && !core.getCoreDescriptor().getCloudDescriptor().requiresTransactionLog();
-    if (updateLog == null && ulogPluginInfo != null && ulogPluginInfo.isEnabled() && !skipUpdateLog) {
-      DirectoryFactory dirFactory = core.getDirectoryFactory();
-      if (dirFactory instanceof HdfsDirectoryFactory) {
-        ulog = new HdfsUpdateLog(((HdfsDirectoryFactory)dirFactory).getConfDir());
-      } else {
-        String className = ulogPluginInfo.className == null ? UpdateLog.class.getName() : ulogPluginInfo.className;
-        ulog = core.getResourceLoader().newInstance(className, UpdateLog.class);
+    if (updateLog == null && ulogPluginInfo != null && ulogPluginInfo.isEnabled()) {
+      String dataDir = (String)ulogPluginInfo.initArgs.get("dir");
+      
+      String ulogDir = core.getCoreDescriptor().getUlogDir();
+      if (ulogDir != null) {
+        dataDir = ulogDir;
       }
-
-      if (!core.isReloaded() && !dirFactory.isPersistent()) {
+      if (dataDir == null || dataDir.length()==0) {
+        dataDir = core.getDataDir();
+      }
+           
+      if (dataDir != null && dataDir.startsWith("hdfs:/")) {
+        DirectoryFactory dirFactory = core.getDirectoryFactory();
+        if (dirFactory instanceof HdfsDirectoryFactory) {
+          ulog = new HdfsUpdateLog(((HdfsDirectoryFactory)dirFactory).getConfDir());
+        } else {
+          ulog = new HdfsUpdateLog();
+        }
+        
+      } else {
+        ulog = new UpdateLog();
+      }
+      
+      if (!core.isReloaded() && !core.getDirectoryFactory().isPersistent()) {
         ulog.clearLog(core, ulogPluginInfo);
       }
-
+      
       log.info("Using UpdateLog implementation: " + ulog.getClass().getName());
+      
       ulog.init(ulogPluginInfo);
+
       ulog.init(this, core);
     } else {
       ulog = updateLog;
     }
+    // ulog.init() when reusing an existing log is deferred (currently at the end of the DUH2 constructor
+
   }
 
   /**
    * Called when the Writer should be opened again - eg when replication replaces
    * all of the index files.
-   *
+   * 
    * @param rollback IndexWriter if true else close
-   *
+   * 
    * @throws IOException If there is a low-level I/O error.
    */
   public abstract void newIndexWriter(boolean rollback) throws IOException;
@@ -174,7 +174,7 @@ public abstract class UpdateHandler implements SolrInfoBean {
   {
     commitCallbacks.add( listener );
   }
-
+  
   /**
    * NOTE: this function is not thread safe.  However, it is safe to call within the
    * <code>inform( SolrCore core )</code> function for <code>SolrCoreAware</code> classes.
@@ -200,13 +200,4 @@ public abstract class UpdateHandler implements SolrInfoBean {
   }
 
   public abstract void split(SplitIndexCommand cmd) throws IOException;
-
-  @Override
-  public Category getCategory() {
-    return Category.UPDATE;
-  }
-  @Override
-  public Set<String> getMetricNames() {
-    return metricNames;
-  }
 }

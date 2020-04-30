@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -221,7 +221,7 @@ public class TestIndexWriterMergePolicy extends LuceneTestCase {
     writer.waitForMerges();
     writer.commit();
     checkInvariants(writer);
-    assertEquals(10, writer.getDocStats().maxDoc);
+    assertEquals(10, writer.maxDoc());
 
     writer.close();
     dir.close();
@@ -287,9 +287,12 @@ public class TestIndexWriterMergePolicy extends LuceneTestCase {
     lmp.setMaxCFSSegmentSizeMB(Long.MAX_VALUE/1024/1024.);
     assertEquals(Long.MAX_VALUE/1024/1024., lmp.getMaxCFSSegmentSizeMB(), EPSILON*Long.MAX_VALUE);
     
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       lmp.setMaxCFSSegmentSizeMB(-2.0);
-    });
+      fail("Didn't throw IllegalArgumentException");
+    } catch (IllegalArgumentException iae) {
+      // pass
+    }
     
     // TODO: Add more checks for other non-double setters!
   }

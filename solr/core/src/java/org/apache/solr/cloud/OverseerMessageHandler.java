@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
 import org.apache.solr.client.solrj.SolrResponse;
 import org.apache.solr.common.cloud.ZkNodeProps;
@@ -44,15 +45,6 @@ public interface OverseerMessageHandler {
    */
   String getTimerName(String operation);
 
-  interface Lock {
-    void unlock();
-  }
-
-  /**Try to provide an exclusive lock for this particular task
-   * return null if locking is not possible. If locking is not necessary
-   */
-  Lock lockTask(ZkNodeProps message, OverseerTaskProcessor.TaskBatch taskBatch);
-
   /**
    * @param message the message being processed
    *
@@ -60,4 +52,30 @@ public interface OverseerMessageHandler {
    */
   String getTaskKey(ZkNodeProps message);
 
+  /**
+   * @param taskKey the key associated with the task, cached from getTaskKey
+   * @param message the message being processed
+   */
+  void markExclusiveTask(String taskKey, ZkNodeProps message);
+  
+  /**
+   * @param taskKey the key associated with the task
+   * @param operation the operation being processed
+   * @param message the message being processed
+   */
+  void unmarkExclusiveTask(String taskKey, String operation, ZkNodeProps message);
+
+  /**
+   * @param taskKey the key associated with the task
+   * @param message the message being processed
+   *
+   * @return the exclusive marking
+   */
+  ExclusiveMarking checkExclusiveMarking(String taskKey, ZkNodeProps message);
+
+  enum ExclusiveMarking {
+    NOTDETERMINED,    // not enough context, fall back to the processor (i.e. look at running tasks)
+    EXCLUSIVE,
+    NONEXCLUSIVE
+  }
 }

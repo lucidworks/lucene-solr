@@ -1,4 +1,9 @@
 /*
+ * Created on 25-Jan-2006
+ */
+package org.apache.lucene.queries.mlt;
+
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -14,20 +19,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.mlt;
-
-import java.io.IOException;
-import java.io.StringReader;
-import java.util.Arrays;
-import java.util.Objects;
-import java.util.Set;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
+
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.Arrays;
+import java.util.Set;
 
 /**
  * A simple wrapper for MoreLikeThis for use in scenarios where a Query object is required eg
@@ -50,14 +52,17 @@ public class MoreLikeThisQuery extends Query {
    * @param moreLikeFields fields used for similarity measure
    */
   public MoreLikeThisQuery(String likeText, String[] moreLikeFields, Analyzer analyzer, String fieldName) {
-    this.likeText = Objects.requireNonNull(likeText);
-    this.moreLikeFields = Objects.requireNonNull(moreLikeFields);
-    this.analyzer = Objects.requireNonNull(analyzer);
-    this.fieldName = Objects.requireNonNull(fieldName);
+    this.likeText = likeText;
+    this.moreLikeFields = moreLikeFields;
+    this.analyzer = analyzer;
+    this.fieldName = fieldName;
   }
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
     MoreLikeThis mlt = new MoreLikeThis(reader);
 
     mlt.setFieldNames(moreLikeFields);
@@ -70,6 +75,7 @@ public class MoreLikeThisQuery extends Query {
     mlt.setStopWords(stopWords);
     BooleanQuery bq = (BooleanQuery) mlt.like(fieldName, new StringReader(likeText));
     BooleanQuery.Builder newBq = new BooleanQuery.Builder();
+    newBq.setDisableCoord(bq.isCoordDisabled());
     for (BooleanClause clause : bq) {
       newBq.add(clause);
     }
@@ -153,36 +159,43 @@ public class MoreLikeThisQuery extends Query {
   @Override
   public int hashCode() {
     final int prime = 31;
-    int result = classHash();
-    result = prime * result + Objects.hash(analyzer, fieldName, likeText, stopWords);
+    int result = super.hashCode();
+    result = prime * result + ((analyzer == null) ? 0 : analyzer.hashCode());
+    result = prime * result + ((fieldName == null) ? 0 : fieldName.hashCode());
+    result = prime * result + ((likeText == null) ? 0 : likeText.hashCode());
     result = prime * result + maxQueryTerms;
     result = prime * result + minDocFreq;
     result = prime * result + minTermFrequency;
     result = prime * result + Arrays.hashCode(moreLikeFields);
     result = prime * result + Float.floatToIntBits(percentTermsToMatch);
+    result = prime * result + ((stopWords == null) ? 0 : stopWords.hashCode());
     return result;
   }
 
   @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           equalsTo(getClass().cast(other));
-  }
-
-  private boolean equalsTo(MoreLikeThisQuery other) {
-    return maxQueryTerms == other.maxQueryTerms &&
-           minDocFreq == other.minDocFreq &&
-           minTermFrequency == other.minTermFrequency &&
-           Float.floatToIntBits(percentTermsToMatch) == Float.floatToIntBits(other.percentTermsToMatch) &&
-           analyzer.equals(other.analyzer) &&
-           fieldName.equals(other.fieldName) &&
-           likeText.equals(other.likeText) &&
-           Arrays.equals(moreLikeFields, other.moreLikeFields) &&
-           Objects.equals(stopWords, other.stopWords);
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    visitor.visitLeaf(this);
+  public boolean equals(Object obj) {
+    if (this == obj) return true;
+    if (!super.equals(obj)) return false;
+    if (getClass() != obj.getClass()) return false;
+    MoreLikeThisQuery other = (MoreLikeThisQuery) obj;
+    if (analyzer == null) {
+      if (other.analyzer != null) return false;
+    } else if (!analyzer.equals(other.analyzer)) return false;
+    if (fieldName == null) {
+      if (other.fieldName != null) return false;
+    } else if (!fieldName.equals(other.fieldName)) return false;
+    if (likeText == null) {
+      if (other.likeText != null) return false;
+    } else if (!likeText.equals(other.likeText)) return false;
+    if (maxQueryTerms != other.maxQueryTerms) return false;
+    if (minDocFreq != other.minDocFreq) return false;
+    if (minTermFrequency != other.minTermFrequency) return false;
+    if (!Arrays.equals(moreLikeFields, other.moreLikeFields)) return false;
+    if (Float.floatToIntBits(percentTermsToMatch) != Float
+        .floatToIntBits(other.percentTermsToMatch)) return false;
+    if (stopWords == null) {
+      if (other.stopWords != null) return false;
+    } else if (!stopWords.equals(other.stopWords)) return false;
+    return true;
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.blocktree;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.blocktree;
-
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -41,6 +41,8 @@ public class Stats {
 
   /** Total number of bytes (sum of term lengths) across all terms in the field. */
   public long totalTermBytes;
+
+  // TODO: add total auto-prefix term count
 
   /** The number of normal (non-floor) blocks in the terms file. */
   public int nonFloorBlockCount;

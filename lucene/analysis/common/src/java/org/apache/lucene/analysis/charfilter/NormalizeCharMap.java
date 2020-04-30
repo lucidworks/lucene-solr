@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.analysis.charfilter;
 
 import java.io.IOException;
@@ -22,7 +23,9 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import org.apache.lucene.util.CharsRef;
+import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.IntsRefBuilder;
+import org.apache.lucene.util.fst.Builder;
 import org.apache.lucene.util.fst.CharSequenceOutputs;
 import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.Outputs;
@@ -50,10 +53,10 @@ public class NormalizeCharMap {
         final FST.BytesReader fstReader = map.getBytesReader();
         map.getFirstArc(scratchArc);
         if (FST.targetHasArcs(scratchArc)) {
-          map.readFirstRealTargetArc(scratchArc.target(), scratchArc, fstReader);
+          map.readFirstRealTargetArc(scratchArc.target, scratchArc, fstReader);
           while(true) {
-            assert scratchArc.label() != FST.END_LABEL;
-            cachedRootArcs.put(Character.valueOf((char) scratchArc.label()), new FST.Arc<CharsRef>().copyFrom(scratchArc));
+            assert scratchArc.label != FST.END_LABEL;
+            cachedRootArcs.put(Character.valueOf((char) scratchArc.label), new FST.Arc<CharsRef>().copyFrom(scratchArc));
             if (scratchArc.isLast()) {
               break;
             }

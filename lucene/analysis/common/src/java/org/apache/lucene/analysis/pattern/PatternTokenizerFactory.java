@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.pattern;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.pattern;
-
 
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -57,13 +57,8 @@ import org.apache.lucene.util.AttributeFactory;
  * 
  * @see PatternTokenizer
  * @since solr1.2
- * @lucene.spi {@value #NAME}
  */
 public class PatternTokenizerFactory extends TokenizerFactory {
-
-  /** SPI name */
-  public static final String NAME = "pattern";
-
   public static final String PATTERN = "pattern";
   public static final String GROUP = "group";
  

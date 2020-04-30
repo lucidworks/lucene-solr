@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,32 +16,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
-import java.io.IOException;
-
 
 /**
  * A list of per-document numeric values, sorted 
  * according to {@link Long#compare(long, long)}.
  */
-public abstract class SortedNumericDocValues extends DocValuesIterator {
+public abstract class SortedNumericDocValues {
   
   /** Sole constructor. (For invocation by subclass 
-   *  constructors, typically implicit.) */
+   * constructors, typically implicit.) */
   protected SortedNumericDocValues() {}
 
   /** 
-   * Iterates to the next value in the current document.  Do not call this more than {@link #docValueCount} times
-   * for the document.
+   * Positions to the specified document 
    */
-  public abstract long nextValue() throws IOException;
+  public abstract void setDocument(int doc);
   
   /** 
-   * Retrieves the number of values for the current document.  This must always
-   * be greater than zero.
-   * It is illegal to call this method after {@link #advanceExact(int)}
-   * returned {@code false}.
+   * Retrieve the value for the current document at the specified index. 
+   * An index ranges from {@code 0} to {@code count()-1}. 
    */
-  public abstract int docValueCount();
+  public abstract long valueAt(int index);
+  
+  /** 
+   * Retrieves the count of values for the current document. 
+   * This may be zero if a document has no values.
+   */
+  public abstract int count();
 }

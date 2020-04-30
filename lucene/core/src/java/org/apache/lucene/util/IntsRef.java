@@ -1,3 +1,7 @@
+package org.apache.lucene.util;
+
+import java.util.Arrays;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +18,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 /** Represents int[], as a slice (offset + length) into an
  *  existing int[].  The {@link #ints} member should never be null; use
@@ -91,15 +93,45 @@ public final class IntsRef implements Comparable<IntsRef>, Cloneable {
   }
 
   public boolean intsEquals(IntsRef other) {
-    return FutureArrays.equals(this.ints, this.offset, this.offset + this.length, 
-                               other.ints, other.offset, other.offset + other.length);
+    if (length == other.length) {
+      int otherUpto = other.offset;
+      final int[] otherInts = other.ints;
+      final int end = offset + length;
+      for(int upto=offset;upto<end;upto++,otherUpto++) {
+        if (ints[upto] != otherInts[otherUpto]) {
+          return false;
+        }
+      }
+      return true;
+    } else {
+      return false;
+    }
   }
 
   /** Signed int order comparison */
   @Override
   public int compareTo(IntsRef other) {
-    return FutureArrays.compare(this.ints, this.offset, this.offset + this.length, 
-                                other.ints, other.offset, other.offset + other.length);
+    if (this == other) return 0;
+
+    final int[] aInts = this.ints;
+    int aUpto = this.offset;
+    final int[] bInts = other.ints;
+    int bUpto = other.offset;
+
+    final int aStop = aUpto + Math.min(this.length, other.length);
+
+    while(aUpto < aStop) {
+      int aInt = aInts[aUpto++];
+      int bInt = bInts[bUpto++];
+      if (aInt > bInt) {
+        return 1;
+      } else if (aInt < bInt) {
+        return -1;
+      }
+    }
+
+    // One is a prefix of the other, or, they are equal:
+    return this.length - other.length;
   }
 
   @Override
@@ -116,7 +148,7 @@ public final class IntsRef implements Comparable<IntsRef>, Cloneable {
     sb.append(']');
     return sb.toString();
   }
-
+  
   /**
    * Creates a new IntsRef that points to a copy of the ints from 
    * <code>other</code>
@@ -125,7 +157,7 @@ public final class IntsRef implements Comparable<IntsRef>, Cloneable {
    * and an offset of zero.
    */
   public static IntsRef deepCopyOf(IntsRef other) {
-    return new IntsRef(ArrayUtil.copyOfSubArray(other.ints, other.offset, other.offset + other.length), 0, other.length);
+    return new IntsRef(Arrays.copyOfRange(other.ints, other.offset, other.offset + other.length), 0, other.length);
   }
   
   /** 

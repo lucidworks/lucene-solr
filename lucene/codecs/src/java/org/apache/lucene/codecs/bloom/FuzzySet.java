@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.bloom;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.bloom;
-
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Collections;
 
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.DataInput;
@@ -308,6 +310,11 @@ public class FuzzySet implements Accountable {
   @Override
   public long ramBytesUsed() {
     return RamUsageEstimator.sizeOf(filter.getBits());
+  }
+
+  @Override
+  public Collection<Accountable> getChildResources() {
+    return Collections.emptyList();
   }
 
   @Override

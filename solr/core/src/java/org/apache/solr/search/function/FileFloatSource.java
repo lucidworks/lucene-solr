@@ -16,31 +16,13 @@
  */
 package org.apache.solr.search.function;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.lang.invoke.MethodHandles;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.WeakHashMap;
-
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexReaderContext;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.MultiTerms;
-import org.apache.lucene.index.PostingsEnum;
-import org.apache.lucene.index.ReaderUtil;
-import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.index.*;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.docvalues.FloatDocValues;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.util.BytesRefBuilder;
+import org.apache.solr.core.SolrCore;
 import org.apache.solr.handler.RequestHandlerBase;
 import org.apache.solr.handler.RequestHandlerUtils;
 import org.apache.solr.request.SolrQueryRequest;
@@ -51,6 +33,14 @@ import org.apache.solr.update.processor.UpdateRequestProcessor;
 import org.apache.solr.util.VersionedFile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.lang.invoke.MethodHandles;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 /**
  * Obtains float field values from an external file.
@@ -213,7 +203,7 @@ public class FileFloatSource extends ValueSource {
     
     public void resetCache(){
       synchronized(readerCache){
-        // Map.clear() is optional and can throw UnsupportedOperationException,
+        // Map.clear() is optional and can throw UnsipportedOperationException,
         // but readerCache is WeakHashMap and it supports clear().
         readerCache.clear();
       }
@@ -281,11 +271,11 @@ public class FileFloatSource extends ValueSource {
     BytesRefBuilder internalKey = new BytesRefBuilder();
 
     try {
-      TermsEnum termsEnum = MultiTerms.getTerms(reader, idName).iterator();
+      TermsEnum termsEnum = MultiFields.getTerms(reader, idName).iterator();
       PostingsEnum postingsEnum = null;
 
       // removing deleted docs shouldn't matter
-      // final Bits liveDocs = MultiLeafReader.getLiveDocs(reader);
+      // final Bits liveDocs = MultiFields.getLiveDocs(reader);
 
       for (String line; (line=r.readLine())!=null;) {
         int delimIndex = line.lastIndexOf(delimiter);
@@ -348,15 +338,13 @@ public class FileFloatSource extends ValueSource {
       FileFloatSource.resetCache();
       log.debug("readerCache has been reset.");
 
-      UpdateRequestProcessor processor = req.getCore().getUpdateProcessingChain(null).createProcessor(req, rsp);
-      try {
+      UpdateRequestProcessor processor =
+        req.getCore().getUpdateProcessingChain(null).createProcessor(req, rsp);
+      try{
         RequestHandlerUtils.handleCommit(req, processor, req.getParams(), true);
-      } finally {
-        try {
-          processor.finish();
-        } finally {
-          processor.close();
-        }
+      }
+      finally{
+        processor.finish();
       }
     }
 

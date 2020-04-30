@@ -1,3 +1,5 @@
+package org.apache.lucene.expressions;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.expressions;
-
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -31,7 +31,6 @@ import org.apache.lucene.search.Rescorer;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.search.similarities.ClassicSimilarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
 
@@ -44,7 +43,7 @@ public class TestExpressionRescorer extends LuceneTestCase {
   public void setUp() throws Exception {
     super.setUp();
     dir = newDirectory();
-    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, newIndexWriterConfig().setSimilarity(new ClassicSimilarity()));
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir);
     
     Document doc = new Document();
     doc.add(newStringField("id", "1", Field.Store.YES));
@@ -66,8 +65,6 @@ public class TestExpressionRescorer extends LuceneTestCase {
     
     reader = iw.getReader();
     searcher = new IndexSearcher(reader);
-    // TODO: fix this test to not be so flaky and use newSearcher
-    searcher.setSimilarity(new ClassicSimilarity());
     iw.close();
   }
   
@@ -86,7 +83,7 @@ public class TestExpressionRescorer extends LuceneTestCase {
 
     // Just first pass query
     TopDocs hits = searcher.search(query, 10);
-    assertEquals(3, hits.totalHits.value);
+    assertEquals(3, hits.totalHits);
     assertEquals("3", r.document(hits.scoreDocs[0].doc).get("id"));
     assertEquals("1", r.document(hits.scoreDocs[1].doc).get("id"));
     assertEquals("2", r.document(hits.scoreDocs[2].doc).get("id"));
@@ -100,7 +97,7 @@ public class TestExpressionRescorer extends LuceneTestCase {
     Rescorer rescorer = e.getRescorer(bindings);
 
     hits = rescorer.rescore(searcher, hits, 10);
-    assertEquals(3, hits.totalHits.value);
+    assertEquals(3, hits.totalHits);
     assertEquals("2", r.document(hits.scoreDocs[0].doc).get("id"));
     assertEquals("1", r.document(hits.scoreDocs[1].doc).get("id"));
     assertEquals("3", r.document(hits.scoreDocs[2].doc).get("id"));
@@ -111,7 +108,7 @@ public class TestExpressionRescorer extends LuceneTestCase {
 
     // Confirm the explanation breaks out the individual
     // variables:
-    assertTrue(expl.contains("= double(popularity)"));
+    assertTrue(expl.contains("= variable \"popularity\""));
 
     // Confirm the explanation includes first pass details:
     assertTrue(expl.contains("= first pass score"));

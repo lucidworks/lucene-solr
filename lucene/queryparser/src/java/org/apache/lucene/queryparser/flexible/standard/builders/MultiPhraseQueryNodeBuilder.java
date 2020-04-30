@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.standard.builders;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.standard.builders;
 
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.TreeMap;
 
 import org.apache.lucene.index.Term;
@@ -44,7 +44,7 @@ public class MultiPhraseQueryNodeBuilder implements StandardQueryBuilder {
   public MultiPhraseQuery build(QueryNode queryNode) throws QueryNodeException {
     MultiPhraseQueryNode phraseNode = (MultiPhraseQueryNode) queryNode;
 
-    MultiPhraseQuery.Builder phraseQueryBuilder = new MultiPhraseQuery.Builder();
+    MultiPhraseQuery phraseQuery = new MultiPhraseQuery();
 
     List<QueryNode> children = phraseNode.getChildren();
 
@@ -68,14 +68,17 @@ public class MultiPhraseQueryNodeBuilder implements StandardQueryBuilder {
 
       }
 
-      for (Map.Entry<Integer, List<Term>> entry : positionTermMap.entrySet()) {
-        List<Term> termList = entry.getValue();
-        phraseQueryBuilder.add(termList.toArray(new Term[termList.size()]), entry.getKey());
+      for (int positionIncrement : positionTermMap.keySet()) {
+        List<Term> termList = positionTermMap.get(positionIncrement);
+
+        phraseQuery.add(termList.toArray(new Term[termList.size()]),
+            positionIncrement);
+
       }
 
     }
 
-    return phraseQueryBuilder.build();
+    return phraseQuery;
 
   }
 

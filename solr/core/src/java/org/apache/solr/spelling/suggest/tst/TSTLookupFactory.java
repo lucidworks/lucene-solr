@@ -1,3 +1,5 @@
+package org.apache.solr.spelling.suggest.tst;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling.suggest.tst;
 
 import org.apache.lucene.search.suggest.Lookup;
 import org.apache.lucene.search.suggest.tst.TSTLookup;
@@ -30,7 +31,7 @@ public class TSTLookupFactory extends LookupFactory {
 
   @Override
   public Lookup create(NamedList params, SolrCore core) {
-    return new TSTLookup(getTempDir(), "suggester");
+    return new TSTLookup();
   }
 
   @Override

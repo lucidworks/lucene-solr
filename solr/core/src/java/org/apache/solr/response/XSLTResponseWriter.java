@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.response;
 
 import java.io.BufferedReader;
@@ -58,7 +59,7 @@ public class XSLTResponseWriter implements QueryResponseWriter {
   
   @Override
   public void init(NamedList n) {
-    final SolrParams p = n.toSolrParams();
+      final SolrParams p = SolrParams.toSolrParams(n);
       xsltCacheLifetimeSeconds = p.getInt(XSLT_CACHE_PARAM,XSLT_CACHE_DEFAULT);
       log.info("xsltCacheLifetimeSeconds=" + xsltCacheLifetimeSeconds);
   }

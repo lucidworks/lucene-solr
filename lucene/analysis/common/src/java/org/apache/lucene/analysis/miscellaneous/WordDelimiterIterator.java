@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
+
+import static org.apache.lucene.analysis.miscellaneous.WordDelimiterFilter.*;
 
 /**
- * A BreakIterator-like API for iterating over subwords in text, according to WordDelimiterGraphFilter rules.
+ * A BreakIterator-like API for iterating over subwords in text, according to WordDelimiterFilter rules.
  * @lucene.internal
  */
 public final class WordDelimiterIterator {
-
-  static final int LOWER = 0x01;
-  static final int UPPER = 0x02;
-  static final int DIGIT = 0x04;
-  static final int SUBWORD_DELIM = 0x08;
-
-  // combinations: for testing, not for setting bits
-  public static final int ALPHA = 0x03;
-  public static final int ALPHANUM = 0x07;
 
   /** Indicates the end of iteration */
   public static final int DONE = -1;
@@ -103,7 +97,7 @@ public final class WordDelimiterIterator {
    * Create a new WordDelimiterIterator operating with the supplied rules.
    * 
    * @param charTypeTable table containing character types
-   * @param splitOnCaseChange if true, causes "PowerShot" to be two tokens; ("Power-Shot" remains two parts regardless)
+   * @param splitOnCaseChange if true, causes "PowerShot" to be two tokens; ("Power-Shot" remains two parts regards)
    * @param splitOnNumerics if true, causes "j2se" to be three tokens; "j" "2" "se"
    * @param stemEnglishPossessive if true, causes trailing "'s" to be removed for each subword: "O'Neil's" =&gt; "O", "Neil"
    */
@@ -256,7 +250,7 @@ public final class WordDelimiterIterator {
    * Determines if the text at the given position indicates an English possessive which should be removed
    *
    * @param pos Position in the text to check if it indicates an English possessive
-   * @return {@code true} if the text at the position indicates an English possessive, {@code false} otherwise
+   * @return {@code true} if the text at the position indicates an English posessive, {@code false} otherwise
    */
   private boolean endsWithPossessive(int pos) {
     return (stemEnglishPossessive &&
@@ -329,45 +323,4 @@ public final class WordDelimiterIterator {
       default: return SUBWORD_DELIM;
     }
   }
-
-  /**
-   * Checks if the given word type includes {@link #ALPHA}
-   *
-   * @param type Word type to check
-   * @return {@code true} if the type contains ALPHA, {@code false} otherwise
-   */
-  static boolean isAlpha(int type) {
-    return (type & ALPHA) != 0;
-  }
-
-  /**
-   * Checks if the given word type includes {@link #DIGIT}
-   *
-   * @param type Word type to check
-   * @return {@code true} if the type contains DIGIT, {@code false} otherwise
-   */
-  static boolean isDigit(int type) {
-    return (type & DIGIT) != 0;
-  }
-
-  /**
-   * Checks if the given word type includes {@link #SUBWORD_DELIM}
-   *
-   * @param type Word type to check
-   * @return {@code true} if the type contains SUBWORD_DELIM, {@code false} otherwise
-   */
-  static boolean isSubwordDelim(int type) {
-    return (type & SUBWORD_DELIM) != 0;
-  }
-
-  /**
-   * Checks if the given word type includes {@link #UPPER}
-   *
-   * @param type Word type to check
-   * @return {@code true} if the type contains UPPER, {@code false} otherwise
-   */
-  static boolean isUpper(int type) {
-    return (type & UPPER) != 0;
-  }
-
 }

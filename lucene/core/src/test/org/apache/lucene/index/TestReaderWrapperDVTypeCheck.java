@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.index;
 
 import java.io.IOException;
@@ -45,7 +46,7 @@ public class TestReaderWrapperDVTypeCheck extends LuceneTestCase {
     {
       final Random indexRandom = new Random(seed);
       final int docs;
-      docs = TestUtil.nextInt(indexRandom, 1, 4);
+      docs = indexRandom.nextInt(4);
      // System.out.println("docs:"+docs);
       
       for(int i=0; i< docs; i++){
@@ -68,13 +69,12 @@ public class TestReaderWrapperDVTypeCheck extends LuceneTestCase {
         iw.commit();
       }
     }
-    iw.forceMerge(1);
     final DirectoryReader reader = iw.getReader();
     
    // System.out.println("sdv:"+ sdvExist+ " ssdv:"+ssdvExist+", segs: "+reader.leaves().size() +", "+reader.leaves());
     
     iw.close();
-    final LeafReader wrapper = getOnlyLeafReader(reader);
+    final LeafReader wrapper = SlowCompositeReaderWrapper.wrap(reader);
     
     {
       //final Random indexRandom = new Random(seed);

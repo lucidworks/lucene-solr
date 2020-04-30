@@ -14,12 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.util.hll;
 
 import java.util.Random;
 
-
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 import org.junit.Test;
 
 import static com.carrotsearch.randomizedtesting.RandomizedTest.*;
@@ -27,29 +27,35 @@ import static com.carrotsearch.randomizedtesting.RandomizedTest.*;
 /**
  * Unit and smoke tests for {@link BigEndianAscendingWordDeserializer}.
  */
-public class BigEndianAscendingWordDeserializerTest extends SolrTestCase {
+public class BigEndianAscendingWordDeserializerTest extends LuceneTestCase {
     /**
      * Error checking tests for constructor.
      */
     @Test
     public void constructorErrorTest() {
         // word length too small
-        IllegalArgumentException e = expectThrows(IllegalArgumentException.class, () -> {
+        try {
             new BigEndianAscendingWordDeserializer(0/*wordLength, below minimum of 1*/, 0/*bytePadding, arbitrary*/, new byte[1]/*bytes, arbitrary, not used here*/);
-        });
-        assertTrue(e.getMessage().contains("Word length must be"));
+            fail("Should complain about too-short words.");
+        } catch(final IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("Word length must be"));
+        }
 
         // word length too large
-        e = expectThrows(IllegalArgumentException.class, () -> {
+        try {
             new BigEndianAscendingWordDeserializer(65/*wordLength, above maximum of 64*/, 0/*bytePadding, arbitrary*/, new byte[1]/*bytes, arbitrary, not used here*/);
-        });
-        assertTrue(e.getMessage().contains("Word length must be"));
+            fail("Should complain about too-long words.");
+        } catch(final IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("Word length must be"));
+        }
 
         // byte padding negative
-        e = expectThrows(IllegalArgumentException.class, () -> {
+        try {
             new BigEndianAscendingWordDeserializer(5/*wordLength, arbitrary*/, -1/*bytePadding, too small*/, new byte[1]/*bytes, arbitrary, not used here*/);
-        });
-        assertTrue(e.getMessage().contains("Byte padding must be"));
+            fail("Should complain about negative byte padding.");
+        } catch(final IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("Byte padding must be"));
+        }
     }
 
     /**

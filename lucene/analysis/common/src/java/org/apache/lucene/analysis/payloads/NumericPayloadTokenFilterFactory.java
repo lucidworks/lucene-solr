@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.payloads;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.payloads;
-
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
@@ -30,15 +30,8 @@ import java.util.Map;
  *     &lt;filter class="solr.NumericPayloadTokenFilterFactory" payload="24" typeMatch="word"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
 public class NumericPayloadTokenFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "numericPayload";
-
   private final float payload;
   private final String typeMatch;
   

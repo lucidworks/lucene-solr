@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
-
 
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.miscellaneous.RemoveDuplicatesTokenFilter;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
@@ -31,14 +32,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  *     &lt;filter class="solr.RemoveDuplicatesTokenFilterFactory"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
 public class RemoveDuplicatesTokenFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "removeDuplicates";
   
   /** Creates a new RemoveDuplicatesTokenFilterFactory */
   public RemoveDuplicatesTokenFilterFactory(Map<String,String> args) {

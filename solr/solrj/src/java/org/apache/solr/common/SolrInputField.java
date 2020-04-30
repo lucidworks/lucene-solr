@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.common;
 
 import java.io.Serializable;
@@ -29,6 +30,7 @@ public class SolrInputField implements Iterable<Object>, Serializable
 {
   String name;
   Object value = null; 
+  float boost = 1.0f;
   
   public SolrInputField( String n )
   {
@@ -43,7 +45,9 @@ public class SolrInputField implements Iterable<Object>, Serializable
    * a collection is given, then that collection will be used as the backing
    * collection for the values.
    */
-  public void setValue(Object v) {
+  public void setValue(Object v, float b) {
+    boost = b;
+
     if( v instanceof Object[] ) {
       Object[] arr = (Object[])v;
       Collection<Object> c = new ArrayList<>( arr.length );
@@ -62,20 +66,26 @@ public class SolrInputField implements Iterable<Object>, Serializable
    * will be added individually.
    */
   @SuppressWarnings("unchecked")
-  public void addValue(Object v) {
+  public void addValue(Object v, float b) {
     if( value == null ) {
       if ( v instanceof Collection ) {
         Collection<Object> c = new ArrayList<>( 3 );
         for ( Object o : (Collection<Object>)v ) {
           c.add( o );
         }
-        setValue(c);
+        setValue(c, b);
       } else {
-        setValue(v);
+        setValue(v, b);
       }
 
       return;
     }
+    
+    // The lucene API and solr XML field specification make it possible to set boosts
+    // on multi-value fields even though lucene indexing does not support this.
+    // To keep behavior consistent with what happens in the lucene index, we accumulate
+    // the product of all boosts specified for this field.
+    boost *= b;
     
     Collection<Object> vals = null;
     if( value instanceof Collection ) {
@@ -87,8 +97,8 @@ public class SolrInputField implements Iterable<Object>, Serializable
       value = vals;
     }
     
-    // Add the new values to a collection, if childDoc add as is without iteration
-    if( v instanceof Iterable && !(v instanceof SolrDocumentBase)) {
+    // Add the new values to a collection
+    if( v instanceof Iterable ) {
       for( Object o : (Iterable<Object>)v ) {
         vals.add( o );
       }
@@ -105,11 +115,12 @@ public class SolrInputField implements Iterable<Object>, Serializable
 
   //---------------------------------------------------------------
   //---------------------------------------------------------------
-
+  
+  @SuppressWarnings("unchecked")
   public Object getFirstValue() {
-    if (value instanceof Collection) {
-      Collection c = (Collection<Object>) value;
-      if (c.size() > 0) {
+    if( value instanceof Collection ) {
+      Collection c = (Collection<Object>)value;
+      if( c.size() > 0 ) {
         return c.iterator().next();
       }
       return null;
@@ -131,12 +142,12 @@ public class SolrInputField implements Iterable<Object>, Serializable
    */
   @SuppressWarnings("unchecked")
   public Collection<Object> getValues() {
-    if (value instanceof Collection) {
-      return (Collection<Object>) value;
+    if( value instanceof Collection ) {
+      return (Collection<Object>)value;
     }
     if( value != null ) {
       Collection<Object> vals = new ArrayList<>(1);
-      vals.add(value);
+      vals.add( value );
       return vals;
     }
     return null;
@@ -154,6 +165,14 @@ public class SolrInputField implements Iterable<Object>, Serializable
   
   //---------------------------------------------------------------
   //---------------------------------------------------------------
+  
+  public float getBoost() {
+    return boost;
+  }
+
+  public void setBoost(float boost) {
+    this.boost = boost;
+  }
 
   public String getName() {
     return name;
@@ -165,7 +184,7 @@ public class SolrInputField implements Iterable<Object>, Serializable
 
   @Override
   @SuppressWarnings("unchecked")
-  public Iterator<Object> iterator(){
+  public Iterator<Object> iterator() {
     if( value instanceof Collection ) {
       return ((Collection)value).iterator();
     }
@@ -193,11 +212,12 @@ public class SolrInputField implements Iterable<Object>, Serializable
   @Override
   public String toString()
   {
-    return name + "=" + value;
+    return name + ((boost == 1.0) ? "=" : ("("+boost+")=")) + value;
   }
 
   public SolrInputField deepCopy() {
     SolrInputField clone = new SolrInputField(name);
+    clone.boost = boost;
     // We can't clone here, so we rely on simple primitives
     if (value instanceof Collection) {
       Collection<Object> values = (Collection<Object>) value;

@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ja;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ja;
 
+import org.apache.lucene.analysis.CharFilter;
+import org.apache.lucene.analysis.ja.JapaneseIterationMarkCharFilter;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.CharFilterFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 
 import java.io.Reader;
 import java.util.Map;
-
-import org.apache.lucene.analysis.util.CharFilterFactory;
 
 /**
  * Factory for {@link org.apache.lucene.analysis.ja.JapaneseIterationMarkCharFilter}.
@@ -31,14 +35,8 @@ import org.apache.lucene.analysis.util.CharFilterFactory;
  *     &lt;tokenizer class="solr.JapaneseTokenizerFactory"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- *
- * @since 4.0.0
- * @lucene.spi {@value #NAME}
  */
-public class JapaneseIterationMarkCharFilterFactory extends CharFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "japaneseIterationMark";
+public class JapaneseIterationMarkCharFilterFactory extends CharFilterFactory implements MultiTermAwareComponent {
 
   private static final String NORMALIZE_KANJI_PARAM = "normalizeKanji";
   private static final String NORMALIZE_KANA_PARAM = "normalizeKana";
@@ -57,12 +55,12 @@ public class JapaneseIterationMarkCharFilterFactory extends CharFilterFactory {
   }
 
   @Override
-  public Reader create(Reader input) {
+  public CharFilter create(Reader input) {
     return new JapaneseIterationMarkCharFilter(input, normalizeKanji, normalizeKana);
   }
 
   @Override
-  public Reader normalize(Reader input) {
-    return create(input);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

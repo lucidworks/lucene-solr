@@ -1,3 +1,5 @@
+package org.apache.lucene.replicator;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.replicator;
 
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
@@ -41,6 +42,7 @@ import org.apache.lucene.index.CheckIndex;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.SegmentInfos;
 import org.apache.lucene.index.SnapshotDeletionPolicy;
 import org.apache.lucene.replicator.IndexAndTaxonomyRevision.SnapshotDirectoryTaxonomyWriter;
 import org.apache.lucene.replicator.ReplicationClient.ReplicationHandler;
@@ -115,7 +117,7 @@ public class IndexAndTaxonomyReplicationClientTest extends ReplicatorTestCase {
         DrillDownQuery drillDown = new DrillDownQuery(config);
         drillDown.add("A", Integer.toString(id, 16));
         TopDocs docs = searcher.search(drillDown, 10);
-        assertEquals(1, docs.totalHits.value);
+        assertEquals(1, docs.totalHits);
       }
       return null;
     }
@@ -172,9 +174,9 @@ public class IndexAndTaxonomyReplicationClientTest extends ReplicatorTestCase {
   
   private Revision createRevision(final int id) throws IOException {
     publishIndexWriter.addDocument(newDocument(publishTaxoWriter, id));
-    publishIndexWriter.setLiveCommitData(new HashMap<String, String>() {{
+    publishIndexWriter.setCommitData(new HashMap<String, String>() {{
       put(VERSION_ID, Integer.toString(id, 16));
-    }}.entrySet());
+    }});
     publishIndexWriter.commit();
     publishTaxoWriter.commit();
     return new IndexAndTaxonomyRevision(publishIndexWriter, publishTaxoWriter);
@@ -302,6 +304,18 @@ public class IndexAndTaxonomyReplicationClientTest extends ReplicatorTestCase {
     client.close();
     callback.close();
 
+    // Replicator violates write-once policy. It may be that the
+    // handler copies files to the index dir, then fails to copy a
+    // file and reverts the copy operation. On the next attempt, it
+    // will copy the same file again. There is nothing wrong with this
+    // in a real system, but it does violate write-once, and MDW
+    // doesn't like it. Disabling it means that we won't catch cases
+    // where the handler overwrites an existing index file, but
+    // there's nothing currently we can do about it, unless we don't
+    // use MDW.
+    handlerIndexDir.setPreventDoubleWrite(false);
+    handlerTaxoDir.setPreventDoubleWrite(false);
+
     // wrap sourceDirFactory to return a MockDirWrapper so we can simulate errors
     final SourceDirectoryFactory in = sourceDirFactory;
     final AtomicInteger failures = new AtomicInteger(atLeast(10));
@@ -410,6 +424,22 @@ public class IndexAndTaxonomyReplicationClientTest extends ReplicatorTestCase {
               }
             }
 
+            if (indexStatus == null || indexStatus.clean == false) {
+
+              // Because segments file for taxo index is replicated after
+              // main index's segments file, if there's an error while replicating
+              // main index's segments file and if virus checker prevents
+              // deletion of taxo index's segments file, it can look like corruption.
+              // But it should be "false" meaning if we remove the latest segments
+              // file then the index is intact.  It's like pulling a hideous
+              // looking rock out of the ground, but then you pull the cruft
+              // off the outside of it and discover it's actually a beautiful
+              // diamond:
+              String segmentsFileName = SegmentInfos.getLastCommitSegmentsFileName(handlerTaxoDir);
+              assertTrue(handlerTaxoDir.didTryToDelete(segmentsFileName));
+              handlerTaxoDir.getDelegate().deleteFile(segmentsFileName);
+              TestUtil.checkIndex(handlerTaxoDir.getDelegate());
+            }
           } catch (IOException e) {
             failed.set(true);
             throw new RuntimeException(e);

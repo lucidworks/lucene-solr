@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
-
-import java.io.IOException;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
@@ -34,14 +26,24 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 import org.apache.lucene.util.Version;
+
+import java.io.IOException;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /*
   Verify we can read the pre-2.1 file format, do searches
   against it, and add documents to it.
 */
+
 public class TestDeletionPolicy extends LuceneTestCase {
   
   private void verifyCommitOrder(List<? extends IndexCommit> commits) {
@@ -221,6 +223,10 @@ public class TestDeletionPolicy extends LuceneTestCase {
     final double SECONDS = 2.0;
 
     Directory dir = newDirectory();
+    if (dir instanceof MockDirectoryWrapper) {
+      // test manually deletes files
+      ((MockDirectoryWrapper)dir).setEnableVirusScanner(false);
+    }
     IndexWriterConfig conf = newIndexWriterConfig(new MockAnalyzer(random()))
         .setIndexDeletionPolicy(new ExpirationTimeDeletionPolicy(dir, SECONDS));
     MergePolicy mp = conf.getMergePolicy();
@@ -229,7 +235,7 @@ public class TestDeletionPolicy extends LuceneTestCase {
     ExpirationTimeDeletionPolicy policy = (ExpirationTimeDeletionPolicy) writer.getConfig().getIndexDeletionPolicy();
     Map<String,String> commitData = new HashMap<>();
     commitData.put("commitTime", String.valueOf(System.currentTimeMillis()));
-    writer.setLiveCommitData(commitData.entrySet());
+    writer.setCommitData(commitData);
     writer.commit();
     writer.close();
 
@@ -251,7 +257,7 @@ public class TestDeletionPolicy extends LuceneTestCase {
       }
       commitData = new HashMap<>();
       commitData.put("commitTime", String.valueOf(System.currentTimeMillis()));
-      writer.setLiveCommitData(commitData.entrySet());
+      writer.setCommitData(commitData);
       writer.commit();
       writer.close();
 
@@ -313,6 +319,10 @@ public class TestDeletionPolicy extends LuceneTestCase {
       boolean useCompoundFile = (pass % 2) != 0;
 
       Directory dir = newDirectory();
+      if (dir instanceof MockDirectoryWrapper) {
+        // test manually deletes files
+        ((MockDirectoryWrapper)dir).setEnableVirusScanner(false);
+      }
 
       IndexWriterConfig conf = newIndexWriterConfig(new MockAnalyzer(random()))
           .setIndexDeletionPolicy(new KeepAllDeletionPolicy(dir))
@@ -427,7 +437,7 @@ public class TestDeletionPolicy extends LuceneTestCase {
     writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random()))
                                     .setIndexDeletionPolicy(policy));
     addDoc(writer);
-    assertEquals(11, writer.getDocStats().numDocs);
+    assertEquals(11, writer.numDocs());
     writer.forceMerge(1);
     writer.close();
 
@@ -437,7 +447,7 @@ public class TestDeletionPolicy extends LuceneTestCase {
     writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random()))
                                     .setIndexDeletionPolicy(policy)
                                     .setIndexCommit(lastCommit));
-    assertEquals(10, writer.getDocStats().numDocs);
+    assertEquals(10, writer.numDocs());
 
     // Should undo our rollback:
     writer.rollback();
@@ -451,7 +461,7 @@ public class TestDeletionPolicy extends LuceneTestCase {
     writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random()))
                                     .setIndexDeletionPolicy(policy)
                                     .setIndexCommit(lastCommit));
-    assertEquals(10, writer.getDocStats().numDocs);
+    assertEquals(10, writer.numDocs());
     // Commits the rollback:
     writer.close();
 
@@ -480,7 +490,7 @@ public class TestDeletionPolicy extends LuceneTestCase {
     // but this time keeping only the last commit:
     writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random()))
                                     .setIndexCommit(lastCommit));
-    assertEquals(10, writer.getDocStats().numDocs);
+    assertEquals(10, writer.numDocs());
     
     // Reader still sees fully merged index, because writer
     // opened on the prior commit has not yet committed:
@@ -560,6 +570,10 @@ public class TestDeletionPolicy extends LuceneTestCase {
       boolean useCompoundFile = (pass % 2) != 0;
 
       Directory dir = newDirectory();
+      if (dir instanceof MockDirectoryWrapper) {
+        // test manually deletes files
+        ((MockDirectoryWrapper)dir).setEnableVirusScanner(false);
+      }
 
       KeepLastNDeletionPolicy policy = new KeepLastNDeletionPolicy(N);
       for(int j=0;j<N+1;j++) {
@@ -620,6 +634,10 @@ public class TestDeletionPolicy extends LuceneTestCase {
       boolean useCompoundFile = (pass % 2) != 0;
 
       Directory dir = newDirectory();
+      if (dir instanceof MockDirectoryWrapper) {
+        // test manually deletes files
+        ((MockDirectoryWrapper)dir).setEnableVirusScanner(false);
+      }
       IndexWriterConfig conf = newIndexWriterConfig(new MockAnalyzer(random()))
           .setOpenMode(OpenMode.CREATE)
           .setIndexDeletionPolicy(new KeepLastNDeletionPolicy(N))

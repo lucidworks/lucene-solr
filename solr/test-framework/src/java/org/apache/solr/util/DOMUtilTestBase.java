@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.util;
 
 
@@ -24,12 +25,12 @@ import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathFactory;
 
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.xml.sax.InputSource;
 
-public abstract class DOMUtilTestBase extends SolrTestCase {
+public abstract class DOMUtilTestBase extends LuceneTestCase {
   
   private DocumentBuilder builder;
   private static final XPathFactory xpathFactory = XPathFactory.newInstance();

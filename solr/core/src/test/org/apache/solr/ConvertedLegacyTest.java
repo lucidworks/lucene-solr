@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr;
 
 import org.apache.solr.common.params.CommonParams;
@@ -43,6 +44,7 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
     SolrQueryRequest req = null;
     Map<String,String> args = new HashMap<>();
     lrf.args.put(CommonParams.VERSION,"2.2");
+    lrf.args.put("defType","lucenePlusSort");
 
     // compact the index, keep things from getting out of hand
 
@@ -133,7 +135,7 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
             );
     args = new HashMap<>();
     req = new LocalSolrQueryRequest(h.getCore(), "val_s:[a TO z]",
-                                    "/select", 2, 5 , args);
+                                    "standard", 2, 5 , args);
     assertQ(req
             ,"//*[@numFound='3'] "
             ,"*[count(//doc)=1] "
@@ -142,28 +144,28 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
             );
     args = new HashMap<>();
     req = new LocalSolrQueryRequest(h.getCore(), "val_s:[a TO z]",
-                                    "/select", 3, 5 , args);
+                                    "standard", 3, 5 , args);
     assertQ(req
             ,"//*[@numFound='3'] "
             ,"*[count(//doc)=0]"
             );
     args = new HashMap<>();
     req = new LocalSolrQueryRequest(h.getCore(), "val_s:[a TO z]",
-                                    "/select", 4, 5 , args);
+                                    "standard", 4, 5 , args);
     assertQ(req
             ,"//*[@numFound='3'] "
             ,"*[count(//doc)=0]"
             );
     args = new HashMap<>();
     req = new LocalSolrQueryRequest(h.getCore(), "val_s:[a TO z]",
-                                    "/select", 25, 5 , args);
+                                    "standard", 25, 5 , args);
     assertQ(req
             ,"//*[@numFound='3'] "
             ,"*[count(//doc)=0]"
             );
     args = new HashMap<>();
     req = new LocalSolrQueryRequest(h.getCore(), "val_s:[a TO z]",
-                                    "/select", 0, 1 , args);
+                                    "standard", 0, 1 , args);
     assertQ(req
             ,"//*[@numFound='3'] "
             ,"*[count(//doc)=1] "
@@ -171,7 +173,7 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
             );
     args = new HashMap<>();
     req = new LocalSolrQueryRequest(h.getCore(), "val_s:[a TO z]",
-                                    "/select", 0, 2 , args);
+                                    "standard", 0, 2 , args);
     assertQ(req
             ,"//*[@numFound='3'] "
             ,"*[count(//doc)=2] "
@@ -179,7 +181,7 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
             );
     args = new HashMap<>();
     req = new LocalSolrQueryRequest(h.getCore(), "val_s:[a TO z]",
-                                    "/select", 1, 1 , args);
+                                    "standard", 1, 1 , args);
     assertQ(req
             ,"//*[@numFound='3'] "
             ,"*[count(//doc)=1] "
@@ -187,44 +189,44 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
             );
     args = new HashMap<>();
     req = new LocalSolrQueryRequest(h.getCore(), "val_s:[a TO z]",
-                                    "/select", 3, 1 , args);
+                                    "standard", 3, 1 , args);
     assertQ(req
             ,"//*[@numFound='3'] "
             ,"*[count(//doc)=0]"
             );
     args = new HashMap<>();
     req = new LocalSolrQueryRequest(h.getCore(), "val_s:[a TO z]",
-                                    "/select", 4, 1 , args);
+                                    "standard", 4, 1 , args);
     assertQ(req
             ,"//*[@numFound='3'] "
             ,"*[count(//doc)=0]"
             );
     args = new HashMap<>();
     req = new LocalSolrQueryRequest(h.getCore(), "val_s:[a TO z]",
-                                    "/select", 1, 0 , args);
+                                    "standard", 1, 0 , args);
     assertQ(req
             ,"//*[@numFound='3'] "
             ,"*[count(//doc)=0]"
             );
     args = new HashMap<>();
     req = new LocalSolrQueryRequest(h.getCore(), "val_s:[a TO z]",
-                                    "/select", 0, 0 , args);
+                                    "standard", 0, 0 , args);
     assertQ(req
             ,"//*[@numFound='3'] "
             ,"*[count(//doc)=0]"
             );
     args = new HashMap<>();
-    args.put("sort","val_s1 asc");
-    req = new LocalSolrQueryRequest(h.getCore(), "val_s:[a TO z]",
-                                    "/select", 0, 0 , args);
+    args.put("defType","lucenePlusSort");
+    req = new LocalSolrQueryRequest(h.getCore(), "val_s:[a TO z];val_s1 asc",
+                                    "standard", 0, 0 , args);
     assertQ(req
             ,"//*[@numFound='3'] "
             ,"*[count(//doc)=0]"
             );
     args = new HashMap<>();
-    args.put("sort","val_s1 desc");
-    req = new LocalSolrQueryRequest(h.getCore(), "val_s:[a TO z]",
-                                    "/select", 0, 0 , args);
+    args.put("defType","lucenePlusSort");
+    req = new LocalSolrQueryRequest(h.getCore(), "val_s:[a TO z];val_s1 desc",
+                                    "standard", 0, 0 , args);
     assertQ(req
             ,"//*[@numFound='3'] "
             ,"*[count(//doc)=0]"
@@ -517,11 +519,11 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
             ,"//@numFound[.='1'] "
             ,"//int[.='-2147483648']"
             );
-    assertQ(req("q", "id:44", "sort","num_i1 asc")
+    assertQ(req("id:44;num_i1 asc;")
             ,"//doc[1]/int[.='-2147483648'] "
             ,"//doc[last()]/int[.='2147483647']"
             );
-    assertQ(req("q","id:44","sort","num_i1 desc")
+    assertQ(req("id:44;num_i1 desc;")
             ,"//doc[1]/int[.='2147483647'] "
             ,"//doc[last()]/int[.='-2147483648']"
             );
@@ -560,11 +562,11 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
             ,"//@numFound[.='1'] "
             ,"//long[.='-9223372036854775808']"
             );
-    assertQ(req("q","id:44","sort","num_l1 asc")
+    assertQ(req("id:44;num_l1 asc;")
             ,"//doc[1]/long[.='-9223372036854775808'] "
             ,"//doc[last()]/long[.='9223372036854775807']"
             );
-    assertQ(req("q","id:44", "sort", "num_l1 desc")
+    assertQ(req("id:44;num_l1 desc;")
             ,"//doc[1]/long[.='9223372036854775807'] "
             ,"//doc[last()]/long[.='-9223372036854775808']"
             );
@@ -610,11 +612,11 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
     assertQ(req("num_f1:\"-1e20\"")
             ,"//@numFound[.='1']"
             );
-    assertQ(req("q", "id:44", "sort", "num_f1 asc")
+    assertQ(req("id:44;num_f1 asc;")
             ,"//doc[1]/float[.='-Infinity'] "
             ,"//doc[last()]/float[.='NaN']"
             );
-    assertQ(req("q", "id:44", "sort","num_f1 desc")
+    assertQ(req("id:44;num_f1 desc;")
             ,"//doc[1]/float[.='NaN'] "
             ,"//doc[last()]/float[.='-Infinity']"
             );
@@ -662,11 +664,11 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
     assertQ(req("num_d1:\"1e-100\"")
             ,"//@numFound[.='1']"
             );
-    assertQ(req("q", "id:44", "sort", "num_d1 asc")
+    assertQ(req("id:44;num_d1 asc;")
             ,"//doc[1]/double[.='-Infinity'] "
             ,"//doc[last()]/double[.='NaN']"
             );
-    assertQ(req("q","id:44","sort","num_d1 desc")
+    assertQ(req("id:44;num_d1 desc;")
             ,"//doc[1]/double[.='NaN'] "
             ,"//doc[last()]/double[.='-Infinity']"
             );
@@ -692,27 +694,27 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
             ,"*[count(//doc)=6]"
             );
 
-    assertQ(req("q","id:44", "sort", "a_i1 asc,b_i1 desc")
+    assertQ(req("id:44; a_i1 asc,b_i1 desc")
             ,"*[count(//doc)=6] "
             ,"//doc[3]/int[.='100'] "
             ,"//doc[4]/int[.='50']"
             );
-    assertQ(req("q","id:44", "sort", "a_i1 asc  , b_i1 asc")
+    assertQ(req("id:44;a_i1 asc  , b_i1 asc;")
             ,"*[count(//doc)=6] "
             ,"//doc[3]/int[.='50'] "
             ,"//doc[4]/int[.='100']"
             );
-    assertQ(req("q", "id:44", "sort", "a_i1 asc")
+    assertQ(req("id:44;a_i1 asc;")
             ,"*[count(//doc)=6] "
             ,"//doc[1]/int[.='-1'] "
             ,"//doc[last()]/int[.='15']"
             );
-    assertQ(req("q","id:44","sort","a_i1 asc , score top")
+    assertQ(req("id:44;a_i1 asc , score top;")
             ,"*[count(//doc)=6] "
             ,"//doc[1]/int[.='-1'] "
             ,"//doc[last()]/int[.='15']"
             );
-    assertQ(req("q","id:44","sort","score top , a_i1 top, b_i1 bottom ")
+    assertQ(req("id:44; score top , a_i1 top, b_i1 bottom ;")
             ,"*[count(//doc)=6] "
             ,"//doc[last()]/int[.='-1'] "
             ,"//doc[1]/int[.='15'] "
@@ -735,36 +737,36 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
     assertQ(req("id_i:[1000 TO 1010]")
             ,"*[count(//doc)=7]"
             );
-    assertQ(req("q","id_i:[1000 TO 1010]","sort","b_i1 asc")
+    assertQ(req("id_i:[1000 TO 1010]; b_i1 asc")
             ,"*[count(//doc)=7] "
             ,"//doc[1]/int[.='50'] "
             ,"//doc[2]/int[.='100']"
             );
-    assertQ(req("q","id_i:[1000 TO 1010]","sort"," b_i1 desc")
+    assertQ(req("id_i:[1000 TO 1010]; b_i1 desc")
             ,"*[count(//doc)=7] "
             ,"//doc[1]/int[.='100'] "
             ,"//doc[2]/int[.='50']"
             );
-    assertQ(req("q","id_i:[1000 TO 1010]","sort"," a_i1 asc,b_i1 desc")
+    assertQ(req("id_i:[1000 TO 1010]; a_i1 asc,b_i1 desc")
             ,"*[count(//doc)=7] "
             ,"//doc[3]/int[@name='b_i1' and .='100'] "
             ,"//doc[4]/int[@name='b_i1' and .='50']  "
             ,"//doc[5]/arr[@name='id_i' and .='1000']"
             );
-    assertQ(req("q","id_i:[1000 TO 1010]","sort"," a_i1 asc,b_i1 asc")
+    assertQ(req("id_i:[1000 TO 1010]; a_i1 asc,b_i1 asc")
             ,"*[count(//doc)=7] "
             ,"//doc[3]/int[@name='b_i1' and .='50'] "
             ,"//doc[4]/int[@name='b_i1' and .='100']  "
             ,"//doc[5]/arr[@name='id_i' and .='1000']"
             );
     // nullfirst tests
-    assertQ(req("q","id_i:[1000 TO 1002]","sort"," nullfirst asc")
+    assertQ(req("id_i:[1000 TO 1002]; nullfirst asc")
             ,"*[count(//doc)=3] "
             ,"//doc[1]/arr[@name='id_i' and .='1002']"
             ,"//doc[2]/arr[@name='id_i' and .='1001']  "
             ,"//doc[3]/arr[@name='id_i' and .='1000']"
             );
-    assertQ(req("q","id_i:[1000 TO 1002]","sort"," nullfirst desc")
+    assertQ(req("id_i:[1000 TO 1002]; nullfirst desc")
             ,"*[count(//doc)=3] "
             ,"//doc[1]/arr[@name='id_i' and .='1002']"
             ,"//doc[2]/arr[@name='id_i' and .='1000']  "
@@ -778,16 +780,16 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
 
     // Sort parsing exception tests.  (SOLR-6, SOLR-99)
     assertQEx( "can not sort unindexed fields",
-        req( "q","id_i:1000", "sort", "shouldbeunindexed asc" ), 400 );
+        req( "id_i:1000; shouldbeunindexed asc" ), 400 );
     
     assertQEx( "invalid query format",
-        req( "q","id_i:1000", "sort", "nullfirst" ), 400 );
+        req( "id_i:1000; nullfirst" ), 400 );
 
     assertQEx( "unknown sort field",
-        req( "q","id_i:1000", "sort", "abcde12345 asc" ), 400 ); 
+        req( "id_i:1000; abcde12345 asc" ), 400 ); 
 
     assertQEx( "unknown sort order",
-        req( "q","id_i:1000", "sort", "nullfirst aaa" ), 400 );
+        req( "id_i:1000; nullfirst aaa" ), 400 );
 
     resetExceptionIgnores();
 
@@ -871,7 +873,7 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
             );
 
 
-    // intra-word delimiter testing (WordDelimiterGraphFilter)
+    // intra-word delimiter testing (WordDelimiterFilter)
 
     assertU("<add><doc><field name=\"id\">42</field><field name=\"subword\">foo bar</field></doc></add>");
     assertU("<commit/>");
@@ -1108,7 +1110,7 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
     args = new HashMap<>();
     args.put("fl","fname_s,arr_f  ");
     req = new LocalSolrQueryRequest(h.getCore(), "id:44",
-                                    "/select", 0, 10, args);
+                                    "standard", 0, 10, args);
     assertQ(req
             ,"//str[.='Yonik']  "
             ,"//float[.='1.4142135']"
@@ -1116,7 +1118,7 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
     args = new HashMap<>();
     args.put("fl","fname_s,score");
     req = new LocalSolrQueryRequest(h.getCore(), "id:44",
-                                    "/select", 0, 10, args);
+                                    "standard", 0, 10, args);
     assertQ(req
             ,"//str[.='Yonik']"
             ,"//float[@name='score' and . > 0]"
@@ -1127,7 +1129,7 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
     args = new HashMap<>();
     args.put("fl","score,* ");
     req = new LocalSolrQueryRequest(h.getCore(), "id:44",
-                                    "/select", 0, 10, args);
+                                    "standard", 0, 10, args);
     assertQ(req
             ,"//str[.='Yonik']  "
             ,"//float[.='1.4142135'] "
@@ -1137,7 +1139,7 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
     args = new HashMap<>();
     args.put("fl","*,score ");
     req = new LocalSolrQueryRequest(h.getCore(), "id:44",
-                                    "/select", 0, 10, args);
+                                    "standard", 0, 10, args);
     assertQ(req
             ,"//str[.='Yonik']  "
             ,"//float[.='1.4142135'] "
@@ -1147,7 +1149,7 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
     args = new HashMap<>();
     args.put("fl","* ");
     req = new LocalSolrQueryRequest(h.getCore(), "id:44",
-                                    "/select", 0, 10, args);
+                                    "standard", 0, 10, args);
     assertQ(req
             ,"//str[.='Yonik']  "
             ,"//float[.='1.4142135'] "
@@ -1159,38 +1161,39 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
     args = new HashMap<>();
     args.put("fl","score ");
     req = new LocalSolrQueryRequest(h.getCore(), "id:44",
-                                    "/select", 0, 10, args);
+                                    "standard", 0, 10, args);
     assertQ(req
             ,"//result[@maxScore>0]"
             );
     args = new HashMap<>();
     args.put("fl","score ");
-    args.put("sort","id desc");
-    req = new LocalSolrQueryRequest(h.getCore(), "id:44",
-                                    "/select", 0, 10, args);
+    args.put("defType","lucenePlusSort");
+    req = new LocalSolrQueryRequest(h.getCore(), "id:44;id desc;",
+                                    "standard", 0, 10, args);
     assertQ(req
             ,"//result[@maxScore>0]"
             );
     args = new HashMap<>();
     args.put("fl","score ");
-    req = new LocalSolrQueryRequest(h.getCore(), "id:44",
-                                    "/select", 0, 10, args);
+    args.put("defType","lucenePlusSort");
+    req = new LocalSolrQueryRequest(h.getCore(), "id:44;",
+                                    "standard", 0, 10, args);
     assertQ(req
             ,"//@maxScore = //doc/float[@name='score']"
             );
     args = new HashMap<>();
     args.put("fl","score ");
-    args.put("sort","id desc");
-    req = new LocalSolrQueryRequest(h.getCore(), "id:44",
-                                    "/select", 0, 10, args);
+    args.put("defType","lucenePlusSort");
+    req = new LocalSolrQueryRequest(h.getCore(), "id:44;id desc;",
+                                    "standard", 0, 10, args);
     assertQ(req
             ,"//@maxScore = //doc/float[@name='score']"
             );
     args = new HashMap<>();
     args.put("fl","*,score");
-    args.put("sort","id desc");
-    req = new LocalSolrQueryRequest(h.getCore(), "id:44",
-                                    "/select", 0, 0 , args);
+    args.put("defType","lucenePlusSort");
+    req = new LocalSolrQueryRequest(h.getCore(), "id:44;id desc;",
+                                    "standard", 0, 0 , args);
     assertQ(req
             ,"//result[@maxScore>0]"
             );

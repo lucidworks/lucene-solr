@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.analysis.wikipedia;
 
 import org.apache.lucene.analysis.Tokenizer;
@@ -26,6 +27,7 @@ import org.apache.lucene.util.AttributeFactory;
 import org.apache.lucene.util.AttributeSource;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.util.*;
 
 
@@ -131,7 +133,7 @@ public final class WikipediaTokenizer extends Tokenizer {
 
   /**
    * Creates a new instance of the {@link org.apache.lucene.analysis.wikipedia.WikipediaTokenizer}.  Attaches the
-   * <code>input</code> to the newly created JFlex scanner.
+   * <code>input</code> to a the newly created JFlex scanner.
    *
    * @param tokenOutput One of {@link #TOKENS_ONLY}, {@link #UNTOKENIZED_ONLY}, {@link #BOTH}
    */
@@ -142,7 +144,7 @@ public final class WikipediaTokenizer extends Tokenizer {
 
   /**
    * Creates a new instance of the {@link org.apache.lucene.analysis.wikipedia.WikipediaTokenizer}.  Attaches the
-   * <code>input</code> to the newly created JFlex scanner. Uses the given {@link org.apache.lucene.util.AttributeFactory}.
+   * <code>input</code> to a the newly created JFlex scanner. Uses the given {@link org.apache.lucene.util.AttributeFactory}.
    *
    * @param tokenOutput One of {@link #TOKENS_ONLY}, {@link #UNTOKENIZED_ONLY}, {@link #BOTH}
    */

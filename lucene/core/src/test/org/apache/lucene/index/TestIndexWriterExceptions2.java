@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -34,7 +34,6 @@ import org.apache.lucene.document.BinaryDocValuesField;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
-import org.apache.lucene.document.IntPoint;
 import org.apache.lucene.document.NumericDocValuesField;
 import org.apache.lucene.document.SortedDocValuesField;
 import org.apache.lucene.document.SortedNumericDocValuesField;
@@ -65,6 +64,7 @@ public class TestIndexWriterExceptions2 extends LuceneTestCase {
     if (dir instanceof MockDirectoryWrapper) {
       ((MockDirectoryWrapper)dir).setThrottling(MockDirectoryWrapper.Throttling.NEVER);
       ((MockDirectoryWrapper)dir).setUseSlowOpenClosers(false);
+      ((MockDirectoryWrapper)dir).setPreventDoubleWrite(false);
     }
     
     // log all exceptions we hit, in case we fail (for debugging)
@@ -125,8 +125,6 @@ public class TestIndexWriterExceptions2 extends LuceneTestCase {
         FieldType ft = new FieldType(TextField.TYPE_NOT_STORED);
         ft.setStoreTermVectors(true);
         doc.add(newField("text_vectors", TestUtil.randomAnalysisString(random(), 6, true), ft));
-        doc.add(new IntPoint("point", random().nextInt()));
-        doc.add(new IntPoint("point2d", random().nextInt(), random().nextInt()));
         
         if (random().nextInt(10) > 0) {
           // single doc
@@ -202,7 +200,7 @@ public class TestIndexWriterExceptions2 extends LuceneTestCase {
             if (random().nextBoolean()) {
               DirectoryReader ir = null;
               try {
-                ir = DirectoryReader.open(iw, random().nextBoolean(), false);
+                ir = DirectoryReader.open(iw, random().nextBoolean());
                 TestUtil.checkReader(ir);
               } finally {
                 IOUtils.closeWhileHandlingException(ir);

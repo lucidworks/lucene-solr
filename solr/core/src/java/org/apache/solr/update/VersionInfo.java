@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update;
 
 import java.io.IOException;
@@ -22,19 +23,19 @@ import java.util.Map;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.PointValues;
 import org.apache.lucene.index.Terms;
-import org.apache.solr.legacy.LegacyNumericUtils;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
-import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.Sort;
+import org.apache.lucene.search.SortField;
+import org.apache.lucene.search.TopFieldDocs;
 import org.apache.lucene.util.BitUtil;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.NumericUtils;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.SuppressForbidden;
-import org.apache.solr.index.SlowCompositeReaderWrapper;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.SolrIndexSearcher;
@@ -42,28 +43,27 @@ import org.apache.solr.util.RefCounted;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.solr.common.params.CommonParams.VERSION_FIELD;
-
 public class VersionInfo {
+
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-  private static final String SYS_PROP_BUCKET_VERSION_LOCK_TIMEOUT_MS = "bucketVersionLockTimeoutMs";
+
+  public static final String VERSION_FIELD="_version_";
 
   private final UpdateLog ulog;
   private final VersionBucket[] buckets;
   private SchemaField versionField;
+  private SchemaField idField;
   final ReadWriteLock lock = new ReentrantReadWriteLock(true);
 
-  private int versionBucketLockTimeoutMs;
-
   /**
-   * Gets and returns the {@link org.apache.solr.common.params.CommonParams#VERSION_FIELD} from the specified
+   * Gets and returns the {@link #VERSION_FIELD} from the specified 
    * schema, after verifying that it is indexed, stored, and single-valued.  
    * If any of these pre-conditions are not met, it throws a SolrException 
    * with a user suitable message indicating the problem.
    */
   public static SchemaField getAndCheckVersionField(IndexSchema schema) 
     throws SolrException {
-    final String errPrefix = VERSION_FIELD + " field must exist in schema and be searchable (indexed or docValues) and retrievable(stored or docValues) and not multiValued";
+    final String errPrefix = VERSION_FIELD + " field must exist in schema, using indexed=\"true\" or docValues=\"true\", stored=\"true\" and multiValued=\"false\"";
     SchemaField sf = schema.getFieldOrNull(VERSION_FIELD);
 
     if (null == sf) {
@@ -74,12 +74,12 @@ public class VersionInfo {
     if ( !sf.indexed() && !sf.hasDocValues()) {
       throw new SolrException
         (SolrException.ErrorCode.SERVER_ERROR, 
-         errPrefix + " (" + VERSION_FIELD + " not searchable");
+         errPrefix + " (" + VERSION_FIELD + " must be either indexed or have docValues");
     }
-    if ( !sf.stored() && !sf.hasDocValues()) {
+    if ( !sf.stored() ) {
       throw new SolrException
         (SolrException.ErrorCode.SERVER_ERROR, 
-         errPrefix + " (" + VERSION_FIELD + " not retrievable");
+         errPrefix + " (" + VERSION_FIELD + " is not stored");
     }
     if ( sf.multiValued() ) {
       throw new SolrException
@@ -94,20 +94,11 @@ public class VersionInfo {
     this.ulog = ulog;
     IndexSchema schema = ulog.uhandler.core.getLatestSchema(); 
     versionField = getAndCheckVersionField(schema);
-    versionBucketLockTimeoutMs = ulog.uhandler.core.getSolrConfig().getInt("updateHandler/versionBucketLockTimeoutMs",
-        Integer.parseInt(System.getProperty(SYS_PROP_BUCKET_VERSION_LOCK_TIMEOUT_MS, "0")));
+    idField = schema.getUniqueKeyField();
     buckets = new VersionBucket[ BitUtil.nextHighestPowerOfTwo(nBuckets) ];
     for (int i=0; i<buckets.length; i++) {
-      if (versionBucketLockTimeoutMs > 0) {
-        buckets[i] = new TimedVersionBucket();
-      } else {
-        buckets[i] = new VersionBucket();
-      }
+      buckets[i] = new VersionBucket();
     }
-  }
-  
-  public int getVersionBucketLockTimeoutMs() {
-    return versionBucketLockTimeoutMs;
   }
 
   public void reload() {
@@ -204,10 +195,6 @@ public class VersionInfo {
     return ulog.lookupVersion(idBytes);
   }
 
-  /**
-   * Returns the latest version from the index, searched by the given id (bytes) as seen from the realtime searcher.
-   * Returns null if no document can be found in the index for the given id.
-   */
   public Long getVersionFromIndex(BytesRef idBytes) {
     // TODO: we could cache much of this and invalidate during a commit.
     // TODO: most DocValues classes are threadsafe - expose which.
@@ -234,37 +221,38 @@ public class VersionInfo {
     }
   }
 
-  /**
-   * Returns the highest version from the index, or 0L if no versions can be found in the index.
-   */
-  public Long getMaxVersionFromIndex(IndexSearcher searcher) throws IOException {
+  public Long getMaxVersionFromIndex(SolrIndexSearcher searcher) throws IOException {
 
-    final String versionFieldName = versionField.getName();
+    String versionFieldName = versionField.getName();
 
-    log.debug("Refreshing highest value of {} for {} version buckets from index", versionFieldName, buckets.length);
+    log.info("Refreshing highest value of {} for {} version buckets from index", versionFieldName, buckets.length);
+    long maxVersionInIndex = 0L;
+
     // if indexed, then we have terms to get the max from
     if (versionField.indexed()) {
-      if (versionField.getType().isPointField()) {
-        return getMaxVersionFromIndexedPoints(searcher);
+      Terms versionTerms = searcher.getLeafReader().terms(versionFieldName);
+      Long max = (versionTerms != null) ? NumericUtils.getMaxLong(versionTerms) : null;
+      if (max != null) {
+        maxVersionInIndex = max.longValue();
+        log.info("Found MAX value {} from Terms for {} in index", maxVersionInIndex, versionFieldName);
       } else {
-        return getMaxVersionFromIndexedTerms(searcher);
+        log.info("No terms found for {}, cannot seed version bucket highest value from index", versionFieldName);
+      }
+    } else {
+      ValueSource vs = versionField.getType().getValueSource(versionField, null);
+      Map funcContext = ValueSource.newContext(searcher);
+      vs.createWeight(funcContext, searcher);
+      // TODO: multi-thread this
+      for (LeafReaderContext ctx : searcher.getTopReaderContext().leaves()) {
+        int maxDoc = ctx.reader().maxDoc();
+        FunctionValues fv = vs.getValues(funcContext, ctx);
+        for (int doc = 0; doc < maxDoc; doc++) {
+          long v = fv.longVal(doc);
+          maxVersionInIndex = Math.max(v, maxVersionInIndex);
+        }
       }
     }
-    // else: not indexed, use docvalues via value source ...
-    
-    long maxVersionInIndex = 0L;
-    ValueSource vs = versionField.getType().getValueSource(versionField, null);
-    Map funcContext = ValueSource.newContext(searcher);
-    vs.createWeight(funcContext, searcher);
-    // TODO: multi-thread this
-    for (LeafReaderContext ctx : searcher.getTopReaderContext().leaves()) {
-      int maxDoc = ctx.reader().maxDoc();
-      FunctionValues fv = vs.getValues(funcContext, ctx);
-      for (int doc = 0; doc < maxDoc; doc++) {
-        long v = fv.longVal(doc);
-        maxVersionInIndex = Math.max(v, maxVersionInIndex);
-      }
-    }
+
     return maxVersionInIndex;
   }
 
@@ -276,39 +264,5 @@ public class VersionInfo {
           buckets[i].highest = highestVersion;
       }
     }
-  }
-
-  private long getMaxVersionFromIndexedTerms(IndexSearcher searcher) throws IOException {
-    assert ! versionField.getType().isPointField();
-      
-    final String versionFieldName = versionField.getName();
-    final LeafReader leafReader = SlowCompositeReaderWrapper.wrap(searcher.getIndexReader());
-    final Terms versionTerms = leafReader.terms(versionFieldName);
-    final Long max = (versionTerms != null) ? LegacyNumericUtils.getMaxLong(versionTerms) : null;
-    if (null != max) {
-      log.debug("Found MAX value {} from Terms for {} in index", max, versionFieldName);
-      return max.longValue();
-    }
-    return 0L;
-  }
-  
-  private long getMaxVersionFromIndexedPoints(IndexSearcher searcher) throws IOException {
-    assert versionField.getType().isPointField();
-    
-    final String versionFieldName = versionField.getName();
-    final byte[] maxBytes = PointValues.getMaxPackedValue(searcher.getIndexReader(), versionFieldName);
-    if (null == maxBytes) {
-      return 0L;
-    }
-    final Object maxObj = versionField.getType().toObject(versionField, new BytesRef(maxBytes));
-    if (null == maxObj || ! ( maxObj instanceof Number) ) {
-      // HACK: aparently nothing asserts that the FieldType is numeric (let alone a Long???)
-      log.error("Unable to convert MAX byte[] from Points for {} in index", versionFieldName);
-      return 0L;
-    }
-    
-    final long max = ((Number)maxObj).longValue();
-    log.debug("Found MAX value {} from Points for {} in index", max, versionFieldName);
-    return max;
   }
 }

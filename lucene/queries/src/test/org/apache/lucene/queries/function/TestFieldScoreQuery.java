@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function;
 
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
@@ -49,25 +50,12 @@ public class TestFieldScoreQuery extends FunctionTestSetup {
   public void testRankInt () throws Exception {
     doTestRank(INT_VALUESOURCE);
   }
-  
-  @Test
-  public void testRankIntMultiValued() throws Exception {
-    doTestRank(INT_MV_MAX_VALUESOURCE);
-    doTestRank(INT_MV_MIN_VALUESOURCE);
-  }
 
   /** Test that FieldScoreQuery of Type.FLOAT returns docs in expected order. */
   @Test
   public void testRankFloat () throws Exception {
     // same values, but in flot format
     doTestRank(FLOAT_VALUESOURCE);
-  }
-  
-  @Test
-  public void testRankFloatMultiValued() throws Exception {
-    // same values, but in flot format
-    doTestRank(FLOAT_MV_MAX_VALUESOURCE);
-    doTestRank(FLOAT_MV_MIN_VALUESOURCE);
   }
 
   // Test that FieldScoreQuery returns docs in expected order.
@@ -95,25 +83,12 @@ public class TestFieldScoreQuery extends FunctionTestSetup {
   public void testExactScoreInt () throws  Exception {
     doTestExactScore(INT_VALUESOURCE);
   }
-  
-  @Test
-  public void testExactScoreIntMultiValued() throws  Exception {
-    doTestExactScore(INT_MV_MAX_VALUESOURCE);
-    doTestExactScore(INT_MV_MIN_VALUESOURCE);
-  }
 
   /** Test that FieldScoreQuery of Type.FLOAT returns the expected scores. */
   @Test
   public void testExactScoreFloat () throws  Exception {
     // same values, but in flot format
     doTestExactScore(FLOAT_VALUESOURCE);
-  }
-  
-  @Test
-  public void testExactScoreFloatMultiValued() throws  Exception {
-    // same values, but in flot format
-    doTestExactScore(FLOAT_MV_MAX_VALUESOURCE);
-    doTestExactScore(FLOAT_MV_MIN_VALUESOURCE);
   }
 
   // Test that FieldScoreQuery returns docs with expected score.
@@ -122,7 +97,7 @@ public class TestFieldScoreQuery extends FunctionTestSetup {
     IndexReader r = DirectoryReader.open(dir);
     IndexSearcher s = newSearcher(r);
     TopDocs td = s.search(functionQuery,1000);
-    assertEquals("All docs should be matched!",N_DOCS,td.totalHits.value);
+    assertEquals("All docs should be matched!",N_DOCS,td.totalHits);
     ScoreDoc sd[] = td.scoreDocs;
     for (ScoreDoc aSd : sd) {
       float score = aSd.score;

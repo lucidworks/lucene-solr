@@ -1,3 +1,4 @@
+package org.apache.lucene.queryparser.surround.query;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +15,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.surround.query;
 
 import java.io.IOException;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
 
 class DistanceRewriteQuery extends RewriteQuery<DistanceQuery> {
 
@@ -33,13 +32,10 @@ class DistanceRewriteQuery extends RewriteQuery<DistanceQuery> {
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
     return srndQuery.getSpanNearQuery(reader, fieldName, qf);
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    // TODO implement this
-    visitor.visitLeaf(this);
   }
 }
 

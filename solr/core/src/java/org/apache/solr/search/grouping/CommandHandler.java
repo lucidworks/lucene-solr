@@ -1,3 +1,5 @@
+package org.apache.solr.search.grouping;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.grouping;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -24,25 +25,23 @@ import java.util.List;
 
 import org.apache.lucene.index.ExitableDirectoryReader;
 import org.apache.lucene.queries.function.ValueSource;
-import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Collector;
+import org.apache.lucene.search.Filter;
+import org.apache.lucene.search.FilteredQuery;
 import org.apache.lucene.search.MultiCollector;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TimeLimitingCollector;
 import org.apache.lucene.search.TotalHitCountCollector;
-import org.apache.lucene.search.grouping.AllGroupHeadsCollector;
-import org.apache.lucene.search.grouping.TermGroupSelector;
-import org.apache.lucene.search.grouping.ValueSourceGroupSelector;
+import org.apache.lucene.search.grouping.AbstractAllGroupHeadsCollector;
+import org.apache.lucene.search.grouping.function.FunctionAllGroupHeadsCollector;
+import org.apache.lucene.search.grouping.function.FunctionAllGroupsCollector;
+import org.apache.lucene.search.grouping.term.TermAllGroupHeadsCollector;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.BitDocSet;
 import org.apache.solr.search.DocSet;
 import org.apache.solr.search.DocSetCollector;
-import org.apache.solr.search.DocSetUtil;
-import org.apache.solr.search.QueryCommand;
-import org.apache.solr.search.QueryResult;
 import org.apache.solr.search.QueryUtils;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.apache.solr.search.SolrIndexSearcher.ProcessedFilter;
@@ -60,14 +59,14 @@ public class CommandHandler {
 
   public static class Builder {
 
-    private QueryCommand queryCommand;
+    private SolrIndexSearcher.QueryCommand queryCommand;
     private List<Command> commands = new ArrayList<>();
     private SolrIndexSearcher searcher;
     private boolean needDocSet = false;
     private boolean truncateGroups = false;
     private boolean includeHitCount = false;
 
-    public Builder setQueryCommand(QueryCommand queryCommand) {
+    public Builder setQueryCommand(SolrIndexSearcher.QueryCommand queryCommand) {
       this.queryCommand = queryCommand;
       this.needDocSet = (queryCommand.getFlags() & SolrIndexSearcher.GET_DOCSET) != 0;
       return this;
@@ -85,7 +84,7 @@ public class CommandHandler {
 
     /**
      * Sets whether to compute a {@link DocSet}.
-     * May override the value set by {@link #setQueryCommand(org.apache.solr.search.QueryCommand)}.
+     * May override the value set by {@link #setQueryCommand(org.apache.solr.search.SolrIndexSearcher.QueryCommand)}.
      *
      * @param needDocSet Whether to compute a {@link DocSet}
      * @return this
@@ -115,9 +114,9 @@ public class CommandHandler {
 
   }
 
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  private final QueryCommand queryCommand;
+  private final SolrIndexSearcher.QueryCommand queryCommand;
   private final List<Command> commands;
   private final SolrIndexSearcher searcher;
   private final boolean needDocset;
@@ -128,7 +127,7 @@ public class CommandHandler {
 
   private DocSet docSet;
 
-  private CommandHandler(QueryCommand queryCommand,
+  private CommandHandler(SolrIndexSearcher.QueryCommand queryCommand,
                          List<Command> commands,
                          SolrIndexSearcher searcher,
                          boolean needDocset,
@@ -163,10 +162,6 @@ public class CommandHandler {
     } else {
       searchWithTimeLimiter(query, filter, null);
     }
-
-    for (Command command : commands) {
-      command.postCollect(searcher);
-    }
   }
 
   private DocSet computeGroupedDocSet(Query query, ProcessedFilter filter, List<Collector> collectors) throws IOException {
@@ -175,14 +170,12 @@ public class CommandHandler {
     SchemaField sf = searcher.getSchema().getField(field);
     FieldType fieldType = sf.getType();
     
-    final AllGroupHeadsCollector allGroupHeadsCollector;
-    if (fieldType.getNumberType() != null) {
+    final AbstractAllGroupHeadsCollector allGroupHeadsCollector;
+    if (fieldType.getNumericType() != null) {
       ValueSource vs = fieldType.getValueSource(sf, null);
-      allGroupHeadsCollector = AllGroupHeadsCollector.newCollector(new ValueSourceGroupSelector(vs, new HashMap<>()),
-          firstCommand.getWithinGroupSort());
+      allGroupHeadsCollector = new FunctionAllGroupHeadsCollector(vs, new HashMap<Object,Object>(), firstCommand.getSortWithinGroup());
     } else {
-      allGroupHeadsCollector
-          = AllGroupHeadsCollector.newCollector(new TermGroupSelector(firstCommand.getKey()), firstCommand.getWithinGroupSort());
+      allGroupHeadsCollector = TermAllGroupHeadsCollector.create(firstCommand.getKey(), firstCommand.getSortWithinGroup());
     }
     if (collectors.isEmpty()) {
       searchWithTimeLimiter(query, filter, allGroupHeadsCollector);
@@ -196,15 +189,16 @@ public class CommandHandler {
 
   private DocSet computeDocSet(Query query, ProcessedFilter filter, List<Collector> collectors) throws IOException {
     int maxDoc = searcher.maxDoc();
+    final Collector collector;
     final DocSetCollector docSetCollector = new DocSetCollector(maxDoc);
     List<Collector> allCollectors = new ArrayList<>(collectors);
     allCollectors.add(docSetCollector);
     searchWithTimeLimiter(query, filter, MultiCollector.wrap(allCollectors));
-    return DocSetUtil.getDocSet( docSetCollector, searcher );
+    return docSetCollector.getDocSet();
   }
 
   @SuppressWarnings("unchecked")
-  public NamedList processResult(QueryResult queryResult, ShardResultTransformer transformer) throws IOException {
+  public NamedList processResult(SolrIndexSearcher.QueryResult queryResult, ShardResultTransformer transformer) throws IOException {
     if (docSet != null) {
       queryResult.setDocSet(docSet);
     }
@@ -229,10 +223,7 @@ public class CommandHandler {
     }
 
     if (filter.filter != null) {
-      query = new BooleanQuery.Builder()
-          .add(query, Occur.MUST)
-          .add(filter.filter, Occur.FILTER)
-          .build();
+      query = new FilteredQuery(query, filter.filter);
     }
     if (filter.postFilter != null) {
       filter.postFilter.setLastDelegate(collector);
@@ -243,7 +234,7 @@ public class CommandHandler {
       searcher.search(query, collector);
     } catch (TimeLimitingCollector.TimeExceededException | ExitableDirectoryReader.ExitingReaderException x) {
       partialResults = true;
-      log.warn( "Query: " + query + "; " + x.getMessage() );
+      logger.warn( "Query: " + query + "; " + x.getMessage() );
     }
 
     if (includeHitCount) {

@@ -1,3 +1,5 @@
+package org.apache.lucene.collation;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.collation;
-
 
 
 import com.ibm.icu.text.Collator;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.core.KeywordTokenizer;
+import org.apache.lucene.collation.CollationKeyAnalyzer; // javadocs
+import org.apache.lucene.util.Version;
+
+import java.io.Reader;
 
 /**
  * <p>
@@ -61,8 +65,6 @@ import org.apache.lucene.analysis.core.KeywordTokenizer;
  *   generation timing and key length comparisons between ICU4J and
  *   java.text.Collator over several languages.
  * </p>
- *
- * @since 3.1
  */
 public final class ICUCollationKeyAnalyzer extends Analyzer {
   private final ICUCollationAttributeFactory factory;
@@ -73,6 +75,14 @@ public final class ICUCollationKeyAnalyzer extends Analyzer {
    * @param collator CollationKey generator
    */
   public ICUCollationKeyAnalyzer(Collator collator) {
+    this.factory = new ICUCollationAttributeFactory(collator);
+  }
+
+  /**
+   * @deprecated Use {@link #ICUCollationKeyAnalyzer(Collator)}
+   */
+  @Deprecated
+  public ICUCollationKeyAnalyzer(Version matchVersion, Collator collator) {
     this.factory = new ICUCollationAttributeFactory(collator);
   }
 

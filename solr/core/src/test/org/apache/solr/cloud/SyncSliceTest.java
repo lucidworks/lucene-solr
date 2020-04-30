@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.solr.client.solrj.SolrQuery;
@@ -31,6 +32,8 @@ import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.CollectionParams.CollectionAction;
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -108,8 +111,9 @@ public class SyncSliceTest extends AbstractFullDistribZkTestBase {
         .getBaseURL();
     baseUrl = baseUrl.substring(0, baseUrl.length() - "collection1".length());
     
-    // we only set the connect timeout, not so timeout
-    try (HttpSolrClient baseClient = getHttpSolrClient(baseUrl, 30000)) {
+    try (HttpSolrClient baseClient = new HttpSolrClient(baseUrl)) {
+      // we only set the connect timeout, not so timeout
+      baseClient.setConnectionTimeout(30000);
       baseClient.request(request);
     }
 
@@ -136,7 +140,7 @@ public class SyncSliceTest extends AbstractFullDistribZkTestBase {
     jetties.remove(leaderJetty);
     assertEquals(getShardCount() - 1, jetties.size());
     
-    leaderJetty.jetty.stop();
+    chaosMonkey.killJetty(leaderJetty);
     
     Thread.sleep(3000);
     
@@ -158,7 +162,7 @@ public class SyncSliceTest extends AbstractFullDistribZkTestBase {
     }
     
     // bring back dead node
-    deadJetty.jetty.start(); // he is not the leader anymore
+    ChaosMonkey.start(deadJetty.jetty); // he is not the leader anymore
     
     waitTillAllNodesActive();
     
@@ -202,7 +206,7 @@ public class SyncSliceTest extends AbstractFullDistribZkTestBase {
 
     
     // kill the current leader
-    leaderJetty.jetty.stop();
+    chaosMonkey.killJetty(leaderJetty);
     
     waitForNoShardInconsistency();
 
@@ -215,6 +219,7 @@ public class SyncSliceTest extends AbstractFullDistribZkTestBase {
     for (int i = 0; i < 60; i++) { 
       Thread.sleep(3000);
       ZkStateReader zkStateReader = cloudClient.getZkStateReader();
+      zkStateReader.updateClusterState();
       ClusterState clusterState = zkStateReader.getClusterState();
       DocCollection collection1 = clusterState.getCollection("collection1");
       Slice slice = collection1.getSlice("shard1");

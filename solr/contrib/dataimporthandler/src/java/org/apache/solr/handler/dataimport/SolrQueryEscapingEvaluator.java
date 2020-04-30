@@ -1,3 +1,11 @@
+package org.apache.solr.handler.dataimport;
+
+import static org.apache.solr.handler.dataimport.DataImportHandlerException.SEVERE;
+
+import java.util.List;
+
+import org.apache.solr.client.solrj.util.ClientUtils;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +22,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.dataimport;
-
-import static org.apache.solr.handler.dataimport.DataImportHandlerException.SEVERE;
-
-import java.util.List;
-
-import org.apache.solr.client.solrj.util.ClientUtils;
 
 public class SolrQueryEscapingEvaluator extends Evaluator {
   @Override

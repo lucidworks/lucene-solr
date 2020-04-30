@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.charfilter;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.charfilter;
-
 
 import org.apache.lucene.analysis.util.CharFilterFactory;
 
@@ -33,15 +33,8 @@ import java.util.regex.Pattern;
  *     &lt;tokenizer class="solr.WhitespaceTokenizerFactory"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
 public class HTMLStripCharFilterFactory extends CharFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "htmlStrip";
-
   final Set<String> escapedTags;
   static final Pattern TAG_NAME_PATTERN = Pattern.compile("[^\\s,]+");
   

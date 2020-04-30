@@ -1,24 +1,24 @@
-<!--
-  Licensed to the Apache Software Foundation (ASF) under one
-  or more contributor license agreements.  See the NOTICE file
-  distributed with this work for additional information
-  regarding copyright ownership.  The ASF licenses this file
-  to you under the Apache License, Version 2.0 (the
-  "License"); you may not use this file except in compliance
-  with the License.  You may obtain a copy of the License at
-  
-  http://www.apache.org/licenses/LICENSE-2.0
-  
-  Unless required by applicable law or agreed to in writing,
-  software distributed under the License is distributed on an
-  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-  KIND, either express or implied.  See the License for the
-  specific language governing permissions and limitations
-  under the License.
--->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <!--
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+    
+    http://www.apache.org/licenses/LICENSE-2.0
+    
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+  -->
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>org.apache</groupId>
@@ -32,21 +32,19 @@
   <packaging>pom</packaging>
   <name>Grandparent POM for Apache Lucene Core and Apache Solr</name>
   <description>Grandparent POM for Apache Lucene Core and Apache Solr</description>
-  <url>https://lucene.apache.org</url>
+  <url>http://lucene.apache.org</url>
   <modules>
     <module>lucene</module>
     <module>solr</module>
   </modules>
   <properties>
-    <vc-anonymous-base-url>https://gitbox.apache.org/repos/asf/lucene-solr.git</vc-anonymous-base-url>
-    <vc-dev-base-url>https://gitbox.apache.org/repos/asf/lucene-solr.git</vc-dev-base-url>
-    <vc-browse-base-url>https://gitbox.apache.org/repos/asf?p=lucene-solr.git</vc-browse-base-url>
+    <vc-anonymous-base-url>http://svn.apache.org/repos/asf/lucene/dev/branches/branch_5x</vc-anonymous-base-url>
+    <vc-dev-base-url>https://svn.apache.org/repos/asf/lucene/dev/branches/branch_5x</vc-dev-base-url>
+    <vc-browse-base-url>http://svn.apache.org/viewvc/lucene/dev/branches/branch_5x</vc-browse-base-url>
     <specification.version>@spec.version@</specification.version>
     <maven.build.timestamp.format>yyyy-MM-dd HH:mm:ss</maven.build.timestamp.format>
-    <java.compat.version>8</java.compat.version>
-    <!-- HACK: the enforce plugin does not like new versioning: -->
-    <java.legacy-compat.version>1.${java.compat.version}</java.legacy-compat.version>
-    <jetty.version>9.3.8.v20160314</jetty.version>
+    <java.compat.version>1.7</java.compat.version>
+    <jetty.version>8.1.10.v20130312</jetty.version>
 
     <!-- RandomizedTesting library system properties -->
     <tests.iters>1</tests.iters>
@@ -82,7 +80,7 @@
       <subscribe>general-subscribe@lucene.apache.org</subscribe>
       <unsubscribe>general-unsubscribe@lucene.apache.org</unsubscribe>
       <archive>
-        https://mail-archives.apache.org/mod_mbox/lucene-general/
+        http://mail-archives.apache.org/mod_mbox/lucene-general/
       </archive>
     </mailingList>
     <mailingList>
@@ -90,28 +88,28 @@
       <subscribe>java-user-subscribe@lucene.apache.org</subscribe>
       <unsubscribe>java-user-unsubscribe@lucene.apache.org</unsubscribe>
       <archive>
-        https://mail-archives.apache.org/mod_mbox/lucene-java-user/
+        http://mail-archives.apache.org/mod_mbox/lucene-java-user/
       </archive>
     </mailingList>
     <mailingList>
       <name>Java Developer List</name>
       <subscribe>dev-subscribe@lucene.apache.org</subscribe>
       <unsubscribe>dev-unsubscribe@lucene.apache.org</unsubscribe>
-      <archive>https://mail-archives.apache.org/mod_mbox/lucene-dev/</archive>
+      <archive>http://mail-archives.apache.org/mod_mbox/lucene-dev/</archive>
     </mailingList>
     <mailingList>
       <name>Java Commits List</name>
       <subscribe>commits-subscribe@lucene.apache.org</subscribe>
       <unsubscribe>commits-unsubscribe@lucene.apache.org</unsubscribe>
       <archive>
-        https://mail-archives.apache.org/mod_mbox/lucene-java-commits/
+        http://mail-archives.apache.org/mod_mbox/lucene-java-commits/
       </archive>
     </mailingList>
   </mailingLists>
   <inceptionYear>2000</inceptionYear>
   <scm>
-    <connection>scm:git:${vc-anonymous-base-url}</connection>
-    <developerConnection>scm:git:${vc-dev-base-url}</developerConnection>
+    <connection>scm:svn:${vc-anonymous-base-url}</connection>
+    <developerConnection>scm:svn:${vc-dev-base-url}</developerConnection>
     <url>${vc-browse-base-url}</url>
   </scm>
   <licenses>
@@ -124,7 +122,7 @@
     <repository>
       <id>apache.snapshots</id>
       <name>Apache Snapshot Repository</name>
-      <url>https://repository.apache.org/snapshots</url>
+      <url>http://repository.apache.org/snapshots</url>
       <releases>
         <enabled>false</enabled>
       </releases>
@@ -161,7 +159,7 @@
         <plugin>
           <groupId>de.thetaphi</groupId>
           <artifactId>forbiddenapis</artifactId>
-          <version>2.7</version>
+          <version>2.0</version>
           <configuration>
             <!--
               This is the default setting, we don't support too new Java versions.
@@ -191,10 +189,6 @@
           <configuration>
             <source>${java.compat.version}</source>
             <target>${java.compat.version}</target>
-            <compilerArgs>
-              <!-- -proc:none was added because of LOG4J2-1925, JDK-8186647, https://github.com/apache/zookeeper/pull/317, JDK-8055048 -->
-              <arg>-proc:none</arg>
-            </compilerArgs>
           </configuration>
         </plugin>
         <plugin>
@@ -234,11 +228,6 @@
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-javadoc-plugin</artifactId>
           <version>2.9.1</version>
-          <configuration>
-            <quiet>true</quiet>
-            <additionalparam>-Xdoclint:all</additionalparam>
-            <additionalparam>-Xdoclint:-missing</additionalparam>
-          </configuration>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -259,12 +248,12 @@
             <reportFormat>plain</reportFormat>
             <workingDirectory>${project.build.directory}/test</workingDirectory>
             <redirectTestOutputToFile>true</redirectTestOutputToFile>
-            <argLine>-Xmx512M</argLine>
+            <argLine>-Xmx512M -XX:MaxPermSize=256M</argLine>
             <systemPropertyVariables>
               <tempDir>.</tempDir>
               <java.awt.headless>true</java.awt.headless>
 
-              <!-- See <https://cwiki.apache.org/confluence/display/lucene/RunningTests>
+              <!-- See <http://wiki.apache.org/lucene-java/RunningTests>
                    for a description of the tests.* system properties. -->
 
               <!-- RandomizedTesting library system properties -->
@@ -286,7 +275,6 @@
               <tests.postingsformat>${tests.postingsformat}</tests.postingsformat>
               <tests.timezone>${tests.timezone}</tests.timezone>
               <tests.verbose>${tests.verbose}</tests.verbose>
-              <java.security.egd>file:/dev/./urandom</java.security.egd>
             </systemPropertyVariables>
           </configuration>
         </plugin>
@@ -307,7 +295,7 @@
                 <Specification-Version>${specification.version}</Specification-Version>
                 <Specification-Vendor>The Apache Software Foundation</Specification-Vendor>
                 <!-- impl version can be any string -->
-                <Implementation-Version>${project.version} ${checkoutid} - ${user.name} - ${now.timestamp}</Implementation-Version>
+                <Implementation-Version>${project.version} ${svn.revision} - ${user.name} - ${now.timestamp}</Implementation-Version>
                 <Implementation-Vendor>The Apache Software Foundation</Implementation-Vendor>
                 <Implementation-Vendor-Id>${project.groupId}</Implementation-Vendor-Id>
                 <X-Compile-Source-JDK>${java.compat.version}</X-Compile-Source-JDK>
@@ -376,7 +364,7 @@
           <doUpdate>false</doUpdate>
           <getRevisionOnlyOnce>true</getRevisionOnlyOnce>
           <revisionOnScmFailure>NO-REVISION-AVAILABLE</revisionOnScmFailure>
-          <buildNumberPropertyName>checkoutid</buildNumberPropertyName>
+          <buildNumberPropertyName>svn.revision</buildNumberPropertyName>
           <scmDirectory>${top-level}</scmDirectory>
         </configuration>
       </plugin>
@@ -393,7 +381,7 @@
               <rules>
                 <requireJavaVersion>
                   <message>Java ${java.compat.version}+ is required.</message>
-                  <version>[${java.legacy-compat.version},)</version>
+                  <version>[${java.compat.version},)</version>
                 </requireJavaVersion>
                 <requireMavenVersion>
                   <message>Maven 2.2.1+ is required.</message>
@@ -433,7 +421,7 @@
             <Specification-Version>${specification.version}</Specification-Version>
             <Specification-Vendor>The Apache Software Foundation</Specification-Vendor>
             <!-- impl version can be any string -->
-            <Implementation-Version>${project.version} ${checkoutid} - ${user.name} - ${now.timestamp}</Implementation-Version>
+            <Implementation-Version>${project.version} ${svn.revision} - ${user.name} - ${now.timestamp}</Implementation-Version>
             <Implementation-Vendor>The Apache Software Foundation</Implementation-Vendor>
             <Implementation-Vendor-Id>${project.groupId}</Implementation-Vendor-Id>
             <X-Compile-Source-JDK>${java.compat.version}</X-Compile-Source-JDK>

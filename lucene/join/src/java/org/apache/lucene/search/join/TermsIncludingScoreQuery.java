@@ -1,3 +1,5 @@
+package org.apache.lucene.search.join;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.join;
 
 import java.io.IOException;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.Set;
 
+import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Term;
@@ -30,99 +31,94 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
-import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.BitSetIterator;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefHash;
 import org.apache.lucene.util.FixedBitSet;
-import org.apache.lucene.util.RamUsageEstimator;
 
-class TermsIncludingScoreQuery extends Query implements Accountable {
-  protected static final long BASE_RAM_BYTES = RamUsageEstimator.shallowSizeOfInstance(TermsIncludingScoreQuery.class);
+class TermsIncludingScoreQuery extends Query {
 
-  private final ScoreMode scoreMode;
-  private final String toField;
-  private final boolean multipleValuesPerDocument;
-  private final BytesRefHash terms;
-  private final float[] scores;
-  private final int[] ords;
+  final String field;
+  final boolean multipleValuesPerDocument;
+  final BytesRefHash terms;
+  final float[] scores;
+  final int[] ords;
+  final Query originalQuery;
+  final Query unwrittenOriginalQuery;
 
-  // These fields are used for equals() and hashcode() only
-  private final Query fromQuery;
-  private final String fromField;
-  // id of the context rather than the context itself in order not to hold references to index readers
-  private final Object topReaderContextId;
-
-  private final long ramBytesUsed; // cache
-
-  TermsIncludingScoreQuery(ScoreMode scoreMode, String toField, boolean multipleValuesPerDocument, BytesRefHash terms, float[] scores,
-                           String fromField, Query fromQuery, Object indexReaderContextId) {
-    this.scoreMode = scoreMode;
-    this.toField = toField;
+  TermsIncludingScoreQuery(String field, boolean multipleValuesPerDocument, BytesRefHash terms, float[] scores, Query originalQuery) {
+    this.field = field;
     this.multipleValuesPerDocument = multipleValuesPerDocument;
     this.terms = terms;
     this.scores = scores;
-    this.ords = terms.sort();
+    this.originalQuery = originalQuery;
+    this.ords = terms.sort(BytesRef.getUTF8SortedAsUnicodeComparator());
+    this.unwrittenOriginalQuery = originalQuery;
+  }
 
-    this.fromField = fromField;
-    this.fromQuery = fromQuery;
-    this.topReaderContextId = indexReaderContextId;
-
-    this.ramBytesUsed = BASE_RAM_BYTES +
-        RamUsageEstimator.sizeOfObject(fromField) +
-        RamUsageEstimator.sizeOfObject(fromQuery, RamUsageEstimator.QUERY_DEFAULT_RAM_BYTES_USED) +
-        RamUsageEstimator.sizeOfObject(ords) +
-        RamUsageEstimator.sizeOfObject(scores) +
-        RamUsageEstimator.sizeOfObject(terms) +
-        RamUsageEstimator.sizeOfObject(toField);
+  private TermsIncludingScoreQuery(String field, boolean multipleValuesPerDocument, BytesRefHash terms, float[] scores, int[] ords, Query originalQuery, Query unwrittenOriginalQuery) {
+    this.field = field;
+    this.multipleValuesPerDocument = multipleValuesPerDocument;
+    this.terms = terms;
+    this.scores = scores;
+    this.originalQuery = originalQuery;
+    this.ords = ords;
+    this.unwrittenOriginalQuery = unwrittenOriginalQuery;
   }
 
   @Override
   public String toString(String string) {
-    return String.format(Locale.ROOT, "TermsIncludingScoreQuery{field=%s;fromQuery=%s}", toField, fromQuery);
+    return String.format(Locale.ROOT, "TermsIncludingScoreQuery{field=%s;originalQuery=%s}", field, unwrittenOriginalQuery);
   }
 
   @Override
-  public void visit(QueryVisitor visitor) {
-    if (visitor.acceptField(toField)) {
-      visitor.visitLeaf(this);
+  public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
+    final Query originalQueryRewrite = originalQuery.rewrite(reader);
+    if (originalQueryRewrite != originalQuery) {
+      return new TermsIncludingScoreQuery(field, multipleValuesPerDocument, terms, scores,
+          ords, originalQueryRewrite, originalQuery);
+    } else {
+      return super.rewrite(reader);
     }
   }
 
   @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           equalsTo(getClass().cast(other));
-  }
-  
-  private boolean equalsTo(TermsIncludingScoreQuery other) {
-    return Objects.equals(scoreMode, other.scoreMode) &&
-        Objects.equals(toField, other.toField) &&
-        Objects.equals(fromField, other.fromField) &&
-        Objects.equals(fromQuery, other.fromQuery) &&
-        Objects.equals(topReaderContextId, other.topReaderContextId);
+  public boolean equals(Object obj) {
+    if (this == obj) {
+      return true;
+    } if (!super.equals(obj)) {
+      return false;
+    } if (getClass() != obj.getClass()) {
+      return false;
+    }
+
+    TermsIncludingScoreQuery other = (TermsIncludingScoreQuery) obj;
+    if (!field.equals(other.field)) {
+      return false;
+    }
+    if (!unwrittenOriginalQuery.equals(other.unwrittenOriginalQuery)) {
+      return false;
+    }
+    return true;
   }
 
   @Override
   public int hashCode() {
-    return classHash() + Objects.hash(scoreMode, toField, fromField, fromQuery, topReaderContextId);
+    final int prime = 31;
+    int result = super.hashCode();
+    result += prime * field.hashCode();
+    result += prime * unwrittenOriginalQuery.hashCode();
+    return result;
   }
 
   @Override
-  public long ramBytesUsed() {
-    return ramBytesUsed;
-  }
-
-  @Override
-  public Weight createWeight(IndexSearcher searcher, org.apache.lucene.search.ScoreMode scoreMode, float boost) throws IOException {
-    if (scoreMode.needsScores() == false) {
-      // We don't need scores then quickly change the query:
-      TermsQuery termsQuery = new TermsQuery(toField, terms, fromField, fromQuery, topReaderContextId);
-      return searcher.rewrite(termsQuery).createWeight(searcher, org.apache.lucene.search.ScoreMode.COMPLETE_NO_SCORES, boost);
-    }
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    final Weight originalWeight = originalQuery.createWeight(searcher, needsScores);
     return new Weight(TermsIncludingScoreQuery.this) {
 
       @Override
@@ -130,7 +126,7 @@ class TermsIncludingScoreQuery extends Query implements Accountable {
 
       @Override
       public Explanation explain(LeafReaderContext context, int doc) throws IOException {
-        Terms terms = context.reader().terms(toField);
+        Terms terms = context.reader().terms(field);
         if (terms != null) {
           TermsEnum segmentTermsEnum = terms.iterator();
           BytesRef spare = new BytesRef();
@@ -149,8 +145,18 @@ class TermsIncludingScoreQuery extends Query implements Accountable {
       }
 
       @Override
+      public float getValueForNormalization() throws IOException {
+        return originalWeight.getValueForNormalization();
+      }
+
+      @Override
+      public void normalize(float norm, float boost) {
+        originalWeight.normalize(norm, boost);
+      }
+
+      @Override
       public Scorer scorer(LeafReaderContext context) throws IOException {
-        Terms terms = context.reader().terms(toField);
+        Terms terms = context.reader().terms(field);
         if (terms == null) {
           return null;
         }
@@ -166,19 +172,16 @@ class TermsIncludingScoreQuery extends Query implements Accountable {
         }
       }
 
-      @Override
-      public boolean isCacheable(LeafReaderContext ctx) {
-        return true;
-      }
-
     };
   }
-
+  
   class SVInOrderScorer extends Scorer {
 
     final DocIdSetIterator matchingDocsIterator;
     final float[] scores;
     final long cost;
+
+    int currentDoc = -1;
 
     SVInOrderScorer(Weight weight, TermsEnum termsEnum, int maxDoc, long cost) throws IOException {
       super(weight);
@@ -208,24 +211,33 @@ class TermsIncludingScoreQuery extends Query implements Accountable {
 
     @Override
     public float score() throws IOException {
-      return scores[docID()];
+      return scores[currentDoc];
     }
 
     @Override
-    public float getMaxScore(int upTo) throws IOException {
-      return Float.POSITIVE_INFINITY;
+    public int freq() throws IOException {
+      return 1;
     }
 
     @Override
     public int docID() {
-      return matchingDocsIterator.docID();
+      return currentDoc;
     }
 
     @Override
-    public DocIdSetIterator iterator() {
-      return matchingDocsIterator;
+    public int nextDoc() throws IOException {
+      return currentDoc = matchingDocsIterator.nextDoc();
     }
 
+    @Override
+    public int advance(int target) throws IOException {
+      return currentDoc = matchingDocsIterator.advance(target);
+    }
+
+    @Override
+    public long cost() {
+      return cost;
+    }
   }
 
   // This scorer deals with the fact that a document can have more than one score from multiple related documents.
@@ -259,5 +271,5 @@ class TermsIncludingScoreQuery extends Query implements Accountable {
       }
     }
   }
-  
+
 }

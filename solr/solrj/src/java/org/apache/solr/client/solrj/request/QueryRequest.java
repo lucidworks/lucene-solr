@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.request;
 
 import org.apache.solr.client.solrj.SolrClient;
@@ -21,6 +22,9 @@ import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.ContentStream;
+
+import java.util.Collection;
 
 /**
  * 
@@ -65,6 +69,11 @@ public class QueryRequest extends SolrRequest<QueryResponse> {
   
   //---------------------------------------------------------------------------------
   //---------------------------------------------------------------------------------
+  
+  @Override
+  public Collection<ContentStream> getContentStreams() {
+    return null;
+  }
 
   @Override
   protected QueryResponse createResponse(SolrClient client) {

@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -26,7 +26,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
@@ -44,13 +43,12 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.index.ThreadedIndexingAndSearchingTestCase;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.LineFileDocs;
 import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.NamedThreadFactory;
 import org.apache.lucene.util.TestUtil;
 
-@SuppressCodecs({ "SimpleText", "Direct" })
+@SuppressCodecs({ "SimpleText", "Memory", "Direct" })
 public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
 
   boolean warmCalled;
@@ -91,7 +89,7 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
       // TODO: can we randomize the applyAllDeletes?  But
       // somehow for final searcher we must apply
       // deletes...
-      mgr = new SearcherManager(writer, factory);
+      mgr = new SearcherManager(writer, true, factory);
       isNRT = true;
     } else {
       // SearcherManager needs to see empty commit:
@@ -233,7 +231,7 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
     };
     final SearcherManager searcherManager = random().nextBoolean() 
         ? new SearcherManager(dir, factory) 
-      : new SearcherManager(writer, random().nextBoolean(), false, factory);
+        : new SearcherManager(writer, random().nextBoolean(), factory);
     if (VERBOSE) {
       System.out.println("sm created");
     }
@@ -282,9 +280,12 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
     searcherManager.close();
     awaitClose.countDown();
     thread.join();
-    expectThrows(AlreadyClosedException.class, () -> {
+    try {
       searcherManager.acquire();
-    });
+      fail("already closed");
+    } catch (AlreadyClosedException ex) {
+      // expected
+    }
     assertFalse(success.get());
     assertTrue(triedReopen.get());
     assertNull("" + exc[0], exc[0]);
@@ -310,7 +311,7 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
     Directory dir = newDirectory();
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(
         new MockAnalyzer(random())).setMergeScheduler(new ConcurrentMergeScheduler()));
-    SearcherManager sm = new SearcherManager(writer, false, false, new SearcherFactory());
+    SearcherManager sm = new SearcherManager(writer, false, new SearcherFactory());
     writer.addDocument(new Document());
     writer.commit();
     sm.maybeRefreshBlocking();
@@ -324,9 +325,12 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
     acquire = sm.acquire();
     acquire.getIndexReader().decRef();
     sm.release(acquire);
-    expectThrows(IllegalStateException.class, () -> {
+    try {
       sm.acquire();
-    });
+      fail("acquire should have thrown an IllegalStateException since we modified the refCount outside of the manager");
+    } catch (IllegalStateException ex) {
+      //
+    }
 
     // sm.close(); -- already closed
     writer.close();
@@ -344,16 +348,19 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
     // this should succeed;
     sm.release(s);
     
-    // this should fail
-    expectThrows(AlreadyClosedException.class, () -> {
+    try {
+      // this should fail
       sm.acquire();
-    });
+    } catch (AlreadyClosedException e) {
+      // ok
+    }
     
-    // this should fail
-    expectThrows(AlreadyClosedException.class, () -> {
+    try {
+      // this should fail
       sm.maybeRefresh();
-    });
-
+    } catch (AlreadyClosedException e) {
+      // ok
+    }
     dir.close();
   }
 
@@ -361,7 +368,7 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
     Directory dir = newDirectory();
     IndexWriter iw = new IndexWriter(dir, new IndexWriterConfig(null));
     final AtomicBoolean afterRefreshCalled = new AtomicBoolean(false);
-    SearcherManager sm = new SearcherManager(iw, false, false, new SearcherFactory());
+    SearcherManager sm = new SearcherManager(iw, false, new SearcherFactory());
     sm.addListener(new ReferenceManager.RefreshListener() {
       @Override
       public void beforeRefresh() {
@@ -398,12 +405,16 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
       }
       };
 
-    expectThrows(IllegalStateException.class, () -> {
+    try {
       new SearcherManager(dir, theEvilOne);
-    });
-    expectThrows(IllegalStateException.class, () -> {
-      new SearcherManager(w.w, random.nextBoolean(), false, theEvilOne);
-    });
+    } catch (IllegalStateException ise) {
+      // expected
+    }
+    try {
+      new SearcherManager(w.w, random.nextBoolean(), theEvilOne);
+    } catch (IllegalStateException ise) {
+      // expected
+    }
     w.close();
     other.close();
     dir.close();
@@ -443,16 +454,6 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
     public MyFilterLeafReader(LeafReader in) {
       super(in);
     }
-
-    @Override
-    public CacheHelper getCoreCacheHelper() {
-      return in.getCoreCacheHelper();
-    }
-
-    @Override
-    public CacheHelper getReaderCacheHelper() {
-      return in.getReaderCacheHelper();
-    }
   }
 
   private static class MyFilterDirectoryReader extends FilterDirectoryReader {
@@ -472,11 +473,6 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
     protected DirectoryReader doWrapDirectoryReader(DirectoryReader in) throws IOException {
       return new MyFilterDirectoryReader(in);
     }
-
-    @Override
-    public CacheHelper getReaderCacheHelper() {
-      return in.getReaderCacheHelper();
-    }
   }
 
   // LUCENE-6087
@@ -487,7 +483,7 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
 
     FilterDirectoryReader reader = new MyFilterDirectoryReader(nrtReader);
     assertEquals(nrtReader, reader.getDelegate());
-    assertEquals(FilterDirectoryReader.unwrap(nrtReader), FilterDirectoryReader.unwrap(reader));
+    assertEquals(nrtReader, FilterDirectoryReader.unwrap(reader));
 
     SearcherManager mgr = new SearcherManager(reader, null);
     for(int i=0;i<10;i++) {
@@ -526,7 +522,7 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
     }
 
     MySearcherFactory factory = new MySearcherFactory();
-    final SearcherManager sm = new SearcherManager(w, random().nextBoolean(), false, factory);
+    final SearcherManager sm = new SearcherManager(w, random().nextBoolean(), factory);
     assertEquals(1, factory.called);
     assertNull(factory.lastPreviousReader);
     assertNotNull(factory.lastReader);
@@ -548,149 +544,6 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
     assertEquals(2, factory.called);
     w.close();
     sm.close();
-    dir.close();
-  }
-
-  public void testConcurrentIndexCloseSearchAndRefresh() throws Exception {
-    final Directory dir = newFSDirectory(createTempDir());
-    AtomicReference<IndexWriter> writerRef = new AtomicReference<>();
-    final MockAnalyzer analyzer = new MockAnalyzer(random());
-    analyzer.setMaxTokenLength(IndexWriter.MAX_TERM_LENGTH);
-    writerRef.set(new IndexWriter(dir, newIndexWriterConfig(analyzer)));
-
-    AtomicReference<SearcherManager> mgrRef = new AtomicReference<>();
-    mgrRef.set(new SearcherManager(writerRef.get(), null));
-    final AtomicBoolean stop = new AtomicBoolean();
-
-    Thread indexThread = new Thread() {
-        @Override
-        public void run() {
-          try {
-            LineFileDocs docs = new LineFileDocs(random());
-            long runTimeSec = TEST_NIGHTLY ? atLeast(10) : atLeast(2);
-            long endTime = System.nanoTime() + runTimeSec * 1000000000;
-            while (System.nanoTime() < endTime) {
-              IndexWriter w = writerRef.get();
-              w.addDocument(docs.nextDoc());
-              if (random().nextInt(1000) == 17) {
-                if (random().nextBoolean()) {
-                  w.close();
-                } else {
-                  w.rollback();
-                }
-                writerRef.set(new IndexWriter(dir, newIndexWriterConfig(analyzer)));
-              }
-            }
-            docs.close();
-            if (VERBOSE) {
-              System.out.println("TEST: index count=" + writerRef.get().getDocStats().maxDoc);
-            }
-          } catch (IOException ioe) {
-            throw new RuntimeException(ioe);
-          } finally {
-            stop.set(true);
-          }
-        }
-      };
-
-    Thread searchThread = new Thread() {
-        @Override
-        public void run() {
-          try {
-            long totCount = 0;
-            while (stop.get() == false) {
-              SearcherManager mgr = mgrRef.get();
-              if (mgr != null) {
-                IndexSearcher searcher;
-                try {
-                  searcher = mgr.acquire();
-                } catch (AlreadyClosedException ace) {
-                  // ok
-                  continue;
-                }
-                totCount += searcher.getIndexReader().maxDoc();
-                mgr.release(searcher);
-              }
-            }
-            if (VERBOSE) {
-              System.out.println("TEST: search totCount=" + totCount);
-            }
-          } catch (IOException ioe) {
-            throw new RuntimeException(ioe);
-          }
-        }
-      };
-
-    Thread refreshThread = new Thread() {
-        @Override
-        public void run() {
-          try {
-            int refreshCount = 0;
-            int aceCount = 0;
-            while (stop.get() == false) {
-              SearcherManager mgr = mgrRef.get();
-              if (mgr != null) {
-                refreshCount++;
-                try {
-                  mgr.maybeRefreshBlocking();
-                } catch (AlreadyClosedException ace) {
-                  // ok
-                  aceCount++;
-                  continue;
-                }
-              }
-            }
-            if (VERBOSE) {
-              System.out.println("TEST: refresh count=" + refreshCount + " aceCount=" + aceCount);
-            }
-          } catch (IOException ioe) {
-            throw new RuntimeException(ioe);
-          }
-        }
-      };
-
-    Thread closeThread = new Thread() {
-        @Override
-        public void run() {
-          try {
-            int closeCount = 0;
-            int aceCount = 0;
-            while (stop.get() == false) {
-              SearcherManager mgr = mgrRef.get();
-              assert mgr != null;
-              mgr.close();
-              closeCount++;
-              while (stop.get() == false) {
-                try {
-                  mgrRef.set(new SearcherManager(writerRef.get(), null));
-                  break;
-                } catch (AlreadyClosedException ace) {
-                  // ok
-                  aceCount++;
-                }
-              }
-            }
-            if (VERBOSE) {
-              System.out.println("TEST: close count=" + closeCount + " aceCount=" + aceCount);
-            }
-          } catch (IOException ioe) {
-            throw new RuntimeException(ioe);
-          }
-        }
-      };
-
-    indexThread.start();
-    searchThread.start();
-    refreshThread.start();
-    closeThread.start();
-
-    indexThread.join();
-    searchThread.join();
-    refreshThread.join();
-    closeThread.join();
-
-    mgrRef.get().close();
-    writerRef.get().close();
     dir.close();
   }
 }

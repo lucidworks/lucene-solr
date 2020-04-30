@@ -1,3 +1,4 @@
+package org.apache.solr.search.function.distance;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +15,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.function.distance;
-import org.locationtech.spatial4j.context.SpatialContext;
-import org.locationtech.spatial4j.distance.DistanceUtils;
-import org.locationtech.spatial4j.distance.GeodesicSphereDistCalc;
-import org.locationtech.spatial4j.io.GeohashUtils;
-import org.locationtech.spatial4j.shape.Point;
+
+
+import com.spatial4j.core.context.SpatialContext;
+import com.spatial4j.core.distance.DistanceUtils;
+import com.spatial4j.core.distance.GeodesicSphereDistCalc;
+import com.spatial4j.core.io.GeohashUtils;
+import com.spatial4j.core.shape.Point;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -65,11 +67,11 @@ public class GeohashHaversineFunction extends ValueSource {
 
     return new DoubleDocValues(this) {
       @Override
-      public double doubleVal(int doc) throws IOException {
+      public double doubleVal(int doc) {
         return distance(doc, gh1DV, gh2DV);
       }
       @Override
-      public String toString(int doc) throws IOException {
+      public String toString(int doc) {
         StringBuilder sb = new StringBuilder();
         sb.append(name()).append('(');
         sb.append(gh1DV.toString(doc)).append(',').append(gh2DV.toString(doc));
@@ -79,7 +81,7 @@ public class GeohashHaversineFunction extends ValueSource {
     };
   }
 
-  protected double distance(int doc, FunctionValues gh1DV, FunctionValues gh2DV) throws IOException {
+  protected double distance(int doc, FunctionValues gh1DV, FunctionValues gh2DV) {
     double result = 0;
     String h1 = gh1DV.strVal(doc);
     String h2 = gh2DV.strVal(doc);

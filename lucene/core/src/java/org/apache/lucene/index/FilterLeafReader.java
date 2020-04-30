@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.Objects;
 
+import org.apache.lucene.search.CachingWrapperQuery;
 import org.apache.lucene.util.AttributeSource;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
@@ -35,23 +37,27 @@ import org.apache.lucene.util.BytesRef;
  * <p><b>NOTE</b>: If you override {@link #getLiveDocs()}, you will likely need
  * to override {@link #numDocs()} as well and vice-versa.
  * <p><b>NOTE</b>: If this {@link FilterLeafReader} does not change the
- * content the contained reader, you could consider delegating calls to
- * {@link #getCoreCacheHelper()} and {@link #getReaderCacheHelper()}.
+ * content the contained reader, you could consider overriding
+ * {@link #getCoreCacheKey()} so that
+ * {@link CachingWrapperQuery} shares the same entries for this atomic reader
+ * and the wrapped one. {@link #getCombinedCoreAndDeletesKey()} could be
+ * overridden as well if the {@link #getLiveDocs() live docs} are not changed
+ * either.
  */
-public abstract class FilterLeafReader extends LeafReader {
+public class FilterLeafReader extends LeafReader {
 
   /** Get the wrapped instance by <code>reader</code> as long as this reader is
    *  an instance of {@link FilterLeafReader}.  */
   public static LeafReader unwrap(LeafReader reader) {
     while (reader instanceof FilterLeafReader) {
-      reader = ((FilterLeafReader) reader).getDelegate();
+      reader = ((FilterLeafReader) reader).in;
     }
     return reader;
   }
 
   /** Base class for filtering {@link Fields}
    *  implementations. */
-  public abstract static class FilterFields extends Fields {
+  public static class FilterFields extends Fields {
     /** The underlying Fields instance. */
     protected final Fields in;
 
@@ -61,7 +67,7 @@ public abstract class FilterLeafReader extends LeafReader {
      */
     public FilterFields(Fields in) {
       if (in == null) {
-        throw new NullPointerException("incoming Fields must not be null");
+        throw new NullPointerException("incoming Fields cannot be null");
       }
       this.in = in;
     }
@@ -87,7 +93,7 @@ public abstract class FilterLeafReader extends LeafReader {
    * these terms are going to be intersected with automata, you could consider
    * overriding {@link #intersect} for better performance.
    */
-  public abstract static class FilterTerms extends Terms {
+  public static class FilterTerms extends Terms {
     /** The underlying Terms instance. */
     protected final Terms in;
 
@@ -97,7 +103,7 @@ public abstract class FilterLeafReader extends LeafReader {
      */
     public FilterTerms(Terms in) {
       if (in == null) {
-        throw new NullPointerException("incoming Terms must not be null");
+        throw new NullPointerException("incoming Terms cannot be null");
       }
       this.in = in;
     }
@@ -154,7 +160,7 @@ public abstract class FilterLeafReader extends LeafReader {
   }
 
   /** Base class for filtering {@link TermsEnum} implementations. */
-  public abstract static class FilterTermsEnum extends TermsEnum {
+  public static class FilterTermsEnum extends TermsEnum {
     /** The underlying TermsEnum instance. */
     protected final TermsEnum in;
 
@@ -164,7 +170,7 @@ public abstract class FilterLeafReader extends LeafReader {
      */
     public FilterTermsEnum(TermsEnum in) {
       if (in == null) {
-        throw new NullPointerException("incoming TermsEnum must not be null");
+        throw new NullPointerException("incoming TermsEnum cannot be null");
       }
       this.in = in;
     }
@@ -177,11 +183,6 @@ public abstract class FilterLeafReader extends LeafReader {
     @Override
     public SeekStatus seekCeil(BytesRef text) throws IOException {
       return in.seekCeil(text);
-    }
-    
-    @Override
-    public boolean seekExact(BytesRef text) throws IOException {
-      return in.seekExact(text);
     }
 
     @Override
@@ -219,24 +220,10 @@ public abstract class FilterLeafReader extends LeafReader {
       return in.postings(reuse, flags);
     }
 
-    @Override
-    public ImpactsEnum impacts(int flags) throws IOException {
-      return in.impacts(flags);
-    }
-
-    @Override
-    public void seekExact(BytesRef term, TermState state) throws IOException {
-      in.seekExact(term, state);
-    }
-
-    @Override
-    public TermState termState() throws IOException {
-      return in.termState();
-    }
   }
 
   /** Base class for filtering {@link PostingsEnum} implementations. */
-  public abstract static class FilterPostingsEnum extends PostingsEnum {
+  public static class FilterPostingsEnum extends PostingsEnum {
     /** The underlying PostingsEnum instance. */
     protected final PostingsEnum in;
 
@@ -246,9 +233,14 @@ public abstract class FilterLeafReader extends LeafReader {
      */
     public FilterPostingsEnum(PostingsEnum in) {
       if (in == null) {
-        throw new NullPointerException("incoming PostingsEnum must not be null");
+        throw new NullPointerException("incoming PostingsEnum cannot be null");
       }
       this.in = in;
+    }
+
+    @Override
+    public AttributeSource attributes() {
+      return in.attributes();
     }
 
     @Override
@@ -308,10 +300,73 @@ public abstract class FilterLeafReader extends LeafReader {
   public FilterLeafReader(LeafReader in) {
     super();
     if (in == null) {
-      throw new NullPointerException("incoming LeafReader must not be null");
+      throw new NullPointerException("incoming LeafReader cannot be null");
     }
     this.in = in;
     in.registerParentReader(this);
+  }
+
+  /**
+   * A CoreClosedListener wrapper that adjusts the core cache key that
+   * the wrapper is called with. This is useful if the core cache key
+   * of a reader is different from the key of the wrapped reader.
+   */
+  private static class CoreClosedListenerWrapper implements CoreClosedListener {
+
+    public static CoreClosedListener wrap(CoreClosedListener listener, Object thisCoreKey, Object inCoreKey) {
+      if (thisCoreKey == inCoreKey) {
+        // this reader has the same core cache key as its parent, nothing to do
+        return listener;
+      } else {
+        // we don't have the same cache key as the wrapped reader, we need to wrap
+        // the listener to call it with the correct cache key
+        return new CoreClosedListenerWrapper(listener, thisCoreKey, inCoreKey);
+      }
+    }
+
+    private final CoreClosedListener in;
+    private final Object thisCoreKey;
+    private final Object inCoreKey;
+
+    private CoreClosedListenerWrapper(CoreClosedListener in, Object thisCoreKey, Object inCoreKey) {
+      this.in = in;
+      this.thisCoreKey = thisCoreKey;
+      this.inCoreKey = inCoreKey;
+    }
+
+    @Override
+    public void onClose(Object ownerCoreCacheKey) throws IOException {
+      assert inCoreKey == ownerCoreCacheKey;
+      in.onClose(thisCoreKey);
+    }
+
+    // NOTE: equals/hashcore are important for removeCoreClosedListener to work
+    // correctly
+
+    @Override
+    public boolean equals(Object obj) {
+      if (obj == null || obj.getClass() != CoreClosedListenerWrapper.class) {
+        return false;
+      }
+      CoreClosedListenerWrapper that = (CoreClosedListenerWrapper) obj;
+      return in.equals(that.in) && thisCoreKey == that.thisCoreKey;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(getClass(), in, thisCoreKey);
+    }
+
+  }
+
+  @Override
+  public void addCoreClosedListener(final CoreClosedListener listener) {
+    in.addCoreClosedListener(CoreClosedListenerWrapper.wrap(listener, getCoreCacheKey(), in.getCoreCacheKey()));
+  }
+
+  @Override
+  public void removeCoreClosedListener(CoreClosedListener listener) {
+    in.removeCoreClosedListener(CoreClosedListenerWrapper.wrap(listener, getCoreCacheKey(), in.getCoreCacheKey()));
   }
 
   @Override
@@ -323,11 +378,6 @@ public abstract class FilterLeafReader extends LeafReader {
   @Override
   public FieldInfos getFieldInfos() {
     return in.getFieldInfos();
-  }
-
-  @Override
-  public PointValues getPointValues(String field) throws IOException {
-    return in.getPointValues(field);
   }
 
   @Override
@@ -359,11 +409,11 @@ public abstract class FilterLeafReader extends LeafReader {
   protected void doClose() throws IOException {
     in.close();
   }
-
+  
   @Override
-  public Terms terms(String field) throws IOException {
+  public Fields fields() throws IOException {
     ensureOpen();
-    return in.terms(field);
+    return in.fields();
   }
 
   @Override
@@ -411,9 +461,9 @@ public abstract class FilterLeafReader extends LeafReader {
   }
 
   @Override
-  public LeafMetaData getMetaData() {
+  public Bits getDocsWithField(String field) throws IOException {
     ensureOpen();
-    return in.getMetaData();
+    return in.getDocsWithField(field);
   }
 
   @Override

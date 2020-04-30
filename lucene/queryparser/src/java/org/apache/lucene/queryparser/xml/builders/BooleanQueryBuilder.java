@@ -1,4 +1,19 @@
 /*
+ * Created on 25-Jan-2006
+ */
+package org.apache.lucene.queryparser.xml.builders;
+
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.BooleanQuery;
+import org.apache.lucene.search.BoostQuery;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.queryparser.xml.DOMUtils;
+import org.apache.lucene.queryparser.xml.ParserException;
+import org.apache.lucene.queryparser.xml.QueryBuilder;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -14,18 +29,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.xml.builders;
-
-import org.apache.lucene.search.BooleanClause;
-import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.BoostQuery;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.queryparser.xml.DOMUtils;
-import org.apache.lucene.queryparser.xml.ParserException;
-import org.apache.lucene.queryparser.xml.QueryBuilder;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
 
 /**
  * Builder for {@link BooleanQuery}
@@ -45,11 +48,11 @@ public class BooleanQueryBuilder implements QueryBuilder {
   @Override
   public Query getQuery(Element e) throws ParserException {
     BooleanQuery.Builder bq = new BooleanQuery.Builder();
+    bq.setDisableCoord(DOMUtils.getAttribute(e, "disableCoord", false));
     bq.setMinimumNumberShouldMatch(DOMUtils.getAttribute(e, "minimumNumberShouldMatch", 0));
 
     NodeList nl = e.getChildNodes();
-    final int nlLen = nl.getLength();
-    for (int i = 0; i < nlLen; i++) {
+    for (int i = 0; i < nl.getLength(); i++) {
       Node node = nl.item(i);
       if (node.getNodeName().equals("Clause")) {
         Element clauseElem = (Element) node;

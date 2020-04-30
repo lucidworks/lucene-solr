@@ -1,10 +1,11 @@
+package org.apache.lucene.analysis.el;
+
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright 2005 The Apache Software Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,19 +15,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.el;
 
 import java.io.IOException;
 import java.io.Reader;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.StopFilter;
-import org.apache.lucene.analysis.StopwordAnalyzerBase;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
+import org.apache.lucene.analysis.core.StopFilter;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.analysis.standard.StandardFilter;
 import org.apache.lucene.analysis.standard.StandardTokenizer;
+import org.apache.lucene.analysis.standard.std40.StandardTokenizer40;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.analysis.util.StopwordAnalyzerBase;
+import org.apache.lucene.util.Version;
 
 /**
  * {@link Analyzer} for the Greek language. 
@@ -38,8 +41,6 @@ import org.apache.lucene.analysis.standard.StandardTokenizer;
  * 
  * <p><b>NOTE</b>: This class uses the same {@link org.apache.lucene.util.Version}
  * dependent settings as {@link StandardAnalyzer}.</p>
- *
- * @since 3.1
  */
 public final class GreekAnalyzer extends StopwordAnalyzerBase {
   /** File containing default Greek stopwords. */
@@ -93,20 +94,21 @@ public final class GreekAnalyzer extends StopwordAnalyzerBase {
    * 
    * @return {@link org.apache.lucene.analysis.Analyzer.TokenStreamComponents}
    *         built from a {@link StandardTokenizer} filtered with
-   *         {@link GreekLowerCaseFilter},
+   *         {@link GreekLowerCaseFilter}, {@link StandardFilter},
    *         {@link StopFilter}, and {@link GreekStemFilter}
    */
   @Override
   protected TokenStreamComponents createComponents(String fieldName) {
-    final Tokenizer source = new StandardTokenizer();
+    final Tokenizer source;
+    if (getVersion().onOrAfter(Version.LUCENE_4_7_0)) {
+      source = new StandardTokenizer();
+    } else {
+      source = new StandardTokenizer40();
+    }
     TokenStream result = new GreekLowerCaseFilter(source);
+    result = new StandardFilter(result);
     result = new StopFilter(result, stopwords);
     result = new GreekStemFilter(result);
     return new TokenStreamComponents(source, result);
-  }
-
-  @Override
-  protected TokenStream normalize(String fieldName, TokenStream in) {
-    return new GreekLowerCaseFilter(in);
   }
 }

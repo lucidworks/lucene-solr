@@ -1,3 +1,5 @@
+package org.apache.solr.update.processor;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update.processor;
 
-import java.io.IOException;
-import java.io.Reader;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
@@ -30,6 +30,7 @@ import com.cybozu.labs.langdetect.Detector;
 import com.cybozu.labs.langdetect.DetectorFactory;
 import com.cybozu.labs.langdetect.LangDetectException;
 import com.cybozu.labs.langdetect.Language;
+import org.apache.solr.common.SolrInputDocument;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,26 +49,33 @@ public class LangDetectLanguageIdentifierUpdateProcessor extends LanguageIdentif
     super(req, rsp, next);
   }
 
-  /**
-   * Detects language(s) from a reader, typically based on some fields in SolrInputDocument
-   * Classes wishing to implement their own language detection module should override this method.
-   *
-   * @param solrDocReader A reader serving the text from the document to detect
-   * @return List of detected language(s) according to RFC-3066
-   */
   @Override
-  protected List<DetectedLanguage> detectLanguage(Reader solrDocReader) {
+  protected List<DetectedLanguage> detectLanguage(SolrInputDocument doc) {
     try {
       Detector detector = DetectorFactory.create();
       detector.setMaxTextLength(maxTotalChars);
 
-      // TODO Work around bug in LangDetect 1.1 which does not expect a -1 return value at end of stream,
-      // but instead only looks at ready()
-      if (solrDocReader instanceof SolrInputDocumentReader) {
-        ((SolrInputDocumentReader)solrDocReader).setEodReturnValue(0);
+      for (String fieldName : inputFields) {
+        log.debug("Appending field " + fieldName);
+        if (doc.containsKey(fieldName)) {
+          Collection<Object> fieldValues = doc.getFieldValues(fieldName);
+          if (fieldValues != null) {
+            for (Object content : fieldValues) {
+              if (content instanceof String) {
+                String stringContent = (String) content;
+                if (stringContent.length() > maxFieldValueChars) {
+                  detector.append(stringContent.substring(0, maxFieldValueChars));
+                } else {
+                  detector.append(stringContent);
+                }
+                detector.append(" ");
+              } else {
+                log.warn("Field " + fieldName + " not a String value, not including in detection");
+              }
+            }
+          }
+        }
       }
-      detector.append(solrDocReader);
-
       ArrayList<Language> langlist = detector.getProbabilities();
       ArrayList<DetectedLanguage> solrLangList = new ArrayList<>();
       for (Language l: langlist) {
@@ -76,9 +84,6 @@ public class LangDetectLanguageIdentifierUpdateProcessor extends LanguageIdentif
       return solrLangList;
     } catch (LangDetectException e) {
       log.debug("Could not determine language, returning empty list: ", e);
-      return Collections.emptyList();
-    } catch (IOException e) {
-      log.warn("Could not determine language.", e);
       return Collections.emptyList();
     }
   }

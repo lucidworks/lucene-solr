@@ -1,3 +1,5 @@
+package org.apache.solr.schema;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -26,45 +27,40 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
 import com.google.common.base.Throwables;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.spatial4j.core.context.SpatialContext;
+import com.spatial4j.core.context.SpatialContextFactory;
+import com.spatial4j.core.distance.DistanceUtils;
+import com.spatial4j.core.shape.Point;
+import com.spatial4j.core.shape.Rectangle;
+import com.spatial4j.core.shape.Shape;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.StoredField;
 import org.apache.lucene.index.IndexableField;
-import org.apache.lucene.queries.function.FunctionScoreQuery;
+import org.apache.lucene.queries.function.FunctionQuery;
 import org.apache.lucene.queries.function.ValueSource;
-import org.apache.lucene.search.BooleanClause.Occur;
+import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.DoubleValuesSource;
-import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.spatial.SpatialStrategy;
 import org.apache.lucene.spatial.query.SpatialArgs;
 import org.apache.lucene.spatial.query.SpatialArgsParser;
 import org.apache.lucene.spatial.query.SpatialOperation;
-import org.apache.lucene.spatial.spatial4j.Geo3dSpatialContextFactory;
+import org.apache.lucene.uninverting.UninvertingReader.Type;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.response.TextResponseWriter;
 import org.apache.solr.search.QParser;
 import org.apache.solr.search.SpatialOptions;
-import org.apache.solr.uninverting.UninvertingReader.Type;
 import org.apache.solr.util.DistanceUnits;
 import org.apache.solr.util.MapListener;
 import org.apache.solr.util.SpatialUtils;
-import org.locationtech.spatial4j.context.SpatialContext;
-import org.locationtech.spatial4j.context.SpatialContextFactory;
-import org.locationtech.spatial4j.distance.DistanceUtils;
-import org.locationtech.spatial4j.io.ShapeReader;
-import org.locationtech.spatial4j.io.ShapeWriter;
-import org.locationtech.spatial4j.io.SupportedFormats;
-import org.locationtech.spatial4j.shape.Point;
-import org.locationtech.spatial4j.shape.Rectangle;
-import org.locationtech.spatial4j.shape.Shape;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,25 +83,21 @@ public abstract class AbstractSpatialFieldType<T extends SpatialStrategy> extend
   public static final String RECIP_DISTANCE = "recipDistance";
   public static final String NONE = "none";
 
-  /** Optional param to pick the string conversion */
-  public static final String FORMAT = "format";
-
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   protected SpatialContext ctx;
   protected SpatialArgsParser argsParser;
 
-  protected ShapeWriter shapeWriter;
-  protected ShapeReader shapeReader;
-
   private final Cache<String, T> fieldStrategyCache = CacheBuilder.newBuilder().build();
 
   protected DistanceUnits distanceUnits;
+  @Deprecated
+  protected String units; // for back compat; hopefully null
 
   protected final Set<String> supportedScoreModes;
 
   protected AbstractSpatialFieldType() {
-    this(Collections.emptySet());
+    this(Collections.<String>emptySet());
   }
 
   protected AbstractSpatialFieldType(Set<String> moreScoreModes) {
@@ -122,58 +114,41 @@ public abstract class AbstractSpatialFieldType<T extends SpatialStrategy> extend
   protected void init(IndexSchema schema, Map<String, String> args) {
     super.init(schema, args);
 
-    if (ctx==null) { // subclass can set this directly
-      final String CTX_PARAM = "spatialContextFactory";
-      final String OLD_SPATIAL4J_PREFIX = "com.spatial4j.core";
-      final String NEW_SPATIAL4J_PREFIX = "org.locationtech.spatial4j";
-      for (Map.Entry<String, String> argEntry : args.entrySet()) {
-        // "JTS" is a convenience alias
-        if (argEntry.getKey().equals(CTX_PARAM) && argEntry.getValue().equals("JTS")) {
-          argEntry.setValue("org.locationtech.spatial4j.context.jts.JtsSpatialContextFactory");
-          continue;
-        }
-        if (argEntry.getKey().equals(CTX_PARAM) && argEntry.getValue().equals("Geo3D")) {
-          argEntry.setValue(Geo3dSpatialContextFactory.class.getName());
-          continue;
-        }
-        // Warn about using old Spatial4j class names
-        if (argEntry.getValue().contains(OLD_SPATIAL4J_PREFIX)) {
-          log.warn("Replace '" + OLD_SPATIAL4J_PREFIX + "' with '" + NEW_SPATIAL4J_PREFIX + "' in your schema.");
-          argEntry.setValue(argEntry.getValue().replace(OLD_SPATIAL4J_PREFIX, NEW_SPATIAL4J_PREFIX));
-        }
-      }
-
+    if(ctx==null) { // subclass can set this directly
       //Solr expects us to remove the parameters we've used.
       MapListener<String, String> argsWrap = new MapListener<>(args);
       ctx = SpatialContextFactory.makeSpatialContext(argsWrap, schema.getResourceLoader().getClassLoader());
       args.keySet().removeAll(argsWrap.getSeenKeys());
     }
+    
+    final String unitsErrMsg = "units parameter is deprecated, please use distanceUnits instead for field types with class " +
+        getClass().getSimpleName();
+    this.units = args.remove("units");//deprecated
+    if (units != null) {
+      if ("degrees".equals(units)) {
+        log.warn(unitsErrMsg);
+      } else {
+        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, unitsErrMsg);
+      }
+    }
 
     final String distanceUnitsStr = args.remove("distanceUnits");
     if (distanceUnitsStr == null) {
-      this.distanceUnits = ctx.isGeo() ? DistanceUnits.KILOMETERS : DistanceUnits.DEGREES;
+      if (units != null) {
+        this.distanceUnits = DistanceUnits.BACKCOMPAT;
+      } else {
+        this.distanceUnits = ctx.isGeo() ? DistanceUnits.KILOMETERS : DistanceUnits.DEGREES;
+      }
     } else {
+      // If both units and distanceUnits was specified
+      if (units != null) {
+        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, unitsErrMsg);
+      }
       this.distanceUnits = parseDistanceUnits(distanceUnitsStr);
       if (this.distanceUnits == null)
         throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
             "Must specify distanceUnits as one of "+ DistanceUnits.getSupportedUnits() +
                 " on field types with class "+getClass().getSimpleName());
-    }
-
-    final SupportedFormats fmts = ctx.getFormats();
-    String format = args.remove(FORMAT);
-    if (format == null) {
-      format = "WKT";
-    }
-    shapeWriter = fmts.getWriter(format);
-    shapeReader = fmts.getReader(format);
-    if(shapeWriter==null) {
-      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
-          "Unknown Shape Format: "+ format);
-    }
-    if(shapeReader==null) {
-      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
-          "Unknown Shape Format: "+ format);
     }
 
     argsParser = newSpatialArgsParser();
@@ -207,7 +182,7 @@ public abstract class AbstractSpatialFieldType<T extends SpatialStrategy> extend
   //--------------------------------------------------------------
 
   @Override
-  public final Field createField(SchemaField field, Object val) {
+  public final Field createField(SchemaField field, Object val, float boost) {
     throw new IllegalStateException("instead call createFields() because isPolyField() is true");
   }
 
@@ -217,7 +192,7 @@ public abstract class AbstractSpatialFieldType<T extends SpatialStrategy> extend
   }
 
   @Override
-  public List<IndexableField> createFields(SchemaField field, Object val) {
+  public List<IndexableField> createFields(SchemaField field, Object val, float boost) {
     String shapeStr = null;
     Shape shape;
     if (val instanceof Shape) {
@@ -232,7 +207,7 @@ public abstract class AbstractSpatialFieldType<T extends SpatialStrategy> extend
     }
 
     List<IndexableField> result = new ArrayList<>();
-    if (field.indexed() || field.hasDocValues()) {
+    if (field.indexed()) {
       T strategy = getStrategy(field.getName());
       result.addAll(Arrays.asList(strategy.createIndexableFields(shape)));
     }
@@ -244,45 +219,43 @@ public abstract class AbstractSpatialFieldType<T extends SpatialStrategy> extend
     return result;
   }
 
-  /** Called by {@link #createFields(SchemaField, Object)} to get the stored value. */
+  /** Called by {@link #createFields(SchemaField, Object, float)} to get the stored value. */
   protected String getStoredValue(Shape shape, String shapeStr) {
     return (shapeStr == null) ? shapeToString(shape) : shapeStr;
   }
 
-  /** Create a {@link Shape} from the input string */
-  public Shape parseShape(String str) {
-    str = str.trim();
+  protected Shape parseShape(String str) {
     if (str.length() == 0)
       throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "empty string shape");
-
-    // If the first char is promising, try to parse with SpatialUtils.parsePoint
-    char firstChar = str.charAt(0);
-    if (firstChar == '+' || firstChar == '-' || (firstChar >= '0' && firstChar <= '9')) {
+    if (Character.isLetter(str.charAt(0))) {//WKT starts with a letter
       try {
-        return SpatialUtils.parsePoint(str, ctx);
-      } catch (Exception e) {//ignore
+        return ctx.readShapeFromWkt(str);
+      } catch (Exception e) {
+        String message = e.getMessage();
+        if (!message.contains(str))
+          message = "Couldn't parse shape '" + str + "' because: " + message;
+        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, message, e);
       }
-    }
-
-    try {
-      return shapeReader.read(str);
-    } catch (Exception e) {
-      String msg = "Unable to parse shape given formats" +
-          " \"lat,lon\", \"x y\" or as " + shapeReader.getFormatName() + " because " + e;
-      if (!msg.contains(str)) {
-        msg += " input: " + str;
-      }
-      throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, msg, e);
+    } else {
+      return SpatialUtils.parsePointSolrException(str, ctx);
     }
   }
 
   /**
-   * Returns a String version of a shape to be used for the stored value.
-   *
-   * The format can be selected using the initParam <code>format={WKT|GeoJSON}</code>
+   * Returns a String version of a shape to be used for the stored value. This method in Solr is only called if for some
+   * reason a Shape object is passed to the field type (perhaps via a custom UpdateRequestProcessor),
+   * *and* the field is marked as stored.  <em>The default implementation throws an exception.</em>
+   * <p>
+   * Spatial4j 0.4 is probably the last release to support SpatialContext.toString(shape) but it's deprecated with no
+   * planned replacement.  Shapes do have a toString() method but they are generally internal/diagnostic and not
+   * standard WKT.
+   * The solution is subclassing and calling ctx.toString(shape) or directly using LegacyShapeReadWriterFormat or
+   * passing in some sort of custom wrapped shape that holds a reference to a String or can generate it.
    */
-  public String shapeToString(Shape shape) {
-    return shapeWriter.toString(shape);
+  protected String shapeToString(Shape shape) {
+//    return ctx.toString(shape);
+    throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
+        "Getting a String from a Shape is no longer possible. See javadocs for commentary.");
   }
 
   /** Called from {@link #getStrategy(String)} upon first use by fieldName. } */
@@ -363,20 +336,20 @@ public abstract class AbstractSpatialFieldType<T extends SpatialStrategy> extend
     String scoreParam = (localParams == null ? null : localParams.get(SCORE_PARAM));
 
     //We get the valueSource for the score then the filter and combine them.
-    DoubleValuesSource valueSource = getValueSourceFromSpatialArgs(parser, field, spatialArgs, scoreParam, strategy);
+    ValueSource valueSource = getValueSourceFromSpatialArgs(parser, field, spatialArgs, scoreParam, strategy);
     if (valueSource == null) {
       return strategy.makeQuery(spatialArgs); //assumed constant scoring
     }
 
-    FunctionScoreQuery functionQuery = new FunctionScoreQuery(new MatchAllDocsQuery(), valueSource);
+    FunctionQuery functionQuery = new FunctionQuery(valueSource);
 
     if (localParams != null && !localParams.getBool(FILTER_PARAM, true))
       return functionQuery;
 
     Query filterQuery = strategy.makeQuery(spatialArgs);
     return new BooleanQuery.Builder()
-        .add(functionQuery, Occur.MUST)//matches everything and provides score
-        .add(filterQuery, Occur.FILTER)//filters (score isn't used)
+        .add(functionQuery, BooleanClause.Occur.MUST)//matches everything and provides score
+        .add(filterQuery, BooleanClause.Occur.FILTER)//filters (score isn't used)
         .build();
   }
 
@@ -390,7 +363,7 @@ public abstract class AbstractSpatialFieldType<T extends SpatialStrategy> extend
     return supportedScoreModes;
   }
 
-  protected DoubleValuesSource getValueSourceFromSpatialArgs(QParser parser, SchemaField field, SpatialArgs spatialArgs, String score, T strategy) {
+  protected ValueSource getValueSourceFromSpatialArgs(QParser parser, SchemaField field, SpatialArgs spatialArgs, String score, T strategy) {
     if (score == null) {
       return null;
     }
@@ -411,10 +384,10 @@ public abstract class AbstractSpatialFieldType<T extends SpatialStrategy> extend
         if (du != null) {
           multiplier = du.multiplierFromDegreesToThisUnit();
         } else {
-          throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
-                                  "'score' local-param must be one of " + supportedScoreModes + ", it was: " + score);
-        }
+        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
+              "'score' local-param must be one of " + supportedScoreModes + ", it was: " + score);
     }
+  }
 
     return strategy.makeDistanceValueSource(spatialArgs.getShape().getCenter(), multiplier);
   }
@@ -427,17 +400,15 @@ public abstract class AbstractSpatialFieldType<T extends SpatialStrategy> extend
    */
   public T getStrategy(final String fieldName) {
     try {
-      return fieldStrategyCache.get(fieldName, () -> newSpatialStrategy(fieldName));
+      return fieldStrategyCache.get(fieldName, new Callable<T>() {
+        @Override
+        public T call() throws Exception {
+          return newSpatialStrategy(fieldName);
+        }
+      });
     } catch (ExecutionException e) {
       throw Throwables.propagate(e.getCause());
     }
-  }
-
-  /**
-   * @return The Spatial Context for this field type
-   */
-  public SpatialContext getSpatialContext() {
-    return ctx;
   }
 
   @Override

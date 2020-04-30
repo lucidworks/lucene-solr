@@ -1,3 +1,5 @@
+package org.apache.solr.search.stats;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.stats;
 
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.TermStatistics;
@@ -33,7 +34,7 @@ public class TermStats {
     this.term = term;
     t = makeTerm(term);
   }
-
+  
   private Term makeTerm(String s) {
     int idx = s.indexOf(':');
     if (idx == -1) {
@@ -55,19 +56,27 @@ public class TermStats {
     this.totalTermFreq = stats.totalTermFreq();
   }
   
+  /*
+   * If any of the stats is -1 then reset total stats to -1.
+   */
   public void add(TermStats stats) {
-    this.docFreq += stats.docFreq;
-    this.totalTermFreq += stats.totalTermFreq;
+    if (this.docFreq < 0 || stats.docFreq < 0) {
+      this.docFreq = -1;
+    } else {
+      this.docFreq += stats.docFreq;
+    }
+    if (this.totalTermFreq < 0 || stats.totalTermFreq < 0) {
+      this.totalTermFreq = -1;
+    } else {
+      this.totalTermFreq += stats.totalTermFreq;
+    }
   }
   
   public TermStatistics toTermStatistics() {
-    if (docFreq == 0) {
-      return null;
-    }
     return new TermStatistics(t.bytes(), docFreq, totalTermFreq);
   }
   
   public String toString() {
-    return StatsUtil.termStatsToString(this, false);
+    return StatsUtil.termStatsToString(this, true);
   }
 }

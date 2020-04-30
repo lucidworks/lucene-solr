@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.core;
-
 
 import java.io.Reader;
 import java.io.StringReader;
@@ -35,9 +35,7 @@ import org.apache.lucene.analysis.MockCharFilter;
 import org.apache.lucene.analysis.MockFixedLengthPayloadFilter;
 import org.apache.lucene.analysis.MockGraphTokenFilter;
 import org.apache.lucene.analysis.MockHoleInjectingTokenFilter;
-import org.apache.lucene.analysis.MockLowerCaseFilter;
 import org.apache.lucene.analysis.MockRandomLookaheadTokenFilter;
-import org.apache.lucene.analysis.MockSynonymFilter;
 import org.apache.lucene.analysis.MockTokenFilter;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.MockVariableLengthPayloadFilter;
@@ -76,9 +74,7 @@ public class TestAllAnalyzersHaveFactories extends LuceneTestCase {
       MockFixedLengthPayloadFilter.class,
       MockGraphTokenFilter.class,
       MockHoleInjectingTokenFilter.class,
-      MockLowerCaseFilter.class,
       MockRandomLookaheadTokenFilter.class,
-      MockSynonymFilter.class,
       MockTokenFilter.class,
       MockVariableLengthPayloadFilter.class,
       ValidatingTokenFilter.class,
@@ -106,9 +102,7 @@ public class TestAllAnalyzersHaveFactories extends LuceneTestCase {
       SnowballFilter.class, // this is called SnowballPorterFilterFactory
       PatternKeywordMarkerFilter.class,
       SetKeywordMarkerFilter.class,
-      UnicodeWhitespaceTokenizer.class, // a supported option via WhitespaceTokenizerFactory
-      org.apache.lucene.analysis.StopFilter.class, // class from core, but StopFilterFactory creates one from this module
-      org.apache.lucene.analysis.LowerCaseFilter.class // class from core, but LowerCaseFilterFactory creates one from this module
+      UnicodeWhitespaceTokenizer.class // a supported option via WhitespaceTokenizerFactory
     );
   }
 
@@ -156,6 +150,10 @@ public class TestAllAnalyzersHaveFactories extends LuceneTestCase {
           }
           assertSame(c, instance.create().getClass());
         } catch (IllegalArgumentException e) {
+          if (e.getCause() instanceof NoSuchMethodException) {
+            // there is no corresponding ctor available
+            throw e;
+          }
           // TODO: For now pass because some factories have not yet a default config that always works
         }
       } else if (TokenFilter.class.isAssignableFrom(c)) {
@@ -176,6 +174,10 @@ public class TestAllAnalyzersHaveFactories extends LuceneTestCase {
             assertSame(c, createdClazz);
           }
         } catch (IllegalArgumentException e) {
+          if (e.getCause() instanceof NoSuchMethodException) {
+            // there is no corresponding ctor available
+            throw e;
+          }
           // TODO: For now pass because some factories have not yet a default config that always works
         }
       } else if (CharFilter.class.isAssignableFrom(c)) {
@@ -196,6 +198,10 @@ public class TestAllAnalyzersHaveFactories extends LuceneTestCase {
             assertSame(c, createdClazz);
           }
         } catch (IllegalArgumentException e) {
+          if (e.getCause() instanceof NoSuchMethodException) {
+            // there is no corresponding ctor available
+            throw e;
+          }
           // TODO: For now pass because some factories have not yet a default config that always works
         }
       }

@@ -14,18 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.request;
 
-import java.io.IOException;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CompletionService;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.Future;
-import java.util.function.Predicate;
+package org.apache.solr.request;
 
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.LeafReaderContext;
@@ -33,6 +23,7 @@ import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.DocIdSet;
 import org.apache.lucene.search.DocIdSetIterator;
+import org.apache.lucene.search.Filter;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.CharsRefBuilder;
@@ -43,13 +34,20 @@ import org.apache.solr.common.params.FacetParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.search.DocSet;
-import org.apache.solr.search.Filter;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.apache.solr.util.BoundedTreeSet;
 
-/**
- * A class which performs per-segment field faceting for single-valued string fields.
- */
+import java.io.IOException;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.Future;
+
+
 class PerSegmentSingleValuedFaceting {
 
   // input params
@@ -62,18 +60,14 @@ class PerSegmentSingleValuedFaceting {
   boolean missing;
   String sort;
   String prefix;
-
-  private final Predicate<BytesRef> termFilter;
+  String contains;
+  boolean ignoreCase;
 
   Filter baseSet;
 
   int nThreads;
 
   public PerSegmentSingleValuedFaceting(SolrIndexSearcher searcher, DocSet docs, String fieldName, int offset, int limit, int mincount, boolean missing, String sort, String prefix, String contains, boolean ignoreCase) {
-    this(searcher, docs, fieldName, offset, limit, mincount, missing, sort, prefix, new SubstringBytesRefFilter(contains, ignoreCase));
-  }
-
-  public PerSegmentSingleValuedFaceting(SolrIndexSearcher searcher, DocSet docs, String fieldName, int offset, int limit, int mincount, boolean missing, String sort, String prefix, Predicate<BytesRef> filter) {
     this.searcher = searcher;
     this.docs = docs;
     this.fieldName = fieldName;
@@ -83,7 +77,8 @@ class PerSegmentSingleValuedFaceting {
     this.missing = missing;
     this.sort = sort;
     this.prefix = prefix;
-    this.termFilter = filter;
+    this.contains = contains;
+    this.ignoreCase = ignoreCase;
   }
 
   public void setNumThreads(int threads) {
@@ -109,9 +104,12 @@ class PerSegmentSingleValuedFaceting {
     for (final LeafReaderContext leave : leaves) {
       final SegFacet segFacet = new SegFacet(leave);
 
-      Callable<SegFacet> task = () -> {
-        segFacet.countTerms();
-        return segFacet;
+      Callable<SegFacet> task = new Callable<SegFacet>() {
+        @Override
+        public SegFacet call() throws Exception {
+          segFacet.countTerms();
+          return segFacet;
+        }
       };
 
       // TODO: if limiting threads, submit by largest segment first?
@@ -165,18 +163,13 @@ class PerSegmentSingleValuedFaceting {
         } else {
           seg.pos = seg.startTermIndex;
         }
-        if (seg.pos < seg.endTermIndex && (mincount < 1 || seg.hasAnyCount)) {  
+        if (seg.pos < seg.endTermIndex) {
           seg.tenum = seg.si.termsEnum();
           seg.tenum.seekExact(seg.pos);
           seg.tempBR = seg.tenum.term();
           queue.add(seg);
         }
       }
-    }
-
-    if (limit == 0) {
-      NamedList<Integer> res = new NamedList<>();
-      return finalize(res, missingCount, hasMissingCount);
     }
 
     FacetCollector collector;
@@ -191,7 +184,8 @@ class PerSegmentSingleValuedFaceting {
     while (queue.size() > 0) {
       SegFacet seg = queue.top();
       
-      boolean collect = termFilter == null || termFilter.test(seg.tempBR);
+      // if facet.contains specified, only actually collect the count if substring contained
+      boolean collect = contains == null || SimpleFacets.contains(seg.tempBR.utf8ToString(), contains, ignoreCase);
       
       // we will normally end up advancing the term enum for this segment
       // while still using "val", so we need to make a copy since the BytesRef
@@ -207,22 +201,14 @@ class PerSegmentSingleValuedFaceting {
           count += seg.counts[seg.pos - seg.startTermIndex];
         }
 
+        // TODO: OPTIMIZATION...
         // if mincount>0 then seg.pos++ can skip ahead to the next non-zero entry.
-        do{
-          ++seg.pos;
-        }
-        while(  
-            (seg.pos < seg.endTermIndex)  //stop incrementing before we run off the end
-         && (seg.tenum.next() != null || true) //move term enum forward with position -- dont care about value 
-         && (mincount > 0) //only skip ahead if mincount > 0
-         && (seg.counts[seg.pos - seg.startTermIndex] == 0) //check zero count
-        );
-        
+        seg.pos++;
         if (seg.pos >= seg.endTermIndex) {
           queue.pop();
           seg = queue.top();
         } else {
-          seg.tempBR = seg.tenum.term();
+          seg.tempBR = seg.tenum.next();
           seg = queue.updateTop();
         }
       } while (seg != null && val.get().compareTo(seg.tempBR) == 0);
@@ -242,11 +228,6 @@ class PerSegmentSingleValuedFaceting {
       res.setName(i, ft.indexedToReadable(res.getName(i)));
     }
 
-    return finalize(res, missingCount, hasMissingCount);
-  }
-
-  private NamedList<Integer> finalize(NamedList<Integer> res, int missingCount, boolean hasMissingCount)
-      throws IOException {
     if (missing) {
       if (!hasMissingCount) {
         missingCount = SimpleFacets.getFieldMissingCount(searcher,docs,fieldName);
@@ -267,10 +248,6 @@ class PerSegmentSingleValuedFaceting {
     int startTermIndex;
     int endTermIndex;
     int[] counts;
-    
-    //whether this segment has any non-zero term counts
-    //used to ignore insignificant segments when mincount>0
-    boolean hasAnyCount = false; 
 
     int pos; // only used when merging
     TermsEnum tenum; // only used when merging
@@ -308,30 +285,15 @@ class PerSegmentSingleValuedFaceting {
         // specialized version when collecting counts for all terms
         int doc;
         while ((doc = iter.nextDoc()) < DocIdSetIterator.NO_MORE_DOCS) {
-          int t;
-          if (si.advanceExact(doc)) {
-            t = 1+si.ordValue();
-          } else {
-            t = 0;
-          }
-          hasAnyCount = hasAnyCount || t > 0; //counts[0] == missing counts
-          counts[t]++;
+          counts[1+si.getOrd(doc)]++;
         }
       } else {
         // version that adjusts term numbers because we aren't collecting the full range
         int doc;
         while ((doc = iter.nextDoc()) < DocIdSetIterator.NO_MORE_DOCS) {
-          int term;
-          if (si.advanceExact(doc)) {
-            term = si.ordValue();
-          } else {
-            term = -1;
-          }
+          int term = si.getOrd(doc);
           int arrIdx = term-startTermIndex;
-          if (arrIdx>=0 && arrIdx<nTerms){
-            counts[arrIdx]++;
-            hasAnyCount = true;
-          }
+          if (arrIdx>=0 && arrIdx<nTerms) counts[arrIdx]++;
         }
       }
     }

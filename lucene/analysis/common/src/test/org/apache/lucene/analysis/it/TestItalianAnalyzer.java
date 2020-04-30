@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.it;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.it;
-
 
 import java.io.IOException;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
-import org.apache.lucene.analysis.CharArraySet;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.util.Version;
 
 public class TestItalianAnalyzer extends BaseTokenStreamTestCase {
   /** This test fails with NPE when the 
@@ -64,5 +65,12 @@ public class TestItalianAnalyzer extends BaseTokenStreamTestCase {
     assertAnalyzesTo(a, "dell'Italia", new String[] { "ital" });
     assertAnalyzesTo(a, "l'Italiano", new String[] { "italian" });
     a.close();
+  }
+
+  public void testBackcompat40() throws IOException {
+    ItalianAnalyzer a = new ItalianAnalyzer();
+    a.setVersion(Version.LUCENE_4_6_1);
+    // this is just a test to see the correct unicode version is being used, not actually testing hebrew
+    assertAnalyzesTo(a, "א\"א", new String[] {"א", "א"});
   }
 }

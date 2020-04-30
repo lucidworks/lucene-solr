@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj;
 
 import org.apache.solr.SolrTestCaseJ4;
@@ -25,6 +26,8 @@ import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.params.CoreAdminParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.core.CoreContainer;
+import org.apache.solr.core.SolrCore;
+import org.junit.BeforeClass;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +42,7 @@ import java.util.Arrays;
  * @since solr 1.4
  *
  */
-public abstract class MergeIndexesExampleTestBase extends SolrTestCaseJ4 {
+public abstract class MergeIndexesExampleTestBase extends SolrExampleTestBase {
 
   protected CoreContainer cores;
   private String saveProp;
@@ -48,8 +51,14 @@ public abstract class MergeIndexesExampleTestBase extends SolrTestCaseJ4 {
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  static String getSolrHome() {
+  @Override
+  public String getSolrHome() {
     return SolrTestCaseJ4.getFile("solrj/solr/multicore").getAbsolutePath();
+  }
+
+  @BeforeClass
+  public static void beforeClass2() throws Exception {
+
   }
 
   protected void setupCoreContainer() {
@@ -72,7 +81,7 @@ public abstract class MergeIndexesExampleTestBase extends SolrTestCaseJ4 {
     System.setProperty( "solr.core1.data.dir", this.dataDir2.getCanonicalPath() );
 
     setupCoreContainer();
-    log.info("CORES=" + cores + " : " + cores.getLoadedCoreNames());
+    log.info("CORES=" + cores + " : " + cores.getCoreNames());
 
   }
 
@@ -84,6 +93,16 @@ public abstract class MergeIndexesExampleTestBase extends SolrTestCaseJ4 {
     
     if (saveProp == null) System.clearProperty("solr.directoryFactory");
     else System.setProperty("solr.directoryFactory", saveProp);
+  }
+
+  @Override
+  protected final SolrClient getSolrClient() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  protected final SolrClient createNewSolrClient() {
+    throw new UnsupportedOperationException();
   }
 
   protected abstract SolrClient getSolrCore0();

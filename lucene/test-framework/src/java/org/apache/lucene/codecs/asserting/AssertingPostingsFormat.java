@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.asserting;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.asserting;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -22,7 +23,6 @@ import java.util.Iterator;
 
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.FieldsProducer;
-import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.index.AssertingLeafReader;
 import org.apache.lucene.index.FieldInfo;
@@ -114,7 +114,7 @@ public final class AssertingPostingsFormat extends PostingsFormat {
     }
     
     @Override
-    public FieldsProducer getMergeInstance() {
+    public FieldsProducer getMergeInstance() throws IOException {
       return new AssertingFieldsProducer(in.getMergeInstance());
     }
 
@@ -134,8 +134,8 @@ public final class AssertingPostingsFormat extends PostingsFormat {
     }
     
     @Override
-    public void write(Fields fields, NormsProducer norms) throws IOException {
-      in.write(fields, norms);
+    public void write(Fields fields) throws IOException {
+      in.write(fields);
 
       // TODO: more asserts?  can we somehow run a
       // "limited" CheckIndex here???  Or ... can we improve

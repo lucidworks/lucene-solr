@@ -23,15 +23,15 @@ doc.body.tokenized=true
 docs.dir=reuters-out
 
 -AnalyzerFactory(name:original-porter-stemmer,StandardTokenizer,
-  EnglishPossessiveFilter,LowerCaseFilter,StopFilter,
+  StandardFilter,EnglishPossessiveFilter,LowerCaseFilter,StopFilter,
   PorterStemFilter)
 
 -AnalyzerFactory(name:porter2-stemmer,StandardTokenizer,
-  EnglishPossessiveFilter,LowerCaseFilter,StopFilter,
+  StandardFilter,EnglishPossessiveFilter,LowerCaseFilter,StopFilter,
   SnowballPorterFilter(language:English))
 
 -AnalyzerFactory(name:no-stemmer,StandardTokenizer,
-  EnglishPossessiveFilter,LowerCaseFilter,StopFilter)
+  StandardFilter,EnglishPossessiveFilter,LowerCaseFilter,StopFilter)
 
 { "Rounds"
     -NewAnalyzer(original-porter-stemmer)

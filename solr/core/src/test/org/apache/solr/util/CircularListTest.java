@@ -14,35 +14,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.util;
 
 import java.io.IOException;
 
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.logging.CircularList;
 import org.junit.Test;
 
 /** 
  * Test circular list
  */
-public class CircularListTest  extends SolrTestCase {
+public class CircularListTest  extends LuceneTestCase {  
 
   @Test
   public void testCircularList() throws IOException {
     CircularList<Integer> list = new CircularList<>(10);
     for(int i=0;i<10; i++) {
-      list.add(i);
+      list.add(new Integer(i));
     }
-    assertEquals("within list", Integer.valueOf(0), list.get(0));
+    assertEquals("within list", new Integer(0), list.get(0));
     for(int i=10;i<20; i++) {
-      list.add(i);
-      assertEquals("within list", Integer.valueOf(i - 9), list.get(0));
+      list.add(new Integer(i));
+      assertEquals("within list", new Integer(i-9), list.get(0));
     }
     
     // now try the resize
     list.resize(5);
-    assertEquals(Integer.valueOf(15), list.get(0));
+    assertEquals(new Integer(15), list.get(0));
     list.resize(10);
-    assertEquals(Integer.valueOf(15), list.get(0));
+    assertEquals(new Integer(15), list.get(0));
   }
 }

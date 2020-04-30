@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -162,8 +162,8 @@ public class TimeLimitingCollector implements Collector {
   }
 
   @Override
-  public ScoreMode scoreMode() {
-    return collector.scoreMode();
+  public boolean needsScores() {
+    return collector.needsScores();
   }
 
   /**

@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.io.DataInputStream;
 import java.math.BigInteger;
@@ -34,19 +34,21 @@ public abstract class StringHelper {
   /**
    * Compares two {@link BytesRef}, element by element, and returns the
    * number of elements common to both arrays (from the start of each).
-   * This method assumes currentTerm comes after priorTerm.
    *
-   * @param priorTerm The first {@link BytesRef} to compare
-   * @param currentTerm The second {@link BytesRef} to compare
+   * @param left The first {@link BytesRef} to compare
+   * @param right The second {@link BytesRef} to compare
    * @return The number of common elements (from the start of each).
    */
-  public static int bytesDifference(BytesRef priorTerm, BytesRef currentTerm) {
-    int mismatch = FutureArrays.mismatch(priorTerm.bytes, priorTerm.offset, priorTerm.offset + priorTerm.length, 
-                                         currentTerm.bytes, currentTerm.offset, currentTerm.offset + currentTerm.length);
-    if (mismatch < 0) {
-      throw new IllegalArgumentException("terms out of order: priorTerm=" + priorTerm + ",currentTerm=" + currentTerm);
-    }
-    return mismatch;
+  public static int bytesDifference(BytesRef left, BytesRef right) {
+    int len = left.length < right.length ? left.length : right.length;
+    final byte[] bytesLeft = left.bytes;
+    final int offLeft = left.offset;
+    byte[] bytesRight = right.bytes;
+    final int offRight = right.offset;
+    for (int i = 0; i < len; i++)
+      if (bytesLeft[i+offLeft] != bytesRight[i+offRight])
+        return i;
+    return len;
   }
   
   /** 
@@ -55,7 +57,15 @@ public abstract class StringHelper {
    * This method assumes currentTerm comes after priorTerm.
    */
   public static int sortKeyLength(final BytesRef priorTerm, final BytesRef currentTerm) {
-    return bytesDifference(priorTerm, currentTerm) + 1;
+    final int currentTermOffset = currentTerm.offset;
+    final int priorTermOffset = priorTerm.offset;
+    final int limit = Math.min(priorTerm.length, currentTerm.length);
+    for (int i = 0; i < limit; i++) {
+      if (priorTerm.bytes[priorTermOffset+i] != currentTerm.bytes[currentTermOffset+i]) {
+        return i+1;
+      }
+    }
+    return Math.min(1+priorTerm.length, currentTerm.length);
   }
 
   private StringHelper() {
@@ -73,12 +83,17 @@ public abstract class StringHelper {
    *         Otherwise <code>false</code>.
    */
   public static boolean startsWith(byte[] ref, BytesRef prefix) {
-    // not long enough to start with the prefix
     if (ref.length < prefix.length) {
       return false;
     }
-    return FutureArrays.equals(ref, 0, prefix.length,
-                               prefix.bytes, prefix.offset, prefix.offset + prefix.length);
+
+    for(int i=0;i<prefix.length;i++) {
+      if (ref[i] != prefix.bytes[prefix.offset+i]) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -93,12 +108,7 @@ public abstract class StringHelper {
    *         Otherwise <code>false</code>.
    */
   public static boolean startsWith(BytesRef ref, BytesRef prefix) {
-    // not long enough to start with the prefix
-    if (ref.length < prefix.length) {
-      return false;
-    }
-    return FutureArrays.equals(ref.bytes, ref.offset, ref.offset + prefix.length, 
-                               prefix.bytes, prefix.offset, prefix.offset + prefix.length);
+    return sliceEquals(ref, prefix, 0);
   }
 
   /**
@@ -113,13 +123,24 @@ public abstract class StringHelper {
    *         Otherwise <code>false</code>.
    */
   public static boolean endsWith(BytesRef ref, BytesRef suffix) {
-    int startAt = ref.length - suffix.length;
-    // not long enough to start with the suffix
-    if (startAt < 0) {
+    return sliceEquals(ref, suffix, ref.length - suffix.length);
+  }
+
+  private static boolean sliceEquals(BytesRef sliceToTest, BytesRef other, int pos) {
+    if (pos < 0 || sliceToTest.length - pos < other.length) {
       return false;
     }
-    return FutureArrays.equals(ref.bytes, ref.offset + startAt, ref.offset + startAt + suffix.length,
-                               suffix.bytes, suffix.offset, suffix.offset + suffix.length);
+    int i = sliceToTest.offset + pos;
+    int j = other.offset;
+    final int k = other.offset + other.length;
+    
+    while (j < k) {
+      if (sliceToTest.bytes[i++] != other.bytes[j++]) {
+        return false;
+      }
+    }
+    
+    return true;
   }
 
   /** Pass this as the seed to {@link #murmurhash3_x86_32}. */
@@ -307,7 +328,7 @@ public abstract class StringHelper {
     if (bits.length > ID_LENGTH) {
       assert bits.length == ID_LENGTH + 1;
       assert bits[0] == 0;
-      return ArrayUtil.copyOfSubArray(bits, 1, bits.length);
+      return Arrays.copyOfRange(bits, 1, bits.length);
     } else {
       byte[] result = new byte[ID_LENGTH];
       System.arraycopy(bits, 0, result, result.length - bits.length, bits.length);

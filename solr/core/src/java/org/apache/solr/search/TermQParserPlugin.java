@@ -21,6 +21,7 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.schema.FieldType;
 
@@ -43,6 +44,10 @@ public class TermQParserPlugin extends QParserPlugin {
   public static final String NAME = "term";
 
   @Override
+  public void init(NamedList args) {
+  }
+
+  @Override
   public QParser createParser(String qstr, SolrParams localParams, SolrParams params, SolrQueryRequest req) {
     return new QParser(qstr, localParams, params, req) {
       @Override
@@ -50,16 +55,10 @@ public class TermQParserPlugin extends QParserPlugin {
         String fname = localParams.get(QueryParsing.F);
         FieldType ft = req.getSchema().getFieldTypeNoEx(fname);
         String val = localParams.get(QueryParsing.V);
-        BytesRefBuilder term;
+        BytesRefBuilder term = new BytesRefBuilder();
         if (ft != null) {
-          if (ft.isPointField()) {
-            return ft.getFieldQuery(this, req.getSchema().getField(fname), val);
-          } else {
-            term = new BytesRefBuilder();
-            ft.readableToIndexed(val, term);
-          }
+          ft.readableToIndexed(val, term);
         } else {
-          term = new BytesRefBuilder();
           term.copyChars(val);
         }
         return new TermQuery(new Term(fname, term.get()));

@@ -14,21 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
-import java.util.Collection;
+import org.apache.solr.core.SolrCore;
 
 import org.apache.solr.common.SolrInputField;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 
-import static org.apache.solr.update.processor.FieldMutatingUpdateProcessor.mutator;
+import java.util.Collection;
 
 /**
  * Base class for processors that want to mutate selected fields to only 
  * keep a subset of the original values.
  * @see #pickSubset
- * @since 4.0.0
  */
 public abstract class FieldValueSubsetUpdateProcessorFactory extends FieldMutatingUpdateProcessorFactory {
 
@@ -36,13 +36,17 @@ public abstract class FieldValueSubsetUpdateProcessorFactory extends FieldMutati
   public final UpdateRequestProcessor getInstance(SolrQueryRequest req,
                                                   SolrQueryResponse rsp,
                                                   UpdateRequestProcessor next) {
-    return mutator(getSelector(), next, src -> {
-      if (src.getValueCount() <= 1) return src;
+    return new FieldMutatingUpdateProcessor(getSelector(), next) {
+      @Override
+      protected SolrInputField mutate(final SolrInputField src) {
+        if (src.getValueCount() <= 1) return src;
 
-      SolrInputField result = new SolrInputField(src.getName());
-      result.setValue(pickSubset(src.getValues()));
-      return result;
-    });
+        SolrInputField result = new SolrInputField(src.getName());
+        result.setValue(pickSubset(src.getValues()),
+                        src.getBoost());
+        return result;
+      }
+    };
   }
 
   /**

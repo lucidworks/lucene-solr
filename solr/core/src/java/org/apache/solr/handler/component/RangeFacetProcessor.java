@@ -1,3 +1,5 @@
+package org.apache.solr.handler.component;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,6 +56,7 @@ public class RangeFacetProcessor extends SimpleFacets {
    *
    * @see org.apache.solr.common.params.FacetParams#FACET_RANGE
    */
+  @SuppressWarnings("unchecked")
   public NamedList<Object> getFacetRangeCounts() throws IOException, SyntaxError {
     final NamedList<Object> resOuter = new SimpleOrderedMap<>();
 
@@ -91,7 +93,7 @@ public class RangeFacetProcessor extends SimpleFacets {
     final FieldType ft = sf.getType();
 
     if (method.equals(FacetRangeMethod.DV)) {
-      assert ft instanceof TrieField || ft.isPointField();
+      assert ft instanceof TrieField;
       resOuter.add(key, getFacetRangeCountsDocValues(rangeFacetRequest));
     } else {
       resOuter.add(key, getFacetRangeCounts(rangeFacetRequest));
@@ -178,29 +180,32 @@ public class RangeFacetProcessor extends SimpleFacets {
     IntervalFacets.FacetInterval after = null;
 
     for (RangeFacetRequest.FacetRange range : rfr.getFacetRanges()) {
-      if (range.other != null) {
-        switch (range.other) {
-          case BEFORE:
-            assert range.lower == null;
-            intervals.set(0, new IntervalFacets.FacetInterval(sf, "*", range.upper, range.includeLower,
-                range.includeUpper, FacetRangeOther.BEFORE.toString()));
-            break;
-          case AFTER:
-            assert range.upper == null;
-            after = new IntervalFacets.FacetInterval(sf, range.lower, "*",
-                range.includeLower, range.includeUpper, FacetRangeOther.AFTER.toString());
-            break;
-          case BETWEEN:
-            intervals.set(includeBefore ? 1 : 0, new IntervalFacets.FacetInterval(sf, range.lower, range.upper,
-                range.includeLower, range.includeUpper, FacetRangeOther.BETWEEN.toString()));
-            break;
-          case ALL:
-          case NONE:
-            break;
+      try {
+        FacetRangeOther other = FacetRangeOther.get(range.name);
+        if (other != null) {
+          switch (other) {
+            case BEFORE:
+              assert range.lower == null;
+              intervals.set(0, new IntervalFacets.FacetInterval(sf, "*", range.upper, range.includeLower,
+                  range.includeUpper, FacetRangeOther.BEFORE.toString()));
+              break;
+            case AFTER:
+              assert range.upper == null;
+              after = new IntervalFacets.FacetInterval(sf, range.lower, "*",
+                  range.includeLower, range.includeUpper, FacetRangeOther.AFTER.toString());
+              break;
+            case BETWEEN:
+              intervals.set(includeBefore ? 1 : 0, new IntervalFacets.FacetInterval(sf, range.lower, range.upper,
+                  range.includeLower, range.includeUpper, FacetRangeOther.BETWEEN.toString()));
+              break;
+          }
         }
-      } else {
-        intervals.add(new IntervalFacets.FacetInterval(sf, range.lower, range.upper, range.includeLower, range.includeUpper, range.lower));
+        continue;
+      } catch (SolrException e) {
+        // safe to ignore
       }
+
+      intervals.add(new IntervalFacets.FacetInterval(sf, range.lower, range.upper, range.includeLower, range.includeUpper, range.lower));
     }
 
     if (includeAfter) {

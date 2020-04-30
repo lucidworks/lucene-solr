@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.response;
 
 import java.io.IOException;
@@ -24,8 +25,8 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 
 import org.apache.solr.common.util.ContentStreamBase;
-import org.apache.solr.common.util.FastWriter;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.util.FastWriter;
 
 /**
  * Static utility methods relating to {@link QueryResponseWriter}s
@@ -36,7 +37,7 @@ public final class QueryResponseWriterUtil {
   /**
    * Writes the response writer's result to the given output stream.
    * This method inspects the specified writer to determine if it is a 
-   * {@link BinaryQueryResponseWriter} or not to delegate to the appropriate method.
+   * {@link BinaryQueryResponseWriter} or not to delegate to the approprate method.
    * @see BinaryQueryResponseWriter#write(OutputStream,SolrQueryRequest,SolrQueryResponse)
    * @see BinaryQueryResponseWriter#write(Writer,SolrQueryRequest,SolrQueryResponse)
    */
@@ -48,20 +49,7 @@ public final class QueryResponseWriterUtil {
       BinaryQueryResponseWriter binWriter = (BinaryQueryResponseWriter) responseWriter;
       binWriter.write(outputStream, solrRequest, solrResponse);
     } else {
-      OutputStream out = new OutputStream() {
-        @Override
-        public void write(int b) throws IOException {
-          outputStream.write(b);
-        }
-        @Override
-        public void flush() throws IOException {
-          // We don't flush here, which allows us to flush below
-          // and only flush internal buffers, not the response.
-          // If we flush the response early, we trigger chunked encoding.
-          // See SOLR-8669.
-        }
-      };
-      Writer writer = buildWriter(out, ContentStreamBase.getCharsetFromContentType(contentType));
+      Writer writer = buildWriter(outputStream, ContentStreamBase.getCharsetFromContentType(contentType));
       responseWriter.write(writer, solrRequest, solrResponse);
       writer.flush();
     }

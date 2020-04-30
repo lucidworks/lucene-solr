@@ -1,3 +1,12 @@
+package org.apache.solr.spelling;
+
+import org.apache.lucene.analysis.Token;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.search.spell.SuggestMode;
+import org.apache.solr.common.params.SolrParams;
+
+import java.util.Collection;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +23,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling;
-
-import java.util.Collection;
-
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.search.spell.SuggestMode;
-import org.apache.solr.common.params.SolrParams;
 
 /**
  *

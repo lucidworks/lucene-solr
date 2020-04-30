@@ -19,22 +19,9 @@
 
 <config>
   <luceneMatchVersion>${tests.luceneMatchVersion:LATEST}</luceneMatchVersion>
-  <indexConfig>
-    <mergePolicyFactory class="${solr.tests.mergePolicyFactory:org.apache.solr.util.RandomMergePolicyFactory}" />
-    <useCompoundFile>${useCompoundFile:false}</useCompoundFile>
-    <maxBufferedDocs>${solr.tests.maxBufferedDocs}</maxBufferedDocs>
-    <ramBufferSizeMB>${solr.tests.ramBufferSizeMB}</ramBufferSizeMB>
-    <mergeScheduler class="${solr.tests.mergeScheduler}" />
-    <writeLockTimeout>1000</writeLockTimeout>
-    <commitLockTimeout>10000</commitLockTimeout>
-    <lockType>${solr.tests.lockType:single}</lockType>
-    <query>
-      <useColdSearcher>false</useColdSearcher>
-      <maxWarmingSearchers>1</maxWarmingSearchers>
-    </query>
-  </indexConfig>
-  <requestHandler name="/select"
-     class="solr.SearchHandler"></requestHandler>
+  <xi:include href="solrconfig.snippet.randomindexconfig.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <requestHandler name="standard"
+     class="solr.StandardRequestHandler"></requestHandler>
 
   <!-- Used to specify an alternate directory to hold all index data.
        It defaults to "index" if not present, and should probably
@@ -45,7 +32,6 @@
         solr.StandardDirectoryFactory, the default, is filesystem based.
         solr.RAMDirectoryFactory is memory based and not persistent. -->
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
 
   <searchComponent name="spellcheck" class="org.apache.solr.handler.component.SpellCheckComponent">
     <!-- This is slightly different from the field value so we can test dealing with token offset changes -->
@@ -156,7 +142,7 @@
    -->
   <queryConverter name="queryConverter" class="org.apache.solr.spelling.SpellingQueryConverter"/>
 
-  <requestHandler name="/spellCheckCompRH" class="org.apache.solr.handler.component.SearchHandler">
+  <requestHandler name="spellCheckCompRH" class="org.apache.solr.handler.component.SearchHandler">
     <lst name="defaults">
       <!-- omp = Only More Popular -->
       <str name="spellcheck.onlyMorePopular">false</str>
@@ -169,7 +155,7 @@
       <str>spellcheck</str>
     </arr>
   </requestHandler>
-  <requestHandler name="/spellCheckCompRH1" class="org.apache.solr.handler.component.SearchHandler">
+  <requestHandler name="spellCheckCompRH1" class="org.apache.solr.handler.component.SearchHandler">
       <lst name="defaults">
         <str name="defType">dismax</str>
         <str name="qf">lowerfilt1^1</str>
@@ -178,7 +164,7 @@
         <str>spellcheck</str>
       </arr>
  </requestHandler>
- <requestHandler name="/spellCheckWithWordbreak" class="org.apache.solr.handler.component.SearchHandler">
+ <requestHandler name="spellCheckWithWordbreak" class="org.apache.solr.handler.component.SearchHandler">
     <lst name="defaults">
       <str name="spellcheck.dictionary">default</str>
       <str name="spellcheck.dictionary">wordbreak</str>
@@ -188,10 +174,5 @@
       <str>spellcheck</str>
     </arr>
   </requestHandler>
-  <initParams path="/spellCheckCompRH,/spellCheckCompRH1,/spellCheckWithWordbreak">
-    <lst name="defaults">
-      <str name="df">text</str>
-    </lst>
-  </initParams>
 
 </config>

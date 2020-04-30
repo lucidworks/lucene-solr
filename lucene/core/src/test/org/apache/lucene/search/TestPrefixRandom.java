@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -75,7 +75,7 @@ public class TestPrefixRandom extends LuceneTestCase {
   }
   
   /** a stupid prefix query that just blasts thru the terms */
-  private static class DumbPrefixQuery extends MultiTermQuery {
+  private class DumbPrefixQuery extends MultiTermQuery {
     private final BytesRef prefix;
     
     DumbPrefixQuery(Term term) {
@@ -88,7 +88,7 @@ public class TestPrefixRandom extends LuceneTestCase {
       return new SimplePrefixTermsEnum(terms.iterator(), prefix);
     }
 
-    private static class SimplePrefixTermsEnum extends FilteredTermsEnum {
+    private class SimplePrefixTermsEnum extends FilteredTermsEnum {
       private final BytesRef prefix;
 
       private SimplePrefixTermsEnum(TermsEnum tenum, BytesRef prefix) {
@@ -106,11 +106,6 @@ public class TestPrefixRandom extends LuceneTestCase {
     @Override
     public String toString(String field) {
       return field.toString() + ":" + prefix.toString();
-    }
-
-    @Override
-    public void visit(QueryVisitor visitor) {
-
     }
 
     @Override

@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.simple.SimpleQueryParser;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BoostQuery;
-import org.apache.lucene.search.FuzzyQuery;
 import org.apache.lucene.search.Query;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.SimpleParams;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.parser.QueryParser;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.schema.FieldType;
@@ -89,6 +89,11 @@ public class SimpleQParserPlugin extends QParserPlugin {
     OPERATORS.put(SimpleParams.NEAR_OPERATOR,        SimpleQueryParser.NEAR_OPERATOR);
   }
 
+  /** No initialization is necessary so this method is empty. */
+  @Override
+  public void init(NamedList args) {
+  }
+
   /** Returns a QParser that will create a query by using Lucene's SimpleQueryParser. */
   @Override
   public QParser createParser(String qstr, SolrParams localParams, SolrParams params, SolrQueryRequest req) {
@@ -109,12 +114,12 @@ public class SimpleQParserPlugin extends QParserPlugin {
 
       if (queryFields.isEmpty()) {
         // It qf is not specified setup up the queryFields map to use the defaultField.
-        String defaultField = defaultParams.get(CommonParams.DF);
+        String defaultField = QueryParsing.getDefaultField(req.getSchema(), defaultParams.get(CommonParams.DF));
 
         if (defaultField == null) {
           // A query cannot be run without having a field or set of fields to run against.
-          throw new IllegalStateException("Neither " + SimpleParams.QF + " nor " + CommonParams.DF
-              + " are present.");
+          throw new IllegalStateException("Neither " + SimpleParams.QF + ", " + CommonParams.DF
+              + ", nor the default search field are present.");
         }
 
         queryFields.put(defaultField, 1.0F);
@@ -154,7 +159,7 @@ public class SimpleQParserPlugin extends QParserPlugin {
       parser = new SolrSimpleQueryParser(req.getSchema().getQueryAnalyzer(), queryFields, enabledOps, this, schema);
 
       // Set the default operator to be either 'AND' or 'OR' for the query.
-      QueryParser.Operator defaultOp = QueryParsing.parseOP(defaultParams.get(QueryParsing.OP));
+      QueryParser.Operator defaultOp = QueryParsing.getQueryParserDefaultOperator(req.getSchema(), defaultParams.get(QueryParsing.OP));
 
       if (defaultOp == QueryParser.Operator.AND) {
         parser.setDefaultOperator(BooleanClause.Occur.MUST);
@@ -182,6 +187,7 @@ public class SimpleQParserPlugin extends QParserPlugin {
     @Override
     protected Query newPrefixQuery(String text) {
       BooleanQuery.Builder bq = new BooleanQuery.Builder();
+      bq.setDisableCoord(true);
 
       for (Map.Entry<String, Float> entry : weights.entrySet()) {
         String field = entry.getKey();
@@ -205,35 +211,6 @@ public class SimpleQParserPlugin extends QParserPlugin {
           prefix = new BoostQuery(prefix, boost);
         }
         bq.add(prefix, BooleanClause.Occur.SHOULD);
-      }
-
-      return simplify(bq.build());
-    }
-
-    @Override
-    protected Query newFuzzyQuery(String text, int fuzziness) {
-      BooleanQuery.Builder bq = new BooleanQuery.Builder();
-
-      for (Map.Entry<String, Float> entry : weights.entrySet()) {
-        String field = entry.getKey();
-        FieldType type = schema.getFieldType(field);
-        Query fuzzy;
-
-        if (type instanceof TextField) {
-          // If the field type is a TextField then use the multi term analyzer.
-          Analyzer analyzer = ((TextField)type).getMultiTermAnalyzer();
-          String term = TextField.analyzeMultiTerm(field, text, analyzer).utf8ToString();
-          fuzzy = new FuzzyQuery(new Term(entry.getKey(), term), fuzziness);
-        } else {
-          // If the type is *not* a TextField don't do any analysis.
-          fuzzy = new FuzzyQuery(new Term(entry.getKey(), text), fuzziness);
-        }
-
-        float boost = entry.getValue();
-        if (boost != 1f) {
-          fuzzy = new BoostQuery(fuzzy, boost);
-        }
-        bq.add(fuzzy, BooleanClause.Occur.SHOULD);
       }
 
       return simplify(bq.build());

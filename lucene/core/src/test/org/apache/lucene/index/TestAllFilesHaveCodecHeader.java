@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -23,9 +23,13 @@ import java.util.Map;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.codecs.CodecUtil;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.FieldType;
+import org.apache.lucene.document.NumericDocValuesField;
+import org.apache.lucene.document.TextField;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.util.LineFileDocs;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 
@@ -39,19 +43,32 @@ public class TestAllFilesHaveCodecHeader extends LuceneTestCase {
     IndexWriterConfig conf = newIndexWriterConfig(new MockAnalyzer(random()));
     conf.setCodec(TestUtil.getDefaultCodec());
     RandomIndexWriter riw = new RandomIndexWriter(random(), dir, conf);
-    // Use LineFileDocs so we (hopefully) get most Lucene features
-    // tested, e.g. IntPoint was recently added to it:
-    LineFileDocs docs = new LineFileDocs(random());
+    Document doc = new Document();
+    Field idField = newStringField("id", "", Field.Store.YES);
+    Field bodyField = newTextField("body", "", Field.Store.YES);
+    FieldType vectorsType = new FieldType(TextField.TYPE_STORED);
+    vectorsType.setStoreTermVectors(true);
+    vectorsType.setStoreTermVectorPositions(true);
+    Field vectorsField = new Field("vectors", "", vectorsType);
+    Field dvField = new NumericDocValuesField("dv", 5);
+    doc.add(idField);
+    doc.add(bodyField);
+    doc.add(vectorsField);
+    doc.add(dvField);
     for (int i = 0; i < 100; i++) {
-      riw.addDocument(docs.nextDoc());
+      idField.setStringValue(Integer.toString(i));
+      bodyField.setStringValue(TestUtil.randomUnicodeString(random()));
+      dvField.setLongValue(random().nextInt(5));
+      vectorsField.setStringValue(TestUtil.randomUnicodeString(random()));
+      riw.addDocument(doc);
       if (random().nextInt(7) == 0) {
         riw.commit();
       }
       if (random().nextInt(20) == 0) {
-        riw.deleteDocuments(new Term("docid", Integer.toString(i)));
+        riw.deleteDocuments(new Term("id", Integer.toString(i)));
       }
       if (random().nextInt(15) == 0) {
-        riw.updateNumericDocValue(new Term("docid", Integer.toString(i)), "docid_intDV", Long.valueOf(i));
+        riw.updateNumericDocValue(new Term("id"), "dv", Long.valueOf(i));
       }
     }
     riw.close();

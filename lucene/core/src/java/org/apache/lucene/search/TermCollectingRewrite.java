@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -23,7 +23,7 @@ import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.util.AttributeSource;
@@ -43,7 +43,7 @@ abstract class TermCollectingRewrite<B> extends MultiTermQuery.RewriteMethod {
     addClause(topLevel, term, docCount, boost, null);
   }
   
-  protected abstract void addClause(B topLevel, Term term, int docCount, float boost, TermStates states) throws IOException;
+  protected abstract void addClause(B topLevel, Term term, int docCount, float boost, TermContext states) throws IOException;
 
   
   final void collectTerms(IndexReader reader, MultiTermQuery query, TermCollector collector) throws IOException {

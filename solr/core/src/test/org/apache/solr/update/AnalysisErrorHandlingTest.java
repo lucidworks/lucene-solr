@@ -1,3 +1,5 @@
+package org.apache.solr.update;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update;
 
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrException;
@@ -27,6 +28,7 @@ import org.junit.Test;
  */
 public class AnalysisErrorHandlingTest extends SolrTestCaseJ4 {
 
+
   public String getCoreName() { return "basic"; }
 
   @BeforeClass
@@ -34,12 +36,16 @@ public class AnalysisErrorHandlingTest extends SolrTestCaseJ4 {
     initCore("solrconfig-basic.xml","solr/analysisconfs/analysis-err-schema.xml");
   }
 
+
+
   @Test
   public void testMultipleUpdatesPerAdd() {
     clearIndex();
-    SolrException se = expectThrows(SolrException.class,
-        () -> h.update("<add><doc><field name=\"id\">1</field><field name=\"text\">Alas Poor Yorik</field></doc></add>")
-    );
-    assertTrue(se.getMessage().contains("Exception writing document id 1 to the index"));
+    try {
+      h.update("<add><doc><field name=\"id\">1</field><field name=\"text\">Alas Poor Yorik</field></doc></add>");
+      fail("Failed to even throw the exception we are stewing over.");
+    } catch (SolrException se) {
+      assertTrue(se.getMessage().contains("Exception writing document id 1 to the index"));
+    }
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
-import java.util.Map;
-
-import com.codahale.metrics.Gauge;
-import com.codahale.metrics.Metric;
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
@@ -58,7 +56,7 @@ public class BasicZkTest extends AbstractZkTestCase {
     SolrCore core = h.getCore();
 
     // test that we got the expected config, not just hardcoded defaults
-    assertNotNull(core.getRequestHandler("/mock"));
+    assertNotNull(core.getRequestHandler("mock"));
 
     lrf.args.put(CommonParams.VERSION, "2.2");
     assertQ("test query on empty index", request("qlkciyopsbgzyvkylsjhchghjrdf"),
@@ -70,10 +68,10 @@ public class BasicZkTest extends AbstractZkTestCase {
     assertU("does commit work?", commit());
 
     assertQ("backslash escaping semicolon", request("id:42 AND val_s:aa\\;bb"),
-        "//*[@numFound='1']", "//str[@name='id'][.='42']");
+        "//*[@numFound='1']", "//int[@name='id'][.='42']");
 
     assertQ("quote escaping semicolon", request("id:42 AND val_s:\"aa;bb\""),
-        "//*[@numFound='1']", "//str[@name='id'][.='42']");
+        "//*[@numFound='1']", "//int[@name='id'][.='42']");
 
     assertQ("no escaping semicolon", request("id:42 AND val_s:aa"),
         "//*[@numFound='0']");
@@ -115,7 +113,7 @@ public class BasicZkTest extends AbstractZkTestCase {
     
     // try a reconnect from disconnect
     zkServer = new ZkTestServer(zkDir, zkPort);
-    zkServer.run(false);
+    zkServer.run();
     
     Thread.sleep(300);
     
@@ -150,22 +148,22 @@ public class BasicZkTest extends AbstractZkTestCase {
     zkController.getZkClient().setData("/configs/conf1/solrconfig.xml", new byte[0], true);
  
     // we set the solrconfig to nothing, so this reload should fail
-    SolrException e = expectThrows(SolrException.class,
-        "The reloaded SolrCore did not pick up configs from zookeeper",
-        () -> {
+    try {
       ignoreException("solrconfig.xml");
       h.getCoreContainer().reload(h.getCore().getName());
-    });
-    resetExceptionIgnores();
-    assertTrue(e.getMessage().contains("Unable to reload core [collection1]"));
-    assertTrue(e.getCause().getMessage().contains("Error loading solr config from solrconfig.xml"));
+      fail("The reloaded SolrCore did not pick up configs from zookeeper");
+    } catch(SolrException e) {
+      resetExceptionIgnores();
+      assertTrue(e.getMessage().contains("Unable to reload core [collection1]"));
+      assertTrue(e.getCause().getMessage().contains("Error loading solr config from solrconfig.xml"));
+    }
     
     // test stats call
-    Map<String, Metric> metrics = h.getCore().getCoreMetricManager().getRegistry().getMetrics();
-    assertEquals("collection1", ((Gauge)metrics.get("CORE.coreName")).getValue());
-    assertEquals("collection1", ((Gauge)metrics.get("CORE.collection")).getValue());
-    assertEquals("shard1", ((Gauge)metrics.get("CORE.shard")).getValue());
-    assertTrue(metrics.get("CORE.refCount") != null);
+    NamedList stats = core.getStatistics();
+    assertEquals("collection1", stats.get("coreName"));
+    assertEquals("collection1", stats.get("collection"));
+    assertEquals("shard1", stats.get("shard"));
+    assertTrue(stats.get("refCount") != null);
 
     //zkController.getZkClient().printLayoutToStdOut();
   }

@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.io.IOException;
+import java.util.Arrays;
 
 import org.apache.lucene.search.DocIdSet;
 import org.apache.lucene.search.DocIdSetIterator;
@@ -72,7 +73,7 @@ public class RoaringDocIdSet extends DocIdSet {
         // Use sparse encoding
         assert denseBuffer == null;
         if (currentBlockCardinality > 0) {
-          sets[currentBlock] = new ShortArrayDocIdSet(ArrayUtil.copyOfSubArray(buffer, 0, currentBlockCardinality));
+          sets[currentBlock] = new ShortArrayDocIdSet(Arrays.copyOf(buffer, currentBlockCardinality));
         }
       } else {
         assert denseBuffer != null;
@@ -239,6 +240,11 @@ public class RoaringDocIdSet extends DocIdSet {
     }
     this.ramBytesUsed = ramBytesUsed;
     this.cardinality = cardinality;
+  }
+
+  @Override
+  public boolean isCacheable() {
+    return true;
   }
 
   @Override

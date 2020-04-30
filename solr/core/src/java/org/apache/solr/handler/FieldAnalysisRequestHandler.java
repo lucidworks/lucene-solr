@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler;
 
 import org.apache.lucene.util.BytesRef;
@@ -91,6 +92,9 @@ import java.util.Set;
  */
 public class FieldAnalysisRequestHandler extends AnalysisRequestHandlerBase {
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   protected NamedList doAnalysis(SolrQueryRequest req) throws Exception {
     FieldAnalysisRequest analysisRequest = resolveAnalysisRequest(req);
@@ -113,7 +117,7 @@ public class FieldAnalysisRequestHandler extends AnalysisRequestHandlerBase {
    * @return AnalysisRequest containing all the information about what needs to be analyzed, and using what
    *         fields/types
    */
-  FieldAnalysisRequest resolveAnalysisRequest(SolrQueryRequest req) throws SolrException {
+  FieldAnalysisRequest resolveAnalysisRequest(SolrQueryRequest req) {
     SolrParams solrParams = req.getParams();
     FieldAnalysisRequest analysisRequest = new FieldAnalysisRequest();
 
@@ -126,13 +130,8 @@ public class FieldAnalysisRequestHandler extends AnalysisRequestHandlerBase {
       analysisRequest.setFieldNames(Arrays.asList(solrParams.get(AnalysisParams.FIELD_NAME).split(",")));
       useDefaultSearchField = false;
     }
-    if (useDefaultSearchField) {
-      if (solrParams.get(CommonParams.DF) != null) {
-        analysisRequest.addFieldName(solrParams.get(CommonParams.DF));
-      } else {
-        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
-            "Field analysis request must contain one of analysis.fieldtype, analysis.fieldname or df.");
-      }
+    if (useDefaultSearchField)  {
+      analysisRequest.addFieldName(req.getSchema().getDefaultSearchFieldName());
     }
     analysisRequest.setQuery(solrParams.get(AnalysisParams.QUERY, solrParams.get(CommonParams.Q)));
 

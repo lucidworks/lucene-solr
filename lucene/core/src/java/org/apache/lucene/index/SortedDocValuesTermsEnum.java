@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -25,7 +25,7 @@ import org.apache.lucene.util.BytesRefBuilder;
 /** Implements a {@link TermsEnum} wrapping a provided
  * {@link SortedDocValues}. */
 
-class SortedDocValuesTermsEnum extends BaseTermsEnum {
+class SortedDocValuesTermsEnum extends TermsEnum {
   private final SortedDocValues values;
   private int currentOrd = -1;
   private final BytesRefBuilder scratch;
@@ -101,16 +101,11 @@ class SortedDocValuesTermsEnum extends BaseTermsEnum {
 
   @Override
   public long totalTermFreq() {
-    throw new UnsupportedOperationException();
+    return -1;
   }
 
   @Override
   public PostingsEnum postings(PostingsEnum reuse, int flags) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ImpactsEnum impacts(int flags) throws IOException {
     throw new UnsupportedOperationException();
   }
 

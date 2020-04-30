@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -31,13 +31,13 @@ import org.apache.lucene.search.CollectionStatistics;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.PhraseQuery;
-import org.apache.lucene.search.Scorable;
-import org.apache.lucene.search.ScoreMode;
+import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.SimpleCollector;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TermStatistics;
 import org.apache.lucene.search.similarities.TFIDFSimilarity;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 
@@ -45,12 +45,20 @@ import org.apache.lucene.util.LuceneTestCase;
 public class TestOmitTf extends LuceneTestCase {
   
   public static class SimpleSimilarity extends TFIDFSimilarity {
-    @Override public float lengthNorm(int length) { return 1; }
+    @Override public float decodeNormValue(long norm) { return norm; }
+    @Override public long encodeNormValue(float f) { return (long) f; }
+    @Override
+    public float queryNorm(float sumOfSquaredWeights) { return 1.0f; }
+    @Override
+    public float coord(int overlap, int maxOverlap) { return 1.0f; }
+    @Override public float lengthNorm(FieldInvertState state) { return state.getBoost(); }
     @Override public float tf(float freq) { return freq; }
-    @Override public float idf(long docFreq, long docCount) { return 1.0f; }
+    @Override public float sloppyFreq(int distance) { return 2.0f; }
+    @Override public float idf(long docFreq, long numDocs) { return 1.0f; }
     @Override public Explanation idfExplain(CollectionStatistics collectionStats, TermStatistics[] termStats) {
       return Explanation.match(1.0f, "Inexplicable");
     }
+    @Override public float scorePayload(int doc, int start, int end, BytesRef payload) { return 1.0f; }
   }
 
   private static final FieldType omitType = new FieldType(TextField.TYPE_NOT_STORED);
@@ -58,6 +66,103 @@ public class TestOmitTf extends LuceneTestCase {
   
   static {
     omitType.setIndexOptions(IndexOptions.DOCS);
+  }
+
+  // Tests whether the DocumentWriter correctly enable the
+  // omitTermFreqAndPositions bit in the FieldInfo
+  public void testOmitTermFreqAndPositions() throws Exception {
+    Directory ram = newDirectory();
+    Analyzer analyzer = new MockAnalyzer(random());
+    IndexWriter writer = new IndexWriter(ram, newIndexWriterConfig(analyzer));
+    Document d = new Document();
+        
+    // this field will have Tf
+    Field f1 = newField("f1", "This field has term freqs", normalType);
+    d.add(f1);
+       
+    // this field will NOT have Tf
+    Field f2 = newField("f2", "This field has NO Tf in all docs", omitType);
+    d.add(f2);
+        
+    writer.addDocument(d);
+    writer.forceMerge(1);
+    // now we add another document which has term freq for field f2 and not for f1 and verify if the SegmentMerger
+    // keep things constant
+    d = new Document();
+        
+    // Reverse
+    f1 = newField("f1", "This field has term freqs", omitType);
+    d.add(f1);
+        
+    f2 = newField("f2", "This field has NO Tf in all docs", normalType);     
+    d.add(f2);
+        
+    writer.addDocument(d);
+
+    // force merge
+    writer.forceMerge(1);
+    // flush
+    writer.close();
+
+    SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(ram));
+    FieldInfos fi = reader.getFieldInfos();
+    assertEquals("OmitTermFreqAndPositions field bit should be set.", IndexOptions.DOCS, fi.fieldInfo("f1").getIndexOptions());
+    assertEquals("OmitTermFreqAndPositions field bit should be set.", IndexOptions.DOCS, fi.fieldInfo("f2").getIndexOptions());
+        
+    reader.close();
+    ram.close();
+  }
+ 
+  // Tests whether merging of docs that have different
+  // omitTermFreqAndPositions for the same field works
+  public void testMixedMerge() throws Exception {
+    Directory ram = newDirectory();
+    Analyzer analyzer = new MockAnalyzer(random());
+    IndexWriter writer = new IndexWriter(
+        ram,
+        newIndexWriterConfig(analyzer).
+            setMaxBufferedDocs(3).
+            setMergePolicy(newLogMergePolicy(2))
+    );
+    Document d = new Document();
+        
+    // this field will have Tf
+    Field f1 = newField("f1", "This field has term freqs", normalType);
+    d.add(f1);
+       
+    // this field will NOT have Tf
+    Field f2 = newField("f2", "This field has NO Tf in all docs", omitType);
+    d.add(f2);
+
+    for(int i=0;i<30;i++)
+      writer.addDocument(d);
+        
+    // now we add another document which has term freq for field f2 and not for f1 and verify if the SegmentMerger
+    // keep things constant
+    d = new Document();
+        
+    // Reverese
+    f1 = newField("f1", "This field has term freqs", omitType);
+    d.add(f1);
+        
+    f2 = newField("f2", "This field has NO Tf in all docs", normalType);     
+    d.add(f2);
+        
+    for(int i=0;i<30;i++)
+      writer.addDocument(d);
+        
+    // force merge
+    writer.forceMerge(1);
+    // flush
+    writer.close();
+
+    SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(ram));
+    FieldInfos fi = reader.getFieldInfos();
+    assertEquals("OmitTermFreqAndPositions field bit should be set.", IndexOptions.DOCS, fi.fieldInfo("f1").getIndexOptions());
+    assertEquals("OmitTermFreqAndPositions field bit should be set.", IndexOptions.DOCS, fi.fieldInfo("f2").getIndexOptions());
+        
+    reader.close();
+    ram.close();
   }
 
   // Make sure first adding docs that do not omitTermFreqAndPositions for
@@ -94,7 +199,7 @@ public class TestOmitTf extends LuceneTestCase {
     // flush
     writer.close();
 
-    LeafReader reader = getOnlyLeafReader(DirectoryReader.open(ram));
+    SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(ram));
     FieldInfos fi = reader.getFieldInfos();
     assertEquals("OmitTermFreqAndPositions field bit should not be set.", IndexOptions.DOCS_AND_FREQS_AND_POSITIONS, fi.fieldInfo("f1").getIndexOptions());
     assertEquals("OmitTermFreqAndPositions field bit should be set.", IndexOptions.DOCS, fi.fieldInfo("f2").getIndexOptions());
@@ -114,6 +219,10 @@ public class TestOmitTf extends LuceneTestCase {
   // Verifies no *.prx exists when all fields omit term freq:
   public void testNoPrxFile() throws Throwable {
     Directory ram = newDirectory();
+    if (ram instanceof MockDirectoryWrapper) {
+      // we verify some files get deleted
+      ((MockDirectoryWrapper)ram).setEnableVirusScanner(false);
+    }
     Analyzer analyzer = new MockAnalyzer(random());
     IndexWriter writer = new IndexWriter(ram, newIndexWriterConfig(analyzer)
                                                 .setMaxBufferedDocs(3)
@@ -133,7 +242,21 @@ public class TestOmitTf extends LuceneTestCase {
 
     assertNoPrx(ram);
     
+    // now add some documents with positions, and check
+    // there is no prox after full merge
+    d = new Document();
+    f1 = newTextField("f1", "This field has positions", Field.Store.NO);
+    d.add(f1);
+    
+    for(int i=0;i<30;i++)
+      writer.addDocument(d);
+ 
+    // force merge
+    writer.forceMerge(1);
+    // flush
     writer.close();
+
+    assertNoPrx(ram);
     ram.close();
   }
  
@@ -186,25 +309,27 @@ public class TestOmitTf extends LuceneTestCase {
     TermQuery q4 = new TermQuery(d);
 
     PhraseQuery pq = new PhraseQuery(a.field(), a.bytes(), c.bytes());
-    Exception expected = expectThrows(Exception.class, () -> {
+    try {
       searcher.search(pq, 10);
-    });
-    Throwable cause = expected;
-    // If the searcher uses an executor service, the IAE is wrapped into other exceptions
-    while (cause.getCause() != null) {
-      cause = cause.getCause();
+      fail("did not hit expected exception");
+    } catch (Exception e) {
+      Throwable cause = e;
+      // If the searcher uses an executor service, the IAE is wrapped into other exceptions
+      while (cause.getCause() != null) {
+        cause = cause.getCause();
+      }
+      assertTrue("Expected an IAE, got " + cause, cause instanceof IllegalStateException);
     }
-    assertTrue("Expected an IAE, got " + cause, cause instanceof IllegalStateException);
         
     searcher.search(q1,
                     new CountingHitCollector() {
-                      private Scorable scorer;
+                      private Scorer scorer;
                       @Override
-                      public ScoreMode scoreMode() {
-                        return ScoreMode.COMPLETE;
+                      public boolean needsScores() {
+                        return true;
                       }
                       @Override
-                      public final void setScorer(Scorable scorer) {
+                      public final void setScorer(Scorer scorer) {
                         this.scorer = scorer;
                       }
                       @Override
@@ -220,13 +345,13 @@ public class TestOmitTf extends LuceneTestCase {
         
     searcher.search(q2,
                     new CountingHitCollector() {
-                      private Scorable scorer;
+                      private Scorer scorer;
                       @Override
-                      public ScoreMode scoreMode() {
-                        return ScoreMode.COMPLETE;
+                      public boolean needsScores() {
+                        return true;
                       }
                       @Override
-                      public final void setScorer(Scorable scorer) {
+                      public final void setScorer(Scorer scorer) {
                         this.scorer = scorer;
                       }
                       @Override
@@ -245,13 +370,13 @@ public class TestOmitTf extends LuceneTestCase {
         
     searcher.search(q3,
                     new CountingHitCollector() {
-                      private Scorable scorer;
+                      private Scorer scorer;
                       @Override
-                      public ScoreMode scoreMode() {
-                        return ScoreMode.COMPLETE;
+                      public boolean needsScores() {
+                        return true;
                       }
                       @Override
-                      public final void setScorer(Scorable scorer) {
+                      public final void setScorer(Scorer scorer) {
                         this.scorer = scorer;
                       }
                       @Override
@@ -268,13 +393,13 @@ public class TestOmitTf extends LuceneTestCase {
         
     searcher.search(q4,
                     new CountingHitCollector() {
-                      private Scorable scorer;
+                      private Scorer scorer;
                       @Override
-                      public ScoreMode scoreMode() {
-                        return ScoreMode.COMPLETE;
+                      public boolean needsScores() {
+                        return true;
                       }
                       @Override
-                      public final void setScorer(Scorable scorer) {
+                      public final void setScorer(Scorer scorer) {
                         this.scorer = scorer;
                       }
                       @Override
@@ -328,12 +453,12 @@ public class TestOmitTf extends LuceneTestCase {
     }
     
     @Override
-    public ScoreMode scoreMode() {
-      return ScoreMode.COMPLETE_NO_SCORES;
+    public boolean needsScores() {
+      return false;
     }
   }
   
-  /** test that when freqs are omitted, that totalTermFreq and sumTotalTermFreq are docFreq, and sumDocFreq */
+  /** test that when freqs are omitted, that totalTermFreq and sumTotalTermFreq are -1 */
   public void testStats() throws Exception {
     Directory dir = newDirectory();
     RandomIndexWriter iw = new RandomIndexWriter(random(), dir,
@@ -347,8 +472,8 @@ public class TestOmitTf extends LuceneTestCase {
     iw.addDocument(doc);
     IndexReader ir = iw.getReader();
     iw.close();
-    assertEquals(ir.docFreq(new Term("foo", new BytesRef("bar"))), ir.totalTermFreq(new Term("foo", new BytesRef("bar"))));
-    assertEquals(ir.getSumDocFreq("foo"), ir.getSumTotalTermFreq("foo"));
+    assertEquals(-1, ir.totalTermFreq(new Term("foo", new BytesRef("bar"))));
+    assertEquals(-1, ir.getSumTotalTermFreq("foo"));
     ir.close();
     dir.close();
   }

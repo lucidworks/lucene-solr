@@ -1,3 +1,5 @@
+package org.apache.solr.spelling;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,20 +16,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.util.Collection;
 import java.util.regex.Pattern;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
-import org.apache.lucene.analysis.LowerCaseFilter;
+import org.apache.lucene.analysis.CannedTokenStream;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.MockTokenizer;
+import org.apache.lucene.analysis.Token;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.core.KeywordTokenizer;
+import org.apache.lucene.analysis.core.LowerCaseFilter;
 import org.apache.lucene.analysis.miscellaneous.TrimFilter;
 import org.apache.lucene.analysis.pattern.PatternReplaceFilter;
 
@@ -63,11 +67,7 @@ public class TestSuggestSpellingConverter extends BaseTokenStreamTestCase {
   
   public void assertConvertsTo(String text, String expected[]) throws IOException {
     Collection<Token> tokens = converter.convert(text);
-    assertEquals(tokens.size(), expected.length);
-    int i = 0;
-    for (Token token : tokens) {
-      assertEquals(token.toString(), expected[i]);
-      i++;
-    }
+    TokenStream ts = new CannedTokenStream(tokens.toArray(new Token[0]));
+    assertTokenStreamContents(ts, expected);
   }
 }

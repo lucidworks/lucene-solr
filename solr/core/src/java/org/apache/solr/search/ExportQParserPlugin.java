@@ -14,35 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
+
+import org.apache.lucene.util.FixedBitSet;
+import org.apache.solr.handler.component.MergeStrategy;
+import org.apache.solr.request.SolrRequestInfo;
+import org.apache.lucene.search.*;
+import org.apache.lucene.index.*;
+import org.apache.solr.common.util.NamedList;
+import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.common.params.SolrParams;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.Objects;
-
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.LeafCollector;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.Scorable;
-import org.apache.lucene.search.ScoreDoc;
-import org.apache.lucene.search.ScoreMode;
-import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.search.TopDocsCollector;
-import org.apache.lucene.search.TotalHits;
-import org.apache.lucene.search.Weight;
-import org.apache.lucene.util.FixedBitSet;
-import org.apache.solr.common.params.SolrParams;
-import org.apache.solr.handler.component.MergeStrategy;
-import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.request.SolrRequestInfo;
 
 public class ExportQParserPlugin extends QParserPlugin {
 
   public static final String NAME = "xport";
-
+  public void init(NamedList namedList) {
+  }
+  
   public QParser createParser(String qstr, SolrParams localParams, SolrParams params, SolrQueryRequest request) {
     return new ExportQParser(qstr, localParams, params, request);
   }
@@ -63,14 +55,10 @@ public class ExportQParserPlugin extends QParserPlugin {
   }
 
   public class ExportQuery extends RankQuery {
+    
+    private int leafCount;
     private Query mainQuery;
     private Object id;
-
-    public RankQuery clone() {
-      ExportQuery clone = new ExportQuery();
-      clone.id = id;
-      return clone;
-    }
 
     public RankQuery wrap(Query mainQuery) {
       this.mainQuery = mainQuery;
@@ -81,51 +69,38 @@ public class ExportQParserPlugin extends QParserPlugin {
       return null;
     }
 
-    @Override
-    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException{
-      return mainQuery.createWeight(searcher, scoreMode, boost);
+    public Weight createWeight(IndexSearcher searcher) throws IOException {
+      return mainQuery.createWeight(searcher, true);
     }
 
     public Query rewrite(IndexReader reader) throws IOException {
-      Query q = mainQuery.rewrite(reader);
-      if(q == mainQuery) {
+      if (getBoost() != 1f) {
         return super.rewrite(reader);
-      } else {
-        return clone().wrap(q);
       }
+      return this.mainQuery.rewrite(reader);
     }
 
     public TopDocsCollector getTopDocsCollector(int len,
-                                                QueryCommand cmd,
+                                                SolrIndexSearcher.QueryCommand cmd,
                                                 IndexSearcher searcher) throws IOException {
-      int leafCount = searcher.getTopReaderContext().leaves().size();
-      FixedBitSet[] sets = new FixedBitSet[leafCount];
+      FixedBitSet[] sets = new FixedBitSet[this.leafCount];
       return new ExportCollector(sets);
     }
 
     public int hashCode() {
-      return classHash() + 
-          31 * id.hashCode() +
-          31 * Objects.hash(mainQuery);
-    }
-
-    public boolean equals(Object other) {
-      return sameClassAs(other) &&
-             equalsTo(getClass().cast(other));
+      return 31 * super.hashCode() + id.hashCode();
     }
     
-    private boolean equalsTo(ExportQuery other) {
-      return Objects.equals(id, other.id) &&
-             Objects.equals(mainQuery, other.mainQuery);
+    public boolean equals(Object o) {
+      if (super.equals(o) == false) {
+        return false;
+      }
+      ExportQuery q = (ExportQuery)o;
+      return id == q.id;
     }
-
+    
     public String toString(String s) {
       return s;
-    }
-
-    @Override
-    public void visit(QueryVisitor visitor) {
-      visitor.visitLeaf(this);
     }
 
     public ExportQuery() {
@@ -133,11 +108,13 @@ public class ExportQParserPlugin extends QParserPlugin {
     }
     
     public ExportQuery(SolrParams localParams, SolrParams params, SolrQueryRequest request) throws IOException {
+      this.leafCount = request.getSearcher().getTopReaderContext().leaves().size();
       id = new Object();
+      mainQuery = new MatchNoDocsQuery();
     }
   }
   
-  private static class ExportCollector extends TopDocsCollector  {
+  private class ExportCollector extends TopDocsCollector  {
 
     private FixedBitSet[] sets;
 
@@ -153,7 +130,7 @@ public class ExportQParserPlugin extends QParserPlugin {
       return new LeafCollector() {
         
         @Override
-        public void setScorer(Scorable scorer) throws IOException {}
+        public void setScorer(Scorer scorer) throws IOException {}
         
         @Override
         public void collect(int docId) throws IOException{
@@ -173,11 +150,7 @@ public class ExportQParserPlugin extends QParserPlugin {
     }
 
     public TopDocs topDocs(int start, int howMany) {
-
-      assert(sets != null);
-
       SolrRequestInfo info = SolrRequestInfo.getRequestInfo();
-
       SolrQueryRequest req = null;
       if(info != null && ((req = info.getReq()) != null)) {
         Map context = req.getContext();
@@ -187,13 +160,12 @@ public class ExportQParserPlugin extends QParserPlugin {
 
       ScoreDoc[] scoreDocs = getScoreDocs(howMany);
       assert scoreDocs.length <= totalHits;
-      return new TopDocs(new TotalHits(totalHits, totalHitsRelation), scoreDocs);
+      return new TopDocs(totalHits, scoreDocs, 0.0f);
     }
 
     @Override
-    public ScoreMode scoreMode() {
-      return ScoreMode.COMPLETE_NO_SCORES;
+    public boolean needsScores() {
+      return true; // TODO: is this the case?
     }
   }
-
 }

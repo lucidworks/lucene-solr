@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ckb;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ckb;
-
 
 import java.util.Map;
 
@@ -32,13 +32,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  *     &lt;filter class="solr.SoraniStemFilterFactory"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- * @since 4.7.0
- * @lucene.spi {@value #NAME}
  */
 public class SoraniStemFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "soraniStem";
 
   /** Creates a new SoraniStemFilterFactory */
   public SoraniStemFilterFactory(Map<String,String> args) {

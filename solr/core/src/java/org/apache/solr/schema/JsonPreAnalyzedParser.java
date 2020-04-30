@@ -1,26 +1,10 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.apache.solr.schema;
 
 import java.io.IOException;
 import java.io.Reader;
 import java.lang.invoke.MethodHandles;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -40,16 +24,34 @@ import org.apache.lucene.util.Attribute;
 import org.apache.lucene.util.AttributeSource;
 import org.apache.lucene.util.AttributeSource.State;
 import org.apache.lucene.util.BytesRef;
+import org.noggit.JSONUtil;
+import org.noggit.JSONWriter;
+import org.noggit.ObjectBuilder;
 import org.apache.solr.common.util.Base64;
 import org.apache.solr.schema.PreAnalyzedField.ParseResult;
 import org.apache.solr.schema.PreAnalyzedField.PreAnalyzedParser;
-import org.noggit.JSONUtil;
-import org.noggit.ObjectBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 public class JsonPreAnalyzedParser implements PreAnalyzedParser {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   
   public static final String VERSION = "1";
   
@@ -81,7 +83,7 @@ public class JsonPreAnalyzedParser implements PreAnalyzedParser {
     if (val.length() == 0) {
       return res;
     }
-    Object o = ObjectBuilder.fromJSONStrict(val);
+    Object o = ObjectBuilder.fromJSON(val);
     if (!(o instanceof Map)) {
       throw new IOException("Invalid JSON type " + o.getClass().getName() + ", expected Map");
     }
@@ -132,7 +134,7 @@ public class JsonPreAnalyzedParser implements PreAnalyzedParser {
             try {
               tokenStart = Integer.parseInt(String.valueOf(obj));
             } catch (NumberFormatException nfe) {
-              log.warn("Invalid " + OFFSET_START_KEY + " attribute, skipped: '" + obj + "'");
+              LOG.warn("Invalid " + OFFSET_START_KEY + " attribute, skipped: '" + obj + "'");
               hasOffsetStart = false;
             }
           }
@@ -145,7 +147,7 @@ public class JsonPreAnalyzedParser implements PreAnalyzedParser {
             try {
               tokenEnd = Integer.parseInt(String.valueOf(obj));
             } catch (NumberFormatException nfe) {
-              log.warn("Invalid " + OFFSET_END_KEY + " attribute, skipped: '" + obj + "'");
+              LOG.warn("Invalid " + OFFSET_END_KEY + " attribute, skipped: '" + obj + "'");
               hasOffsetEnd = false;
             }
           }
@@ -158,7 +160,7 @@ public class JsonPreAnalyzedParser implements PreAnalyzedParser {
             try {
               posIncr = Integer.parseInt(String.valueOf(obj));
             } catch (NumberFormatException nfe) {
-              log.warn("Invalid " + POSINCR_KEY + " attribute, skipped: '" + obj + "'");
+              LOG.warn("Invalid " + POSINCR_KEY + " attribute, skipped: '" + obj + "'");
             }
           }
           PositionIncrementAttribute patt = parent.addAttribute(PositionIncrementAttribute.class);
@@ -178,13 +180,13 @@ public class JsonPreAnalyzedParser implements PreAnalyzedParser {
             FlagsAttribute flags = parent.addAttribute(FlagsAttribute.class);
             flags.setFlags(f);
           } catch (NumberFormatException nfe) {
-            log.warn("Invalid " + FLAGS_KEY + " attribute, skipped: '" + e.getValue() + "'");
+            LOG.warn("Invalid " + FLAGS_KEY + " attribute, skipped: '" + e.getValue() + "'");            
           }
         } else if (key.equals(TYPE_KEY)) {
           TypeAttribute tattr = parent.addAttribute(TypeAttribute.class);
           tattr.setType(String.valueOf(e.getValue()));
         } else {
-          log.warn("Unknown attribute, skipped: " + e.getKey() + "=" + e.getValue());
+          LOG.warn("Unknown attribute, skipped: " + e.getKey() + "=" + e.getValue());
         }
       }
       // handle offset attr

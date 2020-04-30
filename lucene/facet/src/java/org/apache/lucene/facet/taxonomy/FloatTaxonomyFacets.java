@@ -1,3 +1,5 @@
+package org.apache.lucene.facet.taxonomy;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy;
 
 import java.io.IOException;
 import java.util.Map;
@@ -29,8 +30,6 @@ import org.apache.lucene.facet.TopOrdAndFloatQueue;
  *  to a per-ords float[]. */
 public abstract class FloatTaxonomyFacets extends TaxonomyFacets {
 
-  // TODO: also use native hash map for sparse collection, like IntTaxonomyFacets
-
   /** Per-ordinal value. */
   protected final float[] values;
 
@@ -43,7 +42,6 @@ public abstract class FloatTaxonomyFacets extends TaxonomyFacets {
   /** Rolls up any single-valued hierarchical dimensions. */
   protected void rollup() throws IOException {
     // Rollup any necessary dims:
-    int[] children = getChildren();
     for(Map.Entry<String,DimConfig> ent : config.getDimConfigs().entrySet()) {
       String dim = ent.getKey();
       DimConfig ft = ent.getValue();
@@ -55,9 +53,7 @@ public abstract class FloatTaxonomyFacets extends TaxonomyFacets {
     }
   }
 
-  private float rollup(int ord) throws IOException {
-    int[] children = getChildren();
-    int[] siblings = getSiblings();
+  private float rollup(int ord) {
     float sum = 0;
     while (ord != TaxonomyReader.INVALID_ORDINAL) {
       float childValue = values[ord] + rollup(children[ord]);
@@ -101,9 +97,6 @@ public abstract class FloatTaxonomyFacets extends TaxonomyFacets {
 
     TopOrdAndFloatQueue q = new TopOrdAndFloatQueue(Math.min(taxoReader.getSize(), topN));
     float bottomValue = 0;
-
-    int[] children = getChildren();
-    int[] siblings = getSiblings();
 
     int ord = children[dimOrd];
     float sumValues = 0;

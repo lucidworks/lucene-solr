@@ -1,3 +1,5 @@
+package org.apache.solr.update;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,21 +16,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update;
 
-import java.io.IOException;
-import java.net.ConnectException;
-import java.net.SocketException;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.NamedList;
+
+import java.io.IOException;
+import java.net.ConnectException;
+import java.net.SocketException;
 
 public class MockStreamingSolrClients extends StreamingSolrClients {
   
-  public enum Exp {CONNECT_EXCEPTION, SOCKET_EXCEPTION, BAD_REQUEST};
+  public enum Exp {CONNECT_EXCEPTION, SOCKET_EXCEPTION};
   
   private volatile Exp exp = null;
   
@@ -46,14 +47,12 @@ public class MockStreamingSolrClients extends StreamingSolrClients {
     this.exp = exp;
   }
 
-  private Exception exception() {
+  private IOException exception() {
     switch (exp) {
       case CONNECT_EXCEPTION:
         return new ConnectException();
       case SOCKET_EXCEPTION:
         return new SocketException();
-      case BAD_REQUEST:
-        return new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Bad Request");
       default:
         break;
     }
@@ -72,22 +71,18 @@ public class MockStreamingSolrClients extends StreamingSolrClients {
     public NamedList<Object> request(SolrRequest request, String collection)
         throws SolrServerException, IOException {
       if (exp != null) {
-        Exception e = exception();
-        if (e instanceof IOException) {
-          if (LuceneTestCase.random().nextBoolean()) {
-            throw (IOException)e;
-          } else {
-            throw new SolrServerException(e);
-          }
-        } else if (e instanceof SolrServerException) {
-          throw (SolrServerException)e;
+        if (LuceneTestCase.random().nextBoolean()) {
+          throw exception();
         } else {
-          throw new SolrServerException(e);
+          throw new SolrServerException(exception());
         }
       }
       
       return solrClient.request(request);
     }
+
+    @Override
+    public void shutdown() { }
 
     @Override
     public void close() {}

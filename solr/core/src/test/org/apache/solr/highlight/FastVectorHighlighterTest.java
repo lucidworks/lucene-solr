@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.highlight;
 
 import java.util.HashMap;
@@ -70,14 +71,9 @@ public class FastVectorHighlighterTest extends SolrTestCaseJ4 {
     args.put("hl", "true");
     args.put("hl.fl", "tv_text");
     args.put("hl.snippets", "2");
-    args.put("hl.tag.pre", "<fvpre>"); //... and let post default to </em>. This is just a test.
-    if (random().nextBoolean()) {
-      args.put("hl.useFastVectorHighlighter", "true"); // old way
-    } else {
-      args.put("hl.method", "fastVector"); // the new way
-    }
+    args.put("hl.useFastVectorHighlighter", "true");
     TestHarness.LocalRequestFactory sumLRF = h.getRequestFactory(
-      "",0,200,args);
+      "standard",0,200,args);
     
     assertU(adoc("tv_text", "basic fast vector highlighter test", 
                  "id", "1"));
@@ -86,7 +82,7 @@ public class FastVectorHighlighterTest extends SolrTestCaseJ4 {
     assertQ("Basic summarization",
             sumLRF.makeRequest("tv_text:vector"),
             "//lst[@name='highlighting']/lst[@name='1']",
-            "//lst[@name='1']/arr[@name='tv_text']/str[.='basic fast <fvpre>vector</em> highlighter test']"
+            "//lst[@name='1']/arr[@name='tv_text']/str[.='basic fast <em>vector</em> highlighter test']"
             );
   }
 }

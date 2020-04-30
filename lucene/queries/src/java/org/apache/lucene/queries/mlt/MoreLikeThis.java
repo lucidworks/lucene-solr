@@ -1,10 +1,11 @@
+package org.apache.lucene.queries.mlt;
+
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright 2004-2005 The Apache Software Foundation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +15,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.mlt;
+
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.index.Fields;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.MultiFields;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.BooleanQuery;
+import org.apache.lucene.search.BoostQuery;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.similarities.DefaultSimilarity;
+import org.apache.lucene.search.similarities.TFIDFSimilarity;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.CharsRefBuilder;
+import org.apache.lucene.util.PriorityQueue;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -24,29 +46,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
-import org.apache.lucene.analysis.tokenattributes.TermFrequencyAttribute;
-import org.apache.lucene.document.Document;
-import org.apache.lucene.index.FieldInfos;
-import org.apache.lucene.index.Fields;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexableField;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.index.Terms;
-import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.search.BooleanClause;
-import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.BoostQuery;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.search.similarities.ClassicSimilarity;
-import org.apache.lucene.search.similarities.TFIDFSimilarity;
-import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.CharsRefBuilder;
-import org.apache.lucene.util.PriorityQueue;
 
 /**
  * Generate "more like this" similarity queries.
@@ -314,7 +313,7 @@ public final class MoreLikeThis {
    * Constructor requiring an IndexReader.
    */
   public MoreLikeThis(IndexReader ir) {
-    this(ir, new ClassicSimilarity());
+    this(ir, new DefaultSimilarity());
   }
 
   public MoreLikeThis(IndexReader ir, TFIDFSimilarity sim) {
@@ -419,15 +418,13 @@ public final class MoreLikeThis {
    * Set the maximum percentage in which words may still appear. Words that appear
    * in more than this many percent of all docs will be ignored.
    *
-   * This method calls {@link #setMaxDocFreq(int)} internally (both conditions cannot
-   * be used at the same time).
-   *
    * @param maxPercentage the maximum percentage of documents (0-100) that a term may appear
-   * in to be still considered relevant.
+   * in to be still considered relevant
    */
   public void setMaxDocFreqPct(int maxPercentage) {
-    setMaxDocFreq(Math.toIntExact((long) maxPercentage * ir.maxDoc() / 100));
+    this.maxDocFreq = maxPercentage * ir.numDocs() / 100;
   }
+
 
   /**
    * Returns whether to boost terms in query based on "score" or not. The default is
@@ -578,7 +575,7 @@ public final class MoreLikeThis {
   public Query like(int docNum) throws IOException {
     if (fieldNames == null) {
       // gather list of valid fields from lucene
-      Collection<String> fields = FieldInfos.getIndexedFields(ir);
+      Collection<String> fields = MultiFields.getIndexedFields(ir);
       fieldNames = fields.toArray(new String[fields.size()]);
     }
 
@@ -593,7 +590,7 @@ public final class MoreLikeThis {
   public Query like(Map<String, Collection<Object>> filteredDocument) throws IOException {
     if (fieldNames == null) {
       // gather list of valid fields from lucene
-      Collection<String> fields = FieldInfos.getIndexedFields(ir);
+      Collection<String> fields = MultiFields.getIndexedFields(ir);
       fieldNames = fields.toArray(new String[fields.size()]);
     }
     return createQuery(retrieveTerms(filteredDocument));
@@ -606,11 +603,11 @@ public final class MoreLikeThis {
    * @return a query that will return docs like the passed Readers.
    */
   public Query like(String fieldName, Reader... readers) throws IOException {
-    Map<String, Map<String, Int>> perFieldTermFrequencies = new HashMap<>();
+    Map<String, Int> words = new HashMap<>();
     for (Reader r : readers) {
-      addTermFrequencies(r, perFieldTermFrequencies, fieldName);
+      addTermFrequencies(r, words, fieldName);
     }
-    return createQuery(createQueue(perFieldTermFrequencies));
+    return createQuery(createQueue(words));
   }
 
   /**
@@ -645,67 +642,56 @@ public final class MoreLikeThis {
   /**
    * Create a PriorityQueue from a word-&gt;tf map.
    *
-   * @param perFieldTermFrequencies a per field map of words keyed on the word(String) with Int objects as the values.
+   * @param words a map of words keyed on the word(String) with Int objects as the values.
    */
-  private PriorityQueue<ScoreTerm> createQueue(Map<String, Map<String, Int>> perFieldTermFrequencies) throws IOException {
+  private PriorityQueue<ScoreTerm> createQueue(Map<String, Int> words) throws IOException {
     // have collected all words in doc and their freqs
-    final int limit = Math.min(maxQueryTerms, this.getTermsCount(perFieldTermFrequencies));
+    int numDocs = ir.numDocs();
+    final int limit = Math.min(maxQueryTerms, words.size());
     FreqQ queue = new FreqQ(limit); // will order words by score
-    for (Map.Entry<String, Map<String, Int>> entry : perFieldTermFrequencies.entrySet()) {
-      Map<String, Int> perWordTermFrequencies = entry.getValue();
-      String fieldName = entry.getKey();
 
-      long numDocs = ir.getDocCount(fieldName);
-      if(numDocs == -1) {
-        numDocs = ir.numDocs();
+    for (String word : words.keySet()) { // for every word
+      int tf = words.get(word).x; // term freq in the source doc
+      if (minTermFreq > 0 && tf < minTermFreq) {
+        continue; // filter out words that don't occur enough times in the source
       }
 
-      for (Map.Entry<String, Int> tfEntry : perWordTermFrequencies.entrySet()) { // for every word
-        String word = tfEntry.getKey();
-        int tf = tfEntry.getValue().x; // term freq in the source doc
-        if (minTermFreq > 0 && tf < minTermFreq) {
-          continue; // filter out words that don't occur enough times in the source
-        }
+      // go through all the fields and find the largest document frequency
+      String topField = fieldNames[0];
+      int docFreq = 0;
+      for (String fieldName : fieldNames) {
+        int freq = ir.docFreq(new Term(fieldName, word));
+        topField = (freq > docFreq) ? fieldName : topField;
+        docFreq = (freq > docFreq) ? freq : docFreq;
+      }
 
-        int docFreq = ir.docFreq(new Term(fieldName, word));
+      if (minDocFreq > 0 && docFreq < minDocFreq) {
+        continue; // filter out words that don't occur in enough docs
+      }
 
-        if (minDocFreq > 0 && docFreq < minDocFreq) {
-          continue; // filter out words that don't occur in enough docs
-        }
+      if (docFreq > maxDocFreq) {
+        continue; // filter out words that occur in too many docs
+      }
 
-        if (docFreq > maxDocFreq) {
-          continue; // filter out words that occur in too many docs
-        }
+      if (docFreq == 0) {
+        continue; // index update problem?
+      }
 
-        if (docFreq == 0) {
-          continue; // index update problem?
-        }
+      float idf = similarity.idf(docFreq, numDocs);
+      float score = tf * idf;
 
-        float idf = similarity.idf(docFreq, numDocs);
-        float score = tf * idf;
-
-        if (queue.size() < limit) {
-          // there is still space in the queue
-          queue.add(new ScoreTerm(word, fieldName, score, idf, docFreq, tf));
-        } else {
-          ScoreTerm term = queue.top();
-          if (term.score < score) { // update the smallest in the queue in place and update the queue.
-            term.update(word, fieldName, score, idf, docFreq, tf);
-            queue.updateTop();
-          }
+      if (queue.size() < limit) {
+        // there is still space in the queue
+        queue.add(new ScoreTerm(word, topField, score, idf, docFreq, tf));
+      } else {
+        ScoreTerm term = queue.top();
+        if (term.score < score) { // update the smallest in the queue in place and update the queue.
+          term.update(word, topField, score, idf, docFreq, tf);
+          queue.updateTop();
         }
       }
     }
     return queue;
-  }
-
-  private int getTermsCount(Map<String, Map<String, Int>> perFieldTermFrequencies) {
-    int totalTermsCount = 0;
-    Collection<Map<String, Int>> values = perFieldTermFrequencies.values();
-    for (Map<String, Int> perWordTermFrequencies : values) {
-      totalTermsCount += perWordTermFrequencies.size();
-    }
-    return totalTermsCount;
   }
 
   /**
@@ -735,7 +721,7 @@ public final class MoreLikeThis {
    * @param docNum the id of the lucene document from which to find terms
    */
   private PriorityQueue<ScoreTerm> retrieveTerms(int docNum) throws IOException {
-    Map<String, Map<String, Int>> field2termFreqMap = new HashMap<>();
+    Map<String, Int> termFreqMap = new HashMap<>();
     for (String fieldName : fieldNames) {
       final Fields vectors = ir.getTermVectors(docNum);
       final Terms vector;
@@ -752,42 +738,43 @@ public final class MoreLikeThis {
         for (IndexableField field : fields) {
           final String stringValue = field.stringValue();
           if (stringValue != null) {
-            addTermFrequencies(new StringReader(stringValue), field2termFreqMap, fieldName);
+            addTermFrequencies(new StringReader(stringValue), termFreqMap, fieldName);
           }
         }
       } else {
-        addTermFrequencies(field2termFreqMap, vector, fieldName);
+        addTermFrequencies(termFreqMap, vector);
       }
     }
 
-    return createQueue(field2termFreqMap);
+    return createQueue(termFreqMap);
   }
 
 
-  private PriorityQueue<ScoreTerm> retrieveTerms(Map<String, Collection<Object>> field2fieldValues) throws
+  private PriorityQueue<ScoreTerm> retrieveTerms(Map<String, Collection<Object>> fields) throws 
       IOException {
-    Map<String, Map<String, Int>> field2termFreqMap = new HashMap<>();
+    HashMap<String,Int> termFreqMap = new HashMap<>();
     for (String fieldName : fieldNames) {
-      Collection<Object> fieldValues = field2fieldValues.get(fieldName);
-      if (fieldValues == null)
-        continue;
-      for (Object fieldValue : fieldValues) {
-        if (fieldValue != null) {
-          addTermFrequencies(new StringReader(String.valueOf(fieldValue)), field2termFreqMap,
-              fieldName);
+      for (String field : fields.keySet()) {
+        Collection<Object> fieldValues = fields.get(field);
+        if(fieldValues == null)
+          continue;
+        for(Object fieldValue:fieldValues) {
+          if (fieldValue != null) {
+            addTermFrequencies(new StringReader(String.valueOf(fieldValue)), termFreqMap,
+                fieldName);
+          }
         }
       }
     }
-    return createQueue(field2termFreqMap);
+    return createQueue(termFreqMap);
   }
   /**
    * Adds terms and frequencies found in vector into the Map termFreqMap
    *
-   * @param field2termFreqMap a Map of terms and their frequencies per field
+   * @param termFreqMap a Map of terms and their frequencies
    * @param vector List of terms and their frequencies for a doc/field
    */
-  private void addTermFrequencies(Map<String, Map<String, Int>> field2termFreqMap, Terms vector, String fieldName) throws IOException {
-    Map<String, Int> termFreqMap = field2termFreqMap.computeIfAbsent(fieldName, k -> new HashMap<>());
+  private void addTermFrequencies(Map<String, Int> termFreqMap, Terms vector) throws IOException {
     final TermsEnum termsEnum = vector.iterator();
     final CharsRefBuilder spare = new CharsRefBuilder();
     BytesRef text;
@@ -815,21 +802,19 @@ public final class MoreLikeThis {
    * Adds term frequencies found by tokenizing text from reader into the Map words
    *
    * @param r a source of text to be tokenized
-   * @param perFieldTermFrequencies a Map of terms and their frequencies per field
+   * @param termFreqMap a Map of terms and their frequencies
    * @param fieldName Used by analyzer for any special per-field analysis
    */
-  private void addTermFrequencies(Reader r, Map<String, Map<String, Int>> perFieldTermFrequencies, String fieldName)
+  private void addTermFrequencies(Reader r, Map<String, Int> termFreqMap, String fieldName)
       throws IOException {
     if (analyzer == null) {
       throw new UnsupportedOperationException("To use MoreLikeThis without " +
           "term vectors, you must provide an Analyzer");
     }
-    Map<String, Int> termFreqMap = perFieldTermFrequencies.computeIfAbsent(fieldName, k -> new HashMap<>());
     try (TokenStream ts = analyzer.tokenStream(fieldName, r)) {
       int tokenCount = 0;
       // for every token
       CharTermAttribute termAtt = ts.addAttribute(CharTermAttribute.class);
-      TermFrequencyAttribute tfAtt = ts.addAttribute(TermFrequencyAttribute.class);
       ts.reset();
       while (ts.incrementToken()) {
         String word = termAtt.toString();
@@ -844,9 +829,9 @@ public final class MoreLikeThis {
         // increment frequency
         Int cnt = termFreqMap.get(word);
         if (cnt == null) {
-          termFreqMap.put(word, new Int(tfAtt.getTermFrequency()));
+          termFreqMap.put(word, new Int());
         } else {
-          cnt.x += tfAtt.getTermFrequency();
+          cnt.x++;
         }
       }
       ts.end();
@@ -895,16 +880,16 @@ public final class MoreLikeThis {
    * @see #retrieveInterestingTerms
    */
   private PriorityQueue<ScoreTerm> retrieveTerms(Reader r, String fieldName) throws IOException {
-    Map<String, Map<String, Int>> field2termFreqMap = new HashMap<>();
-    addTermFrequencies(r, field2termFreqMap, fieldName);
-    return createQueue(field2termFreqMap);
+    Map<String, Int> words = new HashMap<>();
+    addTermFrequencies(r, words, fieldName);
+    return createQueue(words);
   }
 
   /**
    * @see #retrieveInterestingTerms(java.io.Reader, String)
    */
   public String[] retrieveInterestingTerms(int docNum) throws IOException {
-    ArrayList<String> al = new ArrayList<>(maxQueryTerms);
+    ArrayList<Object> al = new ArrayList<>(maxQueryTerms);
     PriorityQueue<ScoreTerm> pq = retrieveTerms(docNum);
     ScoreTerm scoreTerm;
     int lim = maxQueryTerms; // have to be careful, retrieveTerms returns all words but that's probably not useful to our caller...
@@ -927,7 +912,7 @@ public final class MoreLikeThis {
    * @see #setMaxQueryTerms
    */
   public String[] retrieveInterestingTerms(Reader r, String fieldName) throws IOException {
-    ArrayList<String> al = new ArrayList<>(maxQueryTerms);
+    ArrayList<Object> al = new ArrayList<>(maxQueryTerms);
     PriorityQueue<ScoreTerm> pq = retrieveTerms(r, fieldName);
     ScoreTerm scoreTerm;
     int lim = maxQueryTerms; // have to be careful, retrieveTerms returns all words but that's probably not useful to our caller...
@@ -988,11 +973,7 @@ public final class MoreLikeThis {
     int x;
 
     Int() {
-      this(1);
-    }
-
-    Int(int initialValue) {
-      x = initialValue;
+      x = 1;
     }
   }
 }

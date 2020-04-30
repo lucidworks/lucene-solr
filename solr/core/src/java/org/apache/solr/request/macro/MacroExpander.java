@@ -1,3 +1,5 @@
+package org.apache.solr.request.macro;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.request.macro;
 
 import org.apache.solr.common.SolrException;
 import org.apache.solr.search.StrParser;
@@ -34,15 +35,10 @@ public class MacroExpander {
   private String macroStart = MACRO_START;
   private char escape = '\\';
   private int level;
-  private final boolean failOnMissingParams;
-  
-  public MacroExpander(Map<String,String[]> orig) {
-    this(orig, false);
-  }
 
-  public MacroExpander(Map<String,String[]> orig, boolean failOnMissingParams) {
+
+  public MacroExpander(Map<String,String[]> orig) {
     this.orig = orig;
-    this.failOnMissingParams = failOnMissingParams;
   }
 
   public static Map<String,String[]> expand(Map<String,String[]> params) {
@@ -57,12 +53,8 @@ public class MacroExpander {
     boolean changed = false;
     for (Map.Entry<String,String[]> entry : orig.entrySet()) {
       String k = entry.getKey();
-      String[] values = entry.getValue();
-      if (!isExpandingExpr() && "expr".equals(k) ) {  // SOLR-12891
-        expanded.put(k,values);
-        continue;
-      }
       String newK = expand(k);
+      String[] values = entry.getValue();
       List<String> newValues = null;
       for (String v : values) {
         String newV = expand(v);
@@ -74,8 +66,6 @@ public class MacroExpander {
               newValues.add(vv);
             }
           }
-        }
-        if (newValues != null) {
           newValues.add(newV);
         }
       }
@@ -93,10 +83,6 @@ public class MacroExpander {
     }
 
     return changed;
-  }
-
-  private Boolean isExpandingExpr() {
-    return Boolean.valueOf(System.getProperty("StreamingExpressionMacros", "false"));
   }
 
   public String expand(String val) {
@@ -117,6 +103,7 @@ public class MacroExpander {
     if (idx < 0) return val;
 
     int start = 0;  // start of the unprocessed part of the string
+    int end = 0;
     StringBuilder sb = null;
     for (;;) {
       idx = val.indexOf(macroStart, idx);
@@ -177,13 +164,7 @@ public class MacroExpander {
         String replacement = replacementList!=null ? replacementList[0] : defVal;
         if (replacement != null) {
           String expandedReplacement = expand(replacement);
-          if (failOnMissingParams && expandedReplacement == null) {
-            return null;
-          }
           sb.append(expandedReplacement);
-        }
-        else if (failOnMissingParams) {
-          return null;
         }
 
       } catch (SyntaxError syntaxError) {

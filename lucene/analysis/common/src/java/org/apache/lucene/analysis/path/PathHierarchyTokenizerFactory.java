@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.path;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.path;
-
 
 import java.util.Map;
 
@@ -66,15 +66,8 @@ import org.apache.lucene.util.AttributeFactory;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;
  * </pre>
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
 public class PathHierarchyTokenizerFactory extends TokenizerFactory {
-
-  /** SPI name */
-  public static final String NAME = "pathHierarchy";
-
   private final char delimiter;
   private final char replacement;
   private final boolean reverse;

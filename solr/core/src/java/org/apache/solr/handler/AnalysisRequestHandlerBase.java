@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler;
 
 import java.io.IOException;
@@ -29,11 +30,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
-import org.apache.lucene.analysis.tokenattributes.BytesTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
@@ -117,12 +117,9 @@ public abstract class AnalysisRequestHandlerBase extends RequestHandlerBase {
     if (0 < cfiltfacs.length) {
       String source = value;
       for(CharFilterFactory cfiltfac : cfiltfacs ){
-        try (Reader sreader = new StringReader(source);
-             Reader reader = cfiltfac.create(sreader)) {
-          source = writeCharStream(namedList, reader);
-        } catch (IOException e) {
-          // do nothing.
-        }
+        Reader reader = new StringReader(source);
+        reader = cfiltfac.create(reader);
+        source = writeCharStream(namedList, reader);
       }
     }
 
@@ -142,19 +139,9 @@ public abstract class AnalysisRequestHandlerBase extends RequestHandlerBase {
       tokenStream = tokenFilterFactory.create(listBasedTokenStream);
       tokens = analyzeTokenStream(tokenStream);
       namedList.add(tokenStream.getClass().getName(), convertTokensToNamedLists(tokens, context));
-      try {
-        listBasedTokenStream.close();
-      } catch (IOException e) {
-        // do nothing;
-      }
       listBasedTokenStream = new ListBasedTokenStream(listBasedTokenStream, tokens);
     }
 
-    try {
-      listBasedTokenStream.close();
-    } catch (IOException e) {
-      // do nothing.
-    }
     return namedList;
   }
 
@@ -178,7 +165,7 @@ public abstract class AnalysisRequestHandlerBase extends RequestHandlerBase {
       tokenStream.end();
       return tokens;
     } catch (IOException ioe) {
-      throw new RuntimeException("Error occurred while iterating over tokenstream", ioe);
+      throw new RuntimeException("Error occured while iterating over tokenstream", ioe);
     }
   }
 
@@ -206,7 +193,7 @@ public abstract class AnalysisRequestHandlerBase extends RequestHandlerBase {
       }
       tokenStream.end(); // TODO should we capture?
     } catch (IOException ioe) {
-      throw new RuntimeException("Error occurred while iterating over tokenstream", ioe);
+      throw new RuntimeException("Error occured while iterating over tokenstream", ioe);
     } finally {
       IOUtils.closeWhileHandlingException(tokenStream);
     }
@@ -236,7 +223,7 @@ public abstract class AnalysisRequestHandlerBase extends RequestHandlerBase {
     final FieldType fieldType = context.getFieldType();
     final AttributeSource[] tokens = tokenList.toArray(new AttributeSource[tokenList.size()]);
     
-    // sort the tokens by absolute position
+    // sort the tokens by absoulte position
     ArrayUtil.timSort(tokens, new Comparator<AttributeSource>() {
       @Override
       public int compare(AttributeSource a, AttributeSource b) {
@@ -262,14 +249,8 @@ public abstract class AnalysisRequestHandlerBase extends RequestHandlerBase {
     for (int i = 0; i < tokens.length; i++) {
       AttributeSource token = tokens[i];
       final NamedList<Object> tokenNamedList = new SimpleOrderedMap<>();
-      final BytesRef rawBytes;
-      if (token.hasAttribute(BytesTermAttribute.class)) {
-        final BytesTermAttribute bytesAtt = token.getAttribute(BytesTermAttribute.class);
-        rawBytes = bytesAtt.getBytesRef(); 
-      } else {
-        final TermToBytesRefAttribute termAtt = token.getAttribute(TermToBytesRefAttribute.class);
-        rawBytes = termAtt.getBytesRef();
-      }
+      final TermToBytesRefAttribute termAtt = token.getAttribute(TermToBytesRefAttribute.class);
+      BytesRef rawBytes = termAtt.getBytesRef();
       final String text = fieldType.indexedToReadable(rawBytes, new CharsRefBuilder()).toString();
       tokenNamedList.add("text", text);
       
@@ -501,7 +482,7 @@ public abstract class AnalysisRequestHandlerBase extends RequestHandlerBase {
     /**
      * Constructs a new AnalysisContext with a given field tpe, analyzer and
      * termsToMatch. During the analysis processs, The produced tokens will be 
-     * compared to the terms in the {@code termsToMatch} set. When found, 
+     * compaired to the termes in the {@code termsToMatch} set. When found, 
      * these tokens will be marked as a match.
      *
      * @param fieldName    The name of the field the analysis is performed on 

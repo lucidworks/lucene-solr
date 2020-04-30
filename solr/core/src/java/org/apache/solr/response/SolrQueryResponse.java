@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.response;
 
 import java.util.Collection;
@@ -66,10 +67,6 @@ import org.apache.solr.search.SolrReturnFields;
  */
 public class SolrQueryResponse {
   public static final String NAME = "response";
-  public static final String RESPONSE_HEADER_PARTIAL_RESULTS_KEY = "partialResults";
-  public static final String RESPONSE_HEADER_SEGMENT_TERMINATED_EARLY_KEY = "segmentTerminatedEarly";
-  private static final String RESPONSE_HEADER_KEY = "responseHeader";
-  private static final String RESPONSE_KEY = "response";
 
   /**
    * Container for user defined values
@@ -161,10 +158,6 @@ public class SolrQueryResponse {
 
   /**
    * Causes an error to be returned instead of the results.
-   * 
-   * In general, new calls to this method should not be added. In most cases
-   * you should simply throw an exception and let it bubble out to 
-   * RequestHandlerBase, which will set the exception thrown.
    */
   public void setException(Exception e) {
     err=e;
@@ -178,31 +171,11 @@ public class SolrQueryResponse {
     return err;
   }
 
-  /** Set response header */
-  public void addResponseHeader(NamedList<Object> header) {
-    values.add(RESPONSE_HEADER_KEY, header);
-  }
-
-  /** Clear response header */
-  public void removeResponseHeader() {
-    values.remove(RESPONSE_HEADER_KEY);
-  }
-
   /** Response header to be logged */
   public NamedList<Object> getResponseHeader() {
     @SuppressWarnings("unchecked")
-    SimpleOrderedMap<Object> header = (SimpleOrderedMap<Object>) values.get(RESPONSE_HEADER_KEY);
+    SimpleOrderedMap<Object> header = (SimpleOrderedMap<Object>) values.get("responseHeader");
     return header;
-  }
-
-  /** Set response */
-  public void addResponse(Object response) {
-    values.add(RESPONSE_KEY, response);
-  }
-
-  /** Return response */
-  public Object getResponse() {
-    return values.get(RESPONSE_KEY);
   }
   
   /** Add a value to be logged.
@@ -226,15 +199,12 @@ public class SolrQueryResponse {
   public String getToLogAsString(String logid) {
     StringBuilder sb = new StringBuilder(logid);
     for (int i=0; i<toLog.size(); i++) {
-      if (sb.length() > 0) {
-        sb.append(' ');
-      }
       String name = toLog.getName(i);
       Object val = toLog.getVal(i);
       if (name != null) {
         sb.append(name).append('=');
       }
-      sb.append(val);
+      sb.append(val).append(' ');
     }
     return sb.toString();
   }

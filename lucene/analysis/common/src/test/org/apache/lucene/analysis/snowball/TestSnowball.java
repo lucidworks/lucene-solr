@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.snowball;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.snowball;
-
 
 import java.io.IOException;
 
@@ -71,7 +71,7 @@ public class TestSnowball extends BaseTokenStreamTestCase {
     assertEquals(new BytesRef(new byte[]{0,1,2,3}), payloadAtt.getPayload());
   }
   
-  private static final class TestTokenStream extends TokenStream {
+  private final class TestTokenStream extends TokenStream {
     private final CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);
     private final OffsetAttribute offsetAtt = addAttribute(OffsetAttribute.class);
     private final TypeAttribute typeAtt = addAttribute(TypeAttribute.class);

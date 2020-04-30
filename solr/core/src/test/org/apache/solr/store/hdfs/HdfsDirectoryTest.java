@@ -1,3 +1,5 @@
+package org.apache.solr.store.hdfs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.store.hdfs;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -24,11 +25,12 @@ import java.util.Set;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.NoLockFactory;
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.cloud.hdfs.HdfsTestUtil;
 import org.apache.solr.util.BadHdfsThreadsFilter;
@@ -62,11 +64,8 @@ public class HdfsDirectoryTest extends SolrTestCaseJ4 {
   
   @AfterClass
   public static void afterClass() throws Exception {
-    try {
-      HdfsTestUtil.teardownClass(dfsCluster);
-    } finally {
-      dfsCluster = null;
-    }
+    HdfsTestUtil.teardownClass(dfsCluster);
+    dfsCluster = null;
   }
   
   @Before
@@ -76,7 +75,7 @@ public class HdfsDirectoryTest extends SolrTestCaseJ4 {
     Configuration conf = HdfsTestUtil.getClientConfiguration(dfsCluster);
     conf.set("dfs.permissions.enabled", "false");
     
-    directory = new HdfsDirectory(new Path(dfsCluster.getURI().toString() + createTempDir().toFile().getAbsolutePath() + "/hdfs"), conf);
+    directory = new HdfsDirectory(new Path(HdfsTestUtil.getURI(dfsCluster) + createTempDir().toFile().getAbsolutePath() + "/hdfs"), NoLockFactory.INSTANCE, conf);
     
     random = random();
   }
@@ -131,7 +130,7 @@ public class HdfsDirectoryTest extends SolrTestCaseJ4 {
     IndexOutput output = directory.createOutput("testing.test", new IOContext());
     output.writeInt(12345);
     output.close();
-    directory.rename("testing.test", "testing.test.renamed");
+    directory.renameFile("testing.test", "testing.test.renamed");
     assertFalse(slowFileExists(directory, "testing.test"));
     assertTrue(slowFileExists(directory, "testing.test.renamed"));
     IndexInput input = directory.openInput("testing.test.renamed", new IOContext());
@@ -144,7 +143,7 @@ public class HdfsDirectoryTest extends SolrTestCaseJ4 {
   
   @Test
   public void testEOF() throws IOException {
-    Directory fsDir = new ByteBuffersDirectory();
+    Directory fsDir = new RAMDirectory();
     String name = "test.eof";
     createFile(name, fsDir, directory);
     long fsLength = fsDir.fileLength(name);
@@ -157,7 +156,11 @@ public class HdfsDirectoryTest extends SolrTestCaseJ4 {
   private void testEof(String name, Directory directory, long length) throws IOException {
     IndexInput input = directory.openInput(name, new IOContext());
     input.seek(length);
-    expectThrows(Exception.class, input::readByte);
+    try {
+      input.readByte();
+      fail("should throw eof");
+    } catch (IOException e) {
+    }
   }
 
   @Test
@@ -166,7 +169,7 @@ public class HdfsDirectoryTest extends SolrTestCaseJ4 {
     try {
       Set<String> names = new HashSet<>();
       for (; i< 10; i++) {
-        Directory fsDir = new ByteBuffersDirectory();
+        Directory fsDir = new RAMDirectory();
         String name = getName();
         System.out.println("Working on pass [" + i  +"] contains [" + names.contains(name) + "]");
         names.add(name);

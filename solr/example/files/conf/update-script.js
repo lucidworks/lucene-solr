@@ -72,23 +72,18 @@ function processAdd(cmd) {
     doc.setField("content_type_subtype_s", ct_subtype);
   }
 
-  var content = doc.getFieldValue("content");
-  if (!content) {
-    return; //No content found, so we are done here
-  }
-
     var analyzer =
          req.getCore().getLatestSchema()
          .getFieldTypeByName("text_email_url")
          .getIndexAnalyzer();
 
   var token_stream =
-       analyzer.tokenStream("content", content);
+       analyzer.tokenStream("content", doc.getFieldValue("content"));
   var term_att = token_stream.getAttribute(get_class("org.apache.lucene.analysis.tokenattributes.CharTermAttribute"));
   var type_att = token_stream.getAttribute(get_class("org.apache.lucene.analysis.tokenattributes.TypeAttribute"));
   token_stream.reset();
   while (token_stream.incrementToken()) {
-    doc.addField(type_att.type().replace(/\<|\>/g,'').toLowerCase()+"_ss", term_att.toString());
+    doc.addField(type_att.type().replaceAll(/\<|\>/g,"").toLowerCase()+"_ss", term_att.toString());
   }
   token_stream.end();
   token_stream.close();

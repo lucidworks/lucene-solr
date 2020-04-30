@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.dataimport;
 
 /**
@@ -54,7 +55,7 @@ public class DataImportHandlerException extends RuntimeException {
     return errCode;
   }
 
-  public static DataImportHandlerException wrapAndThrow(int err, Exception e) {
+  public static void wrapAndThrow(int err, Exception e) {
     if (e instanceof DataImportHandlerException) {
       throw (DataImportHandlerException) e;
     } else {
@@ -62,7 +63,7 @@ public class DataImportHandlerException extends RuntimeException {
     }
   }
 
-  public static DataImportHandlerException wrapAndThrow(int err, Exception e, String msg) {
+  public static void wrapAndThrow(int err, Exception e, String msg) {
     if (e instanceof DataImportHandlerException) {
       throw (DataImportHandlerException) e;
     } else {

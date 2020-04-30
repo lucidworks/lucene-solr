@@ -1,3 +1,5 @@
+package org.apache.lucene.search.join;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.join;
 
+import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.index.SortedNumericDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
-import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.SortedNumericSelector;
 import org.apache.lucene.search.SortedSetSelector;
 import org.apache.lucene.util.BitSet;
-import org.apache.lucene.util.BitSetIterator;
 import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.BytesRef;
 
 /** Select a value from a block of documents.
  *  @lucene.internal */
@@ -45,7 +46,7 @@ public class BlockJoinSelector {
 
   /** Return a {@link Bits} instance that returns true if, and only if, any of
    *  the children of the given parent document has a value. */
-  public static Bits wrap(final Bits docsWithValue, BitSet parents, BitSet children) {
+  public static Bits wrap(final Bits docsWithValue, final BitSet parents, final BitSet children) {
     return new Bits() {
 
       @Override
@@ -77,15 +78,7 @@ public class BlockJoinSelector {
   /** Wraps the provided {@link SortedSetDocValues} in order to only select
    *  one value per parent among its {@code children} using the configured
    *  {@code selection} type. */
-  @Deprecated
   public static SortedDocValues wrap(SortedSetDocValues sortedSet, Type selection, BitSet parents, BitSet children) {
-    return wrap(sortedSet, selection, parents, toIter(children));
-  }
-
-  /** Wraps the provided {@link SortedSetDocValues} in order to only select
-   *  one value per parent among its {@code children} using the configured
-   *  {@code selection} type. */
-  public static SortedDocValues wrap(SortedSetDocValues sortedSet, Type selection, BitSet parents, DocIdSetIterator children) {
     SortedDocValues values;
     switch (selection) {
       case MIN:
@@ -99,42 +92,62 @@ public class BlockJoinSelector {
     }
     return wrap(values, selection, parents, children);
   }
-  
-  /** Wraps the provided {@link SortedDocValues} in order to only select
-   *  one value per parent among its {@code children} using the configured
-   *  {@code selection} type. */
-  @Deprecated
-  public static SortedDocValues wrap(final SortedDocValues values, Type selection, BitSet parents, BitSet children) {
-    return wrap(values, selection, parents, toIter(children));
-  }
 
   /** Wraps the provided {@link SortedDocValues} in order to only select
    *  one value per parent among its {@code children} using the configured
    *  {@code selection} type. */
-  public static SortedDocValues wrap(final SortedDocValues values, Type selection, BitSet parents, DocIdSetIterator children) {
-    if (values.docID() != -1) {
-      throw new IllegalArgumentException("values iterator was already consumed: values.docID=" + values.docID());
-    }
-    return ToParentDocValues.wrap(values, selection, parents, children);
+  public static SortedDocValues wrap(final SortedDocValues values, final Type selection, final BitSet parents, final BitSet children) {
+    return new SortedDocValues() {
+
+      @Override
+      public int getOrd(int docID) {
+        assert parents.get(docID) : "this selector may only be used on parent documents";
+
+        if (docID == 0) {
+          // no children
+          return -1;
+        }
+
+        final int firstChild = parents.prevSetBit(docID - 1) + 1;
+
+        int ord = -1;
+        for (int child = children.nextSetBit(firstChild); child < docID; child = children.nextSetBit(child + 1)) {
+          final int childOrd = values.getOrd(child);
+          switch (selection) {
+            case MIN:
+              if (ord == -1) {
+                ord = childOrd;
+              } else if (childOrd != -1) {
+                ord = Math.min(ord, childOrd);
+              }
+              break;
+            case MAX:
+              ord = Math.max(ord, childOrd);
+              break;
+            default:
+              throw new AssertionError();
+          }
+        }
+        return ord;
+      }
+
+      @Override
+      public BytesRef lookupOrd(int ord) {
+        return values.lookupOrd(ord);
+      }
+
+      @Override
+      public int getValueCount() {
+        return values.getValueCount();
+      }
+
+    };
   }
 
   /** Wraps the provided {@link SortedNumericDocValues} in order to only select
    *  one value per parent among its {@code children} using the configured
    *  {@code selection} type. */
-  @Deprecated
   public static NumericDocValues wrap(SortedNumericDocValues sortedNumerics, Type selection, BitSet parents, BitSet children) {
-    return wrap(sortedNumerics, selection, parents, toIter(children));
-  }
-
-  /** creates an iterator for the given bitset */
-  protected static BitSetIterator toIter(BitSet children) {
-    return new BitSetIterator(children, 0);
-  }
-  
-  /** Wraps the provided {@link SortedNumericDocValues} in order to only select
-   *  one value per parent among its {@code children} using the configured
-   *  {@code selection} type. */
-  public static NumericDocValues wrap(SortedNumericDocValues sortedNumerics, Type selection, BitSet parents, DocIdSetIterator children) {
     NumericDocValues values;
     switch (selection) {
       case MIN:
@@ -146,24 +159,54 @@ public class BlockJoinSelector {
       default:
         throw new AssertionError();
     }
-    return wrap(values, selection, parents, children);
+    return wrap(values, DocValues.docsWithValue(sortedNumerics, parents.length()), selection, parents, children);
   }
 
-  /** Wraps the provided {@link NumericDocValues}, iterating over only
-   *  child documents, in order to only select one value per parent among
-   *  its {@code children} using the configured {@code selection} type. */
-  @Deprecated
-  public static NumericDocValues wrap(final NumericDocValues values, Type selection, BitSet parents, BitSet children) {
-    return wrap(values,selection, parents, toIter(children));
+  /** Wraps the provided {@link NumericDocValues} in order to only select
+   *  one value per parent among its {@code children} using the configured
+   *  {@code selection} type. */
+  public static NumericDocValues wrap(final NumericDocValues values, final Bits docsWithValue, final Type selection, final BitSet parents, final BitSet children) {
+    return new NumericDocValues() {
+
+      @Override
+      public long get(int docID) {
+        assert parents.get(docID) : "this selector may only be used on parent documents";
+
+        if (docID == 0) {
+          // no children
+          return 0;
+        }
+
+        final int firstChild = parents.prevSetBit(docID - 1) + 1;
+
+        long value = 0;
+        boolean hasValue = false;
+
+        for (int child = children.nextSetBit(firstChild); child < docID; child = children.nextSetBit(child + 1)) {
+          final long childValue = values.get(child);
+          final boolean childHasValue = value != 0 || docsWithValue.get(child);
+
+          if (hasValue == false) {
+            value = childValue;
+            hasValue = childHasValue;
+          } else if (childHasValue) {
+            switch (selection) {
+              case MIN:
+                value = Math.min(value, childValue);
+                break;
+              case MAX:
+                value = Math.max(value, childValue);
+                break;
+              default:
+                throw new AssertionError();
+            }
+          }
+        }
+
+        return value;
+      }
+
+    };
   }
 
-  /** Wraps the provided {@link NumericDocValues}, iterating over only
-   *  child documents, in order to only select one value per parent among
-   *  its {@code children} using the configured {@code selection} type. */
-  public static NumericDocValues wrap(final NumericDocValues values, Type selection, BitSet parents, DocIdSetIterator children) {
-    if (values.docID() != -1) {
-      throw new IllegalArgumentException("values iterator was already consumed: values.docID=" + values.docID());
-    }
-    return ToParentDocValues.wrap(values,selection, parents, children);
-  }
 }

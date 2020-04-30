@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -233,6 +233,8 @@ public class TestTransactions extends LuceneTestCase {
     // we cant use non-ramdir on windows, because this test needs to double-write.
     MockDirectoryWrapper dir1 = new MockDirectoryWrapper(random(), new RAMDirectory());
     MockDirectoryWrapper dir2 = new MockDirectoryWrapper(random(), new RAMDirectory());
+    dir1.setPreventDoubleWrite(false);
+    dir2.setPreventDoubleWrite(false);
     dir1.failOn(new RandomFailure());
     dir2.failOn(new RandomFailure());
     dir1.setFailOnOpenInput(false);

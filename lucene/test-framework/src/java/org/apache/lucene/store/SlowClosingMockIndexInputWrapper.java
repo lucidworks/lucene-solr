@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
 
 import java.io.IOException;
 
@@ -30,7 +31,7 @@ class SlowClosingMockIndexInputWrapper extends MockIndexInputWrapper {
 
   public SlowClosingMockIndexInputWrapper(MockDirectoryWrapper dir,
       String name, IndexInput delegate) {
-    super(dir, name, delegate, null);
+    super(dir, name, delegate);
   }
   
   @Override

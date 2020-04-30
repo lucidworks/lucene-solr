@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj;
 
 import junit.framework.Assert;
@@ -25,7 +26,6 @@ import org.apache.solr.client.solrj.util.ClientUtils;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.params.CommonParams;
-import org.apache.solr.common.util.TimeSource;
 import org.apache.solr.util.TimeOut;
 import org.junit.Test;
 
@@ -51,8 +51,8 @@ abstract public class SolrExampleTestsBase extends SolrJettyTestBase {
     
     // Now try a timed commit...
     SolrInputDocument doc3 = new SolrInputDocument();
-    doc3.addField("id", "id3");
-    doc3.addField("name", "doc3");
+    doc3.addField("id", "id3", 1.0f);
+    doc3.addField("name", "doc3", 1.0f);
     doc3.addField("price", 10);
     UpdateRequest up = new UpdateRequest();
     up.add(doc3);
@@ -88,8 +88,8 @@ abstract public class SolrExampleTestsBase extends SolrJettyTestBase {
     
     // Now test the new convenience parameter on the add() for commitWithin
     SolrInputDocument doc4 = new SolrInputDocument();
-    doc4.addField("id", "id4");
-    doc4.addField("name", "doc4");
+    doc4.addField("id", "id4", 1.0f);
+    doc4.addField("name", "doc4", 1.0f);
     doc4.addField("price", 10);
     client.add(doc4, 500);
     
@@ -126,8 +126,8 @@ abstract public class SolrExampleTestsBase extends SolrJettyTestBase {
     
     // Now add one document...
     SolrInputDocument doc3 = new SolrInputDocument();
-    doc3.addField("id", "id3");
-    doc3.addField("name", "doc3");
+    doc3.addField("id", "id3", 1.0f);
+    doc3.addField("name", "doc3", 1.0f);
     doc3.addField("price", 10);
     client.add(doc3);
     client.commit();
@@ -147,7 +147,7 @@ abstract public class SolrExampleTestsBase extends SolrJettyTestBase {
     Assert.assertEquals(1, rsp.getResults().getNumFound());
     
     // check if the doc has been deleted every 250 ms for 30 seconds
-    TimeOut timeout = new TimeOut(30, TimeUnit.SECONDS, TimeSource.NANO_TIME);
+    TimeOut timeout = new TimeOut(30, TimeUnit.SECONDS);
     do {
       Thread.sleep(250); // wait 250 ms
       
@@ -170,7 +170,7 @@ abstract public class SolrExampleTestsBase extends SolrJettyTestBase {
     SolrInputDocument[] doc = new SolrInputDocument[3];
     for (int i = 0; i < 3; i++) {
       doc[i] = new SolrInputDocument();
-      doc[i].setField("id", i + " & 222");
+      doc[i].setField("id", i + " & 222", 1.0f);
     }
     String id = (String) doc[0].getField("id").getFirstValue();
     
@@ -249,7 +249,7 @@ abstract public class SolrExampleTestsBase extends SolrJettyTestBase {
 
         // Make sure the transformer works for streaming
         Float score = (Float) doc.get("score");
-        assertEquals("should have score", Float.valueOf(1.0f), score);
+        assertEquals("should have score", new Float(1.0), score);
       }
 
     });

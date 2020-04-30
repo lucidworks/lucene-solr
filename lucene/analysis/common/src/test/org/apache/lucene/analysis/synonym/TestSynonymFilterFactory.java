@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.synonym;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.synonym;
-
 
 import java.io.Reader;
 import java.io.StringReader;
@@ -76,12 +76,14 @@ public class TestSynonymFilterFactory extends BaseTokenStreamFactoryTestCase {
   
   /** Test that bogus arguments result in exception */
   public void testBogusArguments() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       tokenFilterFactory("Synonym", 
           "synonyms", "synonyms.txt", 
           "bogusArg", "bogusValue");
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
   }
 
   /** Test that analyzer and tokenizerFactory is both specified */
@@ -95,13 +97,15 @@ public class TestSynonymFilterFactory extends BaseTokenStreamFactoryTestCase {
         "analyzer", analyzer);
     assertNotNull(factory);
 
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       tokenFilterFactory("Synonym",
           "synonyms", "synonyms.txt",
           "analyzer", analyzer,
           "tokenizerFactory", tokenizerFactory);
-    });
-    assertTrue(expected.getMessage().contains("Analyzer and TokenizerFactory can't be specified both"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Analyzer and TokenizerFactory can't be specified both"));
+    }
   }
 
   static final String TOK_SYN_ARG_VAL = "argument";
@@ -128,21 +132,27 @@ public class TestSynonymFilterFactory extends BaseTokenStreamFactoryTestCase {
     assertNotNull(factory);
 
     // sanity check that sub-PatternTokenizerFactory fails w/o pattern
-    expectThrows(Exception.class, () -> {
-      tokenFilterFactory("Synonym", 
+    try {
+      factory = tokenFilterFactory("Synonym", 
           "synonyms", "synonyms.txt", 
           "tokenizerFactory", clazz);
-    });
+      fail("tokenizerFactory should have complained about missing pattern arg");
+    } catch (Exception expected) {
+      // :NOOP:
+    }
 
     // sanity check that sub-PatternTokenizerFactory fails on unexpected
-    expectThrows(Exception.class, () -> {
-      tokenFilterFactory("Synonym", 
+    try {
+      factory = tokenFilterFactory("Synonym", 
           "synonyms", "synonyms.txt", 
           "tokenizerFactory", clazz,
           "tokenizerFactory.pattern", "(.*)",
           "tokenizerFactory.bogusbogusbogus", "bogus",
           "tokenizerFactory.group", "0");
-    });
+      fail("tokenizerFactory should have complained about missing pattern arg");
+    } catch (Exception expected) {
+      // :NOOP:
+    }
   }
 
 

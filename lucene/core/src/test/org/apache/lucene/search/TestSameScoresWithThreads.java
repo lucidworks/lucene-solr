@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,7 +28,7 @@ import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.Terms;
@@ -61,7 +61,7 @@ public class TestSameScoresWithThreads extends LuceneTestCase {
     w.close();
 
     final IndexSearcher s = newSearcher(r);
-    Terms terms = MultiTerms.getTerms(r, "body");
+    Terms terms = MultiFields.getFields(r).terms("body");
     int termCount = 0;
     TermsEnum termsEnum = terms.iterator();
     while(termsEnum.next() != null) {
@@ -97,7 +97,7 @@ public class TestSameScoresWithThreads extends LuceneTestCase {
                   for(Map.Entry<BytesRef,TopDocs> ent : shuffled) {
                     TopDocs actual = s.search(new TermQuery(new Term("body", ent.getKey())), 100);
                     TopDocs expected = ent.getValue();
-                    assertEquals(expected.totalHits.value, actual.totalHits.value);
+                    assertEquals(expected.totalHits, actual.totalHits);
                     assertEquals("query=" + ent.getKey().utf8ToString(), expected.scoreDocs.length, actual.scoreDocs.length);
                     for(int hit=0;hit<expected.scoreDocs.length;hit++) {
                       assertEquals(expected.scoreDocs[hit].doc, actual.scoreDocs[hit].doc);

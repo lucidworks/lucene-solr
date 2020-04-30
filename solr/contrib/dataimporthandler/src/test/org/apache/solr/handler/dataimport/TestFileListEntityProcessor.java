@@ -1,3 +1,4 @@
+package org.apache.solr.handler.dataimport;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,23 +15,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.dataimport;
+
+import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.util.TestUtil;
+import org.apache.solr.common.util.SuppressForbidden;
+import org.junit.Ignore;
+import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-
-import org.apache.solr.common.util.SuppressForbidden;
-import org.junit.Test;
+import java.util.*;
 
 /**
  * <p>
@@ -69,7 +66,9 @@ public class TestFileListEntityProcessor extends AbstractDataImportHandlerTestCa
   
   @Test
   public void testBiggerSmallerFiles() throws IOException {
-    File tmpdir = createTempDir().toFile();
+    File tmpdir = File.createTempFile("test", "tmp", createTempDir().toFile());
+    Files.delete(tmpdir.toPath());
+    tmpdir.mkdir();
 
     long minLength = Long.MAX_VALUE;
     String smallestFile = "";

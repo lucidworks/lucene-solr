@@ -1,3 +1,5 @@
+package org.apache.solr;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,38 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr;
+
+
+import com.google.common.base.Charsets;
+import org.apache.commons.io.FileUtils;
+import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.LuceneTestCase;
+import org.apache.solr.client.solrj.SolrClient;
+import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.embedded.JettySolrRunner;
+import org.apache.solr.client.solrj.impl.HttpSolrClient;
+import org.apache.solr.client.solrj.impl.NoOpResponseParser;
+import org.apache.solr.client.solrj.request.QueryRequest;
+import org.apache.solr.client.solrj.request.UpdateRequest;
+import org.apache.solr.client.solrj.response.UpdateResponse;
+import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.NamedList;
+import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.schema.IndexSchema;
+import org.apache.solr.schema.SchemaField;
+import org.apache.solr.servlet.DirectSolrConnection;
+import org.noggit.JSONUtil;
+import org.noggit.ObjectBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.lang.invoke.MethodHandles;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -35,37 +61,11 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 
-import org.apache.commons.io.FileUtils;
-import org.apache.lucene.util.IOUtils;
-import org.apache.solr.client.solrj.SolrClient;
-import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.embedded.JettyConfig;
-import org.apache.solr.client.solrj.embedded.JettySolrRunner;
-import org.apache.solr.client.solrj.impl.NoOpResponseParser;
-import org.apache.solr.client.solrj.request.QueryRequest;
-import org.apache.solr.client.solrj.request.UpdateRequest;
-import org.apache.solr.client.solrj.response.UpdateResponse;
-import org.apache.solr.common.SolrInputDocument;
-import org.apache.solr.common.params.ModifiableSolrParams;
-import org.apache.solr.common.params.SolrParams;
-import org.apache.solr.common.util.NamedList;
-import org.apache.solr.core.CoreDescriptor;
-import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.schema.IndexSchema;
-import org.apache.solr.schema.SchemaField;
-import org.apache.solr.servlet.DirectSolrConnection;
-import org.noggit.JSONUtil;
-import org.noggit.ObjectBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 
 @SolrTestCaseJ4.SuppressSSL
 //@LuceneTestCase.SuppressCodecs({"Lucene3x","Lucene40","Lucene41","Lucene42","Lucene45","Appending","Asserting"})
 public class SolrTestCaseHS extends SolrTestCaseJ4 {
   
-  public static final String SOLR_TESTS_SHARDS_WHITELIST = "solr.tests.shardsWhitelist";
-
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   @SafeVarargs
   public static <T> Set<T> set(T... a) {
@@ -287,7 +287,6 @@ public class SolrTestCaseHS extends SolrTestCaseJ4 {
     public boolean local() {
       return provider == null;
     }
-    public ClientProvider getClientProvider() { return provider; }
 
     public void testJQ(SolrParams args, String... tests) throws Exception {
       if (queryDefaults != null) {
@@ -366,10 +365,6 @@ public class SolrTestCaseHS extends SolrTestCaseJ4 {
     public List<SolrClient> all() {
       return clients;
     }
-
-    public int getSeed() {
-      return hashSeed;
-    }
   }
 
 
@@ -423,7 +418,7 @@ public class SolrTestCaseHS extends SolrTestCaseJ4 {
 
     public SolrClient getSolrJ() {
       if (solrj == null) {
-        solrj = getHttpSolrClient(getCollectionURL());
+        solrj = new HttpSolrClient(getCollectionURL());
       }
       return solrj;
     }
@@ -440,7 +435,7 @@ public class SolrTestCaseHS extends SolrTestCaseJ4 {
       copyConfFile(baseDir, collection, schemaFile);
 
       File collDir = new File(baseDir, collection);
-      try (Writer w = new OutputStreamWriter(Files.newOutputStream(collDir.toPath().resolve("core.properties")), StandardCharsets.UTF_8)) {
+      try (Writer w = new OutputStreamWriter(Files.newOutputStream(collDir.toPath().resolve("core.properties")), Charsets.UTF_8)) {
         Properties coreProps = new Properties();
         coreProps.put("name", "collection1");
         coreProps.put("config", solrconfigFile);
@@ -456,26 +451,11 @@ public class SolrTestCaseHS extends SolrTestCaseJ4 {
       }
 
       if (jetty == null) {
-        JettyConfig jettyConfig = JettyConfig.builder()
-            .stopAtShutdown(true)
-            .setContext("/solr")
-            .setPort(port)
-            .withSSLConfig(sslConfig.buildServerSSLConfig())
-            .build();
-        Properties nodeProperties = new Properties();
-        nodeProperties.setProperty("solrconfig", solrconfigFile);
-        nodeProperties.setProperty(CoreDescriptor.CORE_SCHEMA, schemaFile);
-        jetty = new JettySolrRunner(baseDir.getAbsolutePath(), nodeProperties, jettyConfig);
+        jetty = new JettySolrRunner(baseDir.getAbsolutePath(), "/solr", port, solrconfigFile, schemaFile, true, null, null, null);
       }
 
       // silly stuff included from solrconfig.snippet.randomindexconfig.xml
       System.setProperty("solr.tests.maxBufferedDocs", String.valueOf(100000));
-      
-      // If we want to run with whitelist list, this must be explicitly set to true for the test
-      // otherwise we disable the check
-      if (System.getProperty(SYSTEM_PROPERTY_SOLR_DISABLE_SHARDS_WHITELIST) == null) {
-        systemSetPropertySolrDisableShardsWhitelist("true");
-      }
 
       jetty.start();
       port = jetty.getLocalPort();
@@ -541,20 +521,6 @@ public class SolrTestCaseHS extends SolrTestCaseJ4 {
     // For params.set("shards", getShards())
     public String getShards() {
       return getShardsParam(slist);
-    }
-    
-    public String getWhitelistString() {
-      StringBuilder sb = new StringBuilder();
-      boolean first = true;
-      for (SolrInstance instance : slist) {
-        if (first) {
-          first = false;
-        } else {
-          sb.append(',');
-        }
-        sb.append( instance.getBaseURL().replace("/solr", ""));
-      }
-      return sb.toString();
     }
 
     public List<SolrClient> getSolrJs() {

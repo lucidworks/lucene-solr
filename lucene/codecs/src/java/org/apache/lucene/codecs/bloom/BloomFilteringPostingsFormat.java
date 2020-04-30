@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.bloom;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.bloom;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -29,15 +30,12 @@ import java.util.Map.Entry;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.FieldsProducer;
-import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.bloom.FuzzySet.ContainsResult;
-import org.apache.lucene.index.BaseTermsEnum;
+import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.Fields;
-import org.apache.lucene.index.ImpactsEnum;
 import org.apache.lucene.index.IndexFileNames;
-import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Terms;
@@ -47,8 +45,10 @@ import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Accountables;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.automaton.CompiledAutomaton;
 
 /**
@@ -220,8 +220,8 @@ public final class BloomFilteringPostingsFormat extends PostingsFormat {
     public int size() {
       return delegateFieldsProducer.size();
     }
-
-    static class BloomFilteredTerms extends Terms {
+    
+    class BloomFilteredTerms extends Terms {
       private Terms delegateTerms;
       private FuzzySet filter;
       
@@ -291,8 +291,8 @@ public final class BloomFilteringPostingsFormat extends PostingsFormat {
         return delegateTerms.getMax();
       }
     }
-
-    static final class BloomFilteredTermsEnum extends BaseTermsEnum {
+    
+    final class BloomFilteredTermsEnum extends TermsEnum {
       private Terms delegateTerms;
       private TermsEnum delegateTermsEnum;
       private final FuzzySet filter;
@@ -374,17 +374,13 @@ public final class BloomFilteringPostingsFormat extends PostingsFormat {
         return delegate().postings(reuse, flags);
       }
 
-      @Override
-      public ImpactsEnum impacts(int flags) throws IOException {
-        return delegate().impacts(flags);
-      }
     }
 
     @Override
     public long ramBytesUsed() {
       long sizeInBytes =  ((delegateFieldsProducer!=null) ? delegateFieldsProducer.ramBytesUsed() : 0);
       for(Map.Entry<String,FuzzySet> entry: bloomsByFieldName.entrySet()) {
-        sizeInBytes += entry.getKey().length() * Character.BYTES;
+        sizeInBytes += entry.getKey().length() * RamUsageEstimator.NUM_BYTES_CHAR;
         sizeInBytes += entry.getValue().ramBytesUsed();
       }
       return sizeInBytes;
@@ -392,7 +388,8 @@ public final class BloomFilteringPostingsFormat extends PostingsFormat {
 
     @Override
     public Collection<Accountable> getChildResources() {
-      List<Accountable> resources = new ArrayList<>(Accountables.namedAccountables("field", bloomsByFieldName));
+      List<Accountable> resources = new ArrayList<>();
+      resources.addAll(Accountables.namedAccountables("field", bloomsByFieldName));
       if (delegateFieldsProducer != null) {
         resources.add(Accountables.namedAccountable("delegate", delegateFieldsProducer));
       }
@@ -422,7 +419,7 @@ public final class BloomFilteringPostingsFormat extends PostingsFormat {
     }
 
     @Override
-    public void write(Fields fields, NormsProducer norms) throws IOException {
+    public void write(Fields fields) throws IOException {
 
       // Delegate must write first: it may have opened files
       // on creating the class
@@ -430,7 +427,7 @@ public final class BloomFilteringPostingsFormat extends PostingsFormat {
       // close them; alternatively, if we delayed pulling
       // the fields consumer until here, we could do it
       // afterwards:
-      delegateFieldsConsumer.write(fields, norms);
+      delegateFieldsConsumer.write(fields);
 
       for(String field : fields) {
         Terms terms = fields.terms(field);

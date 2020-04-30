@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.core;
-
 
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.util.CharTokenizer;
@@ -45,19 +45,6 @@ public final class WhitespaceTokenizer extends CharTokenizer {
    */
   public WhitespaceTokenizer(AttributeFactory factory) {
     super(factory);
-  }
-
-  /**
-   * Construct a new WhitespaceTokenizer using a given
-   * {@link org.apache.lucene.util.AttributeFactory}.
-   *
-   * @param factory the attribute factory to use for this {@link Tokenizer}
-   * @param maxTokenLen maximum token length the tokenizer will emit. 
-   *        Must be greater than 0 and less than MAX_TOKEN_LENGTH_LIMIT (1024*1024)
-   * @throws IllegalArgumentException if maxTokenLen is invalid.
-   */
-  public WhitespaceTokenizer(AttributeFactory factory, int maxTokenLen) {
-    super(factory, maxTokenLen);
   }
   
   /** Collects only characters which do not satisfy

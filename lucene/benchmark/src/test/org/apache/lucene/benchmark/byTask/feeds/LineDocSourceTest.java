@@ -1,3 +1,5 @@
+package org.apache.lucene.benchmark.byTask.feeds;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.feeds;
-
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -154,7 +154,7 @@ public class LineDocSourceTest extends BenchmarkTestCase {
       reader = DirectoryReader.open(runData.getDirectory());
       searcher = newSearcher(reader);
       TopDocs td = searcher.search(new TermQuery(new Term("body", "body")), 10);
-      assertEquals(numAdds, td.totalHits.value);
+      assertEquals(numAdds, td.totalHits);
       assertNotNull(td.scoreDocs[0]);
       
       if (storedField==null) {
@@ -214,9 +214,12 @@ public class LineDocSourceTest extends BenchmarkTestCase {
       writer.write(testCases[i]);
       writer.newLine();
       writer.close();
-      expectThrows(Exception.class, () -> {
+      try {
         doIndexAndSearchTest(file, null, null);
-      });
+        fail("Some exception should have been thrown for: [" + testCases[i] + "]");
+      } catch (Exception e) {
+        // expected.
+      }
     }
   }
   

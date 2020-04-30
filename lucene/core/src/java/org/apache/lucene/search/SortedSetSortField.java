@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
-import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
 
@@ -118,11 +118,12 @@ public class SortedSetSortField extends SortField {
   }
   
   @Override
-  public FieldComparator<?> getComparator(int numHits, int sortPos) {
+  public FieldComparator<?> getComparator(int numHits, int sortPos) throws IOException {
     return new FieldComparator.TermOrdValComparator(numHits, getField(), missingValue == STRING_LAST) {
       @Override
       protected SortedDocValues getSortedDocValues(LeafReaderContext context, String field) throws IOException {
-        return SortedSetSelector.wrap(DocValues.getSortedSet(context.reader(), field), selector);
+        SortedSetDocValues sortedSet = DocValues.getSortedSet(context.reader(), field);
+        return SortedSetSelector.wrap(sortedSet, selector);
       }
     };
   }

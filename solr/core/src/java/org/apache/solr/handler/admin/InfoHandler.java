@@ -1,3 +1,5 @@
+package org.apache.solr.handler.admin;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,30 +16,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.admin;
 
-import java.util.Collection;
-import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-import org.apache.solr.api.ApiBag.ReqHandlerToApi;
 import org.apache.solr.common.SolrException;
+import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.handler.RequestHandlerBase;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestHandler;
 import org.apache.solr.response.SolrQueryResponse;
-import org.apache.solr.api.Api;
 
-import static java.util.Collections.singletonList;
-import static org.apache.solr.common.util.Utils.getSpec;
 import static org.apache.solr.common.params.CommonParams.PATH;
 
-public class InfoHandler extends RequestHandlerBase  {
-
+public class InfoHandler extends RequestHandlerBase {
   protected final CoreContainer coreContainer;
+  
+  private ThreadDumpHandler threadDumpHandler = new ThreadDumpHandler();
+  private PropertiesRequestHandler propertiesHandler = new PropertiesRequestHandler();
+  private LoggingHandler loggingHandler;
+  private SystemInfoHandler systemInfoHandler;
 
   /**
    * Overloaded ctor to inject CoreContainer into the handler.
@@ -46,12 +43,9 @@ public class InfoHandler extends RequestHandlerBase  {
    */
   public InfoHandler(final CoreContainer coreContainer) {
     this.coreContainer = coreContainer;
-    handlers.put("threads", new ThreadDumpHandler());
-    handlers.put("properties", new PropertiesRequestHandler());
-    handlers.put("logging", new LoggingHandler(coreContainer));
-    handlers.put("system", new SystemInfoHandler(coreContainer));
-    handlers.put("health", new HealthCheckHandler(coreContainer));
-
+    systemInfoHandler = new SystemInfoHandler(coreContainer);
+    loggingHandler = new LoggingHandler(coreContainer);
+    
   }
 
 
@@ -80,19 +74,27 @@ public class InfoHandler extends RequestHandlerBase  {
     }
 
     String path = (String) req.getContext().get(PATH);
-    handle(req, rsp, path);
-  }
-
-  private void handle(SolrQueryRequest req, SolrQueryResponse rsp, String path) {
     int i = path.lastIndexOf('/');
     String name = path.substring(i + 1, path.length());
-    RequestHandlerBase handler = handlers.get(name.toLowerCase(Locale.ROOT));
-    if(handler == null) {
-      throw new SolrException(SolrException.ErrorCode.NOT_FOUND, "No handler by name "+name + " available names are "+ handlers.keySet());
+    
+    if (name.equalsIgnoreCase("properties")) {
+      propertiesHandler.handleRequest(req, rsp);
+    } else if (name.equalsIgnoreCase("threads")) {
+      threadDumpHandler.handleRequest(req, rsp);
+    } else if (name.equalsIgnoreCase("logging")) {
+      loggingHandler.handleRequest(req, rsp);
+    }  else if (name.equalsIgnoreCase("system")) {
+      systemInfoHandler.handleRequest(req, rsp);
+    } else {
+      if (name.equalsIgnoreCase("info")) name = "";
+      throw new SolrException(ErrorCode.NOT_FOUND, "Info Handler not found: " + name);
     }
-    handler.handleRequest(req, rsp);
+    
     rsp.setHttpCaching(false);
   }
+  
+  
+
 
 
   //////////////////////// SolrInfoMBeans methods //////////////////////
@@ -102,58 +104,40 @@ public class InfoHandler extends RequestHandlerBase  {
     return "System Information";
   }
 
-  @Override
-  public Category getCategory() {
-    return Category.ADMIN;
-  }
-
   protected PropertiesRequestHandler getPropertiesHandler() {
-    return (PropertiesRequestHandler) handlers.get("properties");
-
+    return propertiesHandler;
   }
 
   protected ThreadDumpHandler getThreadDumpHandler() {
-    return (ThreadDumpHandler) handlers.get("threads");
+    return threadDumpHandler;
   }
 
   protected LoggingHandler getLoggingHandler() {
-    return (LoggingHandler) handlers.get("logging");
+    return loggingHandler;
   }
 
   protected SystemInfoHandler getSystemInfoHandler() {
-    return (SystemInfoHandler) handlers.get("system");
+    return systemInfoHandler;
   }
 
   protected void setPropertiesHandler(PropertiesRequestHandler propertiesHandler) {
-    handlers.put("properties", propertiesHandler);
+    this.propertiesHandler = propertiesHandler;
   }
 
   protected void setThreadDumpHandler(ThreadDumpHandler threadDumpHandler) {
-    handlers.put("threads", threadDumpHandler);
+    this.threadDumpHandler = threadDumpHandler;
   }
 
   protected void setLoggingHandler(LoggingHandler loggingHandler) {
-    handlers.put("logging", loggingHandler);
+    this.loggingHandler = loggingHandler;
   }
 
   protected void setSystemInfoHandler(SystemInfoHandler systemInfoHandler) {
-    handlers.put("system", systemInfoHandler);
+    this.systemInfoHandler = systemInfoHandler;
   }
 
   @Override
   public SolrRequestHandler getSubHandler(String subPath) {
     return this;
-  }
-
-  private Map<String, RequestHandlerBase> handlers = new ConcurrentHashMap<>();
-
-  @Override
-  public Collection<Api> getApis() {
-    return singletonList(new ReqHandlerToApi(this, getSpec("node.Info")));
-  }
-
-  @Override
-  public Boolean registerV2() {
-    return Boolean.TRUE;
   }
 }

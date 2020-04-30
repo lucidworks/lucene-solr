@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.tokenattributes;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.tokenattributes;
-
 
 import org.apache.lucene.util.AttributeImpl;
 import org.apache.lucene.util.AttributeReflector;
@@ -30,7 +30,8 @@ public class PositionLengthAttributeImpl extends AttributeImpl implements Positi
   @Override
   public void setPositionLength(int positionLength) {
     if (positionLength < 1) {
-      throw new IllegalArgumentException("Position length must be 1 or greater; got " + positionLength);
+      throw new IllegalArgumentException
+        ("Position length must be 1 or greater: got " + positionLength);
     }
     this.positionLength = positionLength;
   }

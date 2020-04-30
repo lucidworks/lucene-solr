@@ -1,3 +1,14 @@
+package org.apache.lucene.facet.taxonomy.writercache;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +25,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy.writercache;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Similar to {@link StringBuilder}, but with a more efficient growing strategy.
@@ -65,9 +66,6 @@ class CharBlockArray implements Appendable, Serializable, CharSequence {
   }
 
   private void addBlock() {
-    if (blockSize * (long) (blocks.size() + 1) > Integer.MAX_VALUE) {
-      throw new IllegalStateException("cannot store more than 2 GB in CharBlockArray");
-    }
     this.current = new Block(this.blockSize);
     this.blocks.add(this.current);
   }

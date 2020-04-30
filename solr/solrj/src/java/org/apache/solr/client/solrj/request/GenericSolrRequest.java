@@ -1,3 +1,5 @@
+package org.apache.solr.client.solrj.request;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,37 +16,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.request;
+
+import java.io.IOException;
+import java.util.Collection;
 
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrRequest;
-import org.apache.solr.client.solrj.request.RequestWriter.ContentWriter;
 import org.apache.solr.client.solrj.response.SimpleSolrResponse;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.ContentStream;
 
 public class GenericSolrRequest extends SolrRequest<SimpleSolrResponse> {
   public SolrParams params;
   public SimpleSolrResponse response = new SimpleSolrResponse();
-  public ContentWriter contentWriter;
+  private Collection<ContentStream> contentStreams;
 
   public GenericSolrRequest(METHOD m, String path, SolrParams params) {
     super(m, path);
     this.params = params;
   }
 
-  public GenericSolrRequest setContentWriter(ContentWriter contentWriter) {
-    this.contentWriter = contentWriter;
-    return this;
+  public void setContentStreams(Collection<ContentStream> streams) {
+    contentStreams = streams;
   }
 
-  @Override
-  public ContentWriter getContentWriter(String expectedType) {
-    return contentWriter;
-  }
 
   @Override
   public SolrParams getParams() {
     return params;
+  }
+
+  @Override
+  public Collection<ContentStream> getContentStreams() throws IOException {
+    return contentStreams;
   }
 
   @Override

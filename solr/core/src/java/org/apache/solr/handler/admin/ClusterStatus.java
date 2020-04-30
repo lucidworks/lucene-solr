@@ -1,3 +1,5 @@
+package org.apache.solr.handler.admin;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.admin;
+
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -26,7 +27,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.Aliases;
@@ -40,34 +40,45 @@ import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.ShardParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
+import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.common.util.Utils;
 import org.apache.zookeeper.KeeperException;
 
 public class ClusterStatus {
   private final ZkStateReader zkStateReader;
-  private final ZkNodeProps message;
-  private final String collection; // maybe null
+  private final String collection;
+  private ZkNodeProps message;
 
   public ClusterStatus(ZkStateReader zkStateReader, ZkNodeProps props) {
     this.zkStateReader = zkStateReader;
     this.message = props;
     collection = props.getStr(ZkStateReader.COLLECTION_PROP);
+
   }
 
   @SuppressWarnings("unchecked")
-  public void getClusterStatus(NamedList results)
+  public  void getClusterStatus(NamedList results)
       throws KeeperException, InterruptedException {
+    zkStateReader.updateClusterState();
+
+
     // read aliases
     Aliases aliases = zkStateReader.getAliases();
     Map<String, List<String>> collectionVsAliases = new HashMap<>();
-    Map<String, List<String>> aliasVsCollections = aliases.getCollectionAliasListMap();
-    for (Map.Entry<String, List<String>> entry : aliasVsCollections.entrySet()) {
-      String alias = entry.getKey();
-      List<String> colls = entry.getValue();
-      for (String coll : colls) {
-        if (collection == null || collection.equals(coll))  {
-          List<String> list = collectionVsAliases.computeIfAbsent(coll, k -> new ArrayList<>());
-          list.add(alias);
+    Map<String, String> aliasVsCollections = aliases.getCollectionAliasMap();
+    if (aliasVsCollections != null) {
+      for (Map.Entry<String, String> entry : aliasVsCollections.entrySet()) {
+        List<String> colls = StrUtils.splitSmart(entry.getValue(), ',');
+        String alias = entry.getKey();
+        for (String coll : colls) {
+          if (collection == null || collection.equals(coll))  {
+            List<String> list = collectionVsAliases.get(coll);
+            if (list == null) {
+              list = new ArrayList<>();
+              collectionVsAliases.put(coll, list);
+            }
+            list.add(alias);
+          }
         }
       }
     }
@@ -83,43 +94,20 @@ public class ClusterStatus {
     byte[] bytes = Utils.toJSON(clusterState);
     Map<String, Object> stateMap = (Map<String,Object>) Utils.fromJSON(bytes);
 
+    Set<String> collections = new HashSet<>();
     String routeKey = message.getStr(ShardParams._ROUTE_);
     String shard = message.getStr(ZkStateReader.SHARD_ID_PROP);
-
-    Map<String, DocCollection> collectionsMap = null;
     if (collection == null) {
-      collectionsMap = clusterState.getCollectionsMap();
+      collections = new HashSet<>(clusterState.getCollections());
     } else  {
-      collectionsMap = Collections.singletonMap(collection, clusterState.getCollectionOrNull(collection));
+      collections = Collections.singleton(collection);
     }
 
-    boolean isAlias = aliasVsCollections.containsKey(collection);
-    boolean didNotFindCollection = collectionsMap.get(collection) == null;
+    NamedList<Object> collectionProps = new SimpleOrderedMap<Object>();
 
-    if (didNotFindCollection && isAlias) {
-      // In this case this.collection is an alias name not a collection
-      // get all collections and filter out collections not in the alias
-      collectionsMap = clusterState.getCollectionsMap().entrySet().stream()
-          .filter((entry) -> aliasVsCollections.get(collection).contains(entry.getKey()))
-          .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    }
-
-    NamedList<Object> collectionProps = new SimpleOrderedMap<>();
-
-    for (Map.Entry<String, DocCollection> entry : collectionsMap.entrySet()) {
-      Map<String, Object> collectionStatus;
-      String name = entry.getKey();
-      DocCollection clusterStateCollection = entry.getValue();
-      if (clusterStateCollection == null) {
-        if (collection != null) {
-          SolrException solrException = new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Collection: " + name + " not found");
-          solrException.setMetadata("CLUSTERSTATUS","NOT_FOUND");
-          throw solrException;
-        } else {
-          //collection might have got deleted at the same time
-          continue;
-        }
-      }
+    for (String name : collections) {
+      Map<String, Object> collectionStatus = null;
+      DocCollection clusterStateCollection = clusterState.getCollection(name);
 
       Set<String> requestedShards = new HashSet<>();
       if (routeKey != null) {
@@ -130,8 +118,7 @@ public class ClusterStatus {
         }
       }
       if (shard != null) {
-        String[] paramShards = shard.split(",");
-        requestedShards.addAll(Arrays.asList(paramShards));
+        requestedShards.add(shard);
       }
 
       if (clusterStateCollection.getStateFormat() > 1) {
@@ -146,14 +133,9 @@ public class ClusterStatus {
       if (collectionVsAliases.containsKey(name) && !collectionVsAliases.get(name).isEmpty()) {
         collectionStatus.put("aliases", collectionVsAliases.get(name));
       }
-      try {
-        String configName = zkStateReader.readConfigName(name);
-        collectionStatus.put("configName", configName);
-        collectionProps.add(name, collectionStatus);
-      } catch (KeeperException.NoNodeException ex) {
-        // skip this collection because the configset's znode has been deleted
-        // which can happen during aggressive collection removal, see SOLR-10720
-      }
+      String configName = zkStateReader.readConfigName(name);
+      collectionStatus.put("configName", configName);
+      collectionProps.add(name, collectionStatus);
     }
 
     List<String> liveNodes = zkStateReader.getZkClient().getChildren(ZkStateReader.LIVE_NODES_ZKNODE, null, true);
@@ -165,15 +147,14 @@ public class ClusterStatus {
     clusterStatus.add("collections", collectionProps);
 
     // read cluster properties
-    Map clusterProps = zkStateReader.getClusterProperties();
+    Map clusterProps = zkStateReader.getClusterProps();
     if (clusterProps != null && !clusterProps.isEmpty())  {
       clusterStatus.add("properties", clusterProps);
     }
 
     // add the alias map too
-    Map<String, String> collectionAliasMap = aliases.getCollectionAliasMap(); // comma delim
-    if (!collectionAliasMap.isEmpty())  {
-      clusterStatus.add("aliases", collectionAliasMap);
+    if (aliasVsCollections != null && !aliasVsCollections.isEmpty())  {
+      clusterStatus.add("aliases", aliasVsCollections);
     }
 
     // add the roles map
@@ -186,7 +167,6 @@ public class ClusterStatus {
 
     results.add("cluster", clusterStatus);
   }
-
   /**
    * Get collection status from cluster state.
    * Can return collection status by given shard name.

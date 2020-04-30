@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -30,6 +30,7 @@ import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IndexInput;
+import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.ThreadInterruptedException;
 import org.junit.Test;
@@ -102,6 +103,10 @@ public class TestSnapshotDeletionPolicy extends LuceneTestCase {
   }
 
   private void runTest(Random random, Directory dir) throws Exception {
+    // we use the IW unref'ed files check which is unaware of retries:
+    if (dir instanceof MockDirectoryWrapper) {
+      ((MockDirectoryWrapper)dir).setEnableVirusScanner(false);
+    }
     // Run for ~1 seconds
     final long stopTime = System.currentTimeMillis() + 1000;
 
@@ -111,10 +116,13 @@ public class TestSnapshotDeletionPolicy extends LuceneTestCase {
         .setMaxBufferedDocs(2));
 
     // Verify we catch misuse:
-    expectThrows(IllegalStateException.class, () -> {
+    try {
       dp.snapshot();
-    });
-
+      fail("did not hit exception");
+    } catch(IllegalStateException ise) {
+      // expected
+    }
+    dp = (SnapshotDeletionPolicy) writer.getConfig().getIndexDeletionPolicy();
     writer.commit();
     
     final Thread t = new Thread() {
@@ -249,6 +257,10 @@ public class TestSnapshotDeletionPolicy extends LuceneTestCase {
     
     // Create 3 snapshots: snapshot0, snapshot1, snapshot2
     Directory dir = newDirectory();
+    if (dir instanceof MockDirectoryWrapper) {
+      // we verify some files get deleted
+      ((MockDirectoryWrapper)dir).setEnableVirusScanner(false);
+    }
     IndexWriter writer = new IndexWriter(dir, getConfig(random(), getDeletionPolicy()));
     SnapshotDeletionPolicy sdp = (SnapshotDeletionPolicy) writer.getConfig().getIndexDeletionPolicy();
     prepareIndexAndSnapshots(sdp, writer, numSnapshots);
@@ -273,7 +285,10 @@ public class TestSnapshotDeletionPolicy extends LuceneTestCase {
   @Test
   public void testMultiThreadedSnapshotting() throws Exception {
     Directory dir = newDirectory();
-
+    if (dir instanceof MockDirectoryWrapper) {
+      // test relies on files actually being deleted
+      ((MockDirectoryWrapper)dir).setEnableVirusScanner(false);
+    }
     final IndexWriter writer = new IndexWriter(dir, getConfig(random(), getDeletionPolicy()));
     final SnapshotDeletionPolicy sdp = (SnapshotDeletionPolicy) writer.getConfig().getIndexDeletionPolicy();
 
@@ -349,6 +364,10 @@ public class TestSnapshotDeletionPolicy extends LuceneTestCase {
   @Test
   public void testReleaseSnapshot() throws Exception {
     Directory dir = newDirectory();
+    if (dir instanceof MockDirectoryWrapper) {
+      // we rely upon existence of files
+      ((MockDirectoryWrapper)dir).setEnableVirusScanner(false);
+    }
     IndexWriter writer = new IndexWriter(dir, getConfig(random(), getDeletionPolicy()));
     SnapshotDeletionPolicy sdp = (SnapshotDeletionPolicy) writer.getConfig().getIndexDeletionPolicy();
     prepareIndexAndSnapshots(sdp, writer, 1);
@@ -398,6 +417,10 @@ public class TestSnapshotDeletionPolicy extends LuceneTestCase {
     // Tests the behavior of SDP when commits that are given at ctor are missing
     // on onInit().
     Directory dir = newDirectory();
+    if (dir instanceof MockDirectoryWrapper) {
+      // we rely upon existence of files
+      ((MockDirectoryWrapper)dir).setEnableVirusScanner(false);
+    }
     IndexWriter writer = new IndexWriter(dir, getConfig(random(), getDeletionPolicy()));
     SnapshotDeletionPolicy sdp = (SnapshotDeletionPolicy) writer.getConfig().getIndexDeletionPolicy();
     writer.addDocument(new Document());

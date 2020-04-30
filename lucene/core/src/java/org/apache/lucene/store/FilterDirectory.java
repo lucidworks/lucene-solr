@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Set;
 
 /** Directory implementation that delegates calls to another directory.
  *  This class can be used to add limitations on top of an existing
@@ -30,7 +29,7 @@ import java.util.Set;
  *  {@link Directory} or {@link BaseDirectory} rather than try to reuse
  *  functionality of existing {@link Directory}s by extending this class.
  *  @lucene.internal */
-public abstract class FilterDirectory extends Directory {
+public class FilterDirectory extends Directory {
 
   /** Get the wrapped instance by <code>dir</code> as long as this reader is
    *  an instance of {@link FilterDirectory}.  */
@@ -75,23 +74,13 @@ public abstract class FilterDirectory extends Directory {
   }
 
   @Override
-  public IndexOutput createTempOutput(String prefix, String suffix, IOContext context) throws IOException {
-    return in.createTempOutput(prefix, suffix, context);
-  }
-
-  @Override
   public void sync(Collection<String> names) throws IOException {
     in.sync(names);
   }
 
   @Override
-  public void rename(String source, String dest) throws IOException {
-    in.rename(source, dest);
-  }
-
-  @Override
-  public void syncMetaData() throws IOException {
-    in.syncMetaData();
+  public void renameFile(String source, String dest) throws IOException {
+    in.renameFile(source, dest);
   }
 
   @Override
@@ -115,8 +104,4 @@ public abstract class FilterDirectory extends Directory {
     return getClass().getSimpleName() + "(" + in.toString() + ")";
   }
 
-  @Override
-  public Set<String> getPendingDeletions() throws IOException {
-    return in.getPendingDeletions();
-  }
 }

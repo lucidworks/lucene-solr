@@ -14,11 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.servlet.cache;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.UnsupportedEncodingException;
 import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.List;
 
 import javax.servlet.http.HttpServletRequest;
@@ -70,9 +73,16 @@ public final class HttpCacheHeaderUtil {
     public String calcEtag(final long currentIndexVersion) {
       if (currentIndexVersion != indexVersionCache) {
         indexVersionCache=currentIndexVersion;
-        etagCache = "\""
-            + new String(Base64.encodeBase64((Long.toHexString(Long.reverse(indexVersionCache)) + etagSeed)
-            .getBytes(StandardCharsets.US_ASCII)), StandardCharsets.US_ASCII) + "\"";
+        
+        try {
+          etagCache = "\""
+           + new String(Base64.encodeBase64((Long.toHexString
+                                             (Long.reverse(indexVersionCache))
+                                             + etagSeed).getBytes("US-ASCII")), "US-ASCII")
+           + "\"";
+        } catch (UnsupportedEncodingException e) {
+          throw new RuntimeException(e); // may not happen
+        }
       }
       
       return etagCache;

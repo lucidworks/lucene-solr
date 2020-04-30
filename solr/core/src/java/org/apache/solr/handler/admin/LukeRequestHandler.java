@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.admin;
 
 import java.io.IOException;
-import java.nio.file.NoSuchFileException;
 import java.lang.invoke.MethodHandles;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -39,13 +41,12 @@ import org.apache.lucene.document.Field;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.FieldInfo;
-import org.apache.lucene.index.IndexCommit;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.SegmentReader;
 import org.apache.lucene.index.Term;
@@ -53,7 +54,6 @@ import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.similarities.Similarity;
-import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
@@ -101,7 +101,7 @@ public class LukeRequestHandler extends RequestHandlerBase
   public static final String NUMTERMS = "numTerms";
   public static final String INCLUDE_INDEX_FIELD_FLAGS = "includeIndexFieldFlags";
   public static final String DOC_ID = "docId";
-  public static final String ID = CommonParams.ID;
+  public static final String ID = "id";
   public static final int DEFAULT_COUNT = 10;
 
   static final int HIST_ARRAY_SIZE = 33;
@@ -205,7 +205,6 @@ public class LukeRequestHandler extends RequestHandlerBase
     flags.append( (f != null && f.fieldType().tokenized())                   ? FieldFlag.TOKENIZED.getAbbreviation() : '-' );
     flags.append( (f != null && f.fieldType().stored())                      ? FieldFlag.STORED.getAbbreviation() : '-' );
     flags.append( (f != null && f.fieldType().docValuesType() != DocValuesType.NONE)        ? FieldFlag.DOC_VALUES.getAbbreviation() : "-" );
-    flags.append( (false)                                          ? FieldFlag.UNINVERTIBLE.getAbbreviation() : '-' ); // SchemaField Specific
     flags.append( (false)                                          ? FieldFlag.MULTI_VALUED.getAbbreviation() : '-' ); // SchemaField Specific
     flags.append( (f != null && f.fieldType().storeTermVectors())            ? FieldFlag.TERM_VECTOR_STORED.getAbbreviation() : '-' );
     flags.append( (f != null && f.fieldType().storeTermVectorOffsets())   ? FieldFlag.TERM_VECTOR_OFFSET.getAbbreviation() : '-' );
@@ -245,7 +244,6 @@ public class LukeRequestHandler extends RequestHandlerBase
     flags.append( (t != null && t.isTokenized())         ? FieldFlag.TOKENIZED.getAbbreviation() : '-' );
     flags.append( (f != null && f.stored())              ? FieldFlag.STORED.getAbbreviation() : '-' );
     flags.append( (f != null && f.hasDocValues())        ? FieldFlag.DOC_VALUES.getAbbreviation() : "-" );
-    flags.append( (f != null && f.isUninvertible())      ? FieldFlag.UNINVERTIBLE.getAbbreviation() : "-" );
     flags.append( (f != null && f.multiValued())         ? FieldFlag.MULTI_VALUED.getAbbreviation() : '-' );
     flags.append( (f != null && f.storeTermVector() )    ? FieldFlag.TERM_VECTOR_STORED.getAbbreviation() : '-' );
     flags.append( (f != null && f.storeTermOffsets() )   ? FieldFlag.TERM_VECTOR_OFFSET.getAbbreviation() : '-' );
@@ -290,6 +288,8 @@ public class LukeRequestHandler extends RequestHandlerBase
       f.add( "schema", getFieldFlags( sfield ) );
       f.add( "flags", getFieldFlags( field ) );
 
+      Term t = new Term(field.name(), ftype!=null ? ftype.storedToIndexed(field) : field.stringValue());
+
       f.add( "value", (ftype==null)?null:ftype.toExternal( field ) );
 
       // TODO: this really should be "stored"
@@ -299,10 +299,8 @@ public class LukeRequestHandler extends RequestHandlerBase
       if (bytes != null) {
         f.add( "binary", Base64.byteArrayToBase64(bytes.bytes, bytes.offset, bytes.length));
       }
-      if (!ftype.isPointField()) {
-        Term t = new Term(field.name(), ftype!=null ? ftype.storedToIndexed(field) : field.stringValue());
-        f.add( "docFreq", t.text()==null ? 0 : reader.docFreq( t ) ); // this can be 0 for non-indexed fields
-      }// TODO: Calculate docFreq for point fields
+      f.add( "boost", field.boost() );
+      f.add( "docFreq", t.text()==null ? 0 : reader.docFreq( t ) ); // this can be 0 for non-indexed fields
 
       // If we have a term vector, return that
       if( field.fieldType().storeTermVectors() ) {
@@ -342,7 +340,7 @@ public class LukeRequestHandler extends RequestHandlerBase
       fields = new TreeSet<>(Arrays.asList(fl.split( "[,\\s]+" )));
     }
 
-    LeafReader reader = searcher.getSlowAtomicReader();
+    LeafReader reader = searcher.getLeafReader();
     IndexSchema schema = searcher.getSchema();
 
     // Don't be tempted to put this in the loop below, the whole point here is to alphabetize the fields!
@@ -369,7 +367,7 @@ public class LukeRequestHandler extends RequestHandlerBase
       if (sfield != null && schema.isDynamicField(sfield.getName()) && schema.getDynamicPattern(sfield.getName()) != null) {
         fieldMap.add("dynamicBase", schema.getDynamicPattern(sfield.getName()));
       }
-      Terms terms = reader.terms(fieldName);
+      Terms terms = reader.fields().terms(fieldName);
       if (terms == null) { // Not indexed, so we need to report what we can (it made it through the fl param if specified)
         finfo.add( fieldName, fieldMap );
         continue;
@@ -378,7 +376,6 @@ public class LukeRequestHandler extends RequestHandlerBase
       if(sfield != null && sfield.indexed() ) {
         if (params.getBool(INCLUDE_INDEX_FIELD_FLAGS,true)) {
           Document doc = getFirstLiveDoc(terms, reader);
-
           if (doc != null) {
             // Found a document with this field
             try {
@@ -394,6 +391,7 @@ public class LukeRequestHandler extends RequestHandlerBase
             }
           }
         }
+
         fieldMap.add("docs", terms.getDocCount());
       }
       if (fields != null && (fields.contains(fieldName) || fields.contains("*"))) {
@@ -475,7 +473,7 @@ public class LukeRequestHandler extends RequestHandlerBase
 
     finfo.add("uniqueKeyField",
         null == uniqueField ? null : uniqueField.getName());
-    finfo.add("similarity", getSimilarityInfo(schema.getSimilarity()));
+    finfo.add("defaultSearchField", schema.getDefaultSearchFieldName());
     finfo.add("types", types);
     return finfo;
   }
@@ -564,6 +562,13 @@ public class LukeRequestHandler extends RequestHandlerBase
     typeusemap.put( ft.getTypeName(), v );
   }
 
+  /**
+   * @deprecated use {@link #getIndexInfo(DirectoryReader)} since you now have to explicitly pass the "fl" prameter
+   * and this was always called with "false" anyway from CoreAdminHandler
+   */
+  public static SimpleOrderedMap<Object> getIndexInfo(DirectoryReader reader, boolean detail) throws IOException {
+    return getIndexInfo(reader);
+  }
   // This method just gets the top-most level of information. This was conflated with getting detailed info
   // for *all* the fields, called from CoreAdminHandler etc.
 
@@ -578,58 +583,15 @@ public class LukeRequestHandler extends RequestHandlerBase
 
     indexInfo.add("version", reader.getVersion());  // TODO? Is this different then: IndexReader.getCurrentVersion( dir )?
     indexInfo.add("segmentCount", reader.leaves().size());
-    indexInfo.add("current", closeSafe( reader::isCurrent));
+    indexInfo.add("current", reader.isCurrent() );
     indexInfo.add("hasDeletions", reader.hasDeletions() );
     indexInfo.add("directory", dir );
-    IndexCommit indexCommit = reader.getIndexCommit();
-    String segmentsFileName = indexCommit.getSegmentsFileName();
-    indexInfo.add("segmentsFile", segmentsFileName);
-    indexInfo.add("segmentsFileSizeInBytes", getSegmentsFileLength(indexCommit));
-    Map<String,String> userData = indexCommit.getUserData();
-    indexInfo.add("userData", userData);
-    String s = userData.get(SolrIndexWriter.COMMIT_TIME_MSEC_KEY);
+    indexInfo.add("userData", reader.getIndexCommit().getUserData());
+    String s = reader.getIndexCommit().getUserData().get(SolrIndexWriter.COMMIT_TIME_MSEC_KEY);
     if (s != null) {
       indexInfo.add("lastModified", new Date(Long.parseLong(s)));
     }
     return indexInfo;
-  }
-
-  @FunctionalInterface
-  interface IOSupplier {
-    boolean get() throws IOException;
-  }
-  
-  private static Object closeSafe(IOSupplier isCurrent) {
-    try {
-      return isCurrent.get();
-    }catch(AlreadyClosedException | IOException exception) {
-    }
-    return false;
-  }
-
-
-  /**
-   * <p>A helper method that attempts to determine the file length of the the segments file for the 
-   * specified IndexCommit from it's Directory.
-   * </p>
-   * <p>
-   * If any sort of {@link IOException} occurs, this method will return "-1" and swallow the exception since 
-   * this may be normal if the IndexCommit is no longer "on disk".  The specific type of the Exception will 
-   * affect how severely it is logged: {@link NoSuchFileException} is considered more "acceptible" then other 
-   * types of IOException which may indicate an actual problem with the Directory.
-   */
-  private static long getSegmentsFileLength(IndexCommit commit) {
-    try {
-      return commit.getDirectory().fileLength(commit.getSegmentsFileName());
-    } catch (NoSuchFileException okException) {
-      log.debug("Unable to determine the (optional) fileSize for the current IndexReader's segments file because it is "
-                + "no longer in the Directory, this can happen if there are new commits since the Reader was opened",
-                okException);
-    } catch (IOException strangeException) {
-      log.warn("Ignoring IOException wile attempting to determine the (optional) fileSize stat for the current IndexReader's segments file",
-               strangeException);
-    }
-    return -1;
   }
 
   /** Returns the sum of RAM bytes used by each segment */
@@ -660,7 +622,7 @@ public class LukeRequestHandler extends RequestHandlerBase
 
     final CharsRefBuilder spare = new CharsRefBuilder();
 
-    Terms terms = MultiTerms.getTerms(req.getSearcher().getIndexReader(), field);
+    Terms terms = MultiFields.getTerms(req.getSearcher().getIndexReader(), field);
     if (terms == null) {  // field does not exist
       return;
     }
@@ -716,8 +678,11 @@ public class LukeRequestHandler extends RequestHandlerBase
   }
 
   @Override
-  public Category getCategory() {
-    return Category.ADMIN;
+  public URL[] getDocs() {
+    try {
+      return new URL[] { new URL("http://wiki.apache.org/solr/LukeRequestHandler") };
+    }
+    catch( MalformedURLException ex ) { return null; }
   }
 
   ///////////////////////////////////////////////////////////////////////////////////////

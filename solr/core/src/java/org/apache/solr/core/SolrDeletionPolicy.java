@@ -1,3 +1,4 @@
+package org.apache.solr.core;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
-
-import java.io.File;
-import java.io.IOException;
-import java.lang.invoke.MethodHandles;
-import java.util.List;
 
 import org.apache.lucene.index.IndexCommit;
 import org.apache.lucene.index.IndexDeletionPolicy;
@@ -27,9 +22,16 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.util.DateMathParser;
+import org.apache.solr.util.DateFormatUtil;
 import org.apache.solr.util.plugin.NamedListInitializedPlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.lang.invoke.MethodHandles;
+import java.util.List;
+import java.util.Locale;
 
 
 /**
@@ -77,10 +79,14 @@ public class SolrDeletionPolicy extends IndexDeletionPolicy implements NamedList
    */
   @Override
   public void onInit(List<? extends IndexCommit> commits) throws IOException {
+    // SOLR-4547: log basic data at INFO, add filenames at DEBUG.
     if (commits.isEmpty()) {
       return;
     }
-    log.debug("SolrDeletionPolicy.onInit: commits: {}", new CommitsLoggingDebug(commits));
+    log.info("SolrDeletionPolicy.onInit: commits: {}",
+        new CommitsLoggingInfo(commits));
+    log.debug("SolrDeletionPolicy.onInit: commits: {}",
+        new CommitsLoggingDebug(commits));
     updateCommits(commits);
   }
 
@@ -89,7 +95,11 @@ public class SolrDeletionPolicy extends IndexDeletionPolicy implements NamedList
    */
   @Override
   public void onCommit(List<? extends IndexCommit> commits) throws IOException {
-    log.debug("SolrDeletionPolicy.onCommit: commits: {}", new CommitsLoggingDebug(commits));
+    // SOLR-4547: log basic data at INFO, add filenames at DEBUG.
+    log.info("SolrDeletionPolicy.onCommit: commits: {}",
+        new CommitsLoggingInfo(commits));
+    log.debug("SolrDeletionPolicy.onCommit: commits: {}",
+        new CommitsLoggingDebug(commits));
     updateCommits(commits);
   }
 
@@ -150,7 +160,10 @@ public class SolrDeletionPolicy extends IndexDeletionPolicy implements NamedList
     synchronized (this) {
       long maxCommitAgeTimeStamp = -1L;
       IndexCommit newest = commits.get(commits.size() - 1);
-      log.debug("newest commit generation = " + newest.getGeneration());
+      // SOLR-4547: Removed the filenames from this log entry because this
+      // method is only called from methods that have just logged them
+      // at DEBUG.
+      log.info("newest commit generation = " + newest.getGeneration());
       int singleSegKept = (newest.getSegmentCount() == 1) ? 1 : 0;
       int totalKept = 1;
 
@@ -162,7 +175,7 @@ public class SolrDeletionPolicy extends IndexDeletionPolicy implements NamedList
         try {
           if (maxCommitAge != null) {
             if (maxCommitAgeTimeStamp==-1) {
-              DateMathParser dmp = new DateMathParser(DateMathParser.UTC);
+              DateMathParser dmp = new DateMathParser(DateFormatUtil.UTC, Locale.ROOT);
               maxCommitAgeTimeStamp = dmp.parseMath(maxCommitAge).getTime();
             }
             if (IndexDeletionPolicyWrapper.getCommitTimestamp(commit) < maxCommitAgeTimeStamp) {

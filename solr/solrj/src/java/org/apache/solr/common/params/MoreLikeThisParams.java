@@ -14,15 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.common.params;
 
 import java.util.Locale;
 
 /**
- * Params for {@code MoreLikeThisHandler}.
+ * @since solr 1.3
  */
 public interface MoreLikeThisParams 
 {
+  // enable more like this -- this only applies to 'StandardRequestHandler' maybe DismaxRequestHandler
   public final static String MLT = "mlt";
   
   public final static String PREFIX = "mlt.";
@@ -30,7 +32,6 @@ public interface MoreLikeThisParams
   public final static String SIMILARITY_FIELDS     = PREFIX + "fl";
   public final static String MIN_TERM_FREQ         = PREFIX + "mintf";
   public final static String MAX_DOC_FREQ          = PREFIX + "maxdf";
-  public final static String MAX_DOC_FREQ_PCT      = PREFIX + "maxdfpct";
   public final static String MIN_DOC_FREQ          = PREFIX + "mindf";
   public final static String MIN_WORD_LEN          = PREFIX + "minwl";
   public final static String MAX_WORD_LEN          = PREFIX + "maxwl";
@@ -50,9 +51,6 @@ public interface MoreLikeThisParams
 
   // Do you want to include the original document in the results or not
   public final static String INTERESTING_TERMS = PREFIX + "interestingTerms";  // false,details,(list or true)
-
-  // the default doc count
-  public final static int DEFAULT_DOC_COUNT = 5;
   
   public enum TermStyle {
     NONE,

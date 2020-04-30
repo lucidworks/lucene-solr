@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
 
 import java.io.IOException;
 
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
 
 /**
  * Holds all implementations of classes in the o.a.l.s.spans package as a
@@ -35,6 +33,10 @@ final class JustCompileSearchSpans {
   private static final String UNSUPPORTED_MSG = "unsupported: used for back-compat testing only !";
 
   static final class JustCompileSpans extends Spans {
+
+    JustCompileSpans() {
+      super(null, null);
+    }
 
     @Override
     public int docID() {
@@ -50,7 +52,7 @@ final class JustCompileSearchSpans {
     public int advance(int target) throws IOException {
       throw new UnsupportedOperationException(UNSUPPORTED_MSG);
     }
-
+    
     @Override
     public int startPosition() {
       throw new UnsupportedOperationException(UNSUPPORTED_MSG);
@@ -95,12 +97,7 @@ final class JustCompileSearchSpans {
     }
 
     @Override
-    public SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-      throw new UnsupportedOperationException(UNSUPPORTED_MSG);
-    }
-
-    @Override
-    public void visit(QueryVisitor visitor) {
+    public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
       throw new UnsupportedOperationException(UNSUPPORTED_MSG);
     }
 
@@ -108,17 +105,7 @@ final class JustCompileSearchSpans {
     public String toString(String field) {
       throw new UnsupportedOperationException(UNSUPPORTED_MSG);
     }
-
-    @Override
-    public boolean equals(Object o) {
-      throw new UnsupportedOperationException(UNSUPPORTED_MSG);
-    }
-
-    @Override
-    public int hashCode() {
-      throw new UnsupportedOperationException(UNSUPPORTED_MSG);
-    }
-
+    
   }
 
 }

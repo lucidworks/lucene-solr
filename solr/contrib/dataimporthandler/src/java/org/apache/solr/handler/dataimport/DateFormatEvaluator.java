@@ -1,3 +1,23 @@
+package org.apache.solr.handler.dataimport;
+
+import static org.apache.solr.handler.dataimport.DataImportHandlerException.SEVERE;
+import static org.apache.solr.handler.dataimport.DataImportHandlerException.wrapAndThrow;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.TimeZone;
+import java.util.WeakHashMap;
+
+import org.apache.solr.handler.dataimport.config.EntityField;
+import org.apache.solr.util.DateMathParser;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,26 +34,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.dataimport;
-
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.IllformedLocaleException;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.TimeZone;
-
-import org.apache.solr.common.util.SuppressForbidden;
-import org.apache.solr.handler.dataimport.config.EntityField;
-import org.apache.solr.util.DateMathParser;
-
-import static org.apache.solr.handler.dataimport.DataImportHandlerException.SEVERE;
-import static org.apache.solr.handler.dataimport.DataImportHandlerException.wrapAndThrow;
 
 /**
  * <p>Formats values using a given date format. </p>
@@ -51,10 +51,24 @@ import static org.apache.solr.handler.dataimport.DataImportHandlerException.wrap
 public class DateFormatEvaluator extends Evaluator {
   
   public static final String DEFAULT_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
+  protected Map<DateFormatCacheKey, SimpleDateFormat> cache = new WeakHashMap<>();
   protected Map<String, Locale> availableLocales = new HashMap<>();
   protected Set<String> availableTimezones = new HashSet<>();
 
-  @SuppressForbidden(reason = "Usage of outdated locale parsing with Locale#toString() because of backwards compatibility")
+  /**
+   * Used to wrap cache keys containing a Locale, TimeZone and date format String
+   */
+  static protected class DateFormatCacheKey {
+    DateFormatCacheKey(Locale l, TimeZone tz, String df) {
+      this.locale = l;
+      this.timezone = tz;
+      this.dateFormat = df;
+    }
+    Locale locale;
+    TimeZone timezone;
+    String dateFormat;
+  }
+  
   public DateFormatEvaluator() {  
     for (Locale locale : Locale.getAvailableLocales()) {
       availableLocales.put(locale.toString(), locale);
@@ -63,12 +77,17 @@ public class DateFormatEvaluator extends Evaluator {
       availableTimezones.add(tz);
     }
   }
-  
   private SimpleDateFormat getDateFormat(String pattern, TimeZone timezone, Locale locale) {
-    final SimpleDateFormat sdf = new SimpleDateFormat(pattern, locale);
-    sdf.setTimeZone(timezone);
+    DateFormatCacheKey dfck = new DateFormatCacheKey(locale, timezone, pattern);
+    SimpleDateFormat sdf = cache.get(dfck);
+    if(sdf == null) {
+      sdf = new SimpleDateFormat(pattern, locale);
+      sdf.setTimeZone(timezone);
+      cache.put(dfck, sdf);
+    }
     return sdf;
   }
+  
   
   @Override
   public String evaluate(String expression, Context context) {
@@ -83,7 +102,7 @@ public class DateFormatEvaluator extends Evaluator {
       o = wrapper.resolve();
       format = o.toString();
     }
-    Locale locale = Locale.ENGLISH; // we default to ENGLISH for dates for full Java 9 compatibility
+    Locale locale = Locale.ROOT;
     if(l.size()>2) {
       Object localeObj = l.get(2);
       String localeStr = null;
@@ -93,13 +112,11 @@ public class DateFormatEvaluator extends Evaluator {
         localeStr = localeObj.toString();
       }
       locale = availableLocales.get(localeStr);
-      if (locale == null) try {
-        locale = new Locale.Builder().setLanguageTag(localeStr).build();
-      } catch (IllformedLocaleException ex) {
-        throw new DataImportHandlerException(SEVERE, "Malformed / non-existent locale: " + localeStr, ex);
+      if(locale==null) {
+        throw new DataImportHandlerException(SEVERE, "Unsupported locale: " + localeStr);
       }
     }
-    TimeZone tz = TimeZone.getDefault(); // DWS TODO: is this the right default for us?  Deserves explanation if so.
+    TimeZone tz = TimeZone.getDefault();
     if(l.size()==4) {
       Object tzObj = l.get(3);
       String tzStr = null;
@@ -153,19 +170,24 @@ public class DateFormatEvaluator extends Evaluator {
    * @return the result of evaluating a string
    */
   protected Date evaluateString(String datemathfmt, Locale locale, TimeZone tz) {
-    // note: DMP does not use the locale but perhaps a subclass might use it, for e.g. parsing a date in a custom
-    // string that doesn't necessarily have date math?
-    //TODO refactor DateMathParser.parseMath a bit to have a static method for this logic.
-    if (datemathfmt.startsWith("NOW")) {
-      datemathfmt = datemathfmt.substring("NOW".length());
-    }
+    Date date = null;
+    datemathfmt = datemathfmt.replaceAll("NOW", "");
     try {
-      DateMathParser parser = new DateMathParser(tz);
-      parser.setNow(new Date());// thus do *not* use SolrRequestInfo
-      return parser.parseMath(datemathfmt);
+      DateMathParser parser = getDateMathParser(locale, tz);
+      date = parseMathString(parser,datemathfmt);
     } catch (ParseException e) {
-      throw wrapAndThrow(SEVERE, e, "Invalid expression for date");
+      wrapAndThrow(SEVERE, e, "Invalid expression for date");
     }
+    return date;
+  }
+
+  /**
+   * NOTE: declared as a method to allow for extensibility
+   * @lucene.experimental
+   * @return the result of resolving the variable wrapper
+   */
+  protected Date parseMathString(DateMathParser parser, String datemathfmt) throws ParseException {
+    return parser.parseMath(datemathfmt);
   }
 
   /**
@@ -177,4 +199,16 @@ public class DateFormatEvaluator extends Evaluator {
     return variableWrapper.resolve();
   }
 
+  /**
+   * @lucene.experimental
+   * @return a DateMathParser
+   */
+  protected DateMathParser getDateMathParser(Locale l, TimeZone tz) {
+    return new DateMathParser(tz, l) {
+      @Override
+      public Date getNow() {
+        return new Date();
+      }
+    };
+  }
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,7 +28,6 @@ import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
@@ -40,7 +39,7 @@ import org.apache.lucene.util.TestUtil;
  * totalTermFreq of its integer value, and checks that the totalTermFreq is correct. 
  */
 // TODO: somehow factor this with BagOfPostings? it's almost the same
-@SuppressCodecs({"Direct"}) // at night this makes like 200k/300k docs and will make Direct's heart beat!
+@SuppressCodecs({"Direct", "Memory"}) // at night this makes like 200k/300k docs and will make Direct's heart beat!
 public class TestBagOfPositions extends LuceneTestCase {
   public void test() throws Exception {
     List<String> postingsList = new ArrayList<>();
@@ -78,7 +77,8 @@ public class TestBagOfPositions extends LuceneTestCase {
       System.out.println("threadCount=" + threadCount);
     }
     
-    FieldType fieldType = new FieldType(TextField.TYPE_NOT_STORED);
+    Field prototype = newTextField("field", "", Field.Store.NO);
+    FieldType fieldType = new FieldType(prototype.fieldType());
     if (random().nextBoolean()) {
       fieldType.setOmitNorms(true);
     }

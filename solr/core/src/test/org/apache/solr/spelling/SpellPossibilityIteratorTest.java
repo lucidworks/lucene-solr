@@ -1,3 +1,4 @@
+package org.apache.solr.spelling;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +15,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling;
+
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.lucene.analysis.Token;
 import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.spelling.PossibilityIterator;
 import org.junit.Before;
 import org.junit.Test;
 

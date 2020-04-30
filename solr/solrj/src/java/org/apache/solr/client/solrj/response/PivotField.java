@@ -14,12 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.response;
 
 import java.io.PrintStream;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+
+import org.apache.solr.common.util.NamedList;
 
 public class PivotField implements Serializable
 {
@@ -30,6 +33,14 @@ public class PivotField implements Serializable
   final Map<String,FieldStatsInfo> _statsInfo;
   final Map<String,Integer> _querycounts;
   final List<RangeFacet> _ranges;
+
+  /**
+   * @deprecated Use {@link #PivotField(String,Object,int,List,Map,Map,List)} with null <code>statsInfo</code>, queryCounts and ranges
+   */
+  @Deprecated
+  public PivotField( String f, Object v, int count, List<PivotField> pivot) {
+    this(f, v, count, pivot, null, null, null);
+  }
 
   public PivotField( String f, Object v, int count, List<PivotField> pivot, Map<String,FieldStatsInfo> statsInfo, Map<String,Integer> queryCounts, List<RangeFacet> ranges)
   {

@@ -1,3 +1,5 @@
+package org.apache.lucene.benchmark.byTask.tasks.alt;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.tasks.alt;
-
 
 import org.apache.lucene.benchmark.BenchmarkTestCase;
 import org.apache.lucene.benchmark.byTask.Benchmark;
@@ -25,9 +25,12 @@ public class AltPackageTaskTest extends BenchmarkTestCase {
 
   /** Benchmark should fail loading the algorithm when alt is not specified */
   public void testWithoutAlt() throws Exception {
-    expectThrows(Exception.class, () -> {
+    try {
       execBenchmark(altAlg(false));
-    });
+      assertFalse("Should have failed to run the algorithm",true);
+    } catch(Exception e) {
+      // expected exception, do nothing
+    }
   }
 
   /** Benchmark should be able to load the algorithm when alt is specified */

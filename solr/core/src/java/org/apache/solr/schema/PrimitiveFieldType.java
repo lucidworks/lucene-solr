@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.schema;
 
 import java.util.Map;
@@ -32,14 +33,5 @@ public abstract class PrimitiveFieldType extends FieldType {
        0 == (falseProperties & OMIT_NORMS)) {
       properties |= OMIT_NORMS;
     }
-  }
-
-  @Override
-  protected void checkSupportsDocValues() { // primitive types support DocValues
-  }
-
-  @Override
-  public MultiValueSelector getDefaultMultiValueSelectorForSort(SchemaField field, boolean reverse) {
-    return reverse ? MultiValueSelector.MAX : MultiValueSelector.MIN;
   }
 }

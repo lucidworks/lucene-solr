@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
 
-import java.io.IOException;
+import org.apache.lucene.analysis.TokenFilter;
+import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.analysis.util.ResourceLoader;
+import org.apache.lucene.analysis.util.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
+import org.apache.lucene.util.Version;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -24,14 +32,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.TokenFilter;
-import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.util.ResourceLoader;
-import org.apache.lucene.analysis.util.ResourceLoaderAware;
-import org.apache.lucene.analysis.util.TokenFilterFactory;
-import org.apache.lucene.search.PhraseQuery;
+import java.io.IOException;
 
 import static org.apache.lucene.analysis.miscellaneous.WordDelimiterFilter.*;
 
@@ -48,20 +49,8 @@ import static org.apache.lucene.analysis.miscellaneous.WordDelimiterFilter.*;
  *             types="wdfftypes.txt" /&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- *
- * @deprecated Use {@link WordDelimiterGraphFilterFactory} instead: it produces a correct
- * token graph so that e.g. {@link PhraseQuery} works correctly when it's used in
- * the search time analyzer.
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
-@Deprecated
 public class WordDelimiterFilterFactory extends TokenFilterFactory implements ResourceLoaderAware {
-
-  /** SPI name */
-  public static final String NAME = "wordDelimiter";
-
   public static final String PROTECTED_TOKENS = "protected";
   public static final String TYPES = "types";
 
@@ -128,8 +117,13 @@ public class WordDelimiterFilterFactory extends TokenFilterFactory implements Re
 
   @Override
   public TokenFilter create(TokenStream input) {
-    return new WordDelimiterFilter(input, typeTable == null ? WordDelimiterIterator.DEFAULT_WORD_DELIM_TABLE : typeTable,
+    if (luceneMatchVersion.onOrAfter(Version.LUCENE_4_8_0)) {
+      return new WordDelimiterFilter(input, typeTable == null ? WordDelimiterIterator.DEFAULT_WORD_DELIM_TABLE : typeTable,
                                    flags, protectedWords);
+    } else {
+      return new Lucene47WordDelimiterFilter(input, typeTable == null ? WordDelimiterIterator.DEFAULT_WORD_DELIM_TABLE : typeTable,
+                                  flags, protectedWords);
+    }
   }
   
   // source => type

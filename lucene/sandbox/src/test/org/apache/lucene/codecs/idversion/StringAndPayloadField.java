@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.idversion;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.idversion;
+
+import java.io.IOException;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
@@ -47,7 +50,7 @@ class StringAndPayloadField extends Field {
   }
 
   @Override
-  public TokenStream tokenStream(Analyzer analyzer, TokenStream reuse) {
+  public TokenStream tokenStream(Analyzer analyzer, TokenStream reuse) throws IOException {
     SingleTokenWithPayloadTokenStream ts;
     if (reuse instanceof SingleTokenWithPayloadTokenStream) {
       ts = (SingleTokenWithPayloadTokenStream) reuse;

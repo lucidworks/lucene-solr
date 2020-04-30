@@ -1,3 +1,5 @@
+package org.apache.lucene.facet;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -30,7 +31,6 @@ import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BoostQuery;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
 import org.apache.lucene.search.TermQuery;
 
 /**
@@ -67,10 +67,10 @@ public final class DrillDownQuery extends Query {
 
   /** Used by DrillSideways */
   DrillDownQuery(FacetsConfig config, Query filter, DrillDownQuery other) {
-    this.baseQuery = new BooleanQuery.Builder()
-        .add(other.baseQuery == null ? new MatchAllDocsQuery() : other.baseQuery, Occur.MUST)
-        .add(filter, Occur.FILTER)
-        .build();
+    BooleanQuery.Builder baseQuery = new BooleanQuery.Builder();
+    baseQuery.add(other.baseQuery == null ? new MatchAllDocsQuery() : other.baseQuery, Occur.MUST);
+    baseQuery.add(filter, Occur.FILTER);
+    this.baseQuery = baseQuery.build();
     this.dimQueries.addAll(other.dimQueries);
     this.drillDownDims.putAll(other.drillDownDims);
     this.config = config;
@@ -94,7 +94,7 @@ public final class DrillDownQuery extends Query {
 
   /** Adds one dimension of drill downs; if you pass the same
    *  dimension more than once it is OR'd with the previous
-   *  constraints on that dimension, and all dimensions are
+   *  cofnstraints on that dimension, and all dimensions are
    *  AND'd against each other and the base query. */
   public void add(String dim, String... path) {
     String indexedField = config.getDimConfig(dim).indexFieldName;
@@ -109,6 +109,7 @@ public final class DrillDownQuery extends Query {
     if (drillDownDims.containsKey(dim) == false) {
       drillDownDims.put(dim, drillDownDims.size());
       BooleanQuery.Builder builder = new BooleanQuery.Builder();
+      builder.setDisableCoord(true);
       dimQueries.add(builder);
     }
     final int index = drillDownDims.get(dim);
@@ -122,22 +123,24 @@ public final class DrillDownQuery extends Query {
   
   @Override
   public int hashCode() {
-    return classHash() + Objects.hash(baseQuery, dimQueries);
+    return 31 * super.hashCode() + Objects.hash(baseQuery, dimQueries);
   }
-
+  
   @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           equalsTo(getClass().cast(other));
+  public boolean equals(Object obj) {
+    if (super.equals(obj) == false) {
+      return false;
+    }
+    DrillDownQuery other = (DrillDownQuery) obj;
+    return Objects.equals(baseQuery, other.baseQuery)
+        && dimQueries.equals(other.dimQueries);
   }
-
-  private boolean equalsTo(DrillDownQuery other) {
-    return Objects.equals(baseQuery, other.baseQuery) && 
-           dimQueries.equals(other.dimQueries);
-  }
-
+  
   @Override
   public Query rewrite(IndexReader r) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(r);
+    }
     BooleanQuery rewritten = getBooleanQuery();
     if (rewritten.clauses().isEmpty()) {
       return new MatchAllDocsQuery();
@@ -148,11 +151,6 @@ public final class DrillDownQuery extends Query {
   @Override
   public String toString(String field) {
     return getBooleanQuery().toString(field);
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    visitor.visitLeaf(this);
   }
 
   private BooleanQuery getBooleanQuery() {

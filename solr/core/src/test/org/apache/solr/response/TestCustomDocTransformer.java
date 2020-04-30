@@ -1,3 +1,5 @@
+package org.apache.solr.response;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.response;
 
 import java.io.IOException;
 
+import org.apache.lucene.document.StoredField;
 import org.apache.lucene.index.IndexableField;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrDocument;
@@ -26,6 +28,7 @@ import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.transform.DocTransformer;
 import org.apache.solr.response.transform.TransformerFactory;
+import org.bouncycastle.util.Strings;
 import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -60,7 +63,7 @@ public class TestCustomDocTransformer extends SolrTestCaseJ4 {
     assertQ( req(
         "q", "*:*", 
         "fl", "id,out:[custom extra=subject,title]"), 
-        // Check that the concatenated fields make it in the results
+        // Check that the concatinated fields make it in the results
         "//*[@numFound='" + max + "']",
         "//str[.='xx#title_0#']",
         "//str[.='xx#title_1#']",
@@ -74,7 +77,7 @@ public class TestCustomDocTransformer extends SolrTestCaseJ4 {
       String[] extra = null;
       String ext = params.get("extra");
       if(ext!=null) {
-        extra = ext.split(",");
+        extra = Strings.split(ext, ',');
       }
       return new CustomTransformer(field, extra);
     }
@@ -101,7 +104,7 @@ public class TestCustomDocTransformer extends SolrTestCaseJ4 {
     }
 
     /**
-     * This transformer simply concatenates the values of multiple fields
+     * This transformer simply concatinates the values of multipe fields
      */
     @Override
     public void transform(SolrDocument doc, int docid) throws IOException {

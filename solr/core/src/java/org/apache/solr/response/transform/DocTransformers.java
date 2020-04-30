@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.response.transform;
 
 import java.io.IOException;
@@ -22,7 +23,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import org.apache.solr.common.SolrDocument;
-import org.apache.solr.response.ResultContext;
+import org.apache.solr.request.SolrQueryRequest;
 
 /**
  * Transform a document before it gets sent out
@@ -64,16 +65,9 @@ public class DocTransformers extends DocTransformer
   }
 
   @Override
-  public void setContext( ResultContext context ) {
+  public void setContext( TransformContext context ) {
     for( DocTransformer a : children ) {
       a.setContext( context );
-    }
-  }
-
-  @Override
-  public void transform(SolrDocument doc, int docid, float score) throws IOException {
-    for( DocTransformer a : children ) {
-      a.transform( doc, docid, score);
     }
   }
 
@@ -83,16 +77,4 @@ public class DocTransformers extends DocTransformer
       a.transform( doc, docid);
     }
   }
-
-  /** Returns true if and only if at least 1 child transformer returns true */
-  @Override
-  public boolean needsSolrIndexSearcher() {
-    for( DocTransformer kid : children ) {
-      if (kid.needsSolrIndexSearcher()) {
-        return true;
-      }
-    }
-    return false;
-  }
-
 }

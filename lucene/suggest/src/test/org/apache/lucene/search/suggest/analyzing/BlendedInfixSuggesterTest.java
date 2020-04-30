@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.analyzing;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.analyzing;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -23,11 +24,10 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
-import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.analysis.util.CharArraySet;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.suggest.Input;
 import org.apache.lucene.search.suggest.InputArrayIterator;
@@ -44,58 +44,22 @@ public class BlendedInfixSuggesterTest extends LuceneTestCase {
    * of the matching term.
    */
   public void testBlendedSort() throws IOException {
+
     BytesRef payload = new BytesRef("star");
+
     Input keys[] = new Input[]{
         new Input("star wars: episode v - the empire strikes back", 8, payload)
     };
-    BlendedInfixSuggester suggester = getBlendedInfixSuggester(keys);
 
-    assertSuggestionsRanking(payload, suggester);
-  }
+    Path tempDir = createTempDir("BlendedInfixSuggesterTest");
 
-  /**
-   * Test to validate the suggestions ranking according to the position coefficient,
-   * even if the weight associated to the suggestion is unitary.
-   */
-  public void testBlendedSort_fieldWeightUnitary_shouldRankSuggestionsByPositionMatch() throws IOException {
-    BytesRef payload = new BytesRef("star");
-    Input keys[] = new Input[]{
-        new Input("star wars: episode v - the empire strikes back", 1, payload)
-    };
-    BlendedInfixSuggester suggester = getBlendedInfixSuggester(keys);
+    Analyzer a = new StandardAnalyzer(CharArraySet.EMPTY_SET);
+    BlendedInfixSuggester suggester = new BlendedInfixSuggester(newFSDirectory(tempDir), a, a,
+                                                                AnalyzingInfixSuggester.DEFAULT_MIN_PREFIX_CHARS,
+                                                                BlendedInfixSuggester.BlenderType.POSITION_LINEAR,
+                                                                BlendedInfixSuggester.DEFAULT_NUM_FACTOR, false);
+    suggester.build(new InputArrayIterator(keys));
 
-    assertSuggestionsRanking(payload, suggester);
-  }
-
-  /**
-   * Test to validate the suggestions ranking according to the position coefficient,
-   * even if the weight associated to the suggestion is zero.
-   */
-  public void testBlendedSort_fieldWeightZero_shouldRankSuggestionsByPositionMatch() throws IOException {
-    BytesRef payload = new BytesRef("star");
-    Input keys[] = new Input[]{
-        new Input("star wars: episode v - the empire strikes back", 0, payload)
-    };
-    BlendedInfixSuggester suggester = getBlendedInfixSuggester(keys);
-
-    assertSuggestionsRanking(payload, suggester);
-  }
-
-  /**
-   * Test to validate the suggestions ranking according to the position coefficient,
-   * even if the weight associated to the suggestion is very big, no overflow should happen.
-   */
-  public void testBlendedSort_fieldWeightLongMax_shouldRankSuggestionsByPositionMatchWithNoOverflow() throws IOException {
-    BytesRef payload = new BytesRef("star");
-    Input keys[] = new Input[]{
-        new Input("star wars: episode v - the empire strikes back", Long.MAX_VALUE, payload)
-    };
-    BlendedInfixSuggester suggester = getBlendedInfixSuggester(keys);
-
-    assertSuggestionsRanking(payload, suggester);
-  }
-
-  private void assertSuggestionsRanking(BytesRef payload, BlendedInfixSuggester suggester) throws IOException {
     // we query for star wars and check that the weight
     // is smaller when we search for tokens that are far from the beginning
 
@@ -112,18 +76,6 @@ public class BlendedInfixSuggesterTest extends LuceneTestCase {
     assertTrue(w4 < 0);
 
     suggester.close();
-  }
-
-  private BlendedInfixSuggester getBlendedInfixSuggester(Input[] keys) throws IOException {
-    Path tempDir = createTempDir("BlendedInfixSuggesterTest");
-
-    Analyzer a = new StandardAnalyzer(CharArraySet.EMPTY_SET);
-    BlendedInfixSuggester suggester = new BlendedInfixSuggester(newFSDirectory(tempDir), a, a,
-        AnalyzingInfixSuggester.DEFAULT_MIN_PREFIX_CHARS,
-        BlendedInfixSuggester.BlenderType.POSITION_LINEAR,
-        BlendedInfixSuggester.DEFAULT_NUM_FACTOR, false);
-    suggester.build(new InputArrayIterator(keys));
-    return suggester;
   }
 
   /**
@@ -160,18 +112,6 @@ public class BlendedInfixSuggesterTest extends LuceneTestCase {
     assertEquals(w, getInResults(suggester, "top", pl, 1));
     assertEquals((int) (w * 1 / (1 + 2)), getInResults(suggester, "the", pl, 1));
     assertEquals((int) (w * 1 / (1 + 3)), getInResults(suggester, "lake", pl, 1));
-    suggester.close();
-
-    // BlenderType.EXPONENTIAL_RECIPROCAL is using 1/(pow(1+p, exponent)) * w where w is weight and p the position of the word
-    suggester = new BlendedInfixSuggester(newFSDirectory(tempDir), a, a,
-        AnalyzingInfixSuggester.DEFAULT_MIN_PREFIX_CHARS,
-        BlendedInfixSuggester.BlenderType.POSITION_EXPONENTIAL_RECIPROCAL, 1, 4.0, false, true, false);
-
-    suggester.build(new InputArrayIterator(keys));
-
-    assertEquals(w, getInResults(suggester, "top", pl, 1));
-    assertEquals((int) (w * 1 / (Math.pow(1 + 2, 4.0))), getInResults(suggester, "the", pl, 1));
-    assertEquals((int) (w * 1 / (Math.pow(1 + 3, 4.0))), getInResults(suggester, "lake", pl, 1));
 
     suggester.close();
   }
@@ -243,7 +183,14 @@ public class BlendedInfixSuggesterTest extends LuceneTestCase {
         new Input("top of the lake", 8, payload)
     };
 
-    BlendedInfixSuggester suggester = getBlendedInfixSuggester(keys);
+    Path tempDir = createTempDir("BlendedInfixSuggesterTest");
+
+    Analyzer a = new StandardAnalyzer(CharArraySet.EMPTY_SET);
+    BlendedInfixSuggester suggester = new BlendedInfixSuggester(newFSDirectory(tempDir), a, a,
+                                                                AnalyzingInfixSuggester.DEFAULT_MIN_PREFIX_CHARS,
+                                                                BlendedInfixSuggester.BlenderType.POSITION_LINEAR,
+                                                                BlendedInfixSuggester.DEFAULT_NUM_FACTOR, false);
+    suggester.build(new InputArrayIterator(keys));
 
     getInResults(suggester, "of ", payload, 1);
     getInResults(suggester, "the ", payload, 1);
@@ -344,17 +291,17 @@ public class BlendedInfixSuggesterTest extends LuceneTestCase {
     assertEquals(2, responses.size());
 
 
-    responses = suggester.lookup(term, (Map<BytesRef, BooleanClause.Occur>) null, 1, false, false);
+    responses = suggester.lookup(term, (Map) null, 1, false, false);
     assertEquals(1, responses.size());
 
-    responses = suggester.lookup(term, (Map<BytesRef, BooleanClause.Occur>) null, 2, false, false);
+    responses = suggester.lookup(term, (Map) null, 2, false, false);
     assertEquals(2, responses.size());
 
 
-    responses = suggester.lookup(term, (Set<BytesRef>) null, 1, false, false);
+    responses = suggester.lookup(term, (Set) null, 1, false, false);
     assertEquals(1, responses.size());
 
-    responses = suggester.lookup(term, (Set<BytesRef>) null, 2, false, false);
+    responses = suggester.lookup(term, (Set) null, 2, false, false);
     assertEquals(2, responses.size());
 
 

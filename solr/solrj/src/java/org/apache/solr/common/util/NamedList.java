@@ -14,26 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.common.util;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.function.BiConsumer;
 
-import org.apache.solr.common.MapWriter;
 import org.apache.solr.common.SolrException;
-import org.apache.solr.common.params.MultiMapSolrParams;
-import org.apache.solr.common.params.SolrParams;
 
 /**
  * A simple container class for modeling an ordered list of name/value pairs.
@@ -61,7 +55,7 @@ import org.apache.solr.common.params.SolrParams;
  * </p>
  *
  */
-public class NamedList<T> implements Cloneable, Serializable, Iterable<Map.Entry<String,T>> , MapWriter {
+public class NamedList<T> implements Cloneable, Serializable, Iterable<Map.Entry<String,T>> {
 
   private static final long serialVersionUID = 1957981902839867821L;
   protected final List<Object> nvPairs;
@@ -76,12 +70,6 @@ public class NamedList<T> implements Cloneable, Serializable, Iterable<Map.Entry
     nvPairs = new ArrayList<>(sz<<1);
   }
 
-  @Override
-  public void writeMap(EntryWriter ew) throws IOException {
-    for (int i = 0; i < nvPairs.size(); i+=2) {
-      ew.put((CharSequence) nvPairs.get(i), nvPairs.get(i + 1));
-    }
-  }
 
   /**
    * Creates a NamedList instance containing the "name,value" pairs contained in the
@@ -133,17 +121,12 @@ public class NamedList<T> implements Cloneable, Serializable, Iterable<Map.Entry
    * When using this constructor, runtime type safety is only guaranteed if
    * all even numbered elements of the input list are of type "T".
    * </p>
-   * <p>
-   * This method is package protected and exists solely so SimpleOrderedMap and clone() can utilize it
-   * </p>
-   * <p>
-   * TODO: this method was formerly public, now that it's not we can change the impl details of 
-   * this class to be based on a Map.Entry[] 
-   * </p>
-   * @lucene.internal
-   * @see #nameValueMapToList
+   *
+   * @param nameValuePairs underlying List which should be used to implement a NamedList
+   * @deprecated Use {@link #NamedList(java.util.Map.Entry[])} for the NamedList instantiation
    */
-  NamedList(List<Object> nameValuePairs) {
+  @Deprecated
+  public NamedList(List<Object> nameValuePairs) {
     nvPairs=nameValuePairs;
   }
 
@@ -152,14 +135,12 @@ public class NamedList<T> implements Cloneable, Serializable, Iterable<Map.Entry
    * indexed elements (0,2,4. ..etc) are Strings and odd elements (1,3,5,) are of
    * the type "T".
    *
-   * <p>
-   * NOTE: This a temporary placeholder method until the guts of the class
-   * are actually replaced by List&lt;String, ?&gt;.
-   * </p>
-   *
    * @return Modified List as per the above description
+   * @deprecated This a temporary placeholder method until the guts of the class
+   * are actually replaced by List&lt;String, ?&gt;.
    * @see <a href="https://issues.apache.org/jira/browse/SOLR-912">SOLR-912</a>
    */
+  @Deprecated
   private List<Object> nameValueMapToList(Map.Entry<String, ? extends T>[] nameValuePairs) {
     List<Object> result = new ArrayList<>();
     for (Map.Entry<String, ?> ent : nameValuePairs) {
@@ -411,101 +392,9 @@ public class NamedList<T> implements Cloneable, Serializable, Iterable<Map.Entry
     return sb.toString();
   }
 
-  public NamedList<T> getImmutableCopy() {
-    NamedList<T> copy = clone();
+  public NamedList getImmutableCopy() {
+    NamedList copy = clone();
     return new NamedList<>( Collections.unmodifiableList(copy.nvPairs));
-  }
-
-  public Map<String,T> asShallowMap() {
-    return asShallowMap(false);
-  }
-  public Map<String,T> asShallowMap(boolean allowDps) {
-    return new Map<String, T>() {
-      @Override
-      public int size() {
-        return NamedList.this.size();
-      }
-
-      @Override
-      public boolean isEmpty() {
-        return size() == 0;
-      }
-
-      public boolean containsKey(Object  key) {
-        return NamedList.this.get((String) key) != null ;
-      }
-
-      @Override
-      public boolean containsValue(Object value) {
-        return false;
-      }
-
-      @Override
-      public T get(Object key) {
-        return  NamedList.this.get((String) key);
-      }
-
-      @Override
-      public T put(String  key, T value) {
-        if (allowDps) {
-          NamedList.this.add(key, value);
-          return null;
-        }
-        int idx = NamedList.this.indexOf(key, 0);
-        if (idx == -1) {
-          NamedList.this.add(key, value);
-        } else {
-          NamedList.this.setVal(idx, value);
-        }
-        return null;
-      }
-
-      @Override
-      public T remove(Object key) {
-        return  NamedList.this.remove((String) key);
-      }
-
-      @Override
-      public void putAll(Map m) {
-        boolean isEmpty = isEmpty();
-        for (Object o : m.entrySet()) {
-          Map.Entry e = (Entry) o;
-          if (isEmpty) {// we know that there are no duplicates
-            add((String) e.getKey(), (T) e.getValue());
-          } else {
-            put(e.getKey() == null ? null : e.getKey().toString(), (T) e.getValue());
-          }
-        }
-      }
-
-      @Override
-      public void clear() {
-        NamedList.this.clear();
-      }
-
-      @Override
-      public Set<String> keySet() {
-        //TODO implement more efficiently
-        return  NamedList.this.asMap(1).keySet();
-      }
-
-      @Override
-      public Collection values() {
-        //TODO implement more efficiently
-        return  NamedList.this.asMap(1).values();
-      }
-
-      @Override
-      public Set<Entry<String,T>> entrySet() {
-        //TODO implement more efficiently
-        return NamedList.this.asMap(1).entrySet();
-      }
-
-      @Override
-      public void forEach(BiConsumer action) {
-        NamedList.this.forEach(action);
-      }
-    };
   }
 
   public Map asMap(int maxDepth) {
@@ -531,33 +420,6 @@ public class NamedList<T> implements Cloneable, Serializable, Iterable<Map.Entry
       }
     }
     return result;
-  }
-  /**
-   * Create SolrParams from NamedList.  Values must be {@code String[]} or {@code List}
-   * (with toString()-appropriate entries), or otherwise have a toString()-appropriate value.
-   * Nulls are retained as such in arrays/lists but otherwise will NPE.
-   */
-  public SolrParams toSolrParams() {
-    HashMap<String,String[]> map = new HashMap<>();
-    for (int i=0; i<this.size(); i++) {
-      String name = this.getName(i);
-      Object val = this.getVal(i);
-      if (val instanceof String[]) {
-        MultiMapSolrParams.addParam(name, (String[]) val, map);
-      } else if (val instanceof List) {
-        List l = (List) val;
-        String[] s = new String[l.size()];
-        for (int j = 0; j < l.size(); j++) {
-          s[j] = l.get(j) == null ? null : l.get(j).toString();
-        }
-        MultiMapSolrParams.addParam(name, s, map);
-      } else {
-        //TODO: we NPE if val is null; yet we support val members above. A bug?
-        MultiMapSolrParams.addParam(name, val.toString(), map);
-      }
-    }
-    // always use MultiMap for easier processing further down the chain
-    return new MultiMapSolrParams(map);
   }
 
   /**
@@ -848,12 +710,5 @@ public class NamedList<T> implements Cloneable, Serializable, Iterable<Map.Entry
     if (!(obj instanceof NamedList)) return false;
     NamedList<?> nl = (NamedList<?>) obj;
     return this.nvPairs.equals(nl.nvPairs);
-  }
-
-  public void forEach(BiConsumer<String, T> action) {
-    int sz = size();
-    for (int i = 0; i < sz; i++) {
-      action.accept(getName(i), getVal(i));
-    }
   }
 }

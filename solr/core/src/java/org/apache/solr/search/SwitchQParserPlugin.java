@@ -22,7 +22,7 @@ import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.handler.component.SearchHandler; // jdoc
 
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang.StringUtils;
 
 /**
  * <p>A QParserPlugin that acts like a "switch/case" statement.</p>
@@ -150,6 +150,10 @@ public class SwitchQParserPlugin extends QParserPlugin {
    * switch case matches the parser input, an error is returned.
    */
   public static String SWITCH_DEFAULT = "default";
+
+  @Override
+  public void init(NamedList args) {
+  }
 
   @Override
   public QParser createParser(String qstr, SolrParams localParams, SolrParams params, SolrQueryRequest req) {

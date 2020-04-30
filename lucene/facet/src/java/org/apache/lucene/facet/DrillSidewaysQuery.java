@@ -1,3 +1,5 @@
+package org.apache.lucene.facet;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet;
-
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -33,8 +33,6 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 
@@ -65,6 +63,9 @@ class DrillSidewaysQuery extends Query {
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
     Query newQuery = baseQuery;
     while(true) {
       Query rewrittenQuery = newQuery.rewrite(reader);
@@ -79,18 +80,13 @@ class DrillSidewaysQuery extends Query {
       return new DrillSidewaysQuery(newQuery, drillDownCollector, drillSidewaysCollectors, drillDownQueries, scoreSubDocsAtOnce);
     }
   }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    visitor.visitLeaf(this);
-  }
   
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    final Weight baseWeight = baseQuery.createWeight(searcher, scoreMode, boost);
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    final Weight baseWeight = baseQuery.createWeight(searcher, needsScores);
     final Weight[] drillDowns = new Weight[drillDownQueries.length];
     for(int dim=0;dim<drillDownQueries.length;dim++) {
-      drillDowns[dim] = searcher.createWeight(searcher.rewrite(drillDownQueries[dim]), ScoreMode.COMPLETE_NO_SCORES, 1);
+      drillDowns[dim] = searcher.createNormalizedWeight(drillDownQueries[dim], false);
     }
 
     return new Weight(DrillSidewaysQuery.this) {
@@ -103,20 +99,19 @@ class DrillSidewaysQuery extends Query {
       }
 
       @Override
-      public Scorer scorer(LeafReaderContext context) throws IOException {
-        // We can only run as a top scorer:
-        throw new UnsupportedOperationException();
+      public float getValueForNormalization() throws IOException {
+        return baseWeight.getValueForNormalization();
       }
 
       @Override
-      public boolean isCacheable(LeafReaderContext ctx) {
-        if (baseWeight.isCacheable(ctx) == false)
-          return false;
-        for (Weight w : drillDowns) {
-          if (w.isCacheable(ctx) == false)
-            return false;
-        }
-        return true;
+      public void normalize(float norm, float boost) {
+        baseWeight.normalize(norm, boost);
+      }
+
+      @Override
+      public Scorer scorer(LeafReaderContext context) throws IOException {
+        // We can only run as a top scorer:
+        throw new UnsupportedOperationException();
       }
 
       @Override
@@ -129,7 +124,7 @@ class DrillSidewaysQuery extends Query {
           Scorer scorer = drillDowns[dim].scorer(context);
           if (scorer == null) {
             nullCount++;
-            scorer = new ConstantScoreScorer(drillDowns[dim], 0f, scoreMode, DocIdSetIterator.empty());
+            scorer = new ConstantScoreScorer(drillDowns[dim], 0f, DocIdSetIterator.empty());
           }
 
           dims[dim] = new DrillSidewaysScorer.DocsAndCost(scorer, drillSidewaysCollectors[dim]);
@@ -169,24 +164,29 @@ class DrillSidewaysQuery extends Query {
   @Override
   public int hashCode() {
     final int prime = 31;
-    int result = classHash();
-    result = prime * result + Objects.hashCode(baseQuery);
-    result = prime * result + Objects.hashCode(drillDownCollector);
+    int result = super.hashCode();
+    result = prime * result + ((baseQuery == null) ? 0 : baseQuery.hashCode());
+    result = prime * result
+        + ((drillDownCollector == null) ? 0 : drillDownCollector.hashCode());
     result = prime * result + Arrays.hashCode(drillDownQueries);
     result = prime * result + Arrays.hashCode(drillSidewaysCollectors);
     return result;
   }
 
   @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           equalsTo(getClass().cast(other));
-  }
-  
-  private boolean equalsTo(DrillSidewaysQuery other) {
-    return Objects.equals(baseQuery, other.baseQuery) &&
-           Objects.equals(drillDownCollector, other.drillDownCollector) &&
-           Arrays.equals(drillDownQueries, other.drillDownQueries) &&
-           Arrays.equals(drillSidewaysCollectors, other.drillSidewaysCollectors);
+  public boolean equals(Object obj) {
+    if (this == obj) return true;
+    if (!super.equals(obj)) return false;
+    if (getClass() != obj.getClass()) return false;
+    DrillSidewaysQuery other = (DrillSidewaysQuery) obj;
+    if (baseQuery == null) {
+      if (other.baseQuery != null) return false;
+    } else if (!baseQuery.equals(other.baseQuery)) return false;
+    if (drillDownCollector == null) {
+      if (other.drillDownCollector != null) return false;
+    } else if (!drillDownCollector.equals(other.drillDownCollector)) return false;
+    if (!Arrays.equals(drillDownQueries, other.drillDownQueries)) return false;
+    if (!Arrays.equals(drillSidewaysCollectors, other.drillSidewaysCollectors)) return false;
+    return true;
   }
 }

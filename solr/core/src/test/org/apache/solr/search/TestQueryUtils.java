@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
 import org.apache.lucene.search.TermQuery;
@@ -22,14 +23,16 @@ import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.index.Term;
 import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.util.AbstractSolrTestCase;
 import org.junit.BeforeClass;
 
 import java.util.Collection;
+import java.util.List;
 
 /**
  *
  */
-public class TestQueryUtils extends SolrTestCaseJ4 {
+public class TestQueryUtils extends AbstractSolrTestCase {
 
   @BeforeClass
   public static void beforeClass() throws Exception {

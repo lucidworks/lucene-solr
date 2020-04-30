@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Map;
 import java.util.Set;
+
+import org.apache.lucene.store.Directory;
 
 /** Embeds a [read-only] SegmentInfo and adds per-commit
  *  fields.
@@ -37,9 +39,6 @@ public class SegmentCommitInfo {
 
   // How many deleted docs in the segment:
   private int delCount;
-
-  // How many soft-deleted docs in the segment that are not also hard-deleted:
-  private int softDelCount;
 
   // Generation number of the live docs file (-1 if there
   // are no deletes yet):
@@ -71,11 +70,11 @@ public class SegmentCommitInfo {
   // track the fieldInfos update files
   private final Set<String> fieldInfosFiles = new HashSet<>();
   
+  // Track the per-generation updates files
+  @Deprecated
+  private final Map<Long,Set<String>> genUpdatesFiles = new HashMap<>();
+  
   private volatile long sizeInBytes = -1;
-
-  // NOTE: only used in-RAM by IW to track buffered deletes;
-  // this is never written to/read from the Directory
-  private long bufferedDeletesGen = -1;
 
   /**
    * Sole constructor.
@@ -91,16 +90,33 @@ public class SegmentCommitInfo {
    * @param docValuesGen
    *          DocValues generation number (used to name doc-values updates files)
    */
-  public SegmentCommitInfo(SegmentInfo info, int delCount, int softDelCount, long delGen, long fieldInfosGen, long docValuesGen) {
+  public SegmentCommitInfo(SegmentInfo info, int delCount, long delGen, long fieldInfosGen, long docValuesGen) {
     this.info = info;
     this.delCount = delCount;
-    this.softDelCount = softDelCount;
     this.delGen = delGen;
     this.nextWriteDelGen = delGen == -1 ? 1 : delGen + 1;
     this.fieldInfosGen = fieldInfosGen;
     this.nextWriteFieldInfosGen = fieldInfosGen == -1 ? 1 : fieldInfosGen + 1;
     this.docValuesGen = docValuesGen;
     this.nextWriteDocValuesGen = docValuesGen == -1 ? 1 : docValuesGen + 1;
+  }
+
+  /**
+   * Sets the updates file names per generation. Does not deep clone the map.
+   * 
+   * @deprecated required to support 4.6-4.8 indexes.
+   */
+  @Deprecated
+  public void setGenUpdatesFiles(Map<Long,Set<String>> genUpdatesFiles) {
+    this.genUpdatesFiles.clear();
+    for (Map.Entry<Long,Set<String>> kv : genUpdatesFiles.entrySet()) {
+      // rename the set
+      Set<String> set = new HashSet<>();
+      for (String file : kv.getValue()) {
+        set.add(info.namedForThisSegment(file));
+      }
+      this.genUpdatesFiles.put(kv.getKey(), set);
+    }
   }
   
   /** Returns the per-field DocValues updates files. */
@@ -232,6 +248,12 @@ public class SegmentCommitInfo {
     
     // Must separately add any live docs files:
     info.getCodec().liveDocsFormat().files(this, files);
+
+    // Must separately add any per-gen updates files. This can go away when we
+    // get rid of genUpdatesFiles (6.0)
+    for (Set<String> updateFiles : genUpdatesFiles.values()) {
+      files.addAll(updateFiles);
+    }
     
     // must separately add any field updates files
     for (Set<String> updatefiles : dvUpdatesFiles.values()) {
@@ -244,17 +266,17 @@ public class SegmentCommitInfo {
     return files;
   }
 
+  // NOTE: only used in-RAM by IW to track buffered deletes;
+  // this is never written to/read from the Directory
+  private long bufferedDeletesGen;
+  
   long getBufferedDeletesGen() {
     return bufferedDeletesGen;
   }
 
   void setBufferedDeletesGen(long v) {
-    if (bufferedDeletesGen == -1) {
-      bufferedDeletesGen = v;
-      sizeInBytes =  -1;
-    } else {
-      throw new IllegalStateException("buffered deletes gen should only be set once");
-    }
+    bufferedDeletesGen = v;
+    sizeInBytes =  -1;
   }
   
   /** Returns true if there are any deletions for the 
@@ -317,27 +339,20 @@ public class SegmentCommitInfo {
     return delCount;
   }
 
-  /**
-   * Returns the number of only soft-deleted docs.
-   */
-  public int getSoftDelCount() {
-    return softDelCount;
-  }
-
   void setDelCount(int delCount) {
     if (delCount < 0 || delCount > info.maxDoc()) {
       throw new IllegalArgumentException("invalid delCount=" + delCount + " (maxDoc=" + info.maxDoc() + ")");
     }
-    assert softDelCount + delCount <= info.maxDoc() : "maxDoc=" + info.maxDoc() + ",delCount=" + delCount + ",softDelCount=" + softDelCount;
     this.delCount = delCount;
   }
-
-  void setSoftDelCount(int softDelCount) {
-    if (softDelCount < 0 || softDelCount > info.maxDoc()) {
-      throw new IllegalArgumentException("invalid softDelCount=" + softDelCount + " (maxDoc=" + info.maxDoc() + ")");
-    }
-    assert softDelCount + delCount <= info.maxDoc() : "maxDoc=" + info.maxDoc() + ",delCount=" + delCount + ",softDelCount=" + softDelCount;
-    this.softDelCount = softDelCount;
+  
+  /** 
+   * Returns a description of this segment. 
+   * @deprecated Use {@link #toString(int)} instead.
+   */
+  @Deprecated
+  public String toString(Directory dir, int pendingDelCount) {
+    return toString(pendingDelCount);
   }
 
   /** Returns a description of this segment. */
@@ -352,10 +367,6 @@ public class SegmentCommitInfo {
     if (docValuesGen != -1) {
       s += ":dvGen=" + docValuesGen;
     }
-    if (softDelCount > 0) {
-      s += " :softDel=" + softDelCount;
-    }
-
     return s;
   }
 
@@ -366,7 +377,7 @@ public class SegmentCommitInfo {
 
   @Override
   public SegmentCommitInfo clone() {
-    SegmentCommitInfo other = new SegmentCommitInfo(info, delCount, softDelCount, delGen, fieldInfosGen, docValuesGen);
+    SegmentCommitInfo other = new SegmentCommitInfo(info, delCount, delGen, fieldInfosGen, docValuesGen);
     // Not clear that we need to carry over nextWriteDelGen
     // (i.e. do we ever clone after a failed write and
     // before the next successful write?), but just do it to
@@ -376,6 +387,11 @@ public class SegmentCommitInfo {
     other.nextWriteDocValuesGen = nextWriteDocValuesGen;
     
     // deep clone
+    for (Entry<Long,Set<String>> e : genUpdatesFiles.entrySet()) {
+      other.genUpdatesFiles.put(e.getKey(), new HashSet<>(e.getValue()));
+    }
+    
+    // deep clone
     for (Entry<Integer,Set<String>> e : dvUpdatesFiles.entrySet()) {
       other.dvUpdatesFiles.put(e.getKey(), new HashSet<>(e.getValue()));
     }
@@ -383,9 +399,5 @@ public class SegmentCommitInfo {
     other.fieldInfosFiles.addAll(fieldInfosFiles);
     
     return other;
-  }
-
-  final int getDelCount(boolean includeSoftDeletes) {
-    return includeSoftDeletes ? getDelCount() + getSoftDelCount() : getDelCount();
   }
 }

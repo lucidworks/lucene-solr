@@ -1,3 +1,4 @@
+package org.apache.solr.search.function.distance;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +15,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.function.distance;
+
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.docvalues.DoubleDocValues;
 import org.apache.lucene.queries.function.valuesource.MultiValueSource;
 import org.apache.lucene.search.IndexSearcher;
-import org.locationtech.spatial4j.distance.DistanceUtils;
+import com.spatial4j.core.distance.DistanceUtils;
 import org.apache.solr.common.SolrException;
 
 import java.io.IOException;
@@ -67,7 +68,7 @@ public class HaversineFunction extends ValueSource {
    * @param doc  The doc to score
    * @return The haversine distance formula
    */
-  protected double distance(int doc, FunctionValues p1DV, FunctionValues p2DV) throws IOException {
+  protected double distance(int doc, FunctionValues p1DV, FunctionValues p2DV) {
 
     double[] p1D = new double[2];
     double[] p2D = new double[2];
@@ -99,11 +100,11 @@ public class HaversineFunction extends ValueSource {
     final FunctionValues vals2 = p2.getValues(context, readerContext);
     return new DoubleDocValues(this) {
       @Override
-      public double doubleVal(int doc) throws IOException {
+      public double doubleVal(int doc) {
         return distance(doc, vals1, vals2);
       }
       @Override
-      public String toString(int doc) throws IOException {
+      public String toString(int doc) {
         StringBuilder sb = new StringBuilder();
         sb.append(name()).append('(');
         sb.append(vals1.toString(doc)).append(',').append(vals2.toString(doc));

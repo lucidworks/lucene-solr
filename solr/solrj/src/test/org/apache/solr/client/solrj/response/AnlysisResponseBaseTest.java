@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.response;
 
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.common.util.NamedList;
 import org.junit.Test;
 
@@ -30,7 +31,7 @@ import java.util.List;
  * @since solr 1.4
  */
 @SuppressWarnings("unchecked")
-public class AnlysisResponseBaseTest extends SolrTestCase {
+public class AnlysisResponseBaseTest extends LuceneTestCase {
 
   /**
    * Tests the {@link AnalysisResponseBase#buildTokenInfo(org.apache.solr.common.util.NamedList)} method.
@@ -96,19 +97,6 @@ public class AnlysisResponseBaseTest extends SolrTestCase {
     assertPhase(phases.get(1), "Filter1", 5, tokenInfo);
     assertPhase(phases.get(2), "Filter2", 4, tokenInfo);
     assertPhase(phases.get(3), "Filter3", 3, tokenInfo);
-  }
-
-  /**
-   * Tests the {@link AnalysisResponseBase#buildPhases(org.apache.solr.common.util.NamedList)} )}
-   * method for the special case of CharacterFilter.
-   */
-  @Test
-  public void testCharFilterBuildPhases() throws Exception {
-    NamedList nl = new NamedList();
-    nl.add("CharFilter1", "CharFilterOutput"); //not list of tokens
-    AnalysisResponseBase response = new AnalysisResponseBase();
-    List<AnalysisResponseBase.AnalysisPhase> phases = response.buildPhases(nl);
-    assertEquals(1, phases.size());
   }
 
   //================================================ Helper Methods ==================================================

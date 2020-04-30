@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.cranky;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.cranky;
 
 import java.io.IOException;
 import java.util.Random;
@@ -66,11 +67,11 @@ class CrankyNormsFormat extends NormsFormat {
     }
 
     @Override
-    public void addNormsField(FieldInfo field, NormsProducer valuesProducer) throws IOException {
+    public void addNormsField(FieldInfo field, Iterable<Number> values) throws IOException {
       if (random.nextInt(100) == 0) {
         throw new IOException("Fake IOException from NormsConsumer.addNormsField()");
       }
-      delegate.addNormsField(field, valuesProducer);
+      delegate.addNormsField(field, values);
     }
   }
 }

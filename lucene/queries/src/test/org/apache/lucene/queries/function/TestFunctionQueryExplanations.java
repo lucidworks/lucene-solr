@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function;
 
 import org.apache.lucene.queries.function.valuesource.ConstValueSource;
 import org.apache.lucene.queries.function.valuesource.RangeMapFloatFunction;
@@ -35,7 +36,7 @@ public class TestFunctionQueryExplanations extends BaseExplanationTestCase {
   }
 
   public void testMapFunction() throws Exception {
-    ValueSource rff = new RangeMapFloatFunction(new ConstValueSource(3), 0, 1, 2, 4f);
+    ValueSource rff = new RangeMapFloatFunction(new ConstValueSource(3), 0, 1, 2, new Float(4));
     Query q = new FunctionQuery(rff);
     qtest(q, new int[] { 0,1,2,3 });
     assertEquals("map(const(3.0),0.0,1.0,const(2.0),const(4.0))", rff.description());

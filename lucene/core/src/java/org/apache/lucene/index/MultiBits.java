@@ -1,3 +1,7 @@
+package org.apache.lucene.index;
+
+import org.apache.lucene.util.Bits;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +18,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
-import java.util.List;
-
-import org.apache.lucene.util.Bits;
-
 
 /**
  * Concatenates multiple Bits together, on every lookup.
@@ -29,7 +27,7 @@ import org.apache.lucene.util.Bits;
  *
  * @lucene.experimental
  */
-public final class MultiBits implements Bits {
+final class MultiBits implements Bits {
   private final Bits[] subs;
 
   // length is 1+subs.length (the last entry has the maxDoc):
@@ -37,43 +35,11 @@ public final class MultiBits implements Bits {
 
   private final boolean defaultValue;
 
-  private MultiBits(Bits[] subs, int[] starts, boolean defaultValue) {
+  public MultiBits(Bits[] subs, int[] starts, boolean defaultValue) {
     assert starts.length == 1+subs.length;
     this.subs = subs;
     this.starts = starts;
     this.defaultValue = defaultValue;
-  }
-
-  /** Returns a single {@link Bits} instance for this
-   *  reader, merging live Documents on the
-   *  fly.  This method will return null if the reader
-   *  has no deletions.
-   *
-   *  <p><b>NOTE</b>: this is a very slow way to access live docs.
-   *  For example, each Bits access will require a binary search.
-   *  It's better to get the sub-readers and iterate through them
-   *  yourself. */
-  public static Bits getLiveDocs(IndexReader reader) {
-    if (reader.hasDeletions()) {
-      final List<LeafReaderContext> leaves = reader.leaves();
-      final int size = leaves.size();
-      assert size > 0 : "A reader with deletions must have at least one leave";
-      if (size == 1) {
-        return leaves.get(0).reader().getLiveDocs();
-      }
-      final Bits[] liveDocs = new Bits[size];
-      final int[] starts = new int[size + 1];
-      for (int i = 0; i < size; i++) {
-        // record all liveDocs, even if they are null
-        final LeafReaderContext ctx = leaves.get(i);
-        liveDocs[i] = ctx.reader().getLiveDocs();
-        starts[i] = ctx.docBase;
-      }
-      starts[size] = reader.maxDoc();
-      return new MultiBits(liveDocs, starts, true);
-    } else {
-      return null;
-    }
   }
 
   private boolean checkLength(int reader, int doc) {
@@ -98,19 +64,50 @@ public final class MultiBits implements Bits {
   @Override
   public String toString() {
     StringBuilder b = new StringBuilder();
-    b.append(subs.length).append(" subs: ");
+    b.append(subs.length + " subs: ");
     for(int i=0;i<subs.length;i++) {
       if (i != 0) {
         b.append("; ");
       }
       if (subs[i] == null) {
-        b.append("s=").append(starts[i]).append(" l=null");
+        b.append("s=" + starts[i] + " l=null");
       } else {
-        b.append("s=").append(starts[i]).append(" l=").append(subs[i].length()).append(" b=").append(subs[i]);
+        b.append("s=" + starts[i] + " l=" + subs[i].length() + " b=" + subs[i]);
       }
     }
-    b.append(" end=").append(starts[subs.length]);
+    b.append(" end=" + starts[subs.length]);
     return b.toString();
+  }
+
+  /**
+   * Represents a sub-Bits from 
+   * {@link MultiBits#getMatchingSub(org.apache.lucene.index.ReaderSlice) getMatchingSub()}.
+   */
+  public final static class SubResult {
+    public boolean matches;
+    public Bits result;
+  }
+
+  /**
+   * Returns a sub-Bits matching the provided <code>slice</code>
+   * <p>
+   * Because <code>null</code> usually has a special meaning for
+   * Bits (e.g. no deleted documents), you must check
+   * {@link SubResult#matches} instead to ensure the sub was 
+   * actually found.
+   */
+  public SubResult getMatchingSub(ReaderSlice slice) {
+    int reader = ReaderUtil.subIndex(slice.start, starts);
+    assert reader != -1;
+    assert reader < subs.length: "slice=" + slice + " starts[-1]=" + starts[starts.length-1];
+    final SubResult subResult = new SubResult();
+    if (starts[reader] == slice.start && starts[1+reader] == slice.start+slice.length) {
+      subResult.matches = true;
+      subResult.result = subs[reader];
+    } else {
+      subResult.matches = false;
+    }
+    return subResult;
   }
 
   @Override

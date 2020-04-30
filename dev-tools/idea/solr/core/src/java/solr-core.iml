@@ -6,9 +6,6 @@
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$" isTestSource="false" />
     </content>
-    <content url="file://$MODULE_DIR$/../resources">
-      <sourceFolder url="file://$MODULE_DIR$/../resources" type="java-resource" />
-    </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="Solr core library" level="project" />
@@ -16,7 +13,7 @@
     <orderEntry type="library" name="Solr example library" level="project" />
     <orderEntry type="module" module-name="solrj" />
     <orderEntry type="module" module-name="kuromoji" />
-    <orderEntry type="module" module-name="spatial-extras" />
+    <orderEntry type="module" module-name="spatial" />
     <orderEntry type="module" module-name="grouping" />
     <orderEntry type="module" module-name="highlighter" />
     <orderEntry type="module" module-name="icu" />
@@ -27,12 +24,8 @@
     <orderEntry type="module" module-name="expressions" />
     <orderEntry type="module" module-name="analysis-common" />
     <orderEntry type="module" module-name="lucene-core" />
-    <orderEntry type="module" module-name="classification" />
     <orderEntry type="module" module-name="queryparser" />
     <orderEntry type="module" module-name="join" />
     <orderEntry type="module" module-name="sandbox" />
-    <orderEntry type="module" module-name="backward-codecs" />
-    <orderEntry type="module" module-name="codecs" />
-    <orderEntry type="module" module-name="nori" />
   </component>
 </module>

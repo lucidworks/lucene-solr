@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.tokenattributes;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.tokenattributes;
-
 
 import org.apache.lucene.util.AttributeImpl;
 import org.apache.lucene.util.AttributeReflector;
@@ -43,7 +43,7 @@ public class OffsetAttributeImpl extends AttributeImpl implements OffsetAttribut
     // OffsetAtt
 
     if (startOffset < 0 || endOffset < startOffset) {
-      throw new IllegalArgumentException("startOffset must be non-negative, and endOffset must be >= startOffset; got "
+      throw new IllegalArgumentException("startOffset must be non-negative, and endOffset must be >= startOffset, "
           + "startOffset=" + startOffset + ",endOffset=" + endOffset);
     }
 

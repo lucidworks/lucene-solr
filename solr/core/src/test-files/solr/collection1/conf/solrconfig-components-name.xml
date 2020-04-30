@@ -33,8 +33,6 @@
         solr.RAMDirectoryFactory is memory based and not persistent. -->
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
 
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
-
   <luceneMatchVersion>${tests.luceneMatchVersion:LATEST}</luceneMatchVersion>
 
   <updateHandler class="solr.DirectUpdateHandler2"></updateHandler>
@@ -42,7 +40,7 @@
   <queryResponseWriter name="xml" default="true"
                        class="solr.XMLResponseWriter" />
 
-  <requestHandler name="/select" class="solr.SearchHandler">
+  <requestHandler name="standard" class="solr.StandardRequestHandler">
     <bool name="httpCaching">true</bool>
     <arr name="first-components">
       <str>component1</str>
@@ -52,8 +50,9 @@
     </arr>
   </requestHandler>
 
-  <requestDispatcher>
-    <requestParsers enableRemoteStreaming="false" multipartUploadLimitInKB="-1" />
+  <!-- enable streaming for testing... -->
+  <requestDispatcher handleSelect="true" >
+    <requestParsers enableRemoteStreaming="true" multipartUploadLimitInKB="2048" />
     <httpCaching lastModifiedFrom="openTime" etagSeed="Solr" never304="false">
       <cacheControl>max-age=30, public</cacheControl>
     </httpCaching>
@@ -61,7 +60,7 @@
 
   <admin>
     <defaultQuery>solr</defaultQuery>
-    <gettableFiles>solrconfig.xml schema.xml</gettableFiles>
+    <gettableFiles>solrconfig.xml schema.xml admin-extra.html</gettableFiles>
   </admin>
   
  <searchComponent name="component1" class="org.apache.solr.search.MockSearchComponent">

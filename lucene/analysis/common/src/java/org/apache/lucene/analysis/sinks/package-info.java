@@ -16,6 +16,8 @@
  */
 
 /**
- * {@link org.apache.lucene.analysis.sinks.TeeSinkTokenFilter}.
+ * {@link org.apache.lucene.analysis.sinks.TeeSinkTokenFilter} and implementations
+ * of {@link org.apache.lucene.analysis.sinks.TeeSinkTokenFilter.SinkFilter} that
+ * might be useful.
  */
 package org.apache.lucene.analysis.sinks;

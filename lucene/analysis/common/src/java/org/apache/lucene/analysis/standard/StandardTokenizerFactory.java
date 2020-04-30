@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.standard;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.standard;
 
-
+import org.apache.lucene.analysis.Tokenizer;
+import org.apache.lucene.analysis.standard.std40.StandardTokenizer40;
 import org.apache.lucene.analysis.util.TokenizerFactory;
 import org.apache.lucene.util.AttributeFactory;
+import org.apache.lucene.util.Version;
 
 import java.util.Map;
 
@@ -30,15 +33,8 @@ import java.util.Map;
  *     &lt;tokenizer class="solr.StandardTokenizerFactory" maxTokenLength="255"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre> 
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
 public class StandardTokenizerFactory extends TokenizerFactory {
-
-  /** SPI name */
-  public static final String NAME = "standard";
-
   private final int maxTokenLength;
   
   /** Creates a new StandardTokenizerFactory */
@@ -51,9 +47,15 @@ public class StandardTokenizerFactory extends TokenizerFactory {
   }
 
   @Override
-  public StandardTokenizer create(AttributeFactory factory) {
-    StandardTokenizer tokenizer = new StandardTokenizer(factory);
-    tokenizer.setMaxTokenLength(maxTokenLength);
-    return tokenizer;
+  public Tokenizer create(AttributeFactory factory) {
+    if (luceneMatchVersion.onOrAfter(Version.LUCENE_4_7_0)) {
+      StandardTokenizer tokenizer = new StandardTokenizer(factory);
+      tokenizer.setMaxTokenLength(maxTokenLength);
+      return tokenizer;
+    } else {
+      StandardTokenizer40 tokenizer40 = new StandardTokenizer40(factory);
+      tokenizer40.setMaxTokenLength(maxTokenLength);
+      return tokenizer40;
+    }
   }
 }

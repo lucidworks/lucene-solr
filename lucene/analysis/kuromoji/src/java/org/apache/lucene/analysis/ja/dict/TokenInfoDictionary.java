@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ja.dict;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ja.dict;
-
 
 import java.io.BufferedInputStream;
 import java.io.InputStream;
 import java.io.IOException;
 
 import org.apache.lucene.store.InputStreamDataInput;
+import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.PositiveIntOutputs;
 
@@ -35,23 +36,25 @@ public final class TokenInfoDictionary extends BinaryDictionary {
 
   private final TokenInfoFST fst;
   
-  /**
-   * @param resourceScheme - scheme for loading resources (FILE or CLASSPATH).
-   * @param resourcePath - where to load resources (dictionaries) from. If null, with CLASSPATH scheme only, use
-   * this class's name as the path.
-   */
-  public TokenInfoDictionary(ResourceScheme resourceScheme, String resourcePath) throws IOException {
-    super(resourceScheme, resourcePath);
-    FST<Long> fst;
-    try (InputStream is = new BufferedInputStream(getResource(FST_FILENAME_SUFFIX))) {
+  private TokenInfoDictionary() throws IOException {
+    super();
+    InputStream is = null;
+    FST<Long> fst = null;
+    boolean success = false;
+    try {
+      is = getResource(FST_FILENAME_SUFFIX);
+      is = new BufferedInputStream(is);
       fst = new FST<>(new InputStreamDataInput(is), PositiveIntOutputs.getSingleton());
+      success = true;
+    } finally {
+      if (success) {
+        IOUtils.close(is);
+      } else {
+        IOUtils.closeWhileHandlingException(is);
+      }
     }
     // TODO: some way to configure?
     this.fst = new TokenInfoFST(fst, true);
-  }
-
-  private TokenInfoDictionary() throws IOException {
-    this(ResourceScheme.CLASSPATH, null);
   }
   
   public TokenInfoFST getFST() {

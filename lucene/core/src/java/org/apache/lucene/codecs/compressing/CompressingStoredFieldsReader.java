@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.compressing;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.compressing;
-
 
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.BYTE_ARR;
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.CODEC_SFX_DAT;
@@ -36,6 +36,7 @@ import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.TYPE_BITS;
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.TYPE_MASK;
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.VERSION_CURRENT;
+import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.VERSION_CHUNK_STATS;
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.VERSION_START;
 
 import java.io.EOFException;
@@ -160,14 +161,18 @@ public final class CompressingStoredFieldsReader extends StoredFieldsReader {
       decompressor = compressionMode.newDecompressor();
       this.merging = false;
       this.state = new BlockState();
-
-      fieldsStream.seek(maxPointer);
-      numChunks = fieldsStream.readVLong();
-      numDirtyChunks = fieldsStream.readVLong();
-      if (numDirtyChunks > numChunks) {
-        throw new CorruptIndexException("invalid chunk counts: dirty=" + numDirtyChunks + ", total=" + numChunks, fieldsStream);
+      
+      if (version >= VERSION_CHUNK_STATS) {
+        fieldsStream.seek(maxPointer);
+        numChunks = fieldsStream.readVLong();
+        numDirtyChunks = fieldsStream.readVLong();
+        if (numDirtyChunks > numChunks) {
+          throw new CorruptIndexException("invalid chunk counts: dirty=" + numDirtyChunks + ", total=" + numChunks, fieldsStream);
+        }
+      } else {
+        numChunks = numDirtyChunks = -1;
       }
-
+      
       // NOTE: data file is too costly to verify checksum against all the bytes on open,
       // but for now we at least verify proper structure of the checksum footer: which looks
       // for FOOTER_MAGIC + algorithmID. This is cheap and can detect some forms of corruption

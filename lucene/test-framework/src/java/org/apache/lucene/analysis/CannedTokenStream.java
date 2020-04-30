@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis;
 
 import java.io.IOException;
 
+import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
+import org.apache.lucene.analysis.tokenattributes.PayloadAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
+import org.apache.lucene.analysis.tokenattributes.PositionLengthAttribute;
 
 /**
  * TokenStream from a canned list of Tokens.
@@ -27,19 +31,23 @@ import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 public final class CannedTokenStream extends TokenStream {
   private final Token[] tokens;
   private int upto = 0;
-  private final OffsetAttribute offsetAtt = addAttribute(OffsetAttribute.class);
+  private final CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);
   private final PositionIncrementAttribute posIncrAtt = addAttribute(PositionIncrementAttribute.class);
+  private final PositionLengthAttribute posLengthAtt = addAttribute(PositionLengthAttribute.class);
+  private final OffsetAttribute offsetAtt = addAttribute(OffsetAttribute.class);
+  private final PayloadAttribute payloadAtt = addAttribute(PayloadAttribute.class);
   private final int finalOffset;
   private final int finalPosInc;
 
   public CannedTokenStream(Token... tokens) {
-    this(0, 0, tokens);
+    this.tokens = tokens;
+    finalOffset = 0;
+    finalPosInc = 0;
   }
 
   /** If you want trailing holes, pass a non-zero
    *  finalPosInc. */
   public CannedTokenStream(int finalPosInc, int finalOffset, Token... tokens) {
-    super(Token.TOKEN_ATTRIBUTE_FACTORY);
     this.tokens = tokens;
     this.finalOffset = finalOffset;
     this.finalPosInc = finalPosInc;
@@ -51,20 +59,20 @@ public final class CannedTokenStream extends TokenStream {
     posIncrAtt.setPositionIncrement(finalPosInc);
     offsetAtt.setOffset(finalOffset, finalOffset);
   }
-
-  @Override
-  public void reset() throws IOException {
-    upto = 0;
-    super.reset();
-  }
-
+  
   @Override
   public boolean incrementToken() {
     if (upto < tokens.length) {
-      clearAttributes();
-      // NOTE: this looks weird, casting offsetAtt to Token, but because we are using the Token class's AttributeFactory, all attributes are
-      // in fact backed by the Token class, so we just copy the current token into our Token:
-      tokens[upto++].copyTo((Token) offsetAtt);
+      final Token token = tokens[upto++];     
+      // TODO: can we just capture/restoreState so
+      // we get all attrs...?
+      clearAttributes();      
+      termAtt.setEmpty();
+      termAtt.append(token.toString());
+      posIncrAtt.setPositionIncrement(token.getPositionIncrement());
+      posLengthAtt.setPositionLength(token.getPositionLength());
+      offsetAtt.setOffset(token.startOffset(), token.endOffset());
+      payloadAtt.setPayload(token.getPayload());
       return true;
     } else {
       return false;

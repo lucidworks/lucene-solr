@@ -1,3 +1,5 @@
+package org.apache.solr.request.json;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.request.json;
+
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -36,7 +38,6 @@ import org.noggit.JSONParser;
 import org.noggit.ObjectBuilder;
 
 import static org.apache.solr.common.params.CommonParams.JSON;
-import static org.apache.solr.common.params.CommonParams.SORT;
 
 public class RequestUtil {
   /**
@@ -148,16 +149,14 @@ public class RequestUtil {
       newMap.putAll( MultiMapSolrParams.asMultiMap(invariants) );
     }
 
-    if (!isShard) { // Don't expand macros in shard requests
-      String[] doMacrosStr = newMap.get("expandMacros");
-      boolean doMacros = true;
-      if (doMacrosStr != null) {
-        doMacros = "true".equals(doMacrosStr[0]);
-      }
+    String[] doMacrosStr = newMap.get("expandMacros");
+    boolean doMacros = true;
+    if (doMacrosStr != null) {
+      doMacros = "true".equals(doMacrosStr[0]);
+    }
 
-      if (doMacros) {
-        newMap = MacroExpander.expand(newMap);
-      }
+    if (doMacros) {
+      newMap = MacroExpander.expand(newMap);
     }
     // Set these params as soon as possible so if there is an error processing later, things like
     // "wt=json" will take effect from the defaults.
@@ -179,32 +178,27 @@ public class RequestUtil {
       }
       mergeJSON(json, JSON, jsonS, new ObjectUtil.ConflictHandler());
     }
-    for (Map.Entry<String, String[]> entry : newMap.entrySet()) {
-      String key = entry.getKey();
+    for (String key : newMap.keySet()) {
       // json.nl, json.wrf are existing query parameters
       if (key.startsWith("json.") && !("json.nl".equals(key) || "json.wrf".equals(key))) {
         if (json == null) {
           json = new LinkedHashMap<>();
         }
-        mergeJSON(json, key, entry.getValue(), new ObjectUtil.ConflictHandler());
+        mergeJSON(json, key, newMap.get(key), new ObjectUtil.ConflictHandler());
       }
     }
 
     // implement compat for existing components...
-    JsonQueryConverter jsonQueryConverter = new JsonQueryConverter();
     if (json != null && !isShard) {
       for (Map.Entry<String,Object> entry : json.entrySet()) {
         String key = entry.getKey();
         String out = null;
-        boolean isQuery = false;
         boolean arr = false;
         if ("query".equals(key)) {
           out = "q";
-          isQuery = true;
         } else if ("filter".equals(key)) {
           out = "fq";
           arr = true;
-          isQuery = true;
         } else if ("fields".equals(key)) {
           out = "fl";
           arr = true;
@@ -212,8 +206,8 @@ public class RequestUtil {
           out = "start";
         } else if ("limit".equals(key)) {
           out = "rows";
-        } else if (SORT.equals(key)) {
-          out = SORT;
+        } else if ("sort".equals(key)) {
+          out = "sort";
         } else if ("params".equals(key) || "facet".equals(key) ) {
           // handled elsewhere
           continue;
@@ -235,14 +229,14 @@ public class RequestUtil {
           if (lst != null) {
             for (int i = 0; i < jsonSize; i++) {
               Object v = lst.get(i);
-              newval[existingSize + i] = isQuery ? jsonQueryConverter.toLocalParams(v, newMap) : v.toString();
+              newval[existingSize + i] = v.toString();
             }
           } else {
-            newval[newval.length-1] = isQuery ? jsonQueryConverter.toLocalParams(val, newMap) : val.toString();
+            newval[newval.length-1] = val.toString();
           }
           newMap.put(out, newval);
         } else {
-          newMap.put(out, new String[]{isQuery ? jsonQueryConverter.toLocalParams(val, newMap) : val.toString()});
+          newMap.put(out, new String[]{val.toString()});
         }
 
       }
@@ -264,14 +258,12 @@ public class RequestUtil {
       List<String> path = StrUtils.splitSmart(queryParamName, ".", true);
       path = path.subList(1, path.size());
       for (String jsonStr : vals) {
-        Object o = ObjectBuilder.fromJSONStrict(jsonStr);
+        Object o = ObjectBuilder.fromJSON(jsonStr);
         // zero-length strings or comments can cause this to be null (and a zero-length string can result from a json content-type w/o a body)
         if (o != null) {
           ObjectUtil.mergeObjects(json, path, o, handler);
         }
       }
-    } catch (JSONParser.ParseException e ) {
-      throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, e);
     } catch (IOException e) {
       // impossible
     }

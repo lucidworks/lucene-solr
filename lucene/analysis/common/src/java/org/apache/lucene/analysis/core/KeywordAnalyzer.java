@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.core;
-
 
 import org.apache.lucene.analysis.Analyzer;
 
 /**
  * "Tokenizes" the entire stream as a single token. This is useful
  * for data like zip codes, ids, and some product names.
- *
- * @since 3.1
  */
 public final class KeywordAnalyzer extends Analyzer {
   public KeywordAnalyzer() {

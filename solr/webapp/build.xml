@@ -35,7 +35,6 @@
   <target name="compile-core"/>
   <target name="compile-test"/>
   <target name="test"/>
-  <target name="test-nocompile"/>
 
   <target name="dist"
           description="Creates the Webapp folder for distribution."
@@ -60,9 +59,6 @@
 
   <!-- nothing to do -->
   <target name="-dist-maven"/>
-
-  <!-- nothing to do -->
-  <target name="-install-to-maven-local-repo"/>
 
   <!-- nothing to do -->
   <target name="-validate-maven-dependencies"/>

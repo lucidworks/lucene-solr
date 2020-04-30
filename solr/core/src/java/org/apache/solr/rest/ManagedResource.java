@@ -1,3 +1,4 @@
+package org.apache.solr.rest;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +15,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.rest;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
-import java.util.Collection;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,6 +28,7 @@ import java.util.Set;
 
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
+import org.apache.solr.common.util.DateUtil;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.SolrResourceLoader;
 import org.apache.solr.rest.ManagedResourceStorage.StorageIO;
@@ -80,7 +81,7 @@ public abstract class ManagedResource {
    * Called once during core initialization to get the managed
    * data loaded from storage and notify observers.
    */
-  public void loadManagedDataAndNotify(Collection<ManagedResourceObserver> observers) 
+  public void loadManagedDataAndNotify(List<ManagedResourceObserver> observers) 
       throws SolrException {
 
     // load managed data from storage
@@ -102,7 +103,8 @@ public abstract class ManagedResource {
    * reload the core to get updates applied to the analysis components that
    * depend on the ManagedResource data.
    */
-  protected void notifyObserversDuringInit(NamedList<?> args, Collection<ManagedResourceObserver> observers)
+  @SuppressWarnings("unchecked")
+  protected void notifyObserversDuringInit(NamedList<?> args, List<ManagedResourceObserver> observers)
       throws SolrException {
 
     if (observers == null || observers.isEmpty())
@@ -265,7 +267,7 @@ public abstract class ManagedResource {
           // note: the data we're managing now remains in a dubious state
           // however the text analysis component remains unaffected 
           // (at least until core reload)
-          log.error("Failed to load data from storage due to: "+reloadExc);
+          log.error("Failed to load stop words from storage due to: "+reloadExc);
         }
       }
       
@@ -281,7 +283,16 @@ public abstract class ManagedResource {
    * Returns this resource's initialization timestamp.
    */
   public String getInitializedOn() {
-    return initializedOn == null ? null : initializedOn.toInstant().toString();
+    if (initializedOn == null)
+      return null;
+    
+    StringBuilder dateBuf = new StringBuilder();
+    try {
+      DateUtil.formatDate(initializedOn, null, dateBuf);
+    } catch (IOException e) {
+      // safe to ignore
+    }
+    return dateBuf.toString();
   }
 
   /**
@@ -289,7 +300,17 @@ public abstract class ManagedResource {
    * or null if this resource has not been updated since initialization.
    */
   public String getUpdatedSinceInitialization() {
-    return lastUpdateSinceInitialization == null ? null : lastUpdateSinceInitialization.toInstant().toString();
+    String dateStr = null;
+    if (lastUpdateSinceInitialization != null) {
+      StringBuilder dateBuf = new StringBuilder();
+      try {
+        DateUtil.formatDate(lastUpdateSinceInitialization, null, dateBuf);
+        dateStr = dateBuf.toString(); 
+      } catch (IOException e) {
+        // safe to ignore here
+      }
+    }
+    return dateStr;
   }
 
   /**
@@ -303,7 +324,7 @@ public abstract class ManagedResource {
    * Builds the JSON object to be stored, containing initArgs and managed data fields. 
    */
   protected Map<String,Object> buildMapToStore(Object managedData) {
-    Map<String,Object> toStore = new LinkedHashMap<>(4, 1.0f);
+    Map<String,Object> toStore = new LinkedHashMap<>();
     toStore.put(INIT_ARGS_JSON_FIELD, convertNamedListToMap(managedInitArgs));
     
     // report important dates when data was init'd / updated

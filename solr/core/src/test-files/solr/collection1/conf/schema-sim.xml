@@ -19,8 +19,9 @@
 <!-- Per-field similarity example for testing -->
 
 <schema name="test" version="1.0">
-  <fieldType name="string" class="solr.StrField" omitNorms="true" positionIncrementGap="0"/>
-  <!--  some per-field similarity examples -->
+  <types>
+  <fieldType name="int" class="solr.TrieIntField" precisionStep="0" omitNorms="true" positionIncrementGap="0"/>
+  <!--  some per-field similarity examples --> 
   <!--  specify a Similarity classname directly -->
   <fieldType name="sim1" class="solr.TextField">
     <analyzer>
@@ -29,7 +30,7 @@
     <similarity class="org.apache.lucene.misc.SweetSpotSimilarity"/>
   </fieldType>
 
-  <!--  specify a Similarity factory -->
+  <!--  specify a Similarity factory -->  
   <fieldType name="sim2" class="solr.TextField">
     <analyzer>
       <tokenizer class="solr.MockTokenizerFactory"/>
@@ -38,32 +39,30 @@
       <str name="echo">is there an echo?</str>
     </similarity>
   </fieldType>
-
+  
   <!-- don't specify any sim at all: get the default  -->
   <fieldType name="sim3" class="solr.TextField">
     <analyzer>
       <tokenizer class="solr.MockTokenizerFactory"/>
     </analyzer>
   </fieldType>
+ </types>
 
-  <field name="id" type="string" indexed="true" stored="true" multiValued="false" required="false"/>
-  <field name="sim1text" type="sim1" indexed="true" stored="true"/>
-  <field name="sim2text" type="sim2" indexed="true" stored="true"/>
-  <field name="sim3text" type="sim3" indexed="true" stored="true"/>
+ <fields>
+   <field name="id" type="int" indexed="true" stored="true" multiValued="false" required="false"/>
+   <field name="sim1text" type="sim1" indexed="true" stored="true"/>
+   <field name="sim2text" type="sim2" indexed="true" stored="true"/>
+   <field name="sim3text" type="sim3" indexed="true" stored="true"/>
 
-  <!-- make sure custom sims work with dynamic fields -->
-  <dynamicField name="*_sim1" type="sim1" indexed="true" stored="true"/>
-  <dynamicField name="*_sim2" type="sim2" indexed="true" stored="true"/>
-  <dynamicField name="*_sim3" type="sim3" indexed="true" stored="true"/>
+   <!-- make sure custom sims work with dynamic fields -->
+   <dynamicField name="*_sim1" type="sim1" indexed="true" stored="true"/>
+   <dynamicField name="*_sim2" type="sim2" indexed="true" stored="true"/>
+   <dynamicField name="*_sim3" type="sim3" indexed="true" stored="true"/>
+ </fields>
 
-  <uniqueKey>id</uniqueKey>
+ <defaultSearchField>sim1text</defaultSearchField>
+ <uniqueKey>id</uniqueKey>
 
-  <!-- Global similarity, defers to the fieldType.
-       
-       Even though SchemaSimilarityFactory is the current implicit default in IndexSchema, we
-       are explicit about it here in this schema file because TestPerFieldSimilarityClassic overrides
-       the luceneMatchVersion which results in a diff implicit global default - but we still
-       need per-fieldtype sims for that test.
-  -->
-  <similarity class="solr.SchemaSimilarityFactory"/>
+ <!-- default similarity, defers to the fieldType -->
+ <similarity class="solr.SchemaSimilarityFactory"/>
 </schema>

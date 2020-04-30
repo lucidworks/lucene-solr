@@ -1,4 +1,6 @@
-/*
+package org.apache.lucene.analysis.icu.segmentation;
+
+/** 
  * Copyright (C) 1999-2010, International Business Machines
  * Corporation and others.  All Rights Reserved.
  *
@@ -25,7 +27,6 @@
  * dealings in this Software without prior written authorization of the 
  * copyright holder.
  */
-package org.apache.lucene.analysis.icu.segmentation;
 
 import com.ibm.icu.lang.UCharacter;
 import com.ibm.icu.lang.UCharacterEnums.ECharacterCategory;

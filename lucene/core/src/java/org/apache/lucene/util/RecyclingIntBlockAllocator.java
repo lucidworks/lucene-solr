@@ -1,3 +1,7 @@
+package org.apache.lucene.util;
+
+import org.apache.lucene.util.IntBlockPool.Allocator;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +18,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
-import org.apache.lucene.util.IntBlockPool.Allocator;
-
 
 /**
  * A {@link Allocator} implementation that recycles unused int
@@ -78,7 +78,7 @@ public final class RecyclingIntBlockAllocator extends Allocator {
   @Override
   public int[] getIntBlock() {
     if (freeBlocks == 0) {
-      bytesUsed.addAndGet(blockSize*Integer.BYTES);
+      bytesUsed.addAndGet(blockSize*RamUsageEstimator.NUM_BYTES_INT);
       return new int[blockSize];
     }
     final int[] b = freeByteBlocks[--freeBlocks];
@@ -104,7 +104,7 @@ public final class RecyclingIntBlockAllocator extends Allocator {
     for (int i = stop; i < end; i++) {
       blocks[i] = null;
     }
-    bytesUsed.addAndGet(-(end - stop) * (blockSize * Integer.BYTES));
+    bytesUsed.addAndGet(-(end - stop) * (blockSize * RamUsageEstimator.NUM_BYTES_INT));
     assert bytesUsed.get() >= 0;
   }
 
@@ -150,7 +150,7 @@ public final class RecyclingIntBlockAllocator extends Allocator {
     while (freeBlocks > stop) {
       freeByteBlocks[--freeBlocks] = null;
     }
-    bytesUsed.addAndGet(-count*blockSize*Integer.BYTES);
+    bytesUsed.addAndGet(-count*blockSize* RamUsageEstimator.NUM_BYTES_INT);
     assert bytesUsed.get() >= 0;
     return count;
   }

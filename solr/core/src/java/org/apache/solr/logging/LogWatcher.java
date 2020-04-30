@@ -14,13 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.logging;
 
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.core.SolrResourceLoader;
 import org.apache.solr.logging.jul.JulWatcher;
-import org.apache.solr.logging.log4j2.Log4j2Watcher;
+import org.apache.solr.logging.log4j.Log4jWatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.impl.StaticLoggerBinder;
@@ -34,7 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * A Class to monitor Logging events and hold N events in memory
  * 
- * This is abstract so we can support both JUL and Log4j2 (and other logging platforms)
+ * This is abstract so we can support both JUL and Log4j (and other logging platforms)
  */
 public abstract class LogWatcher<E> {
 
@@ -127,7 +128,7 @@ public abstract class LogWatcher<E> {
   public static LogWatcher newRegisteredLogWatcher(LogWatcherConfig config, SolrResourceLoader loader) {
 
     if (!config.isEnabled()) {
-      log.debug("A LogWatcher is not enabled");
+      log.info("A LogWatcher is not enabled");
       return null;
     }
 
@@ -135,7 +136,7 @@ public abstract class LogWatcher<E> {
 
     if (logWatcher != null) {
       if (config.getWatcherSize() > 0) {
-        log.debug("Registering Log Listener [{}]", logWatcher.getName());
+        log.info("Registering Log Listener [{}]", logWatcher.getName());
         logWatcher.registerListener(config.asListenerConfig());
       }
     }
@@ -150,10 +151,10 @@ public abstract class LogWatcher<E> {
 
     try {
       slf4jImpl = StaticLoggerBinder.getSingleton().getLoggerFactoryClassStr();
-      log.debug("SLF4J impl is " + slf4jImpl);
+      log.info("SLF4J impl is " + slf4jImpl);
       if (fname == null) {
-        if ("org.apache.logging.slf4j.Log4jLoggerFactory".equals(slf4jImpl)) {
-          fname = "Log4j2";
+        if ("org.slf4j.impl.Log4jLoggerFactory".equals(slf4jImpl)) {
+          fname = "Log4j";
         } else if (slf4jImpl.indexOf("JDK") > 0) {
           fname = "JUL";
         }
@@ -168,16 +169,14 @@ public abstract class LogWatcher<E> {
     }
 
     if (fname == null) {
-      log.debug("No LogWatcher configured");
+      log.info("No LogWatcher configured");
       return null;
     }
 
-    if ("JUL".equalsIgnoreCase(fname)) {
+    if ("JUL".equalsIgnoreCase(fname))
       return new JulWatcher(slf4jImpl);
-    }
-    if ("Log4j2".equals(fname)) {
-      return new Log4j2Watcher();
-    }
+    if ("Log4j".equals(fname))
+      return new Log4jWatcher(slf4jImpl);
 
     try {
       return loader != null ? loader.newInstance(fname, LogWatcher.class) : null;

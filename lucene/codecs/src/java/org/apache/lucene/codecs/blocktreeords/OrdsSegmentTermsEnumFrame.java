@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.blocktreeords;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.blocktreeords;
-
 
 import java.io.IOException;
 
@@ -499,9 +499,7 @@ final class OrdsSegmentTermsEnumFrame {
       // stats
       state.docFreq = statsReader.readVInt();
       //if (DEBUG) System.out.println("    dF=" + state.docFreq);
-      if (ste.fr.fieldInfo.getIndexOptions() == IndexOptions.DOCS) {
-        state.totalTermFreq = state.docFreq; // all tf values are 1
-      } else {
+      if (ste.fr.fieldInfo.getIndexOptions() != IndexOptions.DOCS) {
         state.totalTermFreq = state.docFreq + statsReader.readVLong();
         //if (DEBUG) System.out.println("    totTF=" + state.totalTermFreq);
       }

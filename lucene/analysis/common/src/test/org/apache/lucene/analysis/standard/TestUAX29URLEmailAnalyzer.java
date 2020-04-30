@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.standard;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.standard;
-
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
+import org.apache.lucene.util.Version;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -351,32 +352,15 @@ public class TestUAX29URLEmailAnalyzer extends BaseTokenStreamTestCase {
             new String[] { "<URL>" });
   }
 
-  
   /** blast some random strings through the analyzer */
   public void testRandomStrings() throws Exception {
     checkRandomData(random(), a, 1000*RANDOM_MULTIPLIER);
   }
 
-  public void testMaxTokenLengthDefault() throws Exception {
-
-    StringBuilder bToken = new StringBuilder();
-    // exact max length:
-    for(int i=0;i<UAX29URLEmailAnalyzer.DEFAULT_MAX_TOKEN_LENGTH;i++) {
-      bToken.append('b');
-    }
-
-    String bString = bToken.toString();
-    // first bString is exact max default length; next one is 1 too long
-    String input = "x " + bString + " " + bString + "b";
-    assertAnalyzesTo(a, input, new String[] {"x", bString, bString, "b"});
-    a.close();
-  }
-
-  public void testMaxTokenLengthNonDefault() throws Exception {
+  public void testBackcompat40() throws IOException {
     UAX29URLEmailAnalyzer a = new UAX29URLEmailAnalyzer();
-    a.setMaxTokenLength(5);
-    assertAnalyzesTo(a, "ab cd toolong xy z", new String[]{"ab", "cd", "toolo", "ng", "xy", "z"});
-    a.close();
+    a.setVersion(Version.LUCENE_4_6_1);
+    // this is just a test to see the correct unicode version is being used, not actually testing hebrew
+    assertAnalyzesTo(a, "א\"א", new String[] {"א", "א"});
   }
-  
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -185,45 +185,41 @@ public class TestSloppyPhraseQuery extends LuceneTestCase {
     Scorer scorer;
     
     @Override
-    public void setScorer(Scorable scorer) throws IOException {
-      this.scorer = (Scorer) AssertingScorable.unwrap(scorer);
+    public void setScorer(Scorer scorer) throws IOException {
+      this.scorer = scorer;
     }
 
     @Override
     public void collect(int doc) throws IOException {
       totalHits++;
-      PhraseScorer ps = (PhraseScorer) scorer;
-      float freq = ps.matcher.sloppyWeight();
-      while (ps.matcher.nextMatch()) {
-        freq += ps.matcher.sloppyWeight();
-      }
-      max = Math.max(max, freq);
+      max = Math.max(max, scorer.freq());
     }
     
     @Override
-    public ScoreMode scoreMode() {
-      return ScoreMode.COMPLETE;
+    public boolean needsScores() {
+      return true;
     }
   }
   
-  /** checks that no scores are infinite */
+  /** checks that no scores or freqs are infinite */
   private void assertSaneScoring(PhraseQuery pq, IndexSearcher searcher) throws Exception {
     searcher.search(pq, new SimpleCollector() {
       Scorer scorer;
       
       @Override
-      public void setScorer(Scorable scorer) {
-        this.scorer = (Scorer) AssertingScorable.unwrap(scorer);
+      public void setScorer(Scorer scorer) {
+        this.scorer = scorer;
       }
       
       @Override
       public void collect(int doc) throws IOException {
+        assertFalse(Float.isInfinite(scorer.freq()));
         assertFalse(Float.isInfinite(scorer.score()));
       }
       
       @Override
-      public ScoreMode scoreMode() {
-        return ScoreMode.COMPLETE;
+      public boolean needsScores() {
+        return true;
       }
     });
     QueryUtils.check(random(), pq, searcher);
@@ -255,13 +251,13 @@ public class TestSloppyPhraseQuery extends LuceneTestCase {
     builder.add(new Term("lyrics", "drug"), 4);
     PhraseQuery pq = builder.build();
     // "drug the drug"~1
-    assertEquals(1, is.search(pq, 4).totalHits.value);
+    assertEquals(1, is.search(pq, 4).totalHits);
     builder.setSlop(1);
     pq = builder.build();
-    assertEquals(3, is.search(pq, 4).totalHits.value);
+    assertEquals(3, is.search(pq, 4).totalHits);
     builder.setSlop(2);
     pq = builder.build();
-    assertEquals(4, is.search(pq, 4).totalHits.value);
+    assertEquals(4, is.search(pq, 4).totalHits);
     ir.close();
     dir.close();
   }

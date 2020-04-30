@@ -47,7 +47,7 @@ server/logs
 
 server/resources
 
-  Contains configuration files, such as the Log4j configuration (log4j2.xml) for configuring Solr loggers.
+  Contains configuration files, such as the Log4j configuration (log4j.properties) for configuring Solr loggers.
 
 server/scripts/cloud-scripts
 
@@ -62,11 +62,12 @@ server/solr/configsets
 
   Directories containing different configuration options for running Solr.
 
-    _default                    : Bare minimum configurations with field-guessing and managed schema turned
-                                  on by default, so as to start indexing data in Solr without having to design
-                                  a schema upfront. You can use the REST API to manage your schema as you refine your index
-                                  requirements. You can turn off the field (for a collection, say mycollection) guessing by:
-                                  curl http://host:8983/solr/mycollection/config -d '{"set-user-property": {"update.autoCreateFields":"false"}}'
+    basic_configs               : Bare minimum configuration settings needed to run Solr.
+
+    data_driven_schema_configs  : Field-guessing and managed schema mode; use this configuration if you want
+                                  to start indexing data in Solr without having to design a schema upfront.
+                                  You can use the REST API to manage your schema as you refine your index
+                                  requirements.
 
     sample_techproducts_configs : Comprehensive example configuration that demonstrates many of the powerful
                                   features of Solr, based on the use case of building a search solution for
@@ -93,7 +94,7 @@ statements in the solrconfig.xml file to reference plugin jars outside of
 this directory for loading "contrib" plugins via relative paths.  
 
 If you make a copy of this example server and wish to use the 
-ExtractingRequestHandler (SolrCell), DataImportHandler (DIH), the 
+ExtractingRequestHandler (SolrCell), DataImportHandler (DIH), UIMA, the 
 clustering component, or any other modules in "contrib", you will need to 
 copy the required jars or update the paths to those jars in your 
 solrconfig.xml.
@@ -102,7 +103,7 @@ solrconfig.xml.
 
 By default, Jetty & Solr will log to the console and logs/solr.log. This can
 be convenient when first getting started, but eventually you will want to
-log just to a file. To configure logging, edit the log4j2.xml file in
+log just to a file. To configure logging, edit the log4j.properties file in
 "resources".
  
 It is also possible to setup log4j or other popular logging frameworks.

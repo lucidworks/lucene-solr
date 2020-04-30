@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.AttributeSource;
-import org.apache.lucene.util.RamUsageEstimator;
+import org.apache.lucene.util.ToStringUtils;
 import org.apache.lucene.util.automaton.Automaton;
 import org.apache.lucene.util.automaton.CompiledAutomaton;
 import org.apache.lucene.util.automaton.Operations;
@@ -47,17 +46,12 @@ import org.apache.lucene.util.automaton.Operations;
  * </p>
  * @lucene.experimental
  */
-public class AutomatonQuery extends MultiTermQuery implements Accountable {
-  private static final long BASE_RAM_BYTES = RamUsageEstimator.shallowSizeOfInstance(AutomatonQuery.class);
-
+public class AutomatonQuery extends MultiTermQuery {
   /** the automaton to match index terms against */
   protected final Automaton automaton;
   protected final CompiledAutomaton compiled;
   /** term containing the field, and possibly some pattern structure */
   protected final Term term;
-  protected final boolean automatonIsBinary;
-
-  private final long ramBytesUsed; // cache
 
   /**
    * Create a new AutomatonQuery from an {@link Automaton}.
@@ -105,11 +99,8 @@ public class AutomatonQuery extends MultiTermQuery implements Accountable {
     super(term.field());
     this.term = term;
     this.automaton = automaton;
-    this.automatonIsBinary = isBinary;
     // TODO: we could take isFinite too, to save a bit of CPU in CompiledAutomaton ctor?:
     this.compiled = new CompiledAutomaton(automaton, null, true, maxDeterminizedStates, isBinary);
-
-    this.ramBytesUsed = BASE_RAM_BYTES + term.ramBytesUsed() + automaton.ramBytesUsed() + compiled.ramBytesUsed();
   }
 
   @Override
@@ -157,28 +148,12 @@ public class AutomatonQuery extends MultiTermQuery implements Accountable {
     buffer.append('\n');
     buffer.append(automaton.toString());
     buffer.append("}");
+    buffer.append(ToStringUtils.boost(getBoost()));
     return buffer.toString();
   }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    if (visitor.acceptField(field)) {
-      compiled.visit(visitor, this, field);
-    }
-  }
-
+  
   /** Returns the automaton used to create this query */
   public Automaton getAutomaton() {
     return automaton;
-  }
-
-  /** Is this a binary (byte) oriented automaton. See the constructor.  */
-  public boolean isAutomatonBinary() {
-    return automatonIsBinary;
-  }
-
-  @Override
-  public long ramBytesUsed() {
-    return ramBytesUsed;
   }
 }

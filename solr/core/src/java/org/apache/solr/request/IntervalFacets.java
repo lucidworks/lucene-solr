@@ -1,3 +1,39 @@
+package org.apache.solr.request;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+
+import org.apache.lucene.document.FieldType.NumericType;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.DocValues;
+import org.apache.lucene.index.NumericDocValues;
+import org.apache.lucene.index.SortedDocValues;
+import org.apache.lucene.index.SortedSetDocValues;
+import org.apache.lucene.search.DocIdSet;
+import org.apache.lucene.search.DocIdSetIterator;
+import org.apache.lucene.search.Filter;
+import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.NumericUtils;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.params.CommonParams;
+import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.request.IntervalFacets.FacetInterval;
+import org.apache.solr.schema.FieldType;
+import org.apache.solr.schema.SchemaField;
+import org.apache.solr.schema.TrieDateField;
+import org.apache.solr.search.DocIterator;
+import org.apache.solr.search.DocSet;
+import org.apache.solr.search.QueryParsing;
+import org.apache.solr.search.SolrIndexSearcher;
+import org.apache.solr.search.SyntaxError;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,43 +50,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.request;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Locale;
-
-import org.apache.lucene.index.DocValues;
-import org.apache.lucene.index.FilterNumericDocValues;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.NumericDocValues;
-import org.apache.lucene.index.SortedDocValues;
-import org.apache.lucene.index.SortedNumericDocValues;
-import org.apache.lucene.index.SortedSetDocValues;
-import org.apache.lucene.search.DocIdSet;
-import org.apache.lucene.search.DocIdSetIterator;
-import org.apache.lucene.util.Bits;
-import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.NumericUtils;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.params.CommonParams;
-import org.apache.solr.common.params.SolrParams;
-import org.apache.solr.request.IntervalFacets.FacetInterval;
-import org.apache.solr.schema.FieldType;
-import org.apache.solr.schema.NumberType;
-import org.apache.solr.schema.PointField;
-import org.apache.solr.schema.SchemaField;
-import org.apache.solr.search.DocIterator;
-import org.apache.solr.search.DocSet;
-import org.apache.solr.search.Filter;
-import org.apache.solr.search.QueryParsing;
-import org.apache.solr.search.SolrIndexSearcher;
-import org.apache.solr.search.SyntaxError;
 
 /**
  * Computes interval facets for docvalues field (single or multivalued).
@@ -158,29 +157,15 @@ public class IntervalFacets implements Iterable<FacetInterval> {
         if (o2.start == null) {
           return 1;
         }
-        int startComparison = o1.start.compareTo(o2.start);
-        if (startComparison == 0) {
-          if (o1.startOpen != o2.startOpen) {
-            if (!o1.startOpen) {
-              return -1;
-            } else {
-              return 1;
-            }
-          }
-        }
-        return startComparison;
+        return o1.start.compareTo(o2.start);
       }
     });
     return sortedIntervals;
   }
 
   private void doCount() throws IOException {
-    if (schemaField.getType().getNumberType() != null && (!schemaField.multiValued() || schemaField.getType().isPointField())) {
-      if (schemaField.multiValued()) {
-        getCountMultiValuedNumeric();
-      } else {
-        getCountNumeric();
-      }
+    if (schemaField.getType().getNumericType() != null && !schemaField.multiValued()) {
+      getCountNumeric();
     } else {
       getCountString();
     }
@@ -189,7 +174,7 @@ public class IntervalFacets implements Iterable<FacetInterval> {
   private void getCountNumeric() throws IOException {
     final FieldType ft = schemaField.getType();
     final String fieldName = schemaField.getName();
-    final NumberType numericType = ft.getNumberType();
+    final NumericType numericType = ft.getNumericType();
     if (numericType == null) {
       throw new IllegalStateException();
     }
@@ -198,6 +183,7 @@ public class IntervalFacets implements Iterable<FacetInterval> {
     final Iterator<LeafReaderContext> ctxIt = leaves.iterator();
     LeafReaderContext ctx = null;
     NumericDocValues longs = null;
+    Bits docsWithField = null;
     for (DocIterator docsIt = docs.iterator(); docsIt.hasNext(); ) {
       final int doc = docsIt.nextDoc();
       if (ctx == null || doc >= ctx.docBase + ctx.reader().maxDoc()) {
@@ -207,68 +193,43 @@ public class IntervalFacets implements Iterable<FacetInterval> {
         assert doc >= ctx.docBase;
         switch (numericType) {
           case LONG:
-          case DATE:
-          case INTEGER:
+            longs = DocValues.getNumeric(ctx.reader(), fieldName);
+            break;
+          case INT:
             longs = DocValues.getNumeric(ctx.reader(), fieldName);
             break;
           case FLOAT:
+            final NumericDocValues floats = DocValues.getNumeric(ctx.reader(), fieldName);
             // TODO: this bit flipping should probably be moved to tie-break in the PQ comparator
-            longs = new FilterNumericDocValues(DocValues.getNumeric(ctx.reader(), fieldName)) {
+            longs = new NumericDocValues() {
               @Override
-              public long longValue() throws IOException {
-                return NumericUtils.sortableFloatBits((int)super.longValue());
+              public long get(int docID) {
+                long bits = floats.get(docID);
+                if (bits < 0) bits ^= 0x7fffffffffffffffL;
+                return bits;
               }
             };
             break;
           case DOUBLE:
+            final NumericDocValues doubles = DocValues.getNumeric(ctx.reader(), fieldName);
             // TODO: this bit flipping should probably be moved to tie-break in the PQ comparator
-            longs = new FilterNumericDocValues(DocValues.getNumeric(ctx.reader(), fieldName)) {
+            longs = new NumericDocValues() {
               @Override
-              public long longValue() throws IOException {
-               return NumericUtils.sortableDoubleBits(super.longValue());
+              public long get(int docID) {
+                long bits = doubles.get(docID);
+                if (bits < 0) bits ^= 0x7fffffffffffffffL;
+                return bits;
               }
             };
             break;
           default:
             throw new AssertionError();
         }
+        docsWithField = DocValues.getDocsWithField(ctx.reader(), schemaField.getName());
       }
-      int valuesDocID = longs.docID();
-      if (valuesDocID < doc - ctx.docBase) {
-        valuesDocID = longs.advance(doc - ctx.docBase);
-      }
-      if (valuesDocID == doc - ctx.docBase) {
-        accumIntervalWithValue(longs.longValue());
-      }
-    }
-  }
-  
-  private void getCountMultiValuedNumeric() throws IOException {
-    final FieldType ft = schemaField.getType();
-    final String fieldName = schemaField.getName();
-    if (ft.getNumberType() == null) {
-      throw new IllegalStateException();
-    }
-    final List<LeafReaderContext> leaves = searcher.getIndexReader().leaves();
-
-    final Iterator<LeafReaderContext> ctxIt = leaves.iterator();
-    LeafReaderContext ctx = null;
-    SortedNumericDocValues longs = null;
-    for (DocIterator docsIt = docs.iterator(); docsIt.hasNext(); ) {
-      final int doc = docsIt.nextDoc();
-      if (ctx == null || doc >= ctx.docBase + ctx.reader().maxDoc()) {
-        do {
-          ctx = ctxIt.next();
-        } while (ctx == null || doc >= ctx.docBase + ctx.reader().maxDoc());
-        assert doc >= ctx.docBase;
-        longs = DocValues.getSortedNumeric(ctx.reader(), fieldName);
-      }
-      int valuesDocID = longs.docID();
-      if (valuesDocID < doc - ctx.docBase) {
-        valuesDocID = longs.advance(doc - ctx.docBase);
-      }
-      if (valuesDocID == doc - ctx.docBase) {
-        accumIntervalWithMultipleValues(longs);
+      long v = longs.get(doc - ctx.docBase);
+      if (v != 0 || docsWithField.get(doc - ctx.docBase)) {
+        accumIntervalWithValue(v);
       }
     }
   }
@@ -307,45 +268,6 @@ public class IntervalFacets implements Iterable<FacetInterval> {
     }
   }
 
-  private void accumIntervalWithMultipleValues(SortedNumericDocValues longs) throws IOException {
-    // longs should be already positioned to the correct doc
-    assert longs.docID() != -1;
-    final int docValueCount = longs.docValueCount();
-    assert docValueCount > 0: "Should have at least one value for this document";
-    int currentInterval = 0;
-    for (int i = 0; i < docValueCount; i++) {
-      boolean evaluateNextInterval = true;
-      long value = longs.nextValue();
-      while (evaluateNextInterval && currentInterval < intervals.length) {
-        IntervalCompareResult result = intervals[currentInterval].includes(value);
-        switch (result) {
-          case INCLUDED:
-            /*
-             * Increment the current interval and move to the next one using
-             * the same value
-             */
-            intervals[currentInterval].incCount();
-            currentInterval++;
-            break;
-          case LOWER_THAN_START:
-            /*
-             * None of the next intervals will match this value (all of them have 
-             * higher start value). Move to the next value for this document. 
-             */
-            evaluateNextInterval = false;
-            break;
-          case GREATER_THAN_END:
-            /*
-             * Next interval may match this value
-             */
-            currentInterval++;
-            break;
-        }
-        //Maybe return if currentInterval == intervals.length?
-      }
-     }
-  }
-
   private void accumIntervalsMulti(SortedSetDocValues ssdv,
                                    DocIdSetIterator disi, Bits bits) throws IOException {
     // First update the ordinals in the intervals for this segment
@@ -358,17 +280,14 @@ public class IntervalFacets implements Iterable<FacetInterval> {
       if (bits != null && bits.get(doc) == false) {
         continue;
       }
-      if (doc > ssdv.docID()) {
-        ssdv.advance(doc);
-      }
-      if (doc == ssdv.docID()) {
-        long currOrd;
-        int currentInterval = 0;
-        while ((currOrd = ssdv.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
-          boolean evaluateNextInterval = true;
-          while (evaluateNextInterval && currentInterval < intervals.length) {
-            IntervalCompareResult result = intervals[currentInterval].includes(currOrd);
-            switch (result) {
+      ssdv.setDocument(doc);
+      long currOrd;
+      int currentInterval = 0;
+      while ((currOrd = ssdv.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
+        boolean evaluateNextInterval = true;
+        while (evaluateNextInterval && currentInterval < intervals.length) {
+          IntervalCompareResult result = intervals[currentInterval].includes(currOrd);
+          switch (result) {
             case INCLUDED:
               /*
                * Increment the current interval and move to the next one using
@@ -390,7 +309,6 @@ public class IntervalFacets implements Iterable<FacetInterval> {
                */
               currentInterval++;
               break;
-            }
           }
         }
       }
@@ -407,11 +325,9 @@ public class IntervalFacets implements Iterable<FacetInterval> {
       if (bits != null && bits.get(doc) == false) {
         continue;
       }
-      if (doc > sdv.docID()) {
-        sdv.advance(doc);
-      }
-      if (doc == sdv.docID()) {
-        accumInterval(sdv.ordValue());
+      int ord = sdv.getOrd(doc);
+      if (ord >= 0) {
+        accumInterval(ord);
       }
     }
   }
@@ -435,17 +351,17 @@ public class IntervalFacets implements Iterable<FacetInterval> {
     }
   }
 
-  static enum IntervalCompareResult {
+  enum IntervalCompareResult {
     LOWER_THAN_START,
     INCLUDED,
     GREATER_THAN_END,
   }
-  
+
   /**
    * Helper class to match and count of documents in specified intervals
    */
   public static class FacetInterval {
-    
+
     /**
      * Key to represent this interval
      */
@@ -505,11 +421,6 @@ public class IntervalFacets implements Iterable<FacetInterval> {
      * The current count of documents in that match this interval
      */
     private int count;
-    
-    /**
-     * If this field is set to true, this interval {@code #getCount()} will always return 0.
-     */
-    private boolean includeNoDocs = false;
 
     /**
      * 
@@ -558,7 +469,7 @@ public class IntervalFacets implements Iterable<FacetInterval> {
       } else if (intervalStr.charAt(lastNdx) == ']') {
         endOpen = false;
       } else {
-        throw new SyntaxError("Invalid end character " + intervalStr.charAt(lastNdx) + " in facet interval " + intervalStr);
+        throw new SyntaxError("Invalid end character " + intervalStr.charAt(0) + " in facet interval " + intervalStr);
       }
 
       StringBuilder startStr = new StringBuilder(lastNdx);
@@ -588,7 +499,7 @@ public class IntervalFacets implements Iterable<FacetInterval> {
       }
       // TODO: what about escaping star (*)?
       // TODO: escaping spaces on ends?
-      if (schemaField.getType().getNumberType() != null) {
+      if (schemaField.getType().getNumericType() != null) {
         setNumericLimits(schemaField);
       }
       if (start != null && end != null && start.compareTo(end) > 0) {
@@ -610,7 +521,7 @@ public class IntervalFacets implements Iterable<FacetInterval> {
      */
     public FacetInterval(SchemaField schemaField, String startStr, String endStr,
         boolean includeLower, boolean includeUpper, String key) {
-      assert schemaField.getType().getNumberType() != null: "Only numeric fields supported with this constructor";
+      assert schemaField.getType().getNumericType() != null: "Only numeric fields supported with this constructor";
       this.key = key;
       this.startOpen = !includeLower;
       this.endOpen = !includeUpper;
@@ -632,14 +543,15 @@ public class IntervalFacets implements Iterable<FacetInterval> {
       if (start == null) {
         startLimit = Long.MIN_VALUE;
       } else {
-        switch (schemaField.getType().getNumberType()) {
+        switch (schemaField.getType().getNumericType()) {
           case LONG:
-            startLimit = (long) schemaField.getType().toObject(schemaField, start);
+            if (schemaField.getType() instanceof TrieDateField) {
+              startLimit = ((Date) schemaField.getType().toObject(schemaField, start)).getTime();
+            } else {
+              startLimit = (long) schemaField.getType().toObject(schemaField, start);
+            }
             break;
-          case DATE:
-            startLimit = ((Date) schemaField.getType().toObject(schemaField, start)).getTime();
-            break;
-          case INTEGER:
+          case INT:
             startLimit = ((Integer) schemaField.getType().toObject(schemaField, start)).longValue();
             break;
           case FLOAT:
@@ -652,14 +564,7 @@ public class IntervalFacets implements Iterable<FacetInterval> {
             throw new AssertionError();
         }
         if (startOpen) {
-          if (startLimit == Long.MAX_VALUE) {
-            /*
-             * This interval can match no docs
-             */
-            includeNoDocs = true;
-          } else {
-            startLimit++;
-          }
+          startLimit++;
         }
       }
 
@@ -667,14 +572,15 @@ public class IntervalFacets implements Iterable<FacetInterval> {
       if (end == null) {
         endLimit = Long.MAX_VALUE;
       } else {
-        switch (schemaField.getType().getNumberType()) {
+        switch (schemaField.getType().getNumericType()) {
           case LONG:
-            endLimit = (long) schemaField.getType().toObject(schemaField, end);
+            if (schemaField.getType() instanceof TrieDateField) {
+              endLimit = ((Date) schemaField.getType().toObject(schemaField, end)).getTime();
+            } else {
+              endLimit = (long) schemaField.getType().toObject(schemaField, end);
+            }
             break;
-          case DATE:
-            endLimit = ((Date) schemaField.getType().toObject(schemaField, end)).getTime();
-            break;
-          case INTEGER:
+          case INT:
             endLimit = ((Integer) schemaField.getType().toObject(schemaField, end)).longValue();
             break;
           case FLOAT:
@@ -687,14 +593,7 @@ public class IntervalFacets implements Iterable<FacetInterval> {
             throw new AssertionError();
         }
         if (endOpen) {
-          if (endLimit == Long.MIN_VALUE) {
-            /*
-             * This interval can match no docs
-             */
-            includeNoDocs = true;
-          } else {
-            endLimit--;
-          }
+          endLimit--;
         }
       }
     }
@@ -711,9 +610,6 @@ public class IntervalFacets implements Iterable<FacetInterval> {
       if ("*".equals(value)) {
         return null;
       }
-      if (schemaField.getType().isPointField()) {
-        return ((PointField)schemaField.getType()).toInternalByteRef(value);
-      }
       return new BytesRef(schemaField.getType().toInternal(value));
     }
 
@@ -725,7 +621,7 @@ public class IntervalFacets implements Iterable<FacetInterval> {
      *
      * @param sdv DocValues for the current reader
      */
-    public void updateContext(SortedDocValues sdv) throws IOException {
+    public void updateContext(SortedDocValues sdv) {
       if (start == null) {
         /*
          * Unset start. All ordinals will be greater than -1.
@@ -788,7 +684,7 @@ public class IntervalFacets implements Iterable<FacetInterval> {
      *
      * @param sdv DocValues for the current reader
      */
-    public void updateContext(SortedSetDocValues sdv) throws IOException {
+    public void updateContext(SortedSetDocValues sdv) {
       if (start == null) {
         /*
          * Unset start. All ordinals will be greater than -1.
@@ -854,12 +750,12 @@ public class IntervalFacets implements Iterable<FacetInterval> {
      *              should be the {@code long} representation of the value of the document
      *              in the specified field. For multi-valued and/or non-numeric fields, {@code value}
      *              should be the ordinal of the term in the current segment
-     * @return <ul><li>{@link IntervalCompareResult#INCLUDED} if the value is included in the interval
-     * <li>{@link IntervalCompareResult#GREATER_THAN_END} if the value is greater than {@code endLimit}
-     * <li>{@link IntervalCompareResult#LOWER_THAN_START} if the value is lower than {@code startLimit}
+     * @return <ul><li>{@link org.apache.solr.request.IntervalFacets.IntervalCompareResult#INCLUDED} if the value is included in the interval
+     * <li>{@link org.apache.solr.request.IntervalFacets.IntervalCompareResult#GREATER_THAN_END} if the value is greater than {@code endLimit}
+     * <li>{@link org.apache.solr.request.IntervalFacets.IntervalCompareResult#LOWER_THAN_START} if the value is lower than {@code startLimit}
      * </ul>
-     * @see org.apache.lucene.util.NumericUtils#floatToSortableInt(float)
-     * @see org.apache.lucene.util.NumericUtils#doubleToSortableLong(double)
+     * @see NumericUtils#floatToSortableInt(float)
+     * @see NumericUtils#doubleToSortableLong(double)
      */
     public IntervalCompareResult includes(long value) {
       if (startLimit > value) {
@@ -902,9 +798,6 @@ public class IntervalFacets implements Iterable<FacetInterval> {
      * @return The count of document that matched this interval
      */
     public int getCount() {
-      if (includeNoDocs) {
-        return 0;
-      }
       return this.count;
     }
 
@@ -929,6 +822,7 @@ public class IntervalFacets implements Iterable<FacetInterval> {
    */
   @Override
   public Iterator<FacetInterval> iterator() {
+
     return new ArrayList<FacetInterval>(Arrays.asList(intervals)).iterator();
   }
 

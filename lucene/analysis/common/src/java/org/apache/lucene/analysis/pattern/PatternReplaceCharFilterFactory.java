@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.pattern;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.pattern;
-
 
 import java.io.Reader;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import org.apache.lucene.analysis.CharFilter;
 import org.apache.lucene.analysis.util.CharFilterFactory;
 
 /**
@@ -35,13 +36,8 @@ import org.apache.lucene.analysis.util.CharFilterFactory;
  * &lt;/fieldType&gt;</pre>
  * 
  * @since Solr 3.1
- * @lucene.spi {@value #NAME}
  */
 public class PatternReplaceCharFilterFactory extends CharFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "patternReplace";
-
   private final Pattern pattern;
   private final String replacement;
 
@@ -56,12 +52,7 @@ public class PatternReplaceCharFilterFactory extends CharFilterFactory {
   }
 
   @Override
-  public Reader create(Reader input) {
+  public CharFilter create(Reader input) {
     return new PatternReplaceCharFilter(pattern, replacement, input);
-  }
-
-  @Override
-  public Reader normalize(Reader input) {
-    return create(input);
   }
 }

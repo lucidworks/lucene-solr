@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,36 +16,51 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
 
 /**
  * A {@link Query} wrapper that allows to give a boost to the wrapped query.
  * Boost values that are less than one will give less importance to this
  * query compared to other ones while values that are greater than one will
  * give more importance to the scores returned by this query.
- *
- * More complex boosts can be applied by using FunctionScoreQuery in the
- * lucene-queries module
  */
 public final class BoostQuery extends Query {
 
+  /** By default we enclose the wrapped query within parenthesis, but this is
+   *  not required for all queries, so we use a whitelist of queries that don't
+   *  need parenthesis to have a better toString(). */
+  private static final Set<Class<? extends Query>> NO_PARENS_REQUIRED_QUERIES = Collections.unmodifiableSet(
+      new HashSet<>(Arrays.asList(
+          MatchAllDocsQuery.class,
+          TermQuery.class,
+          PhraseQuery.class,
+          MultiPhraseQuery.class,
+          ConstantScoreQuery.class,
+          TermRangeQuery.class,
+          NumericRangeQuery.class,
+          PrefixQuery.class,
+          FuzzyQuery.class,
+          WildcardQuery.class,
+          RegexpQuery.class
+      )));
+
   private final Query query;
-  private final float boost;
 
   /** Sole constructor: wrap {@code query} in such a way that the produced
    *  scores will be boosted by {@code boost}. */
   public BoostQuery(Query query, float boost) {
     this.query = Objects.requireNonNull(query);
-    if (Float.isFinite(boost) == false || Float.compare(boost, 0f) < 0) {
-      throw new IllegalArgumentException("boost must be a positive float, got " + boost);
-    }
-    this.boost = boost;
+    setBoost(boost);
   }
 
   /**
@@ -53,29 +70,25 @@ public final class BoostQuery extends Query {
     return query;
   }
 
-  /**
-   * Return the applied boost.
-   */
+  @Override
   public float getBoost() {
-    return boost;
+    // overridden to remove the deprecation warning
+    return super.getBoost();
   }
 
   @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           equalsTo(getClass().cast(other));
-  }
-  
-  private boolean equalsTo(BoostQuery other) {
-    return query.equals(other.query) && 
-           Float.floatToIntBits(boost) == Float.floatToIntBits(other.boost);
+  public boolean equals(Object obj) {
+    if (super.equals(obj) == false) {
+      return false;
+    }
+    BoostQuery that = (BoostQuery) obj;
+    return query.equals(that.query);
   }
 
   @Override
   public int hashCode() {
-    int h = classHash();
+    int h = super.hashCode();
     h = 31 * h + query.hashCode();
-    h = 31 * h + Float.floatToIntBits(boost);
     return h;
   }
 
@@ -83,46 +96,83 @@ public final class BoostQuery extends Query {
   public Query rewrite(IndexReader reader) throws IOException {
     final Query rewritten = query.rewrite(reader);
 
-    if (boost == 1f) {
+    if (getBoost() == 1f) {
       return rewritten;
     }
 
     if (rewritten.getClass() == BoostQuery.class) {
       BoostQuery in = (BoostQuery) rewritten;
-      return new BoostQuery(in.query, boost * in.boost);
+      return new BoostQuery(in.query, getBoost() * in.getBoost());
     }
 
-    if (boost == 0f && rewritten.getClass() != ConstantScoreQuery.class) {
+    if (getBoost() == 0f && rewritten.getClass() != ConstantScoreQuery.class) {
       // so that we pass needScores=false
       return new BoostQuery(new ConstantScoreQuery(rewritten), 0f);
     }
 
     if (query != rewritten) {
-      return new BoostQuery(rewritten, boost);
+      return new BoostQuery(rewritten, getBoost());
     }
 
-    return super.rewrite(reader);
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    query.visit(visitor.getSubVisitor(BooleanClause.Occur.MUST, this));
+    return this;
   }
 
   @Override
   public String toString(String field) {
+    boolean needsParens = NO_PARENS_REQUIRED_QUERIES.contains(query.getClass()) == false;
     StringBuilder builder = new StringBuilder();
-    builder.append("(");
+    if (needsParens) {
+      builder.append("(");
+    }
     builder.append(query.toString(field));
-    builder.append(")");
+    if (needsParens) {
+      builder.append(")");
+    }
     builder.append("^");
-    builder.append(boost);
+    builder.append(getBoost());
     return builder.toString();
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    return query.createWeight(searcher, scoreMode, BoostQuery.this.boost * boost);
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    final Weight weight = query.createWeight(searcher, needsScores);
+    if (needsScores == false) {
+      return weight;
+    }
+    // Apply the query boost, this may impact the return value of getValueForNormalization()
+    weight.normalize(1f, getBoost());
+    return new Weight(this) {
+
+      @Override
+      public void extractTerms(Set<Term> terms) {
+        weight.extractTerms(terms);
+      }
+
+      @Override
+      public Explanation explain(LeafReaderContext context, int doc) throws IOException {
+        return weight.explain(context, doc);
+      }
+
+      @Override
+      public float getValueForNormalization() throws IOException {
+        return weight.getValueForNormalization();
+      }
+
+      @Override
+      public void normalize(float norm, float boost) {
+        weight.normalize(norm, BoostQuery.this.getBoost() * boost);
+      }
+
+      @Override
+      public Scorer scorer(LeafReaderContext context) throws IOException {
+        return weight.scorer(context);
+      }
+      
+      @Override
+      public BulkScorer bulkScorer(LeafReaderContext context) throws IOException {
+        return weight.bulkScorer(context);
+      }
+    };
   }
 
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
 
 import java.io.IOException;
 
@@ -53,11 +53,12 @@ public class TestSpanTermQuery extends LuceneTestCase {
     
     IndexSearcher is = new IndexSearcher(ir);
     SpanTermQuery query = new SpanTermQuery(new Term("foo", "bar"));
-    IllegalStateException expected = expectThrows(IllegalStateException.class, () -> {
+    try {
       is.search(query, 5);
-    });
-    assertTrue(expected.getMessage().contains("was indexed without position data"));
-
+      fail("didn't get expected exception");
+    } catch (IllegalStateException expected) {
+      assertTrue(expected.getMessage().contains("was indexed without position data"));
+    }
     ir.close();
     dir.close();
   }

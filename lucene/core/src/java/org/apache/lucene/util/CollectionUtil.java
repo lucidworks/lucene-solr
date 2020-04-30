@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 
 import java.util.Collections;
@@ -146,7 +146,7 @@ public final class CollectionUtil {
   public static <T extends Comparable<? super T>> void introSort(List<T> list) {
     final int size = list.size();
     if (size <= 1) return;
-    introSort(list, Comparator.naturalOrder());
+    introSort(list, ArrayUtil.<T>naturalComparator());
   }
 
   // Tim sorts:
@@ -172,7 +172,7 @@ public final class CollectionUtil {
   public static <T extends Comparable<? super T>> void timSort(List<T> list) {
     final int size = list.size();
     if (size <= 1) return;
-    timSort(list, Comparator.naturalOrder());
+    timSort(list, ArrayUtil.<T>naturalComparator());
   }
 
 }

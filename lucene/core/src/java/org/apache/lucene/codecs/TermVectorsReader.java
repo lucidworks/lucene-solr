@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs;
-
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -57,11 +57,10 @@ public abstract class TermVectorsReader implements Cloneable, Closeable, Account
   public abstract TermVectorsReader clone();
   
   /** 
-   * Returns an instance optimized for merging. This instance may only be
-   * consumed in the thread that called {@link #getMergeInstance()}.
+   * Returns an instance optimized for merging.
    * <p>
    * The default implementation returns {@code this} */
-  public TermVectorsReader getMergeInstance() {
+  public TermVectorsReader getMergeInstance() throws IOException {
     return this;
   }
 }

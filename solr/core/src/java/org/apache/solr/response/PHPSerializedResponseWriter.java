@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.response;
 
 import java.io.IOException;
@@ -22,7 +23,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.Map;
 
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
@@ -31,6 +31,7 @@ import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.ReturnFields;
 
 
@@ -80,7 +81,7 @@ class PHPSerializedWriter extends JSONWriter {
   @Override
   public void writeResponse() throws IOException {
     Boolean omitHeader = req.getParams().getBool(CommonParams.OMIT_HEADER);
-    if(omitHeader != null && omitHeader) rsp.removeResponseHeader();
+    if(omitHeader != null && omitHeader) rsp.getValues().remove("responseHeader");
     writeNamedList(null, rsp.getValues());
   }
   
@@ -138,18 +139,16 @@ class PHPSerializedWriter extends JSONWriter {
     }
 
     writeMapOpener(single.size() + multi.size());
-    for(Map.Entry<String, Object> entry : single.entrySet()){
-      String fname = entry.getKey();
-      Object val = entry.getValue();
+    for(String fname: single.keySet()){
+      Object val = single.get(fname);
       writeKey(fname, true);
       writeVal(fname, val);
     }
     
-    for(Map.Entry<String, Object> entry : multi.entrySet()){
-      String fname = entry.getKey();
+    for(String fname: multi.keySet()){
       writeKey(fname, true);
 
-      Object val = entry.getValue();
+      Object val = multi.get(fname);
       if (!(val instanceof Collection)) {
         // should never be reached if multivalued fields are stored as a Collection
         // so I'm assuming a size of 1 just to wrap the single value
@@ -228,7 +227,7 @@ class PHPSerializedWriter extends JSONWriter {
   }
 
   @Override
-  public void writeKey(String fname, boolean needsEscaping) throws IOException {
+  protected void writeKey(String fname, boolean needsEscaping) throws IOException {
     writeStr(null, fname, needsEscaping);
   }
   void writeKey(int val, boolean needsEscaping) throws IOException {

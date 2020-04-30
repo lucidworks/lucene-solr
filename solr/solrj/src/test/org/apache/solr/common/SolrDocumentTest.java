@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.common;
 
 import java.util.ArrayList;
@@ -23,15 +24,17 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrInputDocument;
 
 /**
  */
-public class SolrDocumentTest extends SolrTestCase
+public class SolrDocumentTest extends LuceneTestCase 
 {
   public void testSimple() 
   {
-    Float fval = 10.01f;
+    Float fval = new Float( 10.01f );
     Boolean bval = Boolean.TRUE;
     String sval = "12qwaszx";
     
@@ -182,16 +185,16 @@ public class SolrDocumentTest extends SolrTestCase
    
   public void testDuplicate() 
   {
-    Float fval0 = 10.01f;
-    Float fval1 = 11.01f;
-    Float fval2 = 12.01f;
+    Float fval0 = new Float( 10.01f );
+    Float fval1 = new Float( 11.01f );
+    Float fval2 = new Float( 12.01f );
     
     // Set up a simple document
     SolrInputDocument doc = new SolrInputDocument();
     for( int i=0; i<5; i++ ) {
-      doc.addField( "f", fval0 );
-      doc.addField( "f", fval1 );
-      doc.addField( "f", fval2 );
+      doc.addField( "f", fval0, 1.0f );
+      doc.addField( "f", fval1, 1.0f );
+      doc.addField( "f", fval2, 1.0f );
     }
     assertEquals( (3*5), doc.getField("f").getValueCount() );
   }

@@ -1,3 +1,5 @@
+package org.apache.lucene.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.document;
-
 
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.util.BytesRef;
@@ -23,8 +23,8 @@ import org.apache.lucene.util.BytesRef;
 /** A field that is indexed but not tokenized: the entire
  *  String value is indexed as a single token.  For example
  *  this might be used for a 'country' field or an 'id'
- *  field.  If you also need to sort on this field, separately
- *  add a {@link SortedDocValuesField} to your document. */
+ *  field, or any field that you intend to use for sorting
+ *  or access through the field cache. */
 
 public final class StringField extends Field {
 

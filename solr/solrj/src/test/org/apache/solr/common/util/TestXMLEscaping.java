@@ -14,16 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.common.util;
 
 import java.io.IOException;
 import java.io.StringWriter;
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 
 /** Test (some of the) character escaping functions of the XML class
  */
 
-public class TestXMLEscaping extends SolrTestCase {
+public class TestXMLEscaping extends LuceneTestCase {
   private void doSimpleTest(String input,String expectedOutput) throws IOException {
     final StringWriter sw = new StringWriter();
     XML.escapeCharData(input, sw);

@@ -1,3 +1,5 @@
+package org.apache.lucene.demo;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.demo;
-
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -152,7 +152,7 @@ public class SearchFiles {
     TopDocs results = searcher.search(query, 5 * hitsPerPage);
     ScoreDoc[] hits = results.scoreDocs;
     
-    int numTotalHits = Math.toIntExact(results.totalHits.value);
+    int numTotalHits = results.totalHits;
     System.out.println(numTotalHits + " total matching documents");
 
     int start = 0;

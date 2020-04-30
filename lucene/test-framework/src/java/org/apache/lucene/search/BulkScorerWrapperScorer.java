@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -31,6 +32,7 @@ public class BulkScorerWrapperScorer extends Scorer {
   private int next = 0;
 
   private final int[] docs;
+  private final int[] freqs;
   private final float[] scores;
   private int bufferLength;
 
@@ -39,6 +41,7 @@ public class BulkScorerWrapperScorer extends Scorer {
     super(weight);
     this.scorer = scorer;
     docs = new int[bufferSize];
+    freqs = new int[bufferSize];
     scores = new float[bufferSize];
   }
 
@@ -48,14 +51,15 @@ public class BulkScorerWrapperScorer extends Scorer {
       final int min = Math.max(target, next);
       final int max = min + docs.length;
       next = scorer.score(new LeafCollector() {
-        Scorable scorer;
+        Scorer scorer;
         @Override
-        public void setScorer(Scorable scorer) throws IOException {
+        public void setScorer(Scorer scorer) throws IOException {
           this.scorer = scorer;
         }
         @Override
         public void collect(int doc) throws IOException {
           docs[bufferLength] = doc;
+          freqs[bufferLength] = scorer.freq();
           scores[bufferLength] = scorer.score();
           bufferLength += 1;
         }
@@ -70,8 +74,8 @@ public class BulkScorerWrapperScorer extends Scorer {
   }
 
   @Override
-  public float getMaxScore(int upTo) throws IOException {
-    return Float.POSITIVE_INFINITY;
+  public int freq() throws IOException {
+    return freqs[i];
   }
 
   @Override
@@ -80,39 +84,29 @@ public class BulkScorerWrapperScorer extends Scorer {
   }
 
   @Override
-  public DocIdSetIterator iterator() {
-    return new DocIdSetIterator() {
-      @Override
-      public int docID() {
-        return doc;
-      }
+  public int nextDoc() throws IOException {
+    return advance(docID() + 1);
+  }
 
-      @Override
-      public int nextDoc() throws IOException {
-        return advance(docID() + 1);
-      }
+  @Override
+  public int advance(int target) throws IOException {
+    if (bufferLength == 0 || docs[bufferLength - 1] < target) {
+      refill(target);
+    }
 
-      @Override
-      public int advance(int target) throws IOException {
-        if (bufferLength == 0 || docs[bufferLength - 1] < target) {
-          refill(target);
-        }
+    i = Arrays.binarySearch(docs, i + 1, bufferLength, target);
+    if (i < 0) {
+      i = -1 - i;
+    }
+    if (i == bufferLength) {
+      return doc = DocIdSetIterator.NO_MORE_DOCS;
+    }
+    return doc = docs[i];
+  }
 
-        i = Arrays.binarySearch(docs, i + 1, bufferLength, target);
-        if (i < 0) {
-          i = -1 - i;
-        }
-        if (i == bufferLength) {
-          return doc = DocIdSetIterator.NO_MORE_DOCS;
-        }
-        return doc = docs[i];
-      }
-
-      @Override
-      public long cost() {
-        return scorer.cost();
-      }
-    };
+  @Override
+  public long cost() {
+    return scorer.cost();
   }
 
 }

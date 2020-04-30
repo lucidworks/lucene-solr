@@ -1,12 +1,14 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,7 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
+import java.util.Iterator;
 
 import org.apache.lucene.index.DocumentsWriterPerThreadPool.ThreadState;
 import org.apache.lucene.store.Directory;
@@ -31,6 +33,9 @@ import org.apache.lucene.util.InfoStream;
  * <li>Number of RAM resident documents - configured via
  * {@link IndexWriterConfig#setMaxBufferedDocs(int)}</li>
  * </ul>
+ * The policy also applies pending delete operations (by term and/or query),
+ * given the threshold set in
+ * {@link IndexWriterConfig#setMaxBufferedDeleteTerms(int)}.
  * <p>
  * {@link IndexWriter} consults the provided {@link FlushPolicy} to control the
  * flushing process. The policy is informed for each added or updated document
@@ -102,8 +107,31 @@ abstract class FlushPolicy {
   protected ThreadState findLargestNonPendingWriter(
       DocumentsWriterFlushControl control, ThreadState perThreadState) {
     assert perThreadState.dwpt.getNumDocsInRAM() > 0;
+    long maxRamSoFar = perThreadState.bytesUsed;
     // the dwpt which needs to be flushed eventually
-    ThreadState maxRamUsingThreadState = control.findLargestNonPendingWriter();
+    ThreadState maxRamUsingThreadState = perThreadState;
+    assert !perThreadState.flushPending : "DWPT should have flushed";
+    Iterator<ThreadState> activePerThreadsIterator = control.allActiveThreadStates();
+    int count = 0;
+    while (activePerThreadsIterator.hasNext()) {
+      ThreadState next = activePerThreadsIterator.next();
+      if (!next.flushPending) {
+        final long nextRam = next.bytesUsed;
+        if (nextRam > 0 && next.dwpt.getNumDocsInRAM() > 0) {
+          if (infoStream.isEnabled("FP")) {
+            infoStream.message("FP", "thread state has " + nextRam + " bytes; docInRAM=" + next.dwpt.getNumDocsInRAM());
+          }
+          count++;
+          if (nextRam > maxRamSoFar) {
+            maxRamSoFar = nextRam;
+            maxRamUsingThreadState = next;
+          }
+        }
+      }
+    }
+    if (infoStream.isEnabled("FP")) {
+      infoStream.message("FP", count + " in-use non-flushing threads states");
+    }
     assert assertMessage("set largest ram consuming thread pending on lower watermark");
     return maxRamUsingThreadState;
   }

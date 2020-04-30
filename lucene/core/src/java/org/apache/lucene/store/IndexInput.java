@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -63,10 +63,7 @@ public abstract class IndexInput extends DataInput implements Cloneable,Closeabl
    */
   public abstract long getFilePointer();
 
-  /** Sets current position in this file, where the next read will occur.  If this is
-   *  beyond the end of the file then this will throw {@code EOFException} and then the
-   *  stream is in an undetermined state.
-   *
+  /** Sets current position in this file, where the next read will occur.
    * @see #getFilePointer()
    */
   public abstract void seek(long pos) throws IOException;
@@ -98,7 +95,7 @@ public abstract class IndexInput extends DataInput implements Cloneable,Closeabl
   
   /**
    * Creates a slice of this index input, with the given description, offset, and length. 
-   * The slice is sought to the beginning.
+   * The slice is seeked to the beginning.
    */
   public abstract IndexInput slice(String sliceDescription, long offset, long length) throws IOException;
 
@@ -148,11 +145,6 @@ public abstract class IndexInput extends DataInput implements Cloneable,Closeabl
         public long readLong(long pos) throws IOException {
           slice.seek(pos);
           return slice.readLong();
-        }
-
-        @Override
-        public String toString() {
-          return "RandomAccessInput(" + IndexInput.this.toString() + ")";
         }
       };
     }

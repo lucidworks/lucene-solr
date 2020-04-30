@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -23,7 +23,6 @@ import java.nio.file.NoSuchFileException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 import org.apache.lucene.search.SearcherManager; // javadocs
 import org.apache.lucene.store.Directory;
@@ -61,40 +60,11 @@ public abstract class DirectoryReader extends BaseCompositeReader<LeafReader> {
    * @throws IOException if there is a low-level IO error
    */
   public static DirectoryReader open(final Directory directory) throws IOException {
-    return open(directory, Collections.emptyMap());
-  }
-
-  /** Returns a IndexReader reading the index in the given
-   *  Directory
-   * @param directory the index directory
-   * @param readerAttributes the reader attributes passed to the {@link org.apache.lucene.codecs.Codec} layer of the
-   *                         directory reader. This attribute map is forwarded to all leaf readers as well as to the readers
-   *                         that are opened subsequently via the different flavors of {@link DirectoryReader#openIfChanged(DirectoryReader)}
-   * @throws IOException if there is a low-level IO error
-   */
-  public static DirectoryReader open(final Directory directory, final Map<String, String> readerAttributes) throws IOException {
-    return StandardDirectoryReader.open(directory, null, readerAttributes);
+    return StandardDirectoryReader.open(directory, null);
   }
   
   /**
    * Open a near real time IndexReader from the {@link org.apache.lucene.index.IndexWriter}.
-   *
-   * @param writer The IndexWriter to open from
-   * @return The new IndexReader
-   * @throws CorruptIndexException if the index is corrupt
-   * @throws IOException if there is a low-level IO error
-   *
-   * @see #openIfChanged(DirectoryReader,IndexWriter,boolean)
-   *
-   * @lucene.experimental
-   */
-  public static DirectoryReader open(final IndexWriter writer) throws IOException {
-    return open(writer, true, false);
-  }
-
-  /**
-   * Expert: open a near real time IndexReader from the {@link org.apache.lucene.index.IndexWriter},
-   * controlling whether past deletions should be applied.
    *
    * @param writer The IndexWriter to open from
    * @param applyAllDeletes If true, all buffered deletes will
@@ -104,16 +74,16 @@ public abstract class DirectoryReader extends BaseCompositeReader<LeafReader> {
    * future.  Applying deletes can be costly, so if your app
    * can tolerate deleted documents being returned you might
    * gain some performance by passing false.
-   * @param writeAllDeletes If true, new deletes will be written
-   * down to index files instead of carried over from writer to
-   * reader directly in heap
+   * @return The new IndexReader
+   * @throws CorruptIndexException if the index is corrupt
+   * @throws IOException if there is a low-level IO error
    *
-   * @see #open(IndexWriter)
+   * @see #openIfChanged(DirectoryReader,IndexWriter,boolean)
    *
    * @lucene.experimental
    */
-  public static DirectoryReader open(final IndexWriter writer, boolean applyAllDeletes, boolean writeAllDeletes) throws IOException {
-    return writer.getReader(applyAllDeletes, writeAllDeletes);
+  public static DirectoryReader open(final IndexWriter writer, boolean applyAllDeletes) throws IOException {
+    return writer.getReader(applyAllDeletes);
   }
 
   /** Expert: returns an IndexReader reading the index in the given
@@ -122,19 +92,7 @@ public abstract class DirectoryReader extends BaseCompositeReader<LeafReader> {
    * @throws IOException if there is a low-level IO error
    */
   public static DirectoryReader open(final IndexCommit commit) throws IOException {
-    return open(commit, Collections.emptyMap());
-  }
-
-  /** Expert: returns an IndexReader reading the index in the given
-   *  {@link IndexCommit}.
-   * @param commit the commit point to open
-   * @param readerAttributes the reader attributes passed to the {@link org.apache.lucene.codecs.Codec} layer of the
-   *                         directory reader. This attribute map is forwarded to all leaf readers as well as to the readers
-   *                         that are opened subsequently via the different flavors of {@link DirectoryReader#openIfChanged(DirectoryReader)}
-   * @throws IOException if there is a low-level IO error
-   */
-  public static DirectoryReader open(final IndexCommit commit, Map<String, String> readerAttributes) throws IOException {
-    return StandardDirectoryReader.open(commit.getDirectory(), commit, readerAttributes);
+    return StandardDirectoryReader.open(commit.getDirectory(), commit);
   }
 
   /**
@@ -226,21 +184,6 @@ public abstract class DirectoryReader extends BaseCompositeReader<LeafReader> {
    * @return DirectoryReader that covers entire index plus all
    * changes made so far by this IndexWriter instance, or
    * null if there are no new changes
-   *
-   * @param writer The IndexWriter to open from
-   *
-   * @throws IOException if there is a low-level IO error
-   *
-   * @lucene.experimental
-   */
-  public static DirectoryReader openIfChanged(DirectoryReader oldReader, IndexWriter writer) throws IOException {
-    return openIfChanged(oldReader, writer, true);
-  }
-
-  /**
-   * Expert: Opens a new reader, if there are any changes, controlling whether past deletions should be applied.
-   *
-   * @see #openIfChanged(DirectoryReader,IndexWriter)
    *
    * @param writer The IndexWriter to open from
    *
@@ -425,7 +368,7 @@ public abstract class DirectoryReader extends BaseCompositeReader<LeafReader> {
    *
    * <p>If instead this reader is a near real-time reader
    * (ie, obtained by a call to {@link
-   * DirectoryReader#open(IndexWriter)}, or by calling {@link #openIfChanged}
+   * DirectoryReader#open(IndexWriter,boolean)}, or by calling {@link #openIfChanged}
    * on a near real-time reader), then this method checks if
    * either a new commit has occurred, or any new
    * uncommitted changes have taken place via the writer.

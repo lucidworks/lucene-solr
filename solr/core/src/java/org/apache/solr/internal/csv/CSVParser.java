@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,6 +18,8 @@ package org.apache.solr.internal.csv;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.io.InputStreamReader;
+import java.io.InputStream;
 import java.util.ArrayList;
 
 
@@ -109,9 +111,41 @@ public class CSVParser {
    * @param input a Reader containing "csv-formatted" input
    */
   public CSVParser(Reader input) {
-    this(input, CSVStrategy.DEFAULT_STRATEGY);
+    // note: must match default-CSV-strategy !!
+    this(input, ',');
   }
   
+  /**
+   * Customized value delimiter parser.
+   * 
+   * The parser follows the default {@link CSVStrategy}
+   * except for the delimiter setting.
+   * 
+   * @param input a Reader based on "csv-formatted" input
+   * @param delimiter a Char used for value separation
+   * @deprecated use {@link #CSVParser(Reader,CSVStrategy)}.
+   */
+  public CSVParser(Reader input, char delimiter) {
+    this(input, delimiter, '"', CSVStrategy.COMMENTS_DISABLED);
+  }
+  
+  /**
+   * Customized csv parser.
+   * 
+   * The parser parses according to the given CSV dialect settings.
+   * Leading whitespaces are truncated, unicode escapes are
+   * not interpreted and empty lines are ignored.
+   * 
+   * @param input a Reader based on "csv-formatted" input
+   * @param delimiter a Char used for value separation
+   * @param encapsulator a Char used as value encapsulation marker
+   * @param commentStart a Char used for comment identification
+   * @deprecated use {@link #CSVParser(Reader,CSVStrategy)}.
+   */
+  public CSVParser(Reader input, char delimiter, char encapsulator, char commentStart) {
+    this(input, new CSVStrategy(delimiter, encapsulator, commentStart));
+  }
+
   /**
    * Customized CSV parser using the given {@link CSVStrategy}
    *
@@ -266,7 +300,7 @@ public class CSVParser {
     int lastChar = in.readAgain();
     
     //  read the next char and set eol
-    /* note: unfortunately isEndOfLine may consumes a character silently.
+    /* note: unfourtunately isEndOfLine may consumes a character silently.
      *       this has no effect outside of the method. so a simple workaround
      *       is to call 'readAgain' on the stream...
      *       uh: might using objects instead of base-types (jdk1.5 autoboxing!)

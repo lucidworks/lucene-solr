@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
 
+import java.io.Reader;
+import java.io.StringReader;
 
-import org.apache.lucene.analysis.CharArraySet;
+import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.util.BaseTokenStreamFactoryTestCase;
+import org.apache.lucene.analysis.util.CharArraySet;
 import org.apache.lucene.analysis.util.ClasspathResourceLoader;
 import org.apache.lucene.analysis.util.ResourceLoader;
+import org.apache.lucene.util.Version;
 
 public class TestKeepFilterFactory extends BaseTokenStreamFactoryTestCase {
 
@@ -44,9 +49,36 @@ public class TestKeepFilterFactory extends BaseTokenStreamFactoryTestCase {
   
   /** Test that bogus arguments result in exception */
   public void testBogusArguments() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       tokenFilterFactory("KeepWord", "bogusArg", "bogusValue");
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
+  }
+  
+  public void test43Backcompat() throws Exception {
+    Reader reader = new StringReader("a foo bar");
+    TokenStream stream = whitespaceMockTokenizer(reader);
+    stream = tokenFilterFactory("KeepWord", Version.LUCENE_4_3_1,
+        "enablePositionIncrements", "false",
+        "words", "keep-1.txt").create(stream);
+    assertTrue(stream instanceof Lucene43KeepWordFilter);
+    assertTokenStreamContents(stream, new String[] {"foo", "bar"}, new int[] {2, 6}, new int[] {5, 9}, new int[] {1, 1});
+
+    try {
+      tokenFilterFactory("KeepWord", Version.LUCENE_4_4_0, "enablePositionIncrements", "false");
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("enablePositionIncrements=false is not supported"));
+    }
+    tokenFilterFactory("KeepWord", Version.LUCENE_4_4_0, "enablePositionIncrements", "true");
+
+    try {
+      tokenFilterFactory("KeepWord", "enablePositionIncrements", "true");
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("not a valid option"));
+    }
   }
 }

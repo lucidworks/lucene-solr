@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.analysis.cn.smart.hhmm;
 
 import java.util.ArrayList;
@@ -222,7 +223,7 @@ class BiSegGraph {
     Collection<ArrayList<SegTokenPair>>  values = tokenPairListTable.values();
     for (ArrayList<SegTokenPair> segList : values) {
       for (SegTokenPair pair : segList) {
-        sb.append(pair).append("\n");
+        sb.append(pair + "\n");
       }
     }
     return sb.toString();

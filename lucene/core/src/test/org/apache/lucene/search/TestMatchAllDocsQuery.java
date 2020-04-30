@@ -45,10 +45,10 @@ public class TestMatchAllDocsQuery extends LuceneTestCase {
   public void testQuery() throws Exception {
     Directory dir = newDirectory();
     IndexWriter iw = new IndexWriter(dir, newIndexWriterConfig(analyzer).setMaxBufferedDocs(2).setMergePolicy(newLogMergePolicy()));
-    addDoc("one", iw);
-    addDoc("two", iw);
-    addDoc("three four", iw);
-    IndexReader ir = DirectoryReader.open(iw);
+    addDoc("one", iw, 1f);
+    addDoc("two", iw, 20f);
+    addDoc("three four", iw, 300f);
+    IndexReader ir = DirectoryReader.open(iw, true);
 
     IndexSearcher is = newSearcher(ir);
     ScoreDoc[] hits;
@@ -75,7 +75,7 @@ public class TestMatchAllDocsQuery extends LuceneTestCase {
 
     iw.deleteDocuments(new Term("key", "one"));
     ir.close();
-    ir = DirectoryReader.open(iw);
+    ir = DirectoryReader.open(iw, true);
     is = newSearcher(ir);
     
     hits = is.search(new MatchAllDocsQuery(), 1000).scoreDocs;
@@ -92,42 +92,12 @@ public class TestMatchAllDocsQuery extends LuceneTestCase {
     assertTrue(q1.equals(q2));
   }
   
-  private void addDoc(String text, IndexWriter iw) throws IOException {
+  private void addDoc(String text, IndexWriter iw, float boost) throws IOException {
     Document doc = new Document();
     Field f = newTextField("key", text, Field.Store.YES);
+    f.setBoost(boost);
     doc.add(f);
     iw.addDocument(doc);
-  }
-
-  public void testEarlyTermination() throws IOException {
-
-    Directory dir = newDirectory();
-    IndexWriter iw = new IndexWriter(dir, newIndexWriterConfig(analyzer).setMaxBufferedDocs(2).setMergePolicy(newLogMergePolicy()));
-    final int numDocs = 500;
-    for (int i = 0; i < numDocs; i++) {
-      addDoc("doc" + i, iw);
-    }
-    IndexReader ir = DirectoryReader.open(iw);
-
-    IndexSearcher is = newSearcher(ir);
-
-    final int totalHitsThreshold = 200;
-    TopScoreDocCollector c = TopScoreDocCollector.create(10, null, totalHitsThreshold);
-
-    is.search(new MatchAllDocsQuery(), c);
-    assertEquals(totalHitsThreshold+1, c.totalHits);
-    assertEquals(TotalHits.Relation.GREATER_THAN_OR_EQUAL_TO, c.totalHitsRelation);
-
-    TopScoreDocCollector c1 = TopScoreDocCollector.create(10, null, numDocs);
-
-    is.search(new MatchAllDocsQuery(), c1);
-    assertEquals(numDocs, c1.totalHits);
-    assertEquals(TotalHits.Relation.EQUAL_TO, c1.totalHitsRelation);
-
-    iw.close();
-    ir.close();
-    dir.close();
-
   }
 
 }

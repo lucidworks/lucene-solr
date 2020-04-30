@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
 
+import java.util.Arrays;
 
 /**
  * A builder for {@link BytesRef} instances.
@@ -141,7 +143,7 @@ public class BytesRefBuilder {
    * represent the provided text.
    */
   public void copyChars(CharSequence text, int off, int len) {
-    grow(UnicodeUtil.maxUTF8Length(len));
+    grow(len * UnicodeUtil.MAX_UTF8_BYTES_PER_CHAR);
     ref.length = UnicodeUtil.UTF16toUTF8(text, off, len, ref.bytes);
   }
 
@@ -150,7 +152,7 @@ public class BytesRefBuilder {
    * represent the provided text.
    */
   public void copyChars(char[] text, int off, int len) {
-    grow(UnicodeUtil.maxUTF8Length(len));
+    grow(len * UnicodeUtil.MAX_UTF8_BYTES_PER_CHAR);
     ref.length = UnicodeUtil.UTF16toUTF8(text, off, len, ref.bytes);
   }
 
@@ -168,7 +170,7 @@ public class BytesRefBuilder {
    * Build a new {@link BytesRef} that has the same content as this buffer.
    */
   public BytesRef toBytesRef() {
-    return new BytesRef(ArrayUtil.copyOfSubArray(ref.bytes, 0, ref.length));
+    return new BytesRef(Arrays.copyOf(ref.bytes, ref.length));
   }
 
   @Override

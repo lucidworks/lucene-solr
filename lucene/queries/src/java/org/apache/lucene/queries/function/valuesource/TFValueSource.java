@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function.valuesource;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function.valuesource;
 
 import java.io.IOException;
 import java.util.Map;
 
-import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.Fields;
+import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.queries.function.FunctionValues;
@@ -49,11 +51,12 @@ public class TFValueSource extends TermFreqValueSource {
 
   @Override
   public FunctionValues getValues(Map context, LeafReaderContext readerContext) throws IOException {
-    final Terms terms = readerContext.reader().terms(indexedField);
+    Fields fields = readerContext.reader().fields();
+    final Terms terms = fields.terms(indexedField);
     IndexSearcher searcher = (IndexSearcher)context.get("searcher");
-    final TFIDFSimilarity similarity = IDFValueSource.asTFIDF(searcher.getSimilarity(), indexedField);
+    final TFIDFSimilarity similarity = IDFValueSource.asTFIDF(searcher.getSimilarity(true), indexedField);
     if (similarity == null) {
-      throw new UnsupportedOperationException("requires a TFIDFSimilarity (such as ClassicSimilarity)");
+      throw new UnsupportedOperationException("requires a TFIDFSimilarity (such as DefaultSimilarity)");
     }
 
     return new FloatDocValues(this) {

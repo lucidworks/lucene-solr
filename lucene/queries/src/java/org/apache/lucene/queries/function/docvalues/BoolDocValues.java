@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function.docvalues;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function.docvalues;
-
-import java.io.IOException;
 
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -35,50 +34,50 @@ public abstract class BoolDocValues extends FunctionValues {
   }
 
   @Override
-  public abstract boolean boolVal(int doc) throws IOException;
+  public abstract boolean boolVal(int doc);
 
   @Override
-  public byte byteVal(int doc) throws IOException {
+  public byte byteVal(int doc) {
     return boolVal(doc) ? (byte)1 : (byte)0;
   }
 
   @Override
-  public short shortVal(int doc) throws IOException {
+  public short shortVal(int doc) {
     return boolVal(doc) ? (short)1 : (short)0;
   }
 
   @Override
-  public float floatVal(int doc) throws IOException {
+  public float floatVal(int doc) {
     return boolVal(doc) ? (float)1 : (float)0;
   }
 
   @Override
-  public int intVal(int doc) throws IOException {
+  public int intVal(int doc) {
     return boolVal(doc) ? 1 : 0;
   }
 
   @Override
-  public long longVal(int doc) throws IOException {
+  public long longVal(int doc) {
     return boolVal(doc) ? (long)1 : (long)0;
   }
 
   @Override
-  public double doubleVal(int doc) throws IOException {
+  public double doubleVal(int doc) {
     return boolVal(doc) ? (double)1 : (double)0;
   }
 
   @Override
-  public String strVal(int doc) throws IOException {
+  public String strVal(int doc) {
     return Boolean.toString(boolVal(doc));
   }
 
   @Override
-  public Object objectVal(int doc) throws IOException {
+  public Object objectVal(int doc) {
     return exists(doc) ? boolVal(doc) : null;
   }
 
   @Override
-  public String toString(int doc) throws IOException {
+  public String toString(int doc) {
     return vs.description() + '=' + strVal(doc);
   }
 
@@ -93,7 +92,7 @@ public abstract class BoolDocValues extends FunctionValues {
       }
 
       @Override
-      public void fillValue(int doc) throws IOException {
+      public void fillValue(int doc) {
         mval.value = boolVal(doc);
         mval.exists = exists(doc);
       }

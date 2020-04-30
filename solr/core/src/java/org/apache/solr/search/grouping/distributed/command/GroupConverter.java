@@ -1,3 +1,5 @@
+package org.apache.solr.search.grouping.distributed.command;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.grouping.distributed.command;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -32,10 +33,9 @@ import org.apache.lucene.util.mutable.MutableValueDouble;
 import org.apache.lucene.util.mutable.MutableValueFloat;
 import org.apache.lucene.util.mutable.MutableValueInt;
 import org.apache.lucene.util.mutable.MutableValueLong;
-import org.apache.solr.common.util.Utils;
 import org.apache.solr.schema.FieldType;
-import org.apache.solr.schema.NumberType;
 import org.apache.solr.schema.SchemaField;
+import org.apache.solr.schema.TrieField;
 
 /** 
  * this is a transition class: for numeric types we use function-based distributed grouping,
@@ -51,11 +51,11 @@ class GroupConverter {
     FieldType fieldType = field.getType();
     List<SearchGroup<BytesRef>> result = new ArrayList<>(values.size());
     for (SearchGroup<MutableValue> original : values) {
-      SearchGroup<BytesRef> converted = new SearchGroup<>();
+      SearchGroup<BytesRef> converted = new SearchGroup<BytesRef>();
       converted.sortValues = original.sortValues;
       if (original.groupValue.exists) {
         BytesRefBuilder binary = new BytesRefBuilder();
-        fieldType.readableToIndexed(Utils.OBJECT_TO_STRING.apply(original.groupValue.toObject()), binary);
+        fieldType.readableToIndexed(original.groupValue.toString(), binary);
         converted.groupValue = binary.get();
       } else {
         converted.groupValue = null;
@@ -69,9 +69,9 @@ class GroupConverter {
     FieldType fieldType = field.getType();
     List<SearchGroup<MutableValue>> result = new ArrayList<>(values.size());
     for (SearchGroup<BytesRef> original : values) {
-      SearchGroup<MutableValue> converted = new SearchGroup<>();
+      SearchGroup<MutableValue> converted = new SearchGroup<MutableValue>();
       converted.sortValues = original.sortValues; // ?
-      NumberType type = fieldType.getNumberType();
+      TrieField.TrieTypes type = ((TrieField)fieldType).getType();
       final MutableValue v;
       switch (type) {
         case INTEGER:
@@ -148,14 +148,14 @@ class GroupConverter {
       final BytesRef groupValue;
       if (original.groupValue.exists) {
         BytesRefBuilder binary = new BytesRefBuilder();
-        fieldType.readableToIndexed(Utils.OBJECT_TO_STRING.apply(original.groupValue.toObject()), binary);
+        fieldType.readableToIndexed(original.groupValue.toString(), binary);
         groupValue = binary.get();
       } else {
         groupValue = null;
       }
-      groupDocs[i] = new GroupDocs<>(original.score, original.maxScore, original.totalHits, original.scoreDocs, groupValue, original.groupSortValues);
+      groupDocs[i] = new GroupDocs<BytesRef>(original.score, original.maxScore, original.totalHits, original.scoreDocs, groupValue, original.groupSortValues);
     }
     
-    return new TopGroups<>(values.groupSort, values.withinGroupSort, values.totalHitCount, values.totalGroupedHitCount, groupDocs, values.maxScore);
+    return new TopGroups<BytesRef>(values.groupSort, values.withinGroupSort, values.totalHitCount, values.totalGroupedHitCount, groupDocs, values.maxScore);
   }
 }

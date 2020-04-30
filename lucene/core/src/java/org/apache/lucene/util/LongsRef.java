@@ -1,3 +1,7 @@
+package org.apache.lucene.util;
+
+import java.util.Arrays;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +18,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 /** Represents long[], as a slice (offset + length) into an
  *  existing long[].  The {@link #longs} member should never be null; use
@@ -90,15 +92,45 @@ public final class LongsRef implements Comparable<LongsRef>, Cloneable {
   }
 
   public boolean longsEquals(LongsRef other) {
-    return FutureArrays.equals(this.longs, this.offset, this.offset + this.length, 
-                               other.longs, other.offset, other.offset + other.length);
+    if (length == other.length) {
+      int otherUpto = other.offset;
+      final long[] otherInts = other.longs;
+      final long end = offset + length;
+      for(int upto=offset; upto<end; upto++,otherUpto++) {
+        if (longs[upto] != otherInts[otherUpto]) {
+          return false;
+        }
+      }
+      return true;
+    } else {
+      return false;
+    }
   }
 
   /** Signed int order comparison */
   @Override
   public int compareTo(LongsRef other) {
-    return FutureArrays.compare(this.longs, this.offset, this.offset + this.length, 
-                                other.longs, other.offset, other.offset + other.length);
+    if (this == other) return 0;
+
+    final long[] aInts = this.longs;
+    int aUpto = this.offset;
+    final long[] bInts = other.longs;
+    int bUpto = other.offset;
+
+    final long aStop = aUpto + Math.min(this.length, other.length);
+
+    while(aUpto < aStop) {
+      long aInt = aInts[aUpto++];
+      long bInt = bInts[bUpto++];
+      if (aInt > bInt) {
+        return 1;
+      } else if (aInt < bInt) {
+        return -1;
+      }
+    }
+
+    // One is a prefix of the other, or, they are equal:
+    return this.length - other.length;
   }
 
   @Override
@@ -124,7 +156,7 @@ public final class LongsRef implements Comparable<LongsRef>, Cloneable {
    * and an offset of zero.
    */
   public static LongsRef deepCopyOf(LongsRef other) {
-    return new LongsRef(ArrayUtil.copyOfSubArray(other.longs, other.offset, other.offset + other.length), 0, other.length);
+    return new LongsRef(Arrays.copyOfRange(other.longs, other.offset, other.offset + other.length), 0, other.length);
   }
   
   /** 

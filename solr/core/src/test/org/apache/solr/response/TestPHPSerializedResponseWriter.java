@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.response;
 
 import java.io.IOException;
@@ -22,7 +23,11 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 
 import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.common.util.NamedList;
+import org.apache.solr.response.PHPSerializedResponseWriter;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.response.QueryResponseWriter;
+import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.junit.BeforeClass;
@@ -91,7 +96,7 @@ public class TestPHPSerializedResponseWriter extends SolrTestCaseJ4 {
     SolrDocumentList sdl = new SolrDocumentList();
     sdl.add(d1);
     sdl.add(d2);
-    rsp.addResponse(sdl);
+    rsp.add("response", sdl); 
     
     w.write(buf, req, rsp);
     assertEquals("a:1:{s:8:\"response\";a:3:{s:8:\"numFound\";i:0;s:5:\"start\";i:0;s:4:\"docs\";a:2:{i:0;a:6:{s:2:\"id\";s:1:\"1\";s:5:\"data1\";s:5:\"hello\";s:5:\"data2\";i:42;s:5:\"data3\";b:1;s:5:\"data4\";a:2:{s:7:\"data4.1\";s:7:\"hashmap\";s:7:\"data4.2\";s:5:\"hello\";}s:5:\"data5\";a:3:{i:0;s:7:\"data5.1\";i:1;s:7:\"data5.2\";i:2;s:7:\"data5.3\";}}i:1;a:1:{s:2:\"id\";s:1:\"2\";}}}}", 

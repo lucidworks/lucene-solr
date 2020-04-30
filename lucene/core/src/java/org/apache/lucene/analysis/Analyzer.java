@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,23 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis;
-
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.io.Reader;
-import java.io.StringReader;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Consumer;
 
-import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
-import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
-import org.apache.lucene.analysis.tokenattributes.TermToBytesRefAttribute;
 import org.apache.lucene.store.AlreadyClosedException;
-import org.apache.lucene.util.AttributeFactory;
-import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CloseableThreadLocal;
 import org.apache.lucene.util.Version;
 
@@ -52,12 +44,6 @@ import org.apache.lucene.util.Version;
  *     filter = new BarFilter(filter);
  *     return new TokenStreamComponents(source, filter);
  *   }
- *   {@literal @Override}
- *   protected TokenStream normalize(TokenStream in) {
- *     // Assuming FooFilter is about normalization and BarFilter is about
- *     // stemming, only FooFilter should be applied
- *     return new FooFilter(in);
- *   }
  * };
  * </pre>
  * For more examples, see the {@link org.apache.lucene.analysis Analysis package documentation}.
@@ -78,9 +64,9 @@ import org.apache.lucene.util.Version;
  *       Analyzer for Simplified Chinese, which indexes words.
  *   <li><a href="{@docRoot}/../analyzers-stempel/overview-summary.html">Stempel</a>:
  *       Algorithmic Stemmer for the Polish Language.
+ *   <li><a href="{@docRoot}/../analyzers-uima/overview-summary.html">UIMA</a>: 
+ *       Analysis integration with Apache UIMA. 
  * </ul>
- *
- * @since 3.1
  */
 public abstract class Analyzer implements Closeable {
 
@@ -120,15 +106,6 @@ public abstract class Analyzer implements Closeable {
    * @return the {@link TokenStreamComponents} for this analyzer.
    */
   protected abstract TokenStreamComponents createComponents(String fieldName);
-
-  /**
-   * Wrap the given {@link TokenStream} in order to apply normalization filters.
-   * The default implementation returns the {@link TokenStream} as-is. This is
-   * used by {@link #normalize(String, String)}.
-   */
-  protected TokenStream normalize(String fieldName, TokenStream in) {
-    return in;
-  }
 
   /**
    * Returns a TokenStream suitable for <code>fieldName</code>, tokenizing
@@ -204,65 +181,7 @@ public abstract class Analyzer implements Closeable {
     components.reusableStringReader = strReader;
     return components.getTokenStream();
   }
-
-  /**
-   * Normalize a string down to the representation that it would have in the
-   * index.
-   * <p>
-   * This is typically used by query parsers in order to generate a query on
-   * a given term, without tokenizing or stemming, which are undesirable if
-   * the string to analyze is a partial word (eg. in case of a wildcard or
-   * fuzzy query).
-   * <p>
-   * This method uses {@link #initReaderForNormalization(String, Reader)} in
-   * order to apply necessary character-level normalization and then
-   * {@link #normalize(String, TokenStream)} in order to apply the normalizing
-   * token filters.
-   */
-  public final BytesRef normalize(final String fieldName, final String text) {
-    try {
-      // apply char filters
-      final String filteredText;
-      try (Reader reader = new StringReader(text)) {
-        Reader filterReader = initReaderForNormalization(fieldName, reader);
-        char[] buffer = new char[64];
-        StringBuilder builder = new StringBuilder();
-        for (;;) {
-          final int read = filterReader.read(buffer, 0, buffer.length);
-          if (read == -1) {
-            break;
-          }
-          builder.append(buffer, 0, read);
-        }
-        filteredText = builder.toString();
-      } catch (IOException e) {
-        throw new IllegalStateException("Normalization threw an unexpected exception", e);
-      }
-
-      final AttributeFactory attributeFactory = attributeFactory(fieldName);
-      try (TokenStream ts = normalize(fieldName,
-          new StringTokenStream(attributeFactory, filteredText, text.length()))) {
-        final TermToBytesRefAttribute termAtt = ts.addAttribute(TermToBytesRefAttribute.class);
-        ts.reset();
-        if (ts.incrementToken() == false) {
-          throw new IllegalStateException("The normalization token stream is "
-              + "expected to produce exactly 1 token, but got 0 for analyzer "
-              + this + " and input \"" + text + "\"");
-        }
-        final BytesRef term = BytesRef.deepCopyOf(termAtt.getBytesRef());
-        if (ts.incrementToken()) {
-          throw new IllegalStateException("The normalization token stream is "
-              + "expected to produce exactly 1 token, but got 2+ for analyzer "
-              + this + " and input \"" + text + "\"");
-        }
-        ts.end();
-        return term;
-      }
-    } catch (IOException e) {
-      throw new IllegalStateException("Normalization threw an unexpected exception", e);
-    }
-  }
-
+    
   /**
    * Override this if you want to add a CharFilter chain.
    * <p>
@@ -275,23 +194,6 @@ public abstract class Analyzer implements Closeable {
    */
   protected Reader initReader(String fieldName, Reader reader) {
     return reader;
-  }
-
-  /** Wrap the given {@link Reader} with {@link CharFilter}s that make sense
-   *  for normalization. This is typically a subset of the {@link CharFilter}s
-   *  that are applied in {@link #initReader(String, Reader)}. This is used by
-   *  {@link #normalize(String, String)}. */
-  protected Reader initReaderForNormalization(String fieldName, Reader reader) {
-    return reader;
-  }
-
-  /** Return the {@link AttributeFactory} to be used for
-   *  {@link #tokenStream analysis} and
-   *  {@link #normalize(String, String) normalization} on the given
-   *  {@code FieldName}. The default implementation returns
-   *  {@link TokenStream#DEFAULT_TOKEN_ATTRIBUTE_FACTORY}. */
-  protected AttributeFactory attributeFactory(String fieldName) {
-    return TokenStream.DEFAULT_TOKEN_ATTRIBUTE_FACTORY;
   }
 
   /**
@@ -358,16 +260,16 @@ public abstract class Analyzer implements Closeable {
 
   /**
    * This class encapsulates the outer components of a token stream. It provides
-   * access to the source (a {@link Reader} {@link Consumer} and the outer end (sink), an
+   * access to the source ({@link Tokenizer}) and the outer end (sink), an
    * instance of {@link TokenFilter} which also serves as the
    * {@link TokenStream} returned by
    * {@link Analyzer#tokenStream(String, Reader)}.
    */
-  public static final class TokenStreamComponents {
+  public static class TokenStreamComponents {
     /**
      * Original source of the tokens.
      */
-    protected final Consumer<Reader> source;
+    protected final Tokenizer source;
     /**
      * Sink tokenstream, such as the outer tokenfilter decorating
      * the chain. This can be the source if there are no filters.
@@ -381,30 +283,25 @@ public abstract class Analyzer implements Closeable {
      * Creates a new {@link TokenStreamComponents} instance.
      * 
      * @param source
-     *          the source to set the reader on
+     *          the analyzer's tokenizer
      * @param result
      *          the analyzer's resulting token stream
      */
-    public TokenStreamComponents(final Consumer<Reader> source,
+    public TokenStreamComponents(final Tokenizer source,
         final TokenStream result) {
       this.source = source;
       this.sink = result;
     }
-
+    
     /**
-     * Creates a new {@link TokenStreamComponents} instance
-     * @param tokenizer the analyzer's Tokenizer
-     * @param result    the analyzer's resulting token stream
+     * Creates a new {@link TokenStreamComponents} instance.
+     * 
+     * @param source
+     *          the analyzer's tokenizer
      */
-    public TokenStreamComponents(final Tokenizer tokenizer, final TokenStream result) {
-      this(tokenizer::setReader, result);
-    }
-
-    /**
-     * Creates a new {@link TokenStreamComponents} from a Tokenizer
-     */
-    public TokenStreamComponents(final Tokenizer tokenizer) {
-      this(tokenizer::setReader, tokenizer);
+    public TokenStreamComponents(final Tokenizer source) {
+      this.source = source;
+      this.sink = source;
     }
 
     /**
@@ -414,8 +311,8 @@ public abstract class Analyzer implements Closeable {
      * @param reader
      *          a reader to reset the source component
      */
-    private void setReader(final Reader reader) {
-      source.accept(reader);
+    protected void setReader(final Reader reader) {
+      source.setReader(reader);
     }
 
     /**
@@ -428,9 +325,11 @@ public abstract class Analyzer implements Closeable {
     }
 
     /**
-     * Returns the component's source
+     * Returns the component's {@link Tokenizer}
+     *
+     * @return Component's {@link Tokenizer}
      */
-    public Consumer<Reader> getSource() {
+    public Tokenizer getTokenizer() {
       return source;
     }
   }
@@ -536,41 +435,4 @@ public abstract class Analyzer implements Closeable {
     }
   };
 
-  private static final class StringTokenStream extends TokenStream {
-
-    private final String value;
-    private final int length;
-    private boolean used = true;
-    private final CharTermAttribute termAttribute = addAttribute(CharTermAttribute.class);
-    private final OffsetAttribute offsetAttribute = addAttribute(OffsetAttribute.class);
-
-    StringTokenStream(AttributeFactory attributeFactory, String value, int length) {
-      super(attributeFactory);
-      this.value = value;
-      this.length = length;
-    }
-
-    @Override
-    public void reset() {
-      used = false;
-    }
-
-    @Override
-    public boolean incrementToken() {
-      if (used) {
-        return false;
-      }
-      clearAttributes();
-      termAttribute.append(value);
-      offsetAttribute.setOffset(0, length);
-      used = true;
-      return true;
-    }
-
-    @Override
-    public void end() throws IOException {
-      super.end();
-      offsetAttribute.setOffset(length, length);
-    }
-  }
 }

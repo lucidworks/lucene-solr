@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.util.Arrays;
 
 /**
  * A LSB Radix sorter for unsigned int values.
- * @lucene.internal
  */
-public final class LSBRadixSorter {
+final class LSBRadixSorter {
 
   private static final int INSERTION_SORT_THRESHOLD = 30;
   private static final int HISTOGRAM_SIZE = 256;
@@ -31,9 +30,9 @@ public final class LSBRadixSorter {
   private final int[] histogram = new int[HISTOGRAM_SIZE];
   private int[] buffer = new int[0];
 
-  private static void buildHistogram(int[] array, int len, int[] histogram, int shift) {
+  private static void buildHistogram(int[] array, int off, int len, int[] histogram, int shift) {
     for (int i = 0; i < len; ++i) {
-      final int b = (array[i] >>> shift) & 0xFF;
+      final int b = (array[off + i] >>> shift) & 0xFF;
       histogram[b] += 1;
     }
   }
@@ -47,22 +46,22 @@ public final class LSBRadixSorter {
     }
   }
 
-  private static void reorder(int[] array, int len, int[] histogram, int shift, int[] dest) {
+  private static void reorder(int[] array, int off, int len, int[] histogram, int shift, int[] dest, int destOff) {
     for (int i = 0; i < len; ++i) {
-      final int v = array[i];
+      final int v = array[off + i];
       final int b = (v >>> shift) & 0xFF;
-      dest[histogram[b]++] = v;
+      dest[destOff + histogram[b]++] = v;
     }
   }
 
-  private static boolean sort(int[] array, int len, int[] histogram, int shift, int[] dest) {
+  private static boolean sort(int[] array, int off, int len, int[] histogram, int shift, int[] dest, int destOff) {
     Arrays.fill(histogram, 0);
-    buildHistogram(array, len, histogram, shift);
+    buildHistogram(array, off, len, histogram, shift);
     if (histogram[0] == len) {
       return false;
     }
     sumHistogram(histogram);
-    reorder(array, len, histogram, shift, dest);
+    reorder(array, off, len, histogram, shift, dest, destOff);
     return true;
   }
 
@@ -80,32 +79,34 @@ public final class LSBRadixSorter {
     }
   }
 
-  /** Sort {@code array[0:len]} in place.
-   * @param numBits how many bits are required to store any of the values in
-   *                {@code array[0:len]}. Pass {@code 32} if unknown. */
-  public void sort(int numBits, final int[] array, int len) {
+  public void sort(final int[] array, int off, int len) {
     if (len < INSERTION_SORT_THRESHOLD) {
-      insertionSort(array, 0, len);
+      insertionSort(array, off, len);
       return;
     }
 
     buffer = ArrayUtil.grow(buffer, len);
 
     int[] arr = array;
+    int arrOff = off;
 
     int[] buf = buffer;
-
-    for (int shift = 0; shift < numBits; shift += 8) {
-      if (sort(arr, len, histogram, shift, buf)) {
+    int bufOff = 0;
+    
+    for (int shift = 0; shift <= 24; shift += 8) {
+      if (sort(arr, arrOff, len, histogram, shift, buf, bufOff)) {
         // swap arrays
         int[] tmp = arr;
+        int tmpOff = arrOff;
         arr = buf;
+        arrOff = bufOff;
         buf = tmp;
+        bufOff = tmpOff;
       }
     }
 
     if (array == buf) {
-      System.arraycopy(arr, 0, array, 0, len);
+      System.arraycopy(arr, arrOff, array, off, len);
     }
   }
 

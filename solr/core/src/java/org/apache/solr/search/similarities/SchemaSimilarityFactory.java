@@ -1,3 +1,5 @@
+package org.apache.solr.search.similarities;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.similarities;
 
-import org.apache.lucene.search.similarities.BM25Similarity;
+import org.apache.lucene.search.similarities.ClassicSimilarity;
 import org.apache.lucene.search.similarities.PerFieldSimilarityWrapper;
 import org.apache.lucene.search.similarities.Similarity;
-import org.apache.lucene.search.similarity.LegacyBM25Similarity;
-import org.apache.lucene.util.Version;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.params.SolrParams;
@@ -30,21 +29,15 @@ import org.apache.solr.schema.SimilarityFactory;
 import org.apache.solr.util.plugin.SolrCoreAware;
 
 /**
- * <p>
  * <code>SimilarityFactory</code> that returns a global {@link PerFieldSimilarityWrapper}
- * that delegates to the field type, if it's configured.  For field types that
+ * that delegates to the field type, if it's configured.  For field type's that
  * do not have a <code>Similarity</code> explicitly configured, the global <code>Similarity</code> 
  * will use per fieldtype defaults -- either based on an explicitly configured 
- * <code>defaultSimFromFieldType</code> a sensible default depending on the {@link Version} 
- * matching configured:
- * </p>
- * <ul>
- *  <li><code>luceneMatchVersion &lt; 8.0</code> = {@link LegacyBM25Similarity}</li>
- *  <li><code>luceneMatchVersion &gt;= 8.0</code> = {@link BM25Similarity}</li>
- * </ul>
+ * <code>defaultSimFromFieldType</code> of an implicit {@link ClassicSimilarity}.
+ *
  * <p>
  * The <code>defaultSimFromFieldType</code> option accepts the name of any fieldtype, and uses 
- * whatever <code>Similarity</code> is explicitly configured for that fieldType as the default for
+ * whatever <code>Similarity</code> is explicitly configured for that fieldType as thedefault for 
  * all other field types.  For example:
  * </p>
  * <pre class="prettyprint">
@@ -72,7 +65,9 @@ import org.apache.solr.util.plugin.SolrCoreAware;
  * <code>Similarity</code> for some or all fields in a Query, the behavior can be inconsistent 
  * with the behavior of explicitly configuring that same <code>Similarity</code> globally, because 
  * of differences in how some multi-field / multi-clause behavior is defined in 
- * <code>PerFieldSimilarityWrapper</code>.
+ * <code>PerFieldSimilarityWrapper</code>.  In particular please consider carefully the documentation 
+ * &amp; implementation of {@link Similarity#coord} and {@link Similarity#queryNorm} in 
+ * {@link ClassicSimilarity} compared to {@link PerFieldSimilarityWrapper}
  * </p>
  *
  * @see FieldType#getSimilarity
@@ -85,12 +80,10 @@ public class SchemaSimilarityFactory extends SimilarityFactory implements SolrCo
   
   private volatile SolrCore core; // set by inform(SolrCore)
   private volatile Similarity similarity; // lazy instantiated
-  private Version coreVersion = Version.LATEST;
 
   @Override
   public void inform(SolrCore core) {
     this.core = core;
-    this.coreVersion = this.core.getSolrConfig().luceneMatchVersion;
   }
   
   @Override
@@ -111,9 +104,7 @@ public class SchemaSimilarityFactory extends SimilarityFactory implements SolrCo
       Similarity defaultSim = null;
       if (null == defaultSimFromFieldType) {
         // nothing configured, choose a sensible implicit default...
-        defaultSim = coreVersion.onOrAfter(Version.LUCENE_8_0_0) ? 
-            new BM25Similarity() :
-            new LegacyBM25Similarity();
+        defaultSim = new ClassicSimilarity();
       } else {
         FieldType defSimFT = core.getLatestSchema().getFieldTypeByName(defaultSimFromFieldType);
         if (null == defSimFT) {
@@ -130,32 +121,21 @@ public class SchemaSimilarityFactory extends SimilarityFactory implements SolrCo
                                   "' but that <fieldType> does not define a <similarity>");
         }
       }
-      similarity = new SchemaSimilarity(defaultSim);
+      assert null != defaultSim;
+      final Similarity defaultSimilarity = defaultSim;
+      similarity = new PerFieldSimilarityWrapper() {
+        @Override
+        public Similarity get(String name) {
+          FieldType fieldType = core.getLatestSchema().getFieldTypeNoEx(name);
+          if (fieldType == null) {
+            return defaultSimilarity;
+          } else {
+            Similarity similarity = fieldType.getSimilarity();
+            return similarity == null ? defaultSimilarity : similarity;
+          }
+        }
+      };
     }
     return similarity;
-  }
-  
-  private class SchemaSimilarity extends PerFieldSimilarityWrapper {
-    private Similarity defaultSimilarity;
-
-    public SchemaSimilarity(Similarity defaultSimilarity) {
-      this.defaultSimilarity = defaultSimilarity;
-    }
-
-    @Override
-    public Similarity get(String name) {
-      FieldType fieldType = core.getLatestSchema().getFieldTypeNoEx(name);
-      if (fieldType == null) {
-        return defaultSimilarity;
-      } else {
-        Similarity similarity = fieldType.getSimilarity();
-        return similarity == null ? defaultSimilarity : similarity;
-      }
-    }
-
-    @Override
-    public String toString() {
-      return "SchemaSimilarity. Default: " + ((get("") == null) ? "null" : get("").toString());
-    }
   }
 }

@@ -1,3 +1,7 @@
+package org.apache.solr.security;
+
+import java.lang.invoke.MethodHandles;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,20 +18,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.security;
 
-import java.lang.invoke.MethodHandles;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Predicate;
 
+import org.apache.commons.io.Charsets;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.util.EntityUtils;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.solr.client.solrj.impl.HttpClientUtil;
 import org.apache.solr.cloud.AbstractFullDistribZkTestBase;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.ModifiableSolrParams;
@@ -48,7 +48,7 @@ public class TestAuthorizationFramework extends AbstractFullDistribZkTestBase {
     try (ZkStateReader zkStateReader = new ZkStateReader(zkServer.getZkAddress(),
         TIMEOUT, TIMEOUT)) {
       zkStateReader.getZkClient().create(ZkStateReader.SOLR_SECURITY_CONF_PATH,
-          "{\"authorization\":{\"class\":\"org.apache.solr.security.MockAuthorizationPlugin\"}}".getBytes(StandardCharsets.UTF_8),
+          "{\"authorization\":{\"class\":\"org.apache.solr.security.MockAuthorizationPlugin\"}}".getBytes(Charsets.UTF_8),
           CreateMode.PERSISTENT, true);
     }
   }
@@ -58,27 +58,22 @@ public class TestAuthorizationFramework extends AbstractFullDistribZkTestBase {
   public void authorizationFrameworkTest() throws Exception {
     MockAuthorizationPlugin.denyUsers.add("user1");
     MockAuthorizationPlugin.denyUsers.add("user1");
+    waitForThingsToLevelOut(10);
+    String baseUrl = jettys.get(0).getBaseUrl().toString();
+    verifySecurityStatus(cloudClient.getLbClient().getHttpClient(), baseUrl + "/admin/authorization", "authorization/class", MockAuthorizationPlugin.class.getName(), 20);
+    log.info("Starting test");
+    ModifiableSolrParams params = new ModifiableSolrParams();
+    params.add("q", "*:*");
+    // This should work fine.
+    cloudClient.query(params);
 
+    // This user is blacklisted in the mock. The request should return a 403.
+    params.add("uname", "user1");
     try {
-      waitForThingsToLevelOut(10);
-      String baseUrl = jettys.get(0).getBaseUrl().toString();
-      verifySecurityStatus(cloudClient.getLbClient().getHttpClient(), baseUrl + "/admin/authorization", "authorization/class", MockAuthorizationPlugin.class.getName(), 20);
-      log.info("Starting test");
-      ModifiableSolrParams params = new ModifiableSolrParams();
-      params.add("q", "*:*");
-      // This should work fine.
       cloudClient.query(params);
-      MockAuthorizationPlugin.protectedResources.add("/select");
-
-      // This user is blacklisted in the mock. The request should return a 403.
-      params.add("uname", "user1");
-      expectThrows(Exception.class, () -> cloudClient.query(params));
-      log.info("Ending test");
-    } finally {
-      MockAuthorizationPlugin.denyUsers.clear();
-      MockAuthorizationPlugin.protectedResources.clear();
-
-    }
+      fail("This should have failed");
+    } catch (Exception e) {}
+    log.info("Ending test");
   }
 
   @Override
@@ -94,7 +89,7 @@ public class TestAuthorizationFramework extends AbstractFullDistribZkTestBase {
     List<String> hierarchy = StrUtils.splitSmart(objPath, '/');
     for (int i = 0; i < count; i++) {
       HttpGet get = new HttpGet(url);
-      s = EntityUtils.toString(cl.execute(get, HttpClientUtil.createNewHttpClientRequestContext()).getEntity());
+      s = EntityUtils.toString(cl.execute(get).getEntity());
       Map m = (Map) Utils.fromJSONString(s);
 
       Object actual = Utils.getObjectByPath(m, true, hierarchy);

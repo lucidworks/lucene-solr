@@ -1,10 +1,11 @@
+package org.apache.lucene.misc;
+
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright 2005 The Apache Software Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,14 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.misc;
 
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
-import org.apache.lucene.store.HardlinkCopyDirectoryWrapper;
 import org.apache.lucene.util.SuppressForbidden;
 
 import java.io.IOException;
@@ -39,12 +38,10 @@ public class IndexMergeTool {
       System.err.println("Usage: IndexMergeTool <mergedIndex> <index1> <index2> [index3] ...");
       System.exit(1);
     }
+    FSDirectory mergedIndex = FSDirectory.open(Paths.get(args[0]));
 
-    // Try to use hardlinks to source segments, if possible.
-    Directory mergedIndex = new HardlinkCopyDirectoryWrapper(FSDirectory.open(Paths.get(args[0])));
-
-    IndexWriter writer = new IndexWriter(mergedIndex, 
-        new IndexWriterConfig(null).setOpenMode(OpenMode.CREATE));
+    IndexWriter writer = new IndexWriter(mergedIndex, new IndexWriterConfig(null)
+        .setOpenMode(OpenMode.CREATE));
 
     Directory[] indexes = new Directory[args.length - 1];
     for (int i = 1; i < args.length; i++) {

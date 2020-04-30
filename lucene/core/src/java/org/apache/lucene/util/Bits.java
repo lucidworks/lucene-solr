@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 /**
  * Interface for Bitset-like structures.
  * @lucene.experimental
  */
 
-public interface  Bits {
+public interface Bits {
   /** 
    * Returns the value of the bit with the specified <code>index</code>.
    * @param index index, should be non-negative and &lt; {@link #length()}.
@@ -30,20 +30,20 @@ public interface  Bits {
    *        by this interface, <b>just don't do it!</b>
    * @return <code>true</code> if the bit is set, <code>false</code> otherwise.
    */
-  boolean get(int index);
+  public boolean get(int index);
   
   /** Returns the number of bits in this set */
-  int length();
+  public int length();
 
-  Bits[] EMPTY_ARRAY = new Bits[0];
+  public static final Bits[] EMPTY_ARRAY = new Bits[0];
   
   /**
    * Bits impl of the specified length with all bits set. 
    */
-  class MatchAllBits implements Bits {
+  public static class MatchAllBits implements Bits {
     final int len;
     
-    public MatchAllBits(int len) {
+    public MatchAllBits( int len ) {
       this.len = len;
     }
 
@@ -61,10 +61,10 @@ public interface  Bits {
   /**
    * Bits impl of the specified length with no bits set. 
    */
-  class MatchNoBits implements Bits {
+  public static class MatchNoBits implements Bits {
     final int len;
     
-    public MatchNoBits(int len) {
+    public MatchNoBits( int len ) {
       this.len = len;
     }
 

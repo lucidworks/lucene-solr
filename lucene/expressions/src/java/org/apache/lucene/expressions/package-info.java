@@ -25,12 +25,11 @@
  * 
  * <p>
  * {@link org.apache.lucene.expressions.Bindings} - abstraction for binding external variables
- * to a way to get a value for those variables for a particular document (DoubleValuesSource).
+ * to a way to get a value for those variables for a particular document (ValueSource).
  * </p>
  * 
  * <p>
- * {@link org.apache.lucene.expressions.SimpleBindings} - default implementation of bindings which
- * provide easy ways to bind sort fields and other expressions to external variables
+ * {@link org.apache.lucene.expressions.SimpleBindings} - default implementation of bindings which provide easy ways to bind sort fields and other expressions to external variables
  * </p>
  */
 package org.apache.lucene.expressions;

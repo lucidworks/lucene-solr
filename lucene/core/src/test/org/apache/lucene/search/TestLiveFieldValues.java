@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -30,7 +30,7 @@ import java.util.concurrent.CountDownLatch;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.StoredField;
+import org.apache.lucene.document.IntField;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -48,7 +48,7 @@ public class TestLiveFieldValues extends LuceneTestCase {
 
     final IndexWriter w = new IndexWriter(dir, iwc);
 
-    final SearcherManager mgr = new SearcherManager(w, new SearcherFactory() {
+    final SearcherManager mgr = new SearcherManager(w, true, new SearcherFactory() {
         @Override
         public IndexSearcher newSearcher(IndexReader r, IndexReader previous) {
           return new IndexSearcher(r);
@@ -62,8 +62,8 @@ public class TestLiveFieldValues extends LuceneTestCase {
         protected Integer lookupFromSearcher(IndexSearcher s, String id) throws IOException {
           TermQuery tq = new TermQuery(new Term("id", id));
           TopDocs hits = s.search(tq, 1);
-          assertTrue(hits.totalHits.value <= 1);
-          if (hits.totalHits.value == 0) {
+          assertTrue(hits.totalHits <= 1);
+          if (hits.totalHits == 0) {
             return null;
           } else {
             Document doc = s.doc(hits.scoreDocs[0].doc);
@@ -108,7 +108,7 @@ public class TestLiveFieldValues extends LuceneTestCase {
                   String id = String.format(Locale.ROOT, "%d_%04x", threadID, threadRandom.nextInt(idCount));
                   Integer field = threadRandom.nextInt(Integer.MAX_VALUE);
                   doc.add(newStringField("id", new BytesRef(id), Field.Store.YES));
-                  doc.add(new StoredField("field", field.intValue()));
+                  doc.add(new IntField("field", field.intValue(), Field.Store.YES));
                   w.updateDocument(new Term("id", id), doc);
                   rt.add(id, field);
                   if (values.put(id, field) == null) {

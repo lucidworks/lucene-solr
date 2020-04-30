@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.core;
 
+import java.io.Reader;
+import java.io.StringReader;
 
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.en.EnglishAnalyzer;
+import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.util.BaseTokenStreamFactoryTestCase;
+import org.apache.lucene.analysis.util.CharArraySet;
 import org.apache.lucene.analysis.util.ClasspathResourceLoader;
 import org.apache.lucene.analysis.util.ResourceLoader;
+import org.apache.lucene.util.Version;
 
 public class TestStopFilterFactory extends BaseTokenStreamFactoryTestCase {
 
@@ -61,39 +65,68 @@ public class TestStopFilterFactory extends BaseTokenStreamFactoryTestCase {
 
     // defaults
     factory = (StopFilterFactory) tokenFilterFactory("Stop");
-    assertEquals(EnglishAnalyzer.ENGLISH_STOP_WORDS_SET, factory.getStopWords());
+    assertEquals(StopAnalyzer.ENGLISH_STOP_WORDS_SET, factory.getStopWords());
     assertEquals(false, factory.isIgnoreCase());
   }
   
   /** Test that bogus arguments result in exception */
   public void testBogusArguments() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       tokenFilterFactory("Stop", "bogusArg", "bogusValue");
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
   }
 
   /** Test that bogus arguments result in exception */
   public void testBogusFormats() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       tokenFilterFactory("Stop", 
                          "words", "stop-snowball.txt",
                          "format", "bogus");
-    });
-    String msg = expected.getMessage();
-    assertTrue(msg, msg.contains("Unknown"));
-    assertTrue(msg, msg.contains("format"));
-    assertTrue(msg, msg.contains("bogus"));
-
-    expected = expectThrows(IllegalArgumentException.class, () -> {
+      fail();
+    } catch (IllegalArgumentException expected) {
+      String msg = expected.getMessage();
+      assertTrue(msg, msg.contains("Unknown"));
+      assertTrue(msg, msg.contains("format"));
+      assertTrue(msg, msg.contains("bogus"));
+    }
+    try {
       tokenFilterFactory("Stop", 
                          // implicit default words file
                          "format", "bogus");
       fail();
-    });
-    msg = expected.getMessage();
-    assertTrue(msg, msg.contains("can not be specified"));
-    assertTrue(msg, msg.contains("format"));
-    assertTrue(msg, msg.contains("bogus"));
+    } catch (IllegalArgumentException expected) {
+      String msg = expected.getMessage();
+      assertTrue(msg, msg.contains("can not be specified"));
+      assertTrue(msg, msg.contains("format"));
+      assertTrue(msg, msg.contains("bogus"));
+    }
+  }
+
+  public void test43Backcompat() throws Exception {
+    Reader reader = new StringReader("foo bar");
+    TokenStream stream = whitespaceMockTokenizer(reader);
+    stream = tokenFilterFactory("Stop", Version.LUCENE_4_3_1,
+        "enablePositionIncrements", "false",
+        "words", "stop-2.txt").create(stream);
+    assertTrue(stream instanceof Lucene43StopFilter);
+    assertTokenStreamContents(stream, new String[] {"foo", "bar"}, new int[] {0, 4}, new int[] {3, 7}, new int[] {1, 1});
+
+    try {
+      tokenFilterFactory("Stop", Version.LUCENE_4_4_0, "enablePositionIncrements", "false", "words", "stop-2.txt");
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("enablePositionIncrements=false is not supported"));
+    }
+    tokenFilterFactory("Stop", Version.LUCENE_4_4_0, "enablePositionIncrements", "true", "words", "stop-2.txt");
+
+    try {
+      tokenFilterFactory("Stop", "enablePositionIncrements", "true", "words", "stop-2.txt");
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("not a valid option"));
+    }
   }
 }

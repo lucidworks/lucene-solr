@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.Random;
@@ -104,6 +104,7 @@ public class TestCrash extends LuceneTestCase {
     // running / store files could be open when we crash:
     dir.setAssertNoUnrefencedFilesOnClose(false);
 
+    dir.setPreventDoubleWrite(false);
     if (VERBOSE) {
       System.out.println("TEST: now crash");
     }
@@ -135,7 +136,7 @@ public class TestCrash extends LuceneTestCase {
 
     writer.close();
     writer = initIndex(random(), dir, false, true);
-    assertEquals(314, writer.getDocStats().maxDoc);
+    assertEquals(314, writer.maxDoc());
     crash(writer);
 
     /*

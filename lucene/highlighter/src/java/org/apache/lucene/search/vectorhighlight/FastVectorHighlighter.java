@@ -1,3 +1,5 @@
+package org.apache.lucene.search.vectorhighlight;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.vectorhighlight;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -31,8 +32,8 @@ import org.apache.lucene.search.highlight.Encoder;
 public class FastVectorHighlighter {
   public static final boolean DEFAULT_PHRASE_HIGHLIGHT = true;
   public static final boolean DEFAULT_FIELD_MATCH = true;
-  protected final boolean phraseHighlight;
-  protected final boolean fieldMatch;
+  private final boolean phraseHighlight;
+  private final boolean fieldMatch;
   private final FragListBuilder fragListBuilder;
   private final FragmentsBuilder fragmentsBuilder;
   private int phraseLimit = Integer.MAX_VALUE;
@@ -80,7 +81,7 @@ public class FastVectorHighlighter {
     // TODO: should we deprecate this? 
     // because if there is no reader, then we cannot rewrite MTQ.
     try {
-      return getFieldQuery(query, null);
+      return new FieldQuery( query, null, phraseHighlight, fieldMatch );
     } catch (IOException e) {
       // should never be thrown when reader is null
       throw new RuntimeException (e);

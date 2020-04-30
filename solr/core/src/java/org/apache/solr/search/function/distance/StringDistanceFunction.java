@@ -1,3 +1,5 @@
+package org.apache.solr.search.function.distance;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.function.distance;
 
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionValues;
@@ -49,7 +50,7 @@ public class StringDistanceFunction extends ValueSource {
     return new FloatDocValues(this) {
 
       @Override
-      public float floatVal(int doc) throws IOException {
+      public float floatVal(int doc) {
         String s1 = str1DV.strVal(doc);
         String s2 = str2DV.strVal(doc);
         if (null == s1 || null == s2) {
@@ -60,12 +61,12 @@ public class StringDistanceFunction extends ValueSource {
       }
 
       @Override
-      public boolean exists(int doc) throws IOException {
+      public boolean exists(int doc) {
         return str1DV.exists(doc) && str2DV.exists(doc);
       }
 
       @Override
-      public String toString(int doc) throws IOException {
+      public String toString(int doc) {
         StringBuilder sb = new StringBuilder();
         sb.append("strdist").append('(');
         sb.append(str1DV.toString(doc)).append(',').append(str2DV.toString(doc))

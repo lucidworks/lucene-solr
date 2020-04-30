@@ -1,3 +1,5 @@
+package org.apache.solr.update;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update;
 
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.util.TestUtil;
+import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.SolrTestCaseJ4;
 
 import java.util.Locale;

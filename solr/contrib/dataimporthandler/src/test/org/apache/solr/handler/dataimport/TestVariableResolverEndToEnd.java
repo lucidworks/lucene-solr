@@ -1,3 +1,19 @@
+package org.apache.solr.handler.dataimport;
+
+import java.lang.invoke.MethodHandles;
+import java.sql.Connection;
+import java.sql.Statement;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import junit.framework.Assert;
+
+import org.apache.solr.request.SolrQueryRequest;
+import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,21 +30,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.dataimport;
-
-import java.lang.invoke.MethodHandles;
-import java.sql.Connection;
-import java.sql.Statement;
-import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import junit.framework.Assert;
-
-import org.apache.solr.request.SolrQueryRequest;
-import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class TestVariableResolverEndToEnd  extends AbstractDIHJdbcTestCase {
 
@@ -63,7 +64,7 @@ public class TestVariableResolverEndToEnd  extends AbstractDIHJdbcTestCase {
   
   @Override
   protected String generateConfig() {
-    String thirdLocaleParam = random().nextBoolean() ? "" : (", '" + Locale.getDefault().toLanguageTag() + "'");
+    String thirdLocaleParam = random().nextBoolean() ? "" : (", '" + Locale.getDefault() + "'");
     StringBuilder sb = new StringBuilder();
     sb.append("<dataConfig> \n");
     sb.append("<dataSource name=\"hsqldb\" driver=\"${dataimporter.request.dots.in.hsqldb.driver}\" url=\"jdbc:hsqldb:mem:.\" /> \n");
@@ -73,14 +74,14 @@ public class TestVariableResolverEndToEnd  extends AbstractDIHJdbcTestCase {
         "select " +
         " 1 as id, " +
         " 'SELECT' as SELECT_KEYWORD, " +
-        " {ts '2017-02-18 12:34:56'} as FIRST_TS " +
+        " CURRENT_TIMESTAMP as FIRST_TS " +
         "from DUAL \" >\n");
     sb.append("  <field column=\"SELECT_KEYWORD\" name=\"select_keyword_s\" /> \n");
     sb.append("  <entity name=\"SECOND\" processor=\"SqlEntityProcessor\" dataSource=\"hsqldb\" transformer=\"TemplateTransformer\" ");
     sb.append("   query=\"" +
         "${dataimporter.functions.encodeUrl(FIRST.SELECT_KEYWORD)} " +
         " 1 as SORT, " +
-        " {ts '2017-02-18 12:34:56'} as SECOND_TS, " +
+        " CURRENT_TIMESTAMP as SECOND_TS, " +
         " '${dataimporter.functions.formatDate(FIRST.FIRST_TS, 'yyyy'" + thirdLocaleParam + ")}' as SECOND1_S,  " +
         " 'PORK' AS MEAT, " +
         " 'GRILL' AS METHOD, " +
@@ -91,7 +92,7 @@ public class TestVariableResolverEndToEnd  extends AbstractDIHJdbcTestCase {
         "UNION " +        
         "${dataimporter.functions.encodeUrl(FIRST.SELECT_KEYWORD)} " +
         " 2 as SORT, " +
-        " {ts '2017-02-18 12:34:56'} as SECOND_TS, " +
+        " CURRENT_TIMESTAMP as SECOND_TS, " +
         " '${dataimporter.functions.formatDate(FIRST.FIRST_TS, 'yyyy'" + thirdLocaleParam + ")}' as SECOND1_S,  " +
         " 'FISH' AS MEAT, " +
         " 'FRY' AS METHOD, " +
@@ -112,7 +113,7 @@ public class TestVariableResolverEndToEnd  extends AbstractDIHJdbcTestCase {
     sb.append("</document> \n");
     sb.append("</dataConfig> \n");
     String config = sb.toString();
-    log.info(config); 
+    log.debug(config); 
     return config;
   }
   @Override

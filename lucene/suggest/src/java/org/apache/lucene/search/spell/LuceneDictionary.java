@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spell;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spell;
 
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.MultiTerms;
 import org.apache.lucene.search.suggest.InputIterator;
+import org.apache.lucene.util.BytesRefIterator;
 import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.MultiFields;
 
 import java.io.*;
 
@@ -42,7 +44,7 @@ public class LuceneDictionary implements Dictionary {
 
   @Override
   public final InputIterator getEntryIterator() throws IOException {
-    final Terms terms = MultiTerms.getTerms(reader, field);
+    final Terms terms = MultiFields.getTerms(reader, field);
     if (terms != null) {
       return new InputIterator.InputIteratorWrapper(terms.iterator());
     } else {

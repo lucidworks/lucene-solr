@@ -1,3 +1,5 @@
+package org.apache.solr.cloud.hdfs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud.hdfs;
+
+import java.io.IOException;
 
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.lucene.util.LuceneTestCase.Slow;
@@ -41,15 +44,14 @@ public class HdfsUnloadDistributedZkTest extends UnloadDistributedZkTest {
   
   @AfterClass
   public static void teardownClass() throws Exception {
-    try {
-      HdfsTestUtil.teardownClass(dfsCluster);
-    } finally {
-      dfsCluster = null;
-    }
+    HdfsTestUtil.teardownClass(dfsCluster);
+    dfsCluster = null;
   }
+
   
   @Override
-  protected String getDataDir(String dataDir) {
+  protected String getDataDir(String dataDir) throws IOException {
     return HdfsTestUtil.getDataDir(dfsCluster, dataDir);
   }
+
 }

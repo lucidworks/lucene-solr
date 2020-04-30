@@ -14,37 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.highlight;
 
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.net.URL;
 
-import com.codahale.metrics.Counter;
-import com.codahale.metrics.MetricRegistry;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.core.SolrInfoBean;
-import org.apache.solr.metrics.SolrMetricManager;
-import org.apache.solr.metrics.SolrMetricProducer;
+import org.apache.solr.common.util.SimpleOrderedMap;
+import org.apache.solr.core.SolrInfoMBean;
 
 /**
  * 
  * @since solr 1.3
  */
-public abstract class HighlightingPluginBase implements SolrInfoBean, SolrMetricProducer
+public abstract class HighlightingPluginBase implements SolrInfoMBean
 {
-  protected Counter numRequests;
+  protected long numRequests;
   protected SolrParams defaults;
-  protected Set<String> metricNames = ConcurrentHashMap.newKeySet(1);
-  protected MetricRegistry registry;
-  protected SolrMetricManager metricManager;
-  protected String registryName;
 
   public void init(NamedList args) {
     if( args != null ) {
       Object o = args.get("defaults");
       if (o != null && o instanceof NamedList ) {
-        defaults = ((NamedList) o).toSolrParams();
+        defaults = SolrParams.toSolrParams((NamedList)o);
       }
     }
   }
@@ -58,29 +51,30 @@ public abstract class HighlightingPluginBase implements SolrInfoBean, SolrMetric
 
   @Override
   public abstract String getDescription();
-
+  @Override
+  public String getSource() { return null; }
+  
+  @Override
+  public String getVersion() {
+    return getClass().getPackage().getSpecificationVersion();
+  }
+  
   @Override
   public Category getCategory()
   {
-    return Category.HIGHLIGHTER;
+    return Category.HIGHLIGHTING;
   }
 
   @Override
-  public Set<String> getMetricNames() {
-    return metricNames;
+  public URL[] getDocs() {
+    return null;  // this can be overridden, but not required
   }
 
   @Override
-  public MetricRegistry getMetricRegistry() {
-    return registry;
-  }
-
-  @Override
-  public void initializeMetrics(SolrMetricManager manager, String registryName, String tag, String scope) {
-    this.registryName = registryName;
-    this.metricManager = manager;
-    registry = manager.registry(registryName);
-    numRequests = manager.counter(this, registryName, "requests", getCategory().toString(), scope);
+  public NamedList getStatistics() {
+    NamedList<Long> lst = new SimpleOrderedMap<>();
+    lst.add("requests", numRequests);
+    return lst;
   }
 }
 

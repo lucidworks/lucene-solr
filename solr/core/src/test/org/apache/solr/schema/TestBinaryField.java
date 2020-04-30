@@ -14,8 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.schema;
 
+import com.google.common.base.Charsets;
 import org.apache.commons.io.FileUtils;
 import org.apache.solr.SolrJettyTestBase;
 import org.apache.solr.SolrTestCaseJ4;
@@ -33,7 +35,6 @@ import java.io.File;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.Properties;
@@ -64,13 +65,13 @@ public class TestBinaryField extends SolrJettyTestBase {
     FileUtils.copyFile(new File(src_dir, "solrconfig.snippet.randomindexconfig.xml"), 
                        new File(confDir, "solrconfig.snippet.randomindexconfig.xml"));
 
-    try (Writer w = new OutputStreamWriter(Files.newOutputStream(collDir.toPath().resolve("core.properties")), StandardCharsets.UTF_8)) {
+    try (Writer w = new OutputStreamWriter(Files.newOutputStream(collDir.toPath().resolve("core.properties")), Charsets.UTF_8)) {
       Properties coreProps = new Properties();
       coreProps.put("name", "collection1");
       coreProps.store(w, "");
     }
 
-    createAndStartJetty(homeDir.getAbsolutePath());
+    createJetty(homeDir.getAbsolutePath());
   }
 
 
@@ -105,7 +106,7 @@ public class TestBinaryField extends SolrJettyTestBase {
       assertEquals(3, beans.size());
       for (SolrDocument d : res) {
 
-        Integer id = Integer.parseInt(d.getFieldValue("id").toString());
+        Integer id = (Integer) d.getFieldValue("id");
         byte[] data = (byte[]) d.getFieldValue("data");
         if (id == 1) {
           assertEquals(5, data.length);
@@ -133,7 +134,7 @@ public class TestBinaryField extends SolrJettyTestBase {
 
       }
       for (Bean d : beans) {
-        Integer id = Integer.parseInt(d.id);
+        Integer id = d.id;
         byte[] data = d.data;
         if (id == 1) {
           assertEquals(5, data.length);
@@ -165,7 +166,7 @@ public class TestBinaryField extends SolrJettyTestBase {
   }
   public static class Bean{
     @Field
-    String id;
+    int id;
     @Field
     byte [] data;
   }

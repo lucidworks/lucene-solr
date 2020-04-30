@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 /*
 This file was partially derived from the
 original CIIR University of Massachusetts Amherst version of KStemmer.java (license for
@@ -55,7 +56,7 @@ the original shown below)
  */
 package org.apache.lucene.analysis.en;
 
-import org.apache.lucene.analysis.CharArrayMap;
+import org.apache.lucene.analysis.util.CharArrayMap;
 import org.apache.lucene.analysis.util.OpenStringBuilder;
 /**
  * <p>Title: Kstemmer</p>

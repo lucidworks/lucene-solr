@@ -1,3 +1,5 @@
+package org.apache.lucene.search.grouping;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.grouping;
 
 import java.io.IOException;
 
@@ -24,8 +25,6 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.FieldComparator;
 import org.apache.lucene.search.LeafCollector;
 import org.apache.lucene.search.LeafFieldComparator;
-import org.apache.lucene.search.Scorable;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.SimpleCollector;
 import org.apache.lucene.search.Sort;
@@ -34,7 +33,6 @@ import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.TopDocsCollector;
 import org.apache.lucene.search.TopFieldCollector;
 import org.apache.lucene.search.TopScoreDocCollector;
-import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.PriorityQueue;
@@ -53,7 +51,7 @@ import org.apache.lucene.util.PriorityQueue;
  *  being that the documents in each group must always be
  *  indexed as a block.  This collector also fills in
  *  TopGroups.totalGroupCount without requiring the separate
- *  {@link org.apache.lucene.search.grouping.AllGroupsCollector}.  However, this collector does
+ *  {@link org.apache.lucene.search.grouping.term.TermAllGroupsCollector}.  However, this collector does
  *  not fill in the groupValue of each group; this field
  *  will always be null.
  *
@@ -94,7 +92,7 @@ public class BlockGroupingCollector extends SimpleCollector {
   private int docBase;
   private int groupEndDocID;
   private DocIdSetIterator lastDocPerGroupBits;
-  private Scorable scorer;
+  private Scorer scorer;
   private final GroupQueue groupQueue;
   private boolean groupCompetes;
 
@@ -138,7 +136,7 @@ public class BlockGroupingCollector extends SimpleCollector {
 
   // Called when we transition to another group; if the
   // group is competitive we insert into the group queue
-  private void processGroup() throws IOException {
+  private void processGroup() {
     totalGroupCount++;
     //System.out.println("    processGroup ord=" + lastGroupOrd + " competes=" + groupCompetes + " count=" + subDocUpto + " groupDoc=" + topGroupDoc);
     if (groupCompetes) {
@@ -219,7 +217,7 @@ public class BlockGroupingCollector extends SimpleCollector {
    *  @param lastDocPerGroup a {@link Weight} that marks the
    *    last document in each group.
    */
-  public BlockGroupingCollector(Sort groupSort, int topNGroups, boolean needsScores, Weight lastDocPerGroup) {
+  public BlockGroupingCollector(Sort groupSort, int topNGroups, boolean needsScores, Weight lastDocPerGroup) throws IOException {
 
     if (topNGroups < 1) {
       throw new IllegalArgumentException("topNGroups must be >= 1 (got " + topNGroups + ")");
@@ -233,7 +231,8 @@ public class BlockGroupingCollector extends SimpleCollector {
 
     this.needsScores = needsScores;
     this.lastDocPerGroup = lastDocPerGroup;
-
+    // TODO: allow null groupSort to mean "by relevance",
+    // and specialize it?
     this.groupSort = groupSort;
     
     this.topNGroups = topNGroups;
@@ -266,14 +265,17 @@ public class BlockGroupingCollector extends SimpleCollector {
    *  DocValues, etc.)
    *
    *  @param withinGroupSort The {@link Sort} used to sort
-   *    documents within each group.
+   *    documents within each group.  Passing null is
+   *    allowed, to sort by relevance.
    *  @param groupOffset Which group to start from
    *  @param withinGroupOffset Which document to start from
    *    within each group
    *  @param maxDocsPerGroup How many top documents to keep
    *     within each group.
+   *  @param fillSortFields If true then the Comparable
+   *     values for the sort fields will be set
    */
-  public TopGroups<?> getTopGroups(Sort withinGroupSort, int groupOffset, int withinGroupOffset, int maxDocsPerGroup) throws IOException {
+  public TopGroups<?> getTopGroups(Sort withinGroupSort, int groupOffset, int withinGroupOffset, int maxDocsPerGroup, boolean fillSortFields) throws IOException {
 
     //if (queueFull) {
     //System.out.println("getTopGroups groupOffset=" + groupOffset + " topNGroups=" + topNGroups);
@@ -286,7 +288,7 @@ public class BlockGroupingCollector extends SimpleCollector {
     }
     int totalGroupedHitCount = 0;
 
-    final ScoreAndDoc fakeScorer = new ScoreAndDoc();
+    final FakeScorer fakeScorer = new FakeScorer();
 
     float maxScore = Float.MIN_VALUE;
 
@@ -298,18 +300,17 @@ public class BlockGroupingCollector extends SimpleCollector {
       // At this point we hold all docs w/ in each group,
       // unsorted; we now sort them:
       final TopDocsCollector<?> collector;
-      if (withinGroupSort.equals(Sort.RELEVANCE)) {
+      if (withinGroupSort == null) {
         // Sort by score
         if (!needsScores) {
           throw new IllegalArgumentException("cannot sort by relevance within group: needsScores=false");
         }
-        collector = TopScoreDocCollector.create(maxDocsPerGroup, Integer.MAX_VALUE);
+        collector = TopScoreDocCollector.create(maxDocsPerGroup);
       } else {
         // Sort by fields
-        collector = TopFieldCollector.create(withinGroupSort, maxDocsPerGroup, Integer.MAX_VALUE); // TODO: disable exact counts?
+        collector = TopFieldCollector.create(withinGroupSort, maxDocsPerGroup, fillSortFields, needsScores, needsScores);
       }
 
-      float groupMaxScore = needsScores ? Float.NEGATIVE_INFINITY : Float.NaN;
       LeafCollector leafCollector = collector.getLeafCollector(og.readerContext);
       leafCollector.setScorer(fakeScorer);
       for(int docIDX=0;docIDX<og.count;docIDX++) {
@@ -317,7 +318,6 @@ public class BlockGroupingCollector extends SimpleCollector {
         fakeScorer.doc = doc;
         if (needsScores) {
           fakeScorer.score = og.scores[docIDX];
-          groupMaxScore = Math.max(groupMaxScore, fakeScorer.score);
         }
         leafCollector.collect(doc);
       }
@@ -325,9 +325,13 @@ public class BlockGroupingCollector extends SimpleCollector {
 
       final Object[] groupSortValues;
 
-      groupSortValues = new Comparable<?>[comparators.length];
-      for(int sortFieldIDX=0;sortFieldIDX<comparators.length;sortFieldIDX++) {
-        groupSortValues[sortFieldIDX] = comparators[sortFieldIDX].value(og.comparatorSlot);
+      if (fillSortFields) {
+        groupSortValues = new Comparable<?>[comparators.length];
+        for(int sortFieldIDX=0;sortFieldIDX<comparators.length;sortFieldIDX++) {
+          groupSortValues[sortFieldIDX] = comparators[sortFieldIDX].value(og.comparatorSlot);
+        }
+      } else {
+        groupSortValues = null;
       }
 
       final TopDocs topDocs = collector.topDocs(withinGroupOffset, maxDocsPerGroup);
@@ -335,12 +339,12 @@ public class BlockGroupingCollector extends SimpleCollector {
       // TODO: we could aggregate scores across children
       // by Sum/Avg instead of passing NaN:
       groups[downTo] = new GroupDocs<>(Float.NaN,
-                                             groupMaxScore,
-                                             new TotalHits(og.count, TotalHits.Relation.EQUAL_TO),
+                                             topDocs.getMaxScore(),
+                                             og.count,
                                              topDocs.scoreDocs,
                                              null,
                                              groupSortValues);
-      maxScore = Math.max(maxScore, groupMaxScore);
+      maxScore = Math.max(maxScore, topDocs.getMaxScore());
     }
 
     /*
@@ -352,13 +356,13 @@ public class BlockGroupingCollector extends SimpleCollector {
     */
 
     return new TopGroups<>(new TopGroups<>(groupSort.getSort(),
-                                       withinGroupSort.getSort(),
+                                       withinGroupSort == null ? null : withinGroupSort.getSort(),
                                        totalHitCount, totalGroupedHitCount, groups, maxScore),
                          totalGroupCount);
   }
 
   @Override
-  public void setScorer(Scorable scorer) throws IOException {
+  public void setScorer(Scorer scorer) throws IOException {
     this.scorer = scorer;
     for (LeafFieldComparator comparator : leafComparators) {
       comparator.setScorer(scorer);
@@ -476,12 +480,7 @@ public class BlockGroupingCollector extends SimpleCollector {
     subDocUpto = 0;
     docBase = readerContext.docBase;
     //System.out.println("setNextReader base=" + docBase + " r=" + readerContext.reader);
-    Scorer s = lastDocPerGroup.scorer(readerContext);
-    if (s == null) {
-      lastDocPerGroupBits = null;
-    } else {
-      lastDocPerGroupBits = s.iterator();
-    }
+    lastDocPerGroupBits = lastDocPerGroup.scorer(readerContext);
     groupEndDocID = -1;
 
     currentReaderContext = readerContext;
@@ -491,24 +490,7 @@ public class BlockGroupingCollector extends SimpleCollector {
   }
 
   @Override
-  public ScoreMode scoreMode() {
-    return needsScores ? ScoreMode.COMPLETE : ScoreMode.COMPLETE_NO_SCORES;
-  }
-
-  private static class ScoreAndDoc extends Scorable {
-
-    float score;
-    int doc = -1;
-
-    @Override
-    public int docID() {
-      return doc;
-    }
-
-    @Override
-    public float score() {
-      return score;
-    }
-
+  public boolean needsScores() {
+    return needsScores;
   }
 }

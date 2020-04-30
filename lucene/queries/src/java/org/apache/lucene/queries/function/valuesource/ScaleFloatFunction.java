@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.queries.function.valuesource;
 
 import org.apache.lucene.index.LeafReaderContext;
@@ -115,15 +116,15 @@ public class ScaleFloatFunction extends ValueSource {
 
     return new FloatDocValues(this) {
       @Override
-      public boolean exists(int doc) throws IOException {
+      public boolean exists(int doc) {
         return vals.exists(doc);
       }
       @Override
-      public float floatVal(int doc) throws IOException {
+      public float floatVal(int doc) {
         return (vals.floatVal(doc) - minSource) * scale + min;
       }
       @Override
-      public String toString(int doc) throws IOException {
+      public String toString(int doc) {
         return "scale(" + vals.toString(doc) + ",toMin=" + min + ",toMax=" + max
                 + ",fromMin=" + minSource
                 + ",fromMax=" + maxSource

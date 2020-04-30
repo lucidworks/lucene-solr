@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.no;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.no;
-
 
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.no.NorwegianMinimalStemFilter;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 import static org.apache.lucene.analysis.no.NorwegianLightStemmer.BOKMAAL;
@@ -35,13 +36,8 @@ import static org.apache.lucene.analysis.no.NorwegianLightStemmer.NYNORSK;
  *     &lt;filter class="solr.NorwegianMinimalStemFilterFactory" variant="nb"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- * @since 3.6.0
- * @lucene.spi {@value #NAME}
  */
 public class NorwegianMinimalStemFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "norwegianMinimalStem";
   
   private final int flags;
   

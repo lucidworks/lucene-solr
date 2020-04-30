@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.cranky;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.cranky;
 
 import java.io.IOException;
 import java.util.Random;
 
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.FieldsProducer;
-import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.SegmentReadState;
@@ -62,11 +62,11 @@ class CrankyPostingsFormat extends PostingsFormat {
     }
     
     @Override
-    public void write(Fields fields, NormsProducer norms) throws IOException {
+    public void write(Fields fields) throws IOException {
       if (random.nextInt(100) == 0) {
         throw new IOException("Fake IOException from FieldsConsumer.write()");
       }  
-      delegate.write(fields, norms);
+      delegate.write(fields);
     }
 
     @Override

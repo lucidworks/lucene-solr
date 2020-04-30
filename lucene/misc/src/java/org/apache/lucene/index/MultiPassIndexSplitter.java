@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -29,6 +30,7 @@ import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.SuppressForbidden;
+import org.apache.lucene.util.Version;
 
 /**
  * This tool splits input index into multiple equal parts. The method employed
@@ -206,11 +208,6 @@ public class MultiPassIndexSplitter {
     @Override
     protected void doClose() {}
 
-    @Override
-    public CacheHelper getReaderCacheHelper() {
-      return null;
-    }
-
     // no need to override numDocs/hasDeletions,
     // as we pass the subreaders directly to IW.addIndexes().
   }
@@ -251,16 +248,6 @@ public class MultiPassIndexSplitter {
     @Override
     public Bits getLiveDocs() {
       return liveDocs;
-    }
-
-    @Override
-    public CacheHelper getCoreCacheHelper() {
-      return in.getCoreCacheHelper();
-    }
-
-    @Override
-    public CacheHelper getReaderCacheHelper() {
-      return null;
     }
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.solr.client.solrj.io.stream.expr;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.io.stream.expr;
 
-import org.apache.solr.SolrTestCase;
-
+import org.apache.lucene.util.LuceneTestCase;
+import org.apache.solr.client.solrj.io.stream.expr.StreamExpression;
+import org.apache.solr.client.solrj.io.stream.expr.StreamExpressionNamedParameter;
+import org.apache.solr.client.solrj.io.stream.expr.StreamExpressionParser;
+import org.apache.solr.client.solrj.io.stream.expr.StreamExpressionValue;
 import org.junit.Test;
 
 /**
  **/
 
-public class StreamExpressionParserTest extends SolrTestCase {
+public class StreamExpressionParserTest extends LuceneTestCase {
 
   public StreamExpressionParserTest() {
     super();

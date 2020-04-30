@@ -17,16 +17,6 @@
 package org.apache.solr.search;
 
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -39,6 +29,16 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.store.Directory;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static org.apache.solr.core.SolrCore.verbose;
 
@@ -55,7 +55,7 @@ public class TestStressLucene extends TestRTGBase {
     final int ndocs = 5 + (random().nextBoolean() ? random().nextInt(25) : random().nextInt(200));
     int nWriteThreads = 5 + random().nextInt(25);
 
-    final int maxConcurrentCommits = nWriteThreads;
+    final int maxConcurrentCommits = nWriteThreads;   // number of committers at a time... it should be <= maxWarmingSearchers
 
     final AtomicLong operations = new AtomicLong(100000);  // number of query operations to perform in total
     int nReadThreads = 5 + random().nextInt(25);
@@ -109,7 +109,7 @@ public class TestStressLucene extends TestRTGBase {
     // reader = IndexReader.open(dir);
     // make this reader an NRT reader from the start to avoid the first non-writer openIfChanged
     // to only opening at the last commit point.
-    reader = DirectoryReader.open(writer.w);
+    reader = DirectoryReader.open(writer.w, true);
 
     for (int i=0; i<nWriteThreads; i++) {
       Thread thread = new Thread("WRITER"+i) {
@@ -226,7 +226,7 @@ public class TestStressLucene extends TestRTGBase {
                   if (tombstones) {
                     Document d = new Document();
                     d.add(new Field("id","-"+Integer.toString(id), idFt));
-                    d.add(new Field(FIELD, Long.toString(nextVal), ft2));
+                    d.add(new Field(field, Long.toString(nextVal), ft2));
                     verbose("adding tombstone for id",id,"val=",nextVal);
                     writer.updateDocument(new Term("id", "-"+Integer.toString(id)), d);
                   }
@@ -243,7 +243,7 @@ public class TestStressLucene extends TestRTGBase {
                   if (tombstones) {
                     Document d = new Document();
                     d.add(new Field("id","-"+Integer.toString(id), idFt));
-                    d.add(new Field(FIELD, Long.toString(nextVal), ft2));
+                    d.add(new Field(field, Long.toString(nextVal), ft2));
                     verbose("adding tombstone for id",id,"val=",nextVal);
                     writer.updateDocument(new Term("id", "-"+Integer.toString(id)), d);
                   }
@@ -258,7 +258,7 @@ public class TestStressLucene extends TestRTGBase {
                   // assertU(adoc("id",Integer.toString(id), field, Long.toString(nextVal)));
                   Document d = new Document();
                   d.add(new Field("id",Integer.toString(id), idFt));
-                  d.add(new Field(FIELD, Long.toString(nextVal), ft2));
+                  d.add(new Field(field, Long.toString(nextVal), ft2));
                   verbose("adding id",id,"val=",nextVal);
                   writer.updateDocument(new Term("id", Integer.toString(id)), d);
                   if (tombstones) {
@@ -337,7 +337,7 @@ public class TestStressLucene extends TestRTGBase {
                 }
                 assertTrue(docid >= 0);   // we should have found the document, or its tombstone
                 Document doc = r.document(docid);
-                long foundVal = Long.parseLong(doc.get(FIELD));
+                long foundVal = Long.parseLong(doc.get(field));
                 if (foundVal < Math.abs(val)) {
                   verbose("ERROR: id",id,"model_val=",val," foundVal=",foundVal,"reader=",reader);
                 }

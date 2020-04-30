@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -22,7 +23,6 @@ import java.nio.file.Path;
 /**
  * Tests RAFDirectory
  */
-// See: https://issues.apache.org/jira/browse/SOLR-12028 Tests cannot remove files on Windows machines occasionally
 public class TestRAFDirectory extends BaseDirectoryTestCase {
 
   @Override

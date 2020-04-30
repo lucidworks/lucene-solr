@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
 
 import java.io.IOException;
 import java.util.Random;
@@ -22,29 +23,27 @@ import java.util.Random;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.util.Bits;
 
-import com.carrotsearch.randomizedtesting.generators.RandomNumbers;
+import com.carrotsearch.randomizedtesting.generators.RandomInts;
 
 /** Wraps a Scorer with additional checks */
 final class AssertingBulkScorer extends BulkScorer {
 
-  public static BulkScorer wrap(Random random, BulkScorer other, int maxDoc, ScoreMode scoreMode) {
+  public static BulkScorer wrap(Random random, BulkScorer other, int maxDoc) {
     if (other == null || other instanceof AssertingBulkScorer) {
       return other;
     }
-    return new AssertingBulkScorer(random, other, maxDoc, scoreMode);
+    return new AssertingBulkScorer(random, other, maxDoc);
   }
 
   final Random random;
   final BulkScorer in;
   final int maxDoc;
-  final ScoreMode scoreMode;
   int max = 0;
 
-  private AssertingBulkScorer(Random random, BulkScorer in, int maxDoc, ScoreMode scoreMode) {
+  private AssertingBulkScorer(Random random, BulkScorer in, int maxDoc) {
     this.random = random;
     this.in = in;
     this.maxDoc = maxDoc;
-    this.scoreMode = scoreMode;
   }
 
   public BulkScorer getIn() {
@@ -59,7 +58,7 @@ final class AssertingBulkScorer extends BulkScorer {
   @Override
   public void score(LeafCollector collector, Bits acceptDocs) throws IOException {
     assert max == 0;
-    collector = new AssertingLeafCollector(collector, 0, PostingsEnum.NO_MORE_DOCS);
+    collector = new AssertingLeafCollector(random, collector, 0, PostingsEnum.NO_MORE_DOCS);
     if (random.nextBoolean()) {
       try {
         final int next = score(collector, acceptDocs, 0, PostingsEnum.NO_MORE_DOCS);
@@ -77,14 +76,14 @@ final class AssertingBulkScorer extends BulkScorer {
     assert min >= this.max: "Scoring backward: min=" + min + " while previous max was max=" + this.max;
     assert min <= max : "max must be greater than min, got min=" + min + ", and max=" + max;
     this.max = max;
-    collector = new AssertingLeafCollector(collector, min, max);
+    collector = new AssertingLeafCollector(random, collector, min, max);
     final int next = in.score(collector, acceptDocs, min, max);
     assert next >= max;
     if (max >= maxDoc || next >= maxDoc) {
       assert next == DocIdSetIterator.NO_MORE_DOCS;
       return DocIdSetIterator.NO_MORE_DOCS;
     } else {
-      return RandomNumbers.randomIntBetween(random, max, next);
+      return RandomInts.randomIntBetween(random, max, next);
     }
   }
 

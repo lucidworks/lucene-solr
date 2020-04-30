@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.analyzing;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.analyzing;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.IntsRefBuilder;
 import org.apache.lucene.util.automaton.Automaton;
 import org.apache.lucene.util.automaton.Transition;
@@ -107,7 +109,7 @@ public class FSTUtil {
             newInput.append(t.min);
             queue.add(new Path<>(t.dest, new FST.Arc<T>()
                 .copyFrom(nextArc), fst.outputs
-                .add(path.output, nextArc.output()), newInput));
+                .add(path.output, nextArc.output), newInput));
           }
         } else {
           // TODO: if this transition's TO state is accepting, and
@@ -119,21 +121,21 @@ public class FSTUtil {
           // done in AnalyzingSuggester).
           FST.Arc<T> nextArc = Util.readCeilArc(min, fst, path.fstNode,
               scratchArc, fstReader);
-          while (nextArc != null && nextArc.label() <= max) {
-            assert nextArc.label() <=  max;
-            assert nextArc.label() >= min : nextArc.label() + " "
+          while (nextArc != null && nextArc.label <= max) {
+            assert nextArc.label <=  max;
+            assert nextArc.label >= min : nextArc.label + " "
                 + min;
             final IntsRefBuilder newInput = new IntsRefBuilder();
             newInput.copyInts(currentInput.get());
-            newInput.append(nextArc.label());
+            newInput.append(nextArc.label);
             queue.add(new Path<>(t.dest, new FST.Arc<T>()
                 .copyFrom(nextArc), fst.outputs
-                .add(path.output, nextArc.output()), newInput));
-            final int label = nextArc.label(); // used in assert
+                .add(path.output, nextArc.output), newInput));
+            final int label = nextArc.label; // used in assert
             nextArc = nextArc.isLast() ? null : fst.readNextRealArc(nextArc,
                 fstReader);
-            assert nextArc == null || label < nextArc.label() : "last: " + label
-                + " next: " + nextArc.label();
+            assert nextArc == null || label < nextArc.label : "last: " + label
+                + " next: " + nextArc.label;
           }
         }
       }

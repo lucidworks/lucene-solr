@@ -14,8 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 
@@ -36,9 +38,8 @@ public class DocSlice extends DocSetBase implements DocList {
   final int[] docs;    // a slice of documents (docs 0-100 of the query)
 
   final float[] scores;  // optional score list
-  final long matches;
+  final int matches;
   final float maxScore;
-  final long ramBytesUsed; // cached value
 
   /**
    * Primary constructor for a DocSlice instance.
@@ -49,14 +50,13 @@ public class DocSlice extends DocSetBase implements DocList {
    * @param scores  array of scores that corresponds to docs, may be null
    * @param matches total number of matches for the query
    */
-  public DocSlice(int offset, int len, int[] docs, float[] scores, long matches, float maxScore) {
+  public DocSlice(int offset, int len, int[] docs, float[] scores, int matches, float maxScore) {
     this.offset=offset;
     this.len=len;
     this.docs=docs;
     this.scores=scores;
     this.matches=matches;
     this.maxScore=maxScore;
-    this.ramBytesUsed = BASE_RAM_BYTES_USED + ((long)docs.length << 2) + (scores == null ? 0 : ((long)scores.length<<2)+RamUsageEstimator.NUM_BYTES_ARRAY_HEADER);
   }
 
   @Override
@@ -89,7 +89,7 @@ public class DocSlice extends DocSetBase implements DocList {
   @Override
   public int size()    { return len; }
   @Override
-  public long matches() { return matches; }
+  public int matches() { return matches; }
 
 
   @Override
@@ -167,14 +167,18 @@ public class DocSlice extends DocSetBase implements DocList {
   }
 
   @Override
-  public DocSlice clone() {
-    return (DocSlice) super.clone();
+  protected DocSlice clone() {
+    try {
+      // DocSlice is not currently mutable
+      DocSlice slice = (DocSlice) super.clone();
+    } catch (CloneNotSupportedException e) {}
+    return null;
   }
 
   /** WARNING: this can over-estimate real memory use since backing arrays are shared with other DocSlice instances */
   @Override
   public long ramBytesUsed() {
-    return ramBytesUsed;
+    return BASE_RAM_BYTES_USED + ((long)docs.length << 2) + (scores == null ? 0 : ((long)scores.length<<2)+RamUsageEstimator.NUM_BYTES_ARRAY_HEADER);
   }
 
   @Override

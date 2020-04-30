@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
@@ -32,7 +32,7 @@ import org.apache.lucene.util.LuceneTestCase.SuppressSysoutChecks;
 
 import com.carrotsearch.randomizedtesting.annotations.TimeoutSuite;
 
-@SuppressCodecs({"SimpleText", "Direct"})
+@SuppressCodecs({"SimpleText", "Memory", "Direct"})
 @TimeoutSuite(millis = 80 * TimeUnits.HOUR) // effectively no limit
 // The six hour time was achieved on a Linux 3.13 system with these specs:
 // 3-core AMD at 2.5Ghz, 12 GB RAM, 5GB test heap, 2 test JVMs, 2TB SATA.
@@ -82,12 +82,11 @@ public class Test2BSortedDocValuesFixedSorted extends LuceneTestCase {
     int expectedValue = 0;
     for (LeafReaderContext context : r.leaves()) {
       LeafReader reader = context.reader();
-      BinaryDocValues dv = DocValues.getBinary(reader, "dv");
+      BinaryDocValues dv = reader.getSortedDocValues("dv");
       for (int i = 0; i < reader.maxDoc(); i++) {
-        assertEquals(i, dv.nextDoc());
         bytes[0] = (byte)(expectedValue >> 8);
         bytes[1] = (byte) expectedValue;
-        final BytesRef term = dv.binaryValue();
+        final BytesRef term = dv.get(i);
         assertEquals(data, term);
         expectedValue++;
       }

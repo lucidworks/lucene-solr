@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.pattern;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.pattern;
-
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
@@ -36,15 +36,8 @@ import java.util.regex.Pattern;
  * &lt;/fieldType&gt;</pre>
  *
  * @see PatternReplaceFilter
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
 public class PatternReplaceFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "patternReplace";
-
   final Pattern pattern;
   final String replacement;
   final boolean replaceAll;

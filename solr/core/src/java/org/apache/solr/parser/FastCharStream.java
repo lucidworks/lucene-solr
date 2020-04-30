@@ -1,3 +1,6 @@
+// FastCharStream.java
+package org.apache.solr.parser;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -13,15 +16,15 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *  
  */
-package org.apache.solr.parser;
 
 import java.io.*;
 
 /** An efficient implementation of JavaCC's CharStream interface.  <p>Note that
  * this does not do line-number counting, but instead keeps track of the
  * character position of the token in the input, as required by Lucene's {@link
- * org.apache.lucene.analysis.tokenattributes.OffsetAttribute} API.
+ * org.apache.lucene.analysis.Token} API. 
  * */
 public final class FastCharStream implements CharStream {
   char[] buffer = null;
@@ -69,7 +72,7 @@ public final class FastCharStream implements CharStream {
     int charsRead =          // fill space in buffer
       input.read(buffer, newPosition, buffer.length-newPosition);
     if (charsRead == -1)
-      throw READ_PAST_EOF;
+      throw new IOException("read past eof");
     else
       bufferLength += charsRead;
   }
@@ -79,11 +82,6 @@ public final class FastCharStream implements CharStream {
     tokenStart = bufferPosition;
     return readChar();
   }
-
-  /**
-   * This Exception is used as a signal rather than an exceptional state.
-   */
-  private static final IOException READ_PAST_EOF = new IOException("read past eof");
 
   @Override
   public final void backup(int amount) {
@@ -110,6 +108,14 @@ public final class FastCharStream implements CharStream {
     }
   }
 
+  @Override
+  public final int getColumn() {
+    return bufferStart + bufferPosition;
+  }
+  @Override
+  public final int getLine() {
+    return 1;
+  }
   @Override
   public final int getEndColumn() {
     return bufferStart + bufferPosition;

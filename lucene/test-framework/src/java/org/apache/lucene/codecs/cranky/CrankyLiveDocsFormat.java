@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.cranky;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.cranky;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -25,6 +26,7 @@ import org.apache.lucene.index.SegmentCommitInfo;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.MutableBits;
 
 class CrankyLiveDocsFormat extends LiveDocsFormat {
   final LiveDocsFormat delegate;
@@ -36,12 +38,22 @@ class CrankyLiveDocsFormat extends LiveDocsFormat {
   }
 
   @Override
+  public MutableBits newLiveDocs(int size) throws IOException {
+    return delegate.newLiveDocs(size);
+  }
+
+  @Override
+  public MutableBits newLiveDocs(Bits existing) throws IOException {
+    return delegate.newLiveDocs(existing);
+  }
+
+  @Override
   public Bits readLiveDocs(Directory dir, SegmentCommitInfo info, IOContext context) throws IOException {
     return delegate.readLiveDocs(dir, info, context);
   }
 
   @Override
-  public void writeLiveDocs(Bits bits, Directory dir, SegmentCommitInfo info, int newDelCount, IOContext context) throws IOException {
+  public void writeLiveDocs(MutableBits bits, Directory dir, SegmentCommitInfo info, int newDelCount, IOContext context) throws IOException {
     if (random.nextInt(100) == 0) {
       throw new IOException("Fake IOException from LiveDocsFormat.writeLiveDocs()");
     }

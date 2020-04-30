@@ -1,3 +1,5 @@
+package org.apache.lucene.benchmark.byTask.tasks;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,25 +16,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.tasks;
-
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.HashSet;
 
+import java.util.List;
+import java.util.Set;
+
+import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.benchmark.byTask.PerfRunData;
 import org.apache.lucene.benchmark.byTask.feeds.QueryMaker;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.MultiBits;
+import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.search.Collector;
+import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.search.MultiTermQuery;
+import org.apache.lucene.search.TopFieldCollector;
+import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.TopScoreDocCollector;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.Sort;
-import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.search.TopFieldCollector;
-import org.apache.lucene.search.TopScoreDocCollector;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.Bits;
 
@@ -68,7 +76,7 @@ public abstract class ReadTask extends PerfTask {
     int res = 0;
 
     // open reader or use existing one
-    IndexSearcher searcher = getRunData().getIndexSearcher(); // (will incRef the reader)
+    IndexSearcher searcher = getRunData().getIndexSearcher();
 
     IndexReader reader;
 
@@ -88,7 +96,7 @@ public abstract class ReadTask extends PerfTask {
     // optionally warm and add num docs traversed to count
     if (withWarm()) {
       Document doc = null;
-      Bits liveDocs = MultiBits.getLiveDocs(reader);
+      Bits liveDocs = MultiFields.getLiveDocs(reader);
       for (int m = 0; m < reader.maxDoc(); m++) {
         if (null == liveDocs || liveDocs.get(m)) {
           doc = reader.document(m);
@@ -112,7 +120,8 @@ public abstract class ReadTask extends PerfTask {
             // Weight public again, we can go back to
             // pulling the Weight ourselves:
             TopFieldCollector collector = TopFieldCollector.create(sort, numHits,
-                                                                   withTotalHits() ? Integer.MAX_VALUE : 1);
+                                                                   true, withScore(),
+                                                                   withMaxScore());
             searcher.search(q, collector);
             hits = collector.topDocs();
           } else {
@@ -124,20 +133,46 @@ public abstract class ReadTask extends PerfTask {
           //hits = collector.topDocs();
         }
 
-        if (hits != null) {
-          final String printHitsField = getRunData().getConfig().get("print.hits.field", null);
-          if (printHitsField != null && printHitsField.length() > 0) {
-            System.out.println("totalHits = " + hits.totalHits);
-            System.out.println("maxDoc()  = " + reader.maxDoc());
-            System.out.println("numDocs() = " + reader.numDocs());
-            for(int i=0;i<hits.scoreDocs.length;i++) {
-              final int docID = hits.scoreDocs[i].doc;
-              final Document doc = reader.document(docID);
-              System.out.println("  " + i + ": doc=" + docID + " score=" + hits.scoreDocs[i].score + " " + printHitsField + " =" + doc.get(printHitsField));
+        final String printHitsField = getRunData().getConfig().get("print.hits.field", null);
+        if (hits != null && printHitsField != null && printHitsField.length() > 0) {
+          System.out.println("totalHits = " + hits.totalHits);
+          System.out.println("maxDoc()  = " + reader.maxDoc());
+          System.out.println("numDocs() = " + reader.numDocs());
+          for(int i=0;i<hits.scoreDocs.length;i++) {
+            final int docID = hits.scoreDocs[i].doc;
+            final Document doc = reader.document(docID);
+            System.out.println("  " + i + ": doc=" + docID + " score=" + hits.scoreDocs[i].score + " " + printHitsField + " =" + doc.get(printHitsField));
+          }
+        }
+
+        if (withTraverse()) {
+          final ScoreDoc[] scoreDocs = hits.scoreDocs;
+          int traversalSize = Math.min(scoreDocs.length, traversalSize());
+
+          if (traversalSize > 0) {
+            boolean retrieve = withRetrieve();
+            int numHighlight = Math.min(numToHighlight(), scoreDocs.length);
+            Analyzer analyzer = getRunData().getAnalyzer();
+            BenchmarkHighlighter highlighter = null;
+            if (numHighlight > 0) {
+              highlighter = getBenchmarkHighlighter(q);
+            }
+            for (int m = 0; m < traversalSize; m++) {
+              int id = scoreDocs[m].doc;
+              res++;
+              if (retrieve) {
+                Document document = retrieveDoc(reader, id);
+                res += document != null ? 1 : 0;
+                if (numHighlight > 0 && m < numHighlight) {
+                  Collection<String> fieldsToHighlight = getFieldsToHighlight(document);
+                  for (final String field : fieldsToHighlight) {
+                    String text = document.get(field);
+                    res += highlighter.doHighlight(reader, id, field, document, analyzer, text);
+                  }
+                }
+              }
             }
           }
-
-          res += withTopDocs(searcher, q, hits);
         }
       }
     }
@@ -151,30 +186,8 @@ public abstract class ReadTask extends PerfTask {
     return res;
   }
 
-  protected int withTopDocs(IndexSearcher searcher, Query q, TopDocs hits) throws Exception {
-    IndexReader reader = searcher.getIndexReader();
-    int res = 0;
-    if (withTraverse()) {
-      final ScoreDoc[] scoreDocs = hits.scoreDocs;
-      int traversalSize = Math.min(scoreDocs.length, traversalSize());
-
-      if (traversalSize > 0) {
-        boolean retrieve = withRetrieve();
-        for (int m = 0; m < traversalSize; m++) {
-          int id = scoreDocs[m].doc;
-          res++;
-          if (retrieve) {
-            Document document = retrieveDoc(reader, id);
-            res += document != null ? 1 : 0;
-          }
-        }
-      }
-    }
-    return res;
-  }
-
   protected Collector createCollector() throws Exception {
-    return TopScoreDocCollector.create(numHits(), withTotalHits() ? Integer.MAX_VALUE : 1);
+    return TopScoreDocCollector.create(numHits());
   }
 
 
@@ -207,10 +220,16 @@ public abstract class ReadTask extends PerfTask {
    */
   public abstract boolean withTraverse();
 
-  /** Whether totalHits should be computed (only useful with
+  /** Whether scores should be computed (only useful with
    *  field sort) */
-  public boolean withTotalHits() {
-    return false;
+  public boolean withScore() {
+    return true;
+  }
+
+  /** Whether maxScores should be computed (only useful with
+   *  field sort) */
+  public boolean withMaxScore() {
+    return true;
   }
 
   /**
@@ -249,8 +268,39 @@ public abstract class ReadTask extends PerfTask {
    */
   public abstract boolean withRetrieve();
 
+  /**
+   * Set to the number of documents to highlight.
+   *
+   * @return The number of the results to highlight.  O means no docs will be highlighted.
+   */
+  public int numToHighlight() {
+    return 0;
+  }
+
+  /**
+   * Return an appropriate highlighter to be used with
+   * highlighting tasks
+   */
+  protected BenchmarkHighlighter getBenchmarkHighlighter(Query q){
+    return null;
+  }
+  
   protected Sort getSort() {
     return null;
+  }
+
+  /**
+   * Define the fields to highlight.  Base implementation returns all fields
+   * @param document The Document
+   * @return A Collection of Field names (Strings)
+   */
+  protected Collection<String> getFieldsToHighlight(Document document) {
+    List<IndexableField> fields = document.getFields();
+    Set<String> result = new HashSet<>(fields.size());
+    for (final IndexableField f : fields) {
+      result.add(f.name());
+    }
+    return result;
   }
 
 }

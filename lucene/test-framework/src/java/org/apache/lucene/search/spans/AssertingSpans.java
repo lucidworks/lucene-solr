@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
 
 import java.io.IOException;
 
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.TwoPhaseIterator;
+import org.apache.lucene.search.similarities.Similarity;
 
 /** 
  * Wraps a Spans with additional asserts
@@ -66,7 +68,8 @@ class AssertingSpans extends Spans {
   
   State state = State.DOC_START;
   
-  AssertingSpans(Spans in) {
+  AssertingSpans(Spans in, Similarity.SimScorer docScorer) {
+    super((SpanWeight)in.getWeight(), docScorer);
     this.in = in;
   }
   
@@ -193,6 +196,12 @@ class AssertingSpans extends Spans {
     assert ! Float.isNaN(cost) : "positionsCost() should not be NaN";
     assert cost > 0 : "positionsCost() must be positive";
     return cost;
+  }
+
+  @Override
+  protected float scoreCurrentDoc() throws IOException {
+    assert in.docScorer != null : in.getClass() + " has no docScorer!";
+    return in.scoreCurrentDoc();
   }
 
   @Override

@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,31 +16,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.document.Field.Store;
+import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.FieldInvertState;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 
 public class TestConjunctions extends LuceneTestCase {
@@ -79,7 +74,7 @@ public class TestConjunctions extends LuceneTestCase {
     bq.add(new TermQuery(new Term(F1, "nutch")), BooleanClause.Occur.MUST);
     bq.add(new TermQuery(new Term(F2, "is")), BooleanClause.Occur.MUST);
     TopDocs td = searcher.search(bq.build(), 3);
-    assertEquals(1, td.totalHits.value);
+    assertEquals(1, td.totalHits);
     assertEquals(3F, td.scoreDocs[0].score, 0.001F); // f1:nutch + f2:is + f2:is
   }
   
@@ -99,59 +94,38 @@ public class TestConjunctions extends LuceneTestCase {
     }
 
     @Override
-    public SimScorer scorer(float boost,
+    public SimWeight computeWeight(
         CollectionStatistics collectionStats, TermStatistics... termStats) {
-      return new SimScorer() {
+      return new SimWeight() {
         @Override
-        public float score(float freq, long norm) {
-          return freq;
+        public float getValueForNormalization() {
+          return 1; // we don't care
+        }
+        @Override
+        public void normalize(float queryNorm, float topLevelBoost) {
+          // we don't care
         }
       };
     }
-  }
 
-  public void testScorerGetChildren() throws Exception {
-    Directory dir = newDirectory();
-    IndexWriter w = new IndexWriter(dir, newIndexWriterConfig());
-    Document doc = new Document();
-    doc.add(newTextField("field", "a b", Field.Store.NO));
-    w.addDocument(doc);
-    IndexReader r = DirectoryReader.open(w);
-    BooleanQuery.Builder b = new BooleanQuery.Builder();
-    b.add(new TermQuery(new Term("field", "a")), BooleanClause.Occur.MUST);
-    b.add(new TermQuery(new Term("field", "b")), BooleanClause.Occur.FILTER);
-    Query q = b.build();
-    IndexSearcher s = new IndexSearcher(r);
-    final boolean[] setScorerCalled = new boolean[1];
-    s.search(q, new SimpleCollector() {
+    @Override
+    public SimScorer simScorer(SimWeight weight, LeafReaderContext context) throws IOException {
+      return new SimScorer() {
         @Override
-        public void setScorer(Scorable s) throws IOException {
-          Collection<Scorer.ChildScorable> childScorers = s.getChildren();
-          setScorerCalled[0] = true;
-          assertEquals(2, childScorers.size());
-          Set<String> terms = new HashSet<>();
-          for (Scorer.ChildScorable childScorer : childScorers) {
-            Query query = ((Scorer)childScorer.child).getWeight().getQuery();
-            assertTrue(query instanceof TermQuery);
-            Term term = ((TermQuery) query).getTerm();
-            assertEquals("field", term.field());
-            terms.add(term.text());
-          }
-          assertEquals(2, terms.size());
-          assertTrue(terms.contains("a"));
-          assertTrue(terms.contains("b"));
+        public float score(int doc, float freq) {
+          return freq;
+        }
+        
+        @Override
+        public float computeSlopFactor(int distance) {
+          return 1F;
         }
 
         @Override
-        public void collect(int doc) {
+        public float computePayloadFactor(int doc, int start, int end, BytesRef payload) {
+          return 1F;
         }
-
-        @Override
-        public ScoreMode scoreMode() {
-          return ScoreMode.COMPLETE;
-        }
-      });
-    assertTrue(setScorerCalled[0]);
-    IOUtils.close(r, w, dir);
+      };
+    }
   }
 }

@@ -17,6 +17,7 @@
 package org.apache.solr.response.transform;
 
 import org.apache.solr.common.SolrDocument;
+import org.apache.solr.request.SolrQueryRequest;
 
 /**
  * Simple Augmenter that adds the score
@@ -39,14 +40,11 @@ public class ScoreAugmenter extends DocTransformer {
   }
 
   @Override
-  public void transform(SolrDocument doc, int docid, float score) {
-    if( context != null && context.wantsScores() ) {
-        doc.setField( name, score );
-    }
-  }
-
-  @Override
   public void transform(SolrDocument doc, int docid) {
-    transform(doc, docid, 0.0f);
+    if( context != null && context.wantsScores() ) {
+      if( context.getDocIterator() != null ) {
+        doc.setField( name, context.getDocIterator().score() );
+      }
+    }
   }
 }

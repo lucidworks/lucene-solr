@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.util;
-
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
@@ -33,17 +31,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.StopFilter;
-import org.apache.lucene.analysis.WordlistLoader;
+import org.apache.lucene.analysis.core.StopFilter;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.Version;
 
@@ -294,24 +288,12 @@ public abstract class AbstractAnalysisFactory {
    * @return a list of file names with the escaping backslashed removed
    */
   protected final List<String> splitFileNames(String fileNames) {
-    return splitAt(',', fileNames);
-  }
-
-  /**
-   * Splits a list separated by zero or more given separator characters.
-   * List items can contain comma characters escaped by backslash '\'.
-   * Whitespace is NOT trimmed from the returned list items.
-   *
-   * @param list the string containing the split list items
-   * @return a list of items with the escaping backslashes removed
-   */
-  protected final List<String> splitAt(char separator, String list) {
-    if (list == null)
-      return Collections.emptyList();
+    if (fileNames == null)
+      return Collections.<String>emptyList();
 
     List<String> result = new ArrayList<>();
-    for (String item : list.split("(?<!\\\\)[" + separator + "]")) {
-      result.add(item.replaceAll("\\\\(?=[" + separator + "])", ""));
+    for (String file : fileNames.split("(?<!\\\\),")) {
+      result.add(file.replaceAll("\\\\(?=,)", ""));
     }
 
     return result;
@@ -339,41 +321,5 @@ public abstract class AbstractAnalysisFactory {
 
   public void setExplicitLuceneMatchVersion(boolean isExplicitLuceneMatchVersion) {
     this.isExplicitLuceneMatchVersion = isExplicitLuceneMatchVersion;
-  }
-
-  /**
-   * Looks up SPI name (static "NAME" field) with appropriate modifiers.
-   * Also it must be a String class and declared in the concrete class.
-   * @return the SPI name
-   * @throws NoSuchFieldException - if the "NAME" field is not defined.
-   * @throws IllegalAccessException - if the "NAME" field is inaccessible.
-   * @throws IllegalStateException - if the "NAME" field does not have appropriate modifiers or isn't a String field.
-   */
-  static String lookupSPIName(Class<? extends AbstractAnalysisFactory> service) throws NoSuchFieldException, IllegalAccessException, IllegalStateException {
-    final Field field = service.getField("NAME");
-    int modifier = field.getModifiers();
-    if (Modifier.isStatic(modifier) && Modifier.isFinal(modifier) &&
-        field.getType().equals(String.class) &&
-        Objects.equals(field.getDeclaringClass(), service)) {
-      return ((String) field.get(null));
-      }
-    throw new IllegalStateException("No SPI name defined.");
-  }
-
-  /**
-   * Generate legacy SPI name derived from the class name.
-   * @return the SPI name
-   */
-  @Deprecated
-  static String generateLegacySPIName(Class<? extends AbstractAnalysisFactory> service, String[] suffixes) {
-    final String clazzName = service.getSimpleName();
-    String name = null;
-    for (String suffix : suffixes) {
-      if (clazzName.endsWith(suffix)) {
-        name = clazzName.substring(0, clazzName.length() - suffix.length()).toLowerCase(Locale.ROOT);
-        break;
-      }
-    }
-    return name;
   }
 }

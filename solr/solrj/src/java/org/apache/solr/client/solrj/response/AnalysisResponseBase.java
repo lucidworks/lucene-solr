@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.response;
 
 import org.apache.solr.common.util.NamedList;
@@ -57,41 +58,22 @@ public class AnalysisResponseBase extends SolrResponseBase {
    *  &lt;/lst&gt;
    * </code></pre>
    *
-   * The special case is a CharacterFilter that just returns a string, which we then map to a single token without type.
-   *
    * @param phaseNL The names list to parse.
    *
    * @return The built analysis phases list.
    */
-  protected List<AnalysisPhase> buildPhases(NamedList<Object> phaseNL) {
+  protected List<AnalysisPhase> buildPhases(NamedList<List<NamedList<Object>>> phaseNL) {
     List<AnalysisPhase> phases = new ArrayList<>(phaseNL.size());
-    for (Map.Entry<String, Object> phaseEntry : phaseNL) {
+    for (Map.Entry<String, List<NamedList<Object>>> phaseEntry : phaseNL) {
       AnalysisPhase phase = new AnalysisPhase(phaseEntry.getKey());
-      Object phaseValue = phaseEntry.getValue();
-
-      if (phaseValue instanceof String) {
-        // We are looking at CharacterFilter, which - exceptionally - returns a string
-        TokenInfo tokenInfo = buildTokenInfoFromString((String) phaseValue);
+      List<NamedList<Object>> tokens = phaseEntry.getValue();
+      for (NamedList<Object> token : tokens) {
+        TokenInfo tokenInfo = buildTokenInfo(token);
         phase.addTokenInfo(tokenInfo);
-      } else {
-        List<NamedList<Object>> tokens = (List<NamedList<Object>>) phaseEntry.getValue();
-        for (NamedList<Object> token : tokens) {
-          TokenInfo tokenInfo = buildTokenInfo(token);
-          phase.addTokenInfo(tokenInfo);
-        }
       }
       phases.add(phase);
     }
     return phases;
-  }
-
-  /**
-   * Convert a string value (from CharacterFilter) into a TokenInfo for its value full span.
-   * @param value String value
-   * @return The built token info (with type set to null)
-   */
-  protected TokenInfo buildTokenInfoFromString(String value) {
-    return new TokenInfo(value, value, null, 0, value.length(), 1, false);
   }
 
   /**

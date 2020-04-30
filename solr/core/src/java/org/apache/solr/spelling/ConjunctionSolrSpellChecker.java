@@ -1,3 +1,5 @@
+package org.apache.solr.spelling;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.Token;
 import org.apache.lucene.search.spell.StringDistance;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.SolrCore;
@@ -55,7 +57,7 @@ public class ConjunctionSolrSpellChecker extends SolrSpellChecker {
     try {
       if (stringDistance == null) {
         stringDistance = checker.getStringDistance();
-      } else if (!stringDistance.equals(checker.getStringDistance())) {
+      } else if (stringDistance != checker.getStringDistance()) {
         throw new IllegalArgumentException(
             "All checkers need to use the same StringDistance.");
       }
@@ -81,8 +83,9 @@ public class ConjunctionSolrSpellChecker extends SolrSpellChecker {
     checkers.add(checker);
   }
   
+  @SuppressWarnings("unchecked")
   @Override
-  public String init(@SuppressWarnings("rawtypes") NamedList config, SolrCore core) {
+  public String init(NamedList config, SolrCore core) {
     for (int i = 0; i < checkers.size(); i++) {
       SolrSpellChecker c = checkers.get(i);
       String dn = c.init(config, core);

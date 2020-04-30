@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
 import org.apache.lucene.util.Constants;
+import org.apache.lucene.util.LuceneTestCase;
 
 import javax.script.Invocable;
 import javax.script.ScriptEngine;
@@ -24,15 +26,14 @@ import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
 import java.io.StringReader;
 
-import org.apache.solr.SolrTestCase;
 import org.junit.Assume;
 import org.junit.BeforeClass;
 
 /**
  * Sanity tests basic functionality of {@link ScriptEngineManager} and 
- * {@link ScriptEngine} w/o exercising any Lucene specific code.
+ * {@link ScriptEngine} w/o excercising any Lucene specific code.
  */
-public class ScriptEngineTest extends SolrTestCase {
+public class ScriptEngineTest extends LuceneTestCase {
 
   private ScriptEngineManager manager;
 

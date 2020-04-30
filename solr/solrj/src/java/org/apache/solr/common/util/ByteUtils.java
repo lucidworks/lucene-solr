@@ -14,13 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.common.util;
 
 import java.io.IOException;
 import java.io.OutputStream;
 
 import org.noggit.CharArr;
-
 
 public class ByteUtils {
 
@@ -143,7 +143,6 @@ public class ByteUtils {
       if (upto > scratch.length - 4)  {
         // a code point may take upto 4 bytes and we don't have enough space, so reset
         totalBytes += upto;
-        if(fos == null) throw new IOException("buffer over flow");
         fos.write(scratch, 0, upto);
         upto = 0;
       }
@@ -182,7 +181,7 @@ public class ByteUtils {
     }
 
     totalBytes += upto;
-    if(fos != null) fos.write(scratch, 0, upto);
+    fos.write(scratch, 0, upto);
 
     return totalBytes;
   }

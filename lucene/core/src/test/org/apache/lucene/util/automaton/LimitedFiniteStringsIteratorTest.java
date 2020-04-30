@@ -1,3 +1,5 @@
+package org.apache.lucene.util.automaton;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.automaton;
-
 
 import java.util.List;
 
@@ -52,17 +52,22 @@ public class LimitedFiniteStringsIteratorTest extends LuceneTestCase {
 
   public void testInvalidLimitNegative() {
     Automaton a = AutomatonTestUtil.randomAutomaton(random());
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new LimitedFiniteStringsIterator(a, -7);
       fail("did not hit exception");
-    });
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
   }
 
   public void testInvalidLimitNull() {
     Automaton a = AutomatonTestUtil.randomAutomaton(random());
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new LimitedFiniteStringsIterator(a, 0);
-    });
+      fail("did not hit exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
   }
 
   public void testSingleton() {

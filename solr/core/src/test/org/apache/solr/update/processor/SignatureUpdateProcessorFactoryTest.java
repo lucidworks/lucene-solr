@@ -14,12 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update.processor;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+package org.apache.solr.update.processor;
 
 import org.apache.lucene.util.Constants;
 import org.apache.solr.SolrTestCaseJ4;
@@ -27,17 +23,24 @@ import org.apache.solr.client.solrj.impl.BinaryRequestWriter;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.params.MultiMapSolrParams;
+import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.params.UpdateParams;
+import org.apache.solr.common.util.ContentStream;
 import org.apache.solr.common.util.ContentStreamBase;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.handler.UpdateRequestHandler;
 import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.request.SolrQueryRequestBase;
 import org.apache.solr.response.SolrQueryResponse;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * 
@@ -85,7 +88,8 @@ public class SignatureUpdateProcessorFactoryTest extends SolrTestCaseJ4 {
     
     SolrCore core = h.getCore();
     UpdateRequestProcessorChain chained = core.getUpdateProcessingChain(this.chain);
-    SignatureUpdateProcessorFactory factory = ((SignatureUpdateProcessorFactory) chained.getProcessors().get(0));
+    SignatureUpdateProcessorFactory factory = ((SignatureUpdateProcessorFactory) chained
+        .getFactories()[0]);
     factory.setEnabled(true);
     assertNotNull(chained);
 
@@ -105,7 +109,8 @@ public class SignatureUpdateProcessorFactoryTest extends SolrTestCaseJ4 {
     SolrCore core = h.getCore();
     UpdateRequestProcessorChain chained = core.getUpdateProcessingChain(
         "dedupe");
-    SignatureUpdateProcessorFactory factory = ((SignatureUpdateProcessorFactory) chained.getProcessors().get(0));
+    SignatureUpdateProcessorFactory factory = ((SignatureUpdateProcessorFactory) chained
+        .getFactories()[0]);
     factory.setEnabled(true);
     assertNotNull(chained);
 
@@ -150,7 +155,8 @@ public class SignatureUpdateProcessorFactoryTest extends SolrTestCaseJ4 {
   public void testMultiThreaded() throws Exception {
     UpdateRequestProcessorChain chained = h.getCore().getUpdateProcessingChain(
         "dedupe");
-    SignatureUpdateProcessorFactory factory = ((SignatureUpdateProcessorFactory) chained.getProcessors().get(0));
+    SignatureUpdateProcessorFactory factory = ((SignatureUpdateProcessorFactory) chained
+        .getFactories()[0]);
     factory.setEnabled(true);
     Thread[] threads = null;
     Thread[] threads2 = null;
@@ -266,7 +272,8 @@ public class SignatureUpdateProcessorFactoryTest extends SolrTestCaseJ4 {
     SolrCore core = h.getCore();
     UpdateRequestProcessorChain chained = core
         .getUpdateProcessingChain(chain);
-    SignatureUpdateProcessorFactory factory = ((SignatureUpdateProcessorFactory) chained.getProcessors().get(0));
+    SignatureUpdateProcessorFactory factory = ((SignatureUpdateProcessorFactory) chained
+        .getFactories()[0]);
     factory.setEnabled(true);
     
     Map<String,String[]> params = new HashMap<>();
@@ -300,7 +307,7 @@ public class SignatureUpdateProcessorFactoryTest extends SolrTestCaseJ4 {
 
       UnusualList<Integer> ints = new UnusualList<>(3);
       for (int val : new int[] {42, 66, 34}) {
-        docA.addField("ints_is", val);
+        docA.addField("ints_is", new Integer(val));
         ints.add(val);
       }
       docB.addField("ints_is", ints);
@@ -318,15 +325,17 @@ public class SignatureUpdateProcessorFactoryTest extends SolrTestCaseJ4 {
       doc.addField("v_t", "same");
       doc.addField("weight", 3.0f);
       for (int val : new int[] {66, 42, 34}) {
-        doc.addField("ints_is", val);
+        doc.addField("ints_is", new Integer(val));
       }
       ureq.add(doc);
     }
         
 
+    ArrayList<ContentStream> streams = new ArrayList<>(2);
+    streams.add(new BinaryRequestWriter().getContentStream(ureq));
     LocalSolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), mmparams);
     try {
-      req.setContentStreams(Collections.singletonList(ContentStreamBase.create(new BinaryRequestWriter(), ureq)));
+      req.setContentStreams(streams);
       UpdateRequestHandler h = new UpdateRequestHandler();
       h.init(new NamedList());
       h.handleRequestBody(req, new SolrQueryResponse());
@@ -354,5 +363,22 @@ public class SignatureUpdateProcessorFactoryTest extends SolrTestCaseJ4 {
 
   private void addDoc(String doc) throws Exception  {
     addDoc(doc, chain);
+  }
+
+  static void addDoc(String doc, String chain) throws Exception {
+    Map<String, String[]> params = new HashMap<>();
+    MultiMapSolrParams mmparams = new MultiMapSolrParams(params);
+    params.put(UpdateParams.UPDATE_CHAIN, new String[] { chain });
+    SolrQueryRequestBase req = new SolrQueryRequestBase(h.getCore(),
+        (SolrParams) mmparams) {
+    };
+
+    UpdateRequestHandler handler = new UpdateRequestHandler();
+    handler.init(null);
+    ArrayList<ContentStream> streams = new ArrayList<>(2);
+    streams.add(new ContentStreamBase.StringStream(doc));
+    req.setContentStreams(streams);
+    handler.handleRequestBody(req, new SolrQueryResponse());
+    req.close();
   }
 }

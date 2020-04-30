@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.queryparser.complexPhrase.ComplexPhraseQueryParser;
-import org.apache.lucene.search.MultiTermQuery;
 import org.apache.lucene.search.Query;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.SolrParams;
@@ -40,7 +40,6 @@ public class ComplexPhraseQParserPlugin extends QParserPlugin {
 
   @Override
   public void init(NamedList args) {
-    super.init(args);
     if (args != null) {
       Object val = args.get("inOrder");
       if (val != null) {
@@ -59,33 +58,7 @@ public class ComplexPhraseQParserPlugin extends QParserPlugin {
   /**
    * Modified from {@link org.apache.solr.search.LuceneQParser} and {@link org.apache.solr.search.SurroundQParserPlugin.SurroundQParser}
    */
-  static class ComplexPhraseQParser extends QParser {
-
-    static final class SolrQueryParserDelegate extends SolrQueryParser {
-      private SolrQueryParserDelegate(QParser parser, String defaultField) {
-        super(parser, defaultField);
-      }
-
-      @Override
-      protected org.apache.lucene.search.Query getWildcardQuery(String field, String termStr) throws SyntaxError {
-        return super.getWildcardQuery(field, termStr);
-      }
-      
-      @Override
-      protected org.apache.lucene.search.Query getRangeQuery(String field, String part1, String part2,
-          boolean startInclusive, boolean endInclusive) throws SyntaxError {
-        return super.getRangeQuery(field, part1, part2, startInclusive, endInclusive);
-      }
-      
-      @Override
-      protected boolean isRangeShouldBeProtectedFromReverse(String field, String part1) {
-        return super.isRangeShouldBeProtectedFromReverse(field, part1);
-      }
-
-      public String getLowerBoundForReverse() {
-        return REVERSE_WILDCARD_LOWER_BOUND;
-      }
-    }
+  class ComplexPhraseQParser extends QParser {
 
     ComplexPhraseQueryParser lparser;
 
@@ -110,50 +83,18 @@ public class ComplexPhraseQParserPlugin extends QParserPlugin {
       String qstr = getString();
 
       String defaultField = getParam(CommonParams.DF);
-
-      SolrQueryParserDelegate reverseAwareParser = new SolrQueryParserDelegate(this, defaultField);
-      
-      lparser = new ComplexPhraseQueryParser(defaultField, getReq().getSchema().getQueryAnalyzer())
-          {
-              protected Query newWildcardQuery(org.apache.lucene.index.Term t) {
-                try {
-                  org.apache.lucene.search.Query wildcardQuery = reverseAwareParser.getWildcardQuery(t.field(), t.text());
-                  setRewriteMethod(wildcardQuery);
-                  return wildcardQuery;
-                } catch (SyntaxError e) {
-                  throw new RuntimeException(e);
-                }
-              }
-
-              private Query setRewriteMethod(org.apache.lucene.search.Query query) {
-                if (query instanceof MultiTermQuery) {
-                  ((MultiTermQuery) query).setRewriteMethod(
-                      org.apache.lucene.search.MultiTermQuery.SCORING_BOOLEAN_REWRITE);
-                }
-                return query;
-              }
-              
-              protected Query newRangeQuery(String field, String part1, String part2, boolean startInclusive,
-                  boolean endInclusive) {
-                boolean reverse = reverseAwareParser.isRangeShouldBeProtectedFromReverse(field, part1);
-                return super.newRangeQuery(field, 
-                                            reverse ? reverseAwareParser.getLowerBoundForReverse() : part1, 
-                                            part2,
-                                            startInclusive || reverse, 
-                                            endInclusive);
-              }
-          }
-          ;
-
-      lparser.setAllowLeadingWildcard(true);
-          
-      if (localParams != null) {
-        inOrder = localParams.getBool("inOrder", inOrder);
+      if (defaultField == null) {
+        defaultField = getReq().getSchema().getDefaultSearchFieldName();
       }
-      
+
+      lparser = new ComplexPhraseQueryParser(defaultField, getReq().getSchema().getQueryAnalyzer());
+
+      if (localParams != null)
+        inOrder = localParams.getBool("inOrder", inOrder);
+
       lparser.setInOrder(inOrder);
 
-      QueryParser.Operator defaultOperator = QueryParsing.parseOP(getParam(QueryParsing.OP));
+      QueryParser.Operator defaultOperator = QueryParsing.getQueryParserDefaultOperator(getReq().getSchema(), getParam(QueryParsing.OP));
 
       if (QueryParser.Operator.AND.equals(defaultOperator))
         lparser.setDefaultOperator(org.apache.lucene.queryparser.classic.QueryParser.Operator.AND);

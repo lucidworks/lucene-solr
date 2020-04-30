@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ru;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ru;
-
 
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.ru.RussianLightStemFilter;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
@@ -32,13 +33,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  *     &lt;filter class="solr.RussianLightStemFilterFactory"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- * @since 3.1.0
- * @lucene.spi {@value #NAME}
  */
 public class RussianLightStemFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "russianLightStem";
   
   /** Creates a new RussianLightStemFilterFactory */
   public RussianLightStemFilterFactory(Map<String,String> args) {

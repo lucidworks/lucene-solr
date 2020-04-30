@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
 import org.apache.solr.SolrTestCaseJ4;
 import org.junit.BeforeClass;
@@ -171,6 +172,18 @@ public class TestFoldingMultitermQuery extends SolrTestCaseJ4 {
   }
 
   @Test
+  public void testLowerTokenizer() {
+    // The lowercasetokenizer will remove the '1' from the index, but not from the query, thus the special test.
+    assertQ(req("q", "content_lower_token:Á*C*"), "//result[@numFound='1']");
+    assertQ(req("q", "content_lower_token:Á*C*1"), "//result[@numFound='0']");
+    assertQ(req("q", "content_lower_token:h*1"), "//result[@numFound='0']");
+    assertQ(req("q", "content_lower_token:H*1"), "//result[@numFound='0']");
+    assertQ(req("q", "content_lower_token:*1"), "//result[@numFound='0']");
+    assertQ(req("q", "content_lower_token:HÏ*l?*"), "//result[@numFound='1']");
+    assertQ(req("q", "content_lower_token:hȉ*l?*"), "//result[@numFound='1']");
+  }
+
+  @Test
   public void testFuzzy() throws Exception {
     assertQ(req("q", "content:ZiLLx~1"),
             "//result[@numFound='1']");
@@ -292,9 +305,9 @@ public class TestFoldingMultitermQuery extends SolrTestCaseJ4 {
   public void testMultiBad() {
     try {
       ignoreException("analyzer returned too many terms");
-      Exception expected = expectThrows(Exception.class, "Should throw exception when token evaluates to more than one term",
-          () -> assertQ(req("q", "content_multi_bad:" + "abCD*"))
-      );
+      assertQ(req("q", "content_multi_bad:" + "abCD*"));
+      fail("Should throw exception when token evaluates to more than one term");
+    } catch (Exception expected) {
       assertTrue(expected.getCause() instanceof org.apache.solr.common.SolrException);
     } finally {
       resetExceptionIgnores();

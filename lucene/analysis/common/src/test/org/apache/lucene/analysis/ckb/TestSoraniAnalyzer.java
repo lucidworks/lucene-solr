@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ckb;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ckb;
-
 
 import java.io.IOException;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
-import org.apache.lucene.analysis.CharArraySet;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.util.Version;
 
 /**
  * Test the Sorani analyzer
@@ -73,10 +74,29 @@ public class TestSoraniAnalyzer extends BaseTokenStreamTestCase {
     a.close();
   }
   
+  /**
+   * test that we don't fold digits for back compat behavior
+   * @deprecated remove this test in lucene 7
+   */
+  @Deprecated
+  public void testDigitsBackCompat() throws Exception {
+    SoraniAnalyzer a = new SoraniAnalyzer();
+    a.setVersion(Version.LUCENE_5_3_0);
+    checkOneTerm(a, "١٢٣٤", "١٢٣٤");
+    a.close();
+  }
+  
   /** blast some random strings through the analyzer */
   public void testRandomStrings() throws Exception {
     Analyzer a = new SoraniAnalyzer();
     checkRandomData(random(), a, 1000*RANDOM_MULTIPLIER);
     a.close();
+  }
+
+  public void testBackcompat40() throws IOException {
+    SoraniAnalyzer a = new SoraniAnalyzer();
+    a.setVersion(Version.LUCENE_4_6_1);
+    // this is just a test to see the correct unicode version is being used, not actually testing hebrew
+    assertAnalyzesTo(a, "א\"א", new String[] {"א", "א"});
   }
 }

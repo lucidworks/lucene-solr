@@ -1,3 +1,5 @@
+package org.apache.lucene.util.fst;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -5,16 +7,15 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p/>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.fst;
 
 import java.io.IOException;
 import java.io.OutputStreamWriter;
@@ -40,6 +41,7 @@ import org.apache.lucene.util.IntsRefBuilder;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 import org.apache.lucene.util.UnicodeUtil;
+import org.apache.lucene.util.packed.PackedInts;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -220,7 +222,7 @@ public class FSTTester<T> {
           return null;
         }
       }
-      output = fst.outputs.add(output, arc.output());
+      output = fst.outputs.add(output, arc.output);
     }
 
     if (prefixLength != null) {
@@ -253,14 +255,14 @@ public class FSTTester<T> {
       arcs.clear();
 
       // accumulate output
-      output = fst.outputs.add(output, arc.output());
+      output = fst.outputs.add(output, arc.output);
 
       // append label
-      if (arc.label() == FST.END_LABEL) {
+      if (arc.label == FST.END_LABEL) {
         break;
       }
 
-      in.append(arc.label());
+      in.append(arc.label);
     }
 
     return output;
@@ -272,14 +274,25 @@ public class FSTTester<T> {
       System.out.println("\nTEST: prune1=" + prune1 + " prune2=" + prune2);
     }
 
+    final boolean willRewrite = random.nextBoolean();
+
     final Builder<T> builder = new Builder<>(inputMode == 0 ? FST.INPUT_TYPE.BYTE1 : FST.INPUT_TYPE.BYTE4,
                                               prune1, prune2,
                                               prune1==0 && prune2==0,
                                               allowRandomSuffixSharing ? random.nextBoolean() : true,
                                               allowRandomSuffixSharing ? TestUtil.nextInt(random, 1, 10) : Integer.MAX_VALUE,
                                               outputs,
+                                              willRewrite,
+                                              PackedInts.DEFAULT,
                                               true,
                                               15);
+    if (LuceneTestCase.VERBOSE) {
+      if (willRewrite) {
+        System.out.println("TEST: packed FST");
+      } else {
+        System.out.println("TEST: non-packed FST");
+      }
+    }
 
     for(InputOutput<T> pair : pairs) {
       if (pair.output instanceof List) {
@@ -294,14 +307,14 @@ public class FSTTester<T> {
     }
     FST<T> fst = builder.finish();
 
-    if (random.nextBoolean() && fst != null) {
+    if (random.nextBoolean() && fst != null && !willRewrite) {
       IOContext context = LuceneTestCase.newIOContext(random);
       IndexOutput out = dir.createOutput("fst.bin", context);
       fst.save(out);
       out.close();
       IndexInput in = dir.openInput("fst.bin", context);
       try {
-        fst = new FST<T>(in, outputs);
+        fst = new FST<>(in, outputs);
       } finally {
         in.close();
         dir.deleteFile("fst.bin");
@@ -812,4 +825,3 @@ public class FSTTester<T> {
     }
   }
 }
-

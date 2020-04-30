@@ -1,3 +1,5 @@
+package org.apache.solr.search.grouping.distributed.requestfactory;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.grouping.distributed.requestfactory;
 
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.grouping.GroupDocs;
@@ -64,11 +65,14 @@ public class StoredFieldsShardRequestFactory implements ShardRequestFactory {
       sreq.params.remove(GroupParams.GROUP);
       sreq.params.remove(CommonParams.SORT);
       sreq.params.remove(ResponseBuilder.FIELD_SORT_VALUES);
-      
-      // we need to ensure the uniqueField is included for collating docs with their return fields
-      if (! rb.rsp.getReturnFields().wantsField(uniqueField.getName())) {
-        // the user didn't ask for it, so we have to...
-        sreq.params.add(CommonParams.FL, uniqueField.getName());
+      String fl = sreq.params.get(CommonParams.FL);
+      if (fl != null) {
+         fl = fl.trim();
+        // currently, "score" is synonymous with "*,score" so
+        // don't add "id" if the fl is empty or "score" or it would change the meaning.
+         if (fl.length()!=0 && !"score".equals(fl) && !"*".equals(fl)) {
+           sreq.params.set(CommonParams.FL, fl+','+uniqueField.getName());
+         }
       }
 
       List<String> ids = new ArrayList<>(shardDocs.size());

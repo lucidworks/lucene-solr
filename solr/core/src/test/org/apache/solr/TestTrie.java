@@ -16,27 +16,25 @@
  */
 package org.apache.solr;
 
-import java.text.SimpleDateFormat;
-import java.util.Locale;
-import java.util.TimeZone;
-
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.TrieField;
 import org.apache.solr.util.DateMathParser;
+import org.apache.solr.util.DateFormatUtil;
 import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.text.SimpleDateFormat;
+import java.util.Locale;
+import java.util.TimeZone;
+
 /**
- * Tests for numeric field functionality.  The name originated from {@link TrieField}, but all tests 
- * done in this class are also valid for any numeric field types.
+ * Tests for TrieField functionality
  *
  *
  * @since solr 1.4
- * @deprecated Trie fields are deprecated as of Solr 7.0
  */
-@Deprecated
 public class TestTrie extends SolrTestCaseJ4 {
   @BeforeClass
   public static void beforeClass() throws Exception {
@@ -175,7 +173,7 @@ public class TestTrie extends SolrTestCaseJ4 {
     format.setTimeZone(TimeZone.getTimeZone("UTC"));
 
     assertU(delQ("*:*"));
-    DateMathParser dmp = new DateMathParser(DateMathParser.UTC);
+    DateMathParser dmp = new DateMathParser(DateFormatUtil.UTC, Locale.ROOT);
     String largestDate = "";
     for (int i = 0; i < 10; i++) {
       // index 10 days starting with today
@@ -214,11 +212,6 @@ public class TestTrie extends SolrTestCaseJ4 {
 
   @Test
   public void testTrieFacet_PrecisionStep() throws Exception {
-    if (Boolean.getBoolean(NUMERIC_POINTS_SYSPROP)) {
-      assumeTrue("Skipping test: Points+facets require docValues, but randomizer: points=true && DV=false",
-                 Boolean.getBoolean(NUMERIC_DOCVALUES_SYSPROP));
-    }
-    
     // Future protect - assert 0<precisionStep<64
     checkPrecisionSteps("tint");
     checkPrecisionSteps("tfloat");
@@ -229,7 +222,7 @@ public class TestTrie extends SolrTestCaseJ4 {
     // For tdate tests
     SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT);
     format.setTimeZone(TimeZone.getTimeZone("UTC"));
-    DateMathParser dmp = new DateMathParser(DateMathParser.UTC);
+    DateMathParser dmp = new DateMathParser(DateFormatUtil.UTC, Locale.ROOT);
 
     for (int i = 0; i < 10; i++) {
       long l = Integer.MAX_VALUE + i*1L;
@@ -256,7 +249,11 @@ public class TestTrie extends SolrTestCaseJ4 {
             "facet.field", "tint",
             "facet.field", "tlong",
             "facet.field", "tfloat",
-            "facet.field", "tdouble");
+            "facet.field", "tdouble",
+            "facet.date", "tdate",
+            "facet.date.start", "NOW/DAY",
+            "facet.date.end", "NOW/DAY+6DAYS",
+            "facet.date.gap", "+1DAY");
     testFacetField(req, "tint", "0", "2");
     testFacetField(req, "tint", "5", "1");
     testFacetField(req, "tlong", String.valueOf(Integer.MAX_VALUE), "2");
@@ -265,6 +262,9 @@ public class TestTrie extends SolrTestCaseJ4 {
     testFacetField(req, "tfloat", String.valueOf(5*5*31.11f), "1");
     testFacetField(req, "tdouble", String.valueOf(2.33d), "2");
     testFacetField(req, "tdouble", String.valueOf(5*2.33d), "1");
+
+    testFacetDate(req, "tdate", format.format(dmp.parseMath("/DAY")), "4");
+    testFacetDate(req, "tdate", format.format(dmp.parseMath("/DAY+5DAYS")), "2");
   }
 
   private void checkPrecisionSteps(String fieldType) {
@@ -277,6 +277,11 @@ public class TestTrie extends SolrTestCaseJ4 {
 
   private void testFacetField(SolrQueryRequest req, String field, String value, String count) {
     String xpath = "//lst[@name='facet_fields']/lst[@name='" + field + "']/int[@name='" + value + "'][.='" + count + "']";
+    assertQ(req, xpath);
+  }
+
+  private void testFacetDate(SolrQueryRequest req, String field, String value, String count)  {
+    String xpath = "//lst[@name='facet_dates']/lst[@name='" + field + "']/int[@name='" + value + "'][.='" + count + "']";
     assertQ(req, xpath);
   }
 }

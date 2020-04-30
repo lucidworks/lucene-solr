@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.cjk;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,27 +16,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.cjk;
-
 
 import java.io.IOException;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.LowerCaseFilter;
-import org.apache.lucene.analysis.StopFilter;
-import org.apache.lucene.analysis.StopwordAnalyzerBase;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
+import org.apache.lucene.analysis.core.LowerCaseFilter;
+import org.apache.lucene.analysis.core.StopFilter;
 import org.apache.lucene.analysis.standard.StandardTokenizer;
+import org.apache.lucene.analysis.standard.std40.StandardTokenizer40;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.analysis.util.StopwordAnalyzerBase;
+import org.apache.lucene.util.Version;
 
 /**
  * An {@link Analyzer} that tokenizes text with {@link StandardTokenizer},
  * normalizes content with {@link CJKWidthFilter}, folds case with
  * {@link LowerCaseFilter}, forms bigrams of CJK with {@link CJKBigramFilter},
  * and filters stopwords with {@link StopFilter}
- *
- * @since 3.1
  */
 public final class CJKAnalyzer extends StopwordAnalyzerBase {
 
@@ -87,18 +87,16 @@ public final class CJKAnalyzer extends StopwordAnalyzerBase {
 
   @Override
   protected TokenStreamComponents createComponents(String fieldName) {
-    final Tokenizer source = new StandardTokenizer();
+    final Tokenizer source;
+    if (getVersion().onOrAfter(Version.LUCENE_4_7_0)) {
+      source = new StandardTokenizer();
+    } else {
+      source = new StandardTokenizer40();
+    }
     // run the widthfilter first before bigramming, it sometimes combines characters.
     TokenStream result = new CJKWidthFilter(source);
     result = new LowerCaseFilter(result);
     result = new CJKBigramFilter(result);
     return new TokenStreamComponents(source, new StopFilter(result, stopwords));
-  }
-
-  @Override
-  protected TokenStream normalize(String fieldName, TokenStream in) {
-    TokenStream result = new CJKWidthFilter(in);
-    result = new LowerCaseFilter(result);
-    return result;
   }
 }

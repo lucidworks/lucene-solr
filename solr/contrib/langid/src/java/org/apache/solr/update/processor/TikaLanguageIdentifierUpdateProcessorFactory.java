@@ -1,3 +1,5 @@
+package org.apache.solr.update.processor;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update.processor;
 
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
@@ -65,17 +66,17 @@ public class TikaLanguageIdentifierUpdateProcessorFactory extends
       Object o;
       o = args.get("defaults");
       if (o != null && o instanceof NamedList) {
-        defaults = ((NamedList) o).toSolrParams();
+        defaults = SolrParams.toSolrParams((NamedList) o);
       } else {
-        defaults = args.toSolrParams();
+        defaults = SolrParams.toSolrParams(args);
       }
       o = args.get("appends");
       if (o != null && o instanceof NamedList) {
-        appends = ((NamedList) o).toSolrParams();
+        appends = SolrParams.toSolrParams((NamedList) o);
       }
       o = args.get("invariants");
       if (o != null && o instanceof NamedList) {
-        invariants = ((NamedList) o).toSolrParams();
+        invariants = SolrParams.toSolrParams((NamedList) o);
       }
     }
   }

@@ -1,3 +1,4 @@
+package org.apache.solr.search.function.distance;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.function.distance;
-import java.io.IOException;
 
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.valuesource.MultiValueSource;
@@ -42,7 +41,7 @@ public class SquaredEuclideanFunction extends VectorDistanceFunction {
    * @param doc The doc to score
    */
   @Override
-  protected double distance(int doc, FunctionValues dv1, FunctionValues dv2) throws IOException {
+  protected double distance(int doc, FunctionValues dv1, FunctionValues dv2) {
 
     double[] vals1 = new double[source1.dimension()];
     double[] vals2 = new double[source1.dimension()];

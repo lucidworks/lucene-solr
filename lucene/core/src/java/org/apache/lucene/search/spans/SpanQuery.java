@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
 
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
+import org.apache.lucene.index.TermContext;
+import org.apache.lucene.search.BoostQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 
 /** Base class for span-based queries. */
 public abstract class SpanQuery extends Query {
@@ -36,30 +37,46 @@ public abstract class SpanQuery extends Query {
    */
   public abstract String getField();
 
-  @Override
-  public abstract SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException;
+  /**
+   * Create a SpanWeight for this query
+   * @param searcher the IndexSearcher to be searched across
+   * @param needsScores if the query needs scores
+   * @return a SpanWeight
+   * @throws IOException on error
+   */
+  public abstract SpanWeight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException;
 
   /**
-   * Build a map of terms to {@link TermStates}, for use in constructing SpanWeights
+   * Build a map of terms to termcontexts, for use in constructing SpanWeights
    * @lucene.internal
    */
-  public static Map<Term, TermStates> getTermStates(SpanWeight... weights) {
-    Map<Term, TermStates> terms = new TreeMap<>();
+  protected static Map<Term, TermContext> getTermContexts(SpanWeight... weights) {
+    Map<Term, TermContext> terms = new TreeMap<>();
     for (SpanWeight w : weights) {
-      w.extractTermStates(terms);
+      w.extractTermContexts(terms);
     }
     return terms;
   }
 
   /**
-   * Build a map of terms to {@link TermStates}, for use in constructing SpanWeights
+   * Build a map of terms to termcontexts, for use in constructing SpanWeights
    * @lucene.internal
    */
-  public static Map<Term, TermStates> getTermStates(Collection<SpanWeight> weights) {
-    Map<Term, TermStates> terms = new TreeMap<>();
+  protected static Map<Term, TermContext> getTermContexts(Collection<SpanWeight> weights) {
+    Map<Term, TermContext> terms = new TreeMap<>();
     for (SpanWeight w : weights) {
-      w.extractTermStates(terms);
+      w.extractTermContexts(terms);
     }
     return terms;
+  }
+
+  @Override
+  public Query rewrite(IndexReader reader) throws IOException {
+    if (super.getBoost() != 1f) {
+      SpanQuery rewritten = (SpanQuery) clone();
+      rewritten.setBoost(1f);
+      return new SpanBoostQuery(rewritten, super.getBoost());
+    }
+    return this;
   }
 }

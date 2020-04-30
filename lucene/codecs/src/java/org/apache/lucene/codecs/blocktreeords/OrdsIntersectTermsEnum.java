@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.blocktreeords;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.blocktreeords;
-
 
 import java.io.IOException;
 
 import org.apache.lucene.codecs.blocktreeords.FSTOrdsOutputs.Output;
-import org.apache.lucene.index.BaseTermsEnum;
-import org.apache.lucene.index.ImpactsEnum;
+import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.TermState;
+import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.ArrayUtil;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.StringHelper;
@@ -34,7 +36,7 @@ import org.apache.lucene.util.automaton.RunAutomaton;
 import org.apache.lucene.util.fst.FST;
 
 // NOTE: cannot seek!
-final class OrdsIntersectTermsEnum extends BaseTermsEnum {
+final class OrdsIntersectTermsEnum extends TermsEnum {
   final IndexInput in;
 
   private OrdsIntersectTermsEnumFrame[] stack;
@@ -93,9 +95,9 @@ final class OrdsIntersectTermsEnum extends BaseTermsEnum {
     final OrdsIntersectTermsEnumFrame f = stack[0];
     f.fp = f.fpOrig = fr.rootBlockFP;
     f.prefix = 0;
-    f.setState(0);
+    f.setState(runAutomaton.getInitialState());
     f.arc = arc;
-    f.outputPrefix = arc.output();
+    f.outputPrefix = arc.output;
     f.load(fr.rootCode);
 
     // for assert:
@@ -168,14 +170,14 @@ final class OrdsIntersectTermsEnum extends BaseTermsEnum {
       // passed to findTargetArc
       arc = fr.index.findTargetArc(target, arc, getArc(1+idx), fstReader);
       assert arc != null;
-      output = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.output());
+      output = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.output);
       idx++;
     }
 
     f.arc = arc;
     f.outputPrefix = output;
     assert arc.isFinal();
-    f.load(OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.nextFinalOutput()));
+    f.load(OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.nextFinalOutput));
     return f;
   }
 
@@ -202,14 +204,16 @@ final class OrdsIntersectTermsEnum extends BaseTermsEnum {
 
   @Override
   public PostingsEnum postings(PostingsEnum reuse, int flags) throws IOException {
+    
+    if (PostingsEnum.featureRequested(flags, DocsAndPositionsEnum.OLD_NULL_SEMANTICS)) {
+      if (fr.fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) < 0) {
+        // Positions were not indexed:
+        return null;
+      }
+    }
+
     currentFrame.decodeMetaData();
     return fr.parent.postingsReader.postings(fr.fieldInfo, currentFrame.termState, reuse, flags);
-  }
-
-  @Override
-  public ImpactsEnum impacts(int flags) throws IOException {
-    currentFrame.decodeMetaData();
-    return fr.parent.postingsReader.impacts(fr.fieldInfo, currentFrame.termState, flags);
   }
 
   private int getState() {

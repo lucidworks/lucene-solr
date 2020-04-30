@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 
-import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 
 /**
@@ -49,12 +49,14 @@ public class MockRandomMergePolicy extends MergePolicy {
   }
 
   @Override
-  public MergeSpecification findMerges(MergeTrigger mergeTrigger, SegmentInfos segmentInfos, MergeContext mergeContext) {
+  public MergeSpecification findMerges(MergeTrigger mergeTrigger, SegmentInfos segmentInfos, IndexWriter writer) {
     MergeSpecification mergeSpec = null;
     //System.out.println("MRMP: findMerges sis=" + segmentInfos);
 
+    int numSegments = segmentInfos.size();
+
     List<SegmentCommitInfo> segments = new ArrayList<>();
-    final Set<SegmentCommitInfo> merging = mergeContext.getMergingSegments();
+    final Collection<SegmentCommitInfo> merging = writer.getMergingSegments();
 
     for(SegmentCommitInfo sipc : segmentInfos) {
       if (!merging.contains(sipc)) {
@@ -62,7 +64,7 @@ public class MockRandomMergePolicy extends MergePolicy {
       }
     }
 
-    int numSegments = segments.size();
+    numSegments = segments.size();
 
     if (numSegments > 1 && (numSegments > 30 || random.nextInt(5) == 3)) {
 
@@ -83,7 +85,7 @@ public class MockRandomMergePolicy extends MergePolicy {
 
   @Override
   public MergeSpecification findForcedMerges(
-      SegmentInfos segmentInfos, int maxSegmentCount, Map<SegmentCommitInfo,Boolean> segmentsToMerge, MergeContext mergeContext)
+       SegmentInfos segmentInfos, int maxSegmentCount, Map<SegmentCommitInfo,Boolean> segmentsToMerge, IndexWriter writer)
     throws IOException {
 
     final List<SegmentCommitInfo> eligibleSegments = new ArrayList<>();
@@ -95,7 +97,7 @@ public class MockRandomMergePolicy extends MergePolicy {
 
     //System.out.println("MRMP: findMerges sis=" + segmentInfos + " eligible=" + eligibleSegments);
     MergeSpecification mergeSpec = null;
-    if (eligibleSegments.size() > 1 || (eligibleSegments.size() == 1 && isMerged(segmentInfos, eligibleSegments.get(0), mergeContext) == false)) {
+    if (eligibleSegments.size() > 1 || (eligibleSegments.size() == 1 && isMerged(segmentInfos, eligibleSegments.get(0), writer) == false)) {
       mergeSpec = new MergeSpecification();
       // Already shuffled having come out of a set but
       // shuffle again for good measure:
@@ -124,18 +126,19 @@ public class MockRandomMergePolicy extends MergePolicy {
   }
 
   @Override
-  public MergeSpecification findForcedDeletesMerges(SegmentInfos segmentInfos, MergeContext mergeContext) throws IOException {
-    return findMerges(null, segmentInfos, mergeContext);
+  public MergeSpecification findForcedDeletesMerges(SegmentInfos segmentInfos, IndexWriter writer) throws IOException {
+    return findMerges(null, segmentInfos, writer);
   }
 
   @Override
-  public boolean useCompoundFile(SegmentInfos infos, SegmentCommitInfo mergedInfo, MergeContext mergeContext) throws IOException {
+  public boolean useCompoundFile(SegmentInfos infos, SegmentCommitInfo mergedInfo, IndexWriter writer) throws IOException {
     // 80% of the time we create CFS:
     return random.nextInt(5) != 1;
   }
   
   static class MockRandomOneMerge extends OneMerge {
     final Random r;
+    ArrayList<CodecReader> readers;
 
     MockRandomOneMerge(List<SegmentCommitInfo> segments, long seed) {
       super(segments);
@@ -143,42 +146,28 @@ public class MockRandomMergePolicy extends MergePolicy {
     }
 
     @Override
-    public CodecReader wrapForMerge(CodecReader reader) throws IOException {
-
-      // wrap it (e.g. prevent bulk merge etc)
-      // TODO: cut this over to FilterCodecReader api, we can explicitly
-      // enable/disable bulk merge for portions of the index we want.
-      int thingToDo = r.nextInt(7);
-      if (thingToDo == 0) {
-        // simple no-op FilterReader
-        if (LuceneTestCase.VERBOSE) {
-          System.out.println("NOTE: MockRandomMergePolicy now swaps in a SlowCodecReaderWrapper for merging reader=" + reader);
-        }
-        return SlowCodecReaderWrapper.wrap(new FilterLeafReader(new MergeReaderWrapper(reader)) {
-
-          @Override
-          public CacheHelper getCoreCacheHelper() {
-            return in.getCoreCacheHelper();
+    public List<CodecReader> getMergeReaders() throws IOException {
+      if (readers == null) {
+        readers = new ArrayList<CodecReader>(super.getMergeReaders());
+        for (int i = 0; i < readers.size(); i++) {
+          // wrap it (e.g. prevent bulk merge etc)
+          // TODO: cut this over to FilterCodecReader api, we can explicitly
+          // enable/disable bulk merge for portions of the index we want.
+          int thingToDo = r.nextInt(7);
+          if (thingToDo == 0) {
+            // simple no-op FilterReader
+            readers.set(i, SlowCodecReaderWrapper.wrap(new FilterLeafReader(readers.get(i))));
+          } else if (thingToDo == 1) {
+            // renumber fields
+            // NOTE: currently this only "blocks" bulk merges just by
+            // being a FilterReader. But it might find bugs elsewhere, 
+            // and maybe the situation can be improved in the future.
+            readers.set(i, SlowCodecReaderWrapper.wrap(new MismatchedLeafReader(readers.get(i), r)));
           }
-
-          @Override
-          public CacheHelper getReaderCacheHelper() {
-            return in.getReaderCacheHelper();
-          }
-        });
-      } else if (thingToDo == 1) {
-        // renumber fields
-        // NOTE: currently this only "blocks" bulk merges just by
-        // being a FilterReader. But it might find bugs elsewhere, 
-        // and maybe the situation can be improved in the future.
-        if (LuceneTestCase.VERBOSE) {
-          System.out.println("NOTE: MockRandomMergePolicy now swaps in a MismatchedLeafReader for merging reader=" + reader);
+          // otherwise, reader is unchanged
         }
-        return SlowCodecReaderWrapper.wrap(new MismatchedLeafReader(new MergeReaderWrapper(reader), r));
-      } else {
-        // otherwise, reader is unchanged
-        return reader;
       }
+      return readers;
     }
   }
 }

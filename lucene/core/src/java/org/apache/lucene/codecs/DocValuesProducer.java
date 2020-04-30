@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs;
-
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -27,6 +27,7 @@ import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.index.SortedNumericDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.util.Accountable;
+import org.apache.lucene.util.Bits;
 
 /** Abstract API that produces numeric, binary, sorted, sortedset,
  *  and sortednumeric docvalues.
@@ -64,6 +65,12 @@ public abstract class DocValuesProducer implements Closeable, Accountable {
    *  used by a single thread. */
   public abstract SortedSetDocValues getSortedSet(FieldInfo field) throws IOException;
   
+  /** Returns a {@link Bits} at the size of <code>reader.maxDoc()</code>, 
+   *  with turned on bits for each docid that does have a value for this field.
+   *  The returned instance need not be thread-safe: it will only be
+   *  used by a single thread. */
+  public abstract Bits getDocsWithField(FieldInfo field) throws IOException;
+  
   /** 
    * Checks consistency of this producer
    * <p>
@@ -74,11 +81,10 @@ public abstract class DocValuesProducer implements Closeable, Accountable {
   public abstract void checkIntegrity() throws IOException;
   
   /** 
-   * Returns an instance optimized for merging. This instance may only be
-   * consumed in the thread that called {@link #getMergeInstance()}.
+   * Returns an instance optimized for merging.
    * <p>
    * The default implementation returns {@code this} */
-  public DocValuesProducer getMergeInstance() {
+  public DocValuesProducer getMergeInstance() throws IOException {
     return this;
   }
 }

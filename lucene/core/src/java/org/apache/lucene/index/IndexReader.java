@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,28 +16,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
-
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
-import java.util.WeakHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.DocumentStoredFieldVisitor;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.util.Bits;  // javadocs
+import org.apache.lucene.util.IOUtils;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  IndexReader is an abstract class, providing an interface for accessing a
  point-in-time view of an index.  Any changes made to the index
  via {@link IndexWriter} will not be visible until a new
  {@code IndexReader} is opened.  It's best to use {@link
- DirectoryReader#open(IndexWriter)} to obtain an
+ DirectoryReader#open(IndexWriter,boolean)} to obtain an
  {@code IndexReader}, if your {@link IndexWriter} is
  in-process.  When you need to re-open to see changes to the
  index, it's best to use {@link DirectoryReader#openIfChanged(DirectoryReader)}
@@ -54,6 +56,8 @@ import org.apache.lucene.util.Bits;  // javadocs
   be used to get stored fields from the underlying LeafReaders,
   but it is not possible to directly retrieve postings. To do that, get
   the sub-readers via {@link CompositeReader#getSequentialSubReaders}.
+  Alternatively, you can mimic an {@link LeafReader} (with a serious slowdown),
+  by wrapping composite readers with {@link SlowCompositeReaderWrapper}.
  </ul>
  
  <p>IndexReader instances for indexes on disk are usually constructed
@@ -86,48 +90,42 @@ public abstract class IndexReader implements Closeable {
     if (!(this instanceof CompositeReader || this instanceof LeafReader))
       throw new Error("IndexReader should never be directly extended, subclass LeafReader or CompositeReader instead.");
   }
-
+  
   /**
-   * A utility class that gives hooks in order to help build a cache based on
-   * the data that is contained in this index. 
+   * A custom listener that's invoked when the IndexReader
+   * is closed.
+   *
    * @lucene.experimental
    */
-  public static interface CacheHelper {
-
-    /**
-     * Get a key that the resource can be cached on. The given entry can be
-     * compared using identity, ie. {@link Object#equals} is implemented as
-     * {@code ==} and {@link Object#hashCode} is implemented as
-     * {@link System#identityHashCode}.
-     */
-    CacheKey getKey();
-
-    /**
-     * Add a {@link ClosedListener} which will be called when the resource
-     * guarded by {@link #getKey()} is closed.
-     */
-    void addClosedListener(ClosedListener listener);
-
+  public static interface ReaderClosedListener {
+    /** Invoked when the {@link IndexReader} is closed. */
+    public void onClose(IndexReader reader) throws IOException;
   }
 
-  /** A cache key identifying a resource that is being cached on. */
-  public static final class CacheKey {
-    CacheKey() {} // only instantiable by core impls
-  }
-
-  /**
-   * A listener that is called when a resource gets closed.
-   * @lucene.experimental
-   */
-  @FunctionalInterface
-  public static interface ClosedListener {
-    /** Invoked when the resource (segment core, or index reader) that is
-     *  being cached on is closed. */
-    void onClose(CacheKey key) throws IOException;
-  }
+  private final Set<ReaderClosedListener> readerClosedListeners = 
+      Collections.synchronizedSet(new LinkedHashSet<ReaderClosedListener>());
 
   private final Set<IndexReader> parentReaders = 
       Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<IndexReader,Boolean>()));
+
+  /** Expert: adds a {@link ReaderClosedListener}.  The
+   * provided listener will be invoked when this reader is closed.
+   * At this point, it is safe for apps to evict this reader from
+   * any caches keyed on {@link #getCombinedCoreAndDeletesKey()}.
+   *
+   * @lucene.experimental */
+  public final void addReaderClosedListener(ReaderClosedListener listener) {
+    ensureOpen();
+    readerClosedListeners.add(listener);
+  }
+
+  /** Expert: remove a previously added {@link ReaderClosedListener}.
+   *
+   * @lucene.experimental */
+  public final void removeReaderClosedListener(ReaderClosedListener listener) {
+    ensureOpen();
+    readerClosedListeners.remove(listener);
+  }
   
   /** Expert: This method is called by {@code IndexReader}s which wrap other readers
    * (e.g. {@link CompositeReader} or {@link FilterLeafReader}) to register the parent
@@ -140,14 +138,26 @@ public abstract class IndexReader implements Closeable {
     parentReaders.add(reader);
   }
 
-  // overridden by StandardDirectoryReader and SegmentReader
-  void notifyReaderClosedListeners() throws IOException {
-    // nothing to notify in the base impl
+  private void notifyReaderClosedListeners(Throwable th) {
+    synchronized(readerClosedListeners) {
+      for(ReaderClosedListener listener : readerClosedListeners) {
+        try {
+          listener.onClose(this);
+        } catch (Throwable t) {
+          if (th == null) {
+            th = t;
+          } else {
+            th.addSuppressed(t);
+          }
+        }
+      }
+      IOUtils.reThrowUnchecked(th);
+    }
   }
 
-  private void reportCloseToParentReaders() throws IOException {
-    synchronized (parentReaders) {
-      for (IndexReader parent : parentReaders) {
+  private void reportCloseToParentReaders() {
+    synchronized(parentReaders) {
+      for(IndexReader parent : parentReaders) {
         parent.closedByChild = true;
         // cross memory barrier by a fake write:
         parent.refCount.addAndGet(0);
@@ -228,7 +238,6 @@ public abstract class IndexReader implements Closeable {
    *
    * @see #incRef
    */
-  @SuppressWarnings("try")
   public final void decRef() throws IOException {
     // only check refcount here (don't call ensureOpen()), so we can
     // still close the reader if it was made invalid by a child:
@@ -239,9 +248,17 @@ public abstract class IndexReader implements Closeable {
     final int rc = refCount.decrementAndGet();
     if (rc == 0) {
       closed = true;
-      try (Closeable finalizer = this::reportCloseToParentReaders;
-            Closeable finalizer1 = this::notifyReaderClosedListeners) {
+      Throwable throwable = null;
+      try {
         doClose();
+      } catch (Throwable th) {
+        throwable = th;
+      } finally {
+        try {
+          reportCloseToParentReaders();
+        } finally {
+          notifyReaderClosedListeners(throwable);
+        }
       }
     } else if (rc < 0) {
       throw new IllegalStateException("too many decRef calls: refCount is " + rc + " after decrement");
@@ -264,8 +281,10 @@ public abstract class IndexReader implements Closeable {
   }
   
   /** {@inheritDoc}
-   * <p>{@code IndexReader} subclasses are not allowed
+   * <p>For caching purposes, {@code IndexReader} subclasses are not allowed
    * to implement equals/hashCode, so methods are declared final.
+   * To lookup instances from caches use {@link #getCoreCacheKey} and 
+   * {@link #getCombinedCoreAndDeletesKey}.
    */
   @Override
   public final boolean equals(Object obj) {
@@ -273,8 +292,10 @@ public abstract class IndexReader implements Closeable {
   }
   
   /** {@inheritDoc}
-   * <p>{@code IndexReader} subclasses are not allowed
+   * <p>For caching purposes, {@code IndexReader} subclasses are not allowed
    * to implement equals/hashCode, so methods are declared final.
+   * To lookup instances from caches use {@link #getCoreCacheKey} and 
+   * {@link #getCombinedCoreAndDeletesKey}.
    */
   @Override
   public final int hashCode() {
@@ -301,9 +322,7 @@ public abstract class IndexReader implements Closeable {
     return vectors.terms(field);
   }
 
-  /** Returns the number of documents in this index.
-   *  <p><b>NOTE</b>: This operation may run in O(maxDoc). Implementations that
-   *  can't return this number in constant-time should cache it. */
+  /** Returns the number of documents in this index. */
   public abstract int numDocs();
 
   /** Returns one greater than the largest possible document number.
@@ -312,8 +331,7 @@ public abstract class IndexReader implements Closeable {
    */
   public abstract int maxDoc();
 
-  /** Returns the number of deleted documents.
-   *  <p><b>NOTE</b>: This operation may run in O(maxDoc). */
+  /** Returns the number of deleted documents. */
   public final int numDeletedDocs() {
     return maxDoc() - numDocs();
   }
@@ -334,7 +352,7 @@ public abstract class IndexReader implements Closeable {
    * requested document is deleted, and therefore asking for a deleted document
    * may yield unspecified results. Usually this is not required, however you
    * can test if the doc is deleted by checking the {@link
-   * Bits} returned from {@link MultiBits#getLiveDocs}.
+   * Bits} returned from {@link MultiFields#getLiveDocs}.
    *
    * <b>NOTE:</b> only the content of a field is returned,
    * if that field was stored during indexing.  Metadata
@@ -420,17 +438,24 @@ public abstract class IndexReader implements Closeable {
     return getContext().leaves();
   }
 
-  /**
-   * Optional method: Return a {@link CacheHelper} that can be used to cache
-   * based on the content of this reader. Two readers that have different data
-   * or different sets of deleted documents will be considered different.
-   * <p>A return value of {@code null} indicates that this reader is not suited
-   * for caching, which is typically the case for short-lived wrappers that
-   * alter the content of the wrapped reader.
-   * @lucene.experimental
-   */
-  public abstract CacheHelper getReaderCacheHelper();
+  /** Expert: Returns a key for this IndexReader, so CachingWrapperFilter can find
+   * it again.
+   * This key must not have equals()/hashCode() methods, so &quot;equals&quot; means &quot;identical&quot;. */
+  public Object getCoreCacheKey() {
+    // Don't call ensureOpen since FC calls this (to evict)
+    // on close
+    return this;
+  }
 
+  /** Expert: Returns a key for this IndexReader that also includes deletions,
+   * so CachingWrapperFilter can find it again.
+   * This key must not have equals()/hashCode() methods, so &quot;equals&quot; means &quot;identical&quot;. */
+  public Object getCombinedCoreAndDeletesKey() {
+    // Don't call ensureOpen since FC calls this (to evict)
+    // on close
+    return this;
+  }
+  
   /** Returns the number of documents containing the 
    * <code>term</code>.  This method returns 0 if the term or
    * field does not exists.  This method does not take into
@@ -442,25 +467,25 @@ public abstract class IndexReader implements Closeable {
   
   /**
    * Returns the total number of occurrences of {@code term} across all
-   * documents (the sum of the freq() for each doc that has this term).
-   * Note that, like other term measures, this measure does not take
-   * deleted documents into account.
+   * documents (the sum of the freq() for each doc that has this term). This
+   * will be -1 if the codec doesn't support this measure. Note that, like other
+   * term measures, this measure does not take deleted documents into account.
    */
   public abstract long totalTermFreq(Term term) throws IOException;
   
   /**
-   * Returns the sum of {@link TermsEnum#docFreq()} for all terms in this field.
-   * Note that, just like other term measures, this measure does not take deleted
-   * documents into account.
+   * Returns the sum of {@link TermsEnum#docFreq()} for all terms in this field,
+   * or -1 if this measure isn't stored by the codec. Note that, just like other
+   * term measures, this measure does not take deleted documents into account.
    * 
    * @see Terms#getSumDocFreq()
    */
   public abstract long getSumDocFreq(String field) throws IOException;
   
   /**
-   * Returns the number of documents that have at least one term for this field.
-   * Note that, just like other term measures, this measure does not take deleted 
-   * documents into account.
+   * Returns the number of documents that have at least one term for this field,
+   * or -1 if this measure isn't stored by the codec. Note that, just like other
+   * term measures, this measure does not take deleted documents into account.
    * 
    * @see Terms#getDocCount()
    */
@@ -468,8 +493,9 @@ public abstract class IndexReader implements Closeable {
 
   /**
    * Returns the sum of {@link TermsEnum#totalTermFreq} for all terms in this
-   * field. Note that, just like other term measures, this measure does not take
-   * deleted documents into account.
+   * field, or -1 if this measure isn't stored by the codec (or if this fields
+   * omits term freq and positions). Note that, just like other term measures,
+   * this measure does not take deleted documents into account.
    * 
    * @see Terms#getSumTotalTermFreq()
    */

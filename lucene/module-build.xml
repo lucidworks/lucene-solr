@@ -34,20 +34,11 @@
   <!-- default classpath refid, can be overridden by contrib's build.xml (use the above base.classpath as basis): -->
   <path id="classpath" refid="base.classpath"/>
   
-  <!-- if we run with Java 9+, we refer to the java9 classes directory and insert this before the main classpath (to "emulate" a MR-JAR): -->
-  <condition property="-test.classpath.java9.addon" value="${build.dir}/classes/java9" else="${build.dir}/classes/java">
-    <and>
-      <not><equals arg1="${build.java.runtime}" arg2="1.8"/></not>
-      <istrue value="${tests.withJava9Patches}"/>
-    </and>
-  </condition>
-  
   <path id="test.base.classpath">
     <pathelement location="${common.dir}/build/test-framework/classes/java"/>
     <pathelement location="${common.dir}/build/codecs/classes/java"/>
     <path refid="classpath"/>
     <path refid="junit-path"/>
-    <pathelement location="${-test.classpath.java9.addon}"/><!-- if it's a duplicate it gets removed by Ant! -->
     <pathelement location="${build.dir}/classes/java"/>
   </path>
 
@@ -56,6 +47,7 @@
   <path id="junit.classpath">
     <pathelement location="${build.dir}/classes/test"/>
     <path refid="test.classpath"/>
+    <pathelement path="${java.class.path}"/>
   </path>
 
   <target name="init" depends="common.init,compile-lucene-core"/>
@@ -293,28 +285,6 @@
     <property name="analyzers-icu-javadocs.uptodate" value="true"/>
   </target>
 
-  <property name="analyzers-opennlp.jar" value="${common.dir}/build/analysis/opennlp/lucene-analyzers-opennlp-${version}.jar"/>
-  <target name="check-analyzers-opennlp-uptodate" unless="analyzers-opennlp.uptodate">
-    <module-uptodate name="analysis/opennlp" jarfile="${analyzers-opennlp.jar}" property="analyzers-opennlp.uptodate"/>
-  </target>
-  <target name="jar-analyzers-opennlp" unless="analyzers-opennlp.uptodate" depends="check-analyzers-opennlp-uptodate">
-    <ant dir="${common.dir}/analysis/opennlp" target="jar-core" inheritAll="false">
-      <propertyset refid="uptodate.and.compiled.properties"/>
-    </ant>
-    <property name="analyzers-opennlp.uptodate" value="true"/>
-  </target>
-
-  <property name="analyzers-opennlp-javadoc.jar" value="${common.dir}/build/analysis/opennlp/lucene-analyzers-opennlp-${version}-javadoc.jar"/>
-  <target name="check-analyzers-opennlp-javadocs-uptodate" unless="analyzers-opennlp-javadocs.uptodate">
-    <module-uptodate name="analysis/opennlp" jarfile="${analyzers-opennlp-javadoc.jar}" property="analyzers-opennlp-javadocs.uptodate"/>
-  </target>
-  <target name="javadocs-analyzers-opennlp" unless="analyzers-opennlp-javadocs.uptodate" depends="check-analyzers-opennlp-javadocs-uptodate">
-    <ant dir="${common.dir}/analysis/opennlp" target="javadocs" inheritAll="false">
-      <propertyset refid="uptodate.and.compiled.properties"/>
-    </ant>
-    <property name="analyzers-opennlp-javadocs.uptodate" value="true"/>
-  </target>
-
   <property name="analyzers-phonetic.jar" value="${common.dir}/build/analysis/phonetic/lucene-analyzers-phonetic-${version}.jar"/>
   <target name="check-analyzers-phonetic-uptodate" unless="analyzers-phonetic.uptodate">
     <module-uptodate name="analysis/phonetic" jarfile="${analyzers-phonetic.jar}" property="analyzers-phonetic.uptodate"/>
@@ -402,6 +372,28 @@
     <property name="analyzers-kuromoji-javadocs.uptodate" value="true"/>
   </target>
 
+  <property name="analyzers-uima.jar" value="${common.dir}/build/analysis/uima/lucene-analyzers-uima-${version}.jar"/>
+  <target name="check-analyzers-uima-uptodate" unless="analyzers-uima.uptodate">
+    <module-uptodate name="analysis/uima" jarfile="${analyzers-uima.jar}" property="analyzers-uima.uptodate"/>
+  </target>
+  <target name="jar-analyzers-uima" unless="analyzers-uima.uptodate" depends="check-analyzers-uima-uptodate">
+    <ant dir="${common.dir}/analysis/uima" target="jar-core" inheritAll="false">
+      <propertyset refid="uptodate.and.compiled.properties"/>
+    </ant>
+    <property name="analyzers-uima.uptodate" value="true"/>
+  </target>
+
+  <property name="analyzers-uima-javadoc.jar" value="${common.dir}/build/analysis/uima/lucene-analyzers-uima-${version}-javadoc.jar"/>
+  <target name="check-analyzers-uima-javadocs-uptodate" unless="analyzers-uima-javadocs.uptodate">
+    <module-uptodate name="analysis/uima" jarfile="${analyzers-uima-javadoc.jar}" property="analyzers-uima-javadocs.uptodate"/>
+  </target>
+  <target name="javadocs-analyzers-uima" unless="analyzers-uima-javadocs.uptodate" depends="check-analyzers-uima-javadocs-uptodate">
+    <ant dir="${common.dir}/analysis/uima" target="javadocs" inheritAll="false">
+      <propertyset refid="uptodate.and.compiled.properties"/>
+    </ant>
+    <property name="analyzers-uima-javadocs.uptodate" value="true"/>
+  </target>
+
   <property name="analyzers-morfologik.jar" value="${common.dir}/build/analysis/morfologik/lucene-analyzers-morfologik-${version}.jar"/>
   <fileset id="analyzers-morfologik.fileset" dir="${common.dir}">
     <include name="build/analysis/morfologik/lucene-analyzers-morfologik-${version}.jar" />
@@ -426,28 +418,6 @@
       <propertyset refid="uptodate.and.compiled.properties"/>
     </ant>
     <property name="analyzers-morfologik-javadocs.uptodate" value="true"/>
-  </target>
-
-  <property name="analyzers-nori.jar" value="${common.dir}/build/analysis/nori/lucene-analyzers-nori-${version}.jar"/>
-  <target name="check-analyzers-nori-uptodate" unless="analyzers-nori.uptodate">
-    <module-uptodate name="analysis/nori" jarfile="${analyzers-nori.jar}" property="analyzers-nori.uptodate"/>
-  </target>
-  <target name="jar-analyzers-nori" unless="analyzers-nori.uptodate" depends="check-analyzers-nori-uptodate">
-    <ant dir="${common.dir}/analysis/nori" target="jar-core" inheritAll="false">
-      <propertyset refid="uptodate.and.compiled.properties"/>
-    </ant>
-    <property name="analyzers-nori.uptodate" value="true"/>
-  </target>
-
-  <property name="analyzers-nori-javadoc.jar" value="${common.dir}/build/analysis/nori/lucene-analyzers-nori-${version}-javadoc.jar"/>
-  <target name="check-analyzers-nori-javadocs-uptodate" unless="analyzers-nori-javadocs.uptodate">
-    <module-uptodate name="analysis/nori" jarfile="${analyzers-nori-javadoc.jar}" property="analyzers-nori-javadocs.uptodate"/>
-  </target>
-  <target name="javadocs-analyzers-nori" unless="analyzers-nori-javadocs.uptodate" depends="check-analyzers-nori-javadocs-uptodate">
-    <ant dir="${common.dir}/analysis/nori" target="javadocs" inheritAll="false">
-      <propertyset refid="uptodate.and.compiled.properties"/>
-    </ant>
-    <property name="analyzers-nori-javadocs.uptodate" value="true"/>
   </target>
 
   <property name="codecs.jar" value="${common.dir}/build/codecs/lucene-codecs-${version}.jar"/>
@@ -670,28 +640,6 @@
     <property name="spatial-javadocs.uptodate" value="true"/>
   </target>
 
-  <property name="spatial-extras.jar" value="${common.dir}/build/spatial-extras/lucene-spatial-extras-${version}.jar"/>
-  <target name="check-spatial-extras-uptodate" unless="spatial-extras.uptodate">
-    <module-uptodate name="spatial-extras" jarfile="${spatial-extras.jar}" property="spatial-extras.uptodate"/>
-  </target>
-  <target name="jar-spatial-extras" unless="spatial-extras.uptodate" depends="check-spatial-extras-uptodate">
-    <ant dir="${common.dir}/spatial-extras" target="jar-core" inheritAll="false">
-      <propertyset refid="uptodate.and.compiled.properties"/>
-    </ant>
-    <property name="spatial-extras.uptodate" value="true"/>
-  </target>
-
-  <property name="spatial-extras-javadoc.jar" value="${common.dir}/build/spatial-extras/lucene-spatial-extras-${version}-javadoc.jar"/>
-  <target name="check-spatial-extras-javadocs-uptodate" unless="spatial-extras-javadocs.uptodate">
-    <module-uptodate name="spatial-extras" jarfile="${spatial-extras-javadoc.jar}" property="spatial-extras-javadocs.uptodate"/>
-  </target>
-  <target name="javadocs-spatial-extras" unless="spatial-extras-javadocs.uptodate" depends="check-spatial-extras-javadocs-uptodate">
-    <ant dir="${common.dir}/spatial-extras" target="javadocs" inheritAll="false">
-      <propertyset refid="uptodate.and.compiled.properties"/>
-    </ant>
-    <property name="spatial-extras-javadocs.uptodate" value="true"/>
-  </target>
-
   <property name="suggest.jar" value="${common.dir}/build/suggest/lucene-suggest-${version}.jar"/>
   <target name="check-suggest-uptodate" unless="suggest.uptodate">
     <module-uptodate name="suggest" jarfile="${suggest.jar}" property="suggest.uptodate"/>
@@ -712,27 +660,5 @@
       <propertyset refid="uptodate.and.compiled.properties"/>
     </ant>
     <property name="suggest-javadocs.uptodate" value="true"/>
-  </target>
-
-  <property name="luke.jar" value="${common.dir}/build/luke/lucene-luke-${version}.jar"/>
-  <target name="check-luke-uptodate" unless="luke.uptodate">
-    <module-uptodate name="luke" jarfile="${luke.jar}" property="luke.uptodate"/>
-  </target>
-  <target name="jar-luke" unless="luke.uptodate" depends="check-luke-uptodate">
-    <ant dir="${common.dir}/luke" target="jar-core" inheritAll="false">
-      <propertyset refid="uptodate.and.compiled.properties"/>
-    </ant>
-    <property name="luke.uptodate" value="true"/>
-  </target>
-
-  <property name="luke-javadoc.jar" value="${common.dir}/build/luke/lucene-luke-${version}-javadoc.jar"/>
-  <target name="check-luke-javadocs-uptodate" unless="luke-javadocs.uptodate">
-    <module-uptodate name="luke" jarfile="${luke-javadoc.jar}" property="luke-javadocs.uptodate"/>
-  </target>
-  <target name="javadocs-luke" unless="luke-javadocs.uptodate" depends="check-luke-javadocs-uptodate">
-    <ant dir="${common.dir}/luke" target="javadocs" inheritAll="false">
-      <propertyset refid="uptodate.and.compiled.properties"/>
-    </ant>
-    <property name="luke-javadocs.uptodate" value="true"/>
   </target>
 </project>

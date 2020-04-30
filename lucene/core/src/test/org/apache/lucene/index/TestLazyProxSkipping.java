@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -104,7 +104,7 @@ public class TestLazyProxSkipping extends LuceneTestCase {
         writer.forceMerge(1);
         writer.close();
 
-      LeafReader reader = getOnlyLeafReader(DirectoryReader.open(directory));
+      SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(directory));
 
       this.searcher = newSearcher(reader);
     }
@@ -130,6 +130,7 @@ public class TestLazyProxSkipping extends LuceneTestCase {
  
     public void testLazySkipping() throws IOException {
       final String fieldFormat = TestUtil.getPostingsFormat(this.field);
+      assumeFalse("This test cannot run with Memory postings format", fieldFormat.equals("Memory"));
       assumeFalse("This test cannot run with Direct postings format", fieldFormat.equals("Direct"));
       assumeFalse("This test cannot run with SimpleText postings format", fieldFormat.equals("SimpleText"));
 
@@ -151,7 +152,7 @@ public class TestLazyProxSkipping extends LuceneTestCase {
         writer.close();
         IndexReader reader = DirectoryReader.open(directory);
 
-        PostingsEnum tp = MultiTerms.getTermPostingsEnum(reader,
+        PostingsEnum tp = MultiFields.getTermPositionsEnum(reader,
                                                                    this.field,
                                                                    new BytesRef("b"));
 
@@ -161,7 +162,7 @@ public class TestLazyProxSkipping extends LuceneTestCase {
             assertEquals(tp.nextPosition(), 1);
         }
 
-        tp = MultiTerms.getTermPostingsEnum(reader,
+        tp = MultiFields.getTermPositionsEnum(reader,
                                               this.field,
                                               new BytesRef("a"));
 

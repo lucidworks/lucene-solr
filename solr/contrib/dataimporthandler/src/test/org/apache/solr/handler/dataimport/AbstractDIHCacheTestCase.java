@@ -1,3 +1,5 @@
+package org.apache.solr.handler.dataimport;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.dataimport;
 
 import java.io.Reader;
 import java.math.BigDecimal;
@@ -47,7 +48,7 @@ public class AbstractDIHCacheTestCase {
   @Before
   public void setup() {
     try {
-      APPLE = new SerialClob("Apples grow on trees and they are good to eat.".toCharArray());
+      APPLE = new SerialClob(new String("Apples grow on trees and they are good to eat.").toCharArray());
     } catch (SQLException sqe) {
       Assert.fail("Could not Set up Test");
     }
@@ -55,14 +56,14 @@ public class AbstractDIHCacheTestCase {
     // The first row needs to have all non-null fields,
     // otherwise we would have to always send the fieldTypes & fieldNames as CacheProperties when building.
     data = new ArrayList<>();
-    data.add(new ControlData(new Object[] {1, new BigDecimal(Math.PI), "A", "Apple", 1.11f, Feb21_2011, APPLE }));
-    data.add(new ControlData(new Object[] {2, new BigDecimal(Math.PI), "B", "Ball", 2.22f, Feb21_2011, null }));
-    data.add(new ControlData(new Object[] {4, new BigDecimal(Math.PI), "D", "Dog", 4.44f, Feb21_2011, null }));
-    data.add(new ControlData(new Object[] {3, new BigDecimal(Math.PI), "C", "Cookie", 3.33f, Feb21_2011, null }));
-    data.add(new ControlData(new Object[] {4, new BigDecimal(Math.PI), "D", "Daisy", 4.44f, Feb21_2011, null }));
-    data.add(new ControlData(new Object[] {4, new BigDecimal(Math.PI), "D", "Drawing", 4.44f, Feb21_2011, null }));
-    data.add(new ControlData(new Object[] {5, new BigDecimal(Math.PI), "E",
-        Arrays.asList("Eggplant", "Ear", "Elephant", "Engine"), 5.55f, Feb21_2011, null }));
+    data.add(new ControlData(new Object[] { new Integer(1), new BigDecimal(Math.PI), "A", "Apple", new Float(1.11), Feb21_2011, APPLE }));
+    data.add(new ControlData(new Object[] { new Integer(2), new BigDecimal(Math.PI), "B", "Ball", new Float(2.22), Feb21_2011, null }));
+    data.add(new ControlData(new Object[] { new Integer(4), new BigDecimal(Math.PI), "D", "Dog", new Float(4.44), Feb21_2011, null }));
+    data.add(new ControlData(new Object[] { new Integer(3), new BigDecimal(Math.PI), "C", "Cookie", new Float(3.33), Feb21_2011, null }));
+    data.add(new ControlData(new Object[] { new Integer(4), new BigDecimal(Math.PI), "D", "Daisy", new Float(4.44), Feb21_2011, null }));
+    data.add(new ControlData(new Object[] { new Integer(4), new BigDecimal(Math.PI), "D", "Drawing", new Float(4.44), Feb21_2011, null }));
+    data.add(new ControlData(new Object[] { new Integer(5), new BigDecimal(Math.PI), "E",
+        Arrays.asList("Eggplant", "Ear", "Elephant", "Engine"), new Float(5.55), Feb21_2011, null }));
   }
 
   @After
@@ -73,7 +74,7 @@ public class AbstractDIHCacheTestCase {
 
   //A limitation of this test class is that the primary key needs to be the first one in the list.
   //DIHCaches, however, can handle any field being the primary key.
-  static class ControlData implements Comparable<ControlData>, Iterable<Object> {
+  class ControlData implements Comparable<ControlData>, Iterable<Object> {
     Object[] data;
 
     ControlData(Object[] data) {

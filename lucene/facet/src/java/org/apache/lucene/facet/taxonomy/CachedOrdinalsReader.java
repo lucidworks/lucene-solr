@@ -1,3 +1,5 @@
+package org.apache.lucene.facet.taxonomy;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 import java.util.WeakHashMap;
 
 import org.apache.lucene.codecs.DocValuesFormat;
 import org.apache.lucene.index.BinaryDocValues;
-import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Accountables;
@@ -68,11 +69,7 @@ public class CachedOrdinalsReader extends OrdinalsReader implements Accountable 
   }
 
   private synchronized CachedOrds getCachedOrds(LeafReaderContext context) throws IOException {
-    IndexReader.CacheHelper cacheHelper = context.reader().getCoreCacheHelper();
-    if (cacheHelper == null) {
-      throw new IllegalStateException("Cannot cache ordinals on leaf: " + context.reader());
-    }
-    Object cacheKey = cacheHelper.getKey();
+    Object cacheKey = context.reader().getCoreCacheKey();
     CachedOrds ords = ordsCache.get(cacheKey);
     if (ords == null) {
       ords = new CachedOrds(source.getReader(context), context.reader().maxDoc());
@@ -151,6 +148,11 @@ public class CachedOrdinalsReader extends OrdinalsReader implements Accountable 
         mem += RamUsageEstimator.sizeOf(ordinals);
       }
       return mem;
+    }
+    
+    @Override
+    public Collection<Accountable> getChildResources() {
+      return Collections.emptyList();
     }
   }
 

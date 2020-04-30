@@ -1,3 +1,5 @@
+package org.apache.solr.handler.component;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
 
 import java.util.BitSet;
 import java.util.Date;
@@ -26,6 +27,7 @@ import java.util.Map;
 import org.apache.solr.common.params.FacetParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
+import org.apache.solr.util.DateFormatUtil;
 import org.apache.solr.util.PivotListEntry;
 
 /**
@@ -91,7 +93,7 @@ public class PivotFacetValue {
     if (null == value) {
       out.add(null);
     } else if (value instanceof Date) {
-      out.add(((Date) value).toInstant().toString());
+      out.add(DateFormatUtil.formatExternal((Date) value));
     } else {
       out.add(value.toString());
     }

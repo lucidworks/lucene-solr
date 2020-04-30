@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.common.params;
 
 import java.util.LinkedHashMap;
@@ -23,7 +24,7 @@ import java.util.Set;
 
 
 /**
- * This class is similar to {@link MultiMapSolrParams} except you can edit the
+ * This class is similar to MultiMapSolrParams except you can edit the 
  * parameters after it is initialized.  It has helper functions to set/add
  * integer and boolean param values.
  * 
@@ -54,19 +55,6 @@ public class ModifiableSolrParams extends SolrParams
     }
   }
 
-  /**
-   * If the input params are of type MofifiableSolrParams, returns the input, otherwise, constructs a new
-   * ModifiableSolrParams, copying values from the given params. If params is null, returns an empty
-   * ModifiableSolrParams instance.
-   */
-  public static ModifiableSolrParams of(SolrParams params)
-  {
-    if (params instanceof ModifiableSolrParams) {
-      return (ModifiableSolrParams) params;
-    }
-    return new ModifiableSolrParams(params);
-  }
-
   public int size() {
     return vals == null ? 0 : vals.size();
   }
@@ -76,10 +64,6 @@ public class ModifiableSolrParams extends SolrParams
   }
 
 
-  public ModifiableSolrParams setNonNull(String name, Object val) {
-    if (val != null) set(name, String.valueOf(val));
-    return this;
-  }
   //----------------------------------------------------------------
   //----------------------------------------------------------------
 
@@ -132,13 +116,12 @@ public class ModifiableSolrParams extends SolrParams
     return this;
   }
 
-  /**
-   * Add all of the params provided in the parameter to <em>this</em> params. Any current value(s) for the same
-   * key will be overridden.
-   */
-  public void add(SolrParams params) {
-    for (Map.Entry<String, String[]> pair: params) {
-      set(pair.getKey(), pair.getValue());
+  public void add(SolrParams params)
+  {
+    Iterator<String> names = params.getParameterNamesIterator();
+    while (names.hasNext()) {
+      String name = names.next();
+      set(name, params.getParams(name));
     }
   }
   
@@ -205,10 +188,5 @@ public class ModifiableSolrParams extends SolrParams
   @Override
   public String[] getParams(String param) {
     return vals.get( param );
-  }
-
-  @Override
-  public Iterator<Map.Entry<String, String[]>> iterator() {
-    return vals.entrySet().iterator();
   }
 }

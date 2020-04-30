@@ -105,13 +105,13 @@ var getIterations = function(slave) {
     for (var i in slave.replicationFailedAtList) {
         var failedDate = slave.replicationFailedAtList[i];
         var matchingIterations = find(iterations, failedDate);
-        if (matchingIterations[0]) {
+        if (matchingIterations) {
             iteration = matchingIterations[0];
-            iteration.status = "failed";
         } else {
-            iteration = {date: failedDate, status:"failed", latest:false};
+            iteration = {date: failedDate, latest:false};
             iterations.push(iteration);
         }
+        iteration.status = "failed";
         if (failedDate == slave.replicationFailedAt) {
             iteration.latest = true;
         }

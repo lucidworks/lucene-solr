@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.compressing.dummy;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.compressing.dummy;
 
 import java.io.IOException;
 
@@ -78,9 +79,6 @@ public class DummyCompressingCodec extends CompressingCodec {
     public void compress(byte[] bytes, int off, int len, DataOutput out) throws IOException {
       out.writeBytes(bytes, off, len);
     }
-
-    @Override
-    public void close() throws IOException {};
 
   };
 

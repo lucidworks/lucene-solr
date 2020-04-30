@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.LinkedList;
@@ -23,7 +23,7 @@ import java.util.LinkedList;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.TermsEnum;
@@ -63,17 +63,17 @@ public class TestPhrasePrefixQuery extends LuceneTestCase {
     IndexSearcher searcher = newSearcher(reader);
     
     // PhrasePrefixQuery query1 = new PhrasePrefixQuery();
-    MultiPhraseQuery.Builder query1builder = new MultiPhraseQuery.Builder();
+    MultiPhraseQuery query1 = new MultiPhraseQuery();
     // PhrasePrefixQuery query2 = new PhrasePrefixQuery();
-    MultiPhraseQuery.Builder query2builder = new MultiPhraseQuery.Builder();
-    query1builder.add(new Term("body", "blueberry"));
-    query2builder.add(new Term("body", "strawberry"));
+    MultiPhraseQuery query2 = new MultiPhraseQuery();
+    query1.add(new Term("body", "blueberry"));
+    query2.add(new Term("body", "strawberry"));
     
     LinkedList<Term> termsWithPrefix = new LinkedList<>();
     
     // this TermEnum gives "piccadilly", "pie" and "pizza".
     String prefix = "pi";
-    TermsEnum te = MultiTerms.getTerms(reader, "body").iterator();
+    TermsEnum te = MultiFields.getFields(reader).terms("body").iterator();
     te.seekCeil(new BytesRef(prefix));
     do {
       String s = te.term().utf8ToString();
@@ -84,14 +84,14 @@ public class TestPhrasePrefixQuery extends LuceneTestCase {
       }
     } while (te.next() != null);
     
-    query1builder.add(termsWithPrefix.toArray(new Term[0]));
-    query2builder.add(termsWithPrefix.toArray(new Term[0]));
+    query1.add(termsWithPrefix.toArray(new Term[0]));
+    query2.add(termsWithPrefix.toArray(new Term[0]));
     
     ScoreDoc[] result;
-    result = searcher.search(query1builder.build(), 1000).scoreDocs;
+    result = searcher.search(query1, 1000).scoreDocs;
     assertEquals(2, result.length);
     
-    result = searcher.search(query2builder.build(), 1000).scoreDocs;
+    result = searcher.search(query2, 1000).scoreDocs;
     assertEquals(0, result.length);
     reader.close();
     indexStore.close();

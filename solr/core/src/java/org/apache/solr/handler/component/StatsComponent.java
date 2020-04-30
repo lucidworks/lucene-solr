@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.component;
 
 import java.io.IOException;
@@ -45,12 +46,6 @@ public class StatsComponent extends SearchComponent {
       rb.setNeedDocSet( true );
       rb.doStats = true;
       rb._statsInfo = new StatsInfo(rb);
-      for (StatsField statsField : rb._statsInfo.getStatsFields()) {
-        if (statsField.getSchemaField() != null && statsField.getSchemaField().getType().isPointField() && !statsField.getSchemaField().hasDocValues()) {
-          throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, 
-              "Can't calculate stats on a PointField without docValues");
-        }
-      }
     }
   }
 
@@ -99,7 +94,7 @@ public class StatsComponent extends SearchComponent {
         stats = (NamedList<NamedList<NamedList<?>>>) 
           srsp.getSolrResponse().getResponse().get("stats");
       } catch (Exception e) {
-        if (ShardParams.getShardsTolerantAsBool(rb.req.getParams())) {
+        if (rb.req.getParams().getBool(ShardParams.SHARDS_TOLERANT, false)) {
           continue; // looks like a shard did not return anything
         }
         throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
@@ -160,7 +155,7 @@ public class StatsComponent extends SearchComponent {
   }
 
   /////////////////////////////////////////////
-  ///  SolrInfoBean
+  ///  SolrInfoMBean
   ////////////////////////////////////////////
 
   @Override

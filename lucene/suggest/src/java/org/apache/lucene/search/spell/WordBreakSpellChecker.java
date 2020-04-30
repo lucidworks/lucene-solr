@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spell;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spell;
 
 import java.io.IOException;
 import java.util.Comparator;
@@ -23,6 +24,8 @@ import java.util.Queue;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.search.spell.SuggestMode;
+import org.apache.lucene.util.BytesRef;
 
 /**
  * <p>
@@ -440,7 +443,7 @@ public class WordBreakSpellChecker {
     this.maxEvaluations = maxEvaluations;
   }
   
-  private static class LengthThenMaxFreqComparator implements
+  private class LengthThenMaxFreqComparator implements
       Comparator<SuggestWordArrayWrapper> {
     @Override
     public int compare(SuggestWordArrayWrapper o1, SuggestWordArrayWrapper o2) {
@@ -454,7 +457,7 @@ public class WordBreakSpellChecker {
     }
   }
   
-  private static class LengthThenSumFreqComparator implements
+  private class LengthThenSumFreqComparator implements
       Comparator<SuggestWordArrayWrapper> {
     @Override
     public int compare(SuggestWordArrayWrapper o1, SuggestWordArrayWrapper o2) {
@@ -468,7 +471,7 @@ public class WordBreakSpellChecker {
     }
   }
   
-  private static class CombinationsThenFreqComparator implements
+  private class CombinationsThenFreqComparator implements
       Comparator<CombineSuggestionWrapper> {
     @Override
     public int compare(CombineSuggestionWrapper o1, CombineSuggestionWrapper o2) {
@@ -483,7 +486,7 @@ public class WordBreakSpellChecker {
     }
   }
   
-  private static class SuggestWordArrayWrapper {
+  private class SuggestWordArrayWrapper {
     final SuggestWord[] suggestWords;
     final int freqMax;
     final int freqSum;
@@ -501,7 +504,7 @@ public class WordBreakSpellChecker {
     }
   }
   
-  private static class CombineSuggestionWrapper {
+  private class CombineSuggestionWrapper {
     final CombineSuggestion combineSuggestion;
     final int numCombinations;
     

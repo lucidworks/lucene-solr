@@ -1,3 +1,5 @@
+package org.apache.solr.handler.clustering.carrot2;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.clustering.carrot2;
-
-import java.util.ArrayList;
 import java.util.List;
 
 import org.carrot2.core.Cluster;
@@ -34,6 +33,8 @@ import org.carrot2.util.attribute.Bindable;
 import org.carrot2.util.attribute.Input;
 import org.carrot2.util.attribute.Output;
 
+import com.google.common.collect.Lists;
+
 /**
  * A mock implementation of Carrot2 clustering algorithm for testing whether the
  * customized lexical resource lookup works correctly. This algorithm ignores
@@ -48,18 +49,18 @@ public class LexicalResourcesCheckClusteringAlgorithm extends
   @Output
   @Processing
   @Attribute(key = AttributeNames.CLUSTERS)
-  public List<Cluster> clusters;
+  private List<Cluster> clusters;
 
   @Input
   @Processing
   @Attribute
-  public String wordsToCheck;
+  private String wordsToCheck;
 
-  public BasicPreprocessingPipeline preprocessing = new BasicPreprocessingPipeline();
+  private BasicPreprocessingPipeline preprocessing = new BasicPreprocessingPipeline();
 
   @Override
   public void process() throws ProcessingException {
-    clusters = new ArrayList<>();
+    clusters = Lists.newArrayList();
     if (wordsToCheck == null) {
       return;
     }

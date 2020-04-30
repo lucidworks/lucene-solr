@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.asserting;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.asserting;
 
 import org.apache.lucene.codecs.DocValuesFormat;
 import org.apache.lucene.codecs.FilterCodec;
 import org.apache.lucene.codecs.LiveDocsFormat;
 import org.apache.lucene.codecs.NormsFormat;
-import org.apache.lucene.codecs.PointsFormat;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.StoredFieldsFormat;
 import org.apache.lucene.codecs.TermVectorsFormat;
@@ -32,14 +32,6 @@ import org.apache.lucene.util.TestUtil;
  * Acts like the default codec but with additional asserts.
  */
 public class AssertingCodec extends FilterCodec {
-
-  static void assertThread(String object, Thread creationThread) {
-    if (creationThread != Thread.currentThread()) {
-      throw new AssertionError(object + " are only supposed to be consumed in "
-          + "the thread in which they have been acquired. But was acquired in "
-          + creationThread + " and consumed in " + Thread.currentThread() + ".");
-    }
-  }
 
   private final PostingsFormat postings = new PerFieldPostingsFormat() {
     @Override
@@ -61,7 +53,6 @@ public class AssertingCodec extends FilterCodec {
   private final LiveDocsFormat liveDocs = new AssertingLiveDocsFormat();
   private final PostingsFormat defaultFormat = new AssertingPostingsFormat();
   private final DocValuesFormat defaultDVFormat = new AssertingDocValuesFormat();
-  private final PointsFormat pointsFormat = new AssertingPointsFormat();
 
   public AssertingCodec() {
     super("Asserting", TestUtil.getDefaultCodec());
@@ -95,11 +86,6 @@ public class AssertingCodec extends FilterCodec {
   @Override
   public LiveDocsFormat liveDocsFormat() {
     return liveDocs;
-  }
-
-  @Override
-  public PointsFormat pointsFormat() {
-    return pointsFormat;
   }
 
   @Override

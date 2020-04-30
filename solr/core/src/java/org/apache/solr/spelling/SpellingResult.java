@@ -1,3 +1,4 @@
+package org.apache.solr.spelling;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling;
+
+import org.apache.lucene.analysis.Token;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -79,7 +81,7 @@ public class SpellingResult {
 
   /**
    * Suggestions must be added with the best suggestion first.  ORDER is important.
-   * @param token The {@link Token}
+   * @param token The {@link org.apache.lucene.analysis.Token}
    * @param suggestion The suggestion for the Token
    * @param docFreq The document frequency
    */
@@ -96,7 +98,7 @@ public class SpellingResult {
   /**
    * Gets the suggestions for the given token.
    *
-   * @param token The {@link Token} to look up
+   * @param token The {@link org.apache.lucene.analysis.Token} to look up
    * @return A LinkedHashMap of the suggestions.  Key is the suggestion, value is the token frequency in the index, else {@link #NO_FREQUENCY_INFO}.
    *
    * The suggestions are added in sorted order (i.e. best suggestion first) then the iterator will return the suggestions in order

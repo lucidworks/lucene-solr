@@ -52,27 +52,29 @@ public class DisMaxQParser extends QParser {
    * Applies the appropriate default rules for the "mm" param based on the 
    * effective value of the "q.op" param
    *
+   * @see QueryParsing#getQueryParserDefaultOperator
    * @see QueryParsing#OP
    * @see DisMaxParams#MM
    */
   public static String parseMinShouldMatch(final IndexSchema schema, 
                                            final SolrParams params) {
-    org.apache.solr.parser.QueryParser.Operator op = QueryParsing.parseOP(params.get(QueryParsing.OP));
-    
+    org.apache.solr.parser.QueryParser.Operator op = QueryParsing.getQueryParserDefaultOperator
+        (schema, params.get(QueryParsing.OP));
     return params.get(DisMaxParams.MM, 
                       op.equals(QueryParser.Operator.AND) ? "100%" : "0%");
   }
 
   /**
    * Uses {@link SolrPluginUtils#parseFieldBoosts(String)} with the 'qf' parameter. Falls back to the 'df' parameter
+   * or {@link org.apache.solr.schema.IndexSchema#getDefaultSearchFieldName()}.
    */
   public static Map<String, Float> parseQueryFields(final IndexSchema indexSchema, final SolrParams solrParams)
       throws SyntaxError {
     Map<String, Float> queryFields = SolrPluginUtils.parseFieldBoosts(solrParams.getParams(DisMaxParams.QF));
     if (queryFields.isEmpty()) {
-      String df = solrParams.get(CommonParams.DF);
+      String df = QueryParsing.getDefaultField(indexSchema, solrParams.get(CommonParams.DF));
       if (df == null) {
-        throw new SyntaxError("Neither "+DisMaxParams.QF+" nor "+CommonParams.DF +" are present.");
+        throw new SyntaxError("Neither "+DisMaxParams.QF+", "+CommonParams.DF +", nor the default search field are present.");
       }
       queryFields.put(df, 1.0f);
     }
@@ -96,7 +98,6 @@ public class DisMaxQParser extends QParser {
 
   @Override
   public Query parse() throws SyntaxError {
-    
     parsed = true;
     SolrParams solrParams = SolrParams.wrapDefaults(localParams, params);
 
@@ -106,6 +107,7 @@ public class DisMaxQParser extends QParser {
      * this query is an artificial construct
      */
     BooleanQuery.Builder query = new BooleanQuery.Builder();
+    query.setDisableCoord(true);
 
     boolean notBlank = addMainQuery(query, solrParams);
     if (!notBlank)
@@ -113,7 +115,7 @@ public class DisMaxQParser extends QParser {
     addBoostQuery(query, solrParams);
     addBoostFunctions(query, solrParams);
 
-    return QueryUtils.build(query, this);
+    return query.build();
   }
 
   protected void addBoostFunctions(BooleanQuery.Builder query, SolrParams solrParams) throws SyntaxError {
@@ -122,9 +124,9 @@ public class DisMaxQParser extends QParser {
       for (String boostFunc : boostFuncs) {
         if (null == boostFunc || "".equals(boostFunc)) continue;
         Map<String, Float> ff = SolrPluginUtils.parseFieldBoosts(boostFunc);
-        for (Map.Entry<String, Float> entry : ff.entrySet()) {
-          Query fq = subQuery(entry.getKey(), FunctionQParserPlugin.NAME).getQuery();
-          Float b = entry.getValue();
+        for (String f : ff.keySet()) {
+          Query fq = subQuery(f, FunctionQParserPlugin.NAME).getQuery();
+          Float b = ff.get(f);
           if (null != b) {
             fq = new BoostQuery(fq, b);
           }
@@ -250,9 +252,8 @@ public class DisMaxQParser extends QParser {
     if (dis instanceof BooleanQuery) {
       BooleanQuery.Builder t = new BooleanQuery.Builder();
       SolrPluginUtils.flattenBooleanQuery(t, (BooleanQuery) dis);
-      boolean mmAutoRelax = params.getBool(DisMaxParams.MM_AUTORELAX, false);
-      SolrPluginUtils.setMinShouldMatch(t, minShouldMatch, mmAutoRelax);
-      query = QueryUtils.build(t, this);
+      SolrPluginUtils.setMinShouldMatch(t, minShouldMatch);
+      query = t.build();
     }
     return query;
   }
@@ -264,7 +265,6 @@ public class DisMaxQParser extends QParser {
             IMPOSSIBLE_FIELD_NAME);
     parser.addAlias(IMPOSSIBLE_FIELD_NAME, tiebreaker, fields);
     parser.setPhraseSlop(slop);
-    parser.setSplitOnWhitespace(true);
     return parser;
   }
 

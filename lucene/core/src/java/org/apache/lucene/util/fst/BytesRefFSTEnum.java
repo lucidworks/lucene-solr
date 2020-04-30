@@ -1,3 +1,5 @@
+package org.apache.lucene.util.fst;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.fst;
-
 
 import java.io.IOException;
 
@@ -81,7 +81,7 @@ public final class BytesRefFSTEnum<T> extends FSTEnum<T> {
   public InputOutput<T> seekExact(BytesRef target) throws IOException {
     this.target = target;
     targetLength = target.length;
-    if (doSeekExact()) {
+    if (super.doSeekExact()) {
       assert upto == 1+target.length;
       return setResult();
     } else {

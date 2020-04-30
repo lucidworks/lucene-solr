@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,45 +16,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
-import org.apache.lucene.index.ImpactsEnum;
 import org.apache.lucene.index.PostingsEnum;
-import org.apache.lucene.index.SlowImpactsEnum;
+import org.apache.lucene.search.similarities.Similarity;
 
 /** Expert: A <code>Scorer</code> for documents matching a <code>Term</code>.
  */
 final class TermScorer extends Scorer {
   private final PostingsEnum postingsEnum;
-  private final ImpactsEnum impactsEnum;
-  private final DocIdSetIterator iterator;
-  private final LeafSimScorer docScorer;
-  private final ImpactsDISI impactsDisi;
+  private final Similarity.SimScorer docScorer;
 
   /**
-   * Construct a {@link TermScorer} that will iterate all documents.
+   * Construct a <code>TermScorer</code>.
+   *
+   * @param weight
+   *          The weight of the <code>Term</code> in the query.
+   * @param td
+   *          An iterator over the documents matching the <code>Term</code>.
+   * @param docScorer
+   *          The <code>Similarity.SimScorer</code> implementation
+   *          to be used for score computations.
    */
-  TermScorer(Weight weight, PostingsEnum postingsEnum, LeafSimScorer docScorer) {
+  TermScorer(Weight weight, PostingsEnum td, Similarity.SimScorer docScorer) {
     super(weight);
-    iterator = this.postingsEnum = postingsEnum;
-    impactsEnum = new SlowImpactsEnum(postingsEnum);
-    impactsDisi = new ImpactsDISI(impactsEnum, impactsEnum, docScorer.getSimScorer());
     this.docScorer = docScorer;
-  }
-
-  /**
-   * Construct a {@link TermScorer} that will use impacts to skip blocks of
-   * non-competitive documents.
-   */
-  TermScorer(Weight weight, ImpactsEnum impactsEnum, LeafSimScorer docScorer) {
-    super(weight);
-    postingsEnum = this.impactsEnum = impactsEnum;
-    impactsDisi = new ImpactsDISI(impactsEnum, impactsEnum, docScorer.getSimScorer());
-    iterator = impactsDisi;
-    this.docScorer = docScorer;
+    this.postingsEnum = td;
   }
 
   @Override
@@ -60,38 +50,47 @@ final class TermScorer extends Scorer {
     return postingsEnum.docID();
   }
 
-  final int freq() throws IOException {
+  @Override
+  public int freq() throws IOException {
     return postingsEnum.freq();
   }
 
+  /**
+   * Advances to the next document matching the query. <br>
+   *
+   * @return the document matching the query or NO_MORE_DOCS if there are no more documents.
+   */
   @Override
-  public DocIdSetIterator iterator() {
-    return iterator;
+  public int nextDoc() throws IOException {
+    return postingsEnum.nextDoc();
   }
 
   @Override
   public float score() throws IOException {
-    assert docID() != DocIdSetIterator.NO_MORE_DOCS;
+    assert docID() != NO_MORE_DOCS;
     return docScorer.score(postingsEnum.docID(), postingsEnum.freq());
   }
 
+  /**
+   * Advances to the first match beyond the current whose document number is
+   * greater than or equal to a given target. <br>
+   * The implementation uses {@link org.apache.lucene.index.PostingsEnum#advance(int)}.
+   *
+   * @param target
+   *          The target document number.
+   * @return the matching document or NO_MORE_DOCS if none exist.
+   */
   @Override
-  public int advanceShallow(int target) throws IOException {
-    return impactsDisi.advanceShallow(target);
+  public int advance(int target) throws IOException {
+    return postingsEnum.advance(target);
   }
 
   @Override
-  public float getMaxScore(int upTo) throws IOException {
-    return impactsDisi.getMaxScore(upTo);
-  }
-
-  @Override
-  public void setMinCompetitiveScore(float minScore) {
-    impactsDisi.setMinCompetitiveScore(minScore);
+  public long cost() {
+    return postingsEnum.cost();
   }
 
   /** Returns a string representation of this <code>TermScorer</code>. */
   @Override
   public String toString() { return "scorer(" + weight + ")[" + super.toString() + "]"; }
-
 }

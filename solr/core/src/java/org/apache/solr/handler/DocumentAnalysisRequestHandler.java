@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler;
 
 import javax.xml.stream.XMLInputFactory;
@@ -84,6 +85,8 @@ public class DocumentAnalysisRequestHandler extends AnalysisRequestHandlerBase {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   private static final XMLErrorLogger xmllog = new XMLErrorLogger(log);
 
+  private static final float DEFAULT_BOOST = 1.0f;
+
   private XMLInputFactory inputFactory;
 
   @Override
@@ -108,6 +111,9 @@ public class DocumentAnalysisRequestHandler extends AnalysisRequestHandlerBase {
     }
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   protected NamedList doAnalysis(SolrQueryRequest req) throws Exception {
     DocumentAnalysisRequest analysisRequest = resolveAnalysisRequest(req);
@@ -293,7 +299,7 @@ public class DocumentAnalysisRequestHandler extends AnalysisRequestHandlerBase {
             }
             return doc;
           } else if ("field".equals(reader.getLocalName())) {
-            doc.addField(fieldName, text.toString());
+            doc.addField(fieldName, text.toString(), DEFAULT_BOOST);
             if (uniqueKeyField.equals(fieldName)) {
               hasId = true;
             }

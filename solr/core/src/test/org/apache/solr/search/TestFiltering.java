@@ -14,26 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
 
-import java.lang.invoke.MethodHandles;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-
 import org.apache.lucene.search.DocIdSetIterator;
-import org.apache.lucene.search.Query;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.SolrException;
 import org.apache.solr.request.SolrQueryRequest;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.lang.invoke.MethodHandles;
+import java.util.*;
 
 public class TestFiltering extends SolrTestCaseJ4 {
 
@@ -42,66 +39,11 @@ public class TestFiltering extends SolrTestCaseJ4 {
   @BeforeClass
   public static void beforeTests() throws Exception {
     System.setProperty("enable.update.log", "false"); // schema12 doesn't support _version_
-    initCore("solrconfig.xml","schema_latest.xml");
+    initCore("solrconfig.xml","schema12.xml");
   }
 
-  @Test
-  public void testLiveDocsSharing() throws Exception {
-    clearIndex();
-    for (int i=0; i<20; i++) {
-      for (int repeat=0; repeat < (i%5==0 ? 2 : 1); repeat++) {
-        assertU(adoc("id", Integer.toString(i), "foo_s", "foo", "val_i", Integer.toString(i), "val_s", Character.toString((char)('A' + i))));
-      }
-    }
-    assertU(commit());
 
-    String[] queries = {
-        "foo_s:foo",
-        "foo_s:f*",
-        "*:*",
-        "id:[* TO *]",
-        "id:[0 TO 99]",
-        "val_i:[0 TO 20]",
-        "val_s:[A TO z]"
-    };
-
-    SolrQueryRequest req = req();
-    try {
-      SolrIndexSearcher searcher = req.getSearcher();
-
-      DocSet live = null;
-      for (String qstr :  queries) {
-        Query q = QParser.getParser(qstr, null, req).getQuery();
-        // System.out.println("getting set for " + q);
-        DocSet set = searcher.getDocSet(q);
-        if (live == null) {
-          live = searcher.getLiveDocSet();
-        }
-        assertTrue( set == live);
-
-        QueryCommand cmd = new QueryCommand();
-        cmd.setQuery( QParser.getParser(qstr, null, req).getQuery() );
-        cmd.setLen(random().nextInt(30));
-        cmd.setNeedDocSet(true);
-        QueryResult res = new QueryResult();
-        searcher.search(res, cmd);
-        set = res.getDocSet();
-        assertTrue( set == live );
-
-        cmd.setQuery( QParser.getParser(qstr + " OR id:0", null, req).getQuery() );
-        cmd.setFilterList( QParser.getParser(qstr + " OR id:1", null, req).getQuery() );
-        res = new QueryResult();
-        searcher.search(res, cmd);
-        set = res.getDocSet();
-        assertTrue( set == live );
-      }
-
-    } finally {
-      req.close();
-    }
-  }
-
-    public void testCaching() throws Exception {
+  public void testCaching() throws Exception {
     clearIndex();
     assertU(adoc("id","4", "val_i","1"));
     assertU(adoc("id","1", "val_i","2"));
@@ -111,38 +53,29 @@ public class TestFiltering extends SolrTestCaseJ4 {
 
     int prevCount;
 
-    // default cost uses post filtering (for frange)
     prevCount = DelegatingCollector.setLastDelegateCount;
-    assertJQ(req("q","*:*", "fq","{!frange l=2 u=3 cache=false}val_i")
+    assertJQ(req("q","*:*", "fq","{!frange l=2 u=3 cache=false cost=100}val_i")
         ,"/response/numFound==2"
     );
     assertEquals(1, DelegatingCollector.setLastDelegateCount - prevCount);
 
     // The exact same query the second time will be cached by the queryCache
     prevCount = DelegatingCollector.setLastDelegateCount;
-    assertJQ(req("q","*:*", "fq","{!frange l=2 u=3 cache=false}val_i")
+    assertJQ(req("q","*:*", "fq","{!frange l=2 u=3 cache=false cost=100}val_i")
         ,"/response/numFound==2"
     );
     assertEquals(0, DelegatingCollector.setLastDelegateCount - prevCount);
 
-    // cache is true by default, even w/explicit low/high costs
+    // cache is true by default
     prevCount = DelegatingCollector.setLastDelegateCount;
     assertJQ(req("q","*:*", "fq","{!frange l=2 u=4}val_i")
         ,"/response/numFound==3"
     );
     assertEquals(0, DelegatingCollector.setLastDelegateCount - prevCount);
-    assertJQ(req("q","*:*", "fq","{!frange l=2 u=4 cost=0}val_i")
-        ,"/response/numFound==3"
-    );
-    assertEquals(0, DelegatingCollector.setLastDelegateCount - prevCount);
-    assertJQ(req("q","*:*", "fq","{!frange l=2 u=4 cost=999}val_i")
-        ,"/response/numFound==3"
-    );
-    assertEquals(0, DelegatingCollector.setLastDelegateCount - prevCount);
 
-    // no caching and explicitly low cost avoids post filtering
+    // default cost avoids post filtering
     prevCount = DelegatingCollector.setLastDelegateCount;
-    assertJQ(req("q","*:*", "fq","{!frange l=2 u=5 cache=false cost=0}val_i")
+    assertJQ(req("q","*:*", "fq","{!frange l=2 u=5 cache=false}val_i")
         ,"/response/numFound==3"
     );
     assertEquals(0, DelegatingCollector.setLastDelegateCount - prevCount);
@@ -150,38 +83,29 @@ public class TestFiltering extends SolrTestCaseJ4 {
 
     // now re-do the same tests w/ faceting on to get the full docset
 
-    // default cost uses post filtering (for frange)
     prevCount = DelegatingCollector.setLastDelegateCount;
-    assertJQ(req("facet","true", "facet.field","id", "q","*:*", "fq","{!frange l=2 u=6 cache=false}val_i")
+    assertJQ(req("facet","true", "facet.field","id", "q","*:*", "fq","{!frange l=2 u=6 cache=false cost=100}val_i")
         ,"/response/numFound==3"
     );
     assertEquals(1, DelegatingCollector.setLastDelegateCount - prevCount);
 
     // since we need the docset and the filter was not cached, the collector will need to be used again
     prevCount = DelegatingCollector.setLastDelegateCount;
-    assertJQ(req("facet","true", "facet.field","id", "q","*:*", "fq","{!frange l=2 u=6 cache=false}val_i")
+    assertJQ(req("facet","true", "facet.field","id", "q","*:*", "fq","{!frange l=2 u=6 cache=false cost=100}val_i")
         ,"/response/numFound==3"
     );
     assertEquals(1, DelegatingCollector.setLastDelegateCount - prevCount);
 
-    // cache is true by default, even w/explicit low/high costs
+    // cache is true by default
     prevCount = DelegatingCollector.setLastDelegateCount;
     assertJQ(req("facet","true", "facet.field","id", "q","*:*", "fq","{!frange l=2 u=7}val_i")
         ,"/response/numFound==3"
     );
     assertEquals(0, DelegatingCollector.setLastDelegateCount - prevCount);
-    assertJQ(req("facet","true", "facet.field","id", "q","*:*", "fq","{!frange l=2 u=7 cost=0}val_i")
-        ,"/response/numFound==3"
-    );
-    assertEquals(0, DelegatingCollector.setLastDelegateCount - prevCount);
-    assertJQ(req("facet","true", "facet.field","id", "q","*:*", "fq","{!frange l=2 u=7 cost=999}val_i")
-        ,"/response/numFound==3"
-    );
-    assertEquals(0, DelegatingCollector.setLastDelegateCount - prevCount);
 
-    // no caching and explicitly low cost avoids post filtering
+    // default cost avoids post filtering
     prevCount = DelegatingCollector.setLastDelegateCount;
-    assertJQ(req("facet","true", "facet.field","id", "q","*:*", "fq","{!frange l=2 u=8 cache=false cost=0}val_i")
+    assertJQ(req("facet","true", "facet.field","id", "q","*:*", "fq","{!frange l=2 u=8 cache=false}val_i")
         ,"/response/numFound==3"
     );
     assertEquals(0, DelegatingCollector.setLastDelegateCount - prevCount);
@@ -194,7 +118,7 @@ public class TestFiltering extends SolrTestCaseJ4 {
   }
 
 
-  static class Model {
+  class Model {
     int indexSize;
     FixedBitSet answer;
     FixedBitSet multiSelect;
@@ -213,79 +137,8 @@ public class TestFiltering extends SolrTestCaseJ4 {
   }
 
   static String f = "val_i";
-  static String f_s = "val_s";
-  static String f_s(int i) {
-    return String.format(Locale.ROOT, "%05d", i);
-  }
 
-
-  String rangeStr(String field, boolean negative, int l, int u, boolean cache, int cost, boolean exclude) {
-    String topLev="";
-    if (!cache || exclude) {
-      topLev = "{!" + (cache || random().nextBoolean() ? " cache=" + cache : "")
-          + (cost != 0 ? " cost=" + cost : "")
-          + ((exclude) ? " tag=t" : "") + "}";
-    }
-
-    String q = field + ":";
-    String q2 = q;
-
-    String lower1 = "[" + f_s(l);
-    String lower2 = l<=0 ? lower1 : ("{" + f_s(l-1));
-    String upper1 = f_s(u) + "]";
-    String upper2 = f_s(u+1) + "}";
-
-    if (random().nextBoolean()) {
-      q += lower1;
-      q2 += lower2;
-    } else {
-      q += lower2;
-      q2 += lower1;
-    }
-
-    q += " TO ";
-    q2 += " TO ";
-
-    if (random().nextBoolean()) {
-      q += upper1;
-      q2 += upper2;
-    } else {
-      q += upper2;
-      q2 += upper1;
-    }
-
-
-    // String q = field + ":[" + f_s(l) + " TO " + f_s(u) + "]";
-
-    if (negative) {
-      q = "-_query_:\"" + q + "\"";
-      // q = "-" + q; // TODO: need to be encapsulated for some reason?
-    } else {
-      if (random().nextBoolean()) {
-        // try some different query structures - important for testing different code paths
-        switch (random().nextInt(5)) {
-          case 0:
-            q = q + " OR id:RAND"+random().nextInt();
-            break;
-          case 1:
-            q = "id:RAND"+random().nextInt() + " OR " + q;
-            break;
-          case 2:
-            q = "*:* AND " + q;
-            break;
-          case 3:
-            q = q + " AND " + q2;
-            break;
-          case 4:
-            q = q + " OR " + q2;
-            break;
-        }
-      }
-    }
-    return topLev + q;
-  }
-
-  String frangeStr(String field, boolean negative, int l, int u, boolean cache, int cost, boolean exclude) {
+  String frangeStr(boolean negative, int l, int u, boolean cache, int cost, boolean exclude) {
 
     String topLev="";
     if (!cache || exclude) {
@@ -294,7 +147,7 @@ public class TestFiltering extends SolrTestCaseJ4 {
         + ((exclude) ? " tag=t" : "");
     }
 
-    String ret = "{!frange v="+field+" l="+l+" u="+u;
+    String ret = "{!frange v="+f+" l="+l+" u="+u;
     if (negative) {
       ret = "-_query_:\"" + ret + "}\"";
       if (topLev.length()>0) {
@@ -317,7 +170,7 @@ public class TestFiltering extends SolrTestCaseJ4 {
     FixedBitSet[] sets = facetQuery ? new FixedBitSet[]{model.facetQuery} :
         (exclude ? new FixedBitSet[]{model.answer, model.facetQuery} : new FixedBitSet[]{model.answer, model.multiSelect, model.facetQuery});
 
-    if (random().nextInt(100) < 60) {
+    if (random().nextInt(100) < 50) {
       // frange
       int l=0;
       int u=0;
@@ -353,10 +206,7 @@ public class TestFiltering extends SolrTestCaseJ4 {
         }
       }
 
-      String whichField = random().nextBoolean() ? f : f_s;
-      return random().nextBoolean() ?
-           frangeStr(f, !positive, l, u, cache, cost, exclude)   // todo: frange doesn't work on the string field?
-         :  rangeStr(whichField, !positive, l, u, cache, cost, exclude);
+      return frangeStr(!positive, l, u, cache, cost, exclude);
     } else {
       // term or boolean query
       int numWords = FixedBitSet.bits2words(model.indexSize);
@@ -411,17 +261,16 @@ public class TestFiltering extends SolrTestCaseJ4 {
     Model model = new Model();
 
     for (int iiter = 0; iiter<indexIter; iiter++) {
-      model.indexSize = random().nextInt(40 * RANDOM_MULTIPLIER) + 1;
+      model.indexSize = random().nextInt(20 * RANDOM_MULTIPLIER) + 1;
       clearIndex();
 
       for (int i=0; i<model.indexSize; i++) {
         String val = Integer.toString(i);
 
-        SolrInputDocument doc = sdoc("id", val, f,val, f_s, f_s(i) );
-        updateJ(jsonAdd(doc), null);
+        assertU(adoc("id",val,f,val));
         if (random().nextInt(100) < 20) {
           // duplicate doc 20% of the time (makes deletions)
-          updateJ(jsonAdd(doc), null);
+          assertU(adoc("id",val,f,val));
         }
         if (random().nextInt(100) < 10) {
           // commit 10% of the time (forces a new segment)

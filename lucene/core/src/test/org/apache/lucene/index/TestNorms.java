@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,51 +16,108 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.Random;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.search.CollectionStatistics;
 import org.apache.lucene.search.TermStatistics;
-import org.apache.lucene.search.similarities.ClassicSimilarity;
+import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.similarities.PerFieldSimilarityWrapper;
 import org.apache.lucene.search.similarities.Similarity;
+import org.apache.lucene.search.similarities.TFIDFSimilarity;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LineFileDocs;
-import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 
 /**
  * Test that norms info is preserved during index life - including
  * separate norms, addDocument, addIndexes, forceMerge.
  */
-@SuppressCodecs({ "Direct", "SimpleText" })
+@SuppressCodecs({ "Memory", "Direct", "SimpleText" })
 @Slow
 public class TestNorms extends LuceneTestCase {
-  static final String BYTE_TEST_FIELD = "normsTestByte";
+  final String byteTestField = "normsTestByte";
+
+  class CustomNormEncodingSimilarity extends TFIDFSimilarity {
+
+    @Override
+    public long encodeNormValue(float f) {
+      return (long) f;
+    }
+    
+    @Override
+    public float decodeNormValue(long norm) {
+      return norm;
+    }
+
+    @Override
+    public float lengthNorm(FieldInvertState state) {
+      return state.getLength();
+    }
+
+    @Override public float coord(int overlap, int maxOverlap) { return 0; }
+    @Override public float queryNorm(float sumOfSquaredWeights) { return 0; }
+    @Override public float tf(float freq) { return 0; }
+    @Override public float idf(long docFreq, long numDocs) { return 0; }
+    @Override public float sloppyFreq(int distance) { return 0; }
+    @Override public float scorePayload(int doc, int start, int end, BytesRef payload) { return 0; }
+  }
+  
+  // LUCENE-1260
+  public void testCustomEncoder() throws Exception {
+    Directory dir = newDirectory();
+    MockAnalyzer analyzer = new MockAnalyzer(random());
+
+    IndexWriterConfig config = newIndexWriterConfig(analyzer);
+    config.setSimilarity(new CustomNormEncodingSimilarity());
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir, config);
+    Document doc = new Document();
+    Field foo = newTextField("foo", "", Field.Store.NO);
+    Field bar = newTextField("bar", "", Field.Store.NO);
+    doc.add(foo);
+    doc.add(bar);
+    
+    for (int i = 0; i < 100; i++) {
+      bar.setStringValue("singleton");
+      writer.addDocument(doc);
+    }
+    
+    IndexReader reader = writer.getReader();
+    writer.close();
+    
+    NumericDocValues fooNorms = MultiDocValues.getNormValues(reader, "foo");
+    for (int i = 0; i < reader.maxDoc(); i++) {
+      assertEquals(0, fooNorms.get(i));
+    }
+    
+    NumericDocValues barNorms = MultiDocValues.getNormValues(reader, "bar");
+    for (int i = 0; i < reader.maxDoc(); i++) {
+      assertEquals(1, barNorms.get(i));
+    }
+    
+    reader.close();
+    dir.close();
+  }
   
   public void testMaxByteNorms() throws IOException {
     Directory dir = newFSDirectory(createTempDir("TestNorms.testMaxByteNorms"));
     buildIndex(dir);
-    DirectoryReader open = DirectoryReader.open(dir);
-    NumericDocValues normValues = MultiDocValues.getNormValues(open, BYTE_TEST_FIELD);
+    LeafReader open = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir));
+    NumericDocValues normValues = open.getNormValues(byteTestField);
     assertNotNull(normValues);
     for (int i = 0; i < open.maxDoc(); i++) {
       Document document = open.document(i);
-      int expected = Integer.parseInt(document.get(BYTE_TEST_FIELD).split(" ")[0]);
-      assertEquals(i, normValues.nextDoc());
-      assertEquals(expected, normValues.longValue());
+      int expected = Integer.parseInt(document.get(byteTestField));
+      assertEquals(expected, normValues.get(i));
     }
     open.close();
     dir.close();
@@ -69,22 +128,21 @@ public class TestNorms extends LuceneTestCase {
   public void buildIndex(Directory dir) throws IOException {
     Random random = random();
     MockAnalyzer analyzer = new MockAnalyzer(random());
-    // we need at least 3 for maxTokenLength otherwise norms are messed up
-    analyzer.setMaxTokenLength(TestUtil.nextInt(random(), 3, IndexWriter.MAX_TERM_LENGTH));
+    analyzer.setMaxTokenLength(TestUtil.nextInt(random(), 1, IndexWriter.MAX_TERM_LENGTH));
     IndexWriterConfig config = newIndexWriterConfig(analyzer);
     Similarity provider = new MySimProvider();
     config.setSimilarity(provider);
     RandomIndexWriter writer = new RandomIndexWriter(random, dir, config);
-    final LineFileDocs docs = new LineFileDocs(random);
+    final LineFileDocs docs = new LineFileDocs(random, true);
     int num = atLeast(100);
     for (int i = 0; i < num; i++) {
       Document doc = docs.nextDoc();
-      int boost = TestUtil.nextInt(random, 1, 255);
-      String value = IntStream.range(0, boost).mapToObj(k -> Integer.toString(boost)).collect(Collectors.joining(" "));
-      Field f = new TextField(BYTE_TEST_FIELD, value, Field.Store.YES);
+      int boost = random().nextInt(255);
+      Field f = new TextField(byteTestField, "" + boost, Field.Store.YES);
+      f.setBoost(boost);
       doc.add(f);
       writer.addDocument(doc);
-      doc.removeField(BYTE_TEST_FIELD);
+      doc.removeField(byteTestField);
       if (rarely()) {
         writer.commit();
       }
@@ -96,15 +154,26 @@ public class TestNorms extends LuceneTestCase {
 
 
   public class MySimProvider extends PerFieldSimilarityWrapper {
-    Similarity delegate = new ClassicSimilarity();
+    Similarity delegate = new DefaultSimilarity();
+
+    @Override
+    public float queryNorm(float sumOfSquaredWeights) {
+
+      return delegate.queryNorm(sumOfSquaredWeights);
+    }
 
     @Override
     public Similarity get(String field) {
-      if (BYTE_TEST_FIELD.equals(field)) {
+      if (byteTestField.equals(field)) {
         return new ByteEncodingBoostSimilarity();
       } else {
         return delegate;
       }
+    }
+
+    @Override
+    public float coord(int overlap, int maxOverlap) {
+      return delegate.coord(overlap, maxOverlap);
     }
   }
 
@@ -113,32 +182,18 @@ public class TestNorms extends LuceneTestCase {
 
     @Override
     public long computeNorm(FieldInvertState state) {
-      return state.getLength();
+      int boost = (int) state.getBoost();
+      return (0xFF & boost);
     }
 
     @Override
-    public SimScorer scorer(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
+    public SimWeight computeWeight(CollectionStatistics collectionStats, TermStatistics... termStats) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public SimScorer simScorer(SimWeight weight, LeafReaderContext context) throws IOException {
       throw new UnsupportedOperationException();
     }
   } 
-
-  public void testEmptyValueVsNoValue() throws IOException {
-    Directory dir = newDirectory();
-    IndexWriterConfig cfg = newIndexWriterConfig().setMergePolicy(newLogMergePolicy());
-    IndexWriter w = new IndexWriter(dir, cfg);
-    Document doc = new Document();
-    w.addDocument(doc);
-    doc.add(newTextField("foo", "", Store.NO));
-    w.addDocument(doc);
-    w.forceMerge(1);
-    IndexReader reader = DirectoryReader.open(w);
-    w.close();
-    LeafReader leafReader = getOnlyLeafReader(reader);
-    NumericDocValues normValues = leafReader.getNormValues("foo");
-    assertNotNull(normValues);
-    assertEquals(1, normValues.nextDoc()); // doc 0 does not have norms
-    assertEquals(0, normValues.longValue());
-    reader.close();
-    dir.close();
-  }
 }

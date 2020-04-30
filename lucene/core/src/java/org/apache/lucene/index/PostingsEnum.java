@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
 import org.apache.lucene.search.DocIdSetIterator;
+import org.apache.lucene.util.AttributeSource;
 import org.apache.lucene.util.BytesRef;
 
 /** Iterates through the postings.
@@ -62,6 +63,8 @@ public abstract class PostingsEnum extends DocIdSetIterator {
     return (flags & feature) == feature;
   }
 
+  private AttributeSource atts = null;
+
   /** Sole constructor. (For invocation by subclass 
    *  constructors, typically implicit.) */
   protected PostingsEnum() {
@@ -78,6 +81,12 @@ public abstract class PostingsEnum extends DocIdSetIterator {
    * the result of this method is undefined.
    */
   public abstract int freq() throws IOException;
+  
+  /** Returns the related attributes. */
+  public AttributeSource attributes() {
+    if (atts == null) atts = new AttributeSource();
+    return atts;
+  }
 
   /**
    * Returns the next position, or -1 if positions were not indexed.

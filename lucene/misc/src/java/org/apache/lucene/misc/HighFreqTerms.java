@@ -1,3 +1,5 @@
+package org.apache.lucene.misc;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,25 +16,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.misc;
+
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.MultiFields;
+import org.apache.lucene.index.Fields;
+import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.util.PriorityQueue;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.SuppressForbidden;
 
 import java.io.IOException;
 import java.nio.file.Paths;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.Locale;
-
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.FieldInfos;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.MultiTerms;
-import org.apache.lucene.index.Terms;
-import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.FSDirectory;
-import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.PriorityQueue;
-import org.apache.lucene.util.SuppressForbidden;
 
 /**
  * <code>HighFreqTerms</code> class extracts the top n most frequent terms
@@ -99,7 +99,7 @@ public class HighFreqTerms {
     TermStatsQueue tiq = null;
     
     if (field != null) {
-      Terms terms = MultiTerms.getTerms(reader, field);
+      Terms terms = MultiFields.getTerms(reader, field);
       if (terms == null) {
         throw new RuntimeException("field " + field + " not found");
       }
@@ -108,13 +108,13 @@ public class HighFreqTerms {
       tiq = new TermStatsQueue(numTerms, comparator);
       tiq.fill(field, termsEnum);
     } else {
-      Collection<String> fields = FieldInfos.getIndexedFields(reader);
+      Fields fields = MultiFields.getFields(reader);
       if (fields.size() == 0) {
         throw new RuntimeException("no fields found for this index");
       }
       tiq = new TermStatsQueue(numTerms, comparator);
       for (String fieldName : fields) {
-        Terms terms = MultiTerms.getTerms(reader, fieldName);
+        Terms terms = fields.terms(fieldName);
         if (terms != null) {
           tiq.fill(fieldName, terms.iterator());
         }

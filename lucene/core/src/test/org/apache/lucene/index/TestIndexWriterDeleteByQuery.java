@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -27,14 +27,14 @@ public class TestIndexWriterDeleteByQuery extends LuceneTestCase {
 
   // LUCENE-6379
   public void testDeleteMatchAllDocsQuery() throws Exception {
-    Directory dir = newMaybeVirusCheckingDirectory();
+    Directory dir = newDirectory();
     IndexWriter w = new IndexWriter(dir, newIndexWriterConfig());
     Document doc = new Document();
     // Norms are disabled:
     doc.add(newStringField("field", "foo", Field.Store.NO));
     w.addDocument(doc);
-    DirectoryReader r = DirectoryReader.open(w);
-    FieldInfo fi = FieldInfos.getMergedFieldInfos(r).fieldInfo("field");
+    DirectoryReader r = DirectoryReader.open(w, true);
+    FieldInfo fi = MultiFields.getMergedFieldInfos(r).fieldInfo("field");
     assertNotNull(fi);
     assertFalse(fi.hasNorms());
     assertEquals(1, r.numDocs());
@@ -61,7 +61,7 @@ public class TestIndexWriterDeleteByQuery extends LuceneTestCase {
     assertEquals(1, r3.maxDoc());
 
     // Make sure norms can come back to life for a field after deleting by MatchAllDocsQuery:
-    fi = FieldInfos.getMergedFieldInfos(r3).fieldInfo("field");
+    fi = MultiFields.getMergedFieldInfos(r3).fieldInfo("field");    
     assertNotNull(fi);
     assertTrue(fi.hasNorms());
     r3.close();

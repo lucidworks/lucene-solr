@@ -14,15 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
 import org.apache.lucene.index.Term;
-import org.apache.solr.legacy.LegacyNumericRangeQuery;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BoostQuery;
 import org.apache.lucene.search.ConstantScoreQuery;
 import org.apache.lucene.search.FuzzyQuery;
+import org.apache.lucene.search.NumericRangeQuery;
 import org.apache.lucene.search.PrefixQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
@@ -30,7 +31,7 @@ import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.search.WildcardQuery;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CharsRefBuilder;
-import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.params.MapSolrParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.parser.QueryParser;
 import org.apache.solr.schema.FieldType;
@@ -38,7 +39,9 @@ import org.apache.solr.schema.IndexSchema;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Collection of static utilities useful for query parsing.
@@ -51,31 +54,44 @@ public class QueryParsing {
   public static final String F = "f";      // field that a query or command pertains to
   public static final String TYPE = "type";// parser for this query or command
   public static final String DEFTYPE = "defType"; // default parser for any direct subqueries
-  public static final String SPLIT_ON_WHITESPACE = "sow"; // Whether to split on whitespace prior to analysis
   public static final String LOCALPARAM_START = "{!";
   public static final char LOCALPARAM_END = '}';
   // true if the value was specified by the "v" param (i.e. v=myval, or v=$param)
   public static final String VAL_EXPLICIT = "__VAL_EXPLICIT__";
 
+
   /**
-   * @param txt Text to parse
-   * @param start Index into text for start of parsing
-   * @param target Object to inject with parsed settings
-   * @param params Additional existing parameters
+   * Returns the "preferred" default operator for use by Query Parsers,
+   * based on the settings in the IndexSchema which may be overridden using 
+   * an optional String override value.
+   *
+   * @see IndexSchema#getQueryParserDefaultOperator()
+   * @see #OP
    */
-  public static int parseLocalParams(String txt, int start, ModifiableSolrParams target, SolrParams params) throws SyntaxError {
-    return parseLocalParams(txt, start, target, params, LOCALPARAM_START, LOCALPARAM_END);
+  public static QueryParser.Operator getQueryParserDefaultOperator(final IndexSchema sch,
+                                                       final String override) {
+    String val = override;
+    if (null == val) val = sch.getQueryParserDefaultOperator();
+    return "AND".equals(val) ? QueryParser.Operator.AND : QueryParser.Operator.OR;
   }
 
   /**
-   * @param txt Text to parse
-   * @param start Index into text for start of parsing
-   * @param target Object to inject with parsed settings
-   * @param params Additional existing parameters
-   * @param startString String that indicates the start of a localParams section
-   * @param endChar Character that indicates the end of a localParams section
+   * Returns the effective default field based on the 'df' param or
+   * hardcoded schema default.  May be null if either exists specified.
+   * @see org.apache.solr.common.params.CommonParams#DF
+   * @see org.apache.solr.schema.IndexSchema#getDefaultSearchFieldName
    */
-  public static int parseLocalParams(String txt, int start, ModifiableSolrParams target, SolrParams params, String startString, char endChar) throws SyntaxError {
+  public static String getDefaultField(final IndexSchema s, final String df) {
+    return df != null ? df : s.getDefaultSearchFieldName();
+  }
+
+  // note to self: something needs to detect infinite recursion when parsing queries
+  public static int parseLocalParams(String txt, int start, Map<String, String> target, SolrParams params) throws SyntaxError {
+    return parseLocalParams(txt, start, target, params, LOCALPARAM_START, LOCALPARAM_END);
+  }
+
+
+  public static int parseLocalParams(String txt, int start, Map<String, String> target, SolrParams params, String startString, char endChar) throws SyntaxError {
     int off = start;
     if (!txt.startsWith(startString, off)) return start;
     StrParser p = new StrParser(txt, start, txt.length());
@@ -97,12 +113,12 @@ public class QueryParsing {
         throw new SyntaxError("Expected ending character '" + endChar + "' parsing local params '" + txt + '"');
 
       }
-      String[] val = new String[1];
+      String val = null;
 
       ch = p.peek();
       if (ch != '=') {
         // single word... treat {!func} as type=func for easy lookup
-        val[0] = id;
+        val = id;
         id = TYPE;
       } else {
         // saw equals, so read value
@@ -116,7 +132,7 @@ public class QueryParsing {
         }
 
         if (ch == '\"' || ch == '\'') {
-          val[0] = p.getQuotedString();
+          val = p.getQuotedString();
         } else {
           // read unquoted literal ended by whitespace or endChar (normally '}')
           // there is no escaping.
@@ -127,7 +143,7 @@ public class QueryParsing {
             }
             char c = p.val.charAt(p.pos);
             if (c == endChar || Character.isWhitespace(c)) {
-              val[0] = p.val.substring(valStart, p.pos);
+              val = p.val.substring(valStart, p.pos);
               break;
             }
             p.pos++;
@@ -136,14 +152,41 @@ public class QueryParsing {
 
         if (deref) {  // dereference parameter
           if (params != null) {
-            val = params.getParams(val[0]);
+            val = params.get(val);
           }
         }
       }
-      if (target != null) target.add(id, val);
+      if (target != null) target.put(id, val);
     }
   }
 
+
+  public static String encodeLocalParamVal(String val) {
+    int len = val.length();
+    int i = 0;
+    if (len > 0 && val.charAt(0) != '$') {
+      for (;i<len; i++) {
+        char ch = val.charAt(i);
+        if (Character.isWhitespace(ch) || ch=='}') break;
+      }
+    }
+
+    if (i>=len) return val;
+
+    // We need to enclose in quotes... but now we need to escape
+    StringBuilder sb = new StringBuilder(val.length() + 4);
+    sb.append('\'');
+    for (i=0; i<len; i++) {
+      char ch = val.charAt(i);
+      if (ch=='\'') {
+        sb.append('\\');
+      }
+      sb.append(ch);
+    }
+    sb.append('\'');
+    return sb.toString();
+  }
+  
 
   /**
    * "foo" returns null
@@ -154,17 +197,17 @@ public class QueryParsing {
     if (txt == null || !txt.startsWith(LOCALPARAM_START)) {
       return null;
     }
-    ModifiableSolrParams localParams = new ModifiableSolrParams();
+    Map<String, String> localParams = new HashMap<>();
     int start = QueryParsing.parseLocalParams(txt, 0, localParams, params);
 
     String val = localParams.get(V);
     if (val == null) {
       val = txt.substring(start);
-      localParams.set(V, val);
+      localParams.put(V, val);
     } else {
       // localParams.put(VAL_EXPLICIT, "true");
     }
-    return localParams;
+    return new MapSolrParams(localParams);
   }
 
 
@@ -178,7 +221,7 @@ public class QueryParsing {
     ft = schema.getFieldTypeNoEx(name);
     out.append(name);
     if (ft == null) {
-      out.append("(UNKNOWN FIELD ").append(name).append(String.valueOf(')'));
+      out.append("(UNKNOWN FIELD " + name + ')');
     }
     out.append(':');
     return ft;
@@ -214,14 +257,18 @@ public class QueryParsing {
     }
   }
 
-
-  private static int FLAG_BOOSTED=0x01;
-  private static int FLAG_IS_CLAUSE=0x02;
   /**
    * @see #toString(Query,IndexSchema)
    */
   public static void toString(Query query, IndexSchema schema, Appendable out, int flags) throws IOException {
-    int subflag = flags & ~(FLAG_BOOSTED|FLAG_IS_CLAUSE);  // clear the boosted / is clause flags for recursion
+    boolean writeBoost = true;
+
+    float boost = 1f;
+    if (query instanceof BoostQuery) {
+      BoostQuery bq = (BoostQuery) query;
+      query = bq.getQuery();
+      boost = bq.getBoost();
+    }
 
     if (query instanceof TermQuery) {
       TermQuery q = (TermQuery) query;
@@ -250,8 +297,8 @@ public class QueryParsing {
       }
 
       out.append(q.includesUpper() ? ']' : '}');
-    } else if (query instanceof LegacyNumericRangeQuery) {
-      LegacyNumericRangeQuery q = (LegacyNumericRangeQuery) query;
+    } else if (query instanceof NumericRangeQuery) {
+      NumericRangeQuery q = (NumericRangeQuery) query;
       String fname = q.getField();
       FieldType ft = writeFieldName(fname, schema, out, flags);
       out.append(q.includesMin() ? '[' : '{');
@@ -276,7 +323,7 @@ public class QueryParsing {
       BooleanQuery q = (BooleanQuery) query;
       boolean needParens = false;
 
-      if (q.getMinimumNumberShouldMatch() != 0 || (flags & (FLAG_IS_CLAUSE | FLAG_BOOSTED)) != 0 ) {
+      if (q.getMinimumNumberShouldMatch() != 0 || q.isCoordDisabled()) {
         needParens = true;
       }
       if (needParens) {
@@ -296,9 +343,23 @@ public class QueryParsing {
           out.append('+');
         }
         Query subQuery = c.getQuery();
+        boolean wrapQuery = false;
 
-        toString(subQuery, schema, out, subflag | FLAG_IS_CLAUSE);
+        // TODO: may need to put parens around other types
+        // of queries too, depending on future syntax.
+        if (subQuery instanceof BooleanQuery) {
+          wrapQuery = true;
+        }
 
+        if (wrapQuery) {
+          out.append('(');
+        }
+
+        toString(subQuery, schema, out, flags);
+
+        if (wrapQuery) {
+          out.append(')');
+        }
       }
 
       if (needParens) {
@@ -307,6 +368,9 @@ public class QueryParsing {
       if (q.getMinimumNumberShouldMatch() > 0) {
         out.append('~');
         out.append(Integer.toString(q.getMinimumNumberShouldMatch()));
+      }
+      if (q.isCoordDisabled()) {
+        out.append("/no_coord");
       }
 
     } else if (query instanceof PrefixQuery) {
@@ -317,23 +381,29 @@ public class QueryParsing {
       out.append('*');
     } else if (query instanceof WildcardQuery) {
       out.append(query.toString());
+      writeBoost = false;
     } else if (query instanceof FuzzyQuery) {
       out.append(query.toString());
+      writeBoost = false;
     } else if (query instanceof ConstantScoreQuery) {
       out.append(query.toString());
+      writeBoost = false;
     } else if (query instanceof WrappedQuery) {
       WrappedQuery q = (WrappedQuery)query;
       out.append(q.getOptions());
-      toString(q.getWrappedQuery(), schema, out, subflag);
-    } else if (query instanceof BoostQuery) {
-      BoostQuery q = (BoostQuery)query;
-      toString(q.getQuery(), schema, out, subflag | FLAG_BOOSTED);
-      out.append('^');
-      out.append(Float.toString(q.getBoost()));
+      toString(q.getWrappedQuery(), schema, out, flags);
+      writeBoost = false; // we don't use the boost on wrapped queries
+    } else {
+      out.append(query.getClass().getSimpleName()
+              + '(' + query.toString() + ')');
+      writeBoost = false;
     }
-    else {
-      out.append(query.getClass().getSimpleName()).append('(').append(query.toString()).append(')');
+
+    if (writeBoost && boost != 1.0f) {
+      out.append("^");
+      out.append(Float.toString(boost));
     }
+
   }
 
   /**
@@ -369,12 +439,4 @@ public class QueryParsing {
     return out;
   }
 
-  /**
-   * Parses default operator string into Operator object
-   * @param operator the string from request
-   * @return Operator.AND if string equals "AND", else return Operator.OR (default)
-   */
-  public static QueryParser.Operator parseOP(String operator) {
-    return "and".equalsIgnoreCase(operator) ? QueryParser.Operator.AND : QueryParser.Operator.OR;
-  }
 }

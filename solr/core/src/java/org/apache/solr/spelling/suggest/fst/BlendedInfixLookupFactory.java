@@ -1,3 +1,5 @@
+package org.apache.solr.spelling.suggest.fst;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,20 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling.suggest.fst;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.search.suggest.Lookup;
 import org.apache.lucene.search.suggest.analyzing.AnalyzingInfixSuggester;
-import org.apache.lucene.search.suggest.analyzing.BlendedInfixSuggester.BlenderType;
 import org.apache.lucene.search.suggest.analyzing.BlendedInfixSuggester;
+import org.apache.lucene.search.suggest.analyzing.BlendedInfixSuggester.BlenderType;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.solr.common.util.NamedList;
@@ -49,9 +49,7 @@ public class BlendedInfixLookupFactory extends AnalyzingInfixLookupFactory {
    *  reciprocal: weight/(1+position) 
    */
   private static final String BLENDER_TYPE = "blenderType";
-
-  private static final String EXPONENT = "exponent";
-
+  
   /** 
    * Factor to multiply the number of searched elements
    * Default is 10
@@ -109,13 +107,11 @@ public class BlendedInfixLookupFactory extends AnalyzingInfixLookupFactory {
     int numFactor = params.get(NUM_FACTOR) != null
     ? Integer.parseInt(params.get(NUM_FACTOR).toString())
     : BlendedInfixSuggester.DEFAULT_NUM_FACTOR;
-
-    Double exponent = params.get(EXPONENT) == null ? null : Double.valueOf(params.get(EXPONENT).toString());
-
+    
     try {
       return new BlendedInfixSuggester(FSDirectory.open(new File(indexPath).toPath()),
                                        indexAnalyzer, queryAnalyzer, minPrefixChars,
-                                       blenderType, numFactor, exponent, true,
+                                       blenderType, numFactor, true,
                                        allTermsRequired, highlight) {
         @Override
         public List<LookupResult> lookup(CharSequence key, Set<BytesRef> contexts, int num, boolean allTermsRequired, boolean doHighlight) throws IOException {
@@ -148,8 +144,10 @@ public class BlendedInfixLookupFactory extends AnalyzingInfixLookupFactory {
   private BlenderType getBlenderType(Object blenderTypeParam) {
     BlenderType blenderType = BlenderType.POSITION_LINEAR;
     if (blenderTypeParam != null) {
-      String blenderTypeStr = blenderTypeParam.toString().toUpperCase(Locale.ROOT);
-      blenderType = BlenderType.valueOf(blenderTypeStr);
+      String blenderTypeStr = blenderTypeParam.toString();
+      if (blenderTypeStr.equalsIgnoreCase("reciprocal")) {
+        blenderType = BlenderType.POSITION_RECIPROCAL;
+      }
     }
     return blenderType;
   }

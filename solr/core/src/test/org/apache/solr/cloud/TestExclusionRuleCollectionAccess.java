@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,34 +16,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
+import org.apache.lucene.util.LuceneTestCase;
+import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
-import org.apache.solr.client.solrj.request.UpdateRequest;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-public class TestExclusionRuleCollectionAccess extends SolrCloudTestCase {
+@LuceneTestCase.Slow
+public class TestExclusionRuleCollectionAccess extends AbstractFullDistribZkTestBase {
 
-  @BeforeClass
-  public static void setupCluster() throws Exception {
-    configureCluster(1)
-        .addConfig("conf", configset("cloud-minimal"))
-        .configure();
+  public TestExclusionRuleCollectionAccess() {
+    schemaString = "schema15.xml";      // we need a string id
+    sliceCount = 1;
   }
 
   @Test
   public void doTest() throws Exception {
+    CollectionAdminRequest.Create req = new CollectionAdminRequest.Create();
+    req.setCollectionName("css33");
+    req.setNumShards(1);
+    req.process(cloudClient);
+    
+    waitForRecoveriesToFinish("css33", false);
+    
+    try (SolrClient c = createCloudClient("css33")) {
+      c.add(getDoc("id", "1"));
+      c.commit();
 
-    CollectionAdminRequest.createCollection("css33", "conf", 1, 1).process(cluster.getSolrClient());
-
-    new UpdateRequest()
-        .add("id", "1")
-        .commit(cluster.getSolrClient(), "css33");
-
-    assertEquals("Should have returned 1 result", 1,
-        cluster.getSolrClient().query("css33", params("q", "*:*", "collection", "css33")).getResults().getNumFound());
-
+      assertEquals("Should have returned 1 result", 1, c.query(params("q", "*:*", "collection", "css33")).getResults().getNumFound());
+    }
   }
   
 }

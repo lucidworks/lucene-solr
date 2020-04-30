@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.core;
-
 
 import java.io.IOException;
 
-import org.apache.lucene.analysis.CharacterUtils;
-import org.apache.lucene.analysis.LowerCaseFilter;
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
+import org.apache.lucene.analysis.util.CharacterUtils;
 
 /**
  * Normalizes token text to UPPER CASE.
@@ -34,6 +33,7 @@ import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
  * general search matching
  */
 public final class UpperCaseFilter extends TokenFilter {
+  private final CharacterUtils charUtils = CharacterUtils.getInstance();
   private final CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);
   
   /**
@@ -48,7 +48,7 @@ public final class UpperCaseFilter extends TokenFilter {
   @Override
   public final boolean incrementToken() throws IOException {
     if (input.incrementToken()) {
-      CharacterUtils.toUpperCase(termAtt.buffer(), 0, termAtt.length());
+      charUtils.toUpperCase(termAtt.buffer(), 0, termAtt.length());
       return true;
     } else
       return false;

@@ -1,3 +1,4 @@
+package org.apache.solr.handler.component;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -185,11 +186,9 @@ public class DebugComponentTest extends SolrTestCaseJ4 {
       //if the request has debugQuery=true or debug=track, the sreq should get debug=track always
       assertTrue(Arrays.asList(sreq.params.getParams(CommonParams.DEBUG)).contains(CommonParams.TRACK));
       //the purpose must be added as readable param to be included in the shard logs
-      assertEquals("GET_FIELDS,GET_DEBUG,SET_TERM_STATS", sreq.params.get(CommonParams.REQUEST_PURPOSE));
+      assertEquals("GET_FIELDS,GET_DEBUG", sreq.params.get(CommonParams.REQUEST_PURPOSE));
       //the rid must be added to be included in the shard logs
       assertEquals("123456-my_rid", sreq.params.get(CommonParams.REQUEST_ID));
-      // close requests - this method obtains a searcher in order to access its StatsCache
-      req.close();
     }
     
   }
@@ -240,43 +239,8 @@ public class DebugComponentTest extends SolrTestCaseJ4 {
       assertEquals("Expecting " + expectedRid + " but found " + rid, expectedRid, rid);
     }
     //The request ID is added to the debug/track section
-    assertEquals(rid, ((NamedList<Object>) rb.getDebugInfo().get("track")).get(CommonParams.REQUEST_ID));
+    assertEquals(rid, ((NamedList<Object>)rb.getDebugInfo().get("track")).get(CommonParams.REQUEST_ID));
     //RID must be added to the toLog, so that it's included in the main request log
     assertEquals(rid, resp.getToLog().get(CommonParams.REQUEST_ID));
-  }
-
-  //
-  // NOTE: String representations are not meant to be exact or backward compatible.
-  // For example, foo:bar^3, foo:bar^3.0 and (foo:bar)^3 are equivalent.  Use your
-  // judgement when modifying these tests.
-  //
-  @Test
-  public void testQueryToString() throws Exception {
-
-    // test that both boosts are represented in a double-boost scenario
-    assertQ(req("debugQuery", "true", "indent","true", "rows","0", "q", "(foo_s:aaa^3)^4"),
-        "//str[@name='parsedquery'][.='foo_s:aaa^3.0^4.0']"
-    );
-
-    // test to see that extra parens are avoided
-    assertQ(req("debugQuery", "true", "indent","true", "rows","0", "q", "+foo_s:aaa^3 -bar_s:bbb^0"),
-        "//str[@name='parsedquery'][.='+foo_s:aaa^3.0 -bar_s:bbb^0.0']"
-    );
-
-    // test that parens are added when needed
-    assertQ(req("debugQuery", "true", "indent", "true", "rows", "0", "q", "foo_s:aaa (bar_s:bbb baz_s:ccc)"),
-        "//str[@name='parsedquery'][.='foo_s:aaa (bar_s:bbb baz_s:ccc)']"
-    );
-
-    // test boosts on subqueries
-    assertQ(req("debugQuery", "true", "indent", "true", "rows", "0", "q", "foo_s:aaa^3 (bar_s:bbb baz_s:ccc)^4"),
-        "//str[@name='parsedquery'][.='foo_s:aaa^3.0 (bar_s:bbb baz_s:ccc)^4.0']"
-    );
-
-    // test constant score query boost exists
-    assertQ(req("debugQuery", "true", "indent", "true", "rows", "0", "q", "foo_s:aaa^=3"),
-        "//str[@name='parsedquery'][contains(.,'3.0')]"
-    );
-
   }
 }

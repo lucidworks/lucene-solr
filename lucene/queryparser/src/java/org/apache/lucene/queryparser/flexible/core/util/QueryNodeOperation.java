@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.core.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.core.util;
 
 import org.apache.lucene.queryparser.flexible.core.QueryNodeError;
 import org.apache.lucene.queryparser.flexible.core.nodes.AndQueryNode;
@@ -56,7 +57,7 @@ public final class QueryNodeOperation {
       op = ANDOperation.BOTH;
     else if (q1 instanceof AndQueryNode)
       op = ANDOperation.Q1;
-    else if (q2 instanceof AndQueryNode)
+    else if (q1 instanceof AndQueryNode)
       op = ANDOperation.Q2;
     else
       op = ANDOperation.NONE;

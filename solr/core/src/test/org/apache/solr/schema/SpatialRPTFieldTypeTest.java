@@ -1,3 +1,4 @@
+package org.apache.solr.schema;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +15,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
+
 import java.io.File;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.solr.common.SolrException;
 import org.apache.solr.core.AbstractBadConfigTestBase;
 import org.junit.After;
 import org.junit.Before;
-import org.locationtech.spatial4j.shape.Shape;
 
 public class SpatialRPTFieldTypeTest extends AbstractBadConfigTestBase {
   
@@ -62,35 +61,65 @@ public class SpatialRPTFieldTypeTest extends AbstractBadConfigTestBase {
     System.clearProperty("managed.schema.mutable");
     System.clearProperty("enable.update.log");
   }
-
-  static final String INDEXED_COORDINATES = "25,82";
-  static final String QUERY_COORDINATES = "24,81";
-  static final String DISTANCE_DEGREES = "1.3520328";
-  static final String DISTANCE_KILOMETERS = "150.33939";
-  static final String DISTANCE_MILES = "93.416565";
   
-  public void testDistanceUnitsDegrees() throws Exception {
-    setupRPTField("degrees", "true");
+  final String INDEXED_COORDINATES = "25,82";
+  final String QUERY_COORDINATES = "24,81";
+  final String DISTANCE_DEGREES = "1.3520328";
+  final String DISTANCE_KILOMETERS = "150.33939";
+  final String DISTANCE_MILES = "93.416565";
+  
+  public void testUnitsDegrees() throws Exception { // test back compat behaviour
+    setupRPTField("degrees", null, "true");
     
     assertU(adoc("str", "X", "geo", INDEXED_COORDINATES));
     assertU(commit());
     String q;
     
-    q = "geo:{!geofilt score=distance filter=false sfield=geo pt="+QUERY_COORDINATES+" d=180}";
+    q = "geo:{!geofilt score=distance filter=false sfield=geo pt="+QUERY_COORDINATES+" d=1000}";
     assertQ(req("q", q, "fl", "*,score"), "//result/doc/float[@name='score'][.='"+DISTANCE_DEGREES+"']");
     
-    q = "geo:{!geofilt score=degrees filter=false sfield=geo pt="+QUERY_COORDINATES+" d=180}";
+    q = "geo:{!geofilt score=degrees filter=false sfield=geo pt="+QUERY_COORDINATES+" d=1000}";
     assertQ(req("q", q, "fl", "*,score"), "//result/doc/float[@name='score'][.='"+DISTANCE_DEGREES+"']");
     
-    q = "geo:{!geofilt score=kilometers filter=false sfield=geo pt="+QUERY_COORDINATES+" d=180}";
+    q = "geo:{!geofilt score=kilometers filter=false sfield=geo pt="+QUERY_COORDINATES+" d=1000}";
     assertQ(req("q", q, "fl", "*,score"), "//result/doc/float[@name='score'][.='"+DISTANCE_KILOMETERS+"']");
     
-    q = "geo:{!geofilt score=miles filter=false sfield=geo pt="+QUERY_COORDINATES+" d=180}";
+    q = "geo:{!geofilt score=miles filter=false sfield=geo pt="+QUERY_COORDINATES+" d=1000}";
+    assertQ(req("q", q, "fl", "*,score"), "//result/doc/float[@name='score'][.='"+DISTANCE_MILES+"']");
+  }
+  
+  public void testUnitsNonDegrees() throws Exception {
+    try {
+      setupRPTField("kilometers", null, "true");
+      fail("Expected exception for deprecated units parameter.");
+    } catch (Exception ex) {
+      if(!ex.getMessage().startsWith("units parameter is deprecated"))
+        throw ex;
+    }
+  }
+  
+  public void testDistanceUnitsDegrees() throws Exception {
+    setupRPTField(null, "degrees", "true");
+    
+    assertU(adoc("str", "X", "geo", INDEXED_COORDINATES));
+    assertU(commit());
+    String q;
+    
+    q = "geo:{!geofilt score=distance filter=false sfield=geo pt="+QUERY_COORDINATES+" d=1000}";
+    assertQ(req("q", q, "fl", "*,score"), "//result/doc/float[@name='score'][.='"+DISTANCE_DEGREES+"']");
+    
+    q = "geo:{!geofilt score=degrees filter=false sfield=geo pt="+QUERY_COORDINATES+" d=1000}";
+    assertQ(req("q", q, "fl", "*,score"), "//result/doc/float[@name='score'][.='"+DISTANCE_DEGREES+"']");
+    
+    q = "geo:{!geofilt score=kilometers filter=false sfield=geo pt="+QUERY_COORDINATES+" d=1000}";
+    assertQ(req("q", q, "fl", "*,score"), "//result/doc/float[@name='score'][.='"+DISTANCE_KILOMETERS+"']");
+    
+    q = "geo:{!geofilt score=miles filter=false sfield=geo pt="+QUERY_COORDINATES+" d=1000}";
     assertQ(req("q", q, "fl", "*,score"), "//result/doc/float[@name='score'][.='"+DISTANCE_MILES+"']");
   }
   
   public void testDistanceUnitsKilometers() throws Exception {
-    setupRPTField("kilometers", "true");
+    setupRPTField(null, "kilometers", "true");
     
     assertU(adoc("str", "X", "geo", INDEXED_COORDINATES));
     assertU(commit());
@@ -109,9 +138,24 @@ public class SpatialRPTFieldTypeTest extends AbstractBadConfigTestBase {
     assertQ(req("q", q, "fl", "*,score"), "//result/doc/float[@name='score'][.='"+DISTANCE_MILES+"']");
   }
   
+  public void testBothUnitsAndDistanceUnits() throws Exception { // distanceUnits should take precedence
+    try {
+      setupRPTField("degrees", "kilometers", "true");  
+      fail("Expected exception for deprecated units parameter.");
+    } catch (Exception ex) {
+      if(!ex.getMessage().startsWith("units parameter is deprecated"))
+        throw ex;
+    }
+  }
+  
   public void testJunkValuesForDistanceUnits() throws Exception {
-    Exception ex = expectThrows(Exception.class, () -> setupRPTField("rose", "true"));
-    assertTrue(ex.getMessage().startsWith("Must specify distanceUnits as one of"));
+    try {
+      setupRPTField(null, "rose", "true");
+      fail("Expected exception for bad value of distanceUnits.");
+    } catch (Exception ex) {
+      if(!ex.getMessage().startsWith("Must specify distanceUnits as one of"))
+        throw ex;
+    }
   }
 
   public void testMaxDistErrConversion() throws Exception {
@@ -153,7 +197,7 @@ public class SpatialRPTFieldTypeTest extends AbstractBadConfigTestBase {
   }
 
   public void testGeoDistanceFunctionWithBackCompat() throws Exception {
-    setupRPTField(null, "true");
+    setupRPTField("degrees", null, "true");
 
     assertU(adoc("str", "X", "geo", "1,2"));
     assertU(commit());
@@ -169,7 +213,7 @@ public class SpatialRPTFieldTypeTest extends AbstractBadConfigTestBase {
   }
 
   public void testGeoDistanceFunctionWithKilometers() throws Exception {
-    setupRPTField("kilometers", "true");
+    setupRPTField(null, "kilometers", "true");
 
     assertU(adoc("str", "X", "geo", "1,2"));
     assertU(commit());
@@ -184,7 +228,7 @@ public class SpatialRPTFieldTypeTest extends AbstractBadConfigTestBase {
   }
 
   public void testGeoDistanceFunctionWithMiles() throws Exception {
-    setupRPTField("miles", "true");
+    setupRPTField(null, "miles", "true");
 
     assertU(adoc("str", "X", "geo", "1,2"));
     assertU(commit());
@@ -198,39 +242,7 @@ public class SpatialRPTFieldTypeTest extends AbstractBadConfigTestBase {
     );
   }
 
-  public void testShapeToFromStringWKT() throws Exception {
-    setupRPTField("miles", "true", "WKT", random().nextBoolean()
-        ? new SpatialRecursivePrefixTreeFieldType() : new RptWithGeometrySpatialField());
-
-    AbstractSpatialFieldType ftype = (AbstractSpatialFieldType)
-        h.getCore().getLatestSchema().getField("geo").getType();
-
-    String wkt = "POINT (1 2)";
-    Shape shape = ftype.parseShape(wkt);
-    String out = ftype.shapeToString(shape);
-
-    assertEquals(wkt, out);
-
-    //assert fails GeoJSON
-    expectThrows(SolrException.class, () -> ftype.parseShape("{\"type\":\"Point\",\"coordinates\":[1,2]}"));
-
-  }
-
-  public void testShapeToFromStringGeoJSON() throws Exception {
-    setupRPTField("miles", "true", "GeoJSON", random().nextBoolean()
-        ? new SpatialRecursivePrefixTreeFieldType() : new RptWithGeometrySpatialField());
-
-    AbstractSpatialFieldType ftype = (AbstractSpatialFieldType)
-        h.getCore().getLatestSchema().getField("geo").getType();
-
-    String json = "{\"type\":\"Point\",\"coordinates\":[1,2]}";
-    Shape shape = ftype.parseShape(json);
-    String out = ftype.shapeToString(shape);
-
-    assertEquals(json, out);
-  }
-
-  private void setupRPTField(String distanceUnits, String geo, String format, FieldType fieldType) throws Exception {
+  private void setupRPTField(String units, String distanceUnits, String geo) throws Exception {
     deleteCore();
     File managedSchemaFile = new File(tmpConfDir, "managed-schema");
     Files.delete(managedSchemaFile.toPath()); // Delete managed-schema so it won't block parsing a new schema
@@ -243,32 +255,21 @@ public class SpatialRPTFieldTypeTest extends AbstractBadConfigTestBase {
     
     IndexSchema oldSchema = h.getCore().getLatestSchema();
 
-    if (fieldType == null) {
-      fieldType = new SpatialRecursivePrefixTreeFieldType();
-    }
+    SpatialRecursivePrefixTreeFieldType rptFieldType = new SpatialRecursivePrefixTreeFieldType();
     Map<String, String> rptMap = new HashMap<String,String>();
+    if(units!=null)
+      rptMap.put("units", units);
     if(distanceUnits!=null)
       rptMap.put("distanceUnits", distanceUnits);
     if(geo!=null)
       rptMap.put("geo", geo);
-    if(format!=null) {
-      rptMap.put("format", format);
-    }
-    if (random().nextBoolean()) {
-      // use Geo3D sometimes
-      rptMap.put("spatialContextFactory", "Geo3D");
-    }
-    fieldType.init(oldSchema, rptMap);
-    fieldType.setTypeName("location_rpt");
-    SchemaField newField = new SchemaField("geo", fieldType, SchemaField.STORED | SchemaField.INDEXED, null);
+    rptFieldType.init(oldSchema, rptMap);
+    rptFieldType.setTypeName("location_rpt");
+    SchemaField newField = new SchemaField("geo", rptFieldType, SchemaField.STORED | SchemaField.INDEXED, null);
     IndexSchema newSchema = oldSchema.addField(newField);
 
     h.getCore().setLatestSchema(newSchema);
 
     assertU(delQ("*:*"));
-  }
-
-  private void setupRPTField(String distanceUnits, String geo) throws Exception {
-    setupRPTField(distanceUnits, geo, null, null);
   }
 }

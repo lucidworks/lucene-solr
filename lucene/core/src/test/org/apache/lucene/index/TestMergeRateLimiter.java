@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
+import java.util.Collections;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.store.Directory;
@@ -27,8 +29,8 @@ public class TestMergeRateLimiter extends LuceneTestCase {
     RandomIndexWriter w = new RandomIndexWriter(random(), dir);
     w.addDocument(new Document());
     w.close();
-
-    MergeRateLimiter rateLimiter = new MergeRateLimiter(new MergePolicy.OneMergeProgress());
+    MergePolicy.OneMerge merge = new MergePolicy.OneMerge(SegmentInfos.readLatestCommit(dir).asList());
+    MergeRateLimiter rateLimiter = new MergeRateLimiter(merge);
     assertEquals(Double.POSITIVE_INFINITY, rateLimiter.getMBPerSec(), 0.0);
     assertTrue(rateLimiter.getMinPauseCheckBytes() > 0);
     dir.close();

@@ -1,3 +1,4 @@
+package org.apache.solr.search.function.distance;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +15,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.function.distance;
+
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
-import org.locationtech.spatial4j.io.GeohashUtils;
+import com.spatial4j.core.io.GeohashUtils;
 
 import java.util.Map;
 import java.io.IOException;
@@ -53,12 +54,12 @@ public class GeohashFunction extends ValueSource {
     return new FunctionValues() {
 
       @Override
-      public String strVal(int doc) throws IOException {
+      public String strVal(int doc) {
         return GeohashUtils.encodeLatLon(latDV.doubleVal(doc), lonDV.doubleVal(doc));
       }
 
       @Override
-      public String toString(int doc) throws IOException {
+      public String toString(int doc) {
         StringBuilder sb = new StringBuilder();
         sb.append(name()).append('(');
         sb.append(latDV.toString(doc)).append(',').append(lonDV.toString(doc));

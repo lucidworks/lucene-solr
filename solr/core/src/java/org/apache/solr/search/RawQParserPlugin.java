@@ -20,6 +20,7 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 
 /**
@@ -34,6 +35,10 @@ import org.apache.solr.request.SolrQueryRequest;
  */
 public class RawQParserPlugin extends QParserPlugin {
   public static final String NAME = "raw";
+
+  @Override
+  public void init(NamedList args) {
+  }
 
   @Override
   public QParser createParser(String qstr, SolrParams localParams, SolrParams params, SolrQueryRequest req) {

@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
-import java.util.concurrent.Executor; // javadocs
+import java.util.concurrent.ExecutorService; // javadocs
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter; // javadocs
@@ -39,7 +39,7 @@ import org.apache.lucene.search.similarities.Similarity; // javadocs
  * You can pass your own factory instead if you want custom behavior, such as:
  * <ul>
  *   <li>Setting a custom scoring model: {@link IndexSearcher#setSimilarity(Similarity)}
- *   <li>Parallel per-segment search: {@link IndexSearcher#IndexSearcher(IndexReader, Executor)}
+ *   <li>Parallel per-segment search: {@link IndexSearcher#IndexSearcher(IndexReader, ExecutorService)}
  *   <li>Return custom subclasses of IndexSearcher (for example that implement distributed scoring)
  *   <li>Run queries to warm your IndexSearcher before it is used. Note: when using near-realtime search
  *       you may want to also {@link IndexWriterConfig#setMergedSegmentWarmer(IndexWriter.IndexReaderWarmer)} to warm

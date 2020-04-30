@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,71 +16,68 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
 import java.io.File;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.util.LuceneTestCase.Slow;
+import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.embedded.JettySolrRunner;
-import org.apache.solr.client.solrj.request.CollectionAdminRequest;
-import org.apache.solr.common.cloud.DocCollection;
+import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.handler.SnapShooter;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-@LuceneTestCase.Slow
-public class CleanupOldIndexTest extends SolrCloudTestCase {
+@Slow
+public class CleanupOldIndexTest extends AbstractFullDistribZkTestBase {
 
-  @BeforeClass
-  public static void setupCluster() throws Exception {
-    // we restart jetty and expect to find on disk data - need a local fs directory
-    useFactory(null);
-    configureCluster(2)
-        .addConfig("conf1", TEST_PATH().resolve("configsets").resolve("cloud-dynamic").resolve("conf"))
-        .configure();
+  private StoppableIndexingThread indexThread;
+
+  public CleanupOldIndexTest() {
+    super();
+    sliceCount = 1;
+    fixShardCount(2);
+    schemaString = "schema15.xml";
   }
   
-  @AfterClass
-  public static void afterClass() throws Exception {
-
-    if (null != cluster && suiteFailureMarker.wasSuccessful()) {
-      zkClient().printLayoutToStdOut();
-    }
-
+  public static String[] fieldNames = new String[]{"f_i", "f_f", "f_d", "f_l", "f_dt"};
+  public static RandVal[] randVals = new RandVal[]{rint, rfloat, rdouble, rlong, rdate};
+  
+  protected String[] getFieldNames() {
+    return fieldNames;
   }
 
-  private static final String COLLECTION = "oldindextest";
+  protected RandVal[] getRandValues() {
+    return randVals;
+  }
 
   @Test
   public void test() throws Exception {
-
-    CollectionAdminRequest.createCollection(COLLECTION, "conf1", 1, 2)
-        .processAndWait(cluster.getSolrClient(), DEFAULT_TIMEOUT);
-    cluster.getSolrClient().setDefaultCollection(COLLECTION); // TODO make this configurable on StoppableIndexingThread
-
-    int[] maxDocList = new int[] {300, 500, 700};
+    handle.clear();
+    handle.put("timestamp", SKIPVAL);
+    
+    int[] maxDocList = new int[] {300, 700, 1200};
     int maxDoc = maxDocList[random().nextInt(maxDocList.length - 1)];
 
-    StoppableIndexingThread indexThread = new StoppableIndexingThread(null, cluster.getSolrClient(), "1", true, maxDoc, 1, true);
+    indexThread = new StoppableIndexingThread(controlClient, cloudClient, "1", true, maxDoc, 1, true);
     indexThread.start();
 
     // give some time to index...
-    int[] waitTimes = new int[] {3000, 4000};
+    int[] waitTimes = new int[] {200, 2000, 3000};
     Thread.sleep(waitTimes[random().nextInt(waitTimes.length - 1)]);
 
     // create some "old" index directories
-    JettySolrRunner jetty = cluster.getRandomJetty(random());
+    JettySolrRunner jetty = chaosMonkey.getShard("shard1", 1);
     CoreContainer coreContainer = jetty.getCoreContainer();
     File dataDir = null;
-    try (SolrCore solrCore = coreContainer.getCore(coreContainer.getCoreDescriptors().get(0).getName())) {
+    try (SolrCore solrCore = coreContainer.getCore("collection1")) {
       dataDir = new File(solrCore.getDataDir());
     }
     assertTrue(dataDir.isDirectory());
@@ -96,27 +95,66 @@ public class CleanupOldIndexTest extends SolrCloudTestCase {
     assertTrue(oldIndexDir2.isDirectory());
 
     // bring shard replica down
-    jetty.stop();
+    JettySolrRunner replica = chaosMonkey.stopShard("shard1", 1).jetty;
 
     // wait a moment - lets allow some docs to be indexed so replication time is non 0
     Thread.sleep(waitTimes[random().nextInt(waitTimes.length - 1)]);
-
+    
     // bring shard replica up
-    jetty.start();
-
+    replica.start();
+    
     // make sure replication can start
     Thread.sleep(3000);
-
+    ZkStateReader zkStateReader = cloudClient.getZkStateReader();
+    
     // stop indexing threads
     indexThread.safeStop();
     indexThread.join();
 
-    cluster.getSolrClient().waitForState(COLLECTION, DEFAULT_TIMEOUT, TimeUnit.SECONDS,
-        (n, c) -> DocCollection.isFullyActive(n, c, 1, 2));
+    Thread.sleep(1000);
+  
+    waitForThingsToLevelOut(120);
+    waitForRecoveriesToFinish(DEFAULT_COLLECTION, zkStateReader, false, true);
+
+    // test that leader and replica have same doc count
+    
+    String fail = checkShardConsistency("shard1", false, false);
+    if (fail != null)
+      fail(fail);
+
+    SolrQuery query = new SolrQuery("*:*");
+    query.setParam("distrib", "false");
+    long client1Docs = shardToJetty.get("shard1").get(0).client.solrClient.query(query).getResults().getNumFound();
+    long client2Docs = shardToJetty.get("shard1").get(1).client.solrClient.query(query).getResults().getNumFound();
+    
+    assertTrue(client1Docs > 0);
+    assertEquals(client1Docs, client2Docs);
 
     assertTrue(!oldIndexDir1.isDirectory());
     assertTrue(!oldIndexDir2.isDirectory());
   }
   
+  @Override
+  protected void indexDoc(SolrInputDocument doc) throws IOException, SolrServerException {
+    controlClient.add(doc);
+    cloudClient.add(doc);
+  }
 
+  
+  @Override
+  public void distribTearDown() throws Exception {
+    // make sure threads have been stopped...
+    indexThread.safeStop();
+    indexThread.join();
+    super.distribTearDown();
+  }
+  
+  // skip the randoms - they can deadlock...
+  @Override
+  protected void indexr(Object... fields) throws Exception {
+    SolrInputDocument doc = new SolrInputDocument();
+    addFields(doc, fields);
+    addFields(doc, "rnd_b", true);
+    indexDoc(doc);
+  }
 }

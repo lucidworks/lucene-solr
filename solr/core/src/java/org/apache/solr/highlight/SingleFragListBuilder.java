@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.highlight;
 
 import org.apache.lucene.search.vectorhighlight.FragListBuilder;
@@ -28,7 +29,7 @@ public class SingleFragListBuilder extends HighlightingPluginBase implements
     // If that ever changes, it should wrap them with defaults...
     // params = SolrParams.wrapDefaults(params, defaults)
 
-    numRequests.inc();
+    numRequests++;
 
     return new org.apache.lucene.search.vectorhighlight.SingleFragListBuilder();
   }

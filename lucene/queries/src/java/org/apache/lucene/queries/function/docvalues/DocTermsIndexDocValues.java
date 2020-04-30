@@ -14,17 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.queries.function.docvalues;
 
 import java.io.IOException;
 
 import org.apache.lucene.index.DocValues;
+import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.ValueSourceScorer;
-import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.CharsRefBuilder;
@@ -40,45 +41,26 @@ public abstract class DocTermsIndexDocValues extends FunctionValues {
   protected final ValueSource vs;
   protected final MutableValueStr val = new MutableValueStr();
   protected final CharsRefBuilder spareChars = new CharsRefBuilder();
-  private final String field;
-  private int lastDocID;
 
   public DocTermsIndexDocValues(ValueSource vs, LeafReaderContext context, String field) throws IOException {
-    this(field, vs, open(context, field));
+    this(vs, open(context, field));
   }
   
-  protected DocTermsIndexDocValues(String field, ValueSource vs, SortedDocValues termsIndex) {
-    this.field = field;
+  protected DocTermsIndexDocValues(ValueSource vs, SortedDocValues termsIndex) {
     this.vs = vs;
     this.termsIndex = termsIndex;
-  }
-
-  protected int getOrdForDoc(int doc) throws IOException {
-    if (doc < lastDocID) {
-      throw new IllegalArgumentException("docs were sent out-of-order: lastDocID=" + lastDocID + " vs docID=" + doc);
-    }
-    lastDocID = doc;
-    int curDocID = termsIndex.docID();
-    if (doc > curDocID) {
-      curDocID = termsIndex.advance(doc);
-    }
-    if (doc == curDocID) {
-      return termsIndex.ordValue();
-    } else {
-      return -1;
-    }
   }
 
   protected abstract String toTerm(String readableValue);
 
   @Override
-  public boolean exists(int doc) throws IOException {
-    return getOrdForDoc(doc) >= 0;
+  public boolean exists(int doc) {
+    return ordVal(doc) >= 0;
   }
 
   @Override
-  public int ordVal(int doc) throws IOException {
-    return getOrdForDoc(doc);
+  public int ordVal(int doc) {
+    return termsIndex.getOrd(doc);
   }
 
   @Override
@@ -87,36 +69,32 @@ public abstract class DocTermsIndexDocValues extends FunctionValues {
   }
 
   @Override
-  public boolean bytesVal(int doc, BytesRefBuilder target) throws IOException {
+  public boolean bytesVal(int doc, BytesRefBuilder target) {
     target.clear();
-    if (getOrdForDoc(doc) == -1) {
-      return false;
-    } else {
-      target.copyBytes(termsIndex.binaryValue());
-      return true;
-    }
+    target.copyBytes(termsIndex.get(doc));
+    return target.length() > 0;
   }
 
   @Override
-  public String strVal(int doc) throws IOException {
-    if (getOrdForDoc(doc) == -1) {
+  public String strVal(int doc) {
+    final BytesRef term = termsIndex.get(doc);
+    if (term.length == 0) {
       return null;
     }
-    final BytesRef term = termsIndex.binaryValue();
     spareChars.copyUTF8Bytes(term);
     return spareChars.toString();
   }
 
   @Override
-  public boolean boolVal(int doc) throws IOException {
+  public boolean boolVal(int doc) {
     return exists(doc);
   }
 
   @Override
-  public abstract Object objectVal(int doc) throws IOException;  // force subclasses to override
+  public abstract Object objectVal(int doc);  // force subclasses to override
 
   @Override
-  public ValueSourceScorer getRangeScorer(Weight weight, LeafReaderContext readerContext, String lowerVal, String upperVal, boolean includeLower, boolean includeUpper) throws IOException {
+  public ValueSourceScorer getRangeScorer(IndexReader reader, String lowerVal, String upperVal, boolean includeLower, boolean includeUpper) {
     // TODO: are lowerVal and upperVal in indexed form or not?
     lowerVal = lowerVal == null ? null : toTerm(lowerVal);
     upperVal = upperVal == null ? null : toTerm(upperVal);
@@ -144,30 +122,17 @@ public abstract class DocTermsIndexDocValues extends FunctionValues {
     final int ll = lower;
     final int uu = upper;
 
-    return new ValueSourceScorer(weight, readerContext, this) {
-      final SortedDocValues values = readerContext.reader().getSortedDocValues(field);
-      private int lastDocID;
-      
+    return new ValueSourceScorer(reader, this) {
       @Override
-      public boolean matches(int doc) throws IOException {
-        if (doc < lastDocID) {
-          throw new IllegalArgumentException("docs were sent out-of-order: lastDocID=" + lastDocID + " vs docID=" + doc);
-        }
-        if (doc > values.docID()) {
-          values.advance(doc);
-        }
-        if (doc == values.docID()) {
-          int ord = values.ordValue();
-          return ord >= ll && ord <= uu;
-        } else {
-          return false;
-        }
+      public boolean matches(int doc) {
+        int ord = termsIndex.getOrd(doc);
+        return ord >= ll && ord <= uu;
       }
     };
   }
 
   @Override
-  public String toString(int doc) throws IOException {
+  public String toString(int doc) {
     return vs.description() + '=' + strVal(doc);
   }
 
@@ -182,8 +147,8 @@ public abstract class DocTermsIndexDocValues extends FunctionValues {
       }
 
       @Override
-      public void fillValue(int doc) throws IOException {
-        int ord = getOrdForDoc(doc);
+      public void fillValue(int doc) {
+        int ord = termsIndex.getOrd(doc);
         mval.value.clear();
         mval.exists = ord >= 0;
         if (mval.exists) {

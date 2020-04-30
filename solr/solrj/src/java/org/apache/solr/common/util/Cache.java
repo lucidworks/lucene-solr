@@ -1,3 +1,5 @@
+package org.apache.solr.common.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,33 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.util;
-
-import java.util.Objects;
-import java.util.function.Function;
 
 public interface Cache<K, V> {
-  V put(K key, V val);
+  public V put(K key, V val);
 
-  V get(K key);
+  public V get(K key);
 
-  V remove(K key);
+  public V remove(K key);
 
-  void clear();
-
-  default V computeIfAbsent(K key,
-                            Function<? super K, ? extends V> mappingFunction) {
-    Objects.requireNonNull(mappingFunction);
-    V v;
-    if ((v = get(key)) == null) {
-      V newValue;
-      if ((newValue = mappingFunction.apply(key)) != null) {
-        put(key, newValue);
-        return newValue;
-      }
-    }
-
-    return v;
-  }
+  public void clear();
 
 }

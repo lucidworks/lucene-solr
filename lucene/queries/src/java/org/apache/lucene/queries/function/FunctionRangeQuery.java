@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,28 +16,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function;
 
 import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Weight;
+import org.apache.lucene.util.ToStringUtils;
 
 /**
  * A Query wrapping a {@link ValueSource} that matches docs in which the values in the value source match a configured
  * range.  The score is the float value.  This can be a slow query if run by itself since it must visit all docs;
  * ideally it's combined with other queries.
  * It's mostly a wrapper around
- * {@link FunctionValues#getRangeScorer(Weight, LeafReaderContext, String, String, boolean, boolean)}.
+ * {@link FunctionValues#getRangeScorer(IndexReader, String, String, boolean, boolean)}.
  *
  * A similar class is {@code org.apache.lucene.search.DocValuesRangeQuery} in the sandbox module.  That one is
  * constant scoring.
@@ -68,60 +69,34 @@ public class FunctionRangeQuery extends Query {
     this.includeUpper = includeUpper;
   }
 
-  public ValueSource getValueSource() {
-    return valueSource;
-  }
-
-  public String getLowerVal() {
-    return lowerVal;
-  }
-
-  public String getUpperVal() {
-    return upperVal;
-  }
-
-  public boolean isIncludeLower() {
-    return includeLower;
-  }
-
-  public boolean isIncludeUpper() {
-    return includeUpper;
-  }
-
   @Override
   public String toString(String field) {
     return "frange(" + valueSource + "):"
         + (includeLower ? '[' : '{')
         + (lowerVal == null ? "*" : lowerVal) + " TO " + (upperVal == null ? "*" : upperVal)
-        + (includeUpper ? ']' : '}');
+        + (includeUpper ? ']' : '}') + ToStringUtils.boost(getBoost());
   }
 
   @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           equalsTo(getClass().cast(other));
-  }
-
-  private boolean equalsTo(FunctionRangeQuery other) {
-    return Objects.equals(includeLower, other.includeLower) &&
-           Objects.equals(includeUpper, other.includeUpper) &&
-           Objects.equals(valueSource, other.valueSource) &&
-           Objects.equals(lowerVal, other.lowerVal) &&
-           Objects.equals(upperVal, other.upperVal);
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof FunctionRangeQuery)) return false;
+    if (!super.equals(o)) return false;
+    FunctionRangeQuery that = (FunctionRangeQuery) o;
+    return Objects.equals(includeLower, that.includeLower) &&
+        Objects.equals(includeUpper, that.includeUpper) &&
+        Objects.equals(valueSource, that.valueSource) &&
+        Objects.equals(lowerVal, that.lowerVal) &&
+        Objects.equals(upperVal, that.upperVal);
   }
 
   @Override
   public int hashCode() {
-    return classHash() ^ Objects.hash(valueSource, lowerVal, upperVal, includeLower, includeUpper);
+    return Objects.hash(super.hashCode(), valueSource, lowerVal, upperVal, includeLower, includeUpper);
   }
 
   @Override
-  public void visit(QueryVisitor visitor) {
-    visitor.visitLeaf(this);
-  }
-
-  @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
     return new FunctionRangeWeight(searcher);
   }
 
@@ -140,6 +115,17 @@ public class FunctionRangeQuery extends Query {
       //none
     }
 
+    //Note: this uses the functionValue's floatVal() as the score; queryNorm/boost is ignored.
+    @Override
+    public float getValueForNormalization() throws IOException {
+      return 1f;
+    }
+
+    @Override
+    public void normalize(float norm, float topLevelBoost) {
+      //no-op
+    }
+
     @Override
     public Explanation explain(LeafReaderContext context, int doc) throws IOException {
       FunctionValues functionValues = valueSource.getValues(vsContext, context);
@@ -147,7 +133,7 @@ public class FunctionRangeQuery extends Query {
       //  which can be slow since if that doc doesn't match, it has to linearly find the next matching
       ValueSourceScorer scorer = scorer(context);
       if (scorer.matches(doc)) {
-        scorer.iterator().advance(doc);
+        scorer.advance(doc);
         return Explanation.match(scorer.score(), FunctionRangeQuery.this.toString(), functionValues.explain(doc));
       } else {
         return Explanation.noMatch(FunctionRangeQuery.this.toString(), functionValues.explain(doc));
@@ -158,12 +144,7 @@ public class FunctionRangeQuery extends Query {
     public ValueSourceScorer scorer(LeafReaderContext context) throws IOException {
       FunctionValues functionValues = valueSource.getValues(vsContext, context);
       // getRangeScorer takes String args and parses them. Weird.
-      return functionValues.getRangeScorer(this, context, lowerVal, upperVal, includeLower, includeUpper);
-    }
-
-    @Override
-    public boolean isCacheable(LeafReaderContext ctx) {
-      return false;
+      return functionValues.getRangeScorer(context.reader(), lowerVal, upperVal, includeLower, includeUpper);
     }
   }
 }

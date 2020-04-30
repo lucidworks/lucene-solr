@@ -1,3 +1,5 @@
+package org.apache.solr.store.hdfs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.store.hdfs;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -36,14 +37,13 @@ public class HdfsFileWriter extends OutputStreamIndexOutput {
   public static final String HDFS_SYNC_BLOCK = "solr.hdfs.sync.block";
   public static final int BUFFER_SIZE = 16384;
   
-  public HdfsFileWriter(FileSystem fileSystem, Path path, String name) throws IOException {
-    super("fileSystem=" + fileSystem + " path=" + path, name, getOutputStream(fileSystem, path), BUFFER_SIZE);
+  public HdfsFileWriter(FileSystem fileSystem, Path path) throws IOException {
+    super("fileSystem=" + fileSystem + " path=" + path, getOutputStream(fileSystem, path), BUFFER_SIZE);
   }
   
   private static final OutputStream getOutputStream(FileSystem fileSystem, Path path) throws IOException {
     Configuration conf = fileSystem.getConf();
     FsServerDefaults fsDefaults = fileSystem.getServerDefaults(path);
-    short replication = fileSystem.getDefaultReplication(path);
     EnumSet<CreateFlag> flags = EnumSet.of(CreateFlag.CREATE,
         CreateFlag.OVERWRITE);
     if (Boolean.getBoolean(HDFS_SYNC_BLOCK)) {
@@ -51,7 +51,7 @@ public class HdfsFileWriter extends OutputStreamIndexOutput {
     }
     return fileSystem.create(path, FsPermission.getDefault()
         .applyUMask(FsPermission.getUMask(conf)), flags, fsDefaults
-        .getFileBufferSize(), replication, fsDefaults
+        .getFileBufferSize(), fsDefaults.getReplication(), fsDefaults
         .getBlockSize(), null);
   }
 }

@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.common.params;
 
 import java.util.HashMap;
@@ -74,11 +75,6 @@ public class MultiMapSolrParams extends SolrParams {
     return map.keySet().iterator();
   }
 
-  @Override
-  public Iterator<Map.Entry<String, String[]>> iterator() {
-    return map.entrySet().iterator();
-  }
-
   public Map<String,String[]> getMap() { return map; }
 
   /** Returns a MultiMap view of the SolrParams as efficiently as possible.  The returned map may or may not be a backing implementation. */
@@ -102,8 +98,10 @@ public class MultiMapSolrParams extends SolrParams {
       return map;
     } else {
       Map<String,String[]> map = new HashMap<>();
-      for (Map.Entry<String, String[]> pair : params) {
-        map.put(pair.getKey(), pair.getValue());
+      Iterator<String> iterator = params.getParameterNamesIterator();
+      while (iterator.hasNext()) {
+        String name = iterator.next();
+        map.put(name, params.getParams(name));
       }
       return map;
     }

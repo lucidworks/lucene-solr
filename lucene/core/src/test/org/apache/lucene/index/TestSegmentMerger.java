@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -35,7 +35,6 @@ import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.StringHelper;
 import org.apache.lucene.util.TestUtil;
 import org.apache.lucene.util.Version;
-import org.apache.lucene.util.packed.PackedLongValues;
 
 public class TestSegmentMerger extends LuceneTestCase {
   //The variables for the new merged segment
@@ -60,8 +59,8 @@ public class TestSegmentMerger extends LuceneTestCase {
     SegmentCommitInfo info1 = DocHelper.writeDoc(random(), merge1Dir, doc1);
     DocHelper.setupDoc(doc2);
     SegmentCommitInfo info2 = DocHelper.writeDoc(random(), merge2Dir, doc2);
-    reader1 = new SegmentReader(info1, Version.LATEST.major, false, newIOContext(random()), Collections.emptyMap());
-    reader2 = new SegmentReader(info2, Version.LATEST.major, false, newIOContext(random()), Collections.emptyMap());
+    reader1 = new SegmentReader(info1, newIOContext(random()));
+    reader2 = new SegmentReader(info2, newIOContext(random()));
   }
 
   @Override
@@ -84,11 +83,11 @@ public class TestSegmentMerger extends LuceneTestCase {
 
   public void testMerge() throws IOException {
     final Codec codec = Codec.getDefault();
-    final SegmentInfo si = new SegmentInfo(mergedDir, Version.LATEST, null, mergedSegment, -1, false, codec, Collections.emptyMap(), StringHelper.randomId(), new HashMap<>(), null);
+    final SegmentInfo si = new SegmentInfo(mergedDir, Version.LATEST, mergedSegment, -1, false, codec, Collections.<String,String>emptyMap(), StringHelper.randomId(), new HashMap<String,String>());
 
     SegmentMerger merger = new SegmentMerger(Arrays.<CodecReader>asList(reader1, reader2),
                                              si, InfoStream.getDefault(), mergedDir,
-                                             new FieldInfos.FieldNumbers(null),
+                                             new FieldInfos.FieldNumbers(),
                                              newIOContext(random(), new IOContext(new MergeInfo(-1, -1, false, -1))));
     MergeState mergeState = merger.merge();
     int docsMerged = mergeState.segmentInfo.maxDoc();
@@ -96,9 +95,8 @@ public class TestSegmentMerger extends LuceneTestCase {
     //Should be able to open a new SegmentReader against the new directory
     SegmentReader mergedReader = new SegmentReader(new SegmentCommitInfo(
                                                          mergeState.segmentInfo,
-                                                         0, 0, -1L, -1L, -1L),
-                                                   Version.LATEST.major,
-        false, newIOContext(random()), Collections.emptyMap());
+                                                         0, -1L, -1L, -1L),
+                                                   newIOContext(random()));
     assertTrue(mergedReader != null);
     assertTrue(mergedReader.numDocs() == 2);
     Document newDoc1 = mergedReader.document(0);
@@ -146,9 +144,22 @@ public class TestSegmentMerger extends LuceneTestCase {
     mergedReader.close();
   }
 
+  private static boolean equals(MergeState.DocMap map1, MergeState.DocMap map2) {
+    if (map1.maxDoc() != map2.maxDoc()) {
+      return false;
+    }
+    for (int i = 0; i < map1.maxDoc(); ++i) {
+      if (map1.get(i) != map2.get(i)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   public void testBuildDocMap() {
     final int maxDoc = TestUtil.nextInt(random(), 1, 128);
     final int numDocs = TestUtil.nextInt(random(), 0, maxDoc);
+    final int numDeletedDocs = maxDoc - numDocs;
     final FixedBitSet liveDocs = new FixedBitSet(maxDoc);
     for (int i = 0; i < numDocs; ++i) {
       while (true) {
@@ -160,11 +171,15 @@ public class TestSegmentMerger extends LuceneTestCase {
       }
     }
 
-    final PackedLongValues docMap = MergeState.removeDeletes(maxDoc, liveDocs);
+    final MergeState.DocMap docMap = MergeState.DocMap.build(maxDoc, liveDocs);
 
+    assertEquals(maxDoc, docMap.maxDoc());
+    assertEquals(numDocs, docMap.numDocs());
+    assertEquals(numDeletedDocs, docMap.numDeletedDocs());
     // assert the mapping is compact
     for (int i = 0, del = 0; i < maxDoc; ++i) {
-      if (liveDocs.get(i) == false) {
+      if (!liveDocs.get(i)) {
+        assertEquals(-1, docMap.get(i));
         ++del;
       } else {
         assertEquals(i - del, docMap.get(i));

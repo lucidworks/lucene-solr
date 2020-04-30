@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
-
 
 import java.io.IOException;
 import java.util.List;
@@ -36,14 +36,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  *     &lt;filter class="solr.StemmerOverrideFilterFactory" dictionary="dictionary.txt" ignoreCase="false"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- * @since 3.1.0
- * @lucene.spi {@value #NAME}
  */
 public class StemmerOverrideFilterFactory extends TokenFilterFactory implements ResourceLoaderAware {
-
-  /** SPI name */
-  public static final String NAME = "stemmerOverride";
-
   private StemmerOverrideMap dictionary;
   private final String dictionaryFiles;
   private final boolean ignoreCase;

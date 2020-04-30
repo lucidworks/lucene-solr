@@ -14,9 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.function;
 
-import java.io.IOException;
+package org.apache.solr.search.function;
 
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -28,7 +27,7 @@ import org.apache.solr.search.ValueSourceParser;
 
 /**
  * A sample ValueSourceParser for testing. Approximates the oracle NVL function,
- * letting you substitute a value when a "null" is encountered. In this case,
+ * letting you substitude a value when a "null" is encountered. In this case,
  * null is approximated by a float value, since ValueSource always returns a
  * float, even if the field is undefined for a document.
  * 
@@ -58,7 +57,7 @@ public class NvlValueSourceParser extends ValueSourceParser {
         }
 
         @Override
-        protected float func(int doc, FunctionValues vals) throws IOException {
+        protected float func(int doc, FunctionValues vals) {
           float v = vals.floatVal(doc);
           if (v == nvlFloatValue) {
             return nvl;

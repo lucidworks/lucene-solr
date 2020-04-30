@@ -1,3 +1,5 @@
+package org.apache.solr.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Method;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -27,17 +29,20 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.server.namenode.LeaseExpiredException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 
 /**
  * Borrowed from Apache HBase to recover an HDFS lease.
  */
+
 public class FSHDFSUtils {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   
   // internal, for tests
-  public static final AtomicLong RECOVER_LEASE_SUCCESS_COUNT = new AtomicLong();
+  public static AtomicLong RECOVER_LEASE_SUCCESS_COUNT = new AtomicLong();
 
   public interface CallerInfo {
     boolean isCallerClosed();
@@ -93,7 +98,17 @@ public class FSHDFSUtils {
     // default value for DFS_CLIENT_SOCKET_TIMEOUT_KEY.
     long subsequentPause = TimeUnit.NANOSECONDS.convert(conf.getInt("solr.hdfs.lease.recovery.dfs.timeout", 61 * 1000), TimeUnit.MILLISECONDS);
     
-    if (dfs.isFileClosed(p)) {
+    Method isFileClosedMeth = null;
+    // whether we need to look for isFileClosed method
+    
+    try {
+      isFileClosedMeth = dfs.getClass().getMethod("isFileClosed",
+          new Class[] {Path.class});
+    } catch (NoSuchMethodException nsme) {
+      log.debug("isFileClosed not available");
+    }
+    
+    if (isFileClosedMeth != null && isFileClosed(dfs, isFileClosedMeth, p)) {
       return true;
     }
     
@@ -108,12 +123,13 @@ public class FSHDFSUtils {
         if (nbAttempt == 0) {
           Thread.sleep(firstPause);
         } else {
-          // Cycle here until subsequentPause elapses.  While spinning, check isFileClosed
+          // Cycle here until subsequentPause elapses.  While spinning, check isFileClosed if
+          // available (should be in hadoop 2.0.5... not in hadoop 1 though.
           long localStartWaiting = System.nanoTime();
           while ((System.nanoTime() - localStartWaiting) < subsequentPause && !callerInfo.isCallerClosed()) {
             Thread.sleep(conf.getInt("solr.hdfs.lease.recovery.pause", 1000));
 
-            if (dfs.isFileClosed(p)) {
+            if (isFileClosedMeth != null && isFileClosed(dfs, isFileClosedMeth, p)) {
               recovered = true;
               break;
             }
@@ -155,7 +171,7 @@ public class FSHDFSUtils {
       log.info("recoverLease=" + recovered + ", " +
         getLogMessageDetail(nbAttempt, p, startWaiting));
     } catch (IOException e) {
-      if (e.getMessage().contains("File does not exist")) {
+      if (e instanceof LeaseExpiredException && e.getMessage().contains("File does not exist")) {
         // This exception comes out instead of FNFE, fix it
         throw new FileNotFoundException("The given transactionlog file wasn't found at " + p);
       } else if (e instanceof FileNotFoundException) {
@@ -173,4 +189,21 @@ public class FSHDFSUtils {
     return "attempt=" + nbAttempt + " on file=" + p + " after " +
       TimeUnit.MILLISECONDS.convert(System.nanoTime() - startWaiting, TimeUnit.NANOSECONDS) + "ms";
   }
+
+  /**
+   * Call HDFS-4525 isFileClosed if it is available.
+   * 
+   * @return True if file is closed.
+   */
+  private static boolean isFileClosed(final DistributedFileSystem dfs, final Method m, final Path p) {
+    try {
+      return (Boolean) m.invoke(dfs, p);
+    } catch (SecurityException e) {
+      log.warn("No access", e);
+    } catch (Exception e) {
+      log.warn("Failed invocation for " + p.toString(), e);
+    }
+    return false;
+  }
+
 }

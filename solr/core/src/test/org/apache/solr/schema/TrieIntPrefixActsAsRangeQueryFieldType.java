@@ -1,3 +1,5 @@
+package org.apache.solr.schema;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,23 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
 
 import org.apache.lucene.search.Query;
 import org.apache.solr.search.QParser;
 
 /**
  * Custom field type that overrides the prefix query behavior to map "X*" to [X TO Integer.MAX_VALUE].
- * * This is used for testing overridden prefix query for custom fields in TestOverriddenPrefixQueryForCustomFieldType
- *
- * @see IntPointPrefixActsAsRangeQueryFieldType
- * @deprecated Trie fields are deprecated as of Solr 7.0
+ * * This is used for testing overridded prefix query for custom fields in TestOverriddenPrefixQueryForCustomFieldType
  */
-@Deprecated
 public class TrieIntPrefixActsAsRangeQueryFieldType extends TrieIntField {
 
   public Query getPrefixQuery(QParser parser, SchemaField sf, String termStr) {
-    return getRangeQuery(parser, sf, termStr, Integer.MAX_VALUE + "", true, false);
+    return getRangeQuery(parser, sf, termStr, new String(Integer.MAX_VALUE + ""), true, false);
   }
 
 }

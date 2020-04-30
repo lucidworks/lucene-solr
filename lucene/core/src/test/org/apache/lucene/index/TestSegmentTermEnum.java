@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
+import org.apache.lucene.document.Field;
+import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.TestUtil;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util.TestUtil;
 
 
 public class TestSegmentTermEnum extends LuceneTestCase {
@@ -79,8 +79,8 @@ public class TestSegmentTermEnum extends LuceneTestCase {
                                 .setCodec(TestUtil.alwaysPostingsFormat(TestUtil.getDefaultPostingsFormat())));
     addDoc(writer, "aaa bbb");
     writer.close();
-    LeafReader reader = getOnlyLeafReader(DirectoryReader.open(dir));
-    TermsEnum terms = reader.terms("content").iterator();
+    SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(dir));
+    TermsEnum terms = reader.fields().terms("content").iterator();
     assertNotNull(terms.next());
     assertEquals("aaa", terms.term().utf8ToString());
     assertNotNull(terms.next());
@@ -104,7 +104,7 @@ public class TestSegmentTermEnum extends LuceneTestCase {
       throws IOException
   {
       IndexReader reader = DirectoryReader.open(dir);
-      TermsEnum termEnum = MultiTerms.getTerms(reader, "content").iterator();
+      TermsEnum termEnum = MultiFields.getTerms(reader, "content").iterator();
 
     // create enumeration of all terms
     // go to the first term (aaa)

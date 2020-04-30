@@ -1,19 +1,3 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.apache.lucene.util;
 
 import static org.apache.lucene.util.LuceneTestCase.*;
@@ -30,6 +14,23 @@ import org.junit.runner.notification.RunListener;
 
 import com.carrotsearch.randomizedtesting.LifecycleScope;
 import com.carrotsearch.randomizedtesting.RandomizedContext;
+
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 /**
  * A suite listener printing a "reproduce string". This ensures test result
@@ -125,10 +126,10 @@ public final class RunListenerPrintReproduceInfo extends RunListener {
 
   /** print some useful debugging information about the environment */
   private static void printDebuggingInformation() {
-    if (classEnvRule != null && classEnvRule.isInitialized()) {
+    if (classEnvRule != null) {
       System.err.println("NOTE: test params are: codec=" + classEnvRule.codec +
           ", sim=" + classEnvRule.similarity +
-          ", locale=" + classEnvRule.locale.toLanguageTag() +
+          ", locale=" + classEnvRule.locale +
           ", timezone=" + (classEnvRule.timeZone == null ? "(null)" : classEnvRule.timeZone.getID()));
     }
     System.err.println("NOTE: " + System.getProperty("os.name") + " "
@@ -166,9 +167,7 @@ public final class RunListenerPrintReproduceInfo extends RunListener {
     if (TEST_NIGHTLY) addVmOpt(b, SYSPROP_NIGHTLY, TEST_NIGHTLY);
     if (TEST_WEEKLY) addVmOpt(b, SYSPROP_WEEKLY, TEST_WEEKLY);
     if (TEST_SLOW) addVmOpt(b, SYSPROP_SLOW, TEST_SLOW);
-    if (TEST_MONSTER) addVmOpt(b, SYSPROP_MONSTER, TEST_MONSTER);
     if (TEST_AWAITSFIX) addVmOpt(b, SYSPROP_AWAITSFIX, TEST_AWAITSFIX);
-    if (TEST_BADAPPLES) addVmOpt(b, SYSPROP_BADAPPLES, TEST_BADAPPLES);
 
     // Codec, postings, directories.
     if (!TEST_CODEC.equals("random")) addVmOpt(b, "tests.codec", TEST_CODEC);
@@ -178,8 +177,8 @@ public final class RunListenerPrintReproduceInfo extends RunListener {
 
     // Environment.
     if (!TEST_LINE_DOCS_FILE.equals(DEFAULT_LINE_DOCS_FILE)) addVmOpt(b, "tests.linedocsfile", TEST_LINE_DOCS_FILE);
-    if (classEnvRule != null && classEnvRule.isInitialized()) {
-      addVmOpt(b, "tests.locale", classEnvRule.locale.toLanguageTag());
+    if (classEnvRule != null) {
+      addVmOpt(b, "tests.locale", classEnvRule.locale);
       if (classEnvRule.timeZone != null) {
         addVmOpt(b, "tests.timezone", classEnvRule.timeZone.getID());
       }

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -63,17 +63,6 @@ public class MultiReader extends BaseCompositeReader<IndexReader> {
         subReaders[i].incRef();
       }
     }
-  }
-
-  @Override
-  public CacheHelper getReaderCacheHelper() {
-    // MultiReader instances can be short-lived, which would make caching trappy
-    // so we do not cache on them, unless they wrap a single reader in which
-    // case we delegate
-    if (getSequentialSubReaders().size() == 1) {
-      return getSequentialSubReaders().get(0).getReaderCacheHelper();
-    }
-    return null;
   }
 
   @Override

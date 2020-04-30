@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
-import java.util.Objects;
+import java.util.Collection;
+import java.util.Collections;
 
 /**
  * Expert: Common scoring functionality for different types of queries.
  *
  * <p>
- * A <code>Scorer</code> exposes an {@link #iterator()} over documents
- * matching a query in increasing order of doc Id.
+ * A <code>Scorer</code> iterates over documents matching a
+ * query in increasing order of doc Id.
  * </p>
  * <p>
  * Document scores are computed using a given <code>Similarity</code>
@@ -38,9 +39,9 @@ import java.util.Objects;
  * TopScoreDocCollector}) will not properly collect hits
  * with these scores.
  */
-public abstract class Scorer extends Scorable {
-
-  /** the Scorer's parent Weight */
+public abstract class Scorer extends DocIdSetIterator {
+  /** the Scorer's parent Weight. in some cases this may be null */
+  // TODO can we clean this up?
   protected final Weight weight;
 
   /**
@@ -48,8 +49,18 @@ public abstract class Scorer extends Scorable {
    * @param weight The scorers <code>Weight</code>.
    */
   protected Scorer(Weight weight) {
-    this.weight = Objects.requireNonNull(weight);
+    this.weight = weight;
   }
+
+  /** Returns the score of the current document matching the query.
+   * Initially invalid, until {@link #nextDoc()} or {@link #advance(int)}
+   * is called the first time, or when called from within
+   * {@link LeafCollector#collect}.
+   */
+  public abstract float score() throws IOException;
+
+  /** Returns the freq of this Scorer on the current document */
+  public abstract int freq() throws IOException;
 
   /** returns parent Weight
    * @lucene.experimental
@@ -57,19 +68,38 @@ public abstract class Scorer extends Scorable {
   public Weight getWeight() {
     return weight;
   }
-
-  /**
-   * Return a {@link DocIdSetIterator} over matching documents.
-   *
-   * The returned iterator will either be positioned on {@code -1} if no
-   * documents have been scored yet, {@link DocIdSetIterator#NO_MORE_DOCS}
-   * if all documents have been scored already, or the last document id that
-   * has been scored otherwise.
-   *
-   * The returned iterator is a view: calling this method several times will
-   * return iterators that have the same state.
-   */
-  public abstract DocIdSetIterator iterator();
+  
+  /** Returns child sub-scorers
+   * @lucene.experimental */
+  public Collection<ChildScorer> getChildren() {
+    return Collections.emptyList();
+  }
+  
+  /** A child Scorer and its relationship to its parent.
+   * the meaning of the relationship depends upon the parent query. 
+   * @lucene.experimental */
+  public static class ChildScorer {
+    /**
+     * Child Scorer. (note this is typically a direct child, and may
+     * itself also have children).
+     */
+    public final Scorer child;
+    /**
+     * An arbitrary string relating this scorer to the parent.
+     */
+    public final String relationship;
+    
+    /**
+     * Creates a new ChildScorer node with the specified relationship.
+     * <p>
+     * The relationship can be any be any string that makes sense to 
+     * the parent Scorer. 
+     */
+    public ChildScorer(Scorer child, String relationship) {
+      this.child = child;
+      this.relationship = relationship;
+    }
+  }
 
   /**
    * Optional method: Return a {@link TwoPhaseIterator} view of this
@@ -78,37 +108,15 @@ public abstract class Scorer extends Scorable {
    *
    * Note that the returned {@link TwoPhaseIterator}'s
    * {@link TwoPhaseIterator#approximation() approximation} must
-   * advance synchronously with the {@link #iterator()}: advancing the
-   * approximation must advance the iterator and vice-versa.
+   * advance synchronously with this iterator: advancing the approximation must
+   * advance this iterator and vice-versa.
    *
    * Implementing this method is typically useful on {@link Scorer}s
    * that have a high per-document overhead in order to confirm matches.
    *
    * The default implementation returns {@code null}.
    */
-  public TwoPhaseIterator twoPhaseIterator() {
+  public TwoPhaseIterator asTwoPhaseIterator() {
     return null;
   }
-
-  /**
-   * Advance to the block of documents that contains {@code target} in order to
-   * get scoring information about this block. This method is implicitly called
-   * by {@link DocIdSetIterator#advance(int)} and
-   * {@link DocIdSetIterator#nextDoc()} on the returned doc ID. Calling this
-   * method doesn't modify the current {@link DocIdSetIterator#docID()}.
-   * It returns a number that is greater than or equal to all documents
-   * contained in the current block, but less than any doc IDS of the next block.
-   * {@code target} must be &gt;= {@link #docID()} as well as all targets that
-   * have been passed to {@link #advanceShallow(int)} so far.
-   */
-  public int advanceShallow(int target) throws IOException {
-    return DocIdSetIterator.NO_MORE_DOCS;
-  }
-
-  /**
-   * Return the maximum score that documents between the last {@code target}
-   * that this iterator was {@link #advanceShallow(int) shallow-advanced} to
-   * included and {@code upTo} included.
-   */
-  public abstract float getMaxScore(int upTo) throws IOException;
 }

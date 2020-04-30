@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
-
 
 import java.util.Map;
 
-import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
+import org.apache.lucene.analysis.miscellaneous.ASCIIFoldingFilter;
+import org.apache.lucene.analysis.TokenStream;
 
 /** 
  * Factory for {@link ASCIIFoldingFilter}.
@@ -31,41 +34,27 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  *     &lt;filter class="solr.ASCIIFoldingFilterFactory" preserveOriginal="false"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
-public class ASCIIFoldingFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "asciiFolding";
-
-  private static final String PRESERVE_ORIGINAL = "preserveOriginal";
-
+public class ASCIIFoldingFilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
   private final boolean preserveOriginal;
   
   /** Creates a new ASCIIFoldingFilterFactory */
   public ASCIIFoldingFilterFactory(Map<String,String> args) {
     super(args);
-    preserveOriginal = getBoolean(args, PRESERVE_ORIGINAL, false);
+    preserveOriginal = getBoolean(args, "preserveOriginal", false);
     if (!args.isEmpty()) {
       throw new IllegalArgumentException("Unknown parameters: " + args);
     }
   }
   
   @Override
-  public TokenStream create(TokenStream input) {
+  public ASCIIFoldingFilter create(TokenStream input) {
     return new ASCIIFoldingFilter(input, preserveOriginal);
   }
 
   @Override
-  public TokenStream normalize(TokenStream input) {
-    // The main use-case for using preserveOriginal is to match regardless of
-    // case and to give better scores to exact matches. Since most multi-term
-    // queries return constant scores anyway, for normalization we
-    // emit only the folded token
-    return new ASCIIFoldingFilter(input, false);
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
-
 }
 

@@ -1,3 +1,7 @@
+package org.apache.lucene.queryparser.flexible.core.nodes;
+
+import org.apache.lucene.queryparser.flexible.core.parser.EscapeQuerySyntax;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +18,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.core.nodes;
-
-import org.apache.lucene.queryparser.flexible.core.parser.EscapeQuerySyntax;
 
 import org.apache.lucene.queryparser.flexible.core.processors.RemoveDeletedQueryNodesProcessor;
 

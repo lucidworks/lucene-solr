@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
 
+import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * A builder for {@link CharsRef} instances.
@@ -151,7 +154,7 @@ public class CharsRefBuilder implements Appendable {
 
   /** Build a new {@link CharsRef} that has the same content as this builder. */
   public CharsRef toCharsRef() {
-    return new CharsRef(ArrayUtil.copyOfSubArray(ref.chars, 0, ref.length), 0, ref.length);
+    return new CharsRef(Arrays.copyOf(ref.chars, ref.length), 0, ref.length);
   }
 
   @Override

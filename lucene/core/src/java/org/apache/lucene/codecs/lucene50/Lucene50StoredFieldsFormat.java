@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.lucene50;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.lucene50;
-
 
 import java.io.IOException;
 import java.util.Objects;
@@ -176,7 +176,7 @@ public final class Lucene50StoredFieldsFormat extends StoredFieldsFormat {
   @Override
   public StoredFieldsWriter fieldsWriter(Directory directory, SegmentInfo si, IOContext context) throws IOException {
     String previous = si.putAttribute(MODE_KEY, mode.name());
-    if (previous != null && previous.equals(mode.name()) == false) {
+    if (previous != null) {
       throw new IllegalStateException("found existing value for " + MODE_KEY + " for segment: " + si.name +
                                       "old=" + previous + ", new=" + mode.name());
     }

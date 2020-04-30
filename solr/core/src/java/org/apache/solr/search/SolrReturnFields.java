@@ -16,23 +16,15 @@
  */
 package org.apache.solr.search;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.Supplier;
-
 import org.apache.commons.io.FilenameUtils;
 import org.apache.lucene.queries.function.FunctionQuery;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.valuesource.QueryValueSource;
 import org.apache.lucene.search.Query;
 import org.apache.solr.common.SolrException;
+import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.params.CommonParams;
-import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.params.MapSolrParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
@@ -42,7 +34,14 @@ import org.apache.solr.response.transform.RenameFieldTransformer;
 import org.apache.solr.response.transform.ScoreAugmenter;
 import org.apache.solr.response.transform.TransformerFactory;
 import org.apache.solr.response.transform.ValueSourceAugmenter;
-import org.apache.solr.search.SolrDocumentFetcher.RetrieveFieldsOptimizer;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * The default implementation of return fields parsing for Solr.
@@ -54,7 +53,6 @@ public class SolrReturnFields extends ReturnFields {
   private final List<String> globs = new ArrayList<>(1);
 
   // The lucene field names to request from the SolrIndexSearcher
-  // This *may* include fields that will not be in the final response
   private final Set<String> fields = new HashSet<>();
 
   // Field names that are OK to include in the response.
@@ -68,28 +66,6 @@ public class SolrReturnFields extends ReturnFields {
   protected DocTransformer transformer;
   protected boolean _wantsScore = false;
   protected boolean _wantsAllFields = false;
-  protected Map<String,String> renameFields = Collections.emptyMap();
-
-  // Only set currently with the SolrDocumentFetcher.solrDoc method. Primarily used
-  // at this time for testing to ensure we get fields from the expected places.
-  public enum FIELD_SOURCES {
-      NOT_SET, ALL_FROM_DV, ALL_FROM_STORED, MIXED_SOURCES
-  }
-
-  public FIELD_SOURCES getFieldSources() {
-    return fieldSources;
-  }
-
-  public void setFieldSources(FIELD_SOURCES fieldSources) {
-    this.fieldSources = fieldSources;
-  }
-
-  private FIELD_SOURCES fieldSources = FIELD_SOURCES.NOT_SET;
-  // For each individual result list, we need to have a separate fetch optimizer
-  // to use. It's particularly important to keep this list separated during, say,
-  // sub-query transformations.
-  //
-  private RetrieveFieldsOptimizer fetchOptimizer = null;
 
   public SolrReturnFields() {
     _wantsAllFields = true;
@@ -123,14 +99,6 @@ public class SolrReturnFields extends ReturnFields {
     parseFieldList(fl, req);
   }
 
-  public RetrieveFieldsOptimizer getFetchOptimizer(Supplier<RetrieveFieldsOptimizer> supplier) {
-    if (fetchOptimizer == null) {
-      fetchOptimizer = supplier.get();
-    }
-    return fetchOptimizer;
-  }
-
-
   private void parseFieldList(String[] fl, SolrQueryRequest req) {
     _wantsScore = false;
     _wantsAllFields = false;
@@ -163,15 +131,16 @@ public class SolrReturnFields extends ReturnFields {
       }
       augmenters.addTransformer( new RenameFieldTransformer( from, to, copy ) );
     }
-    if (rename.size() > 0 ) {
-      renameFields = rename.asShallowMap();
-    }
-    if( !_wantsAllFields && !globs.isEmpty() ) {
-      // TODO??? need to fill up the fields with matching field names in the index
-      // and add them to okFieldNames?
-      // maybe just get all fields?
-      // this would disable field selection optimization... i think that is OK
-      fields.clear(); // this will get all fields, and use wantsField to limit
+
+    if( !_wantsAllFields ) {
+      if( !globs.isEmpty() ) {
+        // TODO??? need to fill up the fields with matching field names in the index
+        // and add them to okFieldNames?
+        // maybe just get all fields?
+        // this would disable field selection optimization... i think thatis OK
+        fields.clear(); // this will get all fields, and use wantsField to limit
+      }
+      okFieldNames.addAll( fields );
     }
 
     if( augmenters.size() == 1 ) {
@@ -180,11 +149,6 @@ public class SolrReturnFields extends ReturnFields {
     else if( augmenters.size() > 1 ) {
       transformer = augmenters;
     }
-  }
-
-  @Override
-  public Map<String,String> getFieldRenames() {
-    return renameFields;
   }
 
   // like getId, but also accepts dashes for legacy fields
@@ -284,13 +248,12 @@ public class SolrReturnFields extends ReturnFields {
         // This is identical to localParams syntax except it uses [] instead of {!}
 
         if (funcStr.startsWith("[")) {
-          ModifiableSolrParams augmenterParams = new ModifiableSolrParams();
-          int end = QueryParsing.parseLocalParams(funcStr, 0, augmenterParams, req.getParams(), "[", ']');
+          Map<String,String> augmenterArgs = new HashMap<>();
+          int end = QueryParsing.parseLocalParams(funcStr, 0, augmenterArgs, req.getParams(), "[", ']');
           sp.pos += end;
 
           // [foo] is short for [type=foo] in localParams syntax
-          String augmenterName = augmenterParams.get("type");
-          augmenterParams.remove("type");
+          String augmenterName = augmenterArgs.remove("type");
           String disp = key;
           if( disp == null ) {
             disp = '['+augmenterName+']';
@@ -298,6 +261,7 @@ public class SolrReturnFields extends ReturnFields {
 
           TransformerFactory factory = req.getCore().getTransformerFactory( augmenterName );
           if( factory != null ) {
+            MapSolrParams augmenterParams = new MapSolrParams( augmenterArgs );
             DocTransformer t = factory.create(disp, augmenterParams, req);
             if(t!=null) {
               if(!_wantsAllFields) {
@@ -434,29 +398,12 @@ public class SolrReturnFields extends ReturnFields {
   @Override
   public Set<String> getLuceneFieldNames()
   {
-    return getLuceneFieldNames(false);
-  }
-
-  @Override
-  public Set<String> getLuceneFieldNames(boolean ignoreWantsAll)
-  {
-    if (ignoreWantsAll)
-      return fields;
-    else
-      return (_wantsAllFields || fields.isEmpty()) ? null : fields;
+    return (_wantsAllFields || fields.isEmpty()) ? null : fields;
   }
 
   @Override
   public Set<String> getRequestedFieldNames() {
-    if(_wantsAllFields || reqFieldNames == null || reqFieldNames.isEmpty()) {
-      return null;
-    }
-    return reqFieldNames;
-  }
-
-  @Override
-  public Set<String> getExplicitlyRequestedFieldNames() {
-    if (reqFieldNames == null || reqFieldNames.isEmpty()) {
+    if(_wantsAllFields || reqFieldNames==null || reqFieldNames.isEmpty()) {
       return null;
     }
     return reqFieldNames;
@@ -499,19 +446,5 @@ public class SolrReturnFields extends ReturnFields {
   public DocTransformer getTransformer()
   {
     return transformer;
-  }
-
-  @Override
-  public String toString() {
-    final StringBuilder sb = new StringBuilder("SolrReturnFields=(");
-    sb.append("globs="); sb.append(globs);
-    sb.append(",fields="); sb.append(fields);
-    sb.append(",okFieldNames="); sb.append(okFieldNames);
-    sb.append(",reqFieldNames="); sb.append(reqFieldNames);
-    sb.append(",transformer="); sb.append(transformer);
-    sb.append(",wantsScore="); sb.append(_wantsScore);
-    sb.append(",wantsAllFields="); sb.append(_wantsAllFields);
-    sb.append(')');
-    return sb.toString();
   }
 }

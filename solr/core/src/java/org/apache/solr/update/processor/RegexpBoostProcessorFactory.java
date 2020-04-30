@@ -29,7 +29,6 @@ import org.apache.solr.response.SolrQueryResponse;
  * The factory initializes a shared object cache which is passed to the processor
  * and this way reduces rules file parsing to the first time the UpdateChain
  * is initialized.
- * @since 4.2.0
  */
 public class RegexpBoostProcessorFactory extends UpdateRequestProcessorFactory {
 
@@ -39,7 +38,7 @@ public class RegexpBoostProcessorFactory extends UpdateRequestProcessorFactory {
     @Override
     public void init(@SuppressWarnings("rawtypes") final NamedList args) {
         if (args != null) {
-          this.params = args.toSolrParams();
+            this.params = SolrParams.toSolrParams(args);
         }
     }
 

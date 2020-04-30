@@ -1,3 +1,5 @@
+package org.apache.lucene.facet.taxonomy;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy;
 
 import java.io.IOException;
 import java.util.List;
 
-import org.apache.lucene.facet.FacetsCollector.MatchingDocs;
 import org.apache.lucene.facet.FacetsCollector;
+import org.apache.lucene.facet.FacetsCollector.MatchingDocs;
 import org.apache.lucene.facet.FacetsConfig;
 import org.apache.lucene.index.BinaryDocValues;
 import org.apache.lucene.search.DocIdSetIterator;
@@ -39,7 +40,7 @@ public class TaxonomyFacetCounts extends IntTaxonomyFacets {
    *  {@link OrdinalsReader}; otherwise use {@link
    *  FastTaxonomyFacetCounts}. */
   public TaxonomyFacetCounts(OrdinalsReader ordinalsReader, TaxonomyReader taxoReader, FacetsConfig config, FacetsCollector fc) throws IOException {
-    super(ordinalsReader.getIndexFieldName(), taxoReader, config, fc);
+    super(ordinalsReader.getIndexFieldName(), taxoReader, config);
     this.ordinalsReader = ordinalsReader;
     count(fc.getMatchingDocs());
   }
@@ -54,7 +55,7 @@ public class TaxonomyFacetCounts extends IntTaxonomyFacets {
       while ((doc = docs.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
         ords.get(doc, scratch);
         for(int i=0;i<scratch.length;i++) {
-          increment(scratch.ints[scratch.offset+i]);
+          values[scratch.ints[scratch.offset+i]]++;
         }
       }
     }

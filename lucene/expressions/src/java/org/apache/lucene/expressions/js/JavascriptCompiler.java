@@ -1,3 +1,4 @@
+package org.apache.lucene.expressions.js;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.expressions.js;
 
 import java.io.IOException;
 import java.io.Reader;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -39,7 +37,7 @@ import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.apache.lucene.expressions.Expression;
 import org.apache.lucene.expressions.js.JavascriptParser.ExpressionContext;
-import org.apache.lucene.search.DoubleValues;
+import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.util.IOUtils;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Label;
@@ -85,7 +83,7 @@ public final class JavascriptCompiler {
     }
   }
   
-  private static final int CLASSFILE_VERSION = Opcodes.V1_8;
+  private static final int CLASSFILE_VERSION = Opcodes.V1_7;
   
   // We use the same class name for all generated classes as they all have their own class loader.
   // The source code is displayed as "source file name" in stack trace.
@@ -93,17 +91,17 @@ public final class JavascriptCompiler {
   private static final String COMPILED_EXPRESSION_INTERNAL = COMPILED_EXPRESSION_CLASS.replace('.', '/');
   
   static final Type EXPRESSION_TYPE = Type.getType(Expression.class);
-  static final Type FUNCTION_VALUES_TYPE = Type.getType(DoubleValues.class);
+  static final Type FUNCTION_VALUES_TYPE = Type.getType(FunctionValues.class);
 
   private static final org.objectweb.asm.commons.Method
-    EXPRESSION_CTOR = getAsmMethod(void.class, "<init>", String.class, String[].class),
-    EVALUATE_METHOD = getAsmMethod(double.class, "evaluate", DoubleValues[].class);
+    EXPRESSION_CTOR = getMethod("void <init>(String, String[])"),
+    EVALUATE_METHOD = getMethod("double evaluate(int, " + FunctionValues.class.getName() + "[])");
 
-  static final org.objectweb.asm.commons.Method DOUBLE_VAL_METHOD = getAsmMethod(double.class, "doubleValue");
+  static final org.objectweb.asm.commons.Method DOUBLE_VAL_METHOD = getMethod("double doubleVal(int)");
   
-  /** create an ASM Method object from return type, method name, and parameters. */
-  private static org.objectweb.asm.commons.Method getAsmMethod(Class<?> rtype, String name, Class<?>... ptypes) {
-    return new org.objectweb.asm.commons.Method(name, MethodType.methodType(rtype, ptypes).toMethodDescriptorString());
+  // to work around import clash:
+  private static org.objectweb.asm.commons.Method getMethod(String method) {
+    return org.objectweb.asm.commons.Method.getMethod(method);
   }
   
   // This maximum length is theoretically 65535 bytes, but as it's CESU-8 encoded we dont know how large it is in bytes, so be safe
@@ -142,8 +140,7 @@ public final class JavascriptCompiler {
       throw new NullPointerException("A parent ClassLoader must be given.");
     }
     for (Method m : functions.values()) {
-      checkFunctionClassLoader(m, parent);
-      checkFunction(m);
+      checkFunction(m, parent);
     }
     return new JavascriptCompiler(sourceText, functions).compileExpression(parent);
   }
@@ -154,9 +151,9 @@ public final class JavascriptCompiler {
    * use the FunctionValues class.
    */
   @SuppressWarnings({"unused", "null"})
-  private static void unusedTestCompile() throws IOException {
-    DoubleValues f = null;
-    double ret = f.doubleValue();
+  private static void unusedTestCompile() {
+    FunctionValues f = null;
+    double ret = f.doubleVal(2);
   }
   
   /**
@@ -188,20 +185,15 @@ public final class JavascriptCompiler {
   private Expression compileExpression(ClassLoader parent) throws ParseException {
     final Map<String, Integer> externalsMap = new LinkedHashMap<>();
     final ClassWriter classWriter = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-
+    
+    generateClass(getAntlrParseTree(), classWriter, externalsMap);
+    
     try {
-      generateClass(getAntlrParseTree(), classWriter, externalsMap);
-
       final Class<? extends Expression> evaluatorClass = new Loader(parent)
         .define(COMPILED_EXPRESSION_CLASS, classWriter.toByteArray());
       final Constructor<? extends Expression> constructor = evaluatorClass.getConstructor(String.class, String[].class);
 
       return constructor.newInstance(sourceText, externalsMap.keySet().toArray(new String[externalsMap.size()]));
-    } catch (RuntimeException re) {
-      if (re.getCause() instanceof ParseException) {
-        throw (ParseException)re.getCause();
-      }
-      throw re;
     } catch (ReflectiveOperationException exception) {
       throw new IllegalStateException("An internal error occurred attempting to compile the expression (" + sourceText + ").", exception);
     }
@@ -214,28 +206,35 @@ public final class JavascriptCompiler {
    * @throws ParseException on failure to parse
    */
   private ParseTree getAntlrParseTree() throws ParseException {
-    final ANTLRInputStream antlrInputStream = new ANTLRInputStream(sourceText);
-    final JavascriptErrorHandlingLexer javascriptLexer = new JavascriptErrorHandlingLexer(antlrInputStream);
-    javascriptLexer.removeErrorListeners();
-    final JavascriptParser javascriptParser = new JavascriptParser(new CommonTokenStream(javascriptLexer));
-    javascriptParser.removeErrorListeners();
-    javascriptParser.setErrorHandler(new JavascriptParserErrorStrategy());
-    return javascriptParser.compile();
+    try {
+      final ANTLRInputStream antlrInputStream = new ANTLRInputStream(sourceText);
+      final JavascriptErrorHandlingLexer javascriptLexer = new JavascriptErrorHandlingLexer(antlrInputStream);
+      javascriptLexer.removeErrorListeners();
+      final JavascriptParser javascriptParser = new JavascriptParser(new CommonTokenStream(javascriptLexer));
+      javascriptParser.removeErrorListeners();
+      javascriptParser.setErrorHandler(new JavascriptParserErrorStrategy());
+      return javascriptParser.compile();
+    } catch (RuntimeException re) {
+      if (re.getCause() instanceof ParseException) {
+        throw (ParseException)re.getCause();
+      }
+      throw re;
+    }
   }
 
   /**
    * Sends the bytecode of class file to {@link ClassWriter}.
    */
-  private void generateClass(final ParseTree parseTree, final ClassWriter classWriter, final Map<String, Integer> externalsMap) throws ParseException {
+  private void generateClass(final ParseTree parseTree, final ClassWriter classWriter, final Map<String, Integer> externalsMap) {
     classWriter.visit(CLASSFILE_VERSION,
-        Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER | Opcodes.ACC_FINAL,
+        Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER | Opcodes.ACC_FINAL | Opcodes.ACC_SYNTHETIC,
         COMPILED_EXPRESSION_INTERNAL,
         null, EXPRESSION_TYPE.getInternalName(), null);
     final String clippedSourceText = (sourceText.length() <= MAX_SOURCE_LENGTH) ?
         sourceText : (sourceText.substring(0, MAX_SOURCE_LENGTH - 3) + "...");
     classWriter.visitSource(clippedSourceText, null);
     
-    final GeneratorAdapter constructor = new GeneratorAdapter(Opcodes.ACC_PUBLIC,
+    final GeneratorAdapter constructor = new GeneratorAdapter(Opcodes.ACC_PUBLIC | Opcodes.ACC_SYNTHETIC,
         EXPRESSION_CTOR, null, null, classWriter);
     constructor.loadThis();
     constructor.loadArgs();
@@ -243,9 +242,9 @@ public final class JavascriptCompiler {
     constructor.returnValue();
     constructor.endMethod();
     
-    final GeneratorAdapter gen = new GeneratorAdapter(Opcodes.ACC_PUBLIC,
+    final GeneratorAdapter gen = new GeneratorAdapter(Opcodes.ACC_PUBLIC | Opcodes.ACC_SYNTHETIC,
         EVALUATE_METHOD, null, null, classWriter);
-    
+
     // to completely hide the ANTLR visitor we use an anonymous impl:
     new JavascriptBaseVisitor<Void>() {
       private final Deque<Type> typeStack = new ArrayDeque<>();
@@ -289,56 +288,49 @@ public final class JavascriptCompiler {
         boolean parens = ctx.LP() != null && ctx.RP() != null;
         Method method = parens ? functions.get(text) : null;
 
-        try {
-          if (method != null) {
-            int arity = method.getParameterTypes().length;
-  
-            if (arguments != arity) {
-              throw new ParseException(
-                  "Invalid expression '" + sourceText + "': Expected (" + 
-                  arity + ") arguments for function call (" + text + "), but found (" + arguments + ").", 
-                  ctx.start.getStartIndex());
-            }
-  
-            typeStack.push(Type.DOUBLE_TYPE);
-  
-            for (int argument = 0; argument < arguments; ++argument) {
-              visit(ctx.expression(argument));
-            }
-  
-            typeStack.pop();
-  
-            gen.invokeStatic(Type.getType(method.getDeclaringClass()),
-                org.objectweb.asm.commons.Method.getMethod(method));
-  
-            gen.cast(Type.DOUBLE_TYPE, typeStack.peek());
-          } else if (!parens || arguments == 0 && text.contains(".")) {
-            int index;
-  
-            text = normalizeQuotes(ctx.getText());
-  
-            if (externalsMap.containsKey(text)) {
-              index = externalsMap.get(text);
-            } else {
-              index = externalsMap.size();
-              externalsMap.put(text, index);
-            }
-  
-            gen.loadArg(0);
-            gen.push(index);
-            gen.arrayLoad(FUNCTION_VALUES_TYPE);
-            gen.invokeVirtual(FUNCTION_VALUES_TYPE, DOUBLE_VAL_METHOD);
-            gen.cast(Type.DOUBLE_TYPE, typeStack.peek());
-          } else {
-            throw new ParseException("Invalid expression '" + sourceText + "': Unrecognized function call (" +
-                text + ").", ctx.start.getStartIndex());
+        if (method != null) {
+          int arity = method.getParameterTypes().length;
+
+          if (arguments != arity) {
+            throw new IllegalArgumentException(
+                "Expected (" + arity + ") arguments for function call (" + text + "), but found (" + arguments + ").");
           }
-          return null;
-        } catch (ParseException e) {
-          // The API doesn't allow checked exceptions here, so propagate up the stack. This is unwrapped
-          // in getAntlrParseTree. 
-          throw new RuntimeException(e);
+
+          typeStack.push(Type.DOUBLE_TYPE);
+
+          for (int argument = 0; argument < arguments; ++argument) {
+            visit(ctx.expression(argument));
+          }
+
+          typeStack.pop();
+
+          gen.invokeStatic(Type.getType(method.getDeclaringClass()),
+              org.objectweb.asm.commons.Method.getMethod(method));
+
+          gen.cast(Type.DOUBLE_TYPE, typeStack.peek());
+        } else if (!parens || arguments == 0 && text.contains(".")) {
+          int index;
+
+          text = normalizeQuotes(ctx.getText());
+
+          if (externalsMap.containsKey(text)) {
+            index = externalsMap.get(text);
+          } else {
+            index = externalsMap.size();
+            externalsMap.put(text, index);
+          }
+
+          gen.loadArg(1);
+          gen.push(index);
+          gen.arrayLoad(FUNCTION_VALUES_TYPE);
+          gen.loadArg(0);
+          gen.invokeVirtual(FUNCTION_VALUES_TYPE, DOUBLE_VAL_METHOD);
+          gen.cast(Type.DOUBLE_TYPE, typeStack.peek());
+        } else {
+          throw new IllegalArgumentException("Unrecognized function call (" + text + ").");
         }
+
+        return null;
       }
 
       @Override
@@ -700,7 +692,7 @@ public final class JavascriptCompiler {
         @SuppressWarnings({"rawtypes", "unchecked"}) Class[] args = new Class[arity];
         Arrays.fill(args, double.class);
         Method method = clazz.getMethod(methodName, args);
-        checkFunction(method);
+        checkFunction(method, JavascriptCompiler.class.getClassLoader());
         map.put(call, method);
       }
     } catch (ReflectiveOperationException | IOException e) {
@@ -709,43 +701,39 @@ public final class JavascriptCompiler {
     DEFAULT_FUNCTIONS = Collections.unmodifiableMap(map);
   }
   
-  /** Check Method signature for compatibility. */
-  private static void checkFunction(Method method) {
-    // check that the Method is public in some public reachable class:
-    final MethodType type;
-    try {
-      type = MethodHandles.publicLookup().unreflect(method).type();
-    } catch (IllegalAccessException iae) {
-      throw new IllegalArgumentException(method + " is not accessible (declaring class or method not public).");
+  private static void checkFunction(Method method, ClassLoader parent) {
+    // We can only call the function if the given parent class loader of our compiled class has access to the method:
+    final ClassLoader functionClassloader = method.getDeclaringClass().getClassLoader();
+    if (functionClassloader != null) { // it is a system class iff null!
+      boolean found = false;
+      while (parent != null) {
+        if (parent == functionClassloader) {
+          found = true;
+          break;
+        }
+        parent = parent.getParent();
+      }
+      if (!found) {
+        throw new IllegalArgumentException(method + " is not declared by a class which is accessible by the given parent ClassLoader.");
+      }
     }
     // do some checks if the signature is "compatible":
     if (!Modifier.isStatic(method.getModifiers())) {
       throw new IllegalArgumentException(method + " is not static.");
     }
-    for (int arg = 0, arity = type.parameterCount(); arg < arity; arg++) {
-      if (type.parameterType(arg) != double.class) {
-        throw new IllegalArgumentException(method + " must take only double parameters.");
+    if (!Modifier.isPublic(method.getModifiers())) {
+      throw new IllegalArgumentException(method + " is not public.");
+    }
+    if (!Modifier.isPublic(method.getDeclaringClass().getModifiers())) {
+      throw new IllegalArgumentException(method.getDeclaringClass().getName() + " is not public.");
+    }
+    for (Class<?> clazz : method.getParameterTypes()) {
+      if (!clazz.equals(double.class)) {
+        throw new IllegalArgumentException(method + " must take only double parameters");
       }
     }
-    if (type.returnType() != double.class) {
+    if (method.getReturnType() != double.class) {
       throw new IllegalArgumentException(method + " does not return a double.");
-    }
-  }
-  
-  /** Cross check if declaring class of given method is the same as
-   * returned by the given parent {@link ClassLoader} on string lookup.
-   * This prevents {@link NoClassDefFoundError}.
-   */
-  private static void checkFunctionClassLoader(Method method, ClassLoader parent) {
-    boolean ok = false;
-    try {
-      final Class<?> clazz = method.getDeclaringClass();
-      ok = Class.forName(clazz.getName(), false, parent) == clazz;
-    } catch (ClassNotFoundException e) {
-      ok = false;
-    }
-    if (!ok) {
-      throw new IllegalArgumentException(method + " is not declared by a class which is accessible by the given parent ClassLoader.");
     }
   }
 }

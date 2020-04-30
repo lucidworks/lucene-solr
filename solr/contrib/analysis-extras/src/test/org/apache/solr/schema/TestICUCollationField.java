@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.schema;
 
 import java.io.File;
@@ -21,9 +22,8 @@ import java.io.FileOutputStream;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
-import org.apache.lucene.analysis.util.FilesystemResourceLoader;
-import org.apache.lucene.analysis.util.ResourceLoader;
-import org.apache.lucene.analysis.util.StringMockResourceLoader;
+import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.util.TestUtil;
 import org.apache.solr.SolrTestCaseJ4;
 import org.junit.BeforeClass;
 
@@ -83,19 +83,9 @@ public class TestICUCollationField extends SolrTestCaseJ4 {
 
     RuleBasedCollator tailoredCollator = new RuleBasedCollator(baseCollator.getRules() + DIN5007_2_tailorings);
     String tailoredRules = tailoredCollator.getRules();
-    final String osFileName = "customrules.dat";
-    final FileOutputStream os = new FileOutputStream(new File(confDir, osFileName));
+    FileOutputStream os = new FileOutputStream(new File(confDir, "customrules.dat"));
     IOUtils.write(tailoredRules, os, "UTF-8");
     os.close();
-
-    final ResourceLoader loader;
-    if (random().nextBoolean()) {
-      loader = new StringMockResourceLoader(tailoredRules);
-    } else {
-      loader = new FilesystemResourceLoader(confDir.toPath());
-    }
-    final Collator readCollator = ICUCollationField.createFromRules(osFileName, loader);
-    assertEquals(tailoredCollator, readCollator);
 
     return tmpFile;
   }
@@ -108,8 +98,8 @@ public class TestICUCollationField extends SolrTestCaseJ4 {
     assertQ("Collated TQ: ",
        req("fl", "id", "q", "sort_de:tone", "sort", "id asc" ),
               "//*[@numFound='2']",
-              "//result/doc[1]/str[@name='id'][.=4]",
-              "//result/doc[2]/str[@name='id'][.=7]"
+              "//result/doc[1]/int[@name='id'][.=4]",
+              "//result/doc[2]/int[@name='id'][.=7]"
     );
   }
   
@@ -122,8 +112,8 @@ public class TestICUCollationField extends SolrTestCaseJ4 {
     assertQ("Collated RangeQ: ",
         req("fl", "id", "q", "sort_de:[tone TO tp]", "sort", "id asc" ),
                "//*[@numFound='2']",
-               "//result/doc[1]/str[@name='id'][.=4]",
-               "//result/doc[2]/str[@name='id'][.=7]"
+               "//result/doc[1]/int[@name='id'][.=4]",
+               "//result/doc[2]/int[@name='id'][.=7]"
      );
   }
   
@@ -134,8 +124,8 @@ public class TestICUCollationField extends SolrTestCaseJ4 {
     assertQ("Collated Sort: ",
         req("fl", "id", "q", "sort_da:[tz TO töz]", "sort", "sort_da asc" ),
                "//*[@numFound='2']",
-               "//result/doc[1]/str[@name='id'][.=11]",
-               "//result/doc[2]/str[@name='id'][.=4]"
+               "//result/doc[1]/int[@name='id'][.=11]",
+               "//result/doc[2]/int[@name='id'][.=4]"
      );
   }
   
@@ -147,8 +137,8 @@ public class TestICUCollationField extends SolrTestCaseJ4 {
     assertQ("Collated Sort: ",
         req("fl", "id", "q", "sort_ar:[\u0698 TO \u0633\u0633]", "sort", "sort_ar asc" ),
                "//*[@numFound='2']",
-               "//result/doc[1]/str[@name='id'][.=12]",
-               "//result/doc[2]/str[@name='id'][.=1]"
+               "//result/doc[1]/int[@name='id'][.=12]",
+               "//result/doc[2]/int[@name='id'][.=1]"
      );
   }
 
@@ -171,9 +161,9 @@ public class TestICUCollationField extends SolrTestCaseJ4 {
     assertQ("Collated TQ: ",
         req("fl", "id", "q", "sort_tr_canon:\"I Will Use Turkish Casıng\"", "sort", "id asc" ),
                "//*[@numFound='3']",
-               "//result/doc[1]/str[@name='id'][.=2]",
-               "//result/doc[2]/str[@name='id'][.=3]",
-               "//result/doc[3]/str[@name='id'][.=5]"
+               "//result/doc[1]/int[@name='id'][.=2]",
+               "//result/doc[2]/int[@name='id'][.=3]",
+               "//result/doc[3]/int[@name='id'][.=5]"
      );
   }
   
@@ -183,10 +173,10 @@ public class TestICUCollationField extends SolrTestCaseJ4 {
    */
   public void testCustomCollation() {
     assertQ("Collated TQ: ",
-        req("fl", "id", "q", "sort_custom:toene"),
+        req("fl", "id", "q", "sort_custom:toene", "sort", "id asc" ),
                "//*[@numFound='2']",
-               "//result/doc/str[@name='id'][.=4]",
-               "//result/doc/str[@name='id'][.=10]"
+               "//result/doc[1]/int[@name='id'][.=4]",
+               "//result/doc[2]/int[@name='id'][.=10]"
      );
   }
 }

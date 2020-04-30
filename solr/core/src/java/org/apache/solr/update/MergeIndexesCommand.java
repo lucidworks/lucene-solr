@@ -14,13 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update;
 
+import com.google.common.base.Function;
+import com.google.common.base.Joiner;
+import com.google.common.collect.Iterables;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.solr.request.SolrQueryRequest;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * A merge indexes command encapsulated in an object.
@@ -44,7 +47,13 @@ public class MergeIndexesCommand extends UpdateCommand {
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder(super.toString());
-    sb.append(readers.stream().map(reader-> reader.directory().toString()).collect(Collectors.joining(",")));
+    Joiner joiner = Joiner.on(",");
+    Iterable<String> directories = Iterables.transform(readers, new Function<DirectoryReader, String>() {
+      public String apply(DirectoryReader reader) {
+        return reader.directory().toString();
+      }
+    });
+    joiner.skipNulls().join(sb, directories);
     sb.append('}');
     return sb.toString();
   }

@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -45,10 +45,14 @@ public class TestSimpleFSLockFactory extends BaseLockFactoryTestCase {
         assumeNoException("test requires the ability to delete a locked file", e);
       }
     
-      expectThrows(IOException.class, () -> {
+      try {
         lock.ensureValid();
-      });
-      IOUtils.closeWhileHandlingException(lock);
+        fail("no exception");
+      } catch (IOException expected) {
+        // ok
+      } finally {
+        IOUtils.closeWhileHandlingException(lock);
+      }
     } finally {
       // Do this in finally clause in case the assumeNoException is false:
       dir.close();

@@ -1,20 +1,20 @@
+package org.apache.solr.cloud;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * contributor license agreements. See the NOTICE file distributed with this
+ * work for additional information regarding copyright ownership. The ASF
+ * licenses this file to You under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
  */
-package org.apache.solr.cloud;
 
 import java.io.File;
 import java.lang.invoke.MethodHandles;
@@ -46,7 +46,7 @@ public class SolrXmlInZkTest extends SolrTestCaseJ4 {
 
   protected ZkTestServer zkServer;
 
-  protected Path zkDir;
+  protected String zkDir;
 
   private SolrZkClient zkClient;
 
@@ -67,11 +67,12 @@ public class SolrXmlInZkTest extends SolrTestCaseJ4 {
 
     System.setProperty("zkClientTimeout", "8000");
 
-    zkDir = tmpDir.resolve("zookeeper" + System.nanoTime()).resolve("server1").resolve("data");
+    zkDir = tmpDir.resolve("zookeeper" + System.nanoTime()).resolve("server1").resolve("data").toString();
     zkServer = new ZkTestServer(zkDir);
     zkServer.run();
     System.setProperty("zkHost", zkServer.getZkAddress());
-    zkServer.buildZooKeeper("solrconfig.xml", "schema.xml");
+    AbstractZkTestCase.buildZooKeeper(zkServer.getZkHost(),
+        zkServer.getZkAddress(), "solrconfig.xml", "schema.xml");
 
     zkClient = new SolrZkClient(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT);
 
@@ -139,12 +140,12 @@ public class SolrXmlInZkTest extends SolrTestCaseJ4 {
   @Test
   public void testNotInZkOrOnDisk() throws Exception {
     try {
-      SolrException e = expectThrows(SolrException.class, () -> {
-        System.setProperty("hostPort", "8787");
-        setUpZkAndDiskXml(false, false); // solr.xml not on disk either
-      });
+      System.setProperty("hostPort", "8787");
+      setUpZkAndDiskXml(false, false); // solr.xml not on disk either
+      fail("Should have thrown an exception here");
+    } catch (SolrException solre) {
       assertTrue("Should be failing to create default solr.xml in code",
-          e.getMessage().contains("solr.xml does not exist"));
+          solre.getMessage().contains("solr.xml does not exist"));
     } finally {
       closeZK();
     }
@@ -162,7 +163,7 @@ public class SolrXmlInZkTest extends SolrTestCaseJ4 {
 
   // Just a random port, I'm not going to use it but just check that the Solr instance constructed from the XML
   // file in ZK overrides the default port.
-  private static final String XML_FOR_ZK =
+  private final String XML_FOR_ZK =
       "<solr>" +
           "  <solrcloud>" +
           "    <str name=\"host\">127.0.0.1</str>" +

@@ -1,3 +1,5 @@
+package org.apache.lucene.replicator.http;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.replicator.http;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -39,7 +40,12 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.RuleChain;
+import org.junit.rules.TestRule;
+
+import com.carrotsearch.randomizedtesting.rules.SystemPropertiesRestoreRule;
 
 public class HttpReplicatorTest extends ReplicatorTestCase {
   private Path clientWorkDir;
@@ -79,7 +85,7 @@ public class HttpReplicatorTest extends ReplicatorTestCase {
     IndexWriterConfig conf = newIndexWriterConfig(null);
     conf.setIndexDeletionPolicy(new SnapshotDeletionPolicy(conf.getIndexDeletionPolicy()));
     writer = new IndexWriter(serverIndexDir, conf);
-    reader = DirectoryReader.open(writer);
+    reader = DirectoryReader.open(writer, false);
   }
   
   @Override
@@ -93,7 +99,7 @@ public class HttpReplicatorTest extends ReplicatorTestCase {
   private void publishRevision(int id) throws IOException {
     Document doc = new Document();
     writer.addDocument(doc);
-    writer.setLiveCommitData(Collections.singletonMap("ID", Integer.toString(id, 16)).entrySet());
+    writer.setCommitData(Collections.singletonMap("ID", Integer.toString(id, 16)));
     writer.commit();
     serverReplicator.publish(new IndexRevision(writer));
   }
@@ -136,9 +142,14 @@ public class HttpReplicatorTest extends ReplicatorTestCase {
     
     try {
       publishRevision(5);
-
-      replicationServlet.setRespondWithError(true);
-      expectThrows(Exception.class, client::updateNow);
+      
+      try {
+        replicationServlet.setRespondWithError(true);
+        client.updateNow();
+        fail("expected exception");
+      } catch (Throwable t) {
+        // expected
+      }
       
       replicationServlet.setRespondWithError(false);
       client.updateNow(); // now it should work

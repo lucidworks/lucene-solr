@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
-
 
 import java.io.Reader;
 import java.io.StringReader;
@@ -39,25 +39,29 @@ public class TestCodepointCountFilterFactory extends BaseTokenStreamFactoryTestC
   
   /** Test that bogus arguments result in exception */
   public void testBogusArguments() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       tokenFilterFactory("CodepointCount", 
           "min", "4", 
           "max", "5", 
           "bogusArg", "bogusValue");
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
   }
 
   /** Test that invalid arguments result in exception */
   public void testInvalidArguments() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       Reader reader = new StringReader("foo foobar super-duper-trooper");
       TokenStream stream = new MockTokenizer(MockTokenizer.WHITESPACE, false);
       ((Tokenizer)stream).setReader(reader);
       tokenFilterFactory("CodepointCount",
           CodepointCountFilterFactory.MIN_KEY, "5",
           CodepointCountFilterFactory.MAX_KEY, "4").create(stream);
-    });
-    assertTrue(expected.getMessage().contains("maximum length must not be greater than minimum length"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("maximum length must not be greater than minimum length"));
+    }
   }
 }

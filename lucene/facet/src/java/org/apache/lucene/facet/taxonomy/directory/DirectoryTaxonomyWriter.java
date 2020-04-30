@@ -1,19 +1,3 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.apache.lucene.facet.taxonomy.directory;
 
 import java.io.BufferedInputStream;
@@ -39,19 +23,19 @@ import org.apache.lucene.facet.FacetsConfig;
 import org.apache.lucene.facet.taxonomy.FacetLabel;
 import org.apache.lucene.facet.taxonomy.TaxonomyReader;
 import org.apache.lucene.facet.taxonomy.TaxonomyWriter;
-import org.apache.lucene.facet.taxonomy.writercache.UTF8TaxonomyWriterCache;
+import org.apache.lucene.facet.taxonomy.writercache.Cl2oTaxonomyWriterCache;
 import org.apache.lucene.facet.taxonomy.writercache.LruTaxonomyWriterCache;
 import org.apache.lucene.facet.taxonomy.writercache.TaxonomyWriterCache;
 import org.apache.lucene.index.CorruptIndexException; // javadocs
 import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.LogByteSizeMergePolicy;
-import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.ReaderManager;
 import org.apache.lucene.index.SegmentInfos;
 import org.apache.lucene.index.Terms;
@@ -61,7 +45,23 @@ import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.LockObtainFailedException;
 import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.FutureObjects;
+
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 /**
  * {@link TaxonomyWriter} which uses a {@link Directory} to store the taxonomy
@@ -150,7 +150,7 @@ public class DirectoryTaxonomyWriter implements TaxonomyWriter {
    * @param cache
    *    A {@link TaxonomyWriterCache} implementation which determines
    *    the in-memory caching policy. See for example
-   *    {@link LruTaxonomyWriterCache} and {@link UTF8TaxonomyWriterCache}.
+   *    {@link LruTaxonomyWriterCache} and {@link Cl2oTaxonomyWriterCache}.
    *    If null or missing, {@link #defaultTaxonomyWriterCache()} is used.
    * @throws CorruptIndexException
    *     if the taxonomy is corrupted.
@@ -195,7 +195,7 @@ public class DirectoryTaxonomyWriter implements TaxonomyWriter {
     parentStreamField = new Field(Consts.FIELD_PAYLOADS, parentStream, ft);
     fullPathField = new StringField(Consts.FULL, "", Field.Store.YES);
 
-    nextID = indexWriter.getDocStats().maxDoc;
+    nextID = indexWriter.maxDoc();
 
     if (cache == null) {
       cache = defaultTaxonomyWriterCache();
@@ -216,11 +216,6 @@ public class DirectoryTaxonomyWriter implements TaxonomyWriter {
       // notice a few cache misses.
       cacheIsComplete = false;
     }
-  }
-
-  /** Returns the {@link TaxonomyWriterCache} in use by this writer. */
-  public TaxonomyWriterCache getCache() {
-    return cache;
   }
 
   /**
@@ -276,7 +271,7 @@ public class DirectoryTaxonomyWriter implements TaxonomyWriter {
         // verify that the taxo-writer hasn't been closed on us.
         ensureOpen();
         if (!initializedReaderManager) {
-          readerManager = new ReaderManager(indexWriter, false, false);
+          readerManager = new ReaderManager(indexWriter, false);
           shouldRefreshReaderManager = false;
           initializedReaderManager = true;
         }
@@ -297,11 +292,12 @@ public class DirectoryTaxonomyWriter implements TaxonomyWriter {
    * Defines the default {@link TaxonomyWriterCache} to use in constructors
    * which do not specify one.
    * <P>  
-   * The current default is {@link UTF8TaxonomyWriterCache}, i.e.,
-   * the entire taxonomy is cached in memory while building it.
+   * The current default is {@link Cl2oTaxonomyWriterCache} constructed
+   * with the parameters (1024, 0.15f, 3), i.e., the entire taxonomy is
+   * cached in memory while building it.
    */
   public static TaxonomyWriterCache defaultTaxonomyWriterCache() {
-    return new UTF8TaxonomyWriterCache();
+    return new Cl2oTaxonomyWriterCache(1024, 0.15f, 3);
   }
 
   /** Create this with {@code OpenMode.CREATE_OR_APPEND}. */
@@ -586,45 +582,34 @@ public class DirectoryTaxonomyWriter implements TaxonomyWriter {
   }
   
   @Override
-  public synchronized long commit() throws IOException {
+  public synchronized void commit() throws IOException {
     ensureOpen();
     // LUCENE-4972: if we always call setCommitData, we create empty commits
-
-    Map<String,String> data = new HashMap<>();
-    Iterable<Map.Entry<String,String>> iter = indexWriter.getLiveCommitData();
-    if (iter != null) {
-      for(Map.Entry<String,String> ent : iter) {
-        data.put(ent.getKey(), ent.getValue());
-      }
-    }
-    
-    String epochStr = data.get(INDEX_EPOCH);
+    String epochStr = indexWriter.getCommitData().get(INDEX_EPOCH);
     if (epochStr == null || Long.parseLong(epochStr, 16) != indexEpoch) {
-      indexWriter.setLiveCommitData(combinedCommitData(indexWriter.getLiveCommitData()));
+      indexWriter.setCommitData(combinedCommitData(indexWriter.getCommitData()));
     }
-    return indexWriter.commit();
+    indexWriter.commit();
   }
 
   /** Combine original user data with the taxonomy epoch. */
-  private Iterable<Map.Entry<String,String>> combinedCommitData(Iterable<Map.Entry<String,String>> commitData) {
+  private Map<String,String> combinedCommitData(Map<String,String> commitData) {
     Map<String,String> m = new HashMap<>();
     if (commitData != null) {
-      for(Map.Entry<String,String> ent : commitData) {
-        m.put(ent.getKey(), ent.getValue());
-      }
+      m.putAll(commitData);
     }
     m.put(INDEX_EPOCH, Long.toString(indexEpoch, 16));
-    return m.entrySet();
+    return m;
   }
   
   @Override
-  public void setLiveCommitData(Iterable<Map.Entry<String,String>> commitUserData) {
-    indexWriter.setLiveCommitData(combinedCommitData(commitUserData));
+  public void setCommitData(Map<String,String> commitUserData) {
+    indexWriter.setCommitData(combinedCommitData(commitUserData));
   }
   
   @Override
-  public Iterable<Map.Entry<String,String>> getLiveCommitData() {
-    return combinedCommitData(indexWriter.getLiveCommitData());
+  public Map<String,String> getCommitData() {
+    return combinedCommitData(indexWriter.getCommitData());
   }
   
   /**
@@ -632,21 +617,14 @@ public class DirectoryTaxonomyWriter implements TaxonomyWriter {
    * See {@link IndexWriter#prepareCommit}.
    */
   @Override
-  public synchronized long prepareCommit() throws IOException {
+  public synchronized void prepareCommit() throws IOException {
     ensureOpen();
     // LUCENE-4972: if we always call setCommitData, we create empty commits
-    Map<String,String> data = new HashMap<>();
-    Iterable<Map.Entry<String,String>> iter = indexWriter.getLiveCommitData();
-    if (iter != null) {
-      for(Map.Entry<String,String> ent : iter) {
-        data.put(ent.getKey(), ent.getValue());
-      }
-    }
-    String epochStr = data.get(INDEX_EPOCH);
+    String epochStr = indexWriter.getCommitData().get(INDEX_EPOCH);
     if (epochStr == null || Long.parseLong(epochStr, 16) != indexEpoch) {
-      indexWriter.setLiveCommitData(combinedCommitData(indexWriter.getLiveCommitData()));
+      indexWriter.setCommitData(combinedCommitData(indexWriter.getCommitData()));
     }
-    return indexWriter.prepareCommit();
+    indexWriter.prepareCommit();
   }
   
   @Override
@@ -769,7 +747,9 @@ public class DirectoryTaxonomyWriter implements TaxonomyWriter {
     // Note: the following if() just enforces that a user can never ask
     // for the parent of a nonexistant category - even if the parent array
     // was allocated bigger than it really needs to be.
-    FutureObjects.checkIndex(ordinal, nextID);
+    if (ordinal >= nextID) {
+      throw new ArrayIndexOutOfBoundsException("requested ordinal is bigger than the largest ordinal in the taxonomy");
+    }
     
     int[] parents = getTaxoArrays().parents();
     assert ordinal < parents.length : "requested ordinal (" + ordinal + "); parents.length (" + parents.length + ") !";
@@ -812,7 +792,7 @@ public class DirectoryTaxonomyWriter implements TaxonomyWriter {
 
   /**
    * Mapping from old ordinal to new ordinals, used when merging indexes 
-   * with separate taxonomies.
+   * wit separate taxonomies.
    * <p> 
    * addToTaxonomies() merges one or more taxonomies into the given taxonomy
    * (this). An OrdinalMap is filled for each of the added taxonomies,
@@ -923,18 +903,18 @@ public class DirectoryTaxonomyWriter implements TaxonomyWriter {
         return map;
       }
       addDone(); // in case this wasn't previously called
-      try (DataInputStream in = new DataInputStream(new BufferedInputStream(
-          Files.newInputStream(tmpfile)))) {
-        map = new int[in.readInt()];
-        // NOTE: The current code assumes here that the map is complete,
-        // i.e., every ordinal gets one and exactly one value. Otherwise,
-        // we may run into an EOF here, or vice versa, not read everything.
-        for (int i=0; i<map.length; i++) {
-          int origordinal = in.readInt();
-          int newordinal = in.readInt();
-          map[origordinal] = newordinal;
-        }
+      DataInputStream in = new DataInputStream(new BufferedInputStream(
+          Files.newInputStream(tmpfile)));
+      map = new int[in.readInt()];
+      // NOTE: The current code assumes here that the map is complete,
+      // i.e., every ordinal gets one and exactly one value. Otherwise,
+      // we may run into an EOF here, or vice versa, not read everything.
+      for (int i=0; i<map.length; i++) {
+        int origordinal = in.readInt();
+        int newordinal = in.readInt();
+        map[origordinal] = newordinal;
       }
+      in.close();
 
       // Delete the temporary file, which is no longer needed.
       Files.delete(tmpfile);
@@ -968,7 +948,7 @@ public class DirectoryTaxonomyWriter implements TaxonomyWriter {
     shouldRefreshReaderManager = true;
     initReaderManager(); // ensure that it's initialized
     refreshReaderManager();
-    nextID = indexWriter.getDocStats().maxDoc;
+    nextID = indexWriter.maxDoc();
     taxoArrays = null; // must nullify so that it's re-computed next time it's needed
     
     // need to clear the cache, so that addCategory won't accidentally return

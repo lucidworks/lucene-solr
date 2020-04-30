@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.morfologik;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.morfologik;
-
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -48,14 +48,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * and used by default. 
  * 
  * @see <a href="http://morfologik.blogspot.com/">Morfologik web site</a>
- * @since 4.0.0
- * @lucene.spi {@value #NAME}
  */
 public class MorfologikFilterFactory extends TokenFilterFactory implements ResourceLoaderAware {
-
-  /** SPI name */
-  public static final String NAME = "morfologik";
-
   /** Dictionary resource attribute (should have {@code ".dict"} suffix), loaded from {@link ResourceLoader}. */
   public static final String DICTIONARY_ATTRIBUTE = "dictionary";
 

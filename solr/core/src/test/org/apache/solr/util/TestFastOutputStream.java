@@ -14,14 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.util;
 
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.update.MemOutputStream;
 
 import java.util.Random;
 
-public class TestFastOutputStream extends SolrTestCase {
+public class TestFastOutputStream extends LuceneTestCase {
 
   Random rand;
   byte[] arr;

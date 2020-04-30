@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ja.dict;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ja.dict;
-
 
 import java.io.IOException;
 
@@ -26,15 +26,6 @@ public final class UnknownDictionary extends BinaryDictionary {
 
   private final CharacterDefinition characterDefinition = CharacterDefinition.getInstance();
   
-  /**
-   * @param scheme scheme for loading resources (FILE or CLASSPATH).
-   * @param path where to load resources from; a path, including the file base name without
-   * extension; this is used to match multiple files with the same base name.
-   */
-  public UnknownDictionary(ResourceScheme scheme, String path) throws IOException {
-    super(scheme, path);
-  }
-
   private UnknownDictionary() throws IOException {
     super();
   }

@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.compressing;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.compressing;
 
 import java.util.Random;
 
@@ -24,7 +25,7 @@ import org.apache.lucene.codecs.TermVectorsFormat;
 import org.apache.lucene.codecs.compressing.dummy.DummyCompressingCodec;
 import org.apache.lucene.util.TestUtil;
 
-import com.carrotsearch.randomizedtesting.generators.RandomNumbers;
+import com.carrotsearch.randomizedtesting.generators.RandomInts;
 
 /**
  * A codec that uses {@link CompressingStoredFieldsFormat} for its stored
@@ -55,22 +56,9 @@ public abstract class CompressingCodec extends FilterCodec {
    * suffix
    */
   public static CompressingCodec randomInstance(Random random) {
-    final int chunkSize = random.nextBoolean() ? RandomNumbers.randomIntBetween(random, 1, 10) : RandomNumbers.randomIntBetween(random, 1, 1 << 15);
-    final int chunkDocs = random.nextBoolean() ? RandomNumbers.randomIntBetween(random, 1, 10) : RandomNumbers.randomIntBetween(random, 64, 1024);
-    final int blockSize = random.nextBoolean() ? RandomNumbers.randomIntBetween(random, 1, 10) : RandomNumbers.randomIntBetween(random, 1, 1024);
-    return randomInstance(random, chunkSize, chunkDocs, false, blockSize);
-  }
-
-  /**
-   * Creates a random {@link CompressingCodec} with more reasonable parameters for big tests.
-   */
-  public static CompressingCodec reasonableInstance(Random random) {
-    // e.g. defaults use 2^14 for FAST and ~ 2^16 for HIGH
-    final int chunkSize = TestUtil.nextInt(random, 1<<13, 1<<17);
-    // e.g. defaults use 128 for FAST and 512 for HIGH
-    final int chunkDocs = TestUtil.nextInt(random, 1<<6, 1<<10);
-    // e.g. defaults use 1024 for both cases
-    final int blockSize = TestUtil.nextInt(random, 1<<9, 1<<11);
+    final int chunkSize = random.nextBoolean() ? RandomInts.randomIntBetween(random, 1, 10) : RandomInts.randomIntBetween(random, 1, 1 << 15);
+    final int chunkDocs = random.nextBoolean() ? RandomInts.randomIntBetween(random, 1, 10) : RandomInts.randomIntBetween(random, 64, 1024);
+    final int blockSize = random.nextBoolean() ? RandomInts.randomIntBetween(random, 1, 10) : RandomInts.randomIntBetween(random, 1, 1024);
     return randomInstance(random, chunkSize, chunkDocs, false, blockSize);
   }
   
@@ -79,10 +67,10 @@ public abstract class CompressingCodec extends FilterCodec {
    */
   public static CompressingCodec randomInstance(Random random, boolean withSegmentSuffix) {
     return randomInstance(random, 
-                          RandomNumbers.randomIntBetween(random, 1, 1 << 15), 
-                          RandomNumbers.randomIntBetween(random, 64, 1024), 
+                          RandomInts.randomIntBetween(random, 1, 1 << 15), 
+                          RandomInts.randomIntBetween(random, 64, 1024), 
                           withSegmentSuffix,
-                          RandomNumbers.randomIntBetween(random, 1, 1024));
+                          RandomInts.randomIntBetween(random, 1, 1024));
   }
 
   private final CompressingStoredFieldsFormat storedFieldsFormat;

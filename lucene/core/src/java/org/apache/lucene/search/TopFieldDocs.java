@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 
 /** Represents hits returned by {@link
@@ -30,9 +30,10 @@ public class TopFieldDocs extends TopDocs {
    * @param totalHits  Total number of hits for the query.
    * @param scoreDocs  The top hits for the query.
    * @param fields     The sort criteria used to find the top hits.
+   * @param maxScore   The maximum score encountered.
    */
-  public TopFieldDocs (TotalHits totalHits, ScoreDoc[] scoreDocs, SortField[] fields) {
-    super (totalHits, scoreDocs);
+  public TopFieldDocs (int totalHits, ScoreDoc[] scoreDocs, SortField[] fields, float maxScore) {
+    super (totalHits, scoreDocs, maxScore);
     this.fields = fields;
   }
 }

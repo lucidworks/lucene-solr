@@ -1,3 +1,4 @@
+package org.apache.lucene.queryparser.xml.builders;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.xml.builders;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -49,8 +50,7 @@ public class DisjunctionMaxQueryBuilder implements QueryBuilder {
 
     List<Query> disjuncts = new ArrayList<>();
     NodeList nl = e.getChildNodes();
-    final int nlLen = nl.getLength();
-    for (int i = 0; i < nlLen; i++) {
+    for (int i = 0; i < nl.getLength(); i++) {
       Node node = nl.item(i);
       if (node instanceof Element) { // all elements are disjuncts.
         Element queryElem = (Element) node;

@@ -1,3 +1,5 @@
+package org.apache.solr.common.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.cloud;
-
-import java.util.Collection;
-import java.util.Collections;
 
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.Hash;
 
-import static org.apache.solr.common.params.CommonParams.ID;
+import java.util.Collection;
+import java.util.Collections;
 
 public abstract class HashBasedRouter extends DocRouter {
 
@@ -53,18 +52,17 @@ public abstract class HashBasedRouter extends DocRouter {
   }
 
   protected String getId(SolrInputDocument sdoc, SolrParams params) {
-    Object  idObj = sdoc.getFieldValue(ID);  // blech
+    Object  idObj = sdoc.getFieldValue("id");  // blech
     String id = idObj != null ? idObj.toString() : "null";  // should only happen on client side
     return id;
   }
 
   protected Slice hashToSlice(int hash, DocCollection collection) {
-    final Slice[] slices = collection.getActiveSlicesArr();
-    for (Slice slice : slices) {
+    for (Slice slice : collection.getActiveSlices()) {
       Range range = slice.getRange();
       if (range != null && range.includes(hash)) return slice;
     }
-    throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "No active slice servicing hash code " + Integer.toHexString(hash) + " in " + collection.getName());
+    throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "No active slice servicing hash code " + Integer.toHexString(hash) + " in " + collection);
   }
 
 

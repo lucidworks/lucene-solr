@@ -1,3 +1,4 @@
+package org.apache.lucene.expressions;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +15,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.expressions;
 
-import java.io.IOException;
+import org.apache.lucene.queries.function.FunctionValues;
+import org.apache.lucene.queries.function.ValueSource;
+import org.apache.lucene.queries.function.docvalues.DoubleDocValues;
 
-import org.apache.lucene.search.DoubleValues;
-
-/** A {@link DoubleValues} which evaluates an expression */
-class ExpressionFunctionValues extends DoubleValues {
+/** A {@link FunctionValues} which evaluates an expression */
+class ExpressionFunctionValues extends DoubleDocValues {
   final Expression expression;
-  final DoubleValues[] functionValues;
+  final FunctionValues[] functionValues;
   
-  ExpressionFunctionValues(Expression expression, DoubleValues[] functionValues) {
+  int currentDocument = -1;
+  double currentValue;
+  
+  ExpressionFunctionValues(ValueSource parent, Expression expression, FunctionValues[] functionValues) {
+    super(parent);
     if (expression == null) {
       throw new NullPointerException();
     }
@@ -35,17 +39,14 @@ class ExpressionFunctionValues extends DoubleValues {
     this.expression = expression;
     this.functionValues = functionValues;
   }
-
-  @Override
-  public boolean advanceExact(int doc) throws IOException {
-    for (DoubleValues v : functionValues) {
-      v.advanceExact(doc);
-    }
-    return true;
-  }
   
   @Override
-  public double doubleValue() {
-    return expression.evaluate(functionValues);
+  public double doubleVal(int document) {
+    if (currentDocument != document) {
+      currentDocument = document;
+      currentValue = expression.evaluate(document, functionValues);
+    }
+    
+    return currentValue;
   }
 }

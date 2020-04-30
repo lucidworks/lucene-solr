@@ -1,3 +1,4 @@
+package org.apache.solr.handler.component;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -22,9 +23,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -64,7 +65,7 @@ public class FieldFacetStats {
     this.facet_sf = facet_sf;
     this.name = facet_sf.getName();
 
-    topLevelReader = searcher.getSlowAtomicReader();
+    topLevelReader = searcher.getLeafReader();
     valueSource = facet_sf.getType().getValueSource(facet_sf, null);
 
     facetStatsValues = new HashMap<>();
@@ -97,17 +98,9 @@ public class FieldFacetStats {
     if (topLevelSortedValues == null) {
       topLevelSortedValues = DocValues.getSorted(topLevelReader, name);
     }
-
-    if (docID > topLevelSortedValues.docID()) {
-      topLevelSortedValues.advance(docID);
-    }
  
-    int term;
-    if (docID == topLevelSortedValues.docID()) {
-      term = topLevelSortedValues.ordValue();
-    } else {
-      term = -1;
-    }
+    
+    int term = topLevelSortedValues.getOrd(docID);
     
     int arrIdx = term;
     if (arrIdx >= 0 && arrIdx < topLevelSortedValues.getValueCount()) {
@@ -170,12 +163,8 @@ public class FieldFacetStats {
       topLevelSortedValues = DocValues.getSorted(topLevelReader, name);
     }
     
-    if (docID > topLevelSortedValues.docID()) {
-      topLevelSortedValues.advance(docID);
-    }
- 
-    if (docID == topLevelSortedValues.docID()) {
-      int ord = topLevelSortedValues.ordValue();
+    int ord = topLevelSortedValues.getOrd(docID);
+    if (ord != -1) {
       Integer missingCount = missingStats.get(ord);
       if (missingCount == null) {
         missingStats.put(ord, 1);

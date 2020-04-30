@@ -1,3 +1,4 @@
+package org.apache.lucene.analysis.payloads;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.payloads;
 
-
-import java.io.IOException;
 
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
@@ -25,9 +23,12 @@ import org.apache.lucene.analysis.tokenattributes.PayloadAttribute;
 import org.apache.lucene.analysis.tokenattributes.TypeAttribute;
 import org.apache.lucene.util.BytesRef;
 
+import java.io.IOException;
+
 
 /**
- * Assigns a payload to a token based on the {@link org.apache.lucene.analysis.tokenattributes.TypeAttribute}
+ * Assigns a payload to a token based on the {@link org.apache.lucene.analysis.Token#type()}
+ *
  **/
 public class NumericPayloadTokenFilter extends TokenFilter {
 
@@ -40,7 +41,7 @@ public class NumericPayloadTokenFilter extends TokenFilter {
   public NumericPayloadTokenFilter(TokenStream input, float payload, String typeMatch) {
     super(input);
     if (typeMatch == null) {
-      throw new IllegalArgumentException("typeMatch must not be null");
+      throw new IllegalArgumentException("typeMatch cannot be null");
     }
     //Need to encode the payload
     thePayload = new BytesRef(PayloadHelper.encodeFloat(payload));

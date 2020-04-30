@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function;
 
 import java.io.IOException;
 
@@ -57,22 +58,10 @@ public class TestFunctionRangeQuery extends FunctionTestSetup {
   public void testRangeInt() throws IOException {
     doTestRange(INT_VALUESOURCE);
   }
-  
-  @Test
-  public void testRangeIntMultiValued() throws IOException {
-    doTestRange(INT_MV_MAX_VALUESOURCE);
-    doTestRange(INT_MV_MIN_VALUESOURCE);
-  }
 
   @Test
   public void testRangeFloat() throws IOException {
     doTestRange(FLOAT_VALUESOURCE);
-  }
-  
-  @Test
-  public void testRangeFloatMultiValued() throws IOException {
-    doTestRange(FLOAT_MV_MAX_VALUESOURCE);
-    doTestRange(FLOAT_MV_MIN_VALUESOURCE);
   }
 
   private void doTestRange(ValueSource valueSource) throws IOException {
@@ -87,22 +76,13 @@ public class TestFunctionRangeQuery extends FunctionTestSetup {
 
   @Test
   public void testDeleted() throws IOException {
-    doTestDeleted(INT_VALUESOURCE);
-  }
-  
-  @Test
-  public void testDeletedMultiValued() throws IOException {
-    doTestDeleted(INT_MV_MAX_VALUESOURCE);
-    doTestDeleted(INT_MV_MIN_VALUESOURCE);
-  }
-  
-  private void doTestDeleted(ValueSource valueSource) throws IOException {
-    // We delete doc with #3. Note we don't commit it to disk; we search using a near real-time reader.
+    // We delete doc with #3. Note we don't commit it to disk; we search using a near eal-time reader.
+    final ValueSource valueSource = INT_VALUESOURCE;
     IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig(null));
     try {
       writer.deleteDocuments(new FunctionRangeQuery(valueSource, 3, 3, true, true));//delete the one with #3
       assert writer.hasDeletions();
-      try (IndexReader indexReader2 = DirectoryReader.open(writer)) {
+      try (IndexReader indexReader2 = DirectoryReader.open(writer, true)) {//applyAllDeletes
         IndexSearcher indexSearcher2 = new IndexSearcher(indexReader2);
         TopDocs topDocs = indexSearcher2.search(new FunctionRangeQuery(valueSource, 3, 4, true, true), N_DOCS);
         expectScores(topDocs.scoreDocs, 4);//missing #3 because it's deleted
@@ -122,18 +102,6 @@ public class TestFunctionRangeQuery extends FunctionTestSetup {
     assertEquals(
             "2.0 = frange(int(" + INT_FIELD + ")):[2 TO 2]\n" +
             "  2.0 = int(" + INT_FIELD + ")=2\n",
-        explain.toString());
-  }
-  
-  @Test
-  public void testExplainMultiValued() throws IOException {
-    Query rangeQuery = new FunctionRangeQuery(INT_MV_MIN_VALUESOURCE, 2, 2, true, true);
-    ScoreDoc[] scoreDocs = indexSearcher.search(rangeQuery, N_DOCS).scoreDocs;
-    Explanation explain = indexSearcher.explain(rangeQuery, scoreDocs[0].doc);
-    // Just validate it looks reasonable
-    assertEquals(
-            "2.0 = frange(int(" + INT_FIELD_MV_MIN + ",MIN)):[2 TO 2]\n" +
-            "  2.0 = int(" + INT_FIELD_MV_MIN + ",MIN)=2\n",
         explain.toString());
   }
 

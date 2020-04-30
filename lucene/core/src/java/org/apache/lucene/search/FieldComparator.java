@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 
 import java.io.IOException;
@@ -25,6 +25,7 @@ import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.index.SortedDocValues;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 
@@ -33,10 +34,6 @@ import org.apache.lucene.util.BytesRefBuilder;
  * sort order when collecting the top results with {@link
  * TopFieldCollector}.  The concrete public FieldComparator
  * classes here correspond to the SortField types.
- *
- * <p>The document IDs passed to these methods must only
- * move forwards, since they are using doc values iterators
- * to retrieve sort values.</p>
  *
  * <p>This API is designed to achieve high performance
  * sorting, by exposing a tight interaction with {@link
@@ -143,6 +140,7 @@ public abstract class FieldComparator<T> {
   public static abstract class NumericComparator<T extends Number> extends SimpleFieldComparator<T> {
     protected final T missingValue;
     protected final String field;
+    protected Bits docsWithField;
     protected NumericDocValues currentReaderValues;
     
     public NumericComparator(String field, T missingValue) {
@@ -153,11 +151,25 @@ public abstract class FieldComparator<T> {
     @Override
     protected void doSetNextReader(LeafReaderContext context) throws IOException {
       currentReaderValues = getNumericDocValues(context, field);
+      if (missingValue != null) {
+        docsWithField = getDocsWithValue(context, field);
+        // optimization to remove unneeded checks on the bit interface:
+        if (docsWithField instanceof Bits.MatchAllBits) {
+          docsWithField = null;
+        }
+      } else {
+        docsWithField = null;
+      }
     }
     
     /** Retrieves the NumericDocValues for the field in this segment */
     protected NumericDocValues getNumericDocValues(LeafReaderContext context, String field) throws IOException {
       return DocValues.getNumeric(context.reader(), field);
+    }
+
+    /** Retrieves a {@link Bits} instance representing documents that have a value in this segment. */
+    protected Bits getDocsWithValue(LeafReaderContext context, String field) throws IOException {
+      return DocValues.getDocsWithField(context.reader(), field);
     }
   }
 
@@ -170,19 +182,11 @@ public abstract class FieldComparator<T> {
 
     /** 
      * Creates a new comparator based on {@link Double#compare} for {@code numHits}.
-     * When a document has no value for the field, {@code missingValue} is substituted.
+     * When a document has no value for the field, {@code missingValue} is substituted. 
      */
     public DoubleComparator(int numHits, String field, Double missingValue) {
-      super(field, missingValue != null ? missingValue : 0.0);
+      super(field, missingValue);
       values = new double[numHits];
-    }
-
-    private double getValueForDoc(int doc) throws IOException {
-      if (currentReaderValues.advanceExact(doc)) {
-        return Double.longBitsToDouble(currentReaderValues.longValue());
-      } else {
-        return missingValue;
-      }
     }
 
     @Override
@@ -191,13 +195,27 @@ public abstract class FieldComparator<T> {
     }
 
     @Override
-    public int compareBottom(int doc) throws IOException {
-      return Double.compare(bottom, getValueForDoc(doc));
+    public int compareBottom(int doc) {
+      double v2 = Double.longBitsToDouble(currentReaderValues.get(doc));
+      // Test for v2 == 0 to save Bits.get method call for
+      // the common case (doc has value and value is non-zero):
+      if (docsWithField != null && v2 == 0 && !docsWithField.get(doc)) {
+        v2 = missingValue;
+      }
+
+      return Double.compare(bottom, v2);
     }
 
     @Override
-    public void copy(int slot, int doc) throws IOException {
-      values[slot] = getValueForDoc(doc);
+    public void copy(int slot, int doc) {
+      double v2 = Double.longBitsToDouble(currentReaderValues.get(doc));
+      // Test for v2 == 0 to save Bits.get method call for
+      // the common case (doc has value and value is non-zero):
+      if (docsWithField != null && v2 == 0 && !docsWithField.get(doc)) {
+        v2 = missingValue;
+      }
+
+      values[slot] = v2;
     }
     
     @Override
@@ -216,8 +234,14 @@ public abstract class FieldComparator<T> {
     }
 
     @Override
-    public int compareTop(int doc) throws IOException {
-      return Double.compare(topValue, getValueForDoc(doc));
+    public int compareTop(int doc) {
+      double docValue = Double.longBitsToDouble(currentReaderValues.get(doc));
+      // Test for docValue == 0 to save Bits.get method call for
+      // the common case (doc has value and value is non-zero):
+      if (docsWithField != null && docValue == 0 && !docsWithField.get(doc)) {
+        docValue = missingValue;
+      }
+      return Double.compare(topValue, docValue);
     }
   }
 
@@ -233,31 +257,38 @@ public abstract class FieldComparator<T> {
      * When a document has no value for the field, {@code missingValue} is substituted. 
      */
     public FloatComparator(int numHits, String field, Float missingValue) {
-      super(field, missingValue != null ? missingValue : 0.0f);
+      super(field, missingValue);
       values = new float[numHits];
     }
     
-    private float getValueForDoc(int doc) throws IOException {
-      if (currentReaderValues.advanceExact(doc)) {
-        return Float.intBitsToFloat((int) currentReaderValues.longValue());
-      } else {
-        return missingValue;
-      }
-    }
-
     @Override
     public int compare(int slot1, int slot2) {
       return Float.compare(values[slot1], values[slot2]);
     }
 
     @Override
-    public int compareBottom(int doc) throws IOException {
-      return Float.compare(bottom, getValueForDoc(doc));
+    public int compareBottom(int doc) {
+      // TODO: are there sneaky non-branch ways to compute sign of float?
+      float v2 = Float.intBitsToFloat((int)currentReaderValues.get(doc));
+      // Test for v2 == 0 to save Bits.get method call for
+      // the common case (doc has value and value is non-zero):
+      if (docsWithField != null && v2 == 0 && !docsWithField.get(doc)) {
+        v2 = missingValue;
+      }
+
+      return Float.compare(bottom, v2);
     }
 
     @Override
-    public void copy(int slot, int doc) throws IOException {
-      values[slot] = getValueForDoc(doc);
+    public void copy(int slot, int doc) {
+      float v2 =  Float.intBitsToFloat((int)currentReaderValues.get(doc));
+      // Test for v2 == 0 to save Bits.get method call for
+      // the common case (doc has value and value is non-zero):
+      if (docsWithField != null && v2 == 0 && !docsWithField.get(doc)) {
+        v2 = missingValue;
+      }
+
+      values[slot] = v2;
     }
     
     @Override
@@ -276,8 +307,14 @@ public abstract class FieldComparator<T> {
     }
 
     @Override
-    public int compareTop(int doc) throws IOException {
-      return Float.compare(topValue, getValueForDoc(doc));
+    public int compareTop(int doc) {
+      float docValue = Float.intBitsToFloat((int)currentReaderValues.get(doc));
+      // Test for docValue == 0 to save Bits.get method call for
+      // the common case (doc has value and value is non-zero):
+      if (docsWithField != null && docValue == 0 && !docsWithField.get(doc)) {
+        docValue = missingValue;
+      }
+      return Float.compare(topValue, docValue);
     }
   }
 
@@ -293,18 +330,8 @@ public abstract class FieldComparator<T> {
      * When a document has no value for the field, {@code missingValue} is substituted. 
      */
     public IntComparator(int numHits, String field, Integer missingValue) {
-      super(field, missingValue != null ? missingValue : 0);
-      //System.out.println("IntComparator.init");
-      //new Throwable().printStackTrace(System.out);
+      super(field, missingValue);
       values = new int[numHits];
-    }
-
-    private int getValueForDoc(int doc) throws IOException {
-      if (currentReaderValues.advanceExact(doc)) {
-        return (int) currentReaderValues.longValue();
-      } else {
-        return missingValue;
-      }
     }
         
     @Override
@@ -313,13 +340,27 @@ public abstract class FieldComparator<T> {
     }
 
     @Override
-    public int compareBottom(int doc) throws IOException {
-      return Integer.compare(bottom, getValueForDoc(doc));
+    public int compareBottom(int doc) {
+      int v2 = (int) currentReaderValues.get(doc);
+      // Test for v2 == 0 to save Bits.get method call for
+      // the common case (doc has value and value is non-zero):
+      if (docsWithField != null && v2 == 0 && !docsWithField.get(doc)) {
+        v2 = missingValue;
+      }
+
+      return Integer.compare(bottom, v2);
     }
 
     @Override
-    public void copy(int slot, int doc) throws IOException {
-      values[slot] = getValueForDoc(doc);
+    public void copy(int slot, int doc) {
+      int v2 = (int) currentReaderValues.get(doc);
+      // Test for v2 == 0 to save Bits.get method call for
+      // the common case (doc has value and value is non-zero):
+      if (docsWithField != null && v2 == 0 && !docsWithField.get(doc)) {
+        v2 = missingValue;
+      }
+
+      values[slot] = v2;
     }
     
     @Override
@@ -338,8 +379,14 @@ public abstract class FieldComparator<T> {
     }
 
     @Override
-    public int compareTop(int doc) throws IOException {
-      return Integer.compare(topValue, getValueForDoc(doc));
+    public int compareTop(int doc) {
+      int docValue = (int) currentReaderValues.get(doc);
+      // Test for docValue == 0 to save Bits.get method call for
+      // the common case (doc has value and value is non-zero):
+      if (docsWithField != null && docValue == 0 && !docsWithField.get(doc)) {
+        docValue = missingValue;
+      }
+      return Integer.compare(topValue, docValue);
     }
   }
 
@@ -355,16 +402,8 @@ public abstract class FieldComparator<T> {
      * When a document has no value for the field, {@code missingValue} is substituted. 
      */
     public LongComparator(int numHits, String field, Long missingValue) {
-      super(field, missingValue != null ? missingValue : 0L);
+      super(field, missingValue);
       values = new long[numHits];
-    }
-
-    private long getValueForDoc(int doc) throws IOException {
-      if (currentReaderValues.advanceExact(doc)) {
-        return currentReaderValues.longValue();
-      } else {
-        return missingValue;
-      }
     }
 
     @Override
@@ -373,13 +412,29 @@ public abstract class FieldComparator<T> {
     }
 
     @Override
-    public int compareBottom(int doc) throws IOException {
-      return Long.compare(bottom, getValueForDoc(doc));
+    public int compareBottom(int doc) {
+      // TODO: there are sneaky non-branch ways to compute
+      // -1/+1/0 sign
+      long v2 = currentReaderValues.get(doc);
+      // Test for v2 == 0 to save Bits.get method call for
+      // the common case (doc has value and value is non-zero):
+      if (docsWithField != null && v2 == 0 && !docsWithField.get(doc)) {
+        v2 = missingValue;
+      }
+
+      return Long.compare(bottom, v2);
     }
 
     @Override
-    public void copy(int slot, int doc) throws IOException {
-      values[slot] = getValueForDoc(doc);
+    public void copy(int slot, int doc) {
+      long v2 = currentReaderValues.get(doc);
+      // Test for v2 == 0 to save Bits.get method call for
+      // the common case (doc has value and value is non-zero):
+      if (docsWithField != null && v2 == 0 && !docsWithField.get(doc)) {
+        v2 = missingValue;
+      }
+
+      values[slot] = v2;
     }
     
     @Override
@@ -398,8 +453,14 @@ public abstract class FieldComparator<T> {
     }
 
     @Override
-    public int compareTop(int doc) throws IOException {
-      return Long.compare(topValue, getValueForDoc(doc));
+    public int compareTop(int doc) {
+      long docValue = currentReaderValues.get(doc);
+      // Test for docValue == 0 to save Bits.get method call for
+      // the common case (doc has value and value is non-zero):
+      if (docsWithField != null && docValue == 0 && !docsWithField.get(doc)) {
+        docValue = missingValue;
+      }
+      return Long.compare(topValue, docValue);
     }
   }
 
@@ -412,7 +473,7 @@ public abstract class FieldComparator<T> {
   public static final class RelevanceComparator extends FieldComparator<Float> implements LeafFieldComparator {
     private final float[] scores;
     private float bottom;
-    private Scorable scorer;
+    private Scorer scorer;
     private float topValue;
 
     /** Creates a new comparator based on relevance for {@code numHits}. */
@@ -454,7 +515,7 @@ public abstract class FieldComparator<T> {
     }
 
     @Override
-    public void setScorer(Scorable scorer) {
+    public void setScorer(Scorer scorer) {
       // wrap with a ScoreCachingWrappingScorer so that successive calls to
       // score() will not incur score computation over and
       // over again.
@@ -546,7 +607,7 @@ public abstract class FieldComparator<T> {
     }
 
     @Override
-    public void setScorer(Scorable scorer) {}
+    public void setScorer(Scorer scorer) {}
   }
   
   /** Sorts by field's natural Term sort order, using
@@ -639,14 +700,6 @@ public abstract class FieldComparator<T> {
       }
     }
 
-    private int getOrdForDoc(int doc) throws IOException {
-      if (termsIndex.advanceExact(doc)) {
-        return termsIndex.ordValue();
-      } else {
-        return -1;
-      }
-    }
-
     @Override
     public int compare(int slot1, int slot2) {
       if (readerGen[slot1] == readerGen[slot2]) {
@@ -667,9 +720,9 @@ public abstract class FieldComparator<T> {
     }
 
     @Override
-    public int compareBottom(int doc) throws IOException {
+    public int compareBottom(int doc) {
       assert bottomSlot != -1;
-      int docOrd = getOrdForDoc(doc);
+      int docOrd = termsIndex.getOrd(doc);
       if (docOrd == -1) {
         docOrd = missingOrd;
       }
@@ -687,8 +740,8 @@ public abstract class FieldComparator<T> {
     }
 
     @Override
-    public void copy(int slot, int doc) throws IOException {
-      int ord = getOrdForDoc(doc);
+    public void copy(int slot, int doc) {
+      int ord = termsIndex.getOrd(doc);
       if (ord == -1) {
         ord = missingOrd;
         values[slot] = null;
@@ -739,7 +792,7 @@ public abstract class FieldComparator<T> {
     }
     
     @Override
-    public void setBottom(final int bottom) throws IOException {
+    public void setBottom(final int bottom) {
       bottomSlot = bottom;
 
       bottomValue = values[bottomSlot];
@@ -783,9 +836,9 @@ public abstract class FieldComparator<T> {
     }
 
     @Override
-    public int compareTop(int doc) throws IOException {
+    public int compareTop(int doc) {
 
-      int ord = getOrdForDoc(doc);
+      int ord = termsIndex.getOrd(doc);
       if (ord == -1) {
         ord = missingOrd;
       }
@@ -818,7 +871,7 @@ public abstract class FieldComparator<T> {
     }
 
     @Override
-    public void setScorer(Scorable scorer) {}
+    public void setScorer(Scorer scorer) {}
   }
   
   /** Sorts by field's natural Term sort order.  All
@@ -830,6 +883,7 @@ public abstract class FieldComparator<T> {
     private final BytesRef[] values;
     private final BytesRefBuilder[] tempBRs;
     private BinaryDocValues docTerms;
+    private Bits docsWithField;
     private final String field;
     private BytesRef bottom;
     private BytesRef topValue;
@@ -843,14 +897,6 @@ public abstract class FieldComparator<T> {
       missingSortCmp = sortMissingLast ? 1 : -1;
     }
 
-    private BytesRef getValueForDoc(int doc) throws IOException {
-      if (docTerms.advanceExact(doc)) {
-        return docTerms.binaryValue();
-      } else {
-        return null;
-      }
-    }
-
     @Override
     public int compare(int slot1, int slot2) {
       final BytesRef val1 = values[slot1];
@@ -859,14 +905,14 @@ public abstract class FieldComparator<T> {
     }
 
     @Override
-    public int compareBottom(int doc) throws IOException {
-      final BytesRef comparableBytes = getValueForDoc(doc);
+    public int compareBottom(int doc) {
+      final BytesRef comparableBytes = getComparableBytes(doc, docTerms.get(doc));
       return compareValues(bottom, comparableBytes);
     }
 
     @Override
-    public void copy(int slot, int doc) throws IOException {
-      final BytesRef comparableBytes = getValueForDoc(doc);
+    public void copy(int slot, int doc) {
+      final BytesRef comparableBytes = getComparableBytes(doc, docTerms.get(doc));
       if (comparableBytes == null) {
         values[slot] = null;
       } else {
@@ -883,9 +929,27 @@ public abstract class FieldComparator<T> {
       return DocValues.getBinary(context.reader(), field);
     }
 
+    /** Retrieves the set of documents that have a value in this segment */
+    protected Bits getDocsWithField(LeafReaderContext context, String field) throws IOException {
+      return DocValues.getDocsWithField(context.reader(), field);
+    }
+
+    /** Check whether the given value represents <tt>null</tt>. This can be
+     *  useful if the {@link BinaryDocValues} returned by {@link #getBinaryDocValues}
+     *  use a special value as a sentinel. The default implementation checks
+     *  {@link #getDocsWithField}.
+     *  <p>NOTE: The null value can only be an EMPTY {@link BytesRef}. */
+    protected boolean isNull(int doc, BytesRef term) {
+      return docsWithField != null && docsWithField.get(doc) == false;
+    }
+
     @Override
     public LeafFieldComparator getLeafComparator(LeafReaderContext context) throws IOException {
       docTerms = getBinaryDocValues(context, field);
+      docsWithField = getDocsWithField(context, field);
+      if (docsWithField instanceof Bits.MatchAllBits) {
+        docsWithField = null;
+      }
       return this;
     }
     
@@ -921,11 +985,23 @@ public abstract class FieldComparator<T> {
     }
 
     @Override
-    public int compareTop(int doc) throws IOException {
-      return compareValues(topValue, getValueForDoc(doc));
+    public int compareTop(int doc) {
+      final BytesRef comparableBytes = getComparableBytes(doc, docTerms.get(doc));
+      return compareValues(topValue, comparableBytes);
+    }
+
+    /**
+     * Given a document and a term, return the term itself if it exists or
+     * <tt>null</tt> otherwise.
+     */
+    private BytesRef getComparableBytes(int doc, BytesRef term) {
+      if (term.length == 0 && isNull(doc, term)) {
+        return null;
+      }
+      return term;
     }
 
     @Override
-    public void setScorer(Scorable scorer) {}
+    public void setScorer(Scorer scorer) {}
   }
 }

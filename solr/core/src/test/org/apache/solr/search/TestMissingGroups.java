@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
 import org.apache.solr.SolrTestCaseJ4;
@@ -27,6 +28,8 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
 
 
 /** Inspired by LUCENE-5790 */
@@ -83,7 +86,7 @@ public class TestMissingGroups extends SolrTestCaseJ4 {
         assertU(commit()); // mess with the segment counts
       }
     }
-    // doc#0: at least one doc that is guaranteed not special and has no chance of being filtered
+    // doc#0: at least one doc that is garunteed not special and has no chance of being filtered
     assertU(adoc(sdoc("id","0")));
     assertU(commit());
 

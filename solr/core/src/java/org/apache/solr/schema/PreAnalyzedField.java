@@ -1,3 +1,4 @@
+package org.apache.solr.schema;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
+
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
@@ -27,21 +28,20 @@ import java.util.Map;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.Tokenizer;
-import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.valuesource.SortedSetFieldSource;
 import org.apache.lucene.search.SortField;
-import org.apache.lucene.search.SortedSetSelector;
+import org.apache.lucene.uninverting.UninvertingReader.Type;
 import org.apache.lucene.util.AttributeFactory;
-import org.apache.lucene.util.AttributeSource.State;
 import org.apache.lucene.util.AttributeSource;
+import org.apache.lucene.util.AttributeSource.State;
 import org.apache.solr.analysis.SolrAnalyzer;
 import org.apache.solr.response.TextResponseWriter;
 import org.apache.solr.search.QParser;
-import org.apache.solr.uninverting.UninvertingReader.Type;
+import org.apache.solr.search.Sorting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,8 +51,8 @@ import static org.apache.solr.common.params.CommonParams.JSON;
  * Pre-analyzed field type provides a way to index a serialized token stream,
  * optionally with an independent stored value of a field.
  */
-public class PreAnalyzedField extends TextField implements HasImplicitIndexAnalyzer {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+public class PreAnalyzedField extends FieldType {
+  private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   /** Init argument name. Value is a fully-qualified class name of the parser
    * that implements {@link PreAnalyzedParser}.
@@ -63,8 +63,8 @@ public class PreAnalyzedField extends TextField implements HasImplicitIndexAnaly
 
   
   private PreAnalyzedParser parser;
-  private PreAnalyzedAnalyzer preAnalyzer;
-
+  private Analyzer analyzer;
+  
   @Override
   public void init(IndexSchema schema, Map<String, String> args) {
     super.init(schema, args);
@@ -83,7 +83,7 @@ public class PreAnalyzedField extends TextField implements HasImplicitIndexAnaly
           Constructor<?> c = implClazz.getConstructor(new Class<?>[0]);
           parser = (PreAnalyzedParser) c.newInstance(new Object[0]);
         } catch (Exception e) {
-          log.warn("Can't use the configured PreAnalyzedParser class '" + implName +
+          LOG.warn("Can't use the configured PreAnalyzedParser class '" + implName +
               "', using default " + DEFAULT_IMPL, e);
           parser = new JsonPreAnalyzedParser();
         }
@@ -91,40 +91,32 @@ public class PreAnalyzedField extends TextField implements HasImplicitIndexAnaly
       args.remove(PARSER_IMPL);
     }
     // create Analyzer instance for reuse:
-    preAnalyzer = new PreAnalyzedAnalyzer(parser);
+    analyzer = new SolrAnalyzer() {
+      @Override
+      protected TokenStreamComponents createComponents(String fieldName) {
+        return new TokenStreamComponents(new PreAnalyzedTokenizer(parser));
+      }
+    };
   }
 
-  /**
-   * Overridden to return an analyzer consisting of a {@link PreAnalyzedTokenizer}.
-   * NOTE: If an index analyzer is specified in the schema, it will be ignored.
-   */
   @Override
   public Analyzer getIndexAnalyzer() {
-    return preAnalyzer;
+    return analyzer;
   }
-
-  /**
-   * Returns the query analyzer defined via the schema, unless there is none,
-   * in which case the index-time pre-analyzer is returned.
-   *
-   * Note that if the schema specifies an index-time analyzer via either
-   * {@code <analyzer>} or {@code <analyzer type="index">}, but no query-time
-   * analyzer, the query analyzer returned here will be the index-time
-   * analyzer specified in the schema rather than the pre-analyzer.
-   */
+  
   @Override
   public Analyzer getQueryAnalyzer() {
-    Analyzer queryAnalyzer = super.getQueryAnalyzer();
-    return queryAnalyzer instanceof FieldType.DefaultAnalyzer ? getIndexAnalyzer() : queryAnalyzer;
+    return getIndexAnalyzer();
   }
 
   @Override
-  public IndexableField createField(SchemaField field, Object value) {
+  public IndexableField createField(SchemaField field, Object value,
+          float boost) {
     IndexableField f = null;
     try {
-      f = fromString(field, String.valueOf(value));
+      f = fromString(field, String.valueOf(value), boost);
     } catch (Exception e) {
-      log.warn("Error parsing pre-analyzed field '" + field.getName() + "'", e);
+      LOG.warn("Error parsing pre-analyzed field '" + field.getName() + "'", e);
       return null;
     }
     return f;
@@ -132,8 +124,8 @@ public class PreAnalyzedField extends TextField implements HasImplicitIndexAnaly
   
   @Override
   public SortField getSortField(SchemaField field, boolean top) {
-    return getSortedSetSortField(field, SortedSetSelector.Type.MIN, top,
-                                 SortField.STRING_FIRST, SortField.STRING_LAST);
+    field.checkSortability();
+    return Sorting.getTextSortField(field.getName(), top, field.sortMissingLast(), field.sortMissingFirst());
   }
   
   @Override
@@ -168,8 +160,8 @@ public class PreAnalyzedField extends TextField implements HasImplicitIndexAnaly
    */
   public static org.apache.lucene.document.FieldType createFieldType(SchemaField field) {
     if (!field.indexed() && !field.stored()) {
-      if (log.isTraceEnabled())
-        log.trace("Ignoring unindexed/unstored field: " + field);
+      if (LOG.isTraceEnabled())
+        LOG.trace("Ignoring unindexed/unstored field: " + field);
       return null;
     }
     org.apache.lucene.document.FieldType newType = new org.apache.lucene.document.FieldType();
@@ -224,15 +216,13 @@ public class PreAnalyzedField extends TextField implements HasImplicitIndexAnaly
   }
   
   
-  public IndexableField fromString(SchemaField field, String val) throws Exception {
+  public IndexableField fromString(SchemaField field, String val, float boost) throws Exception {
     if (val == null || val.trim().length() == 0) {
       return null;
     }
     PreAnalyzedTokenizer parse = new PreAnalyzedTokenizer(parser);
-    Reader reader = new StringReader(val);
-    parse.setReader(reader);
-    parse.decodeInput(reader); // consume
-    parse.reset();
+    parse.setReader(new StringReader(val));
+    parse.reset(); // consume
     org.apache.lucene.document.FieldType type = createFieldType(field);
     if (type == null) {
       parse.close();
@@ -263,14 +253,17 @@ public class PreAnalyzedField extends TextField implements HasImplicitIndexAnaly
         }
       } else {
         if (f != null) {
-          type.setIndexOptions(IndexOptions.NONE);
-          type.setTokenized(false);
+          f.fieldType().setIndexOptions(IndexOptions.NONE);
+          f.fieldType().setTokenized(false);
         }
       }
     }
+    if (f != null) {
+      f.setBoost(boost);
+    }
     return f;
   }
-
+    
   /**
    * Token stream that works from a list of saved states.
    */
@@ -280,9 +273,7 @@ public class PreAnalyzedField extends TextField implements HasImplicitIndexAnaly
     private String stringValue = null;
     private byte[] binaryValue = null;
     private PreAnalyzedParser parser;
-    private IOException readerConsumptionException;
-    private int lastEndOffset;
-
+    
     public PreAnalyzedTokenizer(PreAnalyzedParser parser) {
       // we don't pack attributes: since we are used for (de)serialization and dont want bloat.
       super(AttributeFactory.DEFAULT_ATTRIBUTE_FACTORY);
@@ -303,53 +294,29 @@ public class PreAnalyzedField extends TextField implements HasImplicitIndexAnaly
 
     @Override
     public final boolean incrementToken() {
+      // lazy init the iterator
+      if (it == null) {
+        it = cachedStates.iterator();
+      }
+    
       if (!it.hasNext()) {
         return false;
       }
       
-      AttributeSource.State state = it.next();
+      AttributeSource.State state = (State) it.next();
       restoreState(state.clone());
-      // TODO: why can't I lookup the OffsetAttribute up in ctor instead?
-      lastEndOffset = addAttribute(OffsetAttribute.class).endOffset();
       return true;
     }
-
-    /**
-     * Throws a delayed exception if one was thrown from decodeInput()
-     * while reading from the input reader.
-     */
+  
     @Override
     public final void reset() throws IOException {
-      super.reset();
-      if (readerConsumptionException != null) {
-        IOException e = new IOException(readerConsumptionException);
-        readerConsumptionException = null;
-        throw e;
-      }
-      it = cachedStates.iterator();
-    }
-
-    @Override
-    public void end() throws IOException {
-      super.end();
-      // we must set the end offset correctly so multi-valued fields don't try to send offsets backwards:
-      addAttribute(OffsetAttribute.class).setOffset(lastEndOffset, lastEndOffset);
-    }
-
-    private void setReaderConsumptionException(IOException e) {
-      readerConsumptionException = e;
-    }
-
-    /**
-     * Parses the input reader and adds attributes specified there.
-     */
-    private void decodeInput(Reader reader) throws IOException {
-      removeAllAttributes();  // reset attributes to the empty set
-      cachedStates.clear();
-      stringValue = null;
-      binaryValue = null;
-      try {
-        ParseResult res = parser.parse(reader, this);
+      // NOTE: this acts like rewind if you call it again
+      if (it == null) {
+        super.reset();
+        cachedStates.clear();
+        stringValue = null;
+        binaryValue = null;
+        ParseResult res = parser.parse(input, this);
         if (res != null) {
           stringValue = res.str;
           binaryValue = res.bin;
@@ -357,30 +324,9 @@ public class PreAnalyzedField extends TextField implements HasImplicitIndexAnaly
             cachedStates.addAll(res.states);
           }
         }
-      } catch (IOException e) {
-        removeAllAttributes();  // reset attributes to the empty set
-        throw e; // rethrow
       }
+      it = cachedStates.iterator();
     }
   }
-
-  private static class PreAnalyzedAnalyzer extends SolrAnalyzer {
-    private PreAnalyzedParser parser;
-
-    PreAnalyzedAnalyzer(PreAnalyzedParser parser) {
-      this.parser = parser;
-    }
-
-    @Override
-    protected TokenStreamComponents createComponents(String fieldName) {
-      final PreAnalyzedTokenizer tokenizer = new PreAnalyzedTokenizer(parser);
-      return new TokenStreamComponents(r -> {
-        try {
-          tokenizer.decodeInput(r);
-        } catch (IOException e) {
-          tokenizer.setReaderConsumptionException(e);
-        }
-      }, tokenizer);
-    }
-  }
+  
 }

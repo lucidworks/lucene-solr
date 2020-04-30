@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,54 +16,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
 import com.google.common.collect.ImmutableList;
+import org.apache.commons.codec.Charsets;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang.StringUtils;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrException;
-import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.CoreAdminParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.handler.admin.CoreAdminHandler;
-import org.apache.solr.handler.admin.MetricsHandler;
 import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
-import org.apache.solr.servlet.SolrDispatchFilter;
 import org.apache.solr.update.AddUpdateCommand;
 import org.apache.solr.update.CommitUpdateCommand;
-import org.apache.solr.update.DirectUpdateHandler2;
 import org.apache.solr.update.UpdateHandler;
 import org.apache.solr.util.ReadOnlyCoresLocator;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class TestLazyCores extends SolrTestCaseJ4 {
 
   private File solrHomeDirectory;
 
-  @BeforeClass
-  public static void setupClass() throws Exception {
-    // Need to use a disk-based directory because there are tests that close a core after adding documents
-    // then expect to be able to re-open that core and execute a search
-    useFactory("solr.StandardDirectoryFactory");
-  }
-
-  private static CoreDescriptor makeCoreDescriptor(CoreContainer cc, String coreName, String isTransient, String loadOnStartup) {
-    return new CoreDescriptor(coreName, cc.getCoreRootDirectory().resolve(coreName), cc.getContainerProperties(), false,
+  private static CoreDescriptor makeCoreDescriptor(CoreContainer cc, String coreName, String instanceDir, String isTransient, String loadOnStartup) {
+    return new CoreDescriptor(cc, coreName, instanceDir,
         CoreDescriptor.CORE_TRANSIENT, isTransient,
         CoreDescriptor.CORE_LOADONSTARTUP, loadOnStartup);
   }
@@ -70,15 +59,15 @@ public class TestLazyCores extends SolrTestCaseJ4 {
     @Override
     public List<CoreDescriptor> discover(CoreContainer cc) {
       return ImmutableList.of(
-          makeCoreDescriptor(cc, "collection1", "false", "true"),
-          makeCoreDescriptor(cc, "collection2", "true", "true"),
-          makeCoreDescriptor(cc, "collection3", "on", "false"),
-          makeCoreDescriptor(cc, "collection4", "false", "false"),
-          makeCoreDescriptor(cc, "collection5", "false", "true"),
-          makeCoreDescriptor(cc, "collection6", "true", "false"),
-          makeCoreDescriptor(cc, "collection7", "true", "false"),
-          makeCoreDescriptor(cc, "collection8", "true", "false"),
-          makeCoreDescriptor(cc, "collection9", "true", "false")
+          new CoreDescriptor(cc, "collection1", "collection1"),
+          makeCoreDescriptor(cc, "collectionLazy2", "collection2", "true", "true"),
+          makeCoreDescriptor(cc, "collectionLazy3", "collection3", "on", "false"),
+          makeCoreDescriptor(cc, "collectionLazy4", "collection4", "false", "false"),
+          makeCoreDescriptor(cc, "collectionLazy5", "collection5", "false", "true"),
+          makeCoreDescriptor(cc, "collectionLazy6", "collection6", "true", "false"),
+          makeCoreDescriptor(cc, "collectionLazy7", "collection7", "true", "false"),
+          makeCoreDescriptor(cc, "collectionLazy8", "collection8", "true", "false"),
+          makeCoreDescriptor(cc, "collectionLazy9", "collection9", "true", "false")
       );
     }
   };
@@ -87,13 +76,13 @@ public class TestLazyCores extends SolrTestCaseJ4 {
   private CoreContainer init() throws Exception {
     solrHomeDirectory = createTempDir().toFile();
     
-    copyXmlToHome(solrHomeDirectory.getAbsoluteFile(), "solr.xml");
     for (int idx = 1; idx < 10; ++idx) {
       copyMinConf(new File(solrHomeDirectory, "collection" + idx));
     }
 
-    NodeConfig cfg = SolrDispatchFilter.loadNodeConfig(solrHomeDirectory.toPath(), null);
-    return createCoreContainer(cfg, testCores);
+    SolrResourceLoader loader = new SolrResourceLoader(solrHomeDirectory.toPath());
+    NodeConfig config = new NodeConfig.NodeConfigBuilder("testNode", loader).setTransientCacheSize(4).build();
+    return createCoreContainer(config, testCores);
   }
   
   @Test
@@ -102,28 +91,28 @@ public class TestLazyCores extends SolrTestCaseJ4 {
     try {
 
       // NOTE: This checks the initial state for loading, no need to do this elsewhere.
-      checkInCores(cc, "collection1", "collection2", "collection5");
-      checkNotInCores(cc, Arrays.asList("collection3", "collection4", "collection6", "collection7",
-          "collection8", "collection9"));
+      checkInCores(cc, "collection1", "collectionLazy2", "collectionLazy5");
+      checkNotInCores(cc, "collectionLazy3", "collectionLazy4", "collectionLazy6", "collectionLazy7",
+          "collectionLazy8", "collectionLazy9");
 
       SolrCore core1 = cc.getCore("collection1");
       assertFalse("core1 should not be transient", core1.getCoreDescriptor().isTransient());
       assertTrue("core1 should be loadable", core1.getCoreDescriptor().isLoadOnStartup());
       assertNotNull(core1.getSolrConfig());
 
-      SolrCore core2 = cc.getCore("collection2");
+      SolrCore core2 = cc.getCore("collectionLazy2");
       assertTrue("core2 should be transient", core2.getCoreDescriptor().isTransient());
       assertTrue("core2 should be loadable", core2.getCoreDescriptor().isLoadOnStartup());
 
-      SolrCore core3 = cc.getCore("collection3");
+      SolrCore core3 = cc.getCore("collectionLazy3");
       assertTrue("core3 should be transient", core3.getCoreDescriptor().isTransient());
       assertFalse("core3 should not be loadable", core3.getCoreDescriptor().isLoadOnStartup());
 
-      SolrCore core4 = cc.getCore("collection4");
+      SolrCore core4 = cc.getCore("collectionLazy4");
       assertFalse("core4 should not be transient", core4.getCoreDescriptor().isTransient());
       assertFalse("core4 should not be loadable", core4.getCoreDescriptor().isLoadOnStartup());
 
-      SolrCore core5 = cc.getCore("collection5");
+      SolrCore core5 = cc.getCore("collectionLazy5");
       assertFalse("core5 should not be transient", core5.getCoreDescriptor().isTransient());
       assertTrue("core5 should be loadable", core5.getCoreDescriptor().isLoadOnStartup());
 
@@ -179,8 +168,8 @@ public class TestLazyCores extends SolrTestCaseJ4 {
     CoreContainer cc = init();
     try {
       // Make sure Lazy4 isn't loaded. Should be loaded on the get
-      checkNotInCores(cc, Arrays.asList("collection4"));
-      SolrCore core4 = cc.getCore("collection4");
+      checkNotInCores(cc, "collectionLazy4");
+      SolrCore core4 = cc.getCore("collectionLazy4");
 
       checkSearch(core4);
 
@@ -192,7 +181,7 @@ public class TestLazyCores extends SolrTestCaseJ4 {
           , "//result[@numFound='0']"
       );
 
-      checkInCores(cc, "collection1", "collection2", "collection4", "collection5");
+      checkInCores(cc, "collectionLazy4");
 
       core4.close();
       collection1.close();
@@ -207,52 +196,40 @@ public class TestLazyCores extends SolrTestCaseJ4 {
     try {
       // First check that all the cores that should be loaded at startup actually are.
 
-      checkInCores(cc, "collection1", "collection2", "collection5");
-      checkNotInCores(cc, Arrays.asList("collection3", "collection4", "collection6", "collection7", "collection8", "collection9"));
+      checkInCores(cc, "collection1", "collectionLazy2", "collectionLazy5");
+      checkNotInCores(cc, "collectionLazy3", "collectionLazy4", "collectionLazy6",
+          "collectionLazy7", "collectionLazy8", "collectionLazy9");
 
       // By putting these in non-alpha order, we're also checking that we're  not just seeing an artifact.
       SolrCore core1 = cc.getCore("collection1");
-      SolrCore core3 = cc.getCore("collection3");
-      SolrCore core4 = cc.getCore("collection4");
-      SolrCore core2 = cc.getCore("collection2");
-      SolrCore core5 = cc.getCore("collection5");
+      SolrCore core3 = cc.getCore("collectionLazy3");
+      SolrCore core4 = cc.getCore("collectionLazy4");
+      SolrCore core2 = cc.getCore("collectionLazy2");
+      SolrCore core5 = cc.getCore("collectionLazy5");
 
-      checkInCores(cc, "collection1", "collection2", "collection3", "collection4", "collection5");
-      checkNotInCores(cc, Arrays.asList("collection6", "collection7", "collection8", "collection9"));
+      checkInCores(cc, "collection1", "collectionLazy2", "collectionLazy3", "collectionLazy4", "collectionLazy5");
+      checkNotInCores(cc, "collectionLazy6", "collectionLazy7", "collectionLazy8", "collectionLazy9");
 
       // map should be full up, add one more and verify
-      SolrCore core6 = cc.getCore("collection6");
-      checkInCores(cc, "collection1", "collection2", "collection3", "collection4", "collection5",
-          "collection6");
-      checkNotInCores(cc, Arrays.asList("collection7", "collection8", "collection9"));
+      SolrCore core6 = cc.getCore("collectionLazy6");
+      checkInCores(cc, "collection1", "collectionLazy2", "collectionLazy3", "collectionLazy4", "collectionLazy5",
+          "collectionLazy6");
+      checkNotInCores(cc, "collectionLazy7", "collectionLazy8", "collectionLazy9");
 
-      SolrCore core7 = cc.getCore("collection7");
-      checkInCores(cc, "collection1", "collection2", "collection3", "collection4", "collection5",
-          "collection6", "collection7");
-      checkNotInCores(cc, Arrays.asList("collection8", "collection9"));
+      SolrCore core7 = cc.getCore("collectionLazy7");
+      checkInCores(cc, "collection1", "collectionLazy2", "collectionLazy3", "collectionLazy4", "collectionLazy5",
+          "collectionLazy6", "collectionLazy7");
+      checkNotInCores(cc, "collectionLazy8", "collectionLazy9");
 
-      SolrCore core8 = cc.getCore("collection8");
-      checkInCores(cc, "collection1", "collection2", "collection4", "collection5", "collection6",
-          "collection7", "collection8");
-      checkNotInCores(cc, Arrays.asList("collection3", "collection9"));
+      SolrCore core8 = cc.getCore("collectionLazy8");
+      checkInCores(cc, "collection1", "collectionLazy2", "collectionLazy4", "collectionLazy5", "collectionLazy6",
+          "collectionLazy7", "collectionLazy8");
+      checkNotInCores(cc, "collectionLazy3", "collectionLazy9");
 
-      SolrCore core9 = cc.getCore("collection9");
-      checkInCores(cc, "collection1", "collection4", "collection5", "collection6", "collection7",
-          "collection8", "collection9");
-      checkNotInCores(cc, Arrays.asList("collection2", "collection3"));
-
-      // verify that getting metrics from an unloaded core doesn't cause exceptions (SOLR-12541)
-      MetricsHandler handler = new MetricsHandler(h.getCoreContainer());
-
-      SolrQueryResponse resp = new SolrQueryResponse();
-      handler.handleRequest(makeReq(core1, CommonParams.QT, "/admin/metrics"), resp);
-      NamedList values = resp.getValues();
-      assertNotNull(values.get("metrics"));
-      values = (NamedList) values.get("metrics");
-      NamedList nl = (NamedList) values.get("solr.core.collection2");
-      assertNotNull(nl);
-      Object o = nl.get("REPLICATION./replication.indexPath");
-      assertNotNull(o);
+      SolrCore core9 = cc.getCore("collectionLazy9");
+      checkInCores(cc, "collection1", "collectionLazy4", "collectionLazy5", "collectionLazy6", "collectionLazy7",
+          "collectionLazy8", "collectionLazy9");
+      checkNotInCores(cc, "collectionLazy2", "collectionLazy3");
 
 
       // Note decrementing the count when the core is removed from the lazyCores list is appropriate, since the
@@ -284,7 +261,7 @@ public class TestLazyCores extends SolrTestCaseJ4 {
         threads[idx] = new Thread() {
           @Override
           public void run() {
-            SolrCore core = cc.getCore("collection3");
+            SolrCore core = cc.getCore("collectionLazy3");
             synchronized (theCores) {
               theCores.add(core);
             }
@@ -308,7 +285,7 @@ public class TestLazyCores extends SolrTestCaseJ4 {
   }
 
   private void tryCreateFail(CoreAdminHandler admin, String name, String dataDir, String... errs) throws Exception {
-    SolrException thrown = expectThrows(SolrException.class, () -> {
+    try {
       SolrQueryResponse resp = new SolrQueryResponse();
 
       SolrQueryRequest request = req(CoreAdminParams.ACTION,
@@ -319,11 +296,14 @@ public class TestLazyCores extends SolrTestCaseJ4 {
           "config", "solrconfig.xml");
 
       admin.handleRequestBody(request, resp);
-    });
-    assertEquals("Exception code should be 500", 500, thrown.code());
-    for (String err : errs) {
-      assertTrue("Should have seen an exception containing the an error",
-          thrown.getMessage().contains(err));
+      fail("Should have thrown an error");
+    } catch (SolrException se) {
+      //SolrException cause = (SolrException)se.getCause();
+      assertEquals("Exception code should be 500", 500, se.code());
+      for (String err : errs) {
+       assertTrue("Should have seen an exception containing the an error",
+            se.getMessage().contains(err));
+      }
     }
   }
   @Test
@@ -332,10 +312,10 @@ public class TestLazyCores extends SolrTestCaseJ4 {
     try {
       // First, try all 4 combinations of load on startup and transient
       final CoreAdminHandler admin = new CoreAdminHandler(cc);
-      SolrCore lc2 = cc.getCore("collection2");
-      SolrCore lc4 = cc.getCore("collection4");
-      SolrCore lc5 = cc.getCore("collection5");
-      SolrCore lc6 = cc.getCore("collection6");
+      SolrCore lc2 = cc.getCore("collectionLazy2");
+      SolrCore lc4 = cc.getCore("collectionLazy4");
+      SolrCore lc5 = cc.getCore("collectionLazy5");
+      SolrCore lc6 = cc.getCore("collectionLazy6");
 
       copyMinConf(new File(solrHomeDirectory, "t2"));
       copyMinConf(new File(solrHomeDirectory, "t4"));
@@ -344,10 +324,10 @@ public class TestLazyCores extends SolrTestCaseJ4 {
 
 
       // Should also fail with the same name
-      tryCreateFail(admin, "collection2", "t12", "Core with name", "collection2", "already exists");
-      tryCreateFail(admin, "collection4", "t14", "Core with name", "collection4", "already exists");
-      tryCreateFail(admin, "collection5", "t15", "Core with name", "collection5", "already exists");
-      tryCreateFail(admin, "collection6", "t16", "Core with name", "collection6", "already exists");
+      tryCreateFail(admin, "collectionLazy2", "t12", "Core with name", "collectionLazy2", "already exists");
+      tryCreateFail(admin, "collectionLazy4", "t14", "Core with name", "collectionLazy4", "already exists");
+      tryCreateFail(admin, "collectionLazy5", "t15", "Core with name", "collectionLazy5", "already exists");
+      tryCreateFail(admin, "collectionLazy6", "t16", "Core with name", "collectionLazy6", "already exists");
 
       lc2.close();
       lc4.close();
@@ -359,7 +339,7 @@ public class TestLazyCores extends SolrTestCaseJ4 {
     }
   }
 
-  private void createViaAdmin(CoreContainer cc, String name, boolean isTransient,
+  private void createViaAdmin(CoreContainer cc, String name, String instanceDir, boolean isTransient,
                               boolean loadOnStartup) throws Exception {
 
     final CoreAdminHandler admin = new CoreAdminHandler(cc);
@@ -367,6 +347,7 @@ public class TestLazyCores extends SolrTestCaseJ4 {
     admin.handleRequestBody
         (req(CoreAdminParams.ACTION,
             CoreAdminParams.CoreAdminAction.CREATE.toString(),
+            CoreAdminParams.INSTANCE_DIR, instanceDir,
             CoreAdminParams.NAME, name,
             CoreAdminParams.TRANSIENT, Boolean.toString(isTransient),
             CoreAdminParams.LOAD_ON_STARTUP, Boolean.toString(loadOnStartup)),
@@ -385,7 +366,8 @@ public class TestLazyCores extends SolrTestCaseJ4 {
             resp);
 
   }
-  
+
+
   // Make sure that creating a transient core from the admin handler correctly respects the transient limits etc.
   @Test
   public void testCreateTransientFromAdmin() throws Exception {
@@ -397,66 +379,37 @@ public class TestLazyCores extends SolrTestCaseJ4 {
       copyMinConf(new File(solrHomeDirectory, "core4"));
       copyMinConf(new File(solrHomeDirectory, "core5"));
 
-      createViaAdmin(cc, "core1", true, true);
-      createViaAdmin(cc, "core2", true, false);
-      createViaAdmin(cc, "core3", true, true);
-      createViaAdmin(cc, "core4", true, false);
-      createViaAdmin(cc, "core5", true, false);
+      createViaAdmin(cc, "core1", "./core1", true, true);
+      createViaAdmin(cc, "core2", "./core2", true, false);
+      createViaAdmin(cc, "core3", "./core3", true, true);
+      createViaAdmin(cc, "core4", "./core4", true, false);
+      createViaAdmin(cc, "core5", "./core5", true, false);
 
-      final SolrCore c1 = cc.getCore("core1");
-      final SolrCore c2 = cc.getCore("core2");
-      final SolrCore c3 = cc.getCore("core3");
-      final SolrCore c4 = cc.getCore("core4");
-      final SolrCore c5 = cc.getCore("core5");
+      SolrCore c1 = cc.getCore("core1");
+      SolrCore c2 = cc.getCore("core2");
+      SolrCore c3 = cc.getCore("core3");
+      SolrCore c4 = cc.getCore("core4");
+      SolrCore c5 = cc.getCore("core5");
 
-      checkNotInCores(cc, Arrays.asList("core1", "collection2", "collection3", "collection4", "collection6"
-          , "collection7", "collection8", "collection9"));
+      checkNotInCores(cc, "core1", "collectionLazy2", "collectionLazy3", "collectionLazy4", "collectionLazy6"
+          , "collectionLazy7", "collectionLazy8", "collectionLazy9");
 
-      checkInCores(cc, "collection1", "collection5", "core2", "core3", "core4", "core5");
+      checkInCores(cc, "collection1", "collectionLazy5", "core2", "core3", "core4", "core5");
 
       // While we're at it, a test for SOLR-5366, unloading transient core that's been unloaded b/c it's
       // transient generates a "too many closes" errorl
 
-      class TestThread extends Thread {
-        
-        @Override
-        public void run() {
-          
-          final int sleep_millis = random().nextInt(1000);
-          try {
-            if (sleep_millis > 0) {
-              if (VERBOSE) {
-                System.out.println("TestLazyCores.testCreateTransientFromAdmin Thread.run sleeping for "+sleep_millis+" ms");
-              }
-              Thread.sleep(sleep_millis);
-            }
-          }
-          catch (InterruptedException ie) {
-            if (VERBOSE) {
-              System.out.println("TestLazyCores.testCreateTransientFromAdmin Thread.run caught "+ie+" whilst sleeping for "+sleep_millis+" ms");
-            }
-          }
-
-          c1.close();
-          c2.close();
-          c3.close();
-          c4.close();
-          c5.close();
-        }
-      };
-      
-      // with SOLR-6279 UNLOAD will wait for the core's reference count to have reached zero
-      // hence cN.close() need to proceed or run in parallel with unloadViaAdmin(...)
-      final TestThread cThread = new TestThread();
-      cThread.start();
-      
       unloadViaAdmin(cc, "core1");
       unloadViaAdmin(cc, "core2");
       unloadViaAdmin(cc, "core3");
       unloadViaAdmin(cc, "core4");
       unloadViaAdmin(cc, "core5");
 
-      cThread.join();
+      c1.close();
+      c2.close();
+      c3.close();
+      c4.close();
+      c5.close();
 
     } finally {
       cc.shutdown();
@@ -467,20 +420,17 @@ public class TestLazyCores extends SolrTestCaseJ4 {
   // 1> produce errors as appropriate when the config or schema files are foo'd
   // 2> "self heal". That is, if the problem is corrected can the core be reloaded and used?
   // 3> that OK cores can be searched even when some cores failed to load.
-  // 4> that having no solr.xml entry for transient chache handler correctly uses the default.
   @Test
   public void testBadConfigsGenerateErrors() throws Exception {
     final CoreContainer cc = initGoodAndBad(Arrays.asList("core1", "core2"),
         Arrays.asList("badSchema1", "badSchema2"),
         Arrays.asList("badConfig1", "badConfig2"));
-    
-    
     try {
       // first, did the two good cores load successfully?
       checkInCores(cc, "core1", "core2");
 
       // Did the bad cores fail to load?
-      checkNotInCores(cc, Collections.emptyList(), Arrays.asList("badSchema1", "badSchema2", "badConfig1", "badConfig2"));
+      checkNotInCores(cc, "badSchema1", "badSchema2", "badConfig1", "badConfig2");
 
       //  Can we still search the "good" cores even though there were core init failures?
       SolrCore core1 = cc.getCore("core1");
@@ -507,15 +457,8 @@ public class TestLazyCores extends SolrTestCaseJ4 {
       copyGoodConf("badSchema1", "schema-tiny.xml", "schema.xml");
       copyGoodConf("badSchema2", "schema-tiny.xml", "schema.xml");
 
-      
-      // Reload the cores and insure that
-      // 1> they pick up the new configs
-      // 2> they don't fail again b/c they still have entries in loadFailure in core container.
-      cc.reload("badConfig1");
-      cc.reload("badConfig2");
-      cc.reload("badSchema1");
-      cc.reload("badSchema2");
-      SolrCore bc1 = cc.getCore("badConfig1");;
+      // This should force a reload of the cores.
+      SolrCore bc1 = cc.getCore("badConfig1");
       SolrCore bc2 = cc.getCore("badConfig2");
       SolrCore bs1 = cc.getCore("badSchema1");
       SolrCore bs2 = cc.getCore("badSchema2");
@@ -568,13 +511,13 @@ public class TestLazyCores extends SolrTestCaseJ4 {
     // Write the file for core discovery
     FileUtils.writeStringToFile(new File(coreRoot, "core.properties"), "name=" + coreName +
         System.getProperty("line.separator") + "transient=true" +
-        System.getProperty("line.separator") + "loadOnStartup=true", StandardCharsets.UTF_8);
+        System.getProperty("line.separator") + "loadOnStartup=true", Charsets.UTF_8.toString());
 
-    FileUtils.writeStringToFile(new File(subHome, "solrconfig.snippet.randomindexconfig.xml"), rand_snip, StandardCharsets.UTF_8);
+    FileUtils.writeStringToFile(new File(subHome, "solrconfig.snippet.randomindexconfig.xml"), rand_snip, Charsets.UTF_8.toString());
 
-    FileUtils.writeStringToFile(new File(subHome, "solrconfig.xml"), config, StandardCharsets.UTF_8);
+    FileUtils.writeStringToFile(new File(subHome, "solrconfig.xml"), config, Charsets.UTF_8.toString());
 
-    FileUtils.writeStringToFile(new File(subHome, "schema.xml"), schema, StandardCharsets.UTF_8);
+    FileUtils.writeStringToFile(new File(subHome, "schema.xml"), schema, Charsets.UTF_8.toString());
   }
 
   // Write out the cores' config files, both bad schema files, bad config files as well as some good cores.
@@ -596,11 +539,11 @@ public class TestLazyCores extends SolrTestCaseJ4 {
     // Collect the files that we'll write to the config directories.
     String top = SolrTestCaseJ4.TEST_HOME() + "/collection1/conf";
     String min_schema = FileUtils.readFileToString(new File(top, "schema-tiny.xml"),
-        StandardCharsets.UTF_8);
+        Charsets.UTF_8.toString());
     String min_config = FileUtils.readFileToString(new File(top, "solrconfig-minimal.xml"),
-        StandardCharsets.UTF_8);
+        Charsets.UTF_8.toString());
     String rand_snip = FileUtils.readFileToString(new File(top, "solrconfig.snippet.randomindexconfig.xml"),
-        StandardCharsets.UTF_8);
+        Charsets.UTF_8.toString());
 
     // Now purposely mess up the config files, introducing stupid syntax errors.
     String bad_config = min_config.replace("<requestHandler", "<reqsthalr");
@@ -657,58 +600,17 @@ public class TestLazyCores extends SolrTestCaseJ4 {
     }
   }
 
-  public static void checkNotInCores(CoreContainer cc, List<String> nameCheck) {
-    checkNotInCores(cc, nameCheck, Collections.emptyList());
-  }
-  public static void checkNotInCores(CoreContainer cc, List<String> nameCheck, List<String> namesBad) {
-    Collection<String> loadedNames = cc.getLoadedCoreNames();
+  public static void checkNotInCores(CoreContainer cc, String... nameCheck) {
+    Collection<String> names = cc.getCoreNames();
     for (String name : nameCheck) {
-      assertFalse("core " + name + " was found in the list of cores", loadedNames.contains(name));
+      assertFalse("core " + name + " was found in the list of cores", names.contains(name));
     }
-    
-    // There was a problem at one point exacerbated by the poor naming conventions. So parallel to loaded cores, there
-    // should be the ability to get the core _names_ that are loaded as well as all the core names _possible_
-    //
-    // the names above should only contain loaded core names. Every name in names should be in allNames, but none of 
-    // the names in nameCheck should be loaded and thus should not be in names.
-    
-    Collection<String> allNames = cc.getAllCoreNames();
-    // Every core that has not failed to load should be in coreDescriptors.
-    List<CoreDescriptor> descriptors = cc.getCoreDescriptors();
-
-    assertEquals("There should be as many coreDescriptors as coreNames", allNames.size(), descriptors.size());
-    for (CoreDescriptor desc : descriptors) {
-      assertTrue("Name should have a corresponding descriptor", allNames.contains(desc.getName()));
-    }
-    
-    // First check that all loaded cores are in allNames.
-    for (String name : loadedNames) {                                                                                        
-      assertTrue("Loaded core " + name + " should have been found in the list of all possible core names",
-          allNames.contains(name));
-    }
-
-    // failed cores should have had their descriptors removed.
-    for (String name : nameCheck) {
-      assertTrue("Not-currently-loaded core " + name + " should have been found in the list of all possible core names",
-          allNames.contains(name));
-    }
-
-    // Failed cores should not be in coreDescriptors.
-    for (String name : namesBad) {
-      assertFalse("Failed core " + name + " should have been found in the list of all possible core names",
-          allNames.contains(name));
-    }
-
   }
 
   public static void checkInCores(CoreContainer cc, String... nameCheck) {
-    Collection<String> loadedNames = cc.getLoadedCoreNames();
-    
-    assertEquals("There whould be exactly as many loaded cores as loaded names returned. ", 
-        loadedNames.size(), nameCheck.length);
-    
+    Collection<String> names = cc.getCoreNames();
     for (String name : nameCheck) {
-      assertTrue("core " + name + " was not found in the list of cores", loadedNames.contains(name));
+      assertTrue("core " + name + " was not found in the list of cores", names.contains(name));
     }
   }
 
@@ -735,132 +637,7 @@ public class TestLazyCores extends SolrTestCaseJ4 {
   }
 
   private static final String makePath(String... args) {
-    return String.join(File.separator, args);
+    return StringUtils.join(args, File.separator);
   }
 
-  @Test
-  public void testMidUseUnload() throws Exception {
-    final int maximumSleepMillis = random().nextInt(9999) + 1; // sleep for up to 10 s Must add 1 because using
-                                                               // this as a seed will rea few lines down will
-                                                               // throw an exception if this is zero
-    if (VERBOSE) {
-      System.out.println("TestLazyCores.testMidUseUnload maximumSleepMillis="+maximumSleepMillis);
-    }
-    
-    class TestThread extends Thread {
-      
-      SolrCore core_to_use = null;
-      
-      @Override
-      public void run() {
-        
-        final int sleep_millis = random().nextInt(maximumSleepMillis);
-        try {
-          if (sleep_millis > 0) {
-            if (VERBOSE) {
-              System.out.println("TestLazyCores.testMidUseUnload Thread.run sleeping for "+sleep_millis+" ms");
-            }
-            Thread.sleep(sleep_millis);
-          }
-        }
-        catch (InterruptedException ie) {
-          if (VERBOSE) {
-            System.out.println("TestLazyCores.testMidUseUnload Thread.run caught "+ie+" whilst sleeping for "+sleep_millis+" ms");
-          }
-        }
-        
-        assertFalse(core_to_use.isClosed()); // not closed since we are still using it and hold a reference
-        core_to_use.close(); // now give up our reference to the core
-      }
-    };
-
-    CoreContainer cc = init();
-    
-    try {
-      TestThread thread = new TestThread();
-      
-      thread.core_to_use = cc.getCore("collection1");
-      assertNotNull(thread.core_to_use);
-      assertFalse(thread.core_to_use.isClosed()); // freshly-in-use core is not closed
-      thread.start();
-      
-      unloadViaAdmin(cc, "collection1");
-      assertTrue(thread.core_to_use.isClosed()); // after unload-ing the core is closed
-
-      thread.join();
-    } finally {
-      cc.shutdown();
-    }
-  }
-
-  // Insure that when a core is aged out of the transient cache, any uncommitted docs are preserved.
-  // Note, this needs FS-based indexes to persist!
-  // Cores 2, 3, 6, 7, 8, 9 are transient
-  @Test
-  public void testNoCommit() throws Exception {
-    DirectUpdateHandler2.commitOnClose = true;
-
-    CoreContainer cc = init();
-    String[] coreList = new String[]{
-        "collection2",
-        "collection3",
-        "collection6",
-        "collection7",
-        "collection8",
-        "collection9"
-    };
-    try {
-      // First, go through all the transient cores and add some docs. DO NOT COMMIT!
-      // The aged-out core should commit the docs when it gets closed.
-      List<SolrCore> openCores = new ArrayList<>();
-      for (String coreName : coreList) {
-        SolrCore core = cc.getCore(coreName);
-        openCores.add(core);
-        add10(core);
-      }
-      
-      // Just proving that some cores have been aged out.
-      checkNotInCores(cc, Arrays.asList("collection2", "collection3"));
-
-      // Close our get of all cores above.
-      for (SolrCore core : openCores) core.close();
-      openCores.clear();
-      
-      // We still should have 6, 7, 8, 9 loaded, their reference counts have NOT dropped to zero 
-      checkInCores(cc, "collection1", "collection5",
-          "collection6", "collection7", "collection8", "collection9");
-
-      for (String coreName : coreList) {
-        // The point of this test is to insure that when cores are aged out and re-opened
-        // that the docs are there, so insure that the core we're testing is gone, gone, gone. 
-        checkNotInCores(cc, Arrays.asList(coreName));
-        
-        // Load the core up again.
-        SolrCore core = cc.getCore(coreName);
-        openCores.add(core);
-        
-        // Insure docs are still there.
-        check10(core);
-      }
-      for (SolrCore core : openCores) core.close();
-    } finally {
-      cc.shutdown();
-    }
-  }
-
-  private void add10(SolrCore core) throws IOException {
-    for (int idx = 0; idx < 10; ++idx) {
-      addLazy(core, "id", "0" + idx);
-    }
-    SolrQueryRequest req = makeReq(core);
-
-  }
-
-  private void check10(SolrCore core) {
-    // Just get a couple of searches to work!
-    assertQ("test closing core without committing",
-        makeReq(core, "q", "*:*")
-        , "//result[@numFound='10']"
-    );
-  }
 }

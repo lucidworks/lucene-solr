@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.fst;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.fst;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Comparator;
 
 import org.apache.lucene.search.suggest.InMemorySorter;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.BytesRefIterator;
+import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.IntsRefBuilder;
 import org.apache.lucene.util.fst.*;
+import org.apache.lucene.util.packed.PackedInts;
 
 /**
  * Finite state automata based implementation of "autocomplete" functionality.
@@ -147,10 +149,10 @@ public class FSTCompletionBuilder {
   /**
    * Creates an {@link FSTCompletion} with default options: 10 buckets, exact match
    * promoted to first position and {@link InMemorySorter} with a comparator obtained from
-   * {@link Comparator#naturalOrder()}.
+   * {@link BytesRef#getUTF8SortedAsUnicodeComparator()}.
    */
   public FSTCompletionBuilder() {
-    this(DEFAULT_BUCKETS, new InMemorySorter(Comparator.naturalOrder()), Integer.MAX_VALUE);
+    this(DEFAULT_BUCKETS, new InMemorySorter(BytesRef.getUTF8SortedAsUnicodeComparator()), Integer.MAX_VALUE);
   }
 
   /**
@@ -236,7 +238,8 @@ public class FSTCompletionBuilder {
     final Object empty = outputs.getNoOutput();
     final Builder<Object> builder = new Builder<>(
         FST.INPUT_TYPE.BYTE1, 0, 0, true, true, 
-        shareMaxTailLength, outputs, true, 15);
+        shareMaxTailLength, outputs, false, 
+        PackedInts.DEFAULT, true, 15);
     
     BytesRefBuilder scratch = new BytesRefBuilder();
     BytesRef entry;

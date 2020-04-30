@@ -466,7 +466,7 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
       if (boost != null) {
       float f = (float)1.0;
       try {
-        f = Float.parseFloat(boost.image);
+        f = Float.valueOf(boost.image).floatValue();
         // avoid boosting null queries, such as those caused by stop words
           if (q != null) {
             q = new BoostQueryNode(q, f);
@@ -542,7 +542,7 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
        if (fuzzy) {
            float fms = defaultMinSimilarity;
            try {
-            fms = Float.parseFloat(fuzzySlop.image.substring(1));
+            fms = Float.valueOf(fuzzySlop.image.substring(1)).floatValue();
            } catch (Exception ignored) { }
            if(fms < 0.0f){
                 {if (true) throw new ParseException(new MessageImpl(QueryParserMessages.INVALID_SYNTAX_FUZZY_LIMITS));}
@@ -577,15 +577,19 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
       case RANGE_QUOTED:
         goop1 = jj_consume_token(RANGE_QUOTED);
         break;
-      case RANGE_TO:
-        goop1 = jj_consume_token(RANGE_TO);
-        break;
       default:
         jj_la1[18] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
-      jj_consume_token(RANGE_TO);
+      switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
+      case RANGE_TO:
+        jj_consume_token(RANGE_TO);
+        break;
+      default:
+        jj_la1[19] = jj_gen;
+        ;
+      }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case RANGE_GOOP:
         goop2 = jj_consume_token(RANGE_GOOP);
@@ -593,11 +597,8 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
       case RANGE_QUOTED:
         goop2 = jj_consume_token(RANGE_QUOTED);
         break;
-      case RANGE_TO:
-        goop2 = jj_consume_token(RANGE_TO);
-        break;
       default:
-        jj_la1[19] = jj_gen;
+        jj_la1[20] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -610,7 +611,7 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
         jj_consume_token(RANGEEX_END);
         break;
       default:
-        jj_la1[20] = jj_gen;
+        jj_la1[21] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -620,7 +621,7 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
         boost = jj_consume_token(NUMBER);
         break;
       default:
-        jj_la1[21] = jj_gen;
+        jj_la1[22] = jj_gen;
         ;
       }
           if (goop1.kind == RANGE_QUOTED) {
@@ -644,7 +645,7 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
         fuzzySlop = jj_consume_token(FUZZY_SLOP);
         break;
       default:
-        jj_la1[22] = jj_gen;
+        jj_la1[23] = jj_gen;
         ;
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -653,14 +654,14 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
         boost = jj_consume_token(NUMBER);
         break;
       default:
-        jj_la1[23] = jj_gen;
+        jj_la1[24] = jj_gen;
         ;
       }
          int phraseSlop = 0;
 
          if (fuzzySlop != null) {
            try {
-             phraseSlop = (int)Float.parseFloat(fuzzySlop.image.substring(1));
+             phraseSlop = Float.valueOf(fuzzySlop.image.substring(1)).intValue();
              q = new SlopQueryNode(q, phraseSlop);
            }
            catch (Exception ignored) {
@@ -671,14 +672,14 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
          }
       break;
     default:
-      jj_la1[24] = jj_gen;
+      jj_la1[25] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
     if (boost != null) {
       float f = (float)1.0;
       try {
-        f = Float.parseFloat(boost.image);
+        f = Float.valueOf(boost.image).floatValue();
         // avoid boosting null queries, such as those caused by stop words
           if (q != null) {
             q = new BoostQueryNode(q, f);
@@ -830,7 +831,7 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
   private Token jj_scanpos, jj_lastpos;
   private int jj_la;
   private int jj_gen;
-  final private int[] jj_la1 = new int[25];
+  final private int[] jj_la1 = new int[26];
   static private int[] jj_la1_0;
   static private int[] jj_la1_1;
   static {
@@ -838,10 +839,10 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
       jj_la1_init_1();
    }
    private static void jj_la1_init_0() {
-      jj_la1_0 = new int[] {0x1c00,0x1c00,0x1ec03c00,0x200,0x100,0x18000,0x1e0000,0x10c00000,0x1f8000,0x18000,0x200000,0x1ec02000,0x1ec02000,0x12800000,0x1000000,0x1000000,0x200000,0xc000000,0x20000000,0x20000000,0xc0000000,0x200000,0x1000000,0x200000,0x1ec00000,};
+      jj_la1_0 = new int[] {0x1c00,0x1c00,0x1ec03c00,0x200,0x100,0x18000,0x1e0000,0x10c00000,0x1f8000,0x18000,0x200000,0x1ec02000,0x1ec02000,0x12800000,0x1000000,0x1000000,0x200000,0xc000000,0x0,0x20000000,0x0,0xc0000000,0x200000,0x1000000,0x200000,0x1ec00000,};
    }
    private static void jj_la1_init_1() {
-      jj_la1_1 = new int[] {0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x3,0x3,0x0,0x0,0x0,0x0,0x0,};
+      jj_la1_1 = new int[] {0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x3,0x0,0x3,0x0,0x0,0x0,0x0,0x0,};
    }
   final private JJCalls[] jj_2_rtns = new JJCalls[2];
   private boolean jj_rescan = false;
@@ -853,7 +854,7 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 25; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 26; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -863,7 +864,7 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 25; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 26; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -873,7 +874,7 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 25; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 26; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -883,7 +884,7 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 25; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 26; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1000,7 +1001,7 @@ public class StandardSyntaxParser implements SyntaxParser, StandardSyntaxParserC
       la1tokens[jj_kind] = true;
       jj_kind = -1;
     }
-    for (int i = 0; i < 25; i++) {
+    for (int i = 0; i < 26; i++) {
       if (jj_la1[i] == jj_gen) {
         for (int j = 0; j < 32; j++) {
           if ((jj_la1_0[i] & (1<<j)) != 0) {

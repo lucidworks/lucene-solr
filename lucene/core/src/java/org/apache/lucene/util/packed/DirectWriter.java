@@ -1,3 +1,5 @@
+package org.apache.lucene.util.packed;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.packed;
-
 
 import java.io.EOFException;
 import java.io.IOException;
 import java.util.Arrays;
 
-import org.apache.lucene.store.DataOutput;
+import org.apache.lucene.store.IndexOutput;
 
 /** 
  * Class for writing packed integers to be directly read from Directory.
@@ -44,7 +44,7 @@ import org.apache.lucene.store.DataOutput;
 public final class DirectWriter {
   final int bitsPerValue;
   final long numValues;
-  final DataOutput output;
+  final IndexOutput output;
   
   long count;
   boolean finished;
@@ -56,7 +56,7 @@ public final class DirectWriter {
   final BulkOperation encoder;
   final int iterations;
   
-  DirectWriter(DataOutput output, long numValues, int bitsPerValue) {
+  DirectWriter(IndexOutput output, long numValues, int bitsPerValue) {
     this.output = output;
     this.numValues = numValues;
     this.bitsPerValue = bitsPerValue;
@@ -103,7 +103,7 @@ public final class DirectWriter {
   }
   
   /** Returns an instance suitable for encoding {@code numValues} using {@code bitsPerValue} */
-  public static DirectWriter getInstance(DataOutput output, long numValues, int bitsPerValue) {
+  public static DirectWriter getInstance(IndexOutput output, long numValues, int bitsPerValue) {
     if (Arrays.binarySearch(SUPPORTED_BITS_PER_VALUE, bitsPerValue) < 0) {
       throw new IllegalArgumentException("Unsupported bitsPerValue " + bitsPerValue + ". Did you use bitsRequired?");
     }

@@ -18,6 +18,8 @@ package org.apache.solr.search;
 
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.junit.Ignore;
+
 import java.util.Random;
 
 public class TestReload extends TestRTGBase {
@@ -36,13 +38,13 @@ public class TestReload extends TestRTGBase {
 
     assertU(commit("softCommit","true"));   // should cause a RTG searcher to be opened
 
-    assertJQ(req("qt","/get","id","1", "fl", "id,_version_")
+    assertJQ(req("qt","/get","id","1")
         ,"=={'doc':{'id':'1','_version_':" + version + "}}"
     );
 
     h.reload();
 
-    assertJQ(req("qt","/get","id","1", "fl", "id,_version_")
+    assertJQ(req("qt","/get","id","1")
         ,"=={'doc':{'id':'1','_version_':" + version + "}}"
     );
 
@@ -76,7 +78,7 @@ public class TestReload extends TestRTGBase {
       if (rand.nextBoolean()) {
         // RTG should always be able to see the last version
         // System.out.println("!!! rtg");
-        assertJQ(req("qt","/get","id","1", "fl", "id,_version_")
+        assertJQ(req("qt","/get","id","1")
             ,"=={'doc':{'id':'1','_version_':" + version + "}}"
         );
       }

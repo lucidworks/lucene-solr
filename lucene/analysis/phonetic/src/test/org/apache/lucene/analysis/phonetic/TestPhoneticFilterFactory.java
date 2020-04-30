@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.phonetic;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.phonetic;
-
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -64,30 +64,36 @@ public class TestPhoneticFilterFactory extends BaseTokenStreamTestCase {
    * Case: Failures and Exceptions
    */
   public void testMissingEncoder() throws IOException {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new PhoneticFilterFactory(new HashMap<String,String>());
-    });
-    assertTrue(expected.getMessage().contains("Configuration Error: missing parameter 'encoder'"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Configuration Error: missing parameter 'encoder'"));
+    }
   }
   
   public void testUnknownEncoder() throws IOException {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       Map<String,String> args = new HashMap<>();
       args.put("encoder", "XXX");
       PhoneticFilterFactory factory = new PhoneticFilterFactory(args);
       factory.inform(new ClasspathResourceLoader(factory.getClass()));
-    });
-    assertTrue(expected.getMessage().contains("Error loading encoder"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Error loading encoder"));
+    }
   }
   
   public void testUnknownEncoderReflection() throws IOException {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       Map<String,String> args = new HashMap<>();
       args.put("encoder", "org.apache.commons.codec.language.NonExistence");
       PhoneticFilterFactory factory = new PhoneticFilterFactory(args);
       factory.inform(new ClasspathResourceLoader(factory.getClass()));
-    });
-    assertTrue(expected.getMessage().contains("Error loading encoder"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Error loading encoder"));
+    }
   }
   
   /**
@@ -166,13 +172,15 @@ public class TestPhoneticFilterFactory extends BaseTokenStreamTestCase {
   
   /** Test that bogus arguments result in exception */
   public void testBogusArguments() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new PhoneticFilterFactory(new HashMap<String,String>() {{
         put("encoder", "Metaphone");
         put("bogusArg", "bogusValue");
       }});
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
   }
   
   static void assertAlgorithm(String algName, String inject, String input,

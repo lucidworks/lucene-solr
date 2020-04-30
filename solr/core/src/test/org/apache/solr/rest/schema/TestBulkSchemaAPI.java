@@ -1,3 +1,5 @@
+package org.apache.solr.rest.schema;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,48 +16,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.rest.schema;
+
+import org.apache.commons.io.FileUtils;
+
+import org.apache.lucene.search.similarities.PerFieldSimilarityWrapper;
+import org.apache.lucene.search.similarities.ClassicSimilarity;
+import org.apache.lucene.misc.SweetSpotSimilarity;
+import org.apache.lucene.search.similarities.Similarity;
+
+import org.apache.solr.core.SolrCore;
+import org.apache.solr.core.CoreContainer;
+import org.apache.solr.schema.SimilarityFactory;
+import org.apache.solr.search.similarities.SchemaSimilarityFactory;
+import org.apache.solr.util.RestTestBase;
+import org.apache.solr.util.RestTestHarness;
+
+import org.junit.After;
+import org.junit.Before;
+import org.noggit.JSONParser;
+import org.noggit.ObjectBuilder;
 
 import java.io.File;
-import java.lang.invoke.MethodHandles;
+import java.io.StringReader;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Consumer;
-
-import org.apache.commons.io.FileUtils;
-import org.apache.lucene.misc.SweetSpotSimilarity;
-import org.apache.lucene.search.similarities.BM25Similarity;
-import org.apache.lucene.search.similarities.DFISimilarity;
-import org.apache.lucene.search.similarities.PerFieldSimilarityWrapper;
-import org.apache.lucene.search.similarities.Similarity;
-import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.request.schema.SchemaRequest;
-import org.apache.solr.common.SolrDocumentList;
-import org.apache.solr.core.CoreContainer;
-import org.apache.solr.core.SolrCore;
-import org.apache.solr.schema.IndexSchema;
-import org.apache.solr.schema.SimilarityFactory;
-import org.apache.solr.search.similarities.SchemaSimilarityFactory;
-import org.apache.solr.util.RESTfulServerProvider;
-import org.apache.solr.util.RestTestBase;
-import org.apache.solr.util.RestTestHarness;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import static org.apache.solr.common.util.Utils.fromJSONString;
 
 
 public class TestBulkSchemaAPI extends RestTestBase {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-
 
   private static File tmpSolrHome;
 
@@ -69,15 +59,6 @@ public class TestBulkSchemaAPI extends RestTestBase {
 
     createJettyAndHarness(tmpSolrHome.getAbsolutePath(), "solrconfig-managed-schema.xml", "schema-rest.xml",
         "/solr", true, null);
-    if (random().nextBoolean()) {
-      log.info("These tests are run with V2 API");
-      restTestHarness.setServerProvider(new RESTfulServerProvider() {
-        @Override
-        public String getBaseURL() {
-          return jetty.getBaseUrl().toString() + "/____v2/cores/" + DEFAULT_TEST_CORENAME;
-        }
-      });
-    }
   }
 
   @After
@@ -86,6 +67,7 @@ public class TestBulkSchemaAPI extends RestTestBase {
       jetty.stop();
       jetty = null;
     }
+    client = null;
     if (restTestHarness != null) {
       restTestHarness.close();
     }
@@ -108,19 +90,17 @@ public class TestBulkSchemaAPI extends RestTestBase {
         "                 }\n" +
         "    }";
 
-    String response = restTestHarness.post("/schema", json(payload));
-    Map map = (Map) fromJSONString(response);
-    Map error = (Map)map.get("error");
-    assertNotNull("No errors", error);
-    List details = (List)error.get("details");
-    assertNotNull("No details", details);
-    assertEquals("Wrong number of details", 2, details.size());
-    List firstErrorList = (List)((Map)details.get(0)).get("errorMessages");
-    assertEquals(1, firstErrorList.size());
-    assertTrue (((String)firstErrorList.get(0)).contains("Field 'a1': Field type 'string1' not found.\n"));
-    List secondErrorList = (List)((Map)details.get(1)).get("errorMessages");
-    assertEquals(1, secondErrorList.size());
-    assertTrue (((String)secondErrorList.get(0)).contains("is a required field"));
+    String response = restTestHarness.post("/schema?wt=json", json(payload));
+    Map map = (Map) ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    List l = (List) map.get("errors");
+
+    List errorList = (List) ((Map) l.get(0)).get("errorMessages");
+    assertEquals(1, errorList.size());
+    assertTrue (((String)errorList.get(0)).contains("No such field type"));
+    errorList = (List) ((Map) l.get(1)).get("errorMessages");
+    assertEquals(1, errorList.size());
+    assertTrue (((String)errorList.get(0)).contains("is a required field"));
+
   }
   
   public void testAnalyzerClass() throws Exception {
@@ -146,203 +126,44 @@ public class TestBulkSchemaAPI extends RestTestBase {
         "    }\n"+
         "}}";
 
-    String response = restTestHarness.post("/schema",
+    String response = restTestHarness.post("/schema?wt=json",
         json(addFieldTypeAnalyzerWithClass + ',' + charFilters + tokenizer + filters + suffix));
-    Map map = (Map) fromJSONString(response);
-    Map error = (Map)map.get("error");
-    assertNotNull("No errors", error);
-    List details = (List)error.get("details");
-    assertNotNull("No details", details);
-    assertEquals("Wrong number of details", 1, details.size());
-    List errorList = (List)((Map)details.get(0)).get("errorMessages");
+    Map map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    List list = (List)map.get("errors");
+    List errorList = (List)((Map)list.get(0)).get("errorMessages");
     assertEquals(1, errorList.size());
     assertTrue (((String)errorList.get(0)).contains
         ("An analyzer with a class property may not define any char filters!"));
 
-    response = restTestHarness.post("/schema",
+    response = restTestHarness.post("/schema?wt=json",
         json(addFieldTypeAnalyzerWithClass + ',' + tokenizer + filters + suffix));
-    map = (Map) fromJSONString(response);
-    error = (Map)map.get("error");
-    assertNotNull("No errors", error);
-    details = (List)error.get("details");
-    assertNotNull("No details", details);
-    assertEquals("Wrong number of details", 1, details.size());
-    errorList = (List)((Map)details.get(0)).get("errorMessages");
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    list = (List)map.get("errors");
+    errorList = (List)((Map)list.get(0)).get("errorMessages");
     assertEquals(1, errorList.size());
     assertTrue (((String)errorList.get(0)).contains
         ("An analyzer with a class property may not define a tokenizer!"));
 
-    response = restTestHarness.post("/schema",
+    response = restTestHarness.post("/schema?wt=json",
         json(addFieldTypeAnalyzerWithClass + ',' + filters + suffix));
-    map = (Map) fromJSONString(response);
-    error = (Map)map.get("error");
-    assertNotNull("No errors", error);
-    details = (List)error.get("details");
-    assertNotNull("No details", details);
-    assertEquals("Wrong number of details", 1, details.size());
-    errorList = (List)((Map)details.get(0)).get("errorMessages");
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    list = (List)map.get("errors");
+    errorList = (List)((Map)list.get(0)).get("errorMessages");
     assertEquals(1, errorList.size());
     assertTrue (((String)errorList.get(0)).contains
         ("An analyzer with a class property may not define any filters!"));
 
-    response = restTestHarness.post("/schema", json(addFieldTypeAnalyzerWithClass + suffix));
-    map = (Map) fromJSONString(response);
-    assertNull(response, map.get("error"));
+    response = restTestHarness.post("/schema?wt=json", json(addFieldTypeAnalyzerWithClass + suffix));
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    assertNull(response, map.get("errors"));
 
     map = getObj(restTestHarness, "myNewTextFieldWithAnalyzerClass", "fieldTypes");
     assertNotNull(map);
     Map analyzer = (Map)map.get("analyzer");
     assertEquals("org.apache.lucene.analysis.core.WhitespaceAnalyzer", String.valueOf(analyzer.get("class")));
-    assertEquals("5.0.0", String.valueOf(analyzer.get(IndexSchema.LUCENE_MATCH_VERSION_PARAM)));
+    assertEquals("5.0.0", String.valueOf(analyzer.get("luceneMatchVersion")));
   }
 
-  public void testAddFieldMatchingExistingDynamicField() throws Exception {
-    RestTestHarness harness = restTestHarness;
-
-    String newFieldName = "attr_non_dynamic";
-
-    Map map = getObj(harness, newFieldName, "fields");
-    assertNull("Field '" + newFieldName + "' already exists in the schema", map);
-
-    map = getObj(harness, "attr_*", "dynamicFields");
-    assertNotNull("'attr_*' dynamic field does not exist in the schema", map);
-
-    map = getObj(harness, "boolean", "fieldTypes");
-    assertNotNull("'boolean' field type does not exist in the schema", map);
-
-    String payload = "{\n" +
-        "    'add-field' : {\n" +
-        "                 'name':'" + newFieldName + "',\n" +
-        "                 'type':'boolean',\n" +
-        "                 'stored':true,\n" +
-        "                 'indexed':true\n" +
-        "                 }\n" +
-        "    }";
-
-    String response = harness.post("/schema", json(payload));
-
-    map = (Map) fromJSONString(response);
-    assertNull(response, map.get("error"));
-
-    map = getObj(harness, newFieldName, "fields");
-    assertNotNull("Field '" + newFieldName + "' is not in the schema", map);
-  }
-
-  public void testAddIllegalDynamicField() throws Exception {
-    RestTestHarness harness = restTestHarness;
-
-    String newFieldName = "illegal";
-
-    String payload = "{\n" +
-        "    'add-dynamic-field' : {\n" +
-        "                 'name':'" + newFieldName + "',\n" +
-        "                 'type':'string',\n" +
-        "                 'stored':true,\n" +
-        "                 'indexed':true\n" +
-        "                 }\n" +
-        "    }";
-
-    String response = harness.post("/schema", json(payload));
-    Map map = (Map) fromJSONString(response);
-    assertNotNull(response, map.get("error"));
-
-    map = getObj(harness, newFieldName, "dynamicFields");
-    assertNull(newFieldName + " illegal dynamic field should not have been added to schema", map);
-  }
-
-  public void testAddIllegalFields() throws Exception {
-    RestTestHarness harness = restTestHarness;
-
-    // 1. Make sure you can't create a new field with an asterisk in its name
-    String newFieldName = "asterisk*";
-
-    String payload = "{\n" +
-        "    'add-field' : {\n" +
-        "         'name':'" + newFieldName + "',\n" +
-        "         'type':'string',\n" +
-        "         'stored':true,\n" +
-        "         'indexed':true\n" +
-        "     }\n" +
-        "}";
-
-    String response = harness.post("/schema", json(payload));
-    Map map = (Map) fromJSONString(response);
-    assertNotNull(response, map.get("error"));
-
-    map = getObj(harness, newFieldName, "fields");
-    assertNull(newFieldName + " illegal dynamic field should not have been added to schema", map);
-
-    // 2. Make sure you get an error when you try to create a field that already exists
-    // Make sure 'wdf_nocase' field exists
-    newFieldName = "wdf_nocase";
-    Map m = getObj(harness, newFieldName, "fields");
-    assertNotNull("'" + newFieldName + "' field does not exist in the schema", m);
-
-    payload = "{\n" +
-        "    'add-field' : {\n" +
-        "         'name':'" + newFieldName + "',\n" +
-        "         'type':'string',\n" +
-        "         'stored':true,\n" +
-        "         'indexed':true\n" +
-        "     }\n" +
-        "}";
-
-    response = harness.post("/schema", json(payload));
-    map = (Map) fromJSONString(response);
-    assertNotNull(response, map.get("error"));
-  }
-
-  public void testAddFieldWithExistingCatchallDynamicField() throws Exception {
-    RestTestHarness harness = restTestHarness;
-
-    String newFieldName = "NewField1";
-
-    Map map = getObj(harness, newFieldName, "fields");
-    assertNull("Field '" + newFieldName + "' already exists in the schema", map);
-
-    map = getObj(harness, "*", "dynamicFields");
-    assertNull("'*' dynamic field already exists in the schema", map);
-
-    map = getObj(harness, "string", "fieldTypes");
-    assertNotNull("'boolean' field type does not exist in the schema", map);
-
-    map = getObj(harness, "boolean", "fieldTypes");
-    assertNotNull("'boolean' field type does not exist in the schema", map);
-
-    String payload = "{\n" +
-        "    'add-dynamic-field' : {\n" +
-        "         'name':'*',\n" +
-        "         'type':'string',\n" +
-        "         'stored':true,\n" +
-        "         'indexed':true\n" +
-        "    }\n" +
-        "}";
-
-    String response = harness.post("/schema", json(payload));
-
-    map = (Map) fromJSONString(response);
-    assertNull(response, map.get("error"));
-
-    map = getObj(harness, "*", "dynamicFields");
-    assertNotNull("Dynamic field '*' is not in the schema", map);
-
-    payload = "{\n" +
-        "    'add-field' : {\n" +
-        "                 'name':'" + newFieldName + "',\n" +
-        "                 'type':'boolean',\n" +
-        "                 'stored':true,\n" +
-        "                 'indexed':true\n" +
-        "                 }\n" +
-        "    }";
-
-    response = harness.post("/schema", json(payload));
-
-    map = (Map) fromJSONString(response);
-    assertNull(response, map.get("error"));
-
-    map = getObj(harness, newFieldName, "fields");
-    assertNotNull("Field '" + newFieldName + "' is not in the schema", map);
-  }
 
   public void testMultipleCommands() throws Exception{
     RestTestHarness harness = restTestHarness;
@@ -391,15 +212,13 @@ public class TestBulkSchemaAPI extends RestTestBase {
         "                       'name':'a2',\n" +
         "                       'type': 'string',\n" +
         "                       'stored':true,\n" +
-        "                       'indexed':true,\n" +
-        "                       'uninvertible':true,\n" +
+        "                       'indexed':true\n" +
         "                       },\n" +
         "          'add-dynamic-field' : {\n" +
         "                       'name' :'*_lol',\n" +
         "                       'type':'string',\n" +
         "                       'stored':true,\n" +
-        "                       'indexed':true,\n" +
-        "                       'uninvertible':false,\n" +
+        "                       'indexed':true\n" +
         "                       },\n" +
         "          'add-copy-field' : {\n" +
         "                       'source' :'a1',\n" +
@@ -414,7 +233,7 @@ public class TestBulkSchemaAPI extends RestTestBase {
         "                       'name' : 'myNewTxtField',\n" +
         "                       'class':'solr.TextField',\n" +
         "                       'positionIncrementGap':'100',\n" +
-        "                       'indexAnalyzer' : {\n" +
+        "                       'analyzer' : {\n" +
         "                               'charFilters':[\n" +
         "                                          {\n" +
         "                                           'class':'solr.PatternReplaceCharFilterFactory',\n" +
@@ -425,32 +244,7 @@ public class TestBulkSchemaAPI extends RestTestBase {
         "                               'tokenizer':{'class':'solr.WhitespaceTokenizerFactory'},\n" +
         "                               'filters':[\n" +
         "                                          {\n" +
-        "                                           'class':'solr.WordDelimiterGraphFilterFactory',\n" +
-        "                                           'preserveOriginal':'0'\n" +
-        "                                          },\n" +
-        "                                          {\n" +
-        "                                           'class':'solr.StopFilterFactory',\n" +
-        "                                           'words':'stopwords.txt',\n" +
-        "                                           'ignoreCase':'true'\n" +
-        "                                          },\n" +
-        "                                          {'class':'solr.LowerCaseFilterFactory'},\n" +
-        "                                          {'class':'solr.ASCIIFoldingFilterFactory'},\n" +
-        "                                          {'class':'solr.KStemFilterFactory'},\n" +
-        "                                          {'class':'solr.FlattenGraphFilterFactory'}\n" +
-        "                                         ]\n" +
-        "                               },\n" +
-        "                       'queryAnalyzer' : {\n" +
-        "                               'charFilters':[\n" +
-        "                                          {\n" +
-        "                                           'class':'solr.PatternReplaceCharFilterFactory',\n" +
-        "                                           'replacement':'$1$1',\n" +
-        "                                           'pattern':'([a-zA-Z])\\\\\\\\1+'\n" +
-        "                                          }\n" +
-        "                                         ],\n" +
-        "                               'tokenizer':{'class':'solr.WhitespaceTokenizerFactory'},\n" +
-        "                               'filters':[\n" +
-        "                                          {\n" +
-        "                                           'class':'solr.WordDelimiterGraphFilterFactory',\n" +
+        "                                           'class':'solr.WordDelimiterFilterFactory',\n" +
         "                                           'preserveOriginal':'0'\n" +
         "                                          },\n" +
         "                                          {\n" +
@@ -473,7 +267,6 @@ public class TestBulkSchemaAPI extends RestTestBase {
         "          'add-field-type' : {" +
         "                       'name' : 'myWhitespaceTxtField',\n" +
         "                       'class':'solr.TextField',\n" +
-        "                       'uninvertible':false,\n" +
         "                       'analyzer' : {'class' : 'org.apache.lucene.analysis.core.WhitespaceAnalyzer'}\n" +
         "                       },\n"+
         "          'add-field' : {\n" +
@@ -518,10 +311,10 @@ public class TestBulkSchemaAPI extends RestTestBase {
         "                       }\n" +
         "          }\n";
     
-    String response = harness.post("/schema", json(payload));
+    String response = harness.post("/schema?wt=json", json(payload));
 
-    Map map = (Map) fromJSONString(response);
-    assertNull(response, map.get("error"));
+    Map map = (Map) ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    assertNull(response, map.get("errors"));
 
     m = getObj(harness, "a1", "fields");
     assertNotNull("field a1 not created", m);
@@ -536,7 +329,6 @@ public class TestBulkSchemaAPI extends RestTestBase {
     assertEquals("string", m.get("type"));
     assertEquals(Boolean.TRUE, m.get("stored"));
     assertEquals(Boolean.TRUE, m.get("indexed"));
-    assertEquals(Boolean.TRUE, m.get("uninvertible"));
 
     m = getObj(harness,"*_lol", "dynamicFields");
     assertNotNull("field *_lol not created", m);
@@ -544,7 +336,6 @@ public class TestBulkSchemaAPI extends RestTestBase {
     assertEquals("string", m.get("type"));
     assertEquals(Boolean.TRUE, m.get("stored"));
     assertEquals(Boolean.TRUE, m.get("indexed"));
-    assertEquals(Boolean.FALSE, m.get("uninvertible"));
 
     l = getSourceCopyFields(harness, "a1");
     s = new HashSet();
@@ -585,14 +376,12 @@ public class TestBulkSchemaAPI extends RestTestBase {
     
     m = getObj(harness, "myWhitespaceTxtField", "fieldTypes");
     assertNotNull(m);
-    assertEquals(Boolean.FALSE, m.get("uninvertible"));
     assertNull(m.get("similarity")); // unspecified, expect default
 
     m = getObj(harness, "a5", "fields");
     assertNotNull("field a5 not created", m);
     assertEquals("myWhitespaceTxtField", m.get("type"));
-    assertNull(m.get("uninvertible")); // inherited, but API shouldn't return w/o explicit showDefaults
-    assertFieldSimilarity("a5", BM25Similarity.class); // unspecified, expect default
+    assertFieldSimilarity("a5", ClassicSimilarity.class); // unspecified, expect default
 
     m = getObj(harness, "wdf_nocase", "fields");
     assertNull("field 'wdf_nocase' not deleted", m);
@@ -659,10 +448,10 @@ public class TestBulkSchemaAPI extends RestTestBase {
         "                        {'source':'NewField4',         'dest':['NewField1'], maxChars: 3333     }]\n" +
         "}\n";
 
-    String response = harness.post("/schema", json(cmds));
+    String response = harness.post("/schema?wt=json", json(cmds));
 
-    map = (Map) fromJSONString(response);
-    assertNull(response, map.get("error"));
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    assertNull(response, map.get("errors"));
 
     map = getObj(harness, "NewFieldType", "fieldTypes");
     assertNotNull("'NewFieldType' is not in the schema", map);
@@ -714,32 +503,32 @@ public class TestBulkSchemaAPI extends RestTestBase {
     assertNull(map.get("NewField3"));
 
     cmds = "{'delete-field-type' : {'name':'NewFieldType'}}";
-    response = harness.post("/schema", json(cmds));
-    map = (Map) fromJSONString(response);
-    Object errors = map.get("error");
+    response = harness.post("/schema?wt=json", json(cmds));
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    Object errors = map.get("errors");
     assertNotNull(errors);
     assertTrue(errors.toString().contains("Can't delete 'NewFieldType' because it's the field type of "));
 
     cmds = "{'delete-field' : {'name':'NewField1'}}";
-    response = harness.post("/schema", json(cmds));
-    map = (Map) fromJSONString(response);
-    errors = map.get("error");
+    response = harness.post("/schema?wt=json", json(cmds));
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    errors = map.get("errors");
     assertNotNull(errors);
     assertTrue(errors.toString().contains
         ("Can't delete field 'NewField1' because it's referred to by at least one copy field directive"));
 
     cmds = "{'delete-field' : {'name':'NewField2'}}";
-    response = harness.post("/schema", json(cmds));
-    map = (Map) fromJSONString(response);
-    errors = map.get("error");
+    response = harness.post("/schema?wt=json", json(cmds));
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    errors = map.get("errors");
     assertNotNull(errors);
     assertTrue(errors.toString().contains
         ("Can't delete field 'NewField2' because it's referred to by at least one copy field directive"));
 
     cmds = "{'replace-field' : {'name':'NewField1', 'type':'string'}}";
-    response = harness.post("/schema", json(cmds));
-    map = (Map) fromJSONString(response);
-    assertNull(map.get("error"));
+    response = harness.post("/schema?wt=json", json(cmds));
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    assertNull(map.get("errors"));
     // Make sure the copy field directives with source NewField1 are preserved
     list = getSourceCopyFields(harness, "NewField1");
     set = new HashSet();
@@ -751,17 +540,17 @@ public class TestBulkSchemaAPI extends RestTestBase {
     assertTrue(set.contains("NewDynamicField1A"));
 
     cmds = "{'delete-dynamic-field' : {'name':'NewDynamicField1*'}}";
-    response = harness.post("/schema", json(cmds));
-    map = (Map) fromJSONString(response);
-    errors = map.get("error");
+    response = harness.post("/schema?wt=json", json(cmds));
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    errors = map.get("errors");
     assertNotNull(errors);
     assertTrue(errors.toString().contains
         ("copyField dest :'NewDynamicField1A' is not an explicit field and doesn't match a dynamicField."));
 
     cmds = "{'replace-field' : {'name':'NewField2', 'type':'string'}}";
-    response = harness.post("/schema", json(cmds));
-    map = (Map) fromJSONString(response);
-    errors = map.get("error");
+    response = harness.post("/schema?wt=json", json(cmds));
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    errors = map.get("errors");
     assertNull(errors);
     // Make sure the copy field directives with destination NewField2 are preserved
     list = getDestCopyFields(harness, "NewField2");
@@ -776,9 +565,9 @@ public class TestBulkSchemaAPI extends RestTestBase {
     assertTrue(set.contains("NewDynamicField2*"));
 
     cmds = "{'replace-dynamic-field' : {'name':'NewDynamicField2*', 'type':'string'}}";
-    response = harness.post("/schema", json(cmds));
-    map = (Map) fromJSONString(response);
-    errors = map.get("error");
+    response = harness.post("/schema?wt=json", json(cmds));
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    errors = map.get("errors");
     assertNull(errors);
     // Make sure the copy field directives with source NewDynamicField2* are preserved
     list = getSourceCopyFields(harness, "NewDynamicField2*");
@@ -786,9 +575,9 @@ public class TestBulkSchemaAPI extends RestTestBase {
     assertEquals("NewField2", ((Map) list.get(0)).get("dest"));
 
     cmds = "{'replace-dynamic-field' : {'name':'NewDynamicField1*', 'type':'string'}}";
-    response = harness.post("/schema", json(cmds));
-    map = (Map) fromJSONString(response);
-    errors = map.get("error");
+    response = harness.post("/schema?wt=json", json(cmds));
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    errors = map.get("errors");
     assertNull(errors);
     // Make sure the copy field directives with destinations matching NewDynamicField1* are preserved
     list = getDestCopyFields(harness, "NewDynamicField1A");
@@ -796,9 +585,9 @@ public class TestBulkSchemaAPI extends RestTestBase {
     assertEquals("NewField1", ((Map) list.get(0)).get("source"));
 
     cmds = "{'replace-field-type': {'name':'NewFieldType', 'class':'solr.BinaryField'}}";
-    response = harness.post("/schema", json(cmds));
-    map = (Map) fromJSONString(response);
-    assertNull(map.get("error"));
+    response = harness.post("/schema?wt=json", json(cmds));
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    assertNull(map.get("errors"));
     // Make sure the copy field directives with sources and destinations of type NewFieldType are preserved
     list = getDestCopyFields(harness, "NewField3");
     assertEquals(2, list.size());
@@ -816,9 +605,9 @@ public class TestBulkSchemaAPI extends RestTestBase {
         "                        {'source':'NewDynamicField3*', 'dest':'NewField3'                            },\n" +
         "                        {'source':'NewField4',         'dest':['NewField1', 'NewField2', 'NewField3']}]\n" +
         "}\n";
-    response = harness.post("/schema", json(cmds));
-    map = (Map) fromJSONString(response);
-    assertNull(map.get("error"));
+    response = harness.post("/schema?wt=json", json(cmds));
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    assertNull(map.get("errors"));
     list = getSourceCopyFields(harness, "NewField1");
     assertEquals(0, list.size());
     list = getSourceCopyFields(harness, "NewDynamicField1*");
@@ -831,156 +620,22 @@ public class TestBulkSchemaAPI extends RestTestBase {
     assertEquals(0, list.size());
     
     cmds = "{'delete-field': [{'name':'NewField1'},{'name':'NewField2'},{'name':'NewField3'},{'name':'NewField4'}]}";
-    response = harness.post("/schema", json(cmds));
-    map = (Map) fromJSONString(response);
-    assertNull(map.get("error"));
+    response = harness.post("/schema?wt=json", json(cmds));
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    assertNull(map.get("errors"));
 
     cmds = "{'delete-dynamic-field': [{'name':'NewDynamicField1*'}," +
         "                             {'name':'NewDynamicField2*'},\n" +
         "                             {'name':'NewDynamicField3*'}]\n" +
         "}\n";
-    response = harness.post("/schema", json(cmds));
-    map = (Map) fromJSONString(response);
-    assertNull(map.get("error"));
+    response = harness.post("/schema?wt=json", json(cmds));
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    assertNull(map.get("errors"));
     
     cmds = "{'delete-field-type':{'name':'NewFieldType'}}";
-    response = harness.post("/schema", json(cmds));
-    map = (Map) fromJSONString(response);
-    assertNull(map.get("error"));
-  }
-  public void testSortableTextFieldWithAnalyzer() throws Exception {
-    String fieldTypeName = "sort_text_type";
-    String fieldName = "sort_text";
-    String payload = "{\n" +
-        "  'add-field-type' : {" +
-        "    'name' : '" + fieldTypeName + "',\n" +
-        "    'stored':true,\n" +
-        "    'indexed':true\n" +
-        "    'maxCharsForDocValues':6\n" +
-        "    'class':'solr.SortableTextField',\n" +
-        "    'analyzer' : {'tokenizer':{'class':'solr.WhitespaceTokenizerFactory'}},\n" +
-        "  },\n"+
-        "  'add-field' : {\n" +
-        "    'name':'" + fieldName + "',\n" +
-        "    'type': '"+fieldTypeName+"',\n" +
-        "  }\n" +
-        "}\n";
-
-    String response = restTestHarness.post("/schema", json(payload));
-
-    Map map = (Map) fromJSONString(response);
-    assertNull(response, map.get("errors"));
-
-    Map fields = getObj(restTestHarness, fieldName, "fields");
-    assertNotNull("field " + fieldName + " not created", fields);
-
-    assertEquals(0,
-                 getSolrClient().add(Arrays.asList(sdoc("id","1",fieldName,"xxx aaa"),
-                                                   sdoc("id","2",fieldName,"xxx bbb aaa"),
-                                                   sdoc("id","3",fieldName,"xxx bbb zzz"))).getStatus());
-                                                   
-    assertEquals(0, getSolrClient().commit().getStatus());
-    {
-      SolrDocumentList docs = getSolrClient().query
-        (params("q",fieldName+":xxx","sort", fieldName + " asc, id desc")).getResults();
-         
-      assertEquals(3L, docs.getNumFound());
-      assertEquals(3L, docs.size());
-      assertEquals("1", docs.get(0).getFieldValue("id"));
-      assertEquals("3", docs.get(1).getFieldValue("id"));
-      assertEquals("2", docs.get(2).getFieldValue("id"));
-    }
-    {
-      SolrDocumentList docs = getSolrClient().query
-        (params("q",fieldName+":xxx", "sort", fieldName + " desc, id asc")).getResults();
-                                                           
-      assertEquals(3L, docs.getNumFound());
-      assertEquals(3L, docs.size());
-      assertEquals("2", docs.get(0).getFieldValue("id"));
-      assertEquals("3", docs.get(1).getFieldValue("id"));
-      assertEquals("1", docs.get(2).getFieldValue("id"));
-    }
-    
-  }
-  
-  @Test
-  public void testAddNewFieldAndQuery() throws Exception {
-    getSolrClient().add(Arrays.asList(
-        sdoc("id", "1", "term_s", "tux")));
-
-    getSolrClient().commit(true, true);
-    Map<String,Object> attrs = new HashMap<>();
-    attrs.put("name", "newstringtestfield");
-    attrs.put("type", "string");
-
-    new SchemaRequest.AddField(attrs).process(getSolrClient());
-
-    SolrQuery query = new SolrQuery("*:*");
-    query.addFacetField("newstringtestfield");
-    int size = getSolrClient().query(query).getResults().size();
-    assertEquals(1, size);
-  }
-  
-  public void testSimilarityParser() throws Exception {
-    RestTestHarness harness = restTestHarness;
-
-    final float k1 = 2.25f;
-    final float b = 0.33f;
-
-    String fieldTypeName = "MySimilarityField";
-    String fieldName = "similarityTestField";
-    String payload = "{\n" +
-        "  'add-field-type' : {" +
-        "    'name' : '" + fieldTypeName + "',\n" +
-        "    'class':'solr.TextField',\n" +
-        "    'analyzer' : {'tokenizer':{'class':'solr.WhitespaceTokenizerFactory'}},\n" +
-        "    'similarity' : {'class':'org.apache.solr.search.similarities.BM25SimilarityFactory', 'k1':"+k1+", 'b':"+b+" }\n" +
-        "  },\n"+
-        "  'add-field' : {\n" +
-        "    'name':'" + fieldName + "',\n" +
-        "    'type': 'MySimilarityField',\n" +
-        "    'stored':true,\n" +
-        "    'indexed':true\n" +
-        "  }\n" +
-        "}\n";
-
-    String response = harness.post("/schema", json(payload));
-
-    Map map = (Map) fromJSONString(response);
-    assertNull(response, map.get("error"));
-
-    Map fields = getObj(harness, fieldName, "fields");
-    assertNotNull("field " + fieldName + " not created", fields);
-    
-    assertFieldSimilarity(fieldName, BM25Similarity.class,
-       sim -> assertEquals("Unexpected k1", k1, sim.getK1(), .001),
-       sim -> assertEquals("Unexpected b", b, sim.getB(), .001));
-
-    final String independenceMeasure = "Saturated";
-    final boolean discountOverlaps = false; 
-    payload = "{\n" +
-        "  'replace-field-type' : {" +
-        "    'name' : '" + fieldTypeName + "',\n" +
-        "    'class':'solr.TextField',\n" +
-        "    'analyzer' : {'tokenizer':{'class':'solr.WhitespaceTokenizerFactory'}},\n" +
-        "    'similarity' : {\n" +
-        "      'class':'org.apache.solr.search.similarities.DFISimilarityFactory',\n" +
-        "      'independenceMeasure':'" + independenceMeasure + "',\n" +
-        "      'discountOverlaps':" + discountOverlaps + "\n" +
-        "     }\n" +
-        "  }\n"+
-        "}\n";
-
-    response = harness.post("/schema", json(payload));
-
-    map = (Map) fromJSONString(response);
-    assertNull(response, map.get("error"));
-    fields = getObj(harness, fieldName, "fields");
-    assertNotNull("field " + fieldName + " not created", fields);
-
-    assertFieldSimilarity(fieldName, DFISimilarity.class,
-        sim -> assertEquals("Unexpected independenceMeasure", independenceMeasure, sim.getIndependence().toString()),
-        sim -> assertEquals("Unexpected discountedOverlaps", discountOverlaps, sim.getDiscountOverlaps()));
+    response = harness.post("/schema?wt=json", json(cmds));
+    map = (Map)ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    assertNull(map.get("errors"));
   }
 
   public static Map getObj(RestTestHarness restHarness, String fld, String key) throws Exception {
@@ -995,12 +650,12 @@ public class TestBulkSchemaAPI extends RestTestBase {
   }
 
   public static Map getRespMap(RestTestHarness restHarness) throws Exception {
-    return getAsMap("/schema", restHarness);
+    return getAsMap("/schema?wt=json", restHarness);
   }
 
   public static Map getAsMap(String uri, RestTestHarness restHarness) throws Exception {
     String response = restHarness.query(uri);
-    return (Map) fromJSONString(response);
+    return (Map) ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
   }
 
   public static List getSourceCopyFields(RestTestHarness harness, String src) throws Exception {
@@ -1027,11 +682,8 @@ public class TestBulkSchemaAPI extends RestTestBase {
 
   /**
    * whitebox checks the Similarity for the specified field according to {@link SolrCore#getLatestSchema}
-   * 
-   * Executes each of the specified Similarity-accepting validators.
    */
-  @SafeVarargs
-  private static <T extends Similarity> void assertFieldSimilarity(String fieldname, Class<T> expected, Consumer<T>... validators) {
+  private static void assertFieldSimilarity(String fieldname, Class<? extends Similarity> expected) {
     CoreContainer cc = jetty.getCoreContainer();
     try (SolrCore core = cc.getCore("collection1")) {
       SimilarityFactory simfac = core.getLatestSchema().getSimilarityFactory();
@@ -1049,7 +701,7 @@ public class TestBulkSchemaAPI extends RestTestBase {
                  mainSim instanceof PerFieldSimilarityWrapper);
       Similarity fieldSim = ((PerFieldSimilarityWrapper)mainSim).get(fieldname);
       assertEquals("wrong sim for field=" + fieldname, expected, fieldSim.getClass());
-      Arrays.asList(validators).forEach(v -> v.accept((T)fieldSim));
+      
     }
   }
 }

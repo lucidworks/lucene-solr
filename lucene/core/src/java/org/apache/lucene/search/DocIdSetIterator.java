@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -61,7 +61,7 @@ public abstract class DocIdSetIterator {
 
   /** A {@link DocIdSetIterator} that matches all documents up to
    *  {@code maxDoc - 1}. */
-  public static final DocIdSetIterator all(int maxDoc) {
+  public static final DocIdSetIterator all(final int maxDoc) {
     return new DocIdSetIterator() {
       int doc = -1;
 
@@ -87,47 +87,6 @@ public abstract class DocIdSetIterator {
       @Override
       public long cost() {
         return maxDoc;
-      }
-    };
-  }
-
-  /** A {@link DocIdSetIterator} that matches a range documents from
-   *  minDocID (inclusive) to maxDocID (exclusive). */
-  public static final DocIdSetIterator range(int minDoc, int maxDoc) {
-    if (minDoc >= maxDoc) {
-        throw new IllegalArgumentException("minDoc must be < maxDoc but got minDoc=" + minDoc + " maxDoc=" + maxDoc);
-    }
-    if (minDoc < 0) {
-      throw new IllegalArgumentException("minDoc must be >= 0 but got minDoc=" + minDoc);
-    }
-    return new DocIdSetIterator() {
-      private int doc = -1;
-
-      @Override
-      public int docID() {
-        return doc;
-      }
-
-      @Override
-      public int nextDoc() throws IOException {
-        return advance(doc + 1);
-      }
-
-      @Override
-      public int advance(int target) throws IOException {
-        if (target < minDoc) {
-            doc = minDoc;
-        } else if (target >= maxDoc) {
-            doc = NO_MORE_DOCS;
-        } else {
-            doc = target;
-        }
-        return doc;
-      }
-
-      @Override
-      public long cost() {
-        return maxDoc - minDoc;
       }
     };
   }

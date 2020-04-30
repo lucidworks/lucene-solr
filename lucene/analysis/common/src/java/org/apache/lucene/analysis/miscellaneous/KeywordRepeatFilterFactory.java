@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
-
 
 import java.util.Map;
 
@@ -28,13 +28,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * Since {@link KeywordRepeatFilter} emits two tokens for every input token, and any tokens that aren't transformed
  * later in the analysis chain will be in the document twice. Therefore, consider adding
  * {@link RemoveDuplicatesTokenFilterFactory} later in the analysis chain.
- * @since 4.3.0
- * @lucene.spi {@value #NAME}
  */
 public final class KeywordRepeatFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "keywordRepeat";
   
   /** Creates a new KeywordRepeatFilterFactory */
   public KeywordRepeatFilterFactory(Map<String,String> args) {

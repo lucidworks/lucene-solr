@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.memory;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.memory;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -34,7 +34,6 @@ import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfos;
-import org.apache.lucene.index.ImpactsEnum;
 import org.apache.lucene.index.IndexFileNames;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.SegmentInfo;
@@ -95,9 +94,8 @@ public class FSTTermsReader extends FieldsProducer {
         int fieldNumber = in.readVInt();
         FieldInfo fieldInfo = fieldInfos.fieldInfo(fieldNumber);
         long numTerms = in.readVLong();
-        long sumTotalTermFreq = in.readVLong();
-        // if frequencies are omitted, sumTotalTermFreq=sumDocFreq and we only write one value
-        long sumDocFreq = fieldInfo.getIndexOptions() == IndexOptions.DOCS ? sumTotalTermFreq : in.readVLong();
+        long sumTotalTermFreq = fieldInfo.getIndexOptions() == IndexOptions.DOCS ? -1 : in.readVLong();
+        long sumDocFreq = in.readVLong();
         int docCount = in.readVInt();
         int longsSize = in.readVInt();
         TermsReader current = new TermsReader(fieldInfo, in, numTerms, sumTotalTermFreq, sumDocFreq, docCount, longsSize);
@@ -128,7 +126,7 @@ public class FSTTermsReader extends FieldsProducer {
       throw new CorruptIndexException("invalid sumDocFreq: " + field.sumDocFreq + " docCount: " + field.docCount, in);
     }
     // #positions must be >= #postings
-    if (field.sumTotalTermFreq < field.sumDocFreq) {
+    if (field.sumTotalTermFreq != -1 && field.sumTotalTermFreq < field.sumDocFreq) {
       throw new CorruptIndexException("invalid sumTotalTermFreq: " + field.sumTotalTermFreq + " sumDocFreq: " + field.sumDocFreq, in);
     }
     if (previous != null) {
@@ -252,14 +250,11 @@ public class FSTTermsReader extends FieldsProducer {
 
     @Override
     public TermsEnum intersect(CompiledAutomaton compiled, BytesRef startTerm) throws IOException {
-      if (compiled.type != CompiledAutomaton.AUTOMATON_TYPE.NORMAL) {
-        throw new IllegalArgumentException("please use CompiledAutomaton.getTermsEnum instead");
-      }
       return new IntersectTermsEnum(compiled, startTerm);
     }
 
     // Only wraps common operations for PBF interact
-    abstract class BaseTermsEnum extends org.apache.lucene.index.BaseTermsEnum {
+    abstract class BaseTermsEnum extends TermsEnum {
 
       /* Current term stats + decoded metadata (customized by PBF) */
       final BlockTermState state;
@@ -290,19 +285,13 @@ public class FSTTermsReader extends FieldsProducer {
 
       @Override
       public long totalTermFreq() throws IOException {
-        return state.totalTermFreq == -1 ? state.docFreq : state.totalTermFreq;
+        return state.totalTermFreq;
       }
 
       @Override
       public PostingsEnum postings(PostingsEnum reuse, int flags) throws IOException {
         decodeMetaData();
         return postingsReader.postings(fieldInfo, state, reuse, flags);
-      }
-
-      @Override
-      public ImpactsEnum impacts(int flags) throws IOException {
-        decodeMetaData();
-        return postingsReader.impacts(fieldInfo, state, flags);
       }
 
       @Override
@@ -415,7 +404,7 @@ public class FSTTermsReader extends FieldsProducer {
       /* True when there is pending term when calling next() */
       boolean pending;
 
-      /* stack to record how current term is constructed,
+      /* stack to record how current term is constructed, 
        * used to accumulate metadata or rewind term:
        *   level == term.length + 1,
        *         == 0 when term is null */
@@ -437,8 +426,6 @@ public class FSTTermsReader extends FieldsProducer {
       private final class Frame {
         /* fst stats */
         FST.Arc<FSTTermOutputs.TermData> fstArc;
-
-        FSTTermOutputs.TermData output;
 
         /* automaton stats */
         int fsaState;
@@ -466,9 +453,11 @@ public class FSTTermsReader extends FieldsProducer {
           this.stack[i] = new Frame();
         }
 
-        loadVirtualFrame(newFrame());
+        Frame frame;
+        frame = loadVirtualFrame(newFrame());
         this.level++;
-        pushFrame(loadFirstFrame(newFrame()));
+        frame = loadFirstFrame(newFrame());
+        pushFrame(frame);
 
         this.meta = null;
         this.metaUpto = 1;
@@ -501,17 +490,17 @@ public class FSTTermsReader extends FieldsProducer {
       }
 
       /** Lazily accumulate meta data, when we got a accepted term */
-      void loadMetaData() {
-        Frame last, next;
-        last = stack[metaUpto];
+      void loadMetaData() throws IOException {
+        FST.Arc<FSTTermOutputs.TermData> last, next;
+        last = stack[metaUpto].fstArc;
         while (metaUpto != level) {
           metaUpto++;
-          next = stack[metaUpto];
+          next = stack[metaUpto].fstArc;
           next.output = fstOutputs.add(next.output, last.output);
           last = next;
         }
-        if (last.fstArc.isFinal()) {
-          meta = fstOutputs.add(last.output, last.fstArc.nextFinalOutput());
+        if (last.isFinal()) {
+          meta = fstOutputs.add(last.output, last.nextFinalOutput);
         } else {
           meta = last.output;
         }
@@ -575,7 +564,7 @@ public class FSTTermsReader extends FieldsProducer {
           frame = newFrame();
           label = target.bytes[upto] & 0xff;
           frame = loadCeilFrame(label, topFrame(), frame);
-          if (frame == null || frame.fstArc.label() != label) {
+          if (frame == null || frame.fstArc.label != label) {
             break;
           }
           assert isValid(frame);  // target must be fetched from automaton
@@ -603,8 +592,9 @@ public class FSTTermsReader extends FieldsProducer {
       }
 
       /** Virtual frame, never pop */
-      Frame loadVirtualFrame(Frame frame) {
-        frame.output = fstOutputs.getNoOutput();
+      Frame loadVirtualFrame(Frame frame) throws IOException {
+        frame.fstArc.output = fstOutputs.getNoOutput();
+        frame.fstArc.nextFinalOutput = fstOutputs.getNoOutput();
         frame.fsaState = -1;
         return frame;
       }
@@ -612,8 +602,7 @@ public class FSTTermsReader extends FieldsProducer {
       /** Load frame for start arc(node) on fst */
       Frame loadFirstFrame(Frame frame) throws IOException {
         frame.fstArc = fst.getFirstArc(frame.fstArc);
-        frame.output = frame.fstArc.output();
-        frame.fsaState = 0;
+        frame.fsaState = fsa.getInitialState();
         return frame;
       }
 
@@ -622,13 +611,12 @@ public class FSTTermsReader extends FieldsProducer {
         if (!canGrow(top)) {
           return null;
         }
-        frame.fstArc = fst.readFirstRealTargetArc(top.fstArc.target(), frame.fstArc, fstReader);
-        frame.fsaState = fsa.step(top.fsaState, frame.fstArc.label());
+        frame.fstArc = fst.readFirstRealTargetArc(top.fstArc.target, frame.fstArc, fstReader);
+        frame.fsaState = fsa.step(top.fsaState, frame.fstArc.label);
         //if (TEST) System.out.println(" loadExpand frame="+frame);
         if (frame.fsaState == -1) {
           return loadNextFrame(top, frame);
         }
-        frame.output = frame.fstArc.output();
         return frame;
       }
 
@@ -639,7 +627,7 @@ public class FSTTermsReader extends FieldsProducer {
         }
         while (!frame.fstArc.isLast()) {
           frame.fstArc = fst.readNextRealArc(frame.fstArc, fstReader);
-          frame.fsaState = fsa.step(top.fsaState, frame.fstArc.label());
+          frame.fsaState = fsa.step(top.fsaState, frame.fstArc.label);
           if (frame.fsaState != -1) {
             break;
           }
@@ -648,7 +636,6 @@ public class FSTTermsReader extends FieldsProducer {
         if (frame.fsaState == -1) {
           return null;
         }
-        frame.output = frame.fstArc.output();
         return frame;
       }
 
@@ -660,12 +647,11 @@ public class FSTTermsReader extends FieldsProducer {
         if (arc == null) {
           return null;
         }
-        frame.fsaState = fsa.step(top.fsaState, arc.label());
+        frame.fsaState = fsa.step(top.fsaState, arc.label);
         //if (TEST) System.out.println(" loadCeil frame="+frame);
         if (frame.fsaState == -1) {
           return loadNextFrame(top, frame);
         }
-        frame.output = frame.fstArc.output();
         return frame;
       }
 
@@ -683,7 +669,7 @@ public class FSTTermsReader extends FieldsProducer {
       }
 
       void pushFrame(Frame frame) {
-        term = grow(frame.fstArc.label());
+        term = grow(frame.fstArc.label);
         level++;
         //if (TEST) System.out.println("  term=" + term + " level=" + level);
       }
@@ -740,7 +726,7 @@ public class FSTTermsReader extends FieldsProducer {
     queue.add(startArc);
     while (!queue.isEmpty()) {
       final FST.Arc<T> arc = queue.remove(0);
-      final long node = arc.target();
+      final long node = arc.target;
       //System.out.println(arc);
       if (FST.targetHasArcs(arc) && !seen.get((int) node)) {
         seen.set((int) node);
@@ -768,7 +754,8 @@ public class FSTTermsReader extends FieldsProducer {
   
   @Override
   public Collection<Accountable> getChildResources() {
-    List<Accountable> resources = new ArrayList<>(Accountables.namedAccountables("field", fields));
+    List<Accountable> resources = new ArrayList<>();
+    resources.addAll(Accountables.namedAccountables("field", fields));
     resources.add(Accountables.namedAccountable("delegate", postingsReader));
     return Collections.unmodifiableCollection(resources);
   }

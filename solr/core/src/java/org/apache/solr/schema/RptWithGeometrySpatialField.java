@@ -1,3 +1,5 @@
+package org.apache.solr.schema;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
 
 import java.io.IOException;
 import java.lang.ref.WeakReference;
-import java.util.HashMap;
 import java.util.Map;
 
+import com.spatial4j.core.context.SpatialContext;
+import com.spatial4j.core.shape.Shape;
+import com.spatial4j.core.shape.jts.JtsGeometry;
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.spatial.ShapeValues;
-import org.apache.lucene.spatial.ShapeValuesSource;
+import org.apache.lucene.queries.function.FunctionValues;
+import org.apache.lucene.queries.function.ValueSource;
+import org.apache.lucene.search.Explanation;
 import org.apache.lucene.spatial.composite.CompositeSpatialStrategy;
 import org.apache.lucene.spatial.prefix.RecursivePrefixTreeStrategy;
 import org.apache.lucene.spatial.query.SpatialArgsParser;
@@ -34,9 +37,6 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.search.SolrCache;
-import org.locationtech.spatial4j.context.SpatialContext;
-import org.locationtech.spatial4j.shape.Shape;
-import org.locationtech.spatial4j.shape.jts.JtsGeometry;
 
 /** A Solr Spatial FieldType based on {@link CompositeSpatialStrategy}.
  * @lucene.experimental */
@@ -49,8 +49,7 @@ public class RptWithGeometrySpatialField extends AbstractSpatialFieldType<Compos
 
   @Override
   protected void init(IndexSchema schema, Map<String, String> args) {
-    Map<String, String> origArgs = new HashMap<>(args); // clone so we can feed it to an aggregated field type
-    super.init(schema, origArgs);
+    // Do NOT call super.init(); instead we delegate to an RPT field. Admittedly this is error prone.
 
     //TODO Move this check to a call from AbstractSpatialFieldType.createFields() so the type can declare
     // if it supports multi-valued or not. It's insufficient here; we can't see if you set multiValued on the field.
@@ -67,10 +66,10 @@ public class RptWithGeometrySpatialField extends AbstractSpatialFieldType<Compos
     rptFieldType.setTypeName(getTypeName());
     rptFieldType.properties = properties;
     rptFieldType.init(schema, args);
-
     rptFieldType.argsParser = argsParser = newSpatialArgsParser();
     this.ctx = rptFieldType.ctx;
     this.distanceUnits = rptFieldType.distanceUnits;
+    this.units = rptFieldType.units;
   }
 
   @Override
@@ -102,24 +101,24 @@ public class RptWithGeometrySpatialField extends AbstractSpatialFieldType<Compos
     }
 
     @Override
-    public ShapeValuesSource makeShapeValueSource() {
+    public ValueSource makeShapeValueSource() {
       return new CachingShapeValuesource(super.makeShapeValueSource(), getFieldName());
     }
   }
 
-  private static class CachingShapeValuesource extends ShapeValuesSource {
+  private static class CachingShapeValuesource extends ValueSource {
 
-    private final ShapeValuesSource targetValueSource;
+    private final ValueSource targetValueSource;
     private final String fieldName;
 
-    private CachingShapeValuesource(ShapeValuesSource targetValueSource, String fieldName) {
+    private CachingShapeValuesource(ValueSource targetValueSource, String fieldName) {
       this.targetValueSource = targetValueSource;
       this.fieldName = fieldName;
     }
 
     @Override
-    public String toString() {
-      return "cache(" + targetValueSource.toString() + ")";
+    public String description() {
+      return "cache(" + targetValueSource.description() + ")";
     }
 
     @Override
@@ -141,9 +140,10 @@ public class RptWithGeometrySpatialField extends AbstractSpatialFieldType<Compos
       return result;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public ShapeValues getValues(LeafReaderContext readerContext) throws IOException {
-      final ShapeValues targetFuncValues = targetValueSource.getValues(readerContext);
+    public FunctionValues getValues(Map context, final LeafReaderContext readerContext) throws IOException {
+      final FunctionValues targetFuncValues = targetValueSource.getValues(context, readerContext);
       // The key is a pair of leaf reader with a docId relative to that reader. The value is a Map from field to Shape.
       final SolrCache<PerSegCacheKey,Shape> cache =
           SolrRequestInfo.getRequestInfo().getReq().getSearcher().getCache(CACHE_KEY_PREFIX + fieldName);
@@ -151,46 +151,56 @@ public class RptWithGeometrySpatialField extends AbstractSpatialFieldType<Compos
         return targetFuncValues; // no caching; no configured cache
       }
 
-      return new ShapeValues() {
+      return new FunctionValues() {
         int docId = -1;
+        Shape shape = null;
 
-        @Override
-        public Shape value() throws IOException {
-          //lookup in cache
-          IndexReader.CacheHelper cacheHelper = readerContext.reader().getCoreCacheHelper();
-          if (cacheHelper == null) {
-            throw new IllegalStateException("Leaf " + readerContext.reader() + " is not suited for caching");
+        private void setShapeFromDoc(int doc) {
+          if (docId == doc) {
+            return;
           }
-          PerSegCacheKey key = new PerSegCacheKey(cacheHelper.getKey(), docId);
-          Shape shape = cache.computeIfAbsent(key, k -> {
-            try {
-              return targetFuncValues.value();
-            } catch (IOException e) {
-              return null;
+          docId = doc;
+          //lookup in cache
+          PerSegCacheKey key = new PerSegCacheKey(readerContext.reader().getCoreCacheKey(), doc);
+          shape = cache.get(key);
+          if (shape == null) {
+            shape = (Shape) targetFuncValues.objectVal(doc);
+            if (shape != null) {
+              cache.put(key, shape);
             }
-          });
-          if (shape != null) {
+          } else {
             //optimize shape on a cache hit if possible. This must be thread-safe and it is.
             if (shape instanceof JtsGeometry) {
               ((JtsGeometry) shape).index(); // TODO would be nice if some day we didn't have to cast
             }
           }
+        }
+
+        // Use the cache for exists & objectVal;
+
+        @Override
+        public boolean exists(int doc) {
+          setShapeFromDoc(doc);
+          return shape != null;
+        }
+
+        @Override
+        public Object objectVal(int doc) {
+          setShapeFromDoc(doc);
           return shape;
         }
 
         @Override
-        public boolean advanceExact(int doc) throws IOException {
-          this.docId = doc;
-          return targetFuncValues.advanceExact(doc);
+        public Explanation explain(int doc) {
+          return targetFuncValues.explain(doc);
         }
 
+        @Override
+        public String toString(int doc) {
+          return targetFuncValues.toString(doc);
+        }
       };
 
-    }
-
-    @Override
-    public boolean isCacheable(LeafReaderContext ctx) {
-      return targetValueSource.isCacheable(ctx);
     }
 
   }

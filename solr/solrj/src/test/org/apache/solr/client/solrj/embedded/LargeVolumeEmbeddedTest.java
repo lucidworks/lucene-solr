@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.embedded;
 
 import org.apache.solr.client.solrj.LargeVolumeTestBase;
+import org.apache.solr.util.ExternalPaths;
 import org.junit.BeforeClass;
 
 public class LargeVolumeEmbeddedTest extends LargeVolumeTestBase {

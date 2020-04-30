@@ -20,8 +20,7 @@
 <config>
   <luceneMatchVersion>${tests.luceneMatchVersion:LATEST}</luceneMatchVersion>
   <xi:include href="solrconfig.snippet.randomindexconfig.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
-  <requestHandler name="/select" class="solr.SearchHandler"></requestHandler>
+  <requestHandler name="standard" class="solr.StandardRequestHandler"></requestHandler>
   <directoryFactory name="DirectoryFactory" class="org.apache.solr.core.AlternateDirectoryTest$TestFSDirectoryFactory"></directoryFactory>
   <indexReaderFactory name="IndexReaderFactory" class="org.apache.solr.core.AlternateDirectoryTest$TestIndexReaderFactory"></indexReaderFactory >
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
 </config>

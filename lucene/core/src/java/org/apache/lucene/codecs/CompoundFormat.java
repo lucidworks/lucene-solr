@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs;
-
 
 import java.io.IOException;
 
@@ -43,9 +43,7 @@ public abstract class CompoundFormat {
   public abstract Directory getCompoundReader(Directory dir, SegmentInfo si, IOContext context) throws IOException;
   
   /**
-   * Packs the provided segment's files into a compound format.  All files referenced
-   * by the provided {@link SegmentInfo} must have {@link CodecUtil#writeIndexHeader}
-   * and {@link CodecUtil#writeFooter}.
+   * Packs the provided segment's files into a compound format.
    */
   public abstract void write(Directory dir, SegmentInfo si, IOContext context) throws IOException;
 }

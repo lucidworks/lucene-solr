@@ -1,3 +1,4 @@
+package org.apache.solr.search;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
+
+
 import org.apache.solr.SolrTestCaseJ4;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -142,7 +144,7 @@ public class SpatialFilterTest extends SolrTestCaseJ4 {
     if (docIds != null && docIds.length > 0) {
       int i = 1;
       for (int docId : docIds) {
-        tests[i++] = "//result/doc/str[@name='id'][.='" + docId + "']";
+        tests[i++] = "//result/doc/int[@name='id'][.='" + docId + "']";
       }
     }
 
@@ -201,7 +203,7 @@ public class SpatialFilterTest extends SolrTestCaseJ4 {
     query = parser.parse();
     assertNotNull("Query is null", query);
     assertTrue(query.getClass() + " is not an instanceof "
-            + LegacyNumericRangeQuery.class,
-            query instanceof LegacyNumericRangeQuery);
+            + NumericRangeQuery.class,
+            query instanceof NumericRangeQuery);
     req.close();
   }*/

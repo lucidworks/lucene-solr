@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.memory;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.memory;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -26,17 +27,15 @@ import java.util.TreeMap;
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.PostingsFormat;
-import org.apache.lucene.codecs.lucene84.Lucene84PostingsFormat;
-import org.apache.lucene.index.BaseTermsEnum;
+import org.apache.lucene.codecs.lucene50.Lucene50PostingsFormat;
+import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.Fields;
-import org.apache.lucene.index.ImpactsEnum;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.OrdTermState;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.SegmentWriteState;
-import org.apache.lucene.index.SlowImpactsEnum;
 import org.apache.lucene.index.TermState;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
@@ -55,7 +54,7 @@ import org.apache.lucene.util.automaton.Transition;
 //   - build depth-N prefix hash?
 //   - or: longer dense skip lists than just next byte?
 
-/** Wraps {@link Lucene84PostingsFormat} format for on-disk
+/** Wraps {@link Lucene50PostingsFormat} format for on-disk
  *  storage, but then at read time loads and stores all
  *  terms and postings directly in RAM as byte[], int[].
  *
@@ -103,12 +102,12 @@ public final class DirectPostingsFormat extends PostingsFormat {
 
   @Override
   public FieldsConsumer fieldsConsumer(SegmentWriteState state) throws IOException {
-    return PostingsFormat.forName("Lucene84").fieldsConsumer(state);
+    return PostingsFormat.forName("Lucene50").fieldsConsumer(state);
   }
 
   @Override
   public FieldsProducer fieldsProducer(SegmentReadState state) throws IOException {
-    FieldsProducer postings = PostingsFormat.forName("Lucene84").fieldsProducer(state);
+    FieldsProducer postings = PostingsFormat.forName("Lucene50").fieldsProducer(state);
     if (state.context.context != IOContext.Context.MERGE) {
       FieldsProducer loadedPostings;
       try {
@@ -156,7 +155,7 @@ public final class DirectPostingsFormat extends PostingsFormat {
     public long ramBytesUsed() {
       long sizeInBytes = 0;
       for(Map.Entry<String,DirectField> entry: fields.entrySet()) {
-        sizeInBytes += entry.getKey().length() * Character.BYTES;
+        sizeInBytes += entry.getKey().length() * RamUsageEstimator.NUM_BYTES_CHAR;
         sizeInBytes += entry.getValue().ramBytesUsed();
       }
       return sizeInBytes;
@@ -210,6 +209,11 @@ public final class DirectPostingsFormat extends PostingsFormat {
             ((payloads!=null) ? RamUsageEstimator.sizeOf(payloads) : 0);
       }
 
+      @Override
+      public Collection<Accountable> getChildResources() {
+        return Collections.emptyList();
+      }
+
     }
 
     // TODO: maybe specialize into prx/no-prx/no-frq cases?
@@ -257,6 +261,11 @@ public final class DirectPostingsFormat extends PostingsFormat {
         }
 
         return sizeInBytes;
+      }
+      
+      @Override
+      public Collection<Accountable> getChildResources() {
+        return Collections.emptyList();
       }
 
     }
@@ -536,6 +545,11 @@ public final class DirectPostingsFormat extends PostingsFormat {
 
       return sizeInBytes;
     }
+    
+    @Override
+    public Collection<Accountable> getChildResources() {
+      return Collections.emptyList();
+    }
 
     @Override
     public String toString() {
@@ -662,9 +676,6 @@ public final class DirectPostingsFormat extends PostingsFormat {
 
     @Override
     public TermsEnum intersect(CompiledAutomaton compiled, final BytesRef startTerm) {
-      if (compiled.type != CompiledAutomaton.AUTOMATON_TYPE.NORMAL) {
-        throw new IllegalArgumentException("please use CompiledAutomaton.getTermsEnum instead");
-      }
       return new DirectIntersectTermsEnum(compiled, startTerm);
     }
 
@@ -708,7 +719,7 @@ public final class DirectPostingsFormat extends PostingsFormat {
       return hasPayloads;
     }
 
-    private final class DirectTermsEnum extends BaseTermsEnum {
+    private final class DirectTermsEnum extends TermsEnum {
 
       private final BytesRef scratch = new BytesRef();
       private int termOrd;
@@ -847,6 +858,14 @@ public final class DirectPostingsFormat extends PostingsFormat {
 
       @Override
       public PostingsEnum postings(PostingsEnum reuse, int flags) throws IOException {
+        
+        if (PostingsEnum.featureRequested(flags, DocsAndPositionsEnum.OLD_NULL_SEMANTICS)) {
+          if (!hasPos) {
+            // Positions were not indexed:
+            return null;
+          }
+        }
+
         // TODO: implement reuse
         // it's hairy!
 
@@ -947,13 +966,9 @@ public final class DirectPostingsFormat extends PostingsFormat {
         }
       }
 
-      @Override
-      public ImpactsEnum impacts(int flags) throws IOException {
-        return new SlowImpactsEnum(postings(null, flags));
-      }
     }
 
-    private final class DirectIntersectTermsEnum extends BaseTermsEnum {
+    private final class DirectIntersectTermsEnum extends TermsEnum {
       private final RunAutomaton runAutomaton;
       private final CompiledAutomaton compiledAutomaton;
       private int termOrd;
@@ -979,7 +994,7 @@ public final class DirectPostingsFormat extends PostingsFormat {
         states = new State[1];
         states[0] = new State();
         states[0].changeOrd = terms.length;
-        states[0].state = 0;
+        states[0].state = runAutomaton.getInitialState();
         states[0].transitionCount = compiledAutomaton.automaton.getNumTransitions(states[0].state);
         compiledAutomaton.automaton.initTransition(states[0].state, states[0].transition);
         states[0].transitionUpto = -1;
@@ -1459,6 +1474,14 @@ public final class DirectPostingsFormat extends PostingsFormat {
 
       @Override
       public PostingsEnum postings(PostingsEnum reuse, int flags) {
+        
+        if (PostingsEnum.featureRequested(flags, DocsAndPositionsEnum.OLD_NULL_SEMANTICS)) {
+          if (!hasPos) {
+            // Positions were not indexed:
+            return null;
+          }
+        }
+        
         // TODO: implement reuse
         // it's hairy!
 
@@ -1503,11 +1526,6 @@ public final class DirectPostingsFormat extends PostingsFormat {
       }
 
       @Override
-      public ImpactsEnum impacts(int flags) throws IOException {
-        return new SlowImpactsEnum(postings(null, flags));
-      }
-
-      @Override
       public SeekStatus seekCeil(BytesRef term) {
         throw new UnsupportedOperationException();
       }
@@ -1516,7 +1534,6 @@ public final class DirectPostingsFormat extends PostingsFormat {
       public void seekExact(long ord) {
         throw new UnsupportedOperationException();
       }
-      
     }
   }
 
@@ -1663,7 +1680,7 @@ public final class DirectPostingsFormat extends PostingsFormat {
     }
   }
 
-  // Docs + freqs + positions/offsets:
+  // Docs + freqs + positions/offets:
   private final static class LowFreqDocsEnum extends PostingsEnum {
     private int[] postings;
     private final int posMult;

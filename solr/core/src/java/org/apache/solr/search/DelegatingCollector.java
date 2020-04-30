@@ -14,16 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
 
 import java.io.IOException;
 
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.LeafCollector;
-import org.apache.lucene.search.Scorable;
-import org.apache.lucene.search.ScoreMode;
+import org.apache.lucene.search.Collector;
+import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.SimpleCollector;
 
 
@@ -35,7 +35,7 @@ public class DelegatingCollector extends SimpleCollector {
 
   protected Collector delegate;
   protected LeafCollector leafDelegate;
-  protected Scorable scorer;
+  protected Scorer scorer;
   protected LeafReaderContext context;
   protected int docBase;
 
@@ -56,7 +56,7 @@ public class DelegatingCollector extends SimpleCollector {
   }
 
   @Override
-  public void setScorer(Scorable scorer) throws IOException {
+  public void setScorer(Scorer scorer) throws IOException {
     this.scorer = scorer;
     if (leafDelegate != null) {
       leafDelegate.setScorer(scorer);
@@ -64,8 +64,8 @@ public class DelegatingCollector extends SimpleCollector {
   }
 
   @Override
-  public ScoreMode scoreMode() {
-    return delegate.scoreMode();
+  public boolean needsScores() {
+    return delegate.needsScores();
   }
 
   @Override

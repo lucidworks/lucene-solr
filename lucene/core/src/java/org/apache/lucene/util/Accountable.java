@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.util.Collection;
-import java.util.Collections;
 
 /**
  * An object whose RAM usage can be computed.
@@ -37,8 +36,7 @@ public interface Accountable {
    * The result should be a point-in-time snapshot (to avoid race conditions).
    * @see Accountables
    */
-  default Collection<Accountable> getChildResources() {
-    return Collections.emptyList();
-  }
+  // TODO: on java8 make this a default method returning emptyList
+  Collection<Accountable> getChildResources();
 
 }

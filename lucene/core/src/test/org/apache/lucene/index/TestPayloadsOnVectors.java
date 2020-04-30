@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.StringReader;
 
@@ -133,11 +133,12 @@ public class TestPayloadsOnVectors extends LuceneTestCase {
     customType.setStoreTermVectorPayloads(true);
     customType.setStoreTermVectorOffsets(random().nextBoolean());
     doc.add(new Field("field", "foo", customType));
-
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       writer.addDocument(doc);
-    });
-
+      fail();
+    } catch (IllegalArgumentException expected) {
+      // expected
+    }
     writer.close();
     dir.close();
   }

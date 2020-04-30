@@ -14,15 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
-import java.util.Map;
+package org.apache.solr.search;
 
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.ModifiableSolrParams;
-import org.apache.solr.metrics.MetricsMap;
-import org.apache.solr.metrics.SolrMetricManager;
+import org.apache.solr.common.util.NamedList;
+import org.apache.solr.core.SolrInfoMBean;
+import org.apache.solr.util.RefCounted;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -42,19 +42,6 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     super.setUp();
     clearIndex();
     assertU(commit());
-  }
-
-  @Test
-  public void testReRankQParserPluginConstants() throws Exception {
-    assertEquals(ReRankQParserPlugin.NAME, "rerank");
-
-    assertEquals(ReRankQParserPlugin.RERANK_QUERY, "reRankQuery");
-
-    assertEquals(ReRankQParserPlugin.RERANK_DOCS, "reRankDocs");
-    assertEquals(ReRankQParserPlugin.RERANK_DOCS_DEFAULT, 200);
-
-    assertEquals(ReRankQParserPlugin.RERANK_WEIGHT, "reRankWeight");
-    assertEquals(ReRankQParserPlugin.RERANK_WEIGHT_DEFAULT, 2.0d, 0.0d);
   }
 
   @Test
@@ -86,24 +73,23 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
 
 
     ModifiableSolrParams params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=200}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=200}");
     params.add("q", "term_s:YYYY");
     params.add("rqq", "{!edismax bf=$bff}*:*");
     params.add("bff", "field(test_ti)");
     params.add("start", "0");
     params.add("rows", "6");
-    params.add("df", "text");
     assertQ(req(params), "*[count(//doc)=6]",
-        "//result/doc[1]/str[@name='id'][.='3']",
-        "//result/doc[2]/str[@name='id'][.='4']",
-        "//result/doc[3]/str[@name='id'][.='2']",
-        "//result/doc[4]/str[@name='id'][.='6']",
-        "//result/doc[5]/str[@name='id'][.='1']",
-        "//result/doc[6]/str[@name='id'][.='5']"
+        "//result/doc[1]/float[@name='id'][.='3.0']",
+        "//result/doc[2]/float[@name='id'][.='4.0']",
+        "//result/doc[3]/float[@name='id'][.='2.0']",
+        "//result/doc[4]/float[@name='id'][.='6.0']",
+        "//result/doc[5]/float[@name='id'][.='1.0']",
+        "//result/doc[6]/float[@name='id'][.='5.0']"
     );
 
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=6}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=6}");
     params.add("q", "{!edismax bq=$bqq1}*:*");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("rqq", "{!edismax bq=$bqq2}*:*");
@@ -111,20 +97,19 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("fl", "id,score");
     params.add("start", "0");
     params.add("rows", "10");
-    params.add("df", "text");
 
     assertQ(req(params), "*[count(//doc)=6]",
-        "//result/doc[1]/str[@name='id'][.='2']",
-        "//result/doc[2]/str[@name='id'][.='6']",
-        "//result/doc[3]/str[@name='id'][.='5']",
-        "//result/doc[4]/str[@name='id'][.='4']",
-        "//result/doc[5]/str[@name='id'][.='3']",
-        "//result/doc[6]/str[@name='id'][.='1']"
+        "//result/doc[1]/float[@name='id'][.='2.0']",
+        "//result/doc[2]/float[@name='id'][.='6.0']",
+        "//result/doc[3]/float[@name='id'][.='5.0']",
+        "//result/doc[4]/float[@name='id'][.='4.0']",
+        "//result/doc[5]/float[@name='id'][.='3.0']",
+        "//result/doc[6]/float[@name='id'][.='1.0']"
     );
 
     //Test with sort by score.
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=6}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=6}");
     params.add("q", "{!edismax bq=$bqq1}*:*");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("rqq", "{!edismax bq=$bqq2}*:*");
@@ -133,20 +118,19 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("start", "0");
     params.add("rows", "10");
     params.add("sort", "score desc");
-    params.add("df", "text");
     assertQ(req(params), "*[count(//doc)=6]",
-        "//result/doc[1]/str[@name='id'][.='2']",
-        "//result/doc[2]/str[@name='id'][.='6']",
-        "//result/doc[3]/str[@name='id'][.='5']",
-        "//result/doc[4]/str[@name='id'][.='4']",
-        "//result/doc[5]/str[@name='id'][.='3']",
-        "//result/doc[6]/str[@name='id'][.='1']"
+        "//result/doc[1]/float[@name='id'][.='2.0']",
+        "//result/doc[2]/float[@name='id'][.='6.0']",
+        "//result/doc[3]/float[@name='id'][.='5.0']",
+        "//result/doc[4]/float[@name='id'][.='4.0']",
+        "//result/doc[5]/float[@name='id'][.='3.0']",
+        "//result/doc[6]/float[@name='id'][.='1.0']"
     );
 
 
     //Test with compound sort.
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=6}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=6}");
     params.add("q", "{!edismax bq=$bqq1}*:*");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("rqq", "{!edismax bq=$bqq2}*:*");
@@ -155,21 +139,20 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("start", "0");
     params.add("rows", "10");
     params.add("sort", "score desc,test_ti asc");
-    params.add("df", "text");
 
     assertQ(req(params), "*[count(//doc)=6]",
-        "//result/doc[1]/str[@name='id'][.='2']",
-        "//result/doc[2]/str[@name='id'][.='6']",
-        "//result/doc[3]/str[@name='id'][.='5']",
-        "//result/doc[4]/str[@name='id'][.='4']",
-        "//result/doc[5]/str[@name='id'][.='3']",
-        "//result/doc[6]/str[@name='id'][.='1']"
+        "//result/doc[1]/float[@name='id'][.='2.0']",
+        "//result/doc[2]/float[@name='id'][.='6.0']",
+        "//result/doc[3]/float[@name='id'][.='5.0']",
+        "//result/doc[4]/float[@name='id'][.='4.0']",
+        "//result/doc[5]/float[@name='id'][.='3.0']",
+        "//result/doc[6]/float[@name='id'][.='1.0']"
     );
 
 
     //Test with elevation
 
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=6 "+ReRankQParserPlugin.RERANK_WEIGHT+"=50}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=6 reRankWeight=50}");
     params.add("q", "{!edismax bq=$bqq1}*:*");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("rqq", "{!edismax bq=$bqq2}*:*");
@@ -180,40 +163,39 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("qt", "/elevate");
     params.add("elevateIds", "1");
     assertQ(req(params), "*[count(//doc)=6]",
-        "//result/doc[1]/str[@name='id'][.='1']",
-        "//result/doc[2]/str[@name='id'][.='2']",
-        "//result/doc[3]/str[@name='id'][.='6']",
-        "//result/doc[4]/str[@name='id'][.='5']",
-        "//result/doc[5]/str[@name='id'][.='4']",
-        "//result/doc[6]/str[@name='id'][.='3']"
+        "//result/doc[1]/float[@name='id'][.='1.0']",
+        "//result/doc[2]/float[@name='id'][.='2.0']",
+        "//result/doc[3]/float[@name='id'][.='6.0']",
+        "//result/doc[4]/float[@name='id'][.='5.0']",
+        "//result/doc[5]/float[@name='id'][.='4.0']",
+        "//result/doc[6]/float[@name='id'][.='3.0']"
 
     );
 
 
     //Test TermQuery rqq
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=6 "+ReRankQParserPlugin.RERANK_WEIGHT+"=2}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=6 reRankWeight=2}");
     params.add("q", "{!edismax bq=$bqq1}*:*");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("rqq", "test_ti:50^1000");
     params.add("fl", "id,score");
     params.add("start", "0");
     params.add("rows", "10");
-    params.add("df", "text");
 
     assertQ(req(params), "*[count(//doc)=6]",
-        "//result/doc[1]/str[@name='id'][.='2']",
-        "//result/doc[2]/str[@name='id'][.='6']",
-        "//result/doc[3]/str[@name='id'][.='5']",
-        "//result/doc[4]/str[@name='id'][.='4']",
-        "//result/doc[5]/str[@name='id'][.='3']",
-        "//result/doc[6]/str[@name='id'][.='1']"
+        "//result/doc[1]/float[@name='id'][.='2.0']",
+        "//result/doc[2]/float[@name='id'][.='6.0']",
+        "//result/doc[3]/float[@name='id'][.='5.0']",
+        "//result/doc[4]/float[@name='id'][.='4.0']",
+        "//result/doc[5]/float[@name='id'][.='3.0']",
+        "//result/doc[6]/float[@name='id'][.='1.0']"
     );
 
 
     //Test Elevation
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=6 "+ReRankQParserPlugin.RERANK_WEIGHT+"=2}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=6 reRankWeight=2}");
     params.add("q", "{!edismax bq=$bqq1}*:*");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("rqq", "test_ti:50^1000");
@@ -224,18 +206,18 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("elevateIds", "1,4");
 
     assertQ(req(params), "*[count(//doc)=6]",
-        "//result/doc[1]/str[@name='id'][.='1']", //Elevated
-        "//result/doc[2]/str[@name='id'][.='4']", //Elevated
-        "//result/doc[3]/str[@name='id'][.='2']", //Boosted during rerank.
-        "//result/doc[4]/str[@name='id'][.='6']",
-        "//result/doc[5]/str[@name='id'][.='5']",
-        "//result/doc[6]/str[@name='id'][.='3']"
+        "//result/doc[1]/float[@name='id'][.='1.0']", //Elevated
+        "//result/doc[2]/float[@name='id'][.='4.0']", //Elevated
+        "//result/doc[3]/float[@name='id'][.='2.0']", //Boosted during rerank.
+        "//result/doc[4]/float[@name='id'][.='6.0']",
+        "//result/doc[5]/float[@name='id'][.='5.0']",
+        "//result/doc[6]/float[@name='id'][.='3.0']"
     );
 
 
     //Test Elevation swapped
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=6 "+ReRankQParserPlugin.RERANK_WEIGHT+"=2}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=6 reRankWeight=2}");
     params.add("q", "{!edismax bq=$bqq1}*:*");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("rqq", "test_ti:50^1000");
@@ -246,19 +228,19 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("elevateIds", "4,1");
 
     assertQ(req(params), "*[count(//doc)=6]",
-        "//result/doc[1]/str[@name='id'][.='4']", //Elevated
-        "//result/doc[2]/str[@name='id'][.='1']", //Elevated
-        "//result/doc[3]/str[@name='id'][.='2']", //Boosted during rerank.
-        "//result/doc[4]/str[@name='id'][.='6']",
-        "//result/doc[5]/str[@name='id'][.='5']",
-        "//result/doc[6]/str[@name='id'][.='3']"
+        "//result/doc[1]/float[@name='id'][.='4.0']", //Elevated
+        "//result/doc[2]/float[@name='id'][.='1.0']", //Elevated
+        "//result/doc[3]/float[@name='id'][.='2.0']", //Boosted during rerank.
+        "//result/doc[4]/float[@name='id'][.='6.0']",
+        "//result/doc[5]/float[@name='id'][.='5.0']",
+        "//result/doc[6]/float[@name='id'][.='3.0']"
     );
 
 
 
 
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=4 "+ReRankQParserPlugin.RERANK_WEIGHT+"=2}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=4 reRankWeight=2}");
     params.add("q", "{!edismax bq=$bqq1}*:*");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("rqq", "test_ti:50^1000");
@@ -269,17 +251,17 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("elevateIds", "4,1");
 
     assertQ(req(params), "*[count(//doc)=6]",
-        "//result/doc[1]/str[@name='id'][.='4']", //Elevated
-        "//result/doc[2]/str[@name='id'][.='1']", //Elevated
-        "//result/doc[3]/str[@name='id'][.='6']",
-        "//result/doc[4]/str[@name='id'][.='5']",
-        "//result/doc[5]/str[@name='id'][.='3']",
-        "//result/doc[6]/str[@name='id'][.='2']"  //Not in reRankeDocs
+        "//result/doc[1]/float[@name='id'][.='4.0']", //Elevated
+        "//result/doc[2]/float[@name='id'][.='1.0']", //Elevated
+        "//result/doc[3]/float[@name='id'][.='6.0']",
+        "//result/doc[4]/float[@name='id'][.='5.0']",
+        "//result/doc[5]/float[@name='id'][.='3.0']",
+        "//result/doc[6]/float[@name='id'][.='2.0']"  //Not in reRankeDocs
     );
 
     //Test Elevation with start beyond the rerank docs
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=3 "+ReRankQParserPlugin.RERANK_WEIGHT+"=2}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=3 reRankWeight=2}");
     params.add("q", "{!edismax bq=$bqq1}*:*");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("rqq", "test_ti:50^1000");
@@ -290,13 +272,13 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("elevateIds", "4,1");
 
     assertQ(req(params), "*[count(//doc)=2]",
-        "//result/doc[1]/str[@name='id'][.='3']",
-        "//result/doc[2]/str[@name='id'][.='2']"  //Was not in reRankDocs
+        "//result/doc[1]/float[@name='id'][.='3.0']",
+        "//result/doc[2]/float[@name='id'][.='2.0']"  //Was not in reRankDocs
     );
 
     //Test Elevation with zero results
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=3 "+ReRankQParserPlugin.RERANK_WEIGHT+"=2}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=3 reRankWeight=2}");
     params.add("q", "{!edismax bq=$bqq1}nada");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("rqq", "test_ti:50^1000");
@@ -312,7 +294,7 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
 
     //Pass in reRankDocs lower then the length being collected.
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=1 "+ReRankQParserPlugin.RERANK_WEIGHT+"=2}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=1 reRankWeight=2}");
     params.add("q", "{!edismax bq=$bqq1}*:*");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("rqq", "test_ti:50^1000");
@@ -321,16 +303,16 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("rows", "10");
 
     assertQ(req(params), "*[count(//doc)=6]",
-        "//result/doc[1]/str[@name='id'][.='6']",
-        "//result/doc[2]/str[@name='id'][.='5']",
-        "//result/doc[3]/str[@name='id'][.='4']",
-        "//result/doc[4]/str[@name='id'][.='3']",
-        "//result/doc[5]/str[@name='id'][.='2']",
-        "//result/doc[6]/str[@name='id'][.='1']"
+        "//result/doc[1]/float[@name='id'][.='6.0']",
+        "//result/doc[2]/float[@name='id'][.='5.0']",
+        "//result/doc[3]/float[@name='id'][.='4.0']",
+        "//result/doc[4]/float[@name='id'][.='3.0']",
+        "//result/doc[5]/float[@name='id'][.='2.0']",
+        "//result/doc[6]/float[@name='id'][.='1.0']"
     );
 
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=0 "+ReRankQParserPlugin.RERANK_WEIGHT+"=2}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=0 reRankWeight=2}");
     params.add("q", "{!edismax bq=$bqq1}*:*");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("rqq", "test_ti:50^1000");
@@ -339,16 +321,16 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("rows", "10");
 
     assertQ(req(params), "*[count(//doc)=6]",
-        "//result/doc[1]/str[@name='id'][.='6']",
-        "//result/doc[2]/str[@name='id'][.='5']",
-        "//result/doc[3]/str[@name='id'][.='4']",
-        "//result/doc[4]/str[@name='id'][.='3']",
-        "//result/doc[5]/str[@name='id'][.='2']",
-        "//result/doc[6]/str[@name='id'][.='1']"
+        "//result/doc[1]/float[@name='id'][.='6.0']",
+        "//result/doc[2]/float[@name='id'][.='5.0']",
+        "//result/doc[3]/float[@name='id'][.='4.0']",
+        "//result/doc[4]/float[@name='id'][.='3.0']",
+        "//result/doc[5]/float[@name='id'][.='2.0']",
+        "//result/doc[6]/float[@name='id'][.='1.0']"
     );
 
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=2 "+ReRankQParserPlugin.RERANK_WEIGHT+"=2}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=2 reRankWeight=2}");
     params.add("q", "{!edismax bq=$bqq1}*:*");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("rqq", "test_ti:4^1000");
@@ -357,17 +339,17 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("rows", "10");
 
     assertQ(req(params), "*[count(//doc)=6]",
-        "//result/doc[1]/str[@name='id'][.='5']",
-        "//result/doc[2]/str[@name='id'][.='6']",
-        "//result/doc[3]/str[@name='id'][.='4']",
-        "//result/doc[4]/str[@name='id'][.='3']",
-        "//result/doc[5]/str[@name='id'][.='2']",
-        "//result/doc[6]/str[@name='id'][.='1']"
+        "//result/doc[1]/float[@name='id'][.='5.0']",
+        "//result/doc[2]/float[@name='id'][.='6.0']",
+        "//result/doc[3]/float[@name='id'][.='4.0']",
+        "//result/doc[4]/float[@name='id'][.='3.0']",
+        "//result/doc[5]/float[@name='id'][.='2.0']",
+        "//result/doc[6]/float[@name='id'][.='1.0']"
     );
 
     //Test reRankWeight of 0, reranking will have no effect.
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=6 "+ReRankQParserPlugin.RERANK_WEIGHT+"=0}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=6 reRankWeight=0}");
     params.add("q", "{!edismax bq=$bqq1}*:*");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("rqq", "test_ti:50^1000");
@@ -376,15 +358,15 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("rows", "5");
 
     assertQ(req(params), "*[count(//doc)=5]",
-        "//result/doc[1]/str[@name='id'][.='6']",
-        "//result/doc[2]/str[@name='id'][.='5']",
-        "//result/doc[3]/str[@name='id'][.='4']",
-        "//result/doc[4]/str[@name='id'][.='3']",
-        "//result/doc[5]/str[@name='id'][.='2']"
+        "//result/doc[1]/float[@name='id'][.='6.0']",
+        "//result/doc[2]/float[@name='id'][.='5.0']",
+        "//result/doc[3]/float[@name='id'][.='4.0']",
+        "//result/doc[4]/float[@name='id'][.='3.0']",
+        "//result/doc[5]/float[@name='id'][.='2.0']"
     );
 
-    MetricsMap metrics = (MetricsMap)((SolrMetricManager.GaugeWrapper)h.getCore().getCoreMetricManager().getRegistry().getMetrics().get("CACHE.searcher.queryResultCache")).getGauge();
-    Map<String,Object> stats = metrics.getValue();
+    SolrInfoMBean info  = h.getCore().getInfoRegistry().get("queryResultCache");
+    NamedList stats = info.getStatistics();
 
     long inserts = (Long) stats.get("inserts");
 
@@ -392,7 +374,7 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
 
     //Test range query
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=6}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=6}");
     params.add("q", "test_ti:[0 TO 2000]");
     params.add("rqq", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("fl", "id,score");
@@ -400,15 +382,16 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("rows", "6");
 
     assertQ(req(params), "*[count(//doc)=5]",
-        "//result/doc[1]/str[@name='id'][.='6']",
-        "//result/doc[2]/str[@name='id'][.='5']",
-        "//result/doc[3]/str[@name='id'][.='4']",
-        "//result/doc[4]/str[@name='id'][.='2']",
-        "//result/doc[5]/str[@name='id'][.='1']"
+        "//result/doc[1]/float[@name='id'][.='6.0']",
+        "//result/doc[2]/float[@name='id'][.='5.0']",
+        "//result/doc[3]/float[@name='id'][.='4.0']",
+        "//result/doc[4]/float[@name='id'][.='2.0']",
+        "//result/doc[5]/float[@name='id'][.='1.0']"
     );
 
 
-    stats = metrics.getValue();
+    info  = h.getCore().getInfoRegistry().get("queryResultCache");
+    stats = info.getStatistics();
 
     long inserts1 = (Long) stats.get("inserts");
 
@@ -417,7 +400,7 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
 
     //Run same query and see if it was cached. This tests the query result cache hit with rewritten queries
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=6}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=6}");
     params.add("q", "test_ti:[0 TO 2000]");
     params.add("rqq", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("fl", "id,score");
@@ -425,14 +408,15 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("rows", "6");
 
     assertQ(req(params), "*[count(//doc)=5]",
-        "//result/doc[1]/str[@name='id'][.='6']",
-        "//result/doc[2]/str[@name='id'][.='5']",
-        "//result/doc[3]/str[@name='id'][.='4']",
-        "//result/doc[4]/str[@name='id'][.='2']",
-        "//result/doc[5]/str[@name='id'][.='1']"
+        "//result/doc[1]/float[@name='id'][.='6.0']",
+        "//result/doc[2]/float[@name='id'][.='5.0']",
+        "//result/doc[3]/float[@name='id'][.='4.0']",
+        "//result/doc[4]/float[@name='id'][.='2.0']",
+        "//result/doc[5]/float[@name='id'][.='1.0']"
     );
 
-    stats = metrics.getValue();
+    info  = h.getCore().getInfoRegistry().get("queryResultCache");
+    stats = info.getStatistics();
     long inserts2 = (Long) stats.get("inserts");
     //Last query was NOT added to the cache
     assertTrue(inserts1 == inserts2);
@@ -440,29 +424,26 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
 
     //Test range query embedded in larger query
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=6}");
-    // function query for predictible scores (relative to id) independent of similarity
-    params.add("q", "{!func}id_i");
-    // constant score for each clause (unique per doc) for predictible scores independent of similarity
-    // NOTE: biased in favor of doc id == 2
-    params.add("rqq", "id:1^=10 id:2^=40 id:3^=30 id:4^=40 id:5^=50 id:6^=60");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=6}");
+    params.add("q", "*:* OR test_ti:[0 TO 2000]");
+    params.add("rqq", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("fl", "id,score");
     params.add("start", "0");
     params.add("rows", "6");
 
     assertQ(req(params), "*[count(//doc)=6]",
-        "//result/doc[1]/str[@name='id'][.='6']",
-        "//result/doc[2]/str[@name='id'][.='5']",
-        "//result/doc[3]/str[@name='id'][.='4']",
-        "//result/doc[4]/str[@name='id'][.='2']", // reranked out of orig order
-        "//result/doc[5]/str[@name='id'][.='3']",
-        "//result/doc[6]/str[@name='id'][.='1']"
+        "//result/doc[1]/float[@name='id'][.='6.0']",
+        "//result/doc[2]/float[@name='id'][.='5.0']",
+        "//result/doc[3]/float[@name='id'][.='4.0']",
+        "//result/doc[4]/float[@name='id'][.='2.0']",
+        "//result/doc[5]/float[@name='id'][.='1.0']",
+        "//result/doc[6]/float[@name='id'][.='3.0']"
     );
 
 
     //Test with start beyond reRankDocs
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=3 "+ReRankQParserPlugin.RERANK_WEIGHT+"=2}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=3 reRankWeight=2}");
     params.add("q", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60");
     params.add("rqq", "id:1^1000");
     params.add("fl", "id,score");
@@ -470,15 +451,15 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("rows", "5");
 
     assertQ(req(params), "*[count(//doc)=2]",
-        "//result/doc[1]/str[@name='id'][.='2']",
-        "//result/doc[2]/str[@name='id'][.='1']"
+        "//result/doc[1]/float[@name='id'][.='2.0']",
+        "//result/doc[2]/float[@name='id'][.='1.0']"
     );
 
 
     //Test ReRankDocs > docs returned
 
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=6 "+ReRankQParserPlugin.RERANK_WEIGHT+"=2}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=6 reRankWeight=2}");
     params.add("q", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50");
     params.add("rqq", "id:1^1000");
     params.add("fl", "id,score");
@@ -486,14 +467,14 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("rows", "1");
 
     assertQ(req(params), "*[count(//doc)=1]",
-        "//result/doc[1]/str[@name='id'][.='1']"
+        "//result/doc[1]/float[@name='id'][.='1.0']"
     );
 
 
 
     //Test with zero results
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=3 "+ReRankQParserPlugin.RERANK_WEIGHT+"=2}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=3 reRankWeight=2}");
     params.add("q", "term_s:NNNN");
     params.add("rqq", "id:1^1000");
     params.add("fl", "id,score");
@@ -547,23 +528,22 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
 
 
     ModifiableSolrParams params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=11 "+ReRankQParserPlugin.RERANK_WEIGHT+"=2}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=11 reRankWeight=2}");
     params.add("q", "{!edismax bq=$bqq1}*:*");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60 id:7^70 id:8^80 id:9^90 id:10^100 id:11^110");
     params.add("rqq", "test_ti:50^1000");
     params.add("fl", "id,score");
     params.add("start", "0");
     params.add("rows", "2");
-    params.add("df", "text");
 
     assertQ(req(params), "*[count(//doc)=2]",
-        "//result/doc[1]/str[@name='id'][.='8']",
-        "//result/doc[2]/str[@name='id'][.='2']"
+        "//result/doc[1]/float[@name='id'][.='8.0']",
+        "//result/doc[2]/float[@name='id'][.='2.0']"
     );
 
     //Test Elevation
     params = new ModifiableSolrParams();
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=11 "+ReRankQParserPlugin.RERANK_WEIGHT+"=2}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=11 reRankWeight=2}");
     params.add("q", "{!edismax bq=$bqq1}*:*");
     params.add("bqq1", "id:1^10 id:2^20 id:3^30 id:4^40 id:5^50 id:6^60 id:7^70 id:8^80 id:9^90 id:10^100 id:11^110");
     params.add("rqq", "test_ti:50^1000");
@@ -574,9 +554,9 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
     params.add("elevateIds", "1,4");
 
     assertQ(req(params), "*[count(//doc)=3]",
-        "//result/doc[1]/str[@name='id'][.='1']", //Elevated
-        "//result/doc[2]/str[@name='id'][.='4']", //Elevated
-        "//result/doc[3]/str[@name='id'][.='8']"); //Boosted during rerank.
+        "//result/doc[1]/float[@name='id'][.='1.0']", //Elevated
+        "//result/doc[2]/float[@name='id'][.='4.0']", //Elevated
+        "//result/doc[3]/float[@name='id'][.='8.0']"); //Boosted during rerank.
   }
 
   @Test
@@ -593,56 +573,16 @@ public class TestReRankQParserPlugin extends SolrTestCaseJ4 {
 
     ModifiableSolrParams params = new ModifiableSolrParams();
 
-    params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=$rqq "+ReRankQParserPlugin.RERANK_DOCS+"=200}");
+    params.add("rq", "{!rerank reRankQuery=$rqq reRankDocs=200}");
     params.add("q", "term_s:YYYY");
     params.add("start", "0");
     params.add("rows", "2");
 
-    SolrException se = expectThrows(SolrException.class, "A syntax error should be thrown when "+ReRankQParserPlugin.RERANK_QUERY+" parameter is not specified",
-        () -> h.query(req(params))
-    );
-    assertTrue(se.code() == SolrException.ErrorCode.BAD_REQUEST.code);
-
-  }
-
-  @Test
-  public void testReRankQueriesWithDefType() throws Exception {
-
-    assertU(delQ("*:*"));
-    assertU(commit());
-
-    final String[] doc1 = {"id","1"};
-    assertU(adoc(doc1));
-    assertU(commit());
-    final String[] doc2 = {"id","2"};
-    assertU(adoc(doc2));
-    assertU(commit());
-
-    final String preferredDocId;
-    final String lessPreferrredDocId;
-    if (random().nextBoolean()) {
-      preferredDocId = "1";
-      lessPreferrredDocId = "2";
-    } else {
-      preferredDocId = "2";
-      lessPreferrredDocId = "1";
-    }
-
-    for (final String defType : new String[] {
-        null,
-        LuceneQParserPlugin.NAME,
-        ExtendedDismaxQParserPlugin.NAME
-    }) {
-      final ModifiableSolrParams params = new ModifiableSolrParams();
-      params.add("rq", "{!"+ReRankQParserPlugin.NAME+" "+ReRankQParserPlugin.RERANK_QUERY+"=id:"+preferredDocId+"}");
-      params.add("q", "*:*");
-      if (defType != null) {
-        params.add(QueryParsing.DEFTYPE, defType);
-      }
-      assertQ(req(params), "*[count(//doc)=2]",
-          "//result/doc[1]/str[@name='id'][.='"+preferredDocId+"']",
-          "//result/doc[2]/str[@name='id'][.='"+lessPreferrredDocId+"']"
-      );
+    try {
+      h.query(req(params));
+      fail("A syntax error should be thrown when reRankQuery parameter is not specified");
+    } catch (SolrException e) {
+      assertTrue(e.code() == SolrException.ErrorCode.BAD_REQUEST.code);
     }
   }
 

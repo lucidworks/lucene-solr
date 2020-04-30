@@ -14,10 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.core;
 
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.params.EventParams;
+import org.apache.solr.search.SolrIndexSearcher;
+import org.apache.solr.util.RefCounted;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -37,11 +40,10 @@ public class TestQuerySenderListener extends SolrTestCaseJ4 {
     preInitMockListenerCount = MockEventListener.getCreateCount();
 
     initCore("solrconfig-querysender.xml","schema.xml");
-
   }
 
   public void testListenerCreationCounts() {
-    h.getCore();
+    SolrCore core = h.getCore();
 
     assertEquals("Unexpected number of listeners created",
                  EXPECTED_MOCK_LISTENER_INSTANCES, 
@@ -64,31 +66,23 @@ public class TestQuerySenderListener extends SolrTestCaseJ4 {
     assertTrue("Not an instance of QuerySenderListener", newSearcherListener instanceof QuerySenderListener);
     QuerySenderListener qsl = (QuerySenderListener) newSearcherListener;
 
-    h.getCore().withSearcher(currentSearcher -> {
-      qsl.newSearcher(currentSearcher, null);//test new Searcher
+    RefCounted<SolrIndexSearcher> currentSearcherRef = core.getSearcher();
+    SolrIndexSearcher currentSearcher = currentSearcherRef.get();
+    qsl.newSearcher(currentSearcher, null);//test new Searcher
+    MockQuerySenderListenerReqHandler mock = (MockQuerySenderListenerReqHandler) core.getRequestHandler("mock");
+    assertNotNull("Mock is null", mock);
+    String evt = mock.req.getParams().get(EventParams.EVENT);
+    assertNotNull("Event is null", evt);
+    assertTrue(evt + " is not equal to " + EventParams.FIRST_SEARCHER, evt.equals(EventParams.FIRST_SEARCHER) == true);
 
-      MockQuerySenderListenerReqHandler mock = (MockQuerySenderListenerReqHandler) core.getRequestHandler("/mock");
-      assertNotNull("Mock is null", mock);
+    SolrIndexSearcher newSearcher = new SolrIndexSearcher(core, core.getNewIndexDir(), core.getLatestSchema(), core.getSolrConfig().indexConfig, "testQuerySenderListener", false, core.getDirectoryFactory());
 
-      {
-        String evt = mock.req.getParams().get(EventParams.EVENT);
-        assertNotNull("Event is null", evt);
-        assertTrue(evt + " is not equal to " + EventParams.FIRST_SEARCHER, evt.equals(EventParams.FIRST_SEARCHER) == true);
-
-        assertU(adoc("id", "1"));
-        assertU(commit());
-      }
-
-      h.getCore().withSearcher(newSearcher -> {
-        String evt = mock.req.getParams().get(EventParams.EVENT);
-        assertNotNull("Event is null", evt);
-        assertTrue(evt + " is not equal to " + EventParams.NEW_SEARCHER, evt.equals(EventParams.NEW_SEARCHER) == true);
-        return null;
-      });
-
-      return null;
-    });
-
+    qsl.newSearcher(newSearcher, currentSearcher);
+    evt = mock.req.getParams().get(EventParams.EVENT);
+    assertNotNull("Event is null", evt);
+    assertTrue(evt + " is not equal to " + EventParams.NEW_SEARCHER, evt.equals(EventParams.NEW_SEARCHER) == true);
+    newSearcher.close();
+    currentSearcherRef.decref();
   }
 
 }

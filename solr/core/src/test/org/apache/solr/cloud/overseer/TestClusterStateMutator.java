@@ -1,3 +1,5 @@
+package org.apache.solr.cloud.overseer;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,37 +16,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud.overseer;
 
 import java.util.Collections;
 
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.client.solrj.cloud.DistribStateManager;
-import org.apache.solr.client.solrj.cloud.SolrCloudManager;
+import org.apache.solr.cloud.MockZkStateReader;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.ImplicitDocRouter;
 import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.cloud.ZkNodeProps;
 import org.apache.solr.common.util.Utils;
-import org.junit.BeforeClass;
-
-import static org.mockito.Mockito.*;
 
 public class TestClusterStateMutator extends SolrTestCaseJ4 {
-  
-  @BeforeClass
-  public static void beforeClass() {
-    assumeWorkingMockito();
-  }
-  
   public void testCreateCollection() throws Exception {
-    ClusterState clusterState = new ClusterState(-1, Collections.<String>emptySet(), Collections.<String, DocCollection>emptyMap());
-    DistribStateManager mockStateManager = mock(DistribStateManager.class);
-    SolrCloudManager dataProvider = mock(SolrCloudManager.class);
-    when(dataProvider.getDistribStateManager()).thenReturn(mockStateManager);
+    ClusterState state = new ClusterState(-1, Collections.<String>emptySet(), Collections.<String, DocCollection>emptyMap());
+    MockZkStateReader zkStateReader = new MockZkStateReader(state, Collections.<String>emptySet());
 
-    ClusterStateMutator mutator = new ClusterStateMutator(dataProvider);
+    ClusterState clusterState = zkStateReader.getClusterState();
+    ClusterStateMutator mutator = new ClusterStateMutator(zkStateReader);
     ZkNodeProps message = new ZkNodeProps(Utils.makeMap(
         "name", "xyz",
         "numShards", "1"
@@ -55,7 +45,7 @@ public class TestClusterStateMutator extends SolrTestCaseJ4 {
     assertEquals(1, collection.getSlicesMap().size());
     assertEquals(1, collection.getMaxShardsPerNode());
 
-    ClusterState state = new ClusterState(-1, Collections.<String>emptySet(), Collections.singletonMap("xyz", collection));
+    state = new ClusterState(-1, Collections.<String>emptySet(), Collections.singletonMap("xyz", collection));
     message = new ZkNodeProps(Utils.makeMap(
         "name", "abc",
         "numShards", "2",

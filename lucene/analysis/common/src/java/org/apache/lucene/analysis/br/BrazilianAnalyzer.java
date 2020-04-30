@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.br;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,25 +16,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.br;
-
 
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.LowerCaseFilter;
-import org.apache.lucene.analysis.StopFilter;
-import org.apache.lucene.analysis.StopwordAnalyzerBase;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
-import org.apache.lucene.analysis.WordlistLoader;
+import org.apache.lucene.analysis.core.LowerCaseFilter;
+import org.apache.lucene.analysis.core.StopFilter;
 import org.apache.lucene.analysis.miscellaneous.SetKeywordMarkerFilter;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.analysis.standard.StandardFilter;
 import org.apache.lucene.analysis.standard.StandardTokenizer;
+import org.apache.lucene.analysis.standard.std40.StandardTokenizer40;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.analysis.util.StopwordAnalyzerBase;
+import org.apache.lucene.analysis.util.WordlistLoader;
 import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.Version;
 
 /**
  * {@link Analyzer} for Brazilian Portuguese language. 
@@ -44,8 +47,6 @@ import org.apache.lucene.util.IOUtils;
  *
  * <p><b>NOTE</b>: This class uses the same {@link org.apache.lucene.util.Version}
  * dependent settings as {@link StandardAnalyzer}.</p>
- *
- * @since 3.1
  */
 public final class BrazilianAnalyzer extends StopwordAnalyzerBase {
   /** File containing default Brazilian Portuguese stopwords. */
@@ -115,22 +116,23 @@ public final class BrazilianAnalyzer extends StopwordAnalyzerBase {
    * 
    * @return {@link org.apache.lucene.analysis.Analyzer.TokenStreamComponents}
    *         built from a {@link StandardTokenizer} filtered with
-   *         {@link LowerCaseFilter}, {@link StopFilter}
+   *         {@link LowerCaseFilter}, {@link StandardFilter}, {@link StopFilter}
    *         , and {@link BrazilianStemFilter}.
    */
   @Override
   protected TokenStreamComponents createComponents(String fieldName) {
-    Tokenizer source = new StandardTokenizer();
+    final Tokenizer source;
+    if (getVersion().onOrAfter(Version.LUCENE_4_7_0)) {
+      source = new StandardTokenizer();
+    } else {
+      source = new StandardTokenizer40();
+    }
     TokenStream result = new LowerCaseFilter(source);
+    result = new StandardFilter(result);
     result = new StopFilter(result, stopwords);
     if(excltable != null && !excltable.isEmpty())
       result = new SetKeywordMarkerFilter(result, excltable);
     return new TokenStreamComponents(source, new BrazilianStemFilter(result));
-  }
-
-  @Override
-  protected TokenStream normalize(String fieldName, TokenStream in) {
-    return new LowerCaseFilter(in);
   }
 }
 

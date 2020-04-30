@@ -1,3 +1,7 @@
+package org.apache.lucene.util;
+
+import java.util.Arrays;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +18,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
-import java.util.Arrays;
-
 
 public class TestCharsRef extends LuceneTestCase {
   public void testUTF16InUTF8Order() {
@@ -74,13 +74,19 @@ public class TestCharsRef extends LuceneTestCase {
     
     assertEquals('b', c.charAt(1));
     
-    expectThrows(IndexOutOfBoundsException.class, () -> {
+    try {
       c.charAt(-1);
-    });
+      fail();
+    } catch (IndexOutOfBoundsException expected) {
+      // expected exception
+    }
     
-    expectThrows(IndexOutOfBoundsException.class, () -> {
+    try {
       c.charAt(3);
-    });
+      fail();
+    } catch (IndexOutOfBoundsException expected) {
+      // expected exception
+    }
   }
   
   // LUCENE-3590: fix off-by-one in subsequence, and fully obey interface
@@ -109,28 +115,32 @@ public class TestCharsRef extends LuceneTestCase {
     // empty subsequence
     assertEquals("", c.subSequence(0, 0).toString());
     
-    expectThrows(IndexOutOfBoundsException.class, () -> {
+    try {
       c.subSequence(-1, 1);
-    });
+      fail();
+    } catch (IndexOutOfBoundsException expected) {
+      // expected exception
+    }
     
-    expectThrows(IndexOutOfBoundsException.class, () -> {
+    try {
       c.subSequence(0, -1);
-    });
+      fail();
+    } catch (IndexOutOfBoundsException expected) {
+      // expected exception
+    }
     
-    expectThrows(IndexOutOfBoundsException.class, () -> {
+    try {
       c.subSequence(0, 4);
-    });
+      fail();
+    } catch (IndexOutOfBoundsException expected) {
+      // expected exception
+    }
     
-    expectThrows(IndexOutOfBoundsException.class, () -> {
+    try {
       c.subSequence(2, 1);
-    });
-  }
-  
-  public void testInvalidDeepCopy() {
-    CharsRef from = new CharsRef(new char[] { 'a', 'b' }, 0, 2);
-    from.offset += 1; // now invalid
-    expectThrows(IndexOutOfBoundsException.class, () -> {
-      CharsRef.deepCopyOf(from);
-    });
+      fail();
+    } catch (IndexOutOfBoundsException expected) {
+      // expected exception
+    }
   }
 }

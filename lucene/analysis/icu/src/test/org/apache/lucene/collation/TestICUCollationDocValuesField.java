@@ -1,3 +1,5 @@
+package org.apache.lucene.collation;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.collation;
-
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -117,8 +117,7 @@ public class TestICUCollationDocValuesField extends LuceneTestCase {
       Document doc = is.doc(docID);
       String s = doc.getField("field").stringValue();
       boolean collatorAccepts = collator.compare(s, startPoint) >= 0 && collator.compare(s, endPoint) <= 0;
-      assertEquals(docID, dvs.nextDoc());
-      BytesRef br = dvs.binaryValue();
+      BytesRef br = dvs.get(docID);
       boolean luceneAccepts = br.compareTo(startBR) >= 0 && br.compareTo(endBR) <= 0;
       assertEquals(collatorAccepts, luceneAccepts);
     }

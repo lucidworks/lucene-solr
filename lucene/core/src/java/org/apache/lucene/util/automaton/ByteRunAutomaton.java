@@ -1,3 +1,5 @@
+package org.apache.lucene.util.automaton;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.automaton;
 
 /**
  * Automaton representation for matching UTF-8 byte[].
@@ -26,16 +27,16 @@ public class ByteRunAutomaton extends RunAutomaton {
     this(a, false, Operations.DEFAULT_MAX_DETERMINIZED_STATES);
   }
   
-  /** expert: if isBinary is true, the input is already byte-based */
+  /** expert: if utf8 is true, the input is already byte-based */
   public ByteRunAutomaton(Automaton a, boolean isBinary, int maxDeterminizedStates) {
-    super(isBinary ? a : new UTF32ToUTF8().convert(a), 256, maxDeterminizedStates);
+    super(isBinary ? a : new UTF32ToUTF8().convert(a), 256, true, maxDeterminizedStates);
   }
 
   /**
    * Returns true if the given byte array is accepted by this automaton
    */
   public boolean run(byte[] s, int offset, int length) {
-    int p = 0;
+    int p = initial;
     int l = offset + length;
     for (int i = offset; i < l; i++) {
       p = step(p, s[i] & 0xFF);

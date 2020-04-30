@@ -16,11 +16,15 @@
  limitations under the License.
 -->
 
-<schema name="bad-schema-docValues-unsupported" version="1.6">
-  <fieldType name="binary" class="solr.BinaryField"/>
+<schema name="bad-schema-docValues-unsupported" version="1.5">
+  <types>
+    <fieldType name="binary" class="solr.BinaryField" />
+ </types>
 
 
-  <!-- change the type if BinaryField gets doc values -->
-  <field name="id" type="binary" docValues="true"/>
+ <fields>
+   <!-- change the type if BinaryField gets doc values -->
+   <field name="id" type="binary" docValues="true"/>
+ </fields>
 
 </schema>

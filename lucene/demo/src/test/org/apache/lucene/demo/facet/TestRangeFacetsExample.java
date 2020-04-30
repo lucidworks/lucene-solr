@@ -1,3 +1,5 @@
+package org.apache.lucene.demo.facet;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.demo.facet;
 
+import java.util.List;
 
 import org.apache.lucene.facet.FacetResult;
 import org.apache.lucene.search.TopDocs;
@@ -39,7 +41,7 @@ public class TestRangeFacetsExample extends LuceneTestCase {
     RangeFacetsExample example = new RangeFacetsExample();
     example.index();
     TopDocs hits = example.drillDown(example.PAST_SIX_HOURS);
-    assertEquals(22, hits.totalHits.value);
+    assertEquals(22, hits.totalHits);
     example.close();
   }
 }

@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.request;
 
 import java.util.ArrayList;
@@ -25,10 +26,12 @@ import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.uninverting.DocTermOrds;
 import org.apache.lucene.util.BytesRef;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.params.FacetParams;
-import org.apache.solr.uninverting.DocTermOrds;
+import org.apache.solr.search.SolrIndexSearcher;
+import org.apache.solr.util.RefCounted;
 import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -39,8 +42,6 @@ import org.junit.Test;
 public class TestFaceting extends SolrTestCaseJ4 {
   @BeforeClass
   public static void beforeClass() throws Exception {
-    // we need DVs on point fields to compute stats & facets
-    if (Boolean.getBoolean(NUMERIC_POINTS_SYSPROP)) System.setProperty(NUMERIC_DOCVALUES_SYSPROP,"true");
     initCore("solrconfig.xml","schema11.xml");
   }
 
@@ -64,7 +65,7 @@ public class TestFaceting extends SolrTestCaseJ4 {
   void createIndex(int nTerms) {
     assertU(delQ("*:*"));
     for (int i=0; i<nTerms; i++) {
-      assertU(adoc("id", Integer.toString(i), proto.field(), t(i) ));
+      assertU(adoc("id", Float.toString(i), proto.field(), t(i) ));
     }
     assertU(optimize()); // squeeze out any possible deleted docs
   }
@@ -82,7 +83,7 @@ public class TestFaceting extends SolrTestCaseJ4 {
     createIndex(size);
     req = lrf.makeRequest("q","*:*");
 
-    SortedSetDocValues dv = DocValues.getSortedSet(req.getSearcher().getSlowAtomicReader(), proto.field());
+    SortedSetDocValues dv = DocValues.getSortedSet(req.getSearcher().getLeafReader(), proto.field());
 
     assertEquals(size, dv.getValueCount());
 
@@ -158,10 +159,9 @@ public class TestFaceting extends SolrTestCaseJ4 {
     assertU(adoc("id", "1", "many_ws", sb.toString()));
     assertU(commit());
 
-    for(String method:new String[]{"fc","uif"}){
-      assertQ("check many tokens",
+    assertQ("check many tokens",
             req("q", "*:*","indent","true"
-                ,"facet", "true", "facet.method",method
+                ,"facet", "true", "facet.method","fc"
                 ,"facet.field", "many_ws"
                 ,"facet.limit", "-1"
                 )
@@ -182,7 +182,6 @@ public class TestFaceting extends SolrTestCaseJ4 {
             ,"//lst[@name='many_ws']/int[@name='" + t(4090) + "'][.='1']"
             ,"//lst[@name='many_ws']/int[@name='" + t(4999) + "'][.='1']"
             );
-    }
 
     // add second document, check facets for items with count =2
     sb = new StringBuilder();
@@ -191,11 +190,9 @@ public class TestFaceting extends SolrTestCaseJ4 {
     sb.append(t(4999)).append(' ');
     assertU(adoc("id", "2", "many_ws", sb.toString()));
     assertU(commit());
-    
-    for(String method:new String[]{"fc","uif"}){
-      assertQ("check many tokens",
+    assertQ("check many tokens",
             req("q", "*:*","indent","true"
-                ,"facet", "true", "facet.method",method
+                ,"facet", "true", "facet.method","fc"
                 ,"facet.field", "many_ws"
                 ,"facet.limit", "-1"
                 )
@@ -206,7 +203,6 @@ public class TestFaceting extends SolrTestCaseJ4 {
             ,"//lst[@name='many_ws']/int[@name='" + t(4998) + "'][.='1']"
             ,"//lst[@name='many_ws']/int[@name='" + t(4999) + "'][.='2']"
               );
-    }
   }
 
   @Test
@@ -235,13 +231,10 @@ public class TestFaceting extends SolrTestCaseJ4 {
     }
     assertU(commit());
 
-    final int methodSeed = random().nextInt(2);
-    
     for (int i=0; i<iter; i+=iter/10) {
     assertQ("check many tokens",
             req("q", "id:"+t(i),"indent","true"
-                ,"facet", "true",
-                "facet.method",((methodSeed + i)%2 ==0 ?"fc":"uif")
+                ,"facet", "true", "facet.method","fc"
                 ,"facet.field", "many_ws"
                 ,"facet.limit", "-1"
                 ,"facet.mincount", "1"
@@ -254,24 +247,21 @@ public class TestFaceting extends SolrTestCaseJ4 {
 
     int i=iter-1;
     assertQ("check many tokens",
-        req("q", "id:" + t(i), "indent", "true"
-            , "facet", "true", "facet.method", ((methodSeed + i) % 2 == 0 ? "fc" : "uif")
-            , "facet.field", "many_ws"
-            , "facet.limit", "-1"
-            , "facet.mincount", "1"
+            req("q", "id:"+t(i),"indent","true"
+                ,"facet", "true", "facet.method","fc"
+                ,"facet.field", "many_ws"
+                ,"facet.limit", "-1"
+                ,"facet.mincount", "1"
 
-        )
-        , "*[count(//lst[@name='many_ws']/int)=" + 2 + "]"
-        , "//lst[@name='many_ws']/int[@name='" + t(i1 + i) + "'][.='1']"
-        , "//lst[@name='many_ws']/int[@name='" + t(i1 * 2 + i) + "'][.='1']"
-    );
+                )
+            ,"*[count(//lst[@name='many_ws']/int)=" + 2 + "]"
+            ,"//lst[@name='many_ws']/int[@name='" + t(i1+i) + "'][.='1']"
+            ,"//lst[@name='many_ws']/int[@name='" + t(i1*2+i) + "'][.='1']"
+            );
   }
 
   @Test
   public void testTrieFields() {
-    assumeFalse("Test is only relevant when randomizing Trie fields",
-                Boolean.getBoolean(NUMERIC_POINTS_SYSPROP));
-           
     // make sure that terms are correctly filtered even for trie fields that index several
     // terms for a single value
     List<String> fields = new ArrayList<>();
@@ -285,14 +275,13 @@ public class TestFaceting extends SolrTestCaseJ4 {
     assertU(adoc(fields.toArray(new String[0])));
     assertU(commit());
     for (String suffix : suffixes) {
-      for (String facetMethod : new String[] {FacetParams.FACET_METHOD_enum, FacetParams.FACET_METHOD_fc, FacetParams.FACET_METHOD_fcs, FacetParams.FACET_METHOD_uif}) {
+      for (String facetMethod : new String[] {FacetParams.FACET_METHOD_enum, FacetParams.FACET_METHOD_fc, FacetParams.FACET_METHOD_fcs}) {
         for (String facetSort : new String[] {FacetParams.FACET_SORT_COUNT, FacetParams.FACET_SORT_INDEX}) {
           for (String value : new String[] {"42", "43"}) { // match or not
             final String field = "f_" + suffix;
-            final int num_constraints = ("42".equals(value)) ? 1 : 0;
             assertQ("field=" + field + ",method=" + facetMethod + ",sort=" + facetSort,
-                req("q", field + ":" + value, FacetParams.FACET, "true", FacetParams.FACET_FIELD, field, FacetParams.FACET_MINCOUNT, "1", FacetParams.FACET_SORT, facetSort, FacetParams.FACET_METHOD, facetMethod),
-                "*[count(//lst[@name='" + field + "']/int)="+num_constraints+"]");
+                req("q", field + ":" + value, FacetParams.FACET, "true", FacetParams.FACET_FIELD, field, FacetParams.FACET_MINCOUNT, "0", FacetParams.FACET_SORT, facetSort, FacetParams.FACET_METHOD, facetMethod),
+                "*[count(//lst[@name='" + field + "']/int)=1]"); // exactly 1 facet count
           }
         }
       }
@@ -301,9 +290,9 @@ public class TestFaceting extends SolrTestCaseJ4 {
 
   @Test
   public void testFacetSortWithMinCount() {
-    assertU(adoc("id", "1", "f_td", "-420.126"));
-    assertU(adoc("id", "2", "f_td", "-285.672"));
-    assertU(adoc("id", "3", "f_td", "-1.218"));
+    assertU(adoc("id", "1.0", "f_td", "-420.126"));
+    assertU(adoc("id", "2.0", "f_td", "-285.672"));
+    assertU(adoc("id", "3.0", "f_td", "-1.218"));
     assertU(commit());
 
     assertQ(req("q", "*:*", FacetParams.FACET, "true", FacetParams.FACET_FIELD, "f_td", "f.f_td.facet.sort", FacetParams.FACET_SORT_INDEX),
@@ -311,71 +300,119 @@ public class TestFaceting extends SolrTestCaseJ4 {
         "//lst[@name='facet_fields']/lst[@name='f_td']/int[1][@name='-420.126']",
         "//lst[@name='facet_fields']/lst[@name='f_td']/int[2][@name='-285.672']",
         "//lst[@name='facet_fields']/lst[@name='f_td']/int[3][@name='-1.218']");
-   
+
     assertQ(req("q", "*:*", FacetParams.FACET, "true", FacetParams.FACET_FIELD, "f_td", "f.f_td.facet.sort", FacetParams.FACET_SORT_INDEX, FacetParams.FACET_MINCOUNT, "1", FacetParams.FACET_METHOD, FacetParams.FACET_METHOD_fc),
         "*[count(//lst[@name='f_td']/int)=3]",
         "//lst[@name='facet_fields']/lst[@name='f_td']/int[1][@name='-420.126']",
         "//lst[@name='facet_fields']/lst[@name='f_td']/int[2][@name='-285.672']",
         "//lst[@name='facet_fields']/lst[@name='f_td']/int[3][@name='-1.218']");
 
-    assertQ(req("q", "*:*", FacetParams.FACET, "true", FacetParams.FACET_FIELD, "f_td", "f.f_td.facet.sort", FacetParams.FACET_SORT_INDEX, FacetParams.FACET_MINCOUNT, "1", FacetParams.FACET_METHOD, FacetParams.FACET_METHOD_uif),
-        "*[count(//lst[@name='f_td']/int)=3]",
-        "//lst[@name='facet_fields']/lst[@name='f_td']/int[1][@name='-420.126']",
-        "//lst[@name='facet_fields']/lst[@name='f_td']/int[2][@name='-285.672']",
-        "//lst[@name='facet_fields']/lst[@name='f_td']/int[3][@name='-1.218']");
-    
-    assertQ(req("q", "*:*", FacetParams.FACET, "true", FacetParams.FACET_FIELD, "f_td", "f.f_td.facet.sort", FacetParams.FACET_SORT_INDEX, FacetParams.FACET_MINCOUNT, "1", "indent", "true"),
+    assertQ(req("q", "*:*", FacetParams.FACET, "true", FacetParams.FACET_FIELD, "f_td", "f.f_td.facet.sort", FacetParams.FACET_SORT_INDEX, FacetParams.FACET_MINCOUNT, "1", "indent","true"),
         "*[count(//lst[@name='f_td']/int)=3]",
         "//lst[@name='facet_fields']/lst[@name='f_td']/int[1][@name='-420.126']",
         "//lst[@name='facet_fields']/lst[@name='f_td']/int[2][@name='-285.672']",
         "//lst[@name='facet_fields']/lst[@name='f_td']/int[3][@name='-1.218']");
   }
 
+
   @Test
-  public void testFacetSortWithMinCount0() {
-    assumeFalse("facet.mincount=0 doesn't work with point fields (SOLR-11174) or single valued DV",
-                Boolean.getBoolean(NUMERIC_POINTS_SYSPROP) || Boolean.getBoolean(NUMERIC_DOCVALUES_SYSPROP));
-    
-    assertU(adoc("id", "1", "f_td", "-420.126"));
-    assertU(adoc("id", "2", "f_td", "-285.672"));
-    assertU(adoc("id", "3", "f_td", "-1.218"));
+  public void testDateFacetsWithMultipleConfigurationForSameField() {
+    clearIndex();
+    final String f = "bday_dt";
+
+    assertU(adoc("id", "1",  f, "1976-07-04T12:08:56.235Z"));
+    assertU(adoc("id", "2",  f, "1976-07-05T00:00:00.000Z"));
+    assertU(adoc("id", "3",  f, "1976-07-15T00:07:67.890Z"));
+    assertU(commit());
+    assertU(adoc("id", "4",  f, "1976-07-21T00:07:67.890Z"));
+    assertU(adoc("id", "5",  f, "1976-07-13T12:12:25.255Z"));
+    assertU(adoc("id", "6",  f, "1976-07-03T17:01:23.456Z"));
+    assertU(adoc("id", "7",  f, "1976-07-12T12:12:25.255Z"));
+    assertU(adoc("id", "8",  f, "1976-07-15T15:15:15.155Z"));
+    assertU(adoc("id", "9",  f, "1907-07-12T13:13:23.235Z"));
+    assertU(adoc("id", "10", f, "1976-07-03T11:02:45.678Z"));
+    assertU(commit());
+    assertU(adoc("id", "11", f, "1907-07-12T12:12:25.255Z"));
+    assertU(adoc("id", "12", f, "2007-07-30T07:07:07.070Z"));
+    assertU(adoc("id", "13", f, "1976-07-30T22:22:22.222Z"));
+    assertU(adoc("id", "14", f, "1976-07-05T22:22:22.222Z"));
     assertU(commit());
 
-    assertQ(req("q", "id:1.0", FacetParams.FACET, "true", FacetParams.FACET_FIELD, "f_td", "f.f_td.facet.sort", FacetParams.FACET_SORT_INDEX, FacetParams.FACET_MINCOUNT, "0", FacetParams.FACET_METHOD, FacetParams.FACET_METHOD_fc),
-        "*[count(//lst[@name='f_td']/int)=3]",
-        "//lst[@name='facet_fields']/lst[@name='f_td']/int[1][@name='-420.126']",
-        "//lst[@name='facet_fields']/lst[@name='f_td']/int[2][@name='-285.672']",
-        "//lst[@name='facet_fields']/lst[@name='f_td']/int[3][@name='-1.218']");
+    final String preFoo = "//lst[@name='facet_dates']/lst[@name='foo']";
+    final String preBar = "//lst[@name='facet_dates']/lst[@name='bar']";
 
-    assertQ(req("q", "id:1.0", FacetParams.FACET, "true", FacetParams.FACET_FIELD, "f_td", "f.f_td.facet.sort", FacetParams.FACET_SORT_INDEX, FacetParams.FACET_MINCOUNT, "0", FacetParams.FACET_METHOD, FacetParams.FACET_METHOD_uif),
-        "*[count(//lst[@name='f_td']/int)=3]",
-        "//lst[@name='facet_fields']/lst[@name='f_td']/int[1][@name='-420.126']",
-        "//lst[@name='facet_fields']/lst[@name='f_td']/int[2][@name='-285.672']",
-        "//lst[@name='facet_fields']/lst[@name='f_td']/int[3][@name='-1.218']");
-  }
+    assertQ("check counts for month of facet by day",
+            req( "q", "*:*"
+                ,"rows", "0"
+                ,"facet", "true"
+                ,"facet.date", "{!key=foo " +
+                  "facet.date.start=1976-07-01T00:00:00.000Z " +
+                  "facet.date.end=1976-07-01T00:00:00.000Z+1MONTH " +
+                  "facet.date.gap=+1DAY " +
+                  "facet.date.other=all " +
+                "}" + f
+                ,"facet.date", "{!key=bar " +
+                  "facet.date.start=1976-07-01T00:00:00.000Z " +
+                  "facet.date.end=1976-07-01T00:00:00.000Z+7DAY " +
+                  "facet.date.gap=+1DAY " +
+                "}" + f
+              )
+            // 31 days + pre+post+inner = 34
+            ,"*[count("+preFoo+"/int)=34]"
+            ,preFoo+"/int[@name='1976-07-01T00:00:00Z'][.='0'  ]"
+            ,preFoo+"/int[@name='1976-07-02T00:00:00Z'][.='0'  ]"
+            ,preFoo+"/int[@name='1976-07-03T00:00:00Z'][.='2'  ]"
+            // july4th = 2 because exists doc @ 00:00:00.000 on July5
+            // (date faceting is inclusive)
+            ,preFoo+"/int[@name='1976-07-04T00:00:00Z'][.='2'  ]"
+            ,preFoo+"/int[@name='1976-07-05T00:00:00Z'][.='2'  ]"
+            ,preFoo+"/int[@name='1976-07-06T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-07T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-08T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-09T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-10T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-11T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-12T00:00:00Z'][.='1'  ]"
+            ,preFoo+"/int[@name='1976-07-13T00:00:00Z'][.='1'  ]"
+            ,preFoo+"/int[@name='1976-07-14T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-15T00:00:00Z'][.='2'  ]"
+            ,preFoo+"/int[@name='1976-07-16T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-17T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-18T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-19T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-21T00:00:00Z'][.='1'  ]"
+            ,preFoo+"/int[@name='1976-07-22T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-23T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-24T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-25T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-26T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-27T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-28T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-29T00:00:00Z'][.='0']"
+            ,preFoo+"/int[@name='1976-07-30T00:00:00Z'][.='1'  ]"
+            ,preFoo+"/int[@name='1976-07-31T00:00:00Z'][.='0']"
 
-  @Test
-  public void testFacetOverPointFieldWithMinCount0() {
-    String field = "f_" + new String[]{"i","l","f","d"}[random().nextInt(4)] + "_p";
-    String expectedWarning = "Raising facet.mincount from 0 to 1, because field " + field + " is Points-based.";
-    SolrQueryRequest req = req("q", "id:1.0",
-        FacetParams.FACET, "true",
-        FacetParams.FACET_FIELD, field,
-        FacetParams.FACET_MINCOUNT, "0");
-    assertQ(req
-        , "/response/lst[@name='responseHeader']/arr[@name='warnings']/str[.='" + expectedWarning + "']");
-    
-    field = "f_" + new String[]{"is","ls","fs","ds"}[random().nextInt(4)] + "_p";
-    expectedWarning = "Raising facet.mincount from 0 to 1, because field " + field + " is Points-based.";
-    req = req("q", "id:1.0",
-        FacetParams.FACET, "true",
-        FacetParams.FACET_FIELD, field,
-        FacetParams.FACET_MINCOUNT, "0");
-    assertQ(req
-        , "/response/lst[@name='responseHeader']/arr[@name='warnings']/str[.='" + expectedWarning + "']");
-  }
+            ,preFoo+"/int[@name='before' ][.='2']"
+            ,preFoo+"/int[@name='after'  ][.='1']"
+            ,preFoo+"/int[@name='between'][.='11']"
 
-  public void testSimpleFacetCountsWithMultipleConfigurationsForSameField() {
+            ,"*[count("+preBar+"/int)=7]"
+            ,preBar+"/int[@name='1976-07-01T00:00:00Z'][.='0'  ]"
+            ,preBar+"/int[@name='1976-07-02T00:00:00Z'][.='0'  ]"
+            ,preBar+"/int[@name='1976-07-03T00:00:00Z'][.='2'  ]"
+            // july4th = 2 because exists doc @ 00:00:00.000 on July5
+            // (date faceting is inclusive)
+            ,preBar+"/int[@name='1976-07-04T00:00:00Z'][.='2'  ]"
+            ,preBar+"/int[@name='1976-07-05T00:00:00Z'][.='2'  ]"
+            ,preBar+"/int[@name='1976-07-06T00:00:00Z'][.='0']"
+            ,preBar+"/int[@name='1976-07-07T00:00:00Z'][.='0']"
+              );
+
+      clearIndex();
+      assertU(commit());
+    }
+
+    public void testSimpleFacetCountsWithMultipleConfigurationsForSameField() {
       clearIndex();
       String fname = "trait_ss";
       assertU(adoc("id", "42",
@@ -406,10 +443,8 @@ public class TestFaceting extends SolrTestCaseJ4 {
           "text_t", "line up and fly directly at the enemy death cannons, clogging them with wreckage!"));
       assertU(commit());
   
-      for(String [] methodParam: new String[][]{ new String[]{}, new String []{"facet.method", "uif"}}) {
-        assertQ("checking facets when one has missing=true&mincount=2 and the other has missing=false&mincount=0",
-              req(methodParam
-                  , "q", "id:[42 TO 47]"
+      assertQ("checking facets when one has missing=true&mincount=2 and the other has missing=false&mincount=0",
+              req("q", "id:[42 TO 47]"
                   ,"facet", "true"
                   ,"facet.zeros", "false"
                   ,"fq", "id:[42 TO 45]"
@@ -433,9 +468,8 @@ public class TestFaceting extends SolrTestCaseJ4 {
               ,"//lst[@name='bar']/int[not(@name)][.='1']"
               );
   
-      assertQforUIF("checking facets when one has missing=true&mincount=2 and the other has missing=false&mincount=0",
-              req(methodParam
-                  ,"q", "id:[42 TO 47]"
+      assertQ("checking facets when one has missing=true&mincount=2 and the other has missing=false&mincount=0",
+              req("q", "id:[42 TO 47]"
                   ,"facet", "true"
                   ,"facet.zeros", "false"
                   ,"fq", "id:[42 TO 45]"
@@ -456,8 +490,7 @@ public class TestFaceting extends SolrTestCaseJ4 {
               );
 
       assertQ("localparams in one facet variant should not affect defaults in another: facet.sort vs facet.missing",
-                  req(methodParam
-                      ,"q", "id:[42 TO 47]"
+                  req("q", "id:[42 TO 47]"
                           ,"rows","0"
                           ,"facet", "true"
                           ,"fq", "id:[42 TO 45]"
@@ -483,8 +516,7 @@ public class TestFaceting extends SolrTestCaseJ4 {
                   );
 
       assertQ("localparams in one facet variant should not affect defaults in another: facet.mincount",
-                  req(methodParam
-                      ,"q", "id:[42 TO 47]"
+                  req("q", "id:[42 TO 47]"
                           ,"rows","0"
                           ,"facet", "true"
                           ,"fq", "id:[42 TO 45]"
@@ -504,8 +536,7 @@ public class TestFaceting extends SolrTestCaseJ4 {
                   );
 
       assertQ("localparams in one facet variant should not affect defaults in another: facet.missing",
-                  req(methodParam
-                      ,"q", "id:[42 TO 47]"
+                  req("q", "id:[42 TO 47]"
                           ,"rows","0"
                           ,"facet", "true"
                           ,"fq", "id:[42 TO 45]"
@@ -527,9 +558,8 @@ public class TestFaceting extends SolrTestCaseJ4 {
                   ,"//lst[@name='bar']/int[4][@name='Pig'][.='0']"
                   );
 
-      assertQforUIF("checking facets when local facet.prefix param used after regular/raw field faceting",
-          req(methodParam
-              ,"q", "*:*"
+      assertQ("checking facets when local facet.prefix param used after regular/raw field faceting",
+          req("q", "*:*"
               ,"facet", "true"
               ,"facet.field", fname
               ,"facet.field", "{!key=foo " +
@@ -542,9 +572,8 @@ public class TestFaceting extends SolrTestCaseJ4 {
           ,"//lst[@name='foo']/int[@name='Tool'][.='2']"
       );
 
-        assertQforUIF("checking facets when local facet.prefix param used before regular/raw field faceting",
-          req(methodParam
-              ,"q", "*:*"
+      assertQ("checking facets when local facet.prefix param used before regular/raw field faceting",
+          req("q", "*:*"
               ,"facet", "true"
               ,"facet.field", "{!key=foo " +
               "facet.prefix=T "+
@@ -555,8 +584,7 @@ public class TestFaceting extends SolrTestCaseJ4 {
           ,"*[count(//lst[@name='" + fname + "']/int)=4]"
           ,"*[count(//lst[@name='foo']/int)=1]"
           ,"//lst[@name='foo']/int[@name='Tool'][.='2']"
-        );
-      }
+      );
 
       final String foo_range_facet = "{!key=foo facet.range.gap=2}val_i";
       final String val_range_facet = "val_i";
@@ -578,11 +606,6 @@ public class TestFaceting extends SolrTestCaseJ4 {
 
       clearIndex();
       assertU(commit());
-  }
-      
-  private void assertQforUIF(String message, SolrQueryRequest request, String ... tests) {
-    // handle any differences for uif here, like skipping unsupported options
-    assertQ(message,request, tests);
   }
 
   private void add50ocs() {
@@ -620,14 +643,11 @@ public class TestFaceting extends SolrTestCaseJ4 {
   public void testThreadWait() throws Exception {
 
     add50ocs();
-    String[] methodParam = random().nextBoolean() ? new String[]{} : new String[]{"facet.method","uif"} ;
-    
     // All I really care about here is the chance to fire off a bunch of threads to the UnIninvertedField.get method
     // to insure that we get into/out of the lock. Again, it's not entirely deterministic, but it might catch bad
     // stuff occasionally...
     assertQ("check threading, more threads than fields",
-        req(methodParam
-            , "q", "id:*", "indent", "true", "fl", "id", "rows", "1"
+        req("q", "id:*", "indent", "true", "fl", "id", "rows", "1"
             , "facet", "true"
             , "facet.field", "f0_ws"
             , "facet.field", "f0_ws"
@@ -691,12 +711,8 @@ public class TestFaceting extends SolrTestCaseJ4 {
   @Test
   public void testMultiThreadedFacets() throws Exception {
     add50ocs();
-    
-    String[] methodParam = random().nextBoolean() ? new String[]{} : new String[]{"facet.method","uif"} ;
-    
     assertQ("check no threading, threads == 0",
-        req(methodParam
-            , "q", "id:*", "indent", "true", "fl", "id", "rows", "1"
+        req("q", "id:*", "indent", "true", "fl", "id", "rows", "1"
             , "facet", "true"
             , "facet.field", "f0_ws"
             , "facet.field", "f1_ws"
@@ -736,22 +752,22 @@ public class TestFaceting extends SolrTestCaseJ4 {
 
     );
 
-    h.getCore().withSearcher(currentSearcher -> {
-
-      SortedSetDocValues ui0 = DocValues.getSortedSet(currentSearcher.getSlowAtomicReader(), "f0_ws");
-      SortedSetDocValues ui1 = DocValues.getSortedSet(currentSearcher.getSlowAtomicReader(), "f1_ws");
-      SortedSetDocValues ui2 = DocValues.getSortedSet(currentSearcher.getSlowAtomicReader(), "f2_ws");
-      SortedSetDocValues ui3 = DocValues.getSortedSet(currentSearcher.getSlowAtomicReader(), "f3_ws");
-      SortedSetDocValues ui4 = DocValues.getSortedSet(currentSearcher.getSlowAtomicReader(), "f4_ws");
-      SortedSetDocValues ui5 = DocValues.getSortedSet(currentSearcher.getSlowAtomicReader(), "f5_ws");
-      SortedSetDocValues ui6 = DocValues.getSortedSet(currentSearcher.getSlowAtomicReader(), "f6_ws");
-      SortedSetDocValues ui7 = DocValues.getSortedSet(currentSearcher.getSlowAtomicReader(), "f7_ws");
-      SortedSetDocValues ui8 = DocValues.getSortedSet(currentSearcher.getSlowAtomicReader(), "f8_ws");
-      SortedSetDocValues ui9 = DocValues.getSortedSet(currentSearcher.getSlowAtomicReader(), "f9_ws");
+    RefCounted<SolrIndexSearcher> currentSearcherRef = h.getCore().getSearcher();
+    try {
+      SolrIndexSearcher currentSearcher = currentSearcherRef.get();
+      SortedSetDocValues ui0 = DocValues.getSortedSet(currentSearcher.getLeafReader(), "f0_ws");
+      SortedSetDocValues ui1 = DocValues.getSortedSet(currentSearcher.getLeafReader(), "f1_ws");
+      SortedSetDocValues ui2 = DocValues.getSortedSet(currentSearcher.getLeafReader(), "f2_ws");
+      SortedSetDocValues ui3 = DocValues.getSortedSet(currentSearcher.getLeafReader(), "f3_ws");
+      SortedSetDocValues ui4 = DocValues.getSortedSet(currentSearcher.getLeafReader(), "f4_ws");
+      SortedSetDocValues ui5 = DocValues.getSortedSet(currentSearcher.getLeafReader(), "f5_ws");
+      SortedSetDocValues ui6 = DocValues.getSortedSet(currentSearcher.getLeafReader(), "f6_ws");
+      SortedSetDocValues ui7 = DocValues.getSortedSet(currentSearcher.getLeafReader(), "f7_ws");
+      SortedSetDocValues ui8 = DocValues.getSortedSet(currentSearcher.getLeafReader(), "f8_ws");
+      SortedSetDocValues ui9 = DocValues.getSortedSet(currentSearcher.getLeafReader(), "f9_ws");
 
       assertQ("check threading, more threads than fields",
-          req(methodParam
-              ,"q", "id:*", "indent", "true", "fl", "id", "rows", "1"
+          req("q", "id:*", "indent", "true", "fl", "id", "rows", "1"
               , "facet", "true"
               , "facet.field", "f0_ws"
               , "facet.field", "f1_ws"
@@ -791,8 +807,7 @@ public class TestFaceting extends SolrTestCaseJ4 {
 
       );
       assertQ("check threading, fewer threads than fields",
-          req(methodParam
-              ,"q", "id:*", "indent", "true", "fl", "id", "rows", "1"
+          req("q", "id:*", "indent", "true", "fl", "id", "rows", "1"
               , "facet", "true"
               , "facet.field", "f0_ws"
               , "facet.field", "f1_ws"
@@ -838,8 +853,7 @@ public class TestFaceting extends SolrTestCaseJ4 {
       // It's NOT testing whether the pending/sleep is actually functioning, I had to do that by hand since I don't
       // see how to make sure that uninverting the field multiple times actually happens to hit the wait state.
       assertQ("check threading, more threads than fields",
-          req(methodParam
-              ,"q", "id:*", "indent", "true", "fl", "id", "rows", "1"
+          req("q", "id:*", "indent", "true", "fl", "id", "rows", "1"
               , "facet", "true"
               , "facet.field", "f0_ws"
               , "facet.field", "f0_ws"
@@ -897,39 +911,9 @@ public class TestFaceting extends SolrTestCaseJ4 {
           , "*[count(//lst[@name='facet_fields']/lst)=10]"
           , "*[count(//lst[@name='facet_fields']/lst/int)=20]"
       );
-      return null;
-    });
-  }
-
-  @Test
-  public void testListedTermCounts() throws Exception {
-    assertU(adoc("id", "1", "title_ws", "Book1"));
-    assertU(adoc("id", "2", "title_ws", "Book2"));
-    assertU(adoc("id", "3", "title_ws", "Book3"));
-    assertU(adoc("id", "4", "title_ws", "Book2"));
-    assertU(adoc("id", "5", "title_ws", "Book1"));
-    assertU(adoc("id", "6", "title_ws", "Book2"));
-    assertU(commit());
-
-    // order is the same as in facet.field, when no facet.sort specified
-    assertQ(req("q", "*:*", FacetParams.FACET, "true", FacetParams.FACET_FIELD, "{!terms=Book3,Book2,Book1}title_ws"),
-        "//lst[@name='facet_fields']/lst[@name='title_ws']/int[1][@name='Book3']",
-        "//lst[@name='facet_fields']/lst[@name='title_ws']/int[2][@name='Book2']",
-        "//lst[@name='facet_fields']/lst[@name='title_ws']/int[3][@name='Book1']");
-
-    // order is by counts, when facet.sort by count specified
-    assertQ(req("q", "*:*", FacetParams.FACET, "true", FacetParams.FACET_FIELD, "{!terms=Book3,Book2,Book1}title_ws",
-            "facet.sort", FacetParams.FACET_SORT_COUNT),
-        "//lst[@name='facet_fields']/lst[@name='title_ws']/int[1][@name='Book2']",
-        "//lst[@name='facet_fields']/lst[@name='title_ws']/int[2][@name='Book1']",
-        "//lst[@name='facet_fields']/lst[@name='title_ws']/int[3][@name='Book3']");
-
-    // order is by index, when facet.sort by index specified
-    assertQ(req("q", "*:*", FacetParams.FACET, "true", FacetParams.FACET_FIELD, "{!terms=Book3,Book2,Book1}title_ws",
-            "facet.sort", FacetParams.FACET_SORT_INDEX),
-        "//lst[@name='facet_fields']/lst[@name='title_ws']/int[1][@name='Book1']",
-        "//lst[@name='facet_fields']/lst[@name='title_ws']/int[2][@name='Book2']",
-        "//lst[@name='facet_fields']/lst[@name='title_ws']/int[3][@name='Book3']");
+    } finally {
+      currentSearcherRef.decref();
+    }
   }
 }
 

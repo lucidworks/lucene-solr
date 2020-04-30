@@ -1,3 +1,5 @@
+package org.apache.solr.spelling;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -28,6 +29,8 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.PriorityQueue;
 import java.util.Set;
+
+import org.apache.lucene.analysis.Token;
 
 /**
  * <p>
@@ -358,7 +361,7 @@ public class PossibilityIterator implements
     throw new UnsupportedOperationException();
   }
   
-  public static class RankedSpellPossibility {
+  public class RankedSpellPossibility {
     public List<SpellCheckCorrection> corrections;
     public int rank;
     public int index;
@@ -404,7 +407,7 @@ public class PossibilityIterator implements
     }
   }
   
-  private static class StartOffsetComparator implements
+  private class StartOffsetComparator implements
       Comparator<SpellCheckCorrection> {
     @Override
     public int compare(SpellCheckCorrection o1, SpellCheckCorrection o2) {
@@ -412,7 +415,7 @@ public class PossibilityIterator implements
     }
   }
   
-  private static class RankComparator implements Comparator<RankedSpellPossibility> {
+  private class RankComparator implements Comparator<RankedSpellPossibility> {
     // Rank poorer suggestions ahead of better ones for use with a PriorityQueue
     @Override
     public int compare(RankedSpellPossibility r1, RankedSpellPossibility r2) {

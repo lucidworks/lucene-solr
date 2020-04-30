@@ -1,10 +1,11 @@
+package org.apache.lucene.document;
+
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright 2004 The Apache Software Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,15 +15,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.document;
-
 import java.io.IOException;
 import java.io.Reader;
+import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.lucene.analysis.Analyzer;
@@ -54,17 +53,17 @@ public class LazyDocument {
   }
 
   /**
-   * Creates a StorableField whose value will be lazy loaded if and 
+   * Creates an IndexableField whose value will be lazy loaded if and 
    * when it is used. 
    * <p>
    * <b>NOTE:</b> This method must be called once for each value of the field 
    * name specified in sequence that the values exist.  This method may not be 
-   * used to generate multiple, lazy, StorableField instances referring to 
-   * the same underlying StorableField instance.
+   * used to generate multiple, lazy, IndexableField instances refering to 
+   * the same underlying IndexableField instance.
    * </p>
    * <p>
-   * The lazy loading of field values from all instances of StorableField 
-   * objects returned by this method are all backed by a single StoredDocument 
+   * The lazy loading of field values from all instances of IndexableField 
+   * objects returned by this method are all backed by a single Document 
    * per LazyDocument instance.
    * </p>
    */
@@ -162,6 +161,11 @@ public class LazyDocument {
     }
 
     @Override
+    public float boost() {
+      return 1.0f;
+    }
+
+    @Override
     public BytesRef binaryValue() {
       return getRealValue().binaryValue();
     }
@@ -187,7 +191,7 @@ public class LazyDocument {
     }
 
     @Override
-    public TokenStream tokenStream(Analyzer analyzer, TokenStream reuse) {
+    public TokenStream tokenStream(Analyzer analyzer, TokenStream reuse) throws IOException {
       return getRealValue().tokenStream(analyzer, reuse);
     }
   }

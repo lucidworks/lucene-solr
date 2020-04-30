@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.core;
-
 
 import java.io.IOException;
 
@@ -23,8 +23,6 @@ import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.util.AttributeFactory;
-
-import static org.apache.lucene.analysis.standard.StandardTokenizer.MAX_TOKEN_LENGTH_LIMIT;
 
 /**
  * Emits the entire input as a single token.
@@ -43,16 +41,16 @@ public final class KeywordTokenizer extends Tokenizer {
   }
 
   public KeywordTokenizer(int bufferSize) {
-    if (bufferSize > MAX_TOKEN_LENGTH_LIMIT || bufferSize <= 0) {
-      throw new IllegalArgumentException("maxTokenLen must be greater than 0 and less than " + MAX_TOKEN_LENGTH_LIMIT + " passed: " + bufferSize);
+    if (bufferSize <= 0) {
+      throw new IllegalArgumentException("bufferSize must be > 0");
     }
     termAtt.resizeBuffer(bufferSize);
   }
 
   public KeywordTokenizer(AttributeFactory factory, int bufferSize) {
     super(factory);
-    if (bufferSize > MAX_TOKEN_LENGTH_LIMIT || bufferSize <= 0) {
-      throw new IllegalArgumentException("maxTokenLen must be greater than 0 and less than " + MAX_TOKEN_LENGTH_LIMIT + " passed: " + bufferSize);
+    if (bufferSize <= 0) {
+      throw new IllegalArgumentException("bufferSize must be > 0");
     }
     termAtt.resizeBuffer(bufferSize);
   }

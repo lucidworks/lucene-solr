@@ -1,3 +1,5 @@
+package org.apache.solr.schema;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
-
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 
 import org.apache.lucene.document.SortedDocValuesField;
 import org.apache.lucene.document.SortedSetDocValuesField;
@@ -29,20 +25,27 @@ import org.apache.lucene.search.FieldComparatorSource;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.util.BytesRef;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * Custom field representing a {@link BinaryField} that's sortable.
  */
 public class SortableBinaryField extends BinaryField {
 
   @Override
-  protected void checkSupportsDocValues() { // we support DocValues
+  public void checkSchemaField(final SchemaField field) {
+    // NOOP, It's Aaaaaall Good.
   }
 
   @Override
-  public List<IndexableField> createFields(SchemaField field, Object value) {
+  public List<IndexableField> createFields(SchemaField field, Object value, float boost) {
     if (field.hasDocValues()) {
       List<IndexableField> fields = new ArrayList<>();
-      IndexableField storedField = createField(field, value);
+      IndexableField storedField = createField(field, value, boost);
       fields.add(storedField);
       ByteBuffer byteBuffer = toObject(storedField);
       BytesRef bytes = new BytesRef
@@ -54,7 +57,7 @@ public class SortableBinaryField extends BinaryField {
       }
       return fields;
     } else {
-      return Collections.singletonList(createField(field, value));
+      return Collections.singletonList(createField(field, value, boost));
     }
   }
 
@@ -69,7 +72,7 @@ public class SortableBinaryField extends BinaryField {
       super(field, new FieldComparatorSource() {
         @Override
         public FieldComparator.TermOrdValComparator newComparator
-            (final String fieldname, final int numHits, final int sortPos, final boolean reversed) {
+            (final String fieldname, final int numHits, final int sortPos, final boolean reversed) throws IOException {
           return new FieldComparator.TermOrdValComparator(numHits, fieldname);
         }}, reverse);
     }

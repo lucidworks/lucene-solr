@@ -1,3 +1,5 @@
+package org.apache.solr.common.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.cloud;
 
-import java.io.IOException;
-import java.util.Collections;
+import org.apache.solr.common.util.Utils;
+import org.noggit.JSONUtil;
+import org.noggit.JSONWriter;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.solr.common.util.JavaBinCodec;
-import org.apache.solr.common.util.Utils;
-import org.noggit.JSONWriter;
-
-import static org.apache.solr.common.util.Utils.toJSONString;
 
 /**
  * ZkNodeProps contains generic immutable properties.
@@ -42,17 +39,6 @@ public class ZkNodeProps implements JSONWriter.Writable {
     this.propMap = propMap;
     // TODO: store an unmodifiable map, but in a way that guarantees not to wrap more than once.
     // Always wrapping introduces a memory leak.
-  }
-
-  public ZkNodeProps plus(String key , Object val) {
-    return plus(Collections.singletonMap(key,val));
-  }
-
-  public ZkNodeProps plus(Map<String, Object> newVals) {
-    LinkedHashMap<String, Object> copy = new LinkedHashMap<>(propMap);
-    if (newVals == null || newVals.isEmpty()) return new ZkNodeProps(copy);
-    copy.putAll(newVals);
-    return new ZkNodeProps(copy);
   }
 
 
@@ -92,16 +78,7 @@ public class ZkNodeProps implements JSONWriter.Writable {
    * Create Replica from json string that is typically stored in zookeeper.
    */
   public static ZkNodeProps load(byte[] bytes) {
-    Map<String, Object> props = null;
-    if (bytes[0] == 2) {
-      try {
-        props = (Map<String, Object>) new JavaBinCodec().unmarshal(bytes);
-      } catch (IOException e) {
-        throw new RuntimeException("Unable to parse javabin content");
-      }
-    } else {
-      props = (Map<String, Object>) Utils.fromJSON(bytes);
-    }
+    Map<String, Object> props = (Map<String, Object>) Utils.fromJSON(bytes);
     return new ZkNodeProps(props);
   }
 
@@ -140,7 +117,7 @@ public class ZkNodeProps implements JSONWriter.Writable {
 
   @Override
   public String toString() {
-    return toJSONString(this);
+    return JSONUtil.toJSON(this);
     /***
     StringBuilder sb = new StringBuilder();
     Set<Entry<String,Object>> entries = propMap.entrySet();
@@ -160,13 +137,7 @@ public class ZkNodeProps implements JSONWriter.Writable {
 
   public boolean getBool(String key, boolean b) {
     Object o = propMap.get(key);
-    if (o == null) return b;
-    if (o instanceof Boolean) return (boolean) o;
+    if(o==null) return b;
     return Boolean.parseBoolean(o.toString());
-  }
-
-  @Override
-  public boolean equals(Object that) {
-    return that instanceof ZkNodeProps && ((ZkNodeProps)that).propMap.equals(this.propMap);
   }
 }

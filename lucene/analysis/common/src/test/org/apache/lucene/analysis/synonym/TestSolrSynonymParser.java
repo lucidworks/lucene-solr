@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.synonym;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.synonym;
-
 
 import java.io.StringReader;
 import java.text.ParseException;
@@ -77,9 +77,12 @@ public class TestSolrSynonymParser extends BaseSynonymParserTestCase {
     String testFile = "a => b => c";
     Analyzer analyzer = new MockAnalyzer(random());
     SolrSynonymParser parser = new SolrSynonymParser(true, true, analyzer);
-    expectThrows(ParseException.class, () -> {
+    try {
       parser.parse(new StringReader(testFile));
-    });
+      fail("didn't get expected exception");
+    } catch (ParseException expected) {
+      // expected exc
+    }
     analyzer.close();
   }
   
@@ -88,9 +91,12 @@ public class TestSolrSynonymParser extends BaseSynonymParserTestCase {
     String testFile = "a => 1"; 
     Analyzer analyzer = new MockAnalyzer(random(), MockTokenizer.SIMPLE, false);
     SolrSynonymParser parser = new SolrSynonymParser(true, true, analyzer);
-    expectThrows(ParseException.class, () -> {
+    try {
       parser.parse(new StringReader(testFile));
-    });
+      fail("didn't get expected exception");
+    } catch (ParseException expected) {
+      // expected exc
+    }
     analyzer.close();
   }
   
@@ -99,9 +105,12 @@ public class TestSolrSynonymParser extends BaseSynonymParserTestCase {
     String testFile = "1 => a";
     Analyzer analyzer = new MockAnalyzer(random(), MockTokenizer.SIMPLE, false);
     SolrSynonymParser parser = new SolrSynonymParser(true, true, analyzer);
-    expectThrows(ParseException.class, () -> {
+    try {
       parser.parse(new StringReader(testFile));
-    });
+      fail("didn't get expected exception");
+    } catch (ParseException expected) {
+      // expected exc
+    }
     analyzer.close();
   }
   
@@ -110,9 +119,12 @@ public class TestSolrSynonymParser extends BaseSynonymParserTestCase {
     String testFile = "testola => the test";
     Analyzer analyzer = new EnglishAnalyzer();
     SolrSynonymParser parser = new SolrSynonymParser(true, true, analyzer);
-    expectThrows(ParseException.class, () -> {
+    try {
       parser.parse(new StringReader(testFile));
-    });
+      fail("didn't get expected exception");
+    } catch (ParseException expected) {
+      // expected exc
+    }
     analyzer.close();
   }
   
@@ -121,9 +133,12 @@ public class TestSolrSynonymParser extends BaseSynonymParserTestCase {
     String testFile = "the test => testola";
     Analyzer analyzer = new EnglishAnalyzer();
     SolrSynonymParser parser = new SolrSynonymParser(true, true, analyzer);
-    expectThrows(ParseException.class, () -> {
+    try {
       parser.parse(new StringReader(testFile));
-    });
+      fail("didn't get expected exception");
+    } catch (ParseException expected) {
+      // expected exc
+    }
     analyzer.close();
   }
   
@@ -183,29 +198,6 @@ public class TestSolrSynonymParser extends BaseSynonymParserTestCase {
         new String[]{"word", "SYNONYM", "word"},
         new int[]{1, 0, 1},
         new int[]{1, 2, 1});
-  }
-
-  /** Verify type of original token is "word", others are Synonym. */
-  public void testTypes() throws Exception {
-    String testFile = "woods, wood, forest";
-
-    Analyzer analyzer = new MockAnalyzer(random());
-    SolrSynonymParser parser = new SolrSynonymParser(true, true, analyzer);
-    parser.parse(new StringReader(testFile));
-    final SynonymMap map = parser.build();
-    analyzer.close();
-
-    analyzer = new Analyzer() {
-      @Override
-      protected TokenStreamComponents createComponents(String fieldName) {
-        Tokenizer tokenizer = new MockTokenizer(MockTokenizer.WHITESPACE, true);
-        return new TokenStreamComponents(tokenizer, new SynonymFilter(tokenizer, map, true));
-      }
-    };
-
-    assertAnalyzesTo(analyzer, "lost in the forest",
-        new String[]{"lost", "in", "the", "forest", "woods", "wood"},
-        new String[]{"word", "word", "word", "word", "SYNONYM", "SYNONYM"});
   }
 
   /** Test parsing of simple examples. */

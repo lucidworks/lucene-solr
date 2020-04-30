@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.embedded;
 
 import org.apache.solr.client.solrj.SolrExampleTests;
+import org.apache.solr.util.ExternalPaths;
 import org.junit.BeforeClass;
 
 /**
@@ -29,6 +31,6 @@ public class SolrExampleEmbeddedTest extends SolrExampleTests {
 
   @BeforeClass
   public static void beforeTest() throws Exception {
-    createAndStartJetty(legacyExampleCollection1SolrHome());
+    initCore();
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.mockfile;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.mockfile;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -88,7 +89,7 @@ public abstract class HandleTrackingFS extends FilterFileSystemProvider {
   }
   
   @Override
-  public InputStream newInputStream(Path path, OpenOption... options) throws IOException {
+  public InputStream newInputStream(final Path path, OpenOption... options) throws IOException {
     InputStream stream = new FilterInputStream2(super.newInputStream(path, options)) {
       
       boolean closed;
@@ -162,7 +163,7 @@ public abstract class HandleTrackingFS extends FilterFileSystemProvider {
   }
   
   @Override
-  public FileChannel newFileChannel(Path path, Set<? extends OpenOption> options, FileAttribute<?>... attrs) throws IOException {
+  public FileChannel newFileChannel(final Path path, Set<? extends OpenOption> options, FileAttribute<?>... attrs) throws IOException {
     FileChannel channel = new FilterFileChannel(delegate.newFileChannel(toDelegate(path), options, attrs)) {
       
       boolean closed;
@@ -199,7 +200,7 @@ public abstract class HandleTrackingFS extends FilterFileSystemProvider {
   }
 
   @Override
-  public AsynchronousFileChannel newAsynchronousFileChannel(Path path, Set<? extends OpenOption> options, ExecutorService executor, FileAttribute<?>... attrs) throws IOException {
+  public AsynchronousFileChannel newAsynchronousFileChannel(final Path path, Set<? extends OpenOption> options, ExecutorService executor, FileAttribute<?>... attrs) throws IOException {
     AsynchronousFileChannel channel = new FilterAsynchronousFileChannel(super.newAsynchronousFileChannel(path, options, executor, attrs)) {
       
       boolean closed;
@@ -236,7 +237,7 @@ public abstract class HandleTrackingFS extends FilterFileSystemProvider {
   }
 
   @Override
-  public SeekableByteChannel newByteChannel(Path path, Set<? extends OpenOption> options, FileAttribute<?>... attrs) throws IOException {
+  public SeekableByteChannel newByteChannel(final Path path, Set<? extends OpenOption> options, FileAttribute<?>... attrs) throws IOException {
     SeekableByteChannel channel = new FilterSeekableByteChannel(super.newByteChannel(path, options, attrs)) {
       
       boolean closed;
@@ -273,7 +274,7 @@ public abstract class HandleTrackingFS extends FilterFileSystemProvider {
   }
 
   @Override
-  public DirectoryStream<Path> newDirectoryStream(Path dir, Filter<? super Path> filter) throws IOException {
+  public DirectoryStream<Path> newDirectoryStream(final Path dir, final Filter<? super Path> filter) throws IOException {
     Filter<Path> wrappedFilter = new Filter<Path>() {
       @Override
       public boolean accept(Path entry) throws IOException {

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -32,7 +32,7 @@ import org.apache.lucene.util.PriorityQueue;
  *
  * @lucene.experimental
  */
-public final class MultiTermsEnum extends BaseTermsEnum {
+public final class MultiTermsEnum extends TermsEnum {
 
   private static final Comparator<TermsEnumWithSlice> INDEX_COMPARATOR = new Comparator<TermsEnumWithSlice>() {
     @Override
@@ -302,8 +302,6 @@ public final class MultiTermsEnum extends BaseTermsEnum {
 
     // gather equal top fields
     if (queue.size() > 0) {
-      // TODO: we could maybe defer this somewhat costly operation until one of the APIs that
-      // needs to see the top is invoked (docFreq, postings, etc.)
       pullTop();
     } else {
       current = null;
@@ -326,7 +324,9 @@ public final class MultiTermsEnum extends BaseTermsEnum {
     long sum = 0;
     for(int i=0;i<numTop;i++) {
       final long v = top[i].terms.totalTermFreq();
-      assert v != -1;
+      if (v == -1) {
+        return v;
+      }
       sum += v;
     }
     return sum;
@@ -365,12 +365,6 @@ public final class MultiTermsEnum extends BaseTermsEnum {
     }
     
     return docsEnum.reset(subDocs, upto);
-  }
-
-  @Override
-  public ImpactsEnum impacts(int flags) throws IOException {
-    // implemented to not fail CheckIndex, but you shouldn't be using impacts on a slow reader
-    return new SlowImpactsEnum(postings(null, flags));
   }
 
   final static class TermsEnumWithSlice {

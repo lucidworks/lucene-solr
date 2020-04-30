@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.benchmark.byTask;
 
 import java.io.BufferedReader;
@@ -21,7 +22,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.Collator;
-import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 
@@ -32,22 +32,23 @@ import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.TermToBytesRefAttribute;
 import org.apache.lucene.benchmark.BenchmarkTestCase;
 import org.apache.lucene.benchmark.byTask.feeds.DocMaker;
+import org.apache.lucene.benchmark.byTask.feeds.ReutersQueryMaker;
 import org.apache.lucene.benchmark.byTask.stats.TaskStats;
+import org.apache.lucene.benchmark.byTask.tasks.CountingHighlighterTestTask;
 import org.apache.lucene.benchmark.byTask.tasks.CountingSearchTestTask;
 import org.apache.lucene.benchmark.byTask.tasks.WriteLineDocTask;
 import org.apache.lucene.collation.CollationKeyAnalyzer;
 import org.apache.lucene.facet.taxonomy.TaxonomyReader;
 import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.FieldInfos;
+import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
+import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.LogDocMergePolicy;
 import org.apache.lucene.index.LogMergePolicy;
-import org.apache.lucene.index.MultiTerms;
-import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.SegmentInfos;
 import org.apache.lucene.index.SerialMergeScheduler;
 import org.apache.lucene.index.Terms;
@@ -157,6 +158,114 @@ public class TestPerfTasksLogic extends BenchmarkTestCase {
     // the search threads hadn't yet succeeded in starting
     // up and then they start up and do no searching:
     //assertTrue(CountingSearchTestTask.numSearches > 0);
+  }
+
+  public void testHighlighting() throws Exception {
+    // 1. alg definition (required in every "logic" test)
+    String algLines[] = {
+        "doc.stored=true",
+        "content.source=org.apache.lucene.benchmark.byTask.feeds.LineDocSource",
+        "docs.file=" + getReuters20LinesFile(),
+        "query.maker=" + ReutersQueryMaker.class.getName(),
+        "ResetSystemErase",
+        "CreateIndex",
+        "{ AddDoc } : 100",
+        "ForceMerge(1)",
+        "CloseIndex",
+        "OpenReader",
+        "{ CountingHighlighterTest(size[1],highlight[1],mergeContiguous[true],maxFrags[1],fields[body]) } : 200",
+        "CloseReader",
+    };
+
+    // 2. we test this value later
+    CountingHighlighterTestTask.numHighlightedResults = 0;
+    CountingHighlighterTestTask.numDocsRetrieved = 0;
+    // 3. execute the algorithm  (required in every "logic" test)
+    Benchmark benchmark = execBenchmark(algLines);
+
+    // 4. test specific checks after the benchmark run completed.
+    assertEquals("TestSearchTask was supposed to be called!",92,CountingHighlighterTestTask.numDocsRetrieved);
+    //pretty hard to figure out a priori how many docs are going to have highlighted fragments returned, but we can never have more than the number of docs
+    //we probably should use a different doc/query maker, but...
+    assertTrue("TestSearchTask was supposed to be called!", CountingHighlighterTestTask.numDocsRetrieved >= CountingHighlighterTestTask.numHighlightedResults && CountingHighlighterTestTask.numHighlightedResults > 0);
+
+    assertTrue("Index does not exist?...!", DirectoryReader.indexExists(benchmark.getRunData().getDirectory()));
+    // now we should be able to open the index for write.
+    IndexWriter iw = new IndexWriter(benchmark.getRunData().getDirectory(), new IndexWriterConfig(new MockAnalyzer(random())).setOpenMode(OpenMode.APPEND));
+    iw.close();
+    IndexReader ir = DirectoryReader.open(benchmark.getRunData().getDirectory());
+    assertEquals("100 docs were added to the index, this is what we expect to find!",100,ir.numDocs());
+    ir.close();
+  }
+
+  public void testHighlightingTV() throws Exception {
+    // 1. alg definition (required in every "logic" test)
+    String algLines[] = {
+        "doc.stored=true",//doc storage is required in order to have text to highlight
+        "doc.term.vector=true",
+        "doc.term.vector.offsets=true",
+        "content.source=org.apache.lucene.benchmark.byTask.feeds.LineDocSource",
+        "docs.file=" + getReuters20LinesFile(),
+        "query.maker=" + ReutersQueryMaker.class.getName(),
+        "ResetSystemErase",
+        "CreateIndex",
+        "{ AddDoc } : 1000",
+        "ForceMerge(1)",
+        "CloseIndex",
+        "OpenReader",
+        "{ CountingHighlighterTest(size[1],highlight[1],mergeContiguous[true],maxFrags[1],fields[body]) } : 200",
+        "CloseReader",
+    };
+
+    // 2. we test this value later
+    CountingHighlighterTestTask.numHighlightedResults = 0;
+    CountingHighlighterTestTask.numDocsRetrieved = 0;
+    // 3. execute the algorithm  (required in every "logic" test)
+    Benchmark benchmark = execBenchmark(algLines);
+
+    // 4. test specific checks after the benchmark run completed.
+    assertEquals("TestSearchTask was supposed to be called!",92,CountingHighlighterTestTask.numDocsRetrieved);
+    //pretty hard to figure out a priori how many docs are going to have highlighted fragments returned, but we can never have more than the number of docs
+    //we probably should use a different doc/query maker, but...
+    assertTrue("TestSearchTask was supposed to be called!", CountingHighlighterTestTask.numDocsRetrieved >= CountingHighlighterTestTask.numHighlightedResults && CountingHighlighterTestTask.numHighlightedResults > 0);
+
+    assertTrue("Index does not exist?...!", DirectoryReader.indexExists(benchmark.getRunData().getDirectory()));
+    // now we should be able to open the index for write.
+    IndexWriter iw = new IndexWriter(benchmark.getRunData().getDirectory(), new IndexWriterConfig(new MockAnalyzer(random())).setOpenMode(OpenMode.APPEND));
+    iw.close();
+    IndexReader ir = DirectoryReader.open(benchmark.getRunData().getDirectory());
+    assertEquals("1000 docs were added to the index, this is what we expect to find!",1000,ir.numDocs());
+    ir.close();
+  }
+
+  public void testHighlightingNoTvNoStore() throws Exception {
+    // 1. alg definition (required in every "logic" test)
+    String algLines[] = {
+        "doc.stored=false",
+        "content.source=org.apache.lucene.benchmark.byTask.feeds.LineDocSource",
+        "docs.file=" + getReuters20LinesFile(),
+        "query.maker=" + ReutersQueryMaker.class.getName(),
+        "ResetSystemErase",
+        "CreateIndex",
+        "{ AddDoc } : 1000",
+        "ForceMerge(1)",
+        "CloseIndex",
+        "OpenReader",
+        "{ CountingHighlighterTest(size[1],highlight[1],mergeContiguous[true],maxFrags[1],fields[body]) } : 200",
+        "CloseReader",
+    };
+
+    // 2. we test this value later
+    CountingHighlighterTestTask.numHighlightedResults = 0;
+    CountingHighlighterTestTask.numDocsRetrieved = 0;
+    // 3. execute the algorithm  (required in every "logic" test)
+    try {
+      Benchmark benchmark = execBenchmark(algLines);
+      assertTrue("CountingHighlighterTest should have thrown an exception", false);
+      assertNotNull(benchmark); // (avoid compile warning on unused variable)
+    } catch (Exception e) {
+      assertTrue(true);
+    }
   }
 
   /**
@@ -331,6 +440,8 @@ public class TestPerfTasksLogic extends BenchmarkTestCase {
     IndexReader ir = DirectoryReader.open(benchmark.getRunData().getDirectory());
     assertEquals(numLines + " lines were created but " + ir.numDocs() + " docs are in the index", numLines, ir.numDocs());
     ir.close();
+
+    Files.delete(lineFile);
   }
   
   /**
@@ -375,13 +486,13 @@ public class TestPerfTasksLogic extends BenchmarkTestCase {
 
     int totalTokenCount2 = 0;
 
-    Collection<String> fields = FieldInfos.getIndexedFields(reader);
+    Fields fields = MultiFields.getFields(reader);
 
     for (String fieldName : fields) {
       if (fieldName.equals(DocMaker.ID_FIELD) || fieldName.equals(DocMaker.DATE_MSEC_FIELD) || fieldName.equals(DocMaker.TIME_SEC_FIELD)) {
         continue;
       }
-      Terms terms = MultiTerms.getTerms(reader, fieldName);
+      Terms terms = fields.terms(fieldName);
       if (terms == null) {
         continue;
       }

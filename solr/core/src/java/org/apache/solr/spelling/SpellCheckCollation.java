@@ -1,3 +1,5 @@
+package org.apache.solr.spelling;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling;
 
 import org.apache.solr.common.util.NamedList;
 
 public class SpellCheckCollation implements Comparable<SpellCheckCollation> {
   private NamedList<String> misspellingsAndCorrections;
-  private long hits;
+  private int hits;
   private int internalRank;
   private String collationQuery;
 
   @Override
   public int compareTo(SpellCheckCollation scc) {
-    int c = Integer.compare(internalRank, scc.internalRank);
+    int c = new Integer(internalRank).compareTo(scc.internalRank);
     if (c == 0) {
       return collationQuery.compareTo(scc.collationQuery);
     }
@@ -42,11 +43,11 @@ public class SpellCheckCollation implements Comparable<SpellCheckCollation> {
     this.misspellingsAndCorrections = misspellingsAndCorrections;
   }
 
-  public long getHits() {
+  public int getHits() {
     return hits;
   }
 
-  public void setHits(long hits) {
+  public void setHits(int hits) {
     this.hits = hits;
   }
 

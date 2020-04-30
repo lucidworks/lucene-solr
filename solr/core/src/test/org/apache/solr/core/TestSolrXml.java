@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
 
 import java.io.File;
 import java.io.IOException;
@@ -34,7 +35,7 @@ import org.junit.rules.ExpectedException;
 import org.junit.rules.RuleChain;
 import org.junit.rules.TestRule;
 
-import static org.hamcrest.core.StringContains.containsString;
+import static org.junit.internal.matchers.StringContains.containsString;
 
 public class TestSolrXml extends SolrTestCaseJ4 {
 
@@ -67,19 +68,20 @@ public class TestSolrXml extends SolrTestCaseJ4 {
     NodeConfig cfg = SolrXmlConfig.fromSolrHome(loader, solrHome.toPath());
     CloudConfig ccfg = cfg.getCloudConfig();
     UpdateShardHandlerConfig ucfg = cfg.getUpdateShardHandlerConfig();
-    PluginInfo[] backupRepoConfigs = cfg.getBackupRepositoryPlugins();
-
-    assertEquals("maxBooleanClauses", (Integer) 42, cfg.getBooleanQueryMaxClauseCount());
+    
     assertEquals("core admin handler class", "testAdminHandler", cfg.getCoreAdminHandlerClass());
     assertEquals("collection handler class", "testCollectionsHandler", cfg.getCollectionsHandlerClass());
     assertEquals("info handler class", "testInfoHandler", cfg.getInfoHandlerClass());
     assertEquals("config set handler class", "testConfigSetsHandler", cfg.getConfigSetsHandlerClass());
-    assertEquals("core load threads", 11, cfg.getCoreLoadThreadCount(false));
-    assertEquals("replay update threads", 100, cfg.getReplayUpdatesThreads());
+    assertEquals("core load threads", 11, cfg.getCoreLoadThreadCount());
     assertThat("core root dir", cfg.getCoreRootDirectory().toString(), containsString("testCoreRootDirectory"));
+    assertEquals("distrib conn timeout", 22, cfg.getDistributedConnectionTimeout());
     assertEquals("distrib conn timeout", 22, cfg.getUpdateShardHandlerConfig().getDistributedConnectionTimeout());
+    assertEquals("distrib socket timeout", 33, cfg.getDistributedSocketTimeout());
     assertEquals("distrib socket timeout", 33, cfg.getUpdateShardHandlerConfig().getDistributedSocketTimeout());
+    assertEquals("max update conn", 3, cfg.getMaxUpdateConnections());
     assertEquals("max update conn", 3, cfg.getUpdateShardHandlerConfig().getMaxUpdateConnections());
+    assertEquals("max update conn/host", 37, cfg.getMaxUpdateConnectionsPerHost());
     assertEquals("max update conn/host", 37, cfg.getUpdateShardHandlerConfig().getMaxUpdateConnectionsPerHost());
     assertEquals("distrib conn timeout", 22, ucfg.getDistributedConnectionTimeout());
     assertEquals("distrib socket timeout", 33, ucfg.getDistributedSocketTimeout());
@@ -101,11 +103,6 @@ public class TestSolrXml extends SolrTestCaseJ4 {
     assertEquals("zk host", "testZkHost", ccfg.getZkHost());
     assertEquals("zk ACL provider", "DefaultZkACLProvider", ccfg.getZkACLProviderClass());
     assertEquals("zk credentials provider", "DefaultZkCredentialsProvider", ccfg.getZkCredentialsProviderClass());
-    assertEquals(1, backupRepoConfigs.length);
-    assertEquals("local", backupRepoConfigs[0].name);
-    assertEquals("a.b.C", backupRepoConfigs[0].className);
-    assertEquals("true", backupRepoConfigs[0].attributes.get("default"));
-    assertEquals(0, backupRepoConfigs[0].initArgs.size());
   }
 
   // Test  a few property substitutions that happen to be in solr-50-all.xml.
@@ -128,7 +125,6 @@ public class TestSolrXml extends SolrTestCaseJ4 {
 
   public void testExplicitNullGivesDefaults() throws IOException {
     String solrXml = "<solr>" +
-        "<null name=\"maxBooleanClauses\"/>" +
         "<solrcloud>" +
         "<str name=\"host\">host</str>" +
         "<int name=\"hostPort\">8983</int>" +
@@ -137,7 +133,6 @@ public class TestSolrXml extends SolrTestCaseJ4 {
         "</solrcloud></solr>";
 
     NodeConfig cfg = SolrXmlConfig.fromString(loader, solrXml);
-    assertNull("maxBooleanClauses", cfg.getBooleanQueryMaxClauseCount()); // default is null
     assertEquals("leaderVoteWait", 180000, cfg.getCloudConfig().getLeaderVoteWait());
   }
 
@@ -330,12 +325,5 @@ public class TestSolrXml extends SolrTestCaseJ4 {
     expectedException.expectMessage("solrcloud section missing required entry 'hostContext'");
 
     SolrXmlConfig.fromString(loader, "<solr><solrcloud><str name=\"host\">host</str><int name=\"hostPort\">8983</int></solrcloud></solr>");
-  }
-
-  public void testMultiBackupSectionError() throws IOException {
-    String solrXml = "<solr><backup></backup><backup></backup></solr>";
-    expectedException.expect(SolrException.class);
-    expectedException.expectMessage("Multiple instances of backup section found in solr.xml");
-    SolrXmlConfig.fromString(loader, solrXml); // return not used, only for validation
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -38,7 +38,7 @@ import org.apache.lucene.util.TestUtil;
  * Simple test that adds numeric terms, where each term has the 
  * docFreq of its integer value, and checks that the docFreq is correct. 
  */
-@SuppressCodecs({"Direct"}) // at night this makes like 200k/300k docs and will make Direct's heart beat!
+@SuppressCodecs({"Direct", "Memory"}) // at night this makes like 200k/300k docs and will make Direct's heart beat!
 public class TestBagOfPostings extends LuceneTestCase {
   public void test() throws Exception {
     List<String> postingsList = new ArrayList<>();

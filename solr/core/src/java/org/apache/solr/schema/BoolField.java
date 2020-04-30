@@ -14,27 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.schema;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
-import org.apache.lucene.document.SortedDocValuesField;
-import org.apache.lucene.document.SortedSetDocValuesField;
+import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.IndexableField;
-import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.docvalues.BoolDocValues;
 import org.apache.lucene.search.SortField;
+import org.apache.lucene.uninverting.UninvertingReader.Type;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.CharsRefBuilder;
@@ -44,8 +41,6 @@ import org.apache.solr.analysis.SolrAnalyzer;
 import org.apache.solr.response.TextResponseWriter;
 import org.apache.solr.search.QParser;
 import org.apache.solr.search.function.OrdFieldSource;
-import org.apache.solr.uninverting.UninvertingReader.Type;
-
 /**
  *
  */
@@ -72,8 +67,8 @@ public class BoolField extends PrimitiveFieldType {
   }
 
   // avoid instantiating every time...
-  public final static char[] TRUE_TOKEN = {'T'};
-  public final static char[] FALSE_TOKEN = {'F'};
+  protected final static char[] TRUE_TOKEN = {'T'};
+  protected final static char[] FALSE_TOKEN = {'F'};
 
   ////////////////////////////////////////////////////////////////////////
   // TODO: look into creating my own queryParser that can more efficiently
@@ -129,13 +124,7 @@ public class BoolField extends PrimitiveFieldType {
 
   @Override
   public String toExternal(IndexableField f) {
-    if (null != f.binaryValue()) {
-      return indexedToReadable(f.binaryValue().utf8ToString());
-    }
-    if (null != f.stringValue()) {
-      return indexedToReadable(f.stringValue());
-    }
-    return null;
+    return indexedToReadable(f.stringValue());
   }
 
   @Override
@@ -156,7 +145,7 @@ public class BoolField extends PrimitiveFieldType {
 
   private static final CharsRef TRUE = new CharsRef("true");
   private static final CharsRef FALSE = new CharsRef("false");
-
+  
   @Override
   public CharsRef indexedToReadable(BytesRef input, CharsRefBuilder charsRef) {
     if (input.length > 0 && input.bytes[input.offset] == 'T') {
@@ -180,40 +169,6 @@ public class BoolField extends PrimitiveFieldType {
   @Override
   public Object unmarshalSortValue(Object value) {
     return unmarshalStringSortValue(value);
-  }
-
-  @Override
-  public List<IndexableField> createFields(SchemaField field, Object value) {
-    IndexableField fval = createField(field, value);
-
-    if (field.hasDocValues()) {
-      IndexableField docval;
-      final BytesRef bytes = new BytesRef(toInternal(value.toString()));
-      if (field.multiValued()) {
-        docval = new SortedSetDocValuesField(field.getName(), bytes);
-      } else {
-        docval = new SortedDocValuesField(field.getName(), bytes);
-      }
-
-      // Only create a list of we have 2 values...
-      if (fval != null) {
-        List<IndexableField> fields = new ArrayList<>(2);
-        fields.add(fval);
-        fields.add(docval);
-        return fields;
-      }
-
-      fval = docval;
-    }
-    return Collections.singletonList(fval);
-  }
-
-  @Override
-  public Object toNativeType(Object val) {
-    if (val instanceof CharSequence) {
-      return Boolean.valueOf(val.toString());
-    }
-    return super.toNativeType(val);
   }
 }
 
@@ -250,26 +205,14 @@ class BoolFieldSource extends ValueSource {
     final int trueOrd = tord;
 
     return new BoolDocValues(this) {
-
-      private int getOrdForDoc(int doc) throws IOException {
-        if (doc > sindex.docID()) {
-          sindex.advance(doc);
-        }
-        if (doc == sindex.docID()) {
-          return sindex.ordValue();
-        } else {
-          return -1;
-        }
+      @Override
+      public boolean boolVal(int doc) {
+        return sindex.getOrd(doc) == trueOrd;
       }
 
       @Override
-      public boolean boolVal(int doc) throws IOException {
-        return getOrdForDoc(doc) == trueOrd;
-      }
-
-      @Override
-      public boolean exists(int doc) throws IOException {
-        return getOrdForDoc(doc) != -1;
+      public boolean exists(int doc) {
+        return sindex.getOrd(doc) != -1;
       }
 
       @Override
@@ -283,8 +226,8 @@ class BoolFieldSource extends ValueSource {
           }
 
           @Override
-          public void fillValue(int doc) throws IOException {
-            int ord = getOrdForDoc(doc);
+          public void fillValue(int doc) {
+            int ord = sindex.getOrd(doc);
             mval.value = (ord == trueOrd);
             mval.exists = (ord != -1);
           }
@@ -299,10 +242,9 @@ class BoolFieldSource extends ValueSource {
   }
 
   private static final int hcode = OrdFieldSource.class.hashCode();
-
   @Override
   public int hashCode() {
     return hcode + field.hashCode();
-  }
+  };
 
 }

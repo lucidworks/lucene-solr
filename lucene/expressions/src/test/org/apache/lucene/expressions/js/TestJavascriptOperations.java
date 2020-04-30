@@ -1,3 +1,4 @@
+package org.apache.lucene.expressions.js;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.expressions.js;
 
 import org.apache.lucene.expressions.Expression;
 import org.apache.lucene.util.LuceneTestCase;
@@ -22,7 +22,7 @@ import org.apache.lucene.util.LuceneTestCase;
 public class TestJavascriptOperations extends LuceneTestCase {
   private void assertEvaluatesTo(String expression, long expected) throws Exception {
     Expression evaluator = JavascriptCompiler.compile(expression);
-    long actual = (long)evaluator.evaluate(null);
+    long actual = (long)evaluator.evaluate(0, null);
     assertEquals(expected, actual);
   }
   

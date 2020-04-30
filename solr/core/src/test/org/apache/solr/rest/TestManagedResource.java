@@ -1,3 +1,4 @@
+package org.apache.solr.rest;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.rest;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -22,6 +22,7 @@ import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.io.StringReader;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,10 +35,11 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.Utils;
 import org.apache.solr.core.SolrResourceLoader;
 import org.apache.solr.rest.ManagedResourceStorage.StorageIO;
 import org.junit.Test;
+import org.noggit.JSONParser;
+import org.noggit.ObjectBuilder;
 
 /**
  * Tests {@link ManagedResource} functionality.
@@ -48,7 +50,7 @@ public class TestManagedResource extends SolrTestCaseJ4 {
    * Mock class that acts like an analysis component that depends on
    * data managed by a ManagedResource
    */
-  private static class MockAnalysisComponent implements ManagedResourceObserver {
+  private class MockAnalysisComponent implements ManagedResourceObserver {
     
     private boolean wasNotified = false;
 
@@ -120,7 +122,7 @@ public class TestManagedResource extends SolrTestCaseJ4 {
   /**
    * Implements a Java serialization based storage format.
    */
-  private static class SerializableStorage extends ManagedResourceStorage {
+  private class SerializableStorage extends ManagedResourceStorage {
     
     SerializableStorage(StorageIO storageIO, SolrResourceLoader loader) {
       super(storageIO, loader);
@@ -227,9 +229,11 @@ public class TestManagedResource extends SolrTestCaseJ4 {
     updatedData.add("3");
     updatedData.add("4");    
     res.storeManagedData(updatedData);
-
-    Map<String,Object> jsonObject =
-        (Map<String,Object>) Utils.fromJSONString(storageIO.storage.get(storedResourceId).utf8ToString());
+    
+    StringReader stringReader = 
+        new StringReader(storageIO.storage.get(storedResourceId).utf8ToString());
+    Map<String,Object> jsonObject = 
+        (Map<String,Object>) ObjectBuilder.getVal(new JSONParser(stringReader)); 
     List<String> jsonList = 
         (List<String>)jsonObject.get(ManagedResource.MANAGED_JSON_LIST_FIELD);
     

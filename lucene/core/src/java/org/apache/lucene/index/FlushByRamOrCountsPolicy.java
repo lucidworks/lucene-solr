@@ -1,12 +1,14 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import org.apache.lucene.index.DocumentsWriterPerThreadPool.ThreadState;
 
@@ -29,7 +29,8 @@ import org.apache.lucene.index.DocumentsWriterPerThreadPool.ThreadState;
  * <li>
  * {@link #onDelete(DocumentsWriterFlushControl, DocumentsWriterPerThreadPool.ThreadState)}
  * - applies pending delete operations based on the global number of buffered
- * delete terms if the consumed memory is greater than {@link IndexWriterConfig#getRAMBufferSizeMB()}</li>.
+ * delete terms iff {@link IndexWriterConfig#getMaxBufferedDeleteTerms()} is
+ * enabled</li>
  * <li>
  * {@link #onInsert(DocumentsWriterFlushControl, DocumentsWriterPerThreadPool.ThreadState)}
  * - flushes either on the number of documents per
@@ -59,12 +60,21 @@ class FlushByRamOrCountsPolicy extends FlushPolicy {
 
   @Override
   public void onDelete(DocumentsWriterFlushControl control, ThreadState state) {
-    if ((flushOnRAM() && control.getDeleteBytesUsed() > 1024*1024*indexWriterConfig.getRAMBufferSizeMB())) {
-      control.setApplyAllDeletes();
-      if (infoStream.isEnabled("FP")) {
-        infoStream.message("FP", "force apply deletes bytesUsed=" + control.getDeleteBytesUsed() + " vs ramBufferMB=" + indexWriterConfig.getRAMBufferSizeMB());
+    if (flushOnDeleteTerms()) {
+      // Flush this state by num del terms
+      final int maxBufferedDeleteTerms = indexWriterConfig
+          .getMaxBufferedDeleteTerms();
+      if (control.getNumGlobalTermDeletes() >= maxBufferedDeleteTerms) {
+        control.setApplyAllDeletes();
       }
     }
+    if ((flushOnRAM() &&
+        control.getDeleteBytesUsed() > (1024*1024*indexWriterConfig.getRAMBufferSizeMB()))) {
+      control.setApplyAllDeletes();
+     if (infoStream.isEnabled("FP")) {
+       infoStream.message("FP", "force apply deletes bytesUsed=" + control.getDeleteBytesUsed() + " vs ramBufferMB=" + indexWriterConfig.getRAMBufferSizeMB());
+     }
+   }
   }
 
   @Override
@@ -92,10 +102,7 @@ class FlushByRamOrCountsPolicy extends FlushPolicy {
    */
   protected void markLargestWriterPending(DocumentsWriterFlushControl control,
       ThreadState perThreadState, final long currentBytesPerThread) {
-    ThreadState largestNonPendingWriter = findLargestNonPendingWriter(control, perThreadState);
-    if (largestNonPendingWriter != null) {
-      control.setFlushPending(largestNonPendingWriter);
-    }
+    control.setFlushPending(findLargestNonPendingWriter(control, perThreadState));
   }
   
   /**
@@ -105,6 +112,15 @@ class FlushByRamOrCountsPolicy extends FlushPolicy {
    */
   protected boolean flushOnDocCount() {
     return indexWriterConfig.getMaxBufferedDocs() != IndexWriterConfig.DISABLE_AUTO_FLUSH;
+  }
+
+  /**
+   * Returns <code>true</code> if this {@link FlushPolicy} flushes on
+   * {@link IndexWriterConfig#getMaxBufferedDeleteTerms()}, otherwise
+   * <code>false</code>.
+   */
+  protected boolean flushOnDeleteTerms() {
+    return indexWriterConfig.getMaxBufferedDeleteTerms() != IndexWriterConfig.DISABLE_AUTO_FLUSH;
   }
 
   /**

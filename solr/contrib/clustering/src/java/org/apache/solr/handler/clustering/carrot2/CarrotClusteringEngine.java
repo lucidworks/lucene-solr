@@ -1,3 +1,5 @@
+package org.apache.solr.handler.clustering.carrot2;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.clustering.carrot2;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -27,11 +28,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 import java.util.Set;
-import java.util.function.Supplier;
 
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang.ObjectUtils;
+import org.apache.commons.lang.StringUtils;
 import org.apache.lucene.search.Query;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
@@ -41,7 +41,6 @@ import org.apache.solr.common.params.HighlightParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
-import org.apache.solr.common.util.SuppressForbidden;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.handler.clustering.ClusteringEngine;
 import org.apache.solr.handler.clustering.SearchClusteringEngine;
@@ -60,8 +59,6 @@ import org.carrot2.core.Document;
 import org.carrot2.core.IClusteringAlgorithm;
 import org.carrot2.core.LanguageCode;
 import org.carrot2.core.attribute.AttributeNames;
-import org.carrot2.shaded.guava.common.base.MoreObjects;
-import org.carrot2.shaded.guava.common.base.Strings;
 import org.carrot2.text.linguistic.DefaultLexicalDataFactoryDescriptor;
 import org.carrot2.text.preprocessing.pipeline.BasicPreprocessingPipelineDescriptor;
 import org.carrot2.text.preprocessing.pipeline.BasicPreprocessingPipelineDescriptor.AttributeBuilder;
@@ -72,6 +69,12 @@ import org.carrot2.util.resource.IResource;
 import org.carrot2.util.resource.ResourceLookup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.base.Objects;
+import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 
 /**
  * Search results clustering engine based on Carrot2 clustering algorithms.
@@ -123,7 +126,7 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
     this.core = core;
 
     String result = super.init(config, core);
-    final SolrParams initParams = config.toSolrParams();
+    final SolrParams initParams = SolrParams.toSolrParams(config);
 
     // Initialization attributes for Carrot2 controller.
     HashMap<String, Object> initAttributes = new HashMap<>();
@@ -153,8 +156,7 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
     // Load Carrot2-Workbench exported attribute XMLs based on the 'name' attribute
     // of this component. This by-name convention lookup is used to simplify configuring algorithms.
     String componentName = initParams.get(ClusteringEngine.ENGINE_NAME);
-    log.info("Initializing Clustering Engine '" +
-        MoreObjects.firstNonNull(componentName, "<no 'name' attribute>") + "'");
+    log.info("Initializing Clustering Engine '" + Objects.firstNonNull(componentName, "<no 'name' attribute>") + "'");
 
     if (!Strings.isNullOrEmpty(componentName)) {
       IResource[] attributeXmls = resourceLookup.getAll(componentName + "-attributes.xml");
@@ -164,17 +166,21 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
               + Arrays.toString(attributeXmls));
         }
 
-        withContextClassLoader(core.getResourceLoader().getClassLoader(), () -> {
-          try {
-            AttributeValueSets avs = AttributeValueSets.deserialize(attributeXmls[0].open());
-            AttributeValueSet defaultSet = avs.getDefaultAttributeValueSet();
-            initAttributes.putAll(defaultSet.getAttributeValues());
-          } catch (Exception e) {
-            throw new SolrException(ErrorCode.SERVER_ERROR, 
-                "Could not read attributes XML for clustering component: " + componentName, e);
-          }
-          return null;
-        });
+        Thread ct = Thread.currentThread();
+        ClassLoader prev = ct.getContextClassLoader();
+        try {
+          ct.setContextClassLoader(core.getResourceLoader().getClassLoader());
+
+          AttributeValueSets avs = AttributeValueSets.deserialize(attributeXmls[0].open());
+          AttributeValueSet defaultSet = avs.getDefaultAttributeValueSet();
+          initAttributes.putAll(defaultSet.getAttributeValues());
+        } catch (Exception e) {
+          throw new SolrException(ErrorCode.SERVER_ERROR, 
+              "Could not read attributes XML for clustering component: " 
+                  + componentName, e);
+        } finally {
+          ct.setContextClassLoader(prev);
+        }
       }
     }
 
@@ -203,7 +209,14 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
     // certain classes (e.g. custom tokenizer/stemmer) at initialization time.
     // To make sure classes from contrib JARs are available,
     // we swap the context class loader for the time of clustering.
-    withContextClassLoader(core.getResourceLoader().getClassLoader(), () -> this.controller.init(initAttributes));
+    Thread ct = Thread.currentThread();
+    ClassLoader prev = ct.getContextClassLoader();
+    try {
+      ct.setContextClassLoader(core.getResourceLoader().getClassLoader());
+      this.controller.init(initAttributes);
+    } finally {
+      ct.setContextClassLoader(prev);
+    }
 
     SchemaField uniqueField = core.getLatestSchema().getUniqueKeyField();
     if (uniqueField == null) {
@@ -237,9 +250,15 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
       // certain classes (e.g. custom tokenizer/stemmer) at runtime.
       // To make sure classes from contrib JARs are available,
       // we swap the context class loader for the time of clustering.
-      return withContextClassLoader(core.getResourceLoader().getClassLoader(),
-          () -> clustersToNamedList(controller.process(attributes,
-              clusteringAlgorithmClass).getClusters(), sreq.getParams()));
+      Thread ct = Thread.currentThread();
+      ClassLoader prev = ct.getContextClassLoader();
+      try {
+        ct.setContextClassLoader(core.getResourceLoader().getClassLoader());
+        return clustersToNamedList(controller.process(attributes,
+                clusteringAlgorithmClass).getClusters(), sreq.getParams());
+      } finally {
+        ct.setContextClassLoader(prev);
+      }
     } catch (Exception e) {
       log.error("Carrot2 clustering failed", e);
       throw new SolrException(ErrorCode.SERVER_ERROR, "Carrot2 clustering failed", e);
@@ -250,7 +269,7 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
   protected Set<String> getFieldsToLoad(SolrQueryRequest sreq){
     SolrParams solrParams = sreq.getParams();
 
-    HashSet<String> fields = new HashSet<>(getFieldsForClustering(sreq));
+    HashSet<String> fields = Sets.newHashSet(getFieldsForClustering(sreq));
     fields.add(idFieldName);
     fields.add(solrParams.get(CarrotParams.URL_FIELD_NAME, "url"));
     fields.addAll(getCustomFieldsMap(solrParams).keySet());
@@ -277,7 +296,7 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
               + " must not be blank.");
     }
     
-    final Set<String> fields = new HashSet<>();
+    final Set<String> fields = Sets.newHashSet();
     fields.addAll(Arrays.asList(titleFieldSpec.split("[, ]")));
     fields.addAll(Arrays.asList(snippetFieldSpec.split("[, ]")));
     return fields;
@@ -301,7 +320,7 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
     Map<String, String> customFields = getCustomFieldsMap(solrParams);
 
     // Parse language code map string into a map
-    Map<String, String> languageCodeMap = new HashMap<>();
+    Map<String, String> languageCodeMap = Maps.newHashMap();
     if (StringUtils.isNotBlank(languageField)) {
       for (String pair : solrParams.get(CarrotParams.LANGUAGE_CODE_MAP, "").split("[, ]")) {
         final String[] split = pair.split(":");
@@ -322,7 +341,7 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
     if (produceSummary) {
       highlighter = HighlightComponent.getHighlighter(core);
       if (highlighter != null){
-        Map<String, Object> args = new HashMap<>();
+        Map<String, Object> args = Maps.newHashMap();
         snippetFieldAry = snippetFieldSpec.split("[, ]");
         args.put(HighlightParams.FIELDS, snippetFieldAry);
         args.put(HighlightParams.HIGHLIGHT, "true");
@@ -388,7 +407,7 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
       
       // Create a Carrot2 document
       Document carrotDocument = new Document(getConcatenated(sdoc, titleFieldSpec),
-              snippet, Objects.toString(sdoc.getFieldValue(urlField), ""));
+              snippet, ObjectUtils.toString(sdoc.getFieldValue(urlField), ""));
       
       // Store Solr id of the document, we need it to map document instances 
       // found in clusters back to identifiers.
@@ -401,7 +420,7 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
           
           // Use the first Carrot2-supported language
           for (Object l : languages) {
-            String lang = Objects.toString(l, "");
+            String lang = ObjectUtils.toString(l, "");
             
             if (languageCodeMap.containsKey(lang)) {
               lang = languageCodeMap.get(lang);
@@ -448,10 +467,10 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
    * custom field names.
    */
   private Map<String, String> getCustomFieldsMap(SolrParams solrParams) {
-    Map<String, String> customFields = new HashMap<>();
+    Map<String, String> customFields = Maps.newHashMap();
     String [] customFieldsSpec = solrParams.getParams(CarrotParams.CUSTOM_FIELD_NAME);
     if (customFieldsSpec != null) {
-      customFields = new HashMap<>();
+      customFields = Maps.newHashMap();
       for (String customFieldSpec : customFieldsSpec) {
         String [] split = customFieldSpec.split(":"); 
         if (split.length == 2 && StringUtils.isNotBlank(split[0]) && StringUtils.isNotBlank(split[1])) {
@@ -475,7 +494,7 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
         // Join multiple values with a period so that Carrot2 does not pick up
         // phrases that cross field value boundaries (in most cases it would
         // create useless phrases).
-        result.append(Objects.toString(ite.next(), "")).append(" . ");
+        result.append(ObjectUtils.toString(ite.next())).append(" . ");
       }
     }
     return result.toString().trim();
@@ -483,7 +502,7 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
 
   private List<NamedList<Object>> clustersToNamedList(List<Cluster> carrotClusters,
                                    SolrParams solrParams) {
-    List<NamedList<Object>> result = new ArrayList<>();
+    List<NamedList<Object>> result = Lists.newArrayList();
     clustersToNamedList(carrotClusters, result, solrParams.getBool(
             CarrotParams.OUTPUT_SUB_CLUSTERS, true), solrParams.getInt(
             CarrotParams.NUM_DESCRIPTIONS, Integer.MAX_VALUE));
@@ -516,7 +535,7 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
 
       // Add documents
       List<Document> docs = outputSubClusters ? outCluster.getDocuments() : outCluster.getAllDocuments();
-      List<Object> docList = new ArrayList<>();
+      List<Object> docList = Lists.newArrayList();
       cluster.add("docs", docList);
       for (Document doc : docs) {
         docList.add(doc.getField(SOLR_DOCUMENT_ID));
@@ -524,7 +543,7 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
 
       // Add subclusters
       if (outputSubClusters && !outCluster.getSubclusters().isEmpty()) {
-        List<NamedList<Object>> subclusters = new ArrayList<>();
+        List<NamedList<Object>> subclusters = Lists.newArrayList();
         cluster.add("clusters", subclusters);
         clustersToNamedList(outCluster.getSubclusters(), subclusters,
                 outputSubClusters, maxLabels);
@@ -547,17 +566,4 @@ public class CarrotClusteringEngine extends SearchClusteringEngine {
       }
     }
   }
-  
-  @SuppressForbidden(reason = "Uses context class loader as a workaround to inject correct classloader to 3rd party libs")
-  private static <T> T withContextClassLoader(ClassLoader loader, Supplier<T> action) {
-    Thread ct = Thread.currentThread();
-    ClassLoader prev = ct.getContextClassLoader();
-    try {
-      ct.setContextClassLoader(loader);
-      return action.get();
-    } finally {
-      ct.setContextClassLoader(prev);
-    }
-  }
-
 }

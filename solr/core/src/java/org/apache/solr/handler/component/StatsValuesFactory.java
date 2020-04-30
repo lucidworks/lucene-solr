@@ -3,7 +3,7 @@
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
+
  * the License.  You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -14,12 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.component;
 
 import java.io.IOException;
 import java.util.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -32,6 +34,7 @@ import org.apache.solr.handler.component.StatsField.Stat;
 import org.apache.solr.schema.*;
 
 import com.tdunning.math.stats.AVLTreeDigest;
+import com.google.common.hash.Hashing;
 import com.google.common.hash.HashFunction;
 
 import org.apache.solr.util.hll.HLL;
@@ -64,22 +67,13 @@ public class StatsValuesFactory {
     
     final FieldType fieldType = sf.getType(); // TODO: allow FieldType to provide impl.
     
-    if (TrieDateField.class.isInstance(fieldType) || DatePointField.class.isInstance(fieldType)) {
-      DateStatsValues statsValues = new DateStatsValues(statsField);
-      if (sf.multiValued()) {
-        return new SortedDateStatsValues(statsValues, statsField);
-      }
-      return statsValues;
-    } else if (TrieField.class.isInstance(fieldType) || PointField.class.isInstance(fieldType)) {
-      
-      NumericStatsValues statsValue = new NumericStatsValues(statsField);
-      if (sf.multiValued()) {
-        return new SortedNumericStatsValues(statsValue, statsField);
-      }
-      return statsValue;
+    if (TrieDateField.class.isInstance(fieldType)) {
+      return new DateStatsValues(statsField);
+    } else if (TrieField.class.isInstance(fieldType)) {
+      return new NumericStatsValues(statsField);
     } else if (StrField.class.isInstance(fieldType)) {
       return new StringStatsValues(statsField);
-    } else if (AbstractEnumField.class.isInstance(fieldType)) {
+    } else if (sf.getType().getClass().equals(EnumField.class)) {
       return new EnumStatsValues(statsField);
     } else {
       throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
@@ -163,7 +157,7 @@ abstract class AbstractStatsValues<T> implements StatsValues {
     this.computeMax = statsField.calculateStats(Stat.max);
     this.computeMinOrMax = computeMin || computeMax;
     
-    this.distinctValues = computeCalcDistinct ? new TreeSet<>() : null;
+    this.distinctValues = computeCalcDistinct ? new TreeSet<T>() : null;
 
     this.computeCardinality = statsField.calculateStats(Stat.cardinality);
     if ( computeCardinality ) {
@@ -199,6 +193,9 @@ abstract class AbstractStatsValues<T> implements StatsValues {
     }
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void accumulate(NamedList stv) {
     if (computeCount) {
@@ -258,6 +255,9 @@ abstract class AbstractStatsValues<T> implements StatsValues {
     }
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void accumulate(BytesRef value, int count) {
     if (null == ft) {
@@ -293,6 +293,9 @@ abstract class AbstractStatsValues<T> implements StatsValues {
     updateTypeSpecificStats(value, count);
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void missing() {
     if (computeMissing) {
@@ -300,16 +303,25 @@ abstract class AbstractStatsValues<T> implements StatsValues {
     }
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void addMissing(int count) {
     missing += count;
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void addFacet(String facetName, Map<String, StatsValues> facetValues) {
     facets.put(facetName, facetValues);
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public NamedList<?> getStatsValues() {
     NamedList<Object> res = new SimpleOrderedMap<>();
@@ -360,6 +372,9 @@ abstract class AbstractStatsValues<T> implements StatsValues {
     return res;
   }
   
+  /**
+   * {@inheritDoc}
+   */
   public void setNextReader(LeafReaderContext ctx) throws IOException {
     if (valueSource == null) {
       // first time we've collected local values, get the right ValueSource
@@ -474,7 +489,7 @@ class NumericStatsValues extends AbstractStatsValues<Number> {
   }
   
   @Override
-  public void accumulate(int docID) throws IOException {
+  public void accumulate(int docID) {
     if (values.exists(docID)) {
       Number value = (Number) values.objectVal(docID);
       accumulate(value, 1);
@@ -483,6 +498,9 @@ class NumericStatsValues extends AbstractStatsValues<Number> {
     }
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void updateTypeSpecificStats(NamedList stv) {
     if (computeSum) {
@@ -499,6 +517,9 @@ class NumericStatsValues extends AbstractStatsValues<Number> {
     }
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void updateTypeSpecificStats(Number v, int count) {
     double value = v.doubleValue();
@@ -513,6 +534,9 @@ class NumericStatsValues extends AbstractStatsValues<Number> {
     }
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   protected void updateMinMax(Number min, Number max) {
     // we always use the double values, because that way the response Object class is 
@@ -524,7 +548,7 @@ class NumericStatsValues extends AbstractStatsValues<Number> {
       if (null != min) {
         double minD = min.doubleValue();
         if (null == this.min || minD < this.minD) {
-          // Double for result & cached primitive double to minimize unboxing in future comparisons
+          // Double for result & cached primitive doulbe to minimize unboxing in future comparisons
           this.min = this.minD = minD;
         }
       }
@@ -533,7 +557,7 @@ class NumericStatsValues extends AbstractStatsValues<Number> {
       if (null != max) {
         double maxD = max.doubleValue();
         if (null == this.max || this.maxD < maxD) {
-          // Double for result & cached primitive double to minimize unboxing in future comparisons
+          // Double for result & cached primitive doulbe to minimize unboxing in future comparisons
           this.max = this.maxD = maxD;
         }
       }
@@ -616,8 +640,11 @@ class EnumStatsValues extends AbstractStatsValues<EnumFieldValue> {
     return hasher.hashInt(v.toInt().intValue()).asLong();
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
-  public void accumulate(int docID) throws IOException {
+  public void accumulate(int docID) {
     if (values.exists(docID)) {
       Integer intValue = (Integer) values.objectVal(docID);
       String stringValue = values.strVal(docID);
@@ -628,6 +655,9 @@ class EnumStatsValues extends AbstractStatsValues<EnumFieldValue> {
     }
   }
   
+  /**
+   * {@inheritDoc}
+   */
   protected void updateMinMax(EnumFieldValue min, EnumFieldValue max) {
     if (computeMin) { // nested if to encourage JIT to optimize aware final var?
       if (null != min) {
@@ -645,11 +675,17 @@ class EnumStatsValues extends AbstractStatsValues<EnumFieldValue> {
     }
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   protected void updateTypeSpecificStats(NamedList stv) {
     // No type specific stats
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   protected void updateTypeSpecificStats(EnumFieldValue value, int count) {
     // No type specific stats
@@ -670,7 +706,7 @@ class EnumStatsValues extends AbstractStatsValues<EnumFieldValue> {
  */
 class DateStatsValues extends AbstractStatsValues<Date> {
   
-  private double sum = 0.0;
+  private long sum = 0;
   double sumOfSquares = 0;
   
   final protected boolean computeSum;
@@ -688,7 +724,7 @@ class DateStatsValues extends AbstractStatsValues<Date> {
   }
   
   @Override
-  public void accumulate(int docID) throws IOException {
+  public void accumulate(int docID) {
     if (values.exists(docID)) {
       accumulate((Date) values.objectVal(docID), 1);
     } else {
@@ -696,27 +732,36 @@ class DateStatsValues extends AbstractStatsValues<Date> {
     }
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   protected void updateTypeSpecificStats(NamedList stv) {
     if (computeSum) {
-      sum += ((Number) stv.get("sum")).doubleValue();
+      sum += ((Date) stv.get("sum")).getTime();
     }
     if (computeSumOfSquares) {
       sumOfSquares += ((Number) stv.get("sumOfSquares")).doubleValue();
     }
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void updateTypeSpecificStats(Date v, int count) {
     long value = v.getTime();
     if (computeSumOfSquares) {
-      sumOfSquares += ((double)value * value * count); // for std deviation
+      sumOfSquares += (value * value * count); // for std deviation
     }
     if (computeSum) {
       sum += value * count;
     }
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   protected void updateMinMax(Date min, Date max) {
     if (computeMin) { // nested if to encourage JIT to optimize aware final var?
@@ -740,10 +785,10 @@ class DateStatsValues extends AbstractStatsValues<Date> {
   @Override
   protected void addTypeSpecificStats(NamedList<Object> res) {
     if (statsField.includeInResponse(Stat.sum)) {
-      res.add("sum", sum);
+      res.add("sum", new Date(sum));
     }
     if (statsField.includeInResponse(Stat.mean)) {
-      res.add("mean", (count > 0) ? new Date((long)(sum / count)) : null);
+      res.add("mean", (count > 0) ? new Date(sum / count) : null);
     }
     if (statsField.includeInResponse(Stat.sumOfSquares)) {
       res.add("sumOfSquares", sumOfSquares);
@@ -779,11 +824,11 @@ class StringStatsValues extends AbstractStatsValues<String> {
 
   @Override
   public long hash(String v) {
-    return hasher.hashString(v, StandardCharsets.UTF_8).asLong();
+    return hasher.hashString(v).asLong();
   }
   
   @Override
-  public void accumulate(int docID) throws IOException {
+  public void accumulate(int docID) {
     if (values.exists(docID)) {
       String value = values.strVal(docID);
       if (value != null) {
@@ -796,16 +841,25 @@ class StringStatsValues extends AbstractStatsValues<String> {
     }
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   protected void updateTypeSpecificStats(NamedList stv) {
     // No type specific stats
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   protected void updateTypeSpecificStats(String value, int count) {
     // No type specific stats
   }
   
+  /**
+   * {@inheritDoc}
+   */
   @Override
   protected void updateMinMax(String min, String max) {
     if (computeMin) { // nested if to encourage JIT to optimize aware final var?

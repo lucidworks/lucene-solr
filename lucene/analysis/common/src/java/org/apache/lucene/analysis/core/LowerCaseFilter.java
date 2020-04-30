@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,20 +16,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.core;
 
+import java.io.IOException;
 
+import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
+import org.apache.lucene.analysis.util.CharacterUtils;
 
 /**
  * Normalizes token text to lower case.
- * <p>
- * This class moved to Lucene Core, but a reference in the {@code analysis/common} module
- * is preserved for documentation purposes and consistency with filter factory.
- * @see org.apache.lucene.analysis.LowerCaseFilter
- * @see LowerCaseFilterFactory
  */
-public final class LowerCaseFilter extends org.apache.lucene.analysis.LowerCaseFilter {
+public final class LowerCaseFilter extends TokenFilter {
+  private final CharacterUtils charUtils = CharacterUtils.getInstance();
+  private final CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);
   
   /**
    * Create a new LowerCaseFilter, that normalizes token text to lower case.
@@ -38,4 +40,12 @@ public final class LowerCaseFilter extends org.apache.lucene.analysis.LowerCaseF
     super(in);
   }
   
+  @Override
+  public final boolean incrementToken() throws IOException {
+    if (input.incrementToken()) {
+      charUtils.toLowerCase(termAtt.buffer(), 0, termAtt.length());
+      return true;
+    } else
+      return false;
+  }
 }

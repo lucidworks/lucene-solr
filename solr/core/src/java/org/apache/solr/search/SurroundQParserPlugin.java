@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
+
 
 import org.apache.lucene.search.Query;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 
 import java.lang.invoke.MethodHandles;
@@ -44,6 +47,10 @@ import org.slf4j.LoggerFactory;
 public class SurroundQParserPlugin extends QParserPlugin {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   public static final String NAME = "surround";
+
+  @Override
+  public void init(NamedList args) {
+  }
 
   @Override
   public QParser createParser(String qstr, SolrParams localParams,
@@ -79,7 +86,7 @@ public class SurroundQParserPlugin extends QParserPlugin {
         try {
           this.maxBasicQueries = Integer.parseInt(mbqparam);
         } catch (Exception e) {
-          log.warn("Couldn't parse maxBasicQueries value " + mbqparam +", using default of 1000");
+          LOG.warn("Couldn't parse maxBasicQueries value " + mbqparam +", using default of 1000");
           this.maxBasicQueries = DEFMAXBASICQUERIES;
         }
       }
@@ -95,7 +102,7 @@ public class SurroundQParserPlugin extends QParserPlugin {
       // processing based on example in LIA Ch 9
 
       BasicQueryFactory bqFactory = new BasicQueryFactory(this.maxBasicQueries);
-      String defaultField = getParam(CommonParams.DF);
+      String defaultField = QueryParsing.getDefaultField(getReq().getSchema(),getParam(CommonParams.DF));
       Query lquery = sq.makeLuceneQueryField(defaultField, bqFactory);
       return lquery;
     }

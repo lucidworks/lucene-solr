@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function;
 
 import java.io.IOException;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.IntField;
 import org.apache.lucene.document.NumericDocValuesField;
-import org.apache.lucene.document.StoredField;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.RandomIndexWriter;
@@ -102,7 +103,7 @@ public class TestFunctionQuerySort extends LuceneTestCase {
     RandomIndexWriter writer = new RandomIndexWriter(random(), dir, iwc);
 
     Document doc = new Document();
-    Field field = new StoredField("value", 0);
+    Field field = new IntField("value", 0, Field.Store.YES);
     Field dvField = new NumericDocValuesField("value", 0);
     doc.add(field);
     doc.add(dvField);

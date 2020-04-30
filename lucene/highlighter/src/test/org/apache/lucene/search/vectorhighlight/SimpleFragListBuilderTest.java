@@ -1,3 +1,5 @@
+package org.apache.lucene.search.vectorhighlight;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.vectorhighlight;
 
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.*;
@@ -28,10 +29,13 @@ public class SimpleFragListBuilderTest extends AbstractTestCase {
   }
   
   public void testTooSmallFragSize() throws Exception {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try{
       SimpleFragListBuilder sflb = new SimpleFragListBuilder();
-      sflb.createFieldFragList(fpl(new TermQuery(new Term(F, "a")), "b c d"), sflb.minFragCharSize - 1);
-    });
+      sflb.createFieldFragList( fpl(new TermQuery(new Term(F, "a")), "b c d" ), sflb.minFragCharSize - 1 );
+      fail( "IllegalArgumentException must be thrown" );
+    }
+    catch ( IllegalArgumentException expected ) {
+    }
   }
   
   public void testSmallerFragSizeThanTermQuery() throws Exception {

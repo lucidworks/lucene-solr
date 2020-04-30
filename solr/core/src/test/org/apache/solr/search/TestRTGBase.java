@@ -17,17 +17,9 @@
 package org.apache.solr.search;
 
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
-
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.MultiBits;
-import org.apache.lucene.index.MultiTerms;
 import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
@@ -36,19 +28,38 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.update.UpdateLog;
 
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+
 import static org.apache.solr.update.processor.DistributedUpdateProcessor.DistribPhase;
+import static org.apache.solr.update.processor.DistributingUpdateProcessorFactory.DISTRIB_UPDATE_PARAM;
 
 public class TestRTGBase extends SolrTestCaseJ4 {
 
   // means we've seen the leader and have version info (i.e. we are a non-leader replica)
   public static String FROM_LEADER = DistribPhase.FROMLEADER.toString();
 
+  // since we make up fake versions in these tests, we can get messed up by a DBQ with a real version
+  // since Solr can think following updates were reordered.
+  @Override
+  public void clearIndex() {
+    try {
+      deleteByQueryAndGetVersion("*:*", params("_version_", Long.toString(-Long.MAX_VALUE), DISTRIB_UPDATE_PARAM,FROM_LEADER));
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   protected final ConcurrentHashMap<Integer,DocInfo> model = new ConcurrentHashMap<>();
   protected Map<Integer,DocInfo> committedModel = new HashMap<>();
   protected long snapshotCount;
   protected long committedModelClock;
   protected volatile int lastId;
-  protected static final String FIELD = "val_l";
+  protected final String field = "val_l";
   protected Object[] syncArr;
 
   protected Object globalLock = this;
@@ -101,15 +112,20 @@ public class TestRTGBase extends SolrTestCaseJ4 {
 
 
   protected List<Long> getLatestVersions() {
-    try (UpdateLog.RecentUpdates startingRecentUpdates = h.getCore().getUpdateHandler().getUpdateLog().getRecentUpdates()) {
-      return startingRecentUpdates.getVersions(100);
+    List<Long> recentVersions;
+    UpdateLog.RecentUpdates startingRecentUpdates = h.getCore().getUpdateHandler().getUpdateLog().getRecentUpdates();
+    try {
+      recentVersions = startingRecentUpdates.getVersions(100);
+    } finally {
+      startingRecentUpdates.close();
     }
+    return recentVersions;
   }
 
 
 
   protected int getFirstMatch(IndexReader r, Term t) throws IOException {
-    Terms terms = MultiTerms.getTerms(r, t.field());
+    Terms terms = MultiFields.getTerms(r, t.field());
     if (terms == null) return -1;
     BytesRef termBytes = t.bytes();
     final TermsEnum termsEnum = terms.iterator();
@@ -117,7 +133,7 @@ public class TestRTGBase extends SolrTestCaseJ4 {
       return -1;
     }
     PostingsEnum docs = termsEnum.postings(null, PostingsEnum.NONE);
-    docs = BitsFilteredPostingsEnum.wrap(docs, MultiBits.getLiveDocs(r));
+    docs = BitsFilteredPostingsEnum.wrap(docs, MultiFields.getLiveDocs(r));
     int id = docs.nextDoc();
     if (id != DocIdSetIterator.NO_MORE_DOCS) {
       int next = docs.nextDoc();

@@ -1,26 +1,27 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.apache.solr.common.cloud;
 
 import java.lang.invoke.MethodHandles;
 
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with this
+ * work for additional information regarding copyright ownership. The ASF
+ * licenses this file to You under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.solr.common.SolrException;
@@ -65,14 +66,14 @@ public class ClusterStateUtil {
       success = true;
       ClusterState clusterState = zkStateReader.getClusterState();
       if (clusterState != null) {
-        Map<String, DocCollection> collections = null;
+        Set<String> collections;
         if (collection != null) {
-          collections = Collections.singletonMap(collection, clusterState.getCollection(collection));
+          collections = Collections.singleton(collection);
         } else {
-          collections = clusterState.getCollectionsMap();
+          collections = clusterState.getCollections();
         }
-        for (Map.Entry<String, DocCollection> entry : collections.entrySet()) {
-          DocCollection docCollection = entry.getValue();
+        for (String coll : collections) {
+          DocCollection docCollection = clusterState.getCollection(coll);
           Collection<Slice> slices = docCollection.getSlices();
           for (Slice slice : slices) {
             // only look at active shards
@@ -177,14 +178,14 @@ public class ClusterStateUtil {
       success = true;
       ClusterState clusterState = zkStateReader.getClusterState();
       if (clusterState != null) {
-        Map<String, DocCollection> collections = null;
-        if (collection != null) {
-          collections = Collections.singletonMap(collection, clusterState.getCollection(collection));
+        Set<String> collections;
+        if (collection == null) {
+          collections = clusterState.getCollections();
         } else {
-          collections = clusterState.getCollectionsMap();
+          collections = Collections.singleton(collection);
         }
-        for (Map.Entry<String, DocCollection> entry : collections.entrySet()) {
-          DocCollection docCollection = entry.getValue();
+        for (String coll : collections) {
+          DocCollection docCollection = clusterState.getCollection(coll);
           Collection<Slice> slices = docCollection.getSlices();
           for (Slice slice : slices) {
             // only look at active shards
@@ -217,8 +218,8 @@ public class ClusterStateUtil {
   }
   
   public static int getLiveAndActiveReplicaCount(ZkStateReader zkStateReader, String collection) {
-    Slice[] slices;
-    slices = zkStateReader.getClusterState().getCollection(collection).getActiveSlicesArr();
+    Collection<Slice> slices;
+    slices = zkStateReader.getClusterState().getActiveSlices(collection);
     int liveAndActive = 0;
     for (Slice slice : slices) {
       for (Replica replica : slice.getReplicas()) {
@@ -253,5 +254,16 @@ public class ClusterStateUtil {
     
     return success;
   }
-
+  
+  public static boolean isAutoAddReplicas(ZkStateReader reader, String collection) {
+    ClusterState clusterState = reader.getClusterState();
+    if (clusterState != null) {
+      DocCollection docCollection = clusterState.getCollectionOrNull(collection);
+      if (docCollection != null) {
+        return docCollection.getAutoAddReplicas();
+      }
+    }
+    return false;
+  }
+  
 }

@@ -14,9 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.dataimport;
 
-import org.apache.solr.common.EmptyEntityResolver;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.schema.IndexSchema;
@@ -74,8 +74,8 @@ public class DataImporter {
     IDLE, RUNNING_FULL_DUMP, RUNNING_DELTA_DUMP, JOB_FAILED
   }
 
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-  private static final XMLErrorLogger XMLLOG = new XMLErrorLogger(log);
+  private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private static final XMLErrorLogger XMLLOG = new XMLErrorLogger(LOG);
 
   private Status status = Status.IDLE;
   private DIHConfiguration config;
@@ -125,7 +125,7 @@ public class DataImporter {
         } else if(dataconfigFile!=null) {
           is = new InputSource(core.getResourceLoader().openResource(dataconfigFile));
           is.setSystemId(SystemIdResolver.createSystemIdFromResourceName(dataconfigFile));
-          log.info("Loading DIH Configuration: " + dataconfigFile);
+          LOG.info("Loading DIH Configuration: " + dataconfigFile);
         }
         if(is!=null) {          
           config = loadDataConfig(is);
@@ -143,12 +143,12 @@ public class DataImporter {
             if (name.equals("datasource")) {
               success = true;
               NamedList dsConfig = (NamedList) defaultParams.getVal(position);
-              log.info("Getting configuration for Global Datasource...");
+              LOG.info("Getting configuration for Global Datasource...");              
               Map<String,String> props = new HashMap<>();
               for (int i = 0; i < dsConfig.size(); i++) {
                 props.put(dsConfig.getName(i), dsConfig.getVal(i).toString());
               }
-              log.info("Adding properties to datasource: " + props);
+              LOG.info("Adding properties to datasource: " + props);
               dsProps.put((String) dsConfig.get("name"), props);
             }
             position++;
@@ -179,11 +179,11 @@ public class DataImporter {
   /**
    * Used by tests
    */
-  void loadAndInit(String configStr) {
+  public void loadAndInit(String configStr) {
     config = loadDataConfig(new InputSource(new StringReader(configStr)));
   }
 
-  void loadAndInit(InputSource configFile) {
+  public void loadAndInit(InputSource configFile) {
     config = loadDataConfig(configFile);
   }
 
@@ -192,28 +192,20 @@ public class DataImporter {
     DIHConfiguration dihcfg = null;
     try {
       DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-      dbf.setValidating(false);
       
-      // only enable xinclude, if XML is coming from safe source (local file)
-      // and a a SolrCore and SystemId is present (makes no sense otherwise):
+      // only enable xinclude, if a a SolrCore and SystemId is present (makes no sense otherwise)
       if (core != null && configFile.getSystemId() != null) {
         try {
           dbf.setXIncludeAware(true);
           dbf.setNamespaceAware(true);
         } catch( UnsupportedOperationException e ) {
-          log.warn( "XML parser doesn't support XInclude option" );
+          LOG.warn( "XML parser doesn't support XInclude option" );
         }
       }
       
       DocumentBuilder builder = dbf.newDocumentBuilder();
-      // only enable xinclude / external entities, if XML is coming from
-      // safe source (local file) and a a SolrCore and SystemId is present:
-      if (core != null && configFile.getSystemId() != null) {
+      if (core != null)
         builder.setEntityResolver(new SystemIdResolver(core.getResourceLoader()));
-      } else {
-        // Don't allow external entities without having a system ID:
-        builder.setEntityResolver(EmptyEntityResolver.SAX_INSTANCE);
-      }
       builder.setErrorHandler(XMLLOG);
       Document document;
       try {
@@ -224,7 +216,7 @@ public class DataImporter {
       }
 
       dihcfg = readFromXml(document);
-      log.info("Data Configuration loaded successfully");
+      LOG.info("Data Configuration loaded successfully");
     } catch (Exception e) {
       throw new DataImportHandlerException(SEVERE,
               "Data Config problem: " + e.getMessage(), e);
@@ -297,7 +289,8 @@ public class DataImporter {
     if (propertyWriterTags.isEmpty()) {
       boolean zookeeper = false;
       if (this.core != null
-          && this.core.getCoreContainer().isZooKeeperAware()) {
+          && this.core.getCoreDescriptor().getCoreContainer()
+              .isZooKeeperAware()) {
         zookeeper = true;
       }
       pw = new PropertyWriter(zookeeper ? "ZKPropertiesWriter"
@@ -414,7 +407,7 @@ public class DataImporter {
   }
 
   public void doFullImport(DIHWriter writer, RequestInfo requestParams) {
-    log.info("Starting Full Import");
+    LOG.info("Starting Full Import");
     setStatus(Status.RUNNING_FULL_DUMP);
     try {
       DIHProperties dihPropWriter = createPropertyWriter();
@@ -425,7 +418,7 @@ public class DataImporter {
       if (!requestParams.isDebug())
         cumulativeStatistics.add(docBuilder.importStatistics);
     } catch (Exception e) {
-      SolrException.log(log, "Full Import failed", e);
+      SolrException.log(LOG, "Full Import failed", e);
       docBuilder.handleError("Full Import failed", e);
     } finally {
       setStatus(Status.IDLE);
@@ -442,7 +435,7 @@ public class DataImporter {
   }
 
   public void doDeltaImport(DIHWriter writer, RequestInfo requestParams) {
-    log.info("Starting Delta Import");
+    LOG.info("Starting Delta Import");
     setStatus(Status.RUNNING_DELTA_DUMP);
     try {
       DIHProperties dihPropWriter = createPropertyWriter();
@@ -453,7 +446,7 @@ public class DataImporter {
       if (!requestParams.isDebug())
         cumulativeStatistics.add(docBuilder.importStatistics);
     } catch (Exception e) {
-      log.error("Delta Import Failed", e);
+      LOG.error("Delta Import Failed", e);
       docBuilder.handleError("Delta Import Failed", e);
     } finally {
       setStatus(Status.IDLE);
@@ -463,7 +456,12 @@ public class DataImporter {
   }
 
   public void runAsync(final RequestInfo reqParams, final DIHWriter sw) {
-    new Thread(() -> runCmd(reqParams, sw)).start();
+    new Thread() {
+      @Override
+      public void run() {
+        runCmd(reqParams, sw);
+      }
+    }.start();
   }
 
   void runCmd(RequestInfo reqParams, DIHWriter sw) {
@@ -475,7 +473,7 @@ public class DataImporter {
       return;
     }
     if (!importLock.tryLock()){
-      log.warn("Import command failed . another import is running");
+      LOG.warn("Import command failed . another import is running");      
       return;
     }
     try {

@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.function.Supplier;
-
 
 /**
  * A PriorityQueue maintains a partial ordering of its elements such that the
@@ -27,88 +23,52 @@ import java.util.function.Supplier;
  * require log(size) time but the remove() cost implemented here is linear.
  *
  * <p>
- * <b>NOTE</b>: This class pre-allocates an array of length {@code maxSize+1}
- * and pre-fills it with elements if instantiated via the
- * {@link #PriorityQueue(int,Supplier)} constructor.
- *
- * <b>NOTE</b>: Iteration order is not specified.
- *
+ * <b>NOTE</b>: This class will pre-allocate a full array of length
+ * <code>maxSize+1</code> if instantiated via the
+ * {@link #PriorityQueue(int,boolean)} constructor with <code>prepopulate</code>
+ * set to <code>true</code>.
+ * 
  * @lucene.internal
  */
-public abstract class PriorityQueue<T> implements Iterable<T> {
+public abstract class PriorityQueue<T> {
   private int size = 0;
   private final int maxSize;
   private final T[] heap;
 
-  /**
-   * Create an empty priority queue of the configured size.
-   */
   public PriorityQueue(int maxSize) {
-    this(maxSize, () -> null);
+    this(maxSize, true);
   }
 
-  /**
-   * Create a priority queue that is pre-filled with sentinel objects, so that
-   * the code which uses that queue can always assume it's full and only change
-   * the top without attempting to insert any new object.<br>
-   *
-   * Those sentinel values should always compare worse than any non-sentinel
-   * value (i.e., {@link #lessThan} should always favor the
-   * non-sentinel values).<br>
-   *
-   * By default, the supplier returns null, which means the queue will not be
-   * filled with sentinel values. Otherwise, the value returned will be used to
-   * pre-populate the queue.<br>
-   *
-   * If this method is extended to return a non-null value, then the following
-   * usage pattern is recommended:
-   *
-   * <pre class="prettyprint">
-   * PriorityQueue&lt;MyObject&gt; pq = new MyQueue&lt;MyObject&gt;(numHits);
-   * // save the 'top' element, which is guaranteed to not be null.
-   * MyObject pqTop = pq.top();
-   * &lt;...&gt;
-   * // now in order to add a new element, which is 'better' than top (after
-   * // you've verified it is better), it is as simple as:
-   * pqTop.change().
-   * pqTop = pq.updateTop();
-   * </pre>
-   *
-   * <b>NOTE:</b> the given supplier will be called {@code maxSize} times,
-   * relying on a new object to be returned and will not check if it's null again.
-   * Therefore you should ensure any call to this method creates a new instance and
-   * behaves consistently, e.g., it cannot return null if it previously returned
-   * non-null and all returned instances must {@link #lessThan compare equal}.
-   */
-  public PriorityQueue(int maxSize, Supplier<T> sentinelObjectSupplier) {
+  public PriorityQueue(int maxSize, boolean prepopulate) {
     final int heapSize;
     if (0 == maxSize) {
       // We allocate 1 extra to avoid if statement in top()
       heapSize = 2;
     } else {
-
-      if ((maxSize < 0) || (maxSize >= ArrayUtil.MAX_ARRAY_LENGTH)) {
-        // Throw exception to prevent confusing OOME:
-        throw new IllegalArgumentException("maxSize must be >= 0 and < " + (ArrayUtil.MAX_ARRAY_LENGTH) + "; got: " + maxSize);
-      }
-
       // NOTE: we add +1 because all access to heap is
       // 1-based not 0-based.  heap[0] is unused.
       heapSize = maxSize + 1;
+
+      if (heapSize > ArrayUtil.MAX_ARRAY_LENGTH) {
+        // Throw exception to prevent confusing OOME:
+        throw new IllegalArgumentException("maxSize must be <= " + (ArrayUtil.MAX_ARRAY_LENGTH-1) + "; got: " + maxSize);
+      }
     }
     // T is unbounded type, so this unchecked cast works always:
     @SuppressWarnings("unchecked") final T[] h = (T[]) new Object[heapSize];
     this.heap = h;
     this.maxSize = maxSize;
-
-    // If sentinel objects are supported, populate the queue with them
-    T sentinel = sentinelObjectSupplier.get();
-    if (sentinel != null) {
-      heap[1] = sentinel;
-      for (int i = 2; i < heap.length; i++) {
-        heap[i] = sentinelObjectSupplier.get();
+    
+    if (prepopulate) {
+      // If sentinel objects are supported, populate the queue with them
+      T sentinel = getSentinelObject();
+      if (sentinel != null) {
+        heap[1] = sentinel;
+        for (int i = 2; i < heap.length; i++) {
+          heap[i] = getSentinelObject();
+        }
+        size = maxSize;
       }
-      size = maxSize;
     }
   }
 
@@ -119,10 +79,54 @@ public abstract class PriorityQueue<T> implements Iterable<T> {
   protected abstract boolean lessThan(T a, T b);
 
   /**
+   * This method can be overridden by extending classes to return a sentinel
+   * object which will be used by the {@link PriorityQueue#PriorityQueue(int,boolean)} 
+   * constructor to fill the queue, so that the code which uses that queue can always
+   * assume it's full and only change the top without attempting to insert any new
+   * object.<br>
+   * 
+   * Those sentinel values should always compare worse than any non-sentinel
+   * value (i.e., {@link #lessThan} should always favor the
+   * non-sentinel values).<br>
+   * 
+   * By default, this method returns null, which means the queue will not be
+   * filled with sentinel values. Otherwise, the value returned will be used to
+   * pre-populate the queue. Adds sentinel values to the queue.<br>
+   * 
+   * If this method is extended to return a non-null value, then the following
+   * usage pattern is recommended:
+   * 
+   * <pre class="prettyprint">
+   * // extends getSentinelObject() to return a non-null value.
+   * PriorityQueue&lt;MyObject&gt; pq = new MyQueue&lt;MyObject&gt;(numHits);
+   * // save the 'top' element, which is guaranteed to not be null.
+   * MyObject pqTop = pq.top();
+   * &lt;...&gt;
+   * // now in order to add a new element, which is 'better' than top (after 
+   * // you've verified it is better), it is as simple as:
+   * pqTop.change().
+   * pqTop = pq.updateTop();
+   * </pre>
+   * 
+   * <b>NOTE:</b> if this method returns a non-null value, it will be called by
+   * the {@link PriorityQueue#PriorityQueue(int,boolean)} constructor 
+   * {@link #size()} times, relying on a new object to be returned and will not
+   * check if it's null again. Therefore you should ensure any call to this
+   * method creates a new instance and behaves consistently, e.g., it cannot
+   * return null if it previously returned non-null.
+   * 
+   * @return the sentinel object to use to pre-populate the queue, or null if
+   *         sentinel objects are not supported.
+   */
+  protected T getSentinelObject() {
+    return null;
+  }
+
+  /**
    * Adds an Object to a PriorityQueue in log(size) time. If one tries to add
    * more objects than maxSize from initialize an
    * {@link ArrayIndexOutOfBoundsException} is thrown.
-   *
+   * 
    * @return the new 'top' element in the queue.
    */
   public final T add(T element) {
@@ -178,24 +182,24 @@ public abstract class PriorityQueue<T> implements Iterable<T> {
       return null;
     }
   }
-
+  
   /**
    * Should be called when the Object at top changes values. Still log(n) worst
    * case, but it's at least twice as fast to
-   *
+   * 
    * <pre class="prettyprint">
    * pq.top().change();
    * pq.updateTop();
    * </pre>
-   *
+   * 
    * instead of
-   *
+   * 
    * <pre class="prettyprint">
    * o = pq.pop();
    * o.change();
    * pq.push(o);
    * </pre>
-   *
+   * 
    * @return the new 'top' element.
    */
   public final T updateTop() {
@@ -259,7 +263,7 @@ public abstract class PriorityQueue<T> implements Iterable<T> {
     heap[i] = node;            // install saved node
     return i != origPos;
   }
-
+  
   private final void downHeap(int i) {
     T node = heap[i];          // save top node
     int j = i << 1;            // find smaller child
@@ -284,27 +288,5 @@ public abstract class PriorityQueue<T> implements Iterable<T> {
    */
   protected final Object[] getHeapArray() {
     return (Object[]) heap;
-  }
-
-  @Override
-  public Iterator<T> iterator() {
-    return new Iterator<T>() {
-
-      int i = 1;
-
-      @Override
-      public boolean hasNext() {
-        return i <= size;
-      }
-
-      @Override
-      public T next() {
-        if (hasNext() == false) {
-          throw new NoSuchElementException();
-        }
-        return heap[i++];
-      }
-
-    };
   }
 }

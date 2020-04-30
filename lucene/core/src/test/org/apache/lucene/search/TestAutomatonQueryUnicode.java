@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -39,7 +39,7 @@ public class TestAutomatonQueryUnicode extends LuceneTestCase {
   private IndexSearcher searcher;
   private Directory directory;
 
-  private static final String FN = "field";
+  private final String FN = "field";
 
   @Override
   public void setUp() throws Exception {
@@ -94,8 +94,8 @@ public class TestAutomatonQueryUnicode extends LuceneTestCase {
     return new Term(FN, value);
   }
 
-  private long automatonQueryNrHits(AutomatonQuery query) throws IOException {
-    return searcher.search(query, 5).totalHits.value;
+  private int automatonQueryNrHits(AutomatonQuery query) throws IOException {
+    return searcher.search(query, 5).totalHits;
   }
 
   private void assertAutomatonHits(int expected, Automaton automaton)

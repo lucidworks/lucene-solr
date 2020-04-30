@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.common.params;
 
 /**
@@ -35,7 +36,7 @@ public interface AnalysisParams {
   static final String QUERY = PREFIX + ".query";
 
   /**
-   * Set to {@code true} to indicate that the index tokens that match query tokens should be marked as "matched".
+   * Set to {@code true} to indicate that the index tokens that match query tokens should be marked as "mateched".
    */
   static final String SHOW_MATCH = PREFIX + ".showmatch";
 

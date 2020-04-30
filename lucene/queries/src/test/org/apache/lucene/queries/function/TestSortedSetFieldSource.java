@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function;
 
 import java.util.Collections;
 
@@ -50,7 +51,7 @@ public class TestSortedSetFieldSource extends LuceneTestCase {
 
     DirectoryReader ir = DirectoryReader.open(dir);
     IndexSearcher searcher = newSearcher(ir);
-    LeafReader ar = getOnlyLeafReader(ir);
+    LeafReader ar = getOnlySegmentReader(ir);
     
     ValueSource vs = new SortedSetFieldSource("value");
     FunctionValues values = vs.getValues(Collections.emptyMap(), ar.getContext());

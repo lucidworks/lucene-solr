@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
+
+import org.apache.lucene.util.LuceneTestCase;
+import org.junit.Test;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
-import org.apache.solr.SolrTestCase;
-import org.junit.Test;
 
 /**
  * Check standard query parsers for class loading problems during initialization (NAME field is final and static).
@@ -34,7 +35,7 @@ import org.junit.Test;
  * @see org.apache.solr.search.QParserPlugin#standardPlugins
  *
  */
-public class TestStandardQParsers extends SolrTestCase {
+public class TestStandardQParsers extends LuceneTestCase {
   /**
    * Field name of constant mandatory for query parser plugin.
    */
@@ -50,9 +51,9 @@ public class TestStandardQParsers extends SolrTestCase {
     List<String> notFinal = new ArrayList<>(QParserPlugin.standardPlugins.size());
     List<String> mismatch = new ArrayList<>(QParserPlugin.standardPlugins.size());
 
-    for (Map.Entry<String, QParserPlugin> pair : QParserPlugin.standardPlugins.entrySet()) {
+    for (Map.Entry<String, Class<? extends QParserPlugin>> pair : QParserPlugin.standardPlugins.entrySet()) {
       String regName = pair.getKey();
-      Class<? extends QParserPlugin> clazz = pair.getValue().getClass();;
+      Class<? extends QParserPlugin> clazz = pair.getValue();
 
       Field nameField = clazz.getField(FIELD_NAME);
       int modifiers = nameField.getModifiers();
@@ -77,15 +78,6 @@ public class TestStandardQParsers extends SolrTestCase {
                QParserPlugin.DEFAULT_QTYPE,
         QParserPlugin.standardPlugins.keySet().contains(QParserPlugin.DEFAULT_QTYPE));
 
-  }
-
-  /**
-   * Test that "lucene" is the default query parser.
-   */
-  @Test
-  public void testDefaultQType() throws Exception {
-    assertEquals(LuceneQParserPlugin.NAME, QParserPlugin.DEFAULT_QTYPE);
-    assertEquals("lucene", LuceneQParserPlugin.NAME);
   }
 
 }

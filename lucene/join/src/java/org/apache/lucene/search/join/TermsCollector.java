@@ -1,3 +1,5 @@
+package org.apache.lucene.search.join;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.join;
 
 import java.io.IOException;
 
+import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.BinaryDocValues;
+import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.SortedSetDocValues;
+import org.apache.lucene.search.SimpleCollector;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefHash;
 
@@ -28,13 +32,14 @@ import org.apache.lucene.util.BytesRefHash;
  *
  * @lucene.experimental
  */
-abstract class TermsCollector<DV> extends DocValuesTermsCollector<DV> {
+abstract class TermsCollector extends SimpleCollector {
 
-  TermsCollector(Function<DV> docValuesCall) {
-    super(docValuesCall);
-  }
-
+  final String field;
   final BytesRefHash collectorTerms = new BytesRefHash();
+
+  TermsCollector(String field) {
+    this.field = field;
+  }
 
   public BytesRefHash getCollectorTerms() {
     return collectorTerms;
@@ -47,55 +52,59 @@ abstract class TermsCollector<DV> extends DocValuesTermsCollector<DV> {
    * @param multipleValuesPerDocument Whether the field to collect terms for has multiple values per document.
    * @return a {@link TermsCollector} instance
    */
-  static TermsCollector<?> create(String field, boolean multipleValuesPerDocument) {
-    return multipleValuesPerDocument 
-        ? new MV(sortedSetDocValues(field))
-        : new SV(binaryDocValues(field));
+  static TermsCollector create(String field, boolean multipleValuesPerDocument) {
+    return multipleValuesPerDocument ? new MV(field) : new SV(field);
   }
-  
+
   // impl that works with multiple values per document
-  static class MV extends TermsCollector<SortedSetDocValues> {
-    
-    MV(Function<SortedSetDocValues> docValuesCall) {
-      super(docValuesCall);
+  static class MV extends TermsCollector {
+    final BytesRef scratch = new BytesRef();
+    private SortedSetDocValues docTermOrds;
+
+    MV(String field) {
+      super(field);
     }
 
     @Override
     public void collect(int doc) throws IOException {
+      docTermOrds.setDocument(doc);
       long ord;
-      if (doc > docValues.docID()) {
-        docValues.advance(doc);
+      while ((ord = docTermOrds.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
+        final BytesRef term = docTermOrds.lookupOrd(ord);
+        collectorTerms.add(term);
       }
-      if (doc == docValues.docID()) {
-        while ((ord = docValues.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
-          final BytesRef term = docValues.lookupOrd(ord);
-          collectorTerms.add(term);
-        }
-      }
+    }
+
+    @Override
+    protected void doSetNextReader(LeafReaderContext context) throws IOException {
+      docTermOrds = DocValues.getSortedSet(context.reader(), field);
     }
   }
 
   // impl that works with single value per document
-  static class SV extends TermsCollector<BinaryDocValues> {
+  static class SV extends TermsCollector {
 
-    SV(Function<BinaryDocValues> docValuesCall) {
-      super(docValuesCall);
+    final BytesRef spare = new BytesRef();
+    private BinaryDocValues fromDocTerms;
+
+    SV(String field) {
+      super(field);
     }
 
     @Override
     public void collect(int doc) throws IOException {
-      BytesRef term;
-      if (docValues.advanceExact(doc)) {
-        term = docValues.binaryValue();
-      } else {
-        term = new BytesRef(BytesRef.EMPTY_BYTES);
-      }
+      final BytesRef term = fromDocTerms.get(doc);
       collectorTerms.add(term);
+    }
+
+    @Override
+    protected void doSetNextReader(LeafReaderContext context) throws IOException {
+      fromDocTerms = DocValues.getBinary(context.reader(), field);
     }
   }
 
   @Override
-  public org.apache.lucene.search.ScoreMode scoreMode() {
-    return org.apache.lucene.search.ScoreMode.COMPLETE_NO_SCORES;
+  public boolean needsScores() {
+    return false;
   }
 }

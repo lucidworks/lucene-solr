@@ -14,16 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
-import java.io.IOException;
+package org.apache.solr.search;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Weight;
+
+import java.io.IOException;
 
 /** A simple query that wraps another query and implements ExtendedQuery. */
 public final class WrappedQuery extends ExtendedQueryBase {
@@ -42,19 +41,17 @@ public final class WrappedQuery extends ExtendedQueryBase {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    return q.createWeight(searcher, scoreMode, boost);
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    return q.createWeight(searcher, needsScores);
   }
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
     // currently no need to continue wrapping at this point.
     return q.rewrite(reader);
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    q.visit(visitor);
   }
 
   @Override

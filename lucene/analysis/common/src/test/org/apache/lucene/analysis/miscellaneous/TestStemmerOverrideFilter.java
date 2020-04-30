@@ -1,3 +1,4 @@
+package org.apache.lucene.analysis.miscellaneous;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
@@ -26,13 +26,13 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
-import org.apache.lucene.analysis.CharacterUtils;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.core.KeywordTokenizer;
 import org.apache.lucene.analysis.core.WhitespaceTokenizer;
 import org.apache.lucene.analysis.en.PorterStemFilter;
 import org.apache.lucene.analysis.miscellaneous.StemmerOverrideFilter.StemmerOverrideMap;
+import org.apache.lucene.analysis.util.CharacterUtils;
 import org.apache.lucene.util.TestUtil;
 
 /**
@@ -85,6 +85,8 @@ public class TestStemmerOverrideFilter extends BaseTokenStreamTestCase {
     int numTerms = atLeast(50);
     boolean ignoreCase = random().nextBoolean();
 
+    CharacterUtils charUtils = CharacterUtils.getInstance();
+
     for (int i = 0; i < numTerms; i++) {
       String randomRealisticUnicodeString = TestUtil
           .randomRealisticUnicodeString(random());
@@ -105,7 +107,7 @@ public class TestStemmerOverrideFilter extends BaseTokenStreamTestCase {
         if (ignoreCase) {
           // TODO: can we simply use inputValue.toLowerCase(Locale.ROOT)???
           char[] buffer = inputValue.toCharArray();
-          CharacterUtils.toLowerCase(buffer, 0, buffer.length);
+          charUtils.toLowerCase(buffer, 0, buffer.length);
           seenInputValue = buffer.toString();
         } else {
           seenInputValue = inputValue;
@@ -155,9 +157,7 @@ public class TestStemmerOverrideFilter extends BaseTokenStreamTestCase {
     if (map.isEmpty()) {
       map.put("booked", "books");
     }
-    // This test might fail if ignoreCase is true since the map might have twice the same key, once
-    // lowercased and once uppercased
-    StemmerOverrideFilter.Builder builder = new StemmerOverrideFilter.Builder(false);
+    StemmerOverrideFilter.Builder builder = new StemmerOverrideFilter.Builder(random().nextBoolean());
     Set<Entry<String,String>> entrySet = map.entrySet();
     for (Entry<String,String> entry : entrySet) {
       builder.add(entry.getKey(), entry.getValue());

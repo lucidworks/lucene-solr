@@ -1,3 +1,5 @@
+package org.apache.lucene.payloads;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.payloads;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -33,7 +34,6 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MultiPhraseQuery;
 import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.spans.SpanNearQuery;
 import org.apache.lucene.search.spans.SpanOrQuery;
@@ -115,7 +115,7 @@ public class PayloadSpanUtil {
 
     } else if (query instanceof MultiPhraseQuery) {
       final MultiPhraseQuery mpq = (MultiPhraseQuery) query;
-      final Term[][] termArrays = mpq.getTermArrays();
+      final List<Term[]> termArrays = mpq.getTermArrays();
       final int[] positions = mpq.getPositions();
       if (positions.length > 0) {
 
@@ -130,8 +130,8 @@ public class PayloadSpanUtil {
             new List[maxPosition + 1];
         int distinctPositions = 0;
 
-        for (int i = 0; i < termArrays.length; ++i) {
-          final Term[] termArray = termArrays[i];
+        for (int i = 0; i < termArrays.size(); ++i) {
+          final Term[] termArray = termArrays.get(i);
           List<Query> disjuncts = disjunctLists[positions[i]];
           if (disjuncts == null) {
             disjuncts = (disjunctLists[positions[i]] = new ArrayList<>(
@@ -172,8 +172,7 @@ public class PayloadSpanUtil {
     final IndexSearcher searcher = new IndexSearcher(context);
     searcher.setQueryCache(null);
 
-    query = (SpanQuery) searcher.rewrite(query);
-    SpanWeight w = (SpanWeight) searcher.createWeight(query, ScoreMode.COMPLETE_NO_SCORES, 1);
+    SpanWeight w = (SpanWeight) searcher.createNormalizedWeight(query, false);
 
     PayloadSpanCollector collector = new PayloadSpanCollector();
     for (LeafReaderContext leafReaderContext : context.leaves()) {

@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest;
+
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -67,7 +69,7 @@ public class FileDictionary implements Dictionary {
   /**
    * Creates a dictionary based on an inputstream.
    * Using {@link #DEFAULT_FIELD_DELIMITER} as the 
-   * field separator in a line.
+   * field seperator in a line.
    * <p>
    * NOTE: content is treated as UTF-8
    */
@@ -78,7 +80,7 @@ public class FileDictionary implements Dictionary {
   /**
    * Creates a dictionary based on a reader.
    * Using {@link #DEFAULT_FIELD_DELIMITER} as the 
-   * field separator in a line.
+   * field seperator in a line.
    */
   public FileDictionary(Reader reader) {
     this(reader, DEFAULT_FIELD_DELIMITER);
@@ -86,7 +88,7 @@ public class FileDictionary implements Dictionary {
   
   /**
    * Creates a dictionary based on a reader. 
-   * Using <code>fieldDelimiter</code> to separate out the
+   * Using <code>fieldDelimiter</code> to seperate out the
    * fields in a line.
    */
   public FileDictionary(Reader reader, String fieldDelimiter) {
@@ -96,7 +98,7 @@ public class FileDictionary implements Dictionary {
   
   /**
    * Creates a dictionary based on an inputstream.
-   * Using <code>fieldDelimiter</code> to separate out the
+   * Using <code>fieldDelimiter</code> to seperate out the
    * fields in a line.
    * <p>
    * NOTE: content is treated as UTF-8

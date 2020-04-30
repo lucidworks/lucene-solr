@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs;
 
 
 import java.io.IOException;
@@ -257,90 +258,6 @@ public final class CodecUtil {
     checkIndexHeaderSuffix(in, expectedSuffix);
     return version;
   }
-
-  /**
-   * Expert: verifies the incoming {@link IndexInput} has an index header
-   * and that its segment ID matches the expected one, and then copies
-   * that index header into the provided {@link DataOutput}.  This is
-   * useful when building compound files.
-   *
-   * @param in Input stream, positioned at the point where the
-   *        index header was previously written. Typically this is located
-   *        at the beginning of the file.
-   * @param out Output stream, where the header will be copied to.
-   * @param expectedID Expected segment ID
-   * @throws CorruptIndexException If the first four bytes are not
-   *         {@link #CODEC_MAGIC}, or if the <code>expectedID</code>
-   *         does not match.
-   * @throws IOException If there is an I/O error reading from the underlying medium.
-   *
-   * @lucene.internal 
-   */
-  public static void verifyAndCopyIndexHeader(IndexInput in, DataOutput out, byte[] expectedID) throws IOException {
-    // make sure it's large enough to have a header and footer
-    if (in.length() < footerLength() + headerLength("")) {
-      throw new CorruptIndexException("compound sub-files must have a valid codec header and footer: file is too small (" + in.length() + " bytes)", in);
-    }
-
-    int actualHeader = in.readInt();
-    if (actualHeader != CODEC_MAGIC) {
-      throw new CorruptIndexException("compound sub-files must have a valid codec header and footer: codec header mismatch: actual header=" + actualHeader + " vs expected header=" + CodecUtil.CODEC_MAGIC, in);
-    }
-
-    // we can't verify these, so we pass-through:
-    String codec = in.readString();
-    int version = in.readInt();
-
-    // verify id:
-    checkIndexHeaderID(in, expectedID);
-
-    // we can't verify extension either, so we pass-through:
-    int suffixLength = in.readByte() & 0xFF;
-    byte[] suffixBytes = new byte[suffixLength];
-    in.readBytes(suffixBytes, 0, suffixLength);
-
-    // now write the header we just verified
-    out.writeInt(CodecUtil.CODEC_MAGIC);
-    out.writeString(codec);
-    out.writeInt(version);
-    out.writeBytes(expectedID, 0, expectedID.length);
-    out.writeByte((byte) suffixLength);
-    out.writeBytes(suffixBytes, 0, suffixLength);
-  }
-
-
-  /** Retrieves the full index header from the provided {@link IndexInput}.
-   *  This throws {@link CorruptIndexException} if this file does
-   * not appear to be an index file. */
-  public static byte[] readIndexHeader(IndexInput in) throws IOException {
-    in.seek(0);
-    final int actualHeader = in.readInt();
-    if (actualHeader != CODEC_MAGIC) {
-      throw new CorruptIndexException("codec header mismatch: actual header=" + actualHeader + " vs expected header=" + CODEC_MAGIC, in);
-    }
-    String codec = in.readString();
-    in.readInt();
-    in.seek(in.getFilePointer() + StringHelper.ID_LENGTH);
-    int suffixLength = in.readByte() & 0xFF;
-    byte[] bytes = new byte[headerLength(codec) + StringHelper.ID_LENGTH + 1 + suffixLength];
-    in.seek(0);
-    in.readBytes(bytes, 0, bytes.length);
-    return bytes;
-  }
-
-  /** Retrieves the full footer from the provided {@link IndexInput}.  This throws
-   *  {@link CorruptIndexException} if this file does not have a valid footer. */
-  public static byte[] readFooter(IndexInput in) throws IOException {
-    if (in.length() < footerLength()) {
-      throw new CorruptIndexException("misplaced codec footer (file truncated?): length=" + in.length() + " but footerLength==" + footerLength(), in);
-    }
-    in.seek(in.length() - footerLength());
-    validateFooter(in);
-    in.seek(in.length() - footerLength());
-    byte[] bytes = new byte[footerLength()];
-    in.readBytes(bytes, 0, bytes.length);
-    return bytes;
-  }
   
   /** Expert: just reads and verifies the object ID of an index header */
   public static byte[] checkIndexHeaderID(DataInput in, byte[] expectedID) throws IOException {
@@ -470,7 +387,7 @@ public final class CodecUtil {
         // catch-all for things that shouldn't go wrong (e.g. OOM during readInt) but could...
         priorException.addSuppressed(new CorruptIndexException("checksum status indeterminate: unexpected exception", in, t));
       }
-      throw IOUtils.rethrowAlways(priorException);
+      IOUtils.reThrow(priorException);
     }
   }
   
@@ -480,9 +397,6 @@ public final class CodecUtil {
    * @throws IOException if the footer is invalid
    */
   public static long retrieveChecksum(IndexInput in) throws IOException {
-    if (in.length() < footerLength()) {
-      throw new CorruptIndexException("misplaced codec footer (file truncated?): length=" + in.length() + " but footerLength==" + footerLength(), in);
-    }
     in.seek(in.length() - footerLength());
     validateFooter(in);
     return readCRC(in);
@@ -492,9 +406,9 @@ public final class CodecUtil {
     long remaining = in.length() - in.getFilePointer();
     long expected = footerLength();
     if (remaining < expected) {
-      throw new CorruptIndexException("misplaced codec footer (file truncated?): remaining=" + remaining + ", expected=" + expected + ", fp=" + in.getFilePointer(), in);
+      throw new CorruptIndexException("misplaced codec footer (file truncated?): remaining=" + remaining + ", expected=" + expected, in);
     } else if (remaining > expected) {
-      throw new CorruptIndexException("misplaced codec footer (file extended?): remaining=" + remaining + ", expected=" + expected + ", fp=" + in.getFilePointer(), in);
+      throw new CorruptIndexException("misplaced codec footer (file extended?): remaining=" + remaining + ", expected=" + expected, in);
     }
     
     final int magic = in.readInt();
@@ -505,6 +419,18 @@ public final class CodecUtil {
     final int algorithmID = in.readInt();
     if (algorithmID != 0) {
       throw new CorruptIndexException("codec footer mismatch: unknown algorithmID: " + algorithmID, in);
+    }
+  }
+  
+  /**
+   * Checks that the stream is positioned at the end, and throws exception
+   * if it is not. 
+   * @deprecated Use {@link #checkFooter} instead, this should only used for files without checksums 
+   */
+  @Deprecated
+  public static void checkEOF(IndexInput in) throws IOException {
+    if (in.getFilePointer() != in.length()) {
+      throw new CorruptIndexException("did not read all bytes from file: read " + in.getFilePointer() + " vs size " + in.length(), in);
     }
   }
   
@@ -519,9 +445,6 @@ public final class CodecUtil {
     clone.seek(0);
     ChecksumIndexInput in = new BufferedChecksumIndexInput(clone);
     assert in.getFilePointer() == 0;
-    if (in.length() < footerLength()) {
-      throw new CorruptIndexException("misplaced codec footer (file truncated?): length=" + in.length() + " but footerLength==" + footerLength(), input);
-    }
     in.seek(in.length() - footerLength());
     return checkFooter(in);
   }
@@ -531,7 +454,7 @@ public final class CodecUtil {
    * @throws CorruptIndexException if CRC is formatted incorrectly (wrong bits set)
    * @throws IOException if an i/o error occurs
    */
-  static long readCRC(IndexInput input) throws IOException {
+  public static long readCRC(IndexInput input) throws IOException {
     long value = input.readLong();
     if ((value & 0xFFFFFFFF00000000L) != 0) {
       throw new CorruptIndexException("Illegal CRC-32 checksum: " + value, input);
@@ -544,7 +467,7 @@ public final class CodecUtil {
    * @throws IllegalStateException if CRC is formatted incorrectly (wrong bits set)
    * @throws IOException if an i/o error occurs
    */
-  static void writeCRC(IndexOutput output) throws IOException {
+  public static void writeCRC(IndexOutput output) throws IOException {
     long value = output.getChecksum();
     if ((value & 0xFFFFFFFF00000000L) != 0) {
       throw new IllegalStateException("Illegal CRC-32 checksum: " + value + " (resource=" + output + ")");

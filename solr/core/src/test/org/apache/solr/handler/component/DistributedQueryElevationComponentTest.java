@@ -1,3 +1,5 @@
+package org.apache.solr.handler.component;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
 
 import java.io.File;
 
@@ -35,7 +36,6 @@ import org.junit.Test;
 /**
  *
  */
-// See: https://issues.apache.org/jira/browse/SOLR-12028 Tests cannot remove files on Windows machines occasionally
 public class DistributedQueryElevationComponentTest extends BaseDistributedSearchTestCase {
 
   @BeforeClass
@@ -106,23 +106,21 @@ public class DistributedQueryElevationComponentTest extends BaseDistributedSearc
 
     assertTrue(response.getResults().getNumFound() > 0);
     SolrDocument document = response.getResults().get(0);
-    assertEquals("6", document.getFieldValue("id"));
+    assertEquals(6.0f, document.getFieldValue("id"));
     assertEquals(true, document.getFieldValue("[elevated]"));
 
     // Force javabin format
-    final String clientUrl = ((HttpSolrClient)clients.get(0)).getBaseURL();
-    HttpSolrClient client = getHttpSolrClient(clientUrl);
+    HttpSolrClient client = new HttpSolrClient(((HttpSolrClient)clients.get(0)).getBaseURL());
     client.setParser(new BinaryResponseParser());
     SolrQuery solrQuery = new SolrQuery("XXXX").setParam("qt", "/elevate").setParam("shards.qt", "/elevate").setRows(500).setFields("id,[elevated]")
         .setParam("enableElevation", "true").setParam("forceElevation", "true").setParam("elevateIds", "6", "wt", "javabin")
         .setSort("id", SolrQuery.ORDER.desc);
     setDistributedParams(solrQuery);
     response = client.query(solrQuery);
-    client.close();
 
     assertTrue(response.getResults().getNumFound() > 0);
     document = response.getResults().get(0);
-    assertEquals("6", document.getFieldValue("id"));
+    assertEquals(6.0f, document.getFieldValue("id"));
     assertEquals(true, document.getFieldValue("[elevated]"));
   }
   

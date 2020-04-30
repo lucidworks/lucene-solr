@@ -14,10 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.request;
 
-import java.util.ArrayList;
-import java.util.List;
+package org.apache.solr.client.solrj.request;
 
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrRequest;
@@ -25,6 +23,11 @@ import org.apache.solr.client.solrj.response.LukeResponse;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.ContentStream;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 /**
  * 
@@ -36,7 +39,6 @@ public class LukeRequest extends SolrRequest<LukeResponse> {
   private List<String> fields;
   private int numTerms = -1;
   private boolean showSchema = false;
-  private Boolean includeIndexFieldFlags = null;
   
   public LukeRequest()
   {
@@ -88,22 +90,11 @@ public class LukeRequest extends SolrRequest<LukeResponse> {
 
   //---------------------------------------------------------------------------------
   //---------------------------------------------------------------------------------
-
-  /**
-   * Choose whether /luke should return the index-flags for each field
-   *
-   * Fetching and returning the index-flags for each field in your index has non-zero cost, and can slow down requests to
-   * /luke.  Users who do not care about these values can tell Solr to avoid generating them by setting the
-   * 'includeIndexFieldFlags' flag to false, saving their requests some processing.
-   */
-  public void setIncludeIndexFieldFlags(boolean shouldInclude) {
-    includeIndexFieldFlags = shouldInclude;
+  
+  @Override
+  public Collection<ContentStream> getContentStreams() {
+    return null;
   }
-
-  public boolean getIncludeIndexFieldFlags() { return includeIndexFieldFlags; }
-
-  //---------------------------------------------------------------------------------
-  //---------------------------------------------------------------------------------
 
   @Override
   protected LukeResponse createResponse(SolrClient client) {
@@ -122,10 +113,6 @@ public class LukeRequest extends SolrRequest<LukeResponse> {
     if (showSchema) {
       params.add("show", "schema");
     }
-    if (includeIndexFieldFlags != null) {
-      params.add("includeIndexFieldFlags", includeIndexFieldFlags.toString());
-    }
-
     return params;
   }
 

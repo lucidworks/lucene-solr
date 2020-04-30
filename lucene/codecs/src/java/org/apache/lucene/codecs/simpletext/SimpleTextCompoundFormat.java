@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.simpletext;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.simpletext;
-
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -25,9 +25,7 @@ import java.text.DecimalFormatSymbols;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Locale;
-import java.util.Set;
 
 import org.apache.lucene.codecs.CompoundFormat;
 import org.apache.lucene.index.CorruptIndexException;
@@ -88,23 +86,23 @@ public class SimpleTextCompoundFormat extends CompoundFormat {
       SimpleTextUtil.readLine(in, scratch);
       assert StringHelper.startsWith(scratch.get(), TABLENAME);
       fileNames[i] = si.name + IndexFileNames.stripSegmentName(stripPrefix(scratch, TABLENAME));
-
+      
       if (i > 0) {
         // files must be unique and in sorted order
         assert fileNames[i].compareTo(fileNames[i-1]) > 0;
       }
-
+      
       SimpleTextUtil.readLine(in, scratch);
       assert StringHelper.startsWith(scratch.get(), TABLESTART);
       startOffsets[i] = Long.parseLong(stripPrefix(scratch, TABLESTART));
-
+      
       SimpleTextUtil.readLine(in, scratch);
       assert StringHelper.startsWith(scratch.get(), TABLEEND);
       endOffsets[i] = Long.parseLong(stripPrefix(scratch, TABLEEND));
     }
-
+    
     return new Directory() {
-
+      
       private int getIndex(String name) throws IOException {
         int index = Arrays.binarySearch(fileNames, name);
         if (index < 0) {
@@ -112,44 +110,36 @@ public class SimpleTextCompoundFormat extends CompoundFormat {
         }
         return index;
       }
-
+      
       @Override
       public String[] listAll() throws IOException {
         ensureOpen();
         return fileNames.clone();
       }
-
+      
       @Override
       public long fileLength(String name) throws IOException {
         ensureOpen();
         int index = getIndex(name);
         return endOffsets[index] - startOffsets[index];
       }
-
+      
       @Override
       public IndexInput openInput(String name, IOContext context) throws IOException {
         ensureOpen();
         int index = getIndex(name);
         return in.slice(name, startOffsets[index], endOffsets[index] - startOffsets[index]);
       }
-
+      
       @Override
       public void close() throws IOException {
         in.close();
       }
-
-      @Override
-      public Set<String> getPendingDeletions() throws IOException {
-        return Collections.emptySet();
-      }
-
+      
       // write methods: disabled
       
       @Override
       public IndexOutput createOutput(String name, IOContext context) { throw new UnsupportedOperationException(); }
-
-      @Override
-      public IndexOutput createTempOutput(String prefix, String suffix, IOContext context) { throw new UnsupportedOperationException(); }
       
       @Override
       public void sync(Collection<String> names) { throw new UnsupportedOperationException(); }
@@ -158,10 +148,7 @@ public class SimpleTextCompoundFormat extends CompoundFormat {
       public void deleteFile(String name) { throw new UnsupportedOperationException(); }
       
       @Override
-      public void rename(String source, String dest) { throw new UnsupportedOperationException(); }
-
-      @Override
-      public void syncMetaData() { throw new UnsupportedOperationException(); }
+      public void renameFile(String source, String dest) { throw new UnsupportedOperationException(); }
       
       @Override
       public Lock obtainLock(String name) { throw new UnsupportedOperationException(); }
@@ -224,7 +211,7 @@ public class SimpleTextCompoundFormat extends CompoundFormat {
   }
   
   // helper method to strip strip away 'prefix' from 'scratch' and return as String
-  private String stripPrefix(BytesRefBuilder scratch, BytesRef prefix) {
+  private String stripPrefix(BytesRefBuilder scratch, BytesRef prefix) throws IOException {
     return new String(scratch.bytes(), prefix.length, scratch.length() - prefix.length, StandardCharsets.UTF_8);
   }
   

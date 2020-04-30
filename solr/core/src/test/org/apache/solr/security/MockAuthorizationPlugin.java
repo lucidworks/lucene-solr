@@ -1,3 +1,5 @@
+package org.apache.solr.security;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,46 +16,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.security;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.function.Predicate;
 
 import org.apache.solr.common.SolrException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class MockAuthorizationPlugin implements AuthorizationPlugin {
+public class MockAuthorizationPlugin implements AuthorizationPlugin{
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   static final HashSet<String> denyUsers = new HashSet<>();
-  static final HashSet<String> protectedResources = new HashSet<>();
   static Predicate<AuthorizationContext> predicate;
 
   @Override
   public AuthorizationResponse authorize(AuthorizationContext context) {
-    String uname = context.getUserPrincipal() == null ? null : context.getUserPrincipal().getName();
-    if (predicate != null) {
+    String uname = context.getUserPrincipal()== null? null : context.getUserPrincipal().getName();
+    if(predicate != null){
       try {
         predicate.test(context);
         return new AuthorizationResponse(200);
       } catch (SolrException e) {
         return new AuthorizationResponse(e.code());
       }
-    } else {
-      if (!protectedResources.contains(context.getResource())) {
-        return new AuthorizationResponse(200);
-      }
-      if (uname == null) uname = context.getParams().get("uname");
-      log.info("User request: " + uname);
-      if (uname == null || denyUsers.contains(uname))
-        return new AuthorizationResponse(403);
-      else
-        return new AuthorizationResponse(200);
     }
+
+
+    if(uname == null) uname = context.getParams().get("uname");
+    log.info("User request: " + uname);
+    if(denyUsers.contains(uname))
+      return new AuthorizationResponse(403);
+    else
+      return new AuthorizationResponse(200);
   }
 
   @Override

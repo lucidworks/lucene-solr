@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
@@ -28,9 +28,7 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.search.CheckHits;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
-import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
@@ -62,10 +60,9 @@ public class TestNearSpansOrdered extends LuceneTestCase {
       doc.add(newTextField(FIELD, docFields[i], Field.Store.NO));
       writer.addDocument(doc);
     }
-    writer.forceMerge(1);
     reader = writer.getReader();
     writer.close();
-    searcher = newSearcher(getOnlyLeafReader(reader));
+    searcher = newSearcher(reader);
   }
 
   protected String[] docFields = {
@@ -74,8 +71,7 @@ public class TestNearSpansOrdered extends LuceneTestCase {
     "w1 xx w2 yy w3",
     "w1 w3 xx w2 yy w3 zz",
     "t1 t2 t2 t1",
-    "g x x g g x x x g g x x g",
-      "go to webpage"
+    "g x x g g x x x g g x x g"
   };
 
   protected SpanNearQuery makeQuery(String s1, String s2, String s3,
@@ -122,7 +118,7 @@ public class TestNearSpansOrdered extends LuceneTestCase {
   
   public void testNearSpansNext() throws Exception {
     SpanNearQuery q = makeQuery();
-    Spans span = q.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans span = MultiSpansWrapper.wrap(searcher.getIndexReader(), q);
     assertNext(span,0,0,3);
     assertNext(span,1,0,4);
     assertFinished(span);
@@ -135,7 +131,7 @@ public class TestNearSpansOrdered extends LuceneTestCase {
    */
   public void testNearSpansAdvanceLikeNext() throws Exception {
     SpanNearQuery q = makeQuery();
-    Spans span = q.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans span = MultiSpansWrapper.wrap(searcher.getIndexReader(), q);
     assertEquals(0, span.advance(0));
     assertEquals(0, span.nextStartPosition());
     assertEquals(s(0,0,3), s(span));
@@ -147,7 +143,7 @@ public class TestNearSpansOrdered extends LuceneTestCase {
   
   public void testNearSpansNextThenAdvance() throws Exception {
     SpanNearQuery q = makeQuery();
-    Spans span = q.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans span = MultiSpansWrapper.wrap(searcher.getIndexReader(), q);
     assertNotSame(Spans.NO_MORE_DOCS, span.nextDoc());
     assertEquals(0, span.nextStartPosition());
     assertEquals(s(0,0,3), s(span));
@@ -159,7 +155,7 @@ public class TestNearSpansOrdered extends LuceneTestCase {
   
   public void testNearSpansNextThenAdvancePast() throws Exception {
     SpanNearQuery q = makeQuery();
-    Spans span = q.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans span = MultiSpansWrapper.wrap(searcher.getIndexReader(), q);
     assertNotSame(Spans.NO_MORE_DOCS, span.nextDoc());
     assertEquals(0, span.nextStartPosition());
     assertEquals(s(0,0,3), s(span));
@@ -168,13 +164,13 @@ public class TestNearSpansOrdered extends LuceneTestCase {
   
   public void testNearSpansAdvancePast() throws Exception {
     SpanNearQuery q = makeQuery();
-    Spans span = q.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans span = MultiSpansWrapper.wrap(searcher.getIndexReader(), q);
     assertEquals(Spans.NO_MORE_DOCS, span.advance(2));
   }
   
   public void testNearSpansAdvanceTo0() throws Exception {
     SpanNearQuery q = makeQuery();
-    Spans span = q.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans span = MultiSpansWrapper.wrap(searcher.getIndexReader(), q);
     assertEquals(0, span.advance(0));
     assertEquals(0, span.nextStartPosition());
     assertEquals(s(0,0,3), s(span));
@@ -182,7 +178,7 @@ public class TestNearSpansOrdered extends LuceneTestCase {
 
   public void testNearSpansAdvanceTo1() throws Exception {
     SpanNearQuery q = makeQuery();
-    Spans span = q.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans span = MultiSpansWrapper.wrap(searcher.getIndexReader(), q);
     assertEquals(1, span.advance(1));
     assertEquals(0, span.nextStartPosition());
     assertEquals(s(1,0,4), s(span));
@@ -194,11 +190,11 @@ public class TestNearSpansOrdered extends LuceneTestCase {
    */
   public void testSpanNearScorerSkipTo1() throws Exception {
     SpanNearQuery q = makeQuery();
-    Weight w = searcher.createWeight(searcher.rewrite(q), ScoreMode.COMPLETE, 1);
+    Weight w = searcher.createNormalizedWeight(q, true);
     IndexReaderContext topReaderContext = searcher.getTopReaderContext();
     LeafReaderContext leave = topReaderContext.leaves().get(0);
     Scorer s = w.scorer(leave);
-    assertEquals(1, s.iterator().advance(1));
+    assertEquals(1, s.advance(1));
   }
 
   public void testOverlappedOrderedSpan() throws Exception {
@@ -221,7 +217,7 @@ public class TestNearSpansOrdered extends LuceneTestCase {
         new SpanOrQuery(new SpanTermQuery(new Term(FIELD, "w1")), new SpanTermQuery(new Term(FIELD, "w2"))),
         new SpanTermQuery(new Term(FIELD, "w4"))
     }, 10, true);
-    Spans spans = q.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans spans = MultiSpansWrapper.wrap(reader, q);
     assertNext(spans,0,0,4);
     assertNext(spans,0,1,4);
     assertFinished(spans);
@@ -231,7 +227,7 @@ public class TestNearSpansOrdered extends LuceneTestCase {
     SpanNearQuery q = new SpanNearQuery(new SpanQuery[]{
         new SpanTermQuery(new Term(FIELD, "t1")), new SpanTermQuery(new Term(FIELD, "t2"))
     }, 1, true);
-    Spans spans = q.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans spans = MultiSpansWrapper.wrap(reader, q);
     assertNext(spans,4,0,2);
     assertFinished(spans);
   }
@@ -240,7 +236,7 @@ public class TestNearSpansOrdered extends LuceneTestCase {
     SpanNearQuery q = new SpanNearQuery(new SpanQuery[]{
         new SpanTermQuery(new Term(FIELD, "t2")), new SpanTermQuery(new Term(FIELD, "t1"))
     }, 1, true);
-    Spans spans = q.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans spans = MultiSpansWrapper.wrap(reader, q);
     assertNext(spans,4,1,4);
     assertNext(spans,4,2,4);
     assertFinished(spans);
@@ -255,7 +251,7 @@ public class TestNearSpansOrdered extends LuceneTestCase {
     Explanation e = searcher.explain(q, 1);
     assertTrue("Scorer explanation value for doc#1 isn't positive: "
                + e.toString(),
-               0.0f <= e.getValue().doubleValue());
+               0.0f < e.getValue());
   }
 
   public void testGaps() throws Exception {
@@ -264,7 +260,7 @@ public class TestNearSpansOrdered extends LuceneTestCase {
         .addGap(1)
         .addClause(new SpanTermQuery(new Term(FIELD, "w2")))
         .build();
-    Spans spans = q.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans spans = MultiSpansWrapper.wrap(reader, q);
     assertNext(spans, 1, 0, 3);
     assertNext(spans, 2, 0, 3);
     assertFinished(spans);
@@ -277,7 +273,7 @@ public class TestNearSpansOrdered extends LuceneTestCase {
         .addClause(new SpanTermQuery(new Term(FIELD, "w3")))
         .setSlop(1)
         .build();
-    spans = q.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    spans = MultiSpansWrapper.wrap(reader, q);
     assertNext(spans, 2, 0, 5);
     assertNext(spans, 3, 0, 6);
     assertFinished(spans);
@@ -289,27 +285,10 @@ public class TestNearSpansOrdered extends LuceneTestCase {
         .addGap(2)
         .addClause(new SpanTermQuery(new Term(FIELD, "g")))
         .build();
-    Spans spans = q.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans spans = MultiSpansWrapper.wrap(reader, q);
     assertNext(spans, 5, 0, 4);
     assertNext(spans, 5, 9, 13);
     assertFinished(spans);
-  }
-
-  public void testNestedGaps() throws Exception {
-    SpanQuery q = SpanNearQuery.newOrderedNearQuery(FIELD)
-        .addClause(new SpanOrQuery(
-            new SpanTermQuery(new Term(FIELD, "open")),
-            SpanNearQuery.newOrderedNearQuery(FIELD)
-                .addClause(new SpanTermQuery(new Term(FIELD, "go")))
-                .addGap(1)
-                .build()
-        ))
-        .addClause(new SpanTermQuery(new Term(FIELD, "webpage")))
-        .build();
-
-    TopDocs topDocs = searcher.search(q, 1);
-    assertEquals(6, topDocs.scoreDocs[0].doc);
-
   }
 
   /*
@@ -319,8 +298,7 @@ public class TestNearSpansOrdered extends LuceneTestCase {
     "w1 xx w2 yy w3",
     "w1 w3 xx w2 yy w3 zz",
     "t1 t2 t2 t1",
-    "g x x g g x x x g g x x g",
-    "go to webpage"
+    "g x x g g x x x g g x x g"
   };
    */
 }

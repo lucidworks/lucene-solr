@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj;
 
 import org.apache.solr.SolrTestCaseJ4.SuppressSSL;
@@ -31,7 +32,7 @@ import org.junit.BeforeClass;
 public class SolrExampleBinaryTest extends SolrExampleTests {
   @BeforeClass
   public static void beforeTest() throws Exception {
-    createAndStartJetty(legacyExampleCollection1SolrHome());
+    createJetty(legacyExampleCollection1SolrHome());
   }
 
   @Override
@@ -40,7 +41,10 @@ public class SolrExampleBinaryTest extends SolrExampleTests {
     try {
       // setup the server...
       String url = jetty.getBaseUrl().toString() + "/collection1";
-      HttpSolrClient client = getHttpSolrClient(url, DEFAULT_CONNECTION_TIMEOUT);
+      HttpSolrClient client = new HttpSolrClient( url );
+      client.setConnectionTimeout(DEFAULT_CONNECTION_TIMEOUT);
+      client.setDefaultMaxConnectionsPerHost(100);
+      client.setMaxTotalConnections(100);
       client.setUseMultiPartPost(random().nextBoolean());
 
       // where the magic happens

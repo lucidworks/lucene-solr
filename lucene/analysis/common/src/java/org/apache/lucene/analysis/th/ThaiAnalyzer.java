@@ -1,10 +1,11 @@
+package org.apache.lucene.analysis.th;
+
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright 2006 The Apache Software Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,24 +15,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.th;
 
 import java.io.IOException;
 import java.io.Reader;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.LowerCaseFilter;
-import org.apache.lucene.analysis.StopFilter;
-import org.apache.lucene.analysis.StopwordAnalyzerBase;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.core.DecimalDigitFilter;
+import org.apache.lucene.analysis.core.LowerCaseFilter;
+import org.apache.lucene.analysis.core.StopFilter;
+import org.apache.lucene.analysis.standard.StandardFilter;
+import org.apache.lucene.analysis.standard.StandardTokenizer;
+import org.apache.lucene.analysis.standard.std40.StandardTokenizer40;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.analysis.util.StopwordAnalyzerBase;
+import org.apache.lucene.util.Version;
 
 /**
  * {@link Analyzer} for Thai language. It uses {@link java.text.BreakIterator} to break words.
- *
- * @since 3.1
  */
 public final class ThaiAnalyzer extends StopwordAnalyzerBase {
   
@@ -97,18 +99,25 @@ public final class ThaiAnalyzer extends StopwordAnalyzerBase {
    */
   @Override
   protected TokenStreamComponents createComponents(String fieldName) {
-    final Tokenizer source = new ThaiTokenizer();
-    TokenStream result = new LowerCaseFilter(source);
-    result = new DecimalDigitFilter(result);
-
-    result = new StopFilter(result, stopwords);
-    return new TokenStreamComponents(source, result);
-  }
-
-  @Override
-  protected TokenStream normalize(String fieldName, TokenStream in) {
-    TokenStream result = new LowerCaseFilter(in);
-    result = new DecimalDigitFilter(result);
-    return result;
+    if (getVersion().onOrAfter(Version.LUCENE_4_8_0)) {
+      final Tokenizer source = new ThaiTokenizer();
+      TokenStream result = new LowerCaseFilter(source);
+      if (getVersion().onOrAfter(Version.LUCENE_5_4_0)) {
+        result = new DecimalDigitFilter(result);
+      }
+      result = new StopFilter(result, stopwords);
+      return new TokenStreamComponents(source, result);
+    } else {
+      final Tokenizer source;
+      if (getVersion().onOrAfter(Version.LUCENE_4_7_0)) {
+        source = new StandardTokenizer();
+      } else {
+        source = new StandardTokenizer40();
+      }
+      TokenStream result = new StandardFilter(source);
+      result = new LowerCaseFilter(result);
+      result = new ThaiWordFilter(result);
+      return new TokenStreamComponents(source, new StopFilter(result, stopwords));
+    }
   }
 }

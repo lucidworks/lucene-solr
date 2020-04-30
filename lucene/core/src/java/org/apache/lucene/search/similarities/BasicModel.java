@@ -1,3 +1,5 @@
+package org.apache.lucene.search.similarities;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.similarities;
-
 
 import org.apache.lucene.search.Explanation;
 
@@ -36,18 +36,24 @@ public abstract class BasicModel {
    */
   public BasicModel() {}
 
-  /** Returns the informative content score combined with the after effect, more specifically
-   * {@code informationContentScore * aeTimes1pTfn / (1 + tfn)}. This function must be
-   * non-decreasing with {@code tfn}. */
-  public abstract double score(BasicStats stats, double tfn, double aeTimes1pTfn);
+  /** Returns the informative content score. */
+  public abstract float score(BasicStats stats, float tfn);
   
-
   /**
    * Returns an explanation for the score.
-   * Subclasses must override this method.
+   * <p>Most basic models use the number of documents and the total term
+   * frequency to compute Inf<sub>1</sub>. This method provides a generic
+   * explanation for such models. Subclasses that use other statistics must
+   * override this method.</p>
    */
-  public abstract Explanation explain (BasicStats stats, double tfn, double aeTimes1pTfn);
-
+  public Explanation explain(BasicStats stats, float tfn) {
+    return Explanation.match(
+        score(stats, tfn),
+        getClass().getSimpleName() + ", computed from: ",
+        Explanation.match(stats.getNumberOfDocuments(), "numberOfDocuments"),
+        Explanation.match(stats.getTotalTermFreq(), "totalTermFreq"));
+  }
+  
   /**
    * Subclasses must override this method to return the code of the
    * basic model formula. Refer to the original paper for the list. 

@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
-  
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.lucene.util.LuceneTestCase.BadApple;
 import org.apache.lucene.util.LuceneTestCase.Slow;
-import org.apache.lucene.util.LuceneTestCase.AwaitsFix;
 import org.apache.solr.SolrTestCaseJ4.SuppressSSL;
-import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.embedded.JettyConfig;
 import org.apache.solr.client.solrj.embedded.JettySolrRunner;
 import org.apache.solr.client.solrj.impl.HttpClientUtil;
+import org.apache.solr.client.solrj.impl.LBHttpSolrClient;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.Replica;
@@ -52,7 +52,7 @@ import static org.apache.solr.common.util.Utils.makeMap;
  */
 @Slow
 @SuppressSSL
-@AwaitsFix(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // 17-Mar-2018
+@BadApple(bugUrl = "https://issues.apache.org/jira/browse/SOLR-6213")
 public class SSLMigrationTest extends AbstractFullDistribZkTestBase {
 
   @Test
@@ -71,7 +71,7 @@ public class SSLMigrationTest extends AbstractFullDistribZkTestBase {
       runner.stop();
     }
     
-    HttpClientUtil.setSchemaRegistryProvider(sslConfig.buildClientSchemaRegistryProvider());
+    HttpClientUtil.setConfigurer(sslConfig.getHttpClientConfigurer());
     for(int i = 0; i < this.jettys.size(); i++) {
       JettySolrRunner runner = jettys.get(i);
       JettyConfig config = JettyConfig.builder()
@@ -80,7 +80,7 @@ public class SSLMigrationTest extends AbstractFullDistribZkTestBase {
           .stopAtShutdown(false)
           .withServlets(getExtraServlets())
           .withFilters(getExtraRequestFilters())
-          .withSSLConfig(sslConfig.buildServerSSLConfig())
+          .withSSLConfig(sslConfig)
           .build();
 
       Properties props = new Properties();
@@ -131,9 +131,7 @@ public class SSLMigrationTest extends AbstractFullDistribZkTestBase {
       urls.add(replica.getStr(ZkStateReader.BASE_URL_PROP));
     }
     //Create new SolrServer to configure new HttpClient w/ SSL config
-    try (SolrClient client = getLBHttpSolrClient(urls.toArray(new String[]{}))) {
-      client.request(request);
-    }
+    new LBHttpSolrClient(urls.toArray(new String[]{})).request(request);
   }
   
 }

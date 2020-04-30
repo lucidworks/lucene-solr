@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
-
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
@@ -131,19 +131,6 @@ public class TestASCIIFoldingFilter extends BaseTokenStreamTestCase {
     assertFalse(filter.incrementToken());
   }
 
-  // Test that we do not emit duplicated tokens when preserve original is on
-  public void testUnmodifiedLetters() throws Exception {
-    TokenStream stream = whitespaceMockTokenizer("§ ¦ ¤ END");
-    ASCIIFoldingFilter filter = new ASCIIFoldingFilter(stream, true);
-
-    CharTermAttribute termAtt = filter.getAttribute(CharTermAttribute.class);
-    filter.reset();
-    assertNextTerms("§", "§", filter, termAtt);
-    assertNextTerms("¦", "¦", filter, termAtt);
-    assertNextTerms("¤", "¤", filter, termAtt);
-    assertNextTerms("END", "END", filter, termAtt);
-    assertFalse(filter.incrementToken());
-  }
 
   // The following Perl script generated the foldings[] array automatically
   // from ASCIIFoldingFilter.java:

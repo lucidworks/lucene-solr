@@ -1,3 +1,5 @@
+package org.apache.lucene.search.similarities;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.similarities;
-
 
 import org.apache.lucene.index.Terms;
 
@@ -23,14 +23,14 @@ import org.apache.lucene.index.Terms;
  * Stores all statistics commonly used ranking methods.
  * @lucene.experimental
  */
-public class BasicStats {
+public class BasicStats extends Similarity.SimWeight {
   final String field;
   /** The number of documents. */
   protected long numberOfDocuments;
   /** The total number of tokens in the field. */
   protected long numberOfFieldTokens;
   /** The average field length. */
-  protected double avgFieldLength;
+  protected float avgFieldLength;
   /** The document frequency. */
   protected long docFreq;
   /** The total number of occurrences of this term across all documents. */
@@ -38,13 +38,15 @@ public class BasicStats {
   
   // -------------------------- Boost-related stuff --------------------------
 
-  /** A query boost. Should be applied as a multiplicative factor to the score. */
-  protected final double boost;
+  /** For most Similarities, the immediate and the top level query boosts are
+   * not handled differently. Hence, this field is just the product of the
+   * other two. */
+  protected float boost;
   
   /** Constructor. */
-  public BasicStats(String field, double boost) {
+  public BasicStats(String field) {
     this.field = field;
-    this.boost = boost;
+    normalize(1f, 1f);
   }
   
   // ------------------------- Getter/setter methods -------------------------
@@ -76,12 +78,12 @@ public class BasicStats {
   }
   
   /** Returns the average field length. */
-  public double getAvgFieldLength() {
+  public float getAvgFieldLength() {
     return avgFieldLength;
   }
   
   /** Sets the average field length. */
-  public void setAvgFieldLength(double avgFieldLength) {
+  public void setAvgFieldLength(float avgFieldLength) {
     this.avgFieldLength = avgFieldLength;
   }
   
@@ -105,8 +107,33 @@ public class BasicStats {
     this.totalTermFreq = totalTermFreq;
   }
   
+  // -------------------------- Boost-related stuff --------------------------
+  
+  /** The square of the raw normalization value.
+   * @see #rawNormalizationValue() */
+  @Override
+  public float getValueForNormalization() {
+    float rawValue = rawNormalizationValue();
+    return rawValue * rawValue;
+  }
+  
+  /** Computes the raw normalization value. This basic implementation returns
+   * the query boost. Subclasses may override this method to include other
+   * factors (such as idf), or to save the value for inclusion in
+   * {@link #normalize(float, float)}, etc.
+   */
+  protected float rawNormalizationValue() {
+    return boost;
+  }
+  
+  /** No normalization is done. {@code boost} is saved in the object, however. */
+  @Override
+  public void normalize(float queryNorm, float boost) {
+    this.boost = boost;
+  }
+  
   /** Returns the total boost. */
-  public double getBoost() {
+  public float getBoost() {
     return boost;
   }
 }

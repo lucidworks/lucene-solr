@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -35,7 +35,7 @@ import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 
-@SuppressCodecs({ "SimpleText", "Direct" })
+@SuppressCodecs({ "SimpleText", "Memory", "Direct" })
 public class TestLongPostings extends LuceneTestCase {
 
   // Produces a realistic unicode random string that
@@ -166,7 +166,7 @@ public class TestLongPostings extends LuceneTestCase {
         System.out.println("\nTEST: iter=" + iter + " doS1=" + doS1);
       }
         
-      final PostingsEnum postings = MultiTerms.getTermPostingsEnum(r, "field", new BytesRef(term));
+      final PostingsEnum postings = MultiFields.getTermPositionsEnum(r, "field", new BytesRef(term));
 
       int docID = -1;
       while(docID < DocIdSetIterator.NO_MORE_DOCS) {

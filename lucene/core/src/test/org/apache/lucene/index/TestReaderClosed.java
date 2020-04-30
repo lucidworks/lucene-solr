@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
-
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
 
 import org.apache.lucene.analysis.MockAnalyzer;
@@ -31,7 +32,7 @@ import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 
 public class TestReaderClosed extends LuceneTestCase {
-  private DirectoryReader reader;
+  private IndexReader reader;
   private Directory dir;
 
   @Override
@@ -53,7 +54,6 @@ public class TestReaderClosed extends LuceneTestCase {
       field.setStringValue(TestUtil.randomUnicodeString(random(), 10));
       writer.addDocument(doc);
     }
-    writer.forceMerge(1);
     reader = writer.getReader();
     writer.close();
   }
@@ -77,11 +77,10 @@ public class TestReaderClosed extends LuceneTestCase {
   // LUCENE-3800
   public void testReaderChaining() throws Exception {
     assertTrue(reader.getRefCount() > 0);
-    LeafReader wrappedReader = new ParallelLeafReader(getOnlyLeafReader(reader));
+    IndexReader wrappedReader = SlowCompositeReaderWrapper.wrap(reader);
+    wrappedReader = new ParallelLeafReader((LeafReader) wrappedReader);
 
-    // We wrap with a OwnCacheKeyMultiReader so that closing the underlying reader
-    // does not terminate the threadpool (if that index searcher uses one)
-    IndexSearcher searcher = newSearcher(new OwnCacheKeyMultiReader(wrappedReader));
+    IndexSearcher searcher = newSearcher(wrappedReader);
 
     TermRangeQuery query = TermRangeQuery.newStringRange("field", "a", "z", true, true);
     searcher.search(query, 5);
@@ -95,9 +94,7 @@ public class TestReaderClosed extends LuceneTestCase {
           ace = (AlreadyClosedException) t;
         }
       }
-      if (ace == null) {
-        throw new AssertionError("Query failed, but not due to an AlreadyClosedException", e);
-      }
+      assertNotNull("Query failed, but not due to an AlreadyClosedException", ace);
       assertEquals(
         "this IndexReader cannot be used anymore as one of its child readers was closed",
         ace.getMessage()

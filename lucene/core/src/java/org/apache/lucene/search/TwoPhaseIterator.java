@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.Objects;
 
 /**
- * Returned by {@link Scorer#twoPhaseIterator()}
+ * Returned by {@link Scorer#asTwoPhaseIterator()}
  * to expose an approximation of a {@link DocIdSetIterator}.
  * When the {@link #approximation()}'s
  * {@link DocIdSetIterator#nextDoc()} or {@link DocIdSetIterator#advance(int)}
@@ -40,62 +40,41 @@ public abstract class TwoPhaseIterator {
 
   /** Return a {@link DocIdSetIterator} view of the provided
    *  {@link TwoPhaseIterator}. */
-  public static DocIdSetIterator asDocIdSetIterator(TwoPhaseIterator twoPhaseIterator) {
-    return new TwoPhaseIteratorAsDocIdSetIterator(twoPhaseIterator);
-  }
+  public static DocIdSetIterator asDocIdSetIterator(final TwoPhaseIterator twoPhaseIterator) {
+    final DocIdSetIterator approximation = twoPhaseIterator.approximation();
+    return new DocIdSetIterator() {
 
-  /**
-   * If the given {@link DocIdSetIterator} has been created with
-   * {@link #asDocIdSetIterator}, then this will return the wrapped
-   * {@link TwoPhaseIterator}. Otherwise this returns {@code null}.
-   */
-  public static TwoPhaseIterator unwrap(DocIdSetIterator iterator) {
-    if (iterator instanceof TwoPhaseIteratorAsDocIdSetIterator) {
-      return ((TwoPhaseIteratorAsDocIdSetIterator) iterator).twoPhaseIterator;
-    } else {
-      return null;
-    }
-  }
+      @Override
+      public int docID() {
+        return approximation.docID();
+      }
 
-  private static class TwoPhaseIteratorAsDocIdSetIterator extends DocIdSetIterator {
+      @Override
+      public int nextDoc() throws IOException {
+        return doNext(approximation.nextDoc());
+      }
 
-    final TwoPhaseIterator twoPhaseIterator;
-    final DocIdSetIterator approximation;
+      @Override
+      public int advance(int target) throws IOException {
+        return doNext(approximation.advance(target));
+      }
 
-    TwoPhaseIteratorAsDocIdSetIterator(TwoPhaseIterator twoPhaseIterator) {
-      this.twoPhaseIterator = twoPhaseIterator;
-      this.approximation = twoPhaseIterator.approximation;
-    }
-
-    @Override
-    public int docID() {
-      return approximation.docID();
-    }
-
-    @Override
-    public int nextDoc() throws IOException {
-      return doNext(approximation.nextDoc());
-    }
-
-    @Override
-    public int advance(int target) throws IOException {
-      return doNext(approximation.advance(target));
-    }
-
-    private int doNext(int doc) throws IOException {
-      for (;; doc = approximation.nextDoc()) {
-        if (doc == NO_MORE_DOCS) {
-          return NO_MORE_DOCS;
-        } else if (twoPhaseIterator.matches()) {
-          return doc;
+      private int doNext(int doc) throws IOException {
+        for (;; doc = approximation.nextDoc()) {
+          if (doc == NO_MORE_DOCS) {
+            return NO_MORE_DOCS;
+          } else if (twoPhaseIterator.matches()) {
+            return doc;
+          }
         }
       }
-    }
 
-    @Override
-    public long cost() {
-      return approximation.cost();
-    }
+      @Override
+      public long cost() {
+        return approximation.cost();
+      }
+
+    };
   }
 
   /** Return an approximation. The returned {@link DocIdSetIterator} is a
@@ -118,5 +97,15 @@ public abstract class TwoPhaseIterator {
    *  The returned value must be positive.
    */
   public abstract float matchCost();
+
+  /**
+   * Returns a {@link TwoPhaseIterator} for this {@link DocIdSetIterator}
+   * when available, otherwise returns null.
+   */
+  public static TwoPhaseIterator asTwoPhaseIterator(DocIdSetIterator iter) {
+    return (iter instanceof Scorer)
+            ? ((Scorer) iter).asTwoPhaseIterator()
+            : null;
+  }
 
 }

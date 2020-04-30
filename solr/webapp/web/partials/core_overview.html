@@ -51,6 +51,10 @@ limitations under the License.
           <dt class="index_segmentCount">Segment Count:</dt>
             <dd class="index_segmentCount value">{{index.segmentCount}}</dd>
 
+          <dt class="index_optimized">Optimized:</dt>
+            <dd class="index_optimized ico value" ng-class="index.hasDeletions ? 'ico-0' : 'ico-1'"><span></span>
+            <a ng-click="optimizeIndex()" ng-show="index.hasDeletions">optimize now</a></dd>
+
           <dt class="index_current">Current:</dt>
             <dd class="ico" ng-class="index.current ?'ico-1' : 'ico-0'"><span></span></dd>
 
@@ -196,6 +200,23 @@ limitations under the License.
             <button class="healthcheck-status">enable ping</button>
           </dd>
         </dl>
+      </div>
+
+    </div>
+
+  </div>
+  <div class="clearfix">
+
+    <div class="block" id="admin-extra">
+
+      <h2><span>Admin Extra</span></h2>
+
+      <div class="message-container">
+        <div class="message"></div>
+      </div>
+
+      <div class="content">
+
       </div>
 
     </div>

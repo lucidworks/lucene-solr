@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.util;
 
 import java.text.NumberFormat;
@@ -197,21 +198,5 @@ public class NumberUtils {
   public static long SortableStr2long(BytesRef sval, int offset, int len) {
     // TODO: operate directly on BytesRef
     return SortableStr2long(sval.utf8ToString(), offset, len);
-  }
-
-  public static byte[] intToBytes(int val) {
-    byte[] result = new byte[4];
-
-    result[0] = (byte) (val >> 24);
-    result[1] = (byte) (val >> 16);
-    result[2] = (byte) (val >> 8);
-    result[3] = (byte) val;
-    return result;
-  }
-
-  public static int bytesToInt(byte[] bytes) {
-    if (bytes == null) return 0;
-    assert bytes.length == 4;
-    return bytes[0] << 24 | (bytes[1] & 255) << 16 | (bytes[2] & 255) << 8 | bytes[3] & 255;
   }
 }

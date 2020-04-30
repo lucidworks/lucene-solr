@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.logging;
 
 import org.apache.solr.common.util.SimpleOrderedMap;
@@ -21,7 +22,7 @@ import org.apache.solr.common.util.SimpleOrderedMap;
 import static org.apache.solr.common.params.CommonParams.NAME;
 
 /**
- * Wrapper class for Logger implementations
+ * Wrapper class for Logger implementaions
  */
 public abstract class LoggerInfo implements Comparable<LoggerInfo> {
   public static final String ROOT_NAME = "root";

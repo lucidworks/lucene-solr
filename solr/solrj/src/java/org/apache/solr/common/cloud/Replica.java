@@ -1,3 +1,5 @@
+package org.apache.solr.common.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.cloud;
+
+import static org.apache.solr.common.cloud.ZkStateReader.*;
 
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
-import org.apache.solr.common.util.Utils;
+import org.noggit.JSONUtil;
 
 public class Replica extends ZkNodeProps {
   
@@ -81,41 +83,12 @@ public class Replica extends ZkNodeProps {
     }
   }
 
-  public enum Type {
-    /**
-     * Writes updates to transaction log and indexes locally. Replicas of type {@link Type#NRT} support NRT (soft commits) and RTG. 
-     * Any {@link Type#NRT} replica can become a leader. A shard leader will forward updates to all active {@link Type#NRT} and
-     * {@link Type#TLOG} replicas. 
-     */
-    NRT,
-    /**
-     * Writes to transaction log, but not to index, uses replication. Any {@link Type#TLOG} replica can become leader (by first
-     * applying all local transaction log elements). If a replica is of type {@link Type#TLOG} but is also the leader, it will behave 
-     * as a {@link Type#NRT}. A shard leader will forward updates to all active {@link Type#NRT} and {@link Type#TLOG} replicas.
-     */
-    TLOG,
-    /**
-     * Doesn’t index or writes to transaction log. Just replicates from {@link Type#NRT} or {@link Type#TLOG} replicas. {@link Type#PULL}
-     * replicas can’t become shard leaders (i.e., if there are only pull replicas in the collection at some point, updates will fail
-     * same as if there is no leaders, queries continue to work), so they don’t even participate in elections.
-     */
-    PULL;
-
-    public static Type get(String name){
-      return name == null ? Type.NRT : Type.valueOf(name.toUpperCase(Locale.ROOT));
-    }
-  }
-
   private final String name;
   private final String nodeName;
   private final State state;
-  private final Type type;
-  public final String slice, collection;
 
-  public Replica(String name, Map<String,Object> propMap, String collection, String slice) {
+  public Replica(String name, Map<String,Object> propMap) {
     super(propMap);
-    this.collection = collection;
-    this.slice = slice;
     this.name = name;
     this.nodeName = (String) propMap.get(ZkStateReader.NODE_NAME_PROP);
     if (propMap.get(ZkStateReader.STATE_PROP) != null) {
@@ -124,42 +97,14 @@ public class Replica extends ZkNodeProps {
       this.state = State.ACTIVE;                         //Default to ACTIVE
       propMap.put(ZkStateReader.STATE_PROP, state.toString());
     }
-    type = Type.get((String) propMap.get(ZkStateReader.REPLICA_TYPE));
+
   }
 
-  public String getCollection(){
-    return collection;
-  }
-  public String getSlice(){
-    return slice;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
-    if (!super.equals(o)) return false;
-
-    Replica replica = (Replica) o;
-
-    return name.equals(replica.name);
-  }
-
-  /** Also known as coreNodeName. */
   public String getName() {
     return name;
   }
-
   public String getCoreUrl() {
-    return ZkCoreNodeProps.getCoreUrl(getStr(ZkStateReader.BASE_URL_PROP), getStr(ZkStateReader.CORE_NAME_PROP));
-  }
-  public String getBaseUrl(){
-    return getStr(ZkStateReader.BASE_URL_PROP);
-  }
-
-  /** SolrCore name. */
-  public String getCoreName() {
-    return getStr(ZkStateReader.CORE_NAME_PROP);
+    return ZkCoreNodeProps.getCoreUrl(getStr(BASE_URL_PROP), getStr(CORE_NAME_PROP));
   }
 
   /** The name of the node this replica resides on */
@@ -172,27 +117,8 @@ public class Replica extends ZkNodeProps {
     return state;
   }
 
-  public boolean isActive(Set<String> liveNodes) {
-    return this.nodeName != null && liveNodes.contains(this.nodeName) && this.state == State.ACTIVE;
-  }
-  
-  public Type getType() {
-    return this.type;
-  }
-
-  public String getProperty(String propertyName) {
-    final String propertyKey;
-    if (!propertyName.startsWith(ZkStateReader.PROPERTY_PROP_PREFIX)) {
-      propertyKey = ZkStateReader.PROPERTY_PROP_PREFIX+propertyName;
-    } else {
-      propertyKey = propertyName;
-    }
-    final String propertyValue = getStr(propertyKey);
-    return propertyValue;
-  }
-
   @Override
   public String toString() {
-    return name + ':' + Utils.toJSONString(propMap); // small enough, keep it on one line (i.e. no indent)
+    return name + ':' + JSONUtil.toJSON(propMap, -1); // small enough, keep it on one line (i.e. no indent)
   }
 }

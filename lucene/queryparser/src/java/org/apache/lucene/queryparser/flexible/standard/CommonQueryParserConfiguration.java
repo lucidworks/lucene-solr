@@ -1,3 +1,15 @@
+package org.apache.lucene.queryparser.flexible.standard;
+
+import java.util.Locale;
+import java.util.TimeZone;
+import java.util.TooManyListenersException;
+
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.document.DateTools;
+import org.apache.lucene.document.DateTools.Resolution;
+import org.apache.lucene.search.FuzzyQuery;
+import org.apache.lucene.search.MultiTermQuery;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +26,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.standard;
-
-import java.util.Locale;
-import java.util.TimeZone;
-import java.util.TooManyListenersException;
-
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.document.DateTools;
-import org.apache.lucene.document.DateTools.Resolution;
-import org.apache.lucene.search.FuzzyQuery;
-import org.apache.lucene.search.MultiTermQuery;
 
 /**
  * Configuration options common across queryparser implementations.
  */
 public interface CommonQueryParserConfiguration {
+  
+  /**
+   * Whether terms of multi-term queries (e.g., wildcard,
+   * prefix, fuzzy and range) should be automatically
+   * lower-cased or not.  Default is <code>true</code>.
+   */
+  public void setLowercaseExpandedTerms(boolean lowercaseExpandedTerms);
+  
+  /**
+   * @see #setLowercaseExpandedTerms(boolean)
+   */
+  public boolean getLowercaseExpandedTerms();
   
   /**
    * Set to <code>true</code> to allow leading wildcard characters.

@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import org.apache.lucene.search.DocIdSetIterator;
 
@@ -54,27 +54,14 @@ public class BitSetIterator extends DocIdSetIterator {
 
   /** Sole constructor. */
   public BitSetIterator(BitSet bits, long cost) {
-    if (cost < 0) {
-      throw new IllegalArgumentException("cost must be >= 0, got " + cost);
-    }
     this.bits = bits;
     this.length = bits.length();
     this.cost = cost;
   }
 
-  /** Return the wrapped {@link BitSet}. */
-  public BitSet getBitSet() {
-    return bits;
-  }
-
   @Override
   public int docID() {
     return doc;
-  }
-
-  /** Set the current doc id that this iterator is on. */
-  public void setDocId(int docId) {
-    this.doc = docId;
   }
 
   @Override

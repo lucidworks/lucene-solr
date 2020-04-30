@@ -14,13 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update.processor;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Locale;
-import java.util.Set;
+package org.apache.solr.update.processor;
 
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
@@ -31,7 +26,12 @@ import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.schema.BoolField;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.IndexSchema;
-import org.apache.solr.update.processor.FieldMutatingUpdateProcessor.FieldNameSelector;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * <p>
@@ -66,7 +66,6 @@ import org.apache.solr.update.processor.FieldMutatingUpdateProcessor.FieldNameSe
  *     &lt;str&gt;No&lt;/str&gt;
  *   &lt;/arr&gt;
  * &lt;/processor&gt;</pre>
- * @since 4.4.0
  */
 public class ParseBooleanFieldUpdateProcessorFactory extends FieldMutatingUpdateProcessorFactory {
   private static final String TRUE_VALUES_PARAM = "trueValue";
@@ -143,11 +142,16 @@ public class ParseBooleanFieldUpdateProcessorFactory extends FieldMutatingUpdate
    *           or if the matched field's type is BoolField
    */
   @Override
-  public FieldNameSelector getDefaultSelector(final SolrCore core) {
-    return fieldName -> {
-      final IndexSchema schema = core.getLatestSchema();
-      FieldType type = schema.getFieldTypeNoEx(fieldName);
-      return (null == type) || (type instanceof BoolField);
+  public FieldMutatingUpdateProcessor.FieldNameSelector
+  getDefaultSelector(final SolrCore core) {
+
+    return new FieldMutatingUpdateProcessor.FieldNameSelector() {
+      @Override
+      public boolean shouldMutate(final String fieldName) {
+        final IndexSchema schema = core.getLatestSchema();
+        FieldType type = schema.getFieldTypeNoEx(fieldName);
+        return (null == type) || (type instanceof BoolField);
+      }
     };
   }
 }

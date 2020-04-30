@@ -14,7 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.util;
+
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.SolrInputField;
+import org.apache.solr.common.cloud.Slice;
+import org.apache.solr.common.util.Base64;
+import org.apache.solr.common.util.ContentStream;
+import org.apache.solr.common.util.ContentStreamBase;
+import org.apache.solr.common.util.DateUtil;
+import org.apache.solr.common.util.XML;
 
 import java.io.IOException;
 import java.io.StringWriter;
@@ -26,14 +37,6 @@ import java.util.Date;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.apache.solr.common.SolrInputDocument;
-import org.apache.solr.common.SolrInputField;
-import org.apache.solr.common.cloud.Slice;
-import org.apache.solr.common.util.Base64;
-import org.apache.solr.common.util.ContentStream;
-import org.apache.solr.common.util.ContentStreamBase;
-import org.apache.solr.common.util.XML;
-
 
 /**
  *
@@ -42,8 +45,7 @@ import org.apache.solr.common.util.XML;
 public class ClientUtils 
 {
   // Standard Content types
-  public static final String TEXT_XML = "application/xml; charset=UTF-8";
-  public static final String TEXT_JSON = "application/json; charset=UTF-8";
+  public static final String TEXT_XML = "application/xml; charset=UTF-8";  
   
   /**
    * Take a string and make it an iterable ContentStream
@@ -60,22 +62,53 @@ public class ClientUtils
     return streams;
   }
 
+  /**
+   * @param d SolrDocument to convert
+   * @return a SolrInputDocument with the same fields and values as the
+   *   SolrDocument.  All boosts are 1.0f
+   */
+  public static SolrInputDocument toSolrInputDocument( SolrDocument d )
+  {
+    SolrInputDocument doc = new SolrInputDocument();
+    for( String name : d.getFieldNames() ) {
+      doc.addField( name, d.getFieldValue(name), 1.0f );
+    }
+    return doc;
+  }
+
+  /**
+   * @param d SolrInputDocument to convert
+   * @return a SolrDocument with the same fields and values as the SolrInputDocument
+   */
+  public static SolrDocument toSolrDocument(SolrInputDocument d) {
+    SolrDocument doc = new SolrDocument();
+    for (SolrInputField field : d) {
+      doc.setField(field.getName(), field.getValue());
+    }
+    if (d.getChildDocuments() != null) {
+      for (SolrInputDocument in : d.getChildDocuments()) {
+        doc.addChildDocument(toSolrDocument(in));
+      }
+
+    }
+    return doc;
+  }
+
   //------------------------------------------------------------------------
   //------------------------------------------------------------------------
 
   public static void writeXML( SolrInputDocument doc, Writer writer ) throws IOException
   {
-    writer.write("<doc>");
+    writer.write("<doc boost=\""+doc.getDocumentBoost()+"\">");
 
     for( SolrInputField field : doc ) {
+      float boost = field.getBoost();
       String name = field.getName();
 
       for( Object v : field ) {
         String update = null;
 
-        if(v instanceof SolrInputDocument) {
-          writeVal(writer, name, v , null);
-        } else if (v instanceof Map) {
+        if (v instanceof Map) {
           // currently only supports a single value
           for (Entry<Object,Object> entry : ((Map<Object,Object>)v).entrySet()) {
             update = entry.getKey().toString();
@@ -83,14 +116,19 @@ public class ClientUtils
             if (v instanceof Collection) {
               Collection values = (Collection) v;
               for (Object value : values) {
-                writeVal(writer, name, value, update);
+                writeVal(writer, boost, name, value, update);
+                boost = 1.0f;
               }
             } else  {
-              writeVal(writer, name, v, update);
+              writeVal(writer, boost, name, v, update);
+              boost = 1.0f;
             }
           }
         } else  {
-          writeVal(writer, name, v, update);
+          writeVal(writer, boost, name, v, update);
+          // only write the boost for the first multi-valued field
+          // otherwise, the used boost is the product of all the boost values
+          boost = 1.0f;
         }
       }
     }
@@ -104,9 +142,9 @@ public class ClientUtils
     writer.write("</doc>");
   }
 
-  private static void writeVal(Writer writer, String name, Object v, String update) throws IOException {
+  private static void writeVal(Writer writer, float boost, String name, Object v, String update) throws IOException {
     if (v instanceof Date) {
-      v = ((Date)v).toInstant().toString();
+      v = DateUtil.getThreadLocalDateFormat().format( (Date)v );
     } else if (v instanceof byte[]) {
       byte[] bytes = (byte[]) v;
       v = Base64.byteArrayToBase64(bytes, 0, bytes.length);
@@ -115,27 +153,25 @@ public class ClientUtils
       v = Base64.byteArrayToBase64(bytes.array(), bytes.position(),bytes.limit() - bytes.position());
     }
 
-    XML.Writable valWriter = null;
-    if(v instanceof SolrInputDocument) {
-      final SolrInputDocument solrDoc = (SolrInputDocument) v;
-      valWriter = (writer1) -> writeXML(solrDoc, writer1);
-    } else if(v != null) {
-      final Object val = v;
-      valWriter = (writer1) -> XML.escapeCharData(val.toString(), writer1);
-    }
-
     if (update == null) {
-      if (v != null) {
-        XML.writeXML(writer, "field", valWriter, "name", name);
+      if( boost != 1.0f ) {
+        XML.writeXML(writer, "field", v.toString(), "name", name, "boost", boost);
+      } else if (v != null) {
+        XML.writeXML(writer, "field", v.toString(), "name", name );
       }
     } else {
-      if (v == null)  {
-        XML.writeXML(writer, "field", (XML.Writable) null, "name", name, "update", update, "null", true);
-      } else  {
-        XML.writeXML(writer, "field", valWriter, "name", name, "update", update);
+      if( boost != 1.0f ) {
+        XML.writeXML(writer, "field", v.toString(), "name", name, "boost", boost, "update", update);
+      } else {
+        if (v == null)  {
+          XML.writeXML(writer, "field", null, "name", name, "update", update, "null", true);
+        } else  {
+          XML.writeXML(writer, "field", v.toString(), "name", name, "update", update);
+        }
       }
     }
   }
+
 
   public static String toXML( SolrInputDocument doc )
   {
@@ -167,35 +203,6 @@ public class ClientUtils
       }
       sb.append(c);
     }
-    return sb.toString();
-  }
-
-  /**
-   * Returns the value encoded properly so it can be appended after a <pre>name=</pre> local-param.
-   */
-  public static String encodeLocalParamVal(String val) {
-    int len = val.length();
-    int i = 0;
-    if (len > 0 && val.charAt(0) != '$') {
-      for (;i<len; i++) {
-        char ch = val.charAt(i);
-        if (Character.isWhitespace(ch) || ch=='}') break;
-      }
-    }
-
-    if (i>=len) return val;
-
-    // We need to enclose in quotes... but now we need to escape
-    StringBuilder sb = new StringBuilder(val.length() + 4);
-    sb.append('\'');
-    for (i=0; i<len; i++) {
-      char ch = val.charAt(i);
-      if (ch=='\'') {
-        sb.append('\\');
-      }
-      sb.append(ch);
-    }
-    sb.append('\'');
     return sb.toString();
   }
 

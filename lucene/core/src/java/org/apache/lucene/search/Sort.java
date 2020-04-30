@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -147,9 +147,6 @@ public class Sort {
    *  etc.  Finally, if there is still a tie after all SortFields
    *  are checked, the internal Lucene docid is used to break it. */
   public void setSort(SortField... fields) {
-    if (fields.length == 0) {
-      throw new IllegalArgumentException("There must be at least 1 sort field");
-    }
     this.fields = fields;
   }
   

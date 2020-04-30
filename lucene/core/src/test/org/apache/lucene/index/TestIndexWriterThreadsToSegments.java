@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
@@ -40,7 +39,6 @@ import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.StringHelper;
 import org.apache.lucene.util.TestUtil;
-import org.apache.lucene.util.Version;
 
 public class TestIndexWriterThreadsToSegments extends LuceneTestCase {
 
@@ -84,7 +82,7 @@ public class TestIndexWriterThreadsToSegments extends LuceneTestCase {
     startingGun.countDown();
     startDone.await();
 
-    IndexReader r = DirectoryReader.open(w);
+    IndexReader r = DirectoryReader.open(w, true);
     assertEquals(2, r.numDocs());
     int numSegments = r.leaves().size();
     // 1 segment if the threads ran sequentially, else 2:
@@ -97,7 +95,7 @@ public class TestIndexWriterThreadsToSegments extends LuceneTestCase {
     finalGun.countDown();
     threads[1].join();
 
-    r = DirectoryReader.open(w);
+    r = DirectoryReader.open(w, true);
     assertEquals(4, r.numDocs());
     // Both threads should have shared a single thread state since they did not try to index concurrently:
     assertEquals(1+numSegments, r.leaves().size());
@@ -120,7 +118,7 @@ public class TestIndexWriterThreadsToSegments extends LuceneTestCase {
       this.w = w;
       this.maxThreadCountPerIter = maxThreadCountPerIter;
       this.indexingCount = indexingCount;
-      r = DirectoryReader.open(w);
+      r = DirectoryReader.open(w, true);
       assertEquals(0, r.leaves().size());
       setNextIterThreadCount();
     }
@@ -332,8 +330,8 @@ public class TestIndexWriterThreadsToSegments extends LuceneTestCase {
               byte id[] = readSegmentInfoID(dir, fileName);
               SegmentInfo si = TestUtil.getDefaultCodec().segmentInfoFormat().read(dir, segName, id, IOContext.DEFAULT);
               si.setCodec(codec);
-              SegmentCommitInfo sci = new SegmentCommitInfo(si, 0, 0, -1, -1, -1);
-              SegmentReader sr = new SegmentReader(sci, Version.LATEST.major, false, IOContext.DEFAULT, Collections.emptyMap());
+              SegmentCommitInfo sci = new SegmentCommitInfo(si, 0, -1, -1, -1);
+              SegmentReader sr = new SegmentReader(sci, IOContext.DEFAULT);
               try {
                 thread0Count += sr.docFreq(new Term("field", "threadID0"));
                 thread1Count += sr.docFreq(new Term("field", "threadID1"));

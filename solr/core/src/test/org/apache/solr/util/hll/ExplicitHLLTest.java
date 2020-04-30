@@ -14,11 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.util.hll;
 
 import java.util.HashSet;
 
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 import org.junit.Test;
 
 import com.carrotsearch.hppc.LongHashSet;
@@ -28,7 +29,7 @@ import static com.carrotsearch.randomizedtesting.RandomizedTest.*;
 /**
  * Tests {@link HLL} of type {@link HLLType#EXPLICIT}.
  */
-public class ExplicitHLLTest extends SolrTestCase {
+public class ExplicitHLLTest extends LuceneTestCase {
     /**
      * Tests basic set semantics of {@link HLL#addRaw(long)}.
      */

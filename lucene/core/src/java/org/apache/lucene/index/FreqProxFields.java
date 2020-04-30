@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -124,7 +124,7 @@ class FreqProxFields extends Fields {
     }
   }
 
-  private static class FreqProxTermsEnum extends BaseTermsEnum {
+  private static class FreqProxTermsEnum extends TermsEnum {
     final FreqProxTermsWriterPerField terms;
     final int[] sortedTermIDs;
     final FreqProxPostingsArray postingsArray;
@@ -271,11 +271,6 @@ class FreqProxFields extends Fields {
       }
       docsEnum.reset(sortedTermIDs[ord]);
       return docsEnum;
-    }
-
-    @Override
-    public ImpactsEnum impacts(int flags) throws IOException {
-      throw new UnsupportedOperationException();
     }
 
     /**

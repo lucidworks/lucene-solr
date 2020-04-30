@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ar;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +16,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ar;
-
 
 import java.io.IOException;
 import java.io.Reader;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.LowerCaseFilter;
-import org.apache.lucene.analysis.StopFilter;
-import org.apache.lucene.analysis.StopwordAnalyzerBase;
-import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.core.DecimalDigitFilter;
+import org.apache.lucene.analysis.core.LowerCaseFilter;
+import org.apache.lucene.analysis.core.StopFilter;
 import org.apache.lucene.analysis.miscellaneous.SetKeywordMarkerFilter;
 import org.apache.lucene.analysis.standard.StandardTokenizer;
+import org.apache.lucene.analysis.standard.std40.StandardTokenizer40;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.analysis.util.StopwordAnalyzerBase;
+import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.Tokenizer;
+import org.apache.lucene.util.Version;
 
 /**
  * {@link Analyzer} for Arabic. 
@@ -46,8 +48,7 @@ import org.apache.lucene.analysis.standard.StandardTokenizer;
  *  <li>{@link ArabicStemFilter}: Arabic light stemming
  *  <li>Arabic stop words file: a set of default Arabic stop words.
  * </ul>
- *
- * @since 3.1
+ * 
  */
 public final class ArabicAnalyzer extends StopwordAnalyzerBase {
 
@@ -132,9 +133,16 @@ public final class ArabicAnalyzer extends StopwordAnalyzerBase {
    */
   @Override
   protected TokenStreamComponents createComponents(String fieldName) {
-    final Tokenizer source = new StandardTokenizer();
+    final Tokenizer source;
+    if (getVersion().onOrAfter(Version.LUCENE_4_7_0)) {
+      source = new StandardTokenizer();
+    } else {
+      source = new StandardTokenizer40();
+    }
     TokenStream result = new LowerCaseFilter(source);
-    result = new DecimalDigitFilter(result);
+    if (getVersion().onOrAfter(Version.LUCENE_5_4_0)) {
+      result = new DecimalDigitFilter(result);
+    }
     // the order here is important: the stopword list is not normalized!
     result = new StopFilter(result, stopwords);
     // TODO maybe we should make ArabicNormalization filter also KeywordAttribute aware?!
@@ -143,14 +151,6 @@ public final class ArabicAnalyzer extends StopwordAnalyzerBase {
       result = new SetKeywordMarkerFilter(result, stemExclusionSet);
     }
     return new TokenStreamComponents(source, new ArabicStemFilter(result));
-  }
-
-  @Override
-  protected TokenStream normalize(String fieldName, TokenStream in) {
-    TokenStream result = new LowerCaseFilter(in);
-    result = new DecimalDigitFilter(result);
-    result = new ArabicNormalizationFilter(result);
-    return result;
   }
 }
 

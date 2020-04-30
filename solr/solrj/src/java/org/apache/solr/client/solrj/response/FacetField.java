@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.response;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 
 import org.apache.solr.client.solrj.util.ClientUtils;
@@ -85,12 +87,38 @@ import org.apache.solr.client.solrj.util.ClientUtils;
    
    private String      _name   = null;
    private List<Count> _values = null;
+   private String _gap = null;
+   private Date _end = null;
    
    public FacetField( final String n )
    {
      _name = n;
    }
    
+   public FacetField(String name, String gap, Date end) {
+     _name = name;
+     _gap = gap;
+     _end = end;
+   }
+   
+   /**
+    * Date Gap Facet parameter
+    * 
+    * @return the value specified for facet.date.gap
+    */
+   public String getGap()   {
+     return _gap;
+   }
+   
+   /**
+    * Date End Facet parameter
+    * 
+    * @return the value specified for facet.date.end
+    */
+   public Date getEnd() {
+     return _end;
+   }
+
    /**
     * Insert at the end of the list
     */

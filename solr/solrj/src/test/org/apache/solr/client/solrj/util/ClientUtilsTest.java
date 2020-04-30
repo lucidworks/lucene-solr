@@ -14,16 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.util;
 
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 
 /**
  * 
  *
  * @since solr 1.3
  */
-public class ClientUtilsTest extends SolrTestCase {
+public class ClientUtilsTest extends LuceneTestCase {
   
   public void testEscapeQuery() 
   { 

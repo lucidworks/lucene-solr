@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.memory;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.memory;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -24,7 +24,6 @@ import java.util.List;
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
-import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsWriterBase;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.FieldInfo;
@@ -121,7 +120,7 @@ import org.apache.lucene.util.fst.Util;
  */
 
 public class FSTTermsWriter extends FieldsConsumer {
-  static final String TERMS_EXTENSION = "tfp";
+  static final String TERMS_EXTENSION = "tmp";
   static final String TERMS_CODEC_NAME = "FSTTerms";
   public static final int TERMS_VERSION_START = 2;
   public static final int TERMS_VERSION_CURRENT = TERMS_VERSION_START;
@@ -159,7 +158,7 @@ public class FSTTermsWriter extends FieldsConsumer {
   }
 
   @Override
-  public void write(Fields fields, NormsProducer norms) throws IOException {
+  public void write(Fields fields) throws IOException {
     for(String field : fields) {
       Terms terms = fields.terms(field);
       if (terms == null) {
@@ -168,7 +167,7 @@ public class FSTTermsWriter extends FieldsConsumer {
       FieldInfo fieldInfo = fieldInfos.fieldInfo(field);
       boolean hasFreq = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS) >= 0;
       TermsEnum termsEnum = terms.iterator();
-      TermsWriter termsWriter = new TermsWriter(fieldInfo);
+      TermsWriter termsWriter = termsWriter = new TermsWriter(fieldInfo);
 
       long sumTotalTermFreq = 0;
       long sumDocFreq = 0;
@@ -180,7 +179,7 @@ public class FSTTermsWriter extends FieldsConsumer {
           break;
         }
             
-        BlockTermState termState = postingsWriter.writeTerm(term, termsEnum, docsSeen, norms);
+        BlockTermState termState = postingsWriter.writeTerm(term, termsEnum, docsSeen);
         if (termState != null) {
           termsWriter.finishTerm(term, termState);
           sumTotalTermFreq += termState.totalTermFreq;

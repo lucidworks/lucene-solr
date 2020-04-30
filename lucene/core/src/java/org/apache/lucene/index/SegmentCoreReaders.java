@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,29 +16,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
-
-import java.io.Closeable;
-import java.io.EOFException;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.nio.file.NoSuchFileException;
 import java.util.Collections;
 import java.util.LinkedHashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.NormsProducer;
-import org.apache.lucene.codecs.PointsReader;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.StoredFieldsReader;
 import org.apache.lucene.codecs.TermVectorsReader;
-import org.apache.lucene.index.IndexReader.CacheKey;
-import org.apache.lucene.index.IndexReader.ClosedListener;
+import org.apache.lucene.index.LeafReader.CoreClosedListener;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
@@ -60,9 +53,7 @@ final class SegmentCoreReaders {
 
   final StoredFieldsReader fieldsReaderOrig;
   final TermVectorsReader termVectorsReaderOrig;
-  final PointsReader pointsReader;
   final Directory cfsReader;
-  final String segment;
   /** 
    * fieldinfos for this core: means gen=-1.
    * this is the exact fieldinfos these codec components saw at write.
@@ -87,13 +78,14 @@ final class SegmentCoreReaders {
     }
   };
 
-  private final Set<IndexReader.ClosedListener> coreClosedListeners = 
-      Collections.synchronizedSet(new LinkedHashSet<IndexReader.ClosedListener>());
+  private final Set<CoreClosedListener> coreClosedListeners = 
+      Collections.synchronizedSet(new LinkedHashSet<CoreClosedListener>());
   
-  SegmentCoreReaders(Directory dir, SegmentCommitInfo si, boolean openedFromWriter, IOContext context, Map<String, String> readerAttributes) throws IOException {
+  SegmentCoreReaders(SegmentReader owner, Directory dir, SegmentCommitInfo si, IOContext context) throws IOException {
 
     final Codec codec = si.info.getCodec();
     final Directory cfsDir; // confusing name: if (cfs) it's the cfsdir, otherwise it's the segment's directory.
+
     boolean success = false;
     
     try {
@@ -104,11 +96,9 @@ final class SegmentCoreReaders {
         cfsDir = dir;
       }
 
-      segment = si.info.name;
-
       coreFieldInfos = codec.fieldInfosFormat().read(cfsDir, si.info, "", context);
       
-      final SegmentReadState segmentReadState = new SegmentReadState(cfsDir, si.info, coreFieldInfos, openedFromWriter, context, readerAttributes);
+      final SegmentReadState segmentReadState = new SegmentReadState(cfsDir, si.info, coreFieldInfos, context);
       final PostingsFormat format = codec.postingsFormat();
       // Ask codec for its Fields
       fields = format.fieldsProducer(segmentReadState);
@@ -132,16 +122,7 @@ final class SegmentCoreReaders {
         termVectorsReaderOrig = null;
       }
 
-      if (coreFieldInfos.hasPointValues()) {
-        pointsReader = codec.pointsFormat().fieldsReader(segmentReadState);
-      } else {
-        pointsReader = null;
-      }
       success = true;
-    } catch (EOFException | FileNotFoundException e) {
-      throw new CorruptIndexException("Problem reading index from " + dir, dir.toString(), e);
-    } catch (NoSuchFileException e) {
-      throw new CorruptIndexException("Problem reading index.", e.getFile(), e);
     } finally {
       if (!success) {
         decRef();
@@ -163,43 +144,45 @@ final class SegmentCoreReaders {
     throw new AlreadyClosedException("SegmentCoreReaders is already closed");
   }
 
-  @SuppressWarnings("try")
   void decRef() throws IOException {
     if (ref.decrementAndGet() == 0) {
+//      System.err.println("--- closing core readers");
       Throwable th = null;
-      try (Closeable finalizer = this::notifyCoreClosedListeners){
+      try {
         IOUtils.close(termVectorsLocal, fieldsReaderLocal, fields, termVectorsReaderOrig, fieldsReaderOrig,
-                      cfsReader, normsProducer, pointsReader);
+            cfsReader, normsProducer);
+      } catch (Throwable throwable) {
+        th = throwable;
+      } finally {
+        notifyCoreClosedListeners(th);
       }
     }
   }
-
-  private final IndexReader.CacheHelper cacheHelper = new IndexReader.CacheHelper() {
-    private final IndexReader.CacheKey cacheKey = new IndexReader.CacheKey();
-
-    @Override
-    public CacheKey getKey() {
-      return cacheKey;
-    }
-
-    @Override
-    public void addClosedListener(ClosedListener listener) {
-      coreClosedListeners.add(listener);
-    }
-  };
-
-  IndexReader.CacheHelper getCacheHelper() {
-    return cacheHelper;
-  }
-
-  private void notifyCoreClosedListeners() throws IOException {
+  
+  private void notifyCoreClosedListeners(Throwable th) {
     synchronized(coreClosedListeners) {
-      IOUtils.applyToAll(coreClosedListeners, l -> l.onClose(cacheHelper.getKey()));
+      for (CoreClosedListener listener : coreClosedListeners) {
+        // SegmentReader uses our instance as its
+        // coreCacheKey:
+        try {
+          listener.onClose(this);
+        } catch (Throwable t) {
+          if (th == null) {
+            th = t;
+          } else {
+            th.addSuppressed(t);
+          }
+        }
+      }
+      IOUtils.reThrowUnchecked(th);
     }
   }
 
-  @Override
-  public String toString() {
-    return "SegmentCoreReader(" + segment + ")";
+  void addCoreClosedListener(CoreClosedListener listener) {
+    coreClosedListeners.add(listener);
+  }
+  
+  void removeCoreClosedListener(CoreClosedListener listener) {
+    coreClosedListeners.remove(listener);
   }
 }

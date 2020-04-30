@@ -1,3 +1,5 @@
+package org.apache.lucene.search.similarities;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.similarities;
-
 
 import org.apache.lucene.search.Explanation;
 import static org.apache.lucene.search.similarities.SimilarityBase.log2;
@@ -30,30 +30,19 @@ public class BasicModelIn extends BasicModel {
   public BasicModelIn() {}
 
   @Override
-  public final double score(BasicStats stats, double tfn, double aeTimes1pTfn) {
+  public final float score(BasicStats stats, float tfn) {
     long N = stats.getNumberOfDocuments();
     long n = stats.getDocFreq();
-    double A = log2((N + 1) / (n + 0.5));
-
-    // basic model I(n) should return A * tfn
-    // which we rewrite to A * (1 + tfn) - A
-    // so that it can be combined with the after effect while still guaranteeing
-    // that the result is non-decreasing with tfn
-
-    return A * aeTimes1pTfn * (1 - 1 / (1 + tfn));
+    return tfn * (float)(log2((N + 1) / (n + 0.5)));
   }
   
   @Override
-  public final Explanation explain(BasicStats stats, double tfn, double aeTimes1pTfn) {
+  public final Explanation explain(BasicStats stats, float tfn) {
     return Explanation.match(
-        (float) (score(stats, tfn, aeTimes1pTfn) * (1 + tfn) / aeTimes1pTfn),
-        getClass().getSimpleName() +
-            ", computed as tfn * log2((N + 1) / (n + 0.5)) from:",
-        Explanation.match((float) tfn, "tfn, normalized term frequency"),
-        Explanation.match(stats.getNumberOfDocuments(),
-            "N, total number of documents with field"),
-        Explanation.match(stats.getDocFreq(),
-            "n, number of documents containing term"));
+        score(stats, tfn),
+        getClass().getSimpleName() + ", computed from: ",
+        Explanation.match(stats.getNumberOfDocuments(), "numberOfDocuments"),
+        Explanation.match(stats.getDocFreq(), "docFreq"));
   }
 
   @Override

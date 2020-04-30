@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,23 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
 import org.apache.lucene.index.Term;
-import org.apache.solr.legacy.LegacyNumericRangeQuery;
 import org.apache.lucene.search.*;
-import org.apache.solr.common.params.MapSolrParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
-import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.util.AbstractSolrTestCase;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Collections;
 
-public class TestMaxScoreQueryParser extends SolrTestCaseJ4 {
+public class TestMaxScoreQueryParser extends AbstractSolrTestCase {
   Query q;
   BooleanClause[] clauses;
 
@@ -48,14 +46,7 @@ public class TestMaxScoreQueryParser extends SolrTestCaseJ4 {
     assertEquals(new BoostQuery(new TermQuery(new Term("text", "foo")), 3f), q);
 
     q = parse("price:[0 TO 10]");
-    Class expected = LegacyNumericRangeQuery.class;
-    if (Boolean.getBoolean(NUMERIC_POINTS_SYSPROP)) {
-      expected = PointRangeQuery.class;
-      if (Boolean.getBoolean(NUMERIC_DOCVALUES_SYSPROP)) {
-        expected = IndexOrDocValuesQuery.class;
-      }
-    }
-    assertTrue(expected + " vs actual: " + q.getClass(), expected.isInstance(q));
+    assertTrue(q instanceof NumericRangeQuery);
   }
 
   @Test
@@ -149,7 +140,7 @@ public class TestMaxScoreQueryParser extends SolrTestCaseJ4 {
       while(al.size() >= 2) {
         p.add(al.remove(0), al.remove(0));
       }
-      return new MaxScoreQParser(q, p, new MapSolrParams(Collections.singletonMap("df", "text")), req(q)).parse();
+      return new MaxScoreQParser(q, p, new ModifiableSolrParams(), req(q)).parse();
     } catch (SyntaxError syntaxError) {
       fail("Failed with exception "+syntaxError.getMessage());
     }

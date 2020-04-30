@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.analyzing;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.analyzing;
 
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -28,21 +30,18 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.MockTokenizer;
-import org.apache.lucene.analysis.StopFilter;
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.core.StopFilter;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
-import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.analysis.util.CharArraySet;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.SearcherManager;
 import org.apache.lucene.search.suggest.Input;
 import org.apache.lucene.search.suggest.InputArrayIterator;
 import org.apache.lucene.search.suggest.Lookup.LookupResult;
-import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
@@ -67,7 +66,7 @@ public class AnalyzingInfixSuggesterTest extends LuceneTestCase {
     assertEquals("a penny saved is a penny earned", results.get(0).key);
     assertEquals("a penny saved is a penny <b>ear</b>ned", results.get(0).highlightKey);
     assertEquals(10, results.get(0).value);
-    assertEquals("foobaz", results.get(0).payload.utf8ToString());
+    assertEquals(new BytesRef("foobaz"), results.get(0).payload);
 
     assertEquals("lend me your ear", results.get(1).key);
     assertEquals("lend me your <b>ear</b>", results.get(1).highlightKey);
@@ -701,15 +700,18 @@ public class AnalyzingInfixSuggesterTest extends LuceneTestCase {
         }
 
         Collections.sort(expected,
-            (a1, b) -> {
-              if (a1.v > b.v) {
-                return -1;
-              } else if (a1.v < b.v) {
-                return 1;
-              } else {
-                return 0;
-              }
-            });
+                         new Comparator<Input>() {
+                           @Override
+                           public int compare(Input a, Input b) {
+                             if (a.v > b.v) {
+                               return -1;
+                             } else if (a.v < b.v) {
+                               return 1;
+                             } else {
+                               return 0;
+                             }
+                           }
+                         });
 
         if (expected.isEmpty() == false) {
 
@@ -876,11 +878,12 @@ public class AnalyzingInfixSuggesterTest extends LuceneTestCase {
     Path tempDir = createTempDir("AIS_NRT_PERSIST_TEST");
     AnalyzingInfixSuggester suggester = new AnalyzingInfixSuggester(newFSDirectory(tempDir), a, a, 3, false);
     Thread[] multiAddThreads = new Thread[10];
-    // Cannot call refresh on an suggester when no docs are added to the index
-    expectThrows(IllegalStateException.class, () -> {
+    try {
       suggester.refresh();
-    });
-
+      fail("Cannot call refresh on an suggester when no docs are added to the index");
+    } catch(IllegalStateException e) {
+      //Expected
+    }
     for(int i=0; i<10; i++) {
       multiAddThreads[i] = new Thread(new IndexDocument(suggester, keys[i]));
     }
@@ -901,16 +904,16 @@ public class AnalyzingInfixSuggesterTest extends LuceneTestCase {
     suggester.commit();
     suggester.close();
 
-    AnalyzingInfixSuggester suggester2 = new AnalyzingInfixSuggester(newFSDirectory(tempDir), a, a, 3, false);
-    results = suggester2.lookup(TestUtil.stringToCharSequence("python", random()), 10, true, false);
+    suggester = new AnalyzingInfixSuggester(newFSDirectory(tempDir), a, a, 3, false);
+    results = suggester.lookup(TestUtil.stringToCharSequence("python", random()), 10, true, false);
     assertEquals(1, results.size());
     assertEquals("python", results.get(0).key);
 
-    suggester2.close();
+    suggester.close();
     a.close();
   }
 
-  private static class IndexDocument implements Runnable {
+  private class IndexDocument implements Runnable {
     AnalyzingInfixSuggester suggester;
     String key;
 
@@ -1260,200 +1263,5 @@ public class AnalyzingInfixSuggesterTest extends LuceneTestCase {
       suggester.close();
       a.close();
     }
-  }
-
-  public void testContextNotAllTermsRequired() throws Exception {
-
-    Input keys[] = new Input[] {
-      new Input("lend me your ear", 8, new BytesRef("foobar"), asSet("foo", "bar")),
-      new Input("a penny saved is a penny earned", 10, new BytesRef("foobaz"), asSet("foo", "baz"))
-    };
-    Path tempDir = createTempDir("analyzingInfixContext");
-
-    Analyzer a = new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false);
-    AnalyzingInfixSuggester suggester = new AnalyzingInfixSuggester(newFSDirectory(tempDir), a, a, 3, false);
-    suggester.build(new InputArrayIterator(keys));
-
-    // No context provided, all results returned
-    List<LookupResult> results = suggester.lookup(TestUtil.stringToCharSequence("ear", random()), 10, false, true);
-    assertEquals(2, results.size());
-    LookupResult result = results.get(0);
-    assertEquals("a penny saved is a penny earned", result.key);
-    assertEquals("a penny saved is a penny <b>ear</b>ned", result.highlightKey);
-    assertEquals(10, result.value);
-    assertEquals(new BytesRef("foobaz"), result.payload);
-    assertNotNull(result.contexts);
-    assertEquals(2, result.contexts.size());
-    assertTrue(result.contexts.contains(new BytesRef("foo")));
-    assertTrue(result.contexts.contains(new BytesRef("baz")));
-
-    result = results.get(1);
-    assertEquals("lend me your ear", result.key);
-    assertEquals("lend me your <b>ear</b>", result.highlightKey);
-    assertEquals(8, result.value);
-    assertEquals(new BytesRef("foobar"), result.payload);
-    assertNotNull(result.contexts);
-    assertEquals(2, result.contexts.size());
-    assertTrue(result.contexts.contains(new BytesRef("foo")));
-    assertTrue(result.contexts.contains(new BytesRef("bar")));
-
-    // Both have "foo" context:
-    results = suggester.lookup(TestUtil.stringToCharSequence("ear", random()), asSet("foo"), 10, false, true);
-    assertEquals(2, results.size());
-
-    result = results.get(0);
-    assertEquals("a penny saved is a penny earned", result.key);
-    assertEquals("a penny saved is a penny <b>ear</b>ned", result.highlightKey);
-    assertEquals(10, result.value);
-    assertEquals(new BytesRef("foobaz"), result.payload);
-    assertNotNull(result.contexts);
-    assertEquals(2, result.contexts.size());
-    assertTrue(result.contexts.contains(new BytesRef("foo")));
-    assertTrue(result.contexts.contains(new BytesRef("baz")));
-
-    result = results.get(1);
-    assertEquals("lend me your ear", result.key);
-    assertEquals("lend me your <b>ear</b>", result.highlightKey);
-    assertEquals(8, result.value);
-    assertEquals(new BytesRef("foobar"), result.payload);
-    assertNotNull(result.contexts);
-    assertEquals(2, result.contexts.size());
-    assertTrue(result.contexts.contains(new BytesRef("foo")));
-    assertTrue(result.contexts.contains(new BytesRef("bar")));
-
-    // Only one has "foo" context and len
-    results = suggester.lookup(TestUtil.stringToCharSequence("len", random()), asSet("foo"), 10, false, true);
-    assertEquals(1, results.size());
-
-    result = results.get(0);
-    assertEquals("lend me your ear", result.key);
-    assertEquals("<b>len</b>d me your ear", result.highlightKey);
-    assertEquals(8, result.value);
-    assertEquals(new BytesRef("foobar"), result.payload);
-    assertNotNull(result.contexts);
-    assertEquals(2, result.contexts.size());
-    assertTrue(result.contexts.contains(new BytesRef("foo")));
-    assertTrue(result.contexts.contains(new BytesRef("bar")));
-
-    suggester.close();
-  }
-  
-  public void testCloseIndexWriterOnBuild() throws Exception {
-    class MyAnalyzingInfixSuggester extends AnalyzingInfixSuggester {
-      public MyAnalyzingInfixSuggester(Directory dir, Analyzer indexAnalyzer, Analyzer queryAnalyzer, 
-                                       int minPrefixChars, boolean commitOnBuild, boolean allTermsRequired,
-                                       boolean highlight, boolean closeIndexWriterOnBuild) throws IOException {
-        super(dir, indexAnalyzer, queryAnalyzer, minPrefixChars, commitOnBuild, 
-              allTermsRequired, highlight, closeIndexWriterOnBuild);
-      }
-      public IndexWriter getIndexWriter() {
-        return writer;
-      } 
-      public SearcherManager getSearcherManager() {
-        return searcherMgr;
-      }
-    }
-
-    // After build(), when closeIndexWriterOnBuild = true: 
-    // * The IndexWriter should be null 
-    // * The SearcherManager should be non-null
-    // * SearcherManager's IndexWriter reference should be closed 
-    //   (as evidenced by maybeRefreshBlocking() throwing AlreadyClosedException)
-    Analyzer a = new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false);
-    Path tempDir = createTempDir("analyzingInfixContext");
-    final MyAnalyzingInfixSuggester suggester = new MyAnalyzingInfixSuggester(newFSDirectory(tempDir), a, a, 3, false,
-        AnalyzingInfixSuggester.DEFAULT_ALL_TERMS_REQUIRED, AnalyzingInfixSuggester.DEFAULT_HIGHLIGHT, true);
-    suggester.build(new InputArrayIterator(sharedInputs));
-    assertNull(suggester.getIndexWriter());
-    assertNotNull(suggester.getSearcherManager());
-    expectThrows(AlreadyClosedException.class, () -> suggester.getSearcherManager().maybeRefreshBlocking());
-    
-    suggester.close();
-
-    // After instantiating from an already-built suggester dir:
-    // * The IndexWriter should be null
-    // * The SearcherManager should be non-null
-    final MyAnalyzingInfixSuggester suggester2 = new MyAnalyzingInfixSuggester(newFSDirectory(tempDir), a, a, 3, false,
-        AnalyzingInfixSuggester.DEFAULT_ALL_TERMS_REQUIRED, AnalyzingInfixSuggester.DEFAULT_HIGHLIGHT, true);
-    assertNull(suggester2.getIndexWriter());
-    assertNotNull(suggester2.getSearcherManager());
-
-    suggester2.close();
-    a.close();
-  }
-  
-  public void testCommitAfterBuild() throws Exception {
-    performOperationWithAllOptionCombinations(suggester -> {
-      suggester.build(new InputArrayIterator(sharedInputs));
-      suggester.commit();
-    });    
-  }
-
-  public void testRefreshAfterBuild() throws Exception {
-    performOperationWithAllOptionCombinations(suggester -> {
-      suggester.build(new InputArrayIterator(sharedInputs)); 
-      suggester.refresh(); 
-    });
-  }
-  
-  public void testDisallowCommitBeforeBuild() throws Exception {
-    performOperationWithAllOptionCombinations
-        (suggester -> expectThrows(IllegalStateException.class, suggester::commit));
-  }
-
-  public void testDisallowRefreshBeforeBuild() throws Exception {
-    performOperationWithAllOptionCombinations
-        (suggester -> expectThrows(IllegalStateException.class, suggester::refresh));
-  }
-
-  private Input sharedInputs[] = new Input[] {
-      new Input("lend me your ear", 8, new BytesRef("foobar")),
-      new Input("a penny saved is a penny earned", 10, new BytesRef("foobaz")),
-  };
-
-  private interface SuggesterOperation {
-    void operate(AnalyzingInfixSuggester suggester) throws Exception;
-  }
-
-  /**
-   * Perform the given operation on suggesters constructed with all combinations of options
-   * commitOnBuild and closeIndexWriterOnBuild, including defaults.
-   */
-  private void performOperationWithAllOptionCombinations(SuggesterOperation operation) throws Exception {
-    Analyzer a = new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false);
-
-    AnalyzingInfixSuggester suggester = new AnalyzingInfixSuggester(newDirectory(), a);
-    operation.operate(suggester);
-    suggester.close();
-
-    suggester = new AnalyzingInfixSuggester(newDirectory(), a, a, 3, false);
-    operation.operate(suggester);
-    suggester.close();
-
-    suggester = new AnalyzingInfixSuggester(newDirectory(), a, a, 3, true);
-    operation.operate(suggester);
-    suggester.close();
-
-    suggester = new AnalyzingInfixSuggester(newDirectory(), a, a, 3, true,
-        AnalyzingInfixSuggester.DEFAULT_ALL_TERMS_REQUIRED, AnalyzingInfixSuggester.DEFAULT_HIGHLIGHT, true);
-    operation.operate(suggester);
-    suggester.close();
-
-    suggester = new AnalyzingInfixSuggester(newDirectory(), a, a, 3, true,
-        AnalyzingInfixSuggester.DEFAULT_ALL_TERMS_REQUIRED, AnalyzingInfixSuggester.DEFAULT_HIGHLIGHT, false);
-    operation.operate(suggester);
-    suggester.close();
-
-    suggester = new AnalyzingInfixSuggester(newDirectory(), a, a, 3, false,
-        AnalyzingInfixSuggester.DEFAULT_ALL_TERMS_REQUIRED, AnalyzingInfixSuggester.DEFAULT_HIGHLIGHT, true);
-    operation.operate(suggester);
-    suggester.close();
-
-    suggester = new AnalyzingInfixSuggester(newDirectory(), a, a, 3, false,
-        AnalyzingInfixSuggester.DEFAULT_ALL_TERMS_REQUIRED, AnalyzingInfixSuggester.DEFAULT_HIGHLIGHT, false);
-    operation.operate(suggester);
-    suggester.close();
-
-    a.close();
   }
 }

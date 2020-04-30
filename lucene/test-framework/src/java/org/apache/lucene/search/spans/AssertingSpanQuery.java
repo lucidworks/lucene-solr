@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
 
 import java.io.IOException;
-import java.util.Objects;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
 
 /** Wraps a span query with asserts */
 public class AssertingSpanQuery extends SpanQuery {
@@ -44,13 +42,16 @@ public class AssertingSpanQuery extends SpanQuery {
   }
 
   @Override
-  public SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    SpanWeight weight = in.createWeight(searcher, scoreMode, boost);
+  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    SpanWeight weight = in.createWeight(searcher, needsScores);
     return new AssertingSpanWeight(searcher, weight);
   }
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
     Query q = in.rewrite(reader);
     if (q == in) {
       return super.rewrite(reader);
@@ -62,27 +63,27 @@ public class AssertingSpanQuery extends SpanQuery {
   }
 
   @Override
-  public void visit(QueryVisitor visitor) {
-    in.visit(visitor);
-  }
-
-  @Override
   public Query clone() {
     return new AssertingSpanQuery(in);
   }
 
   @Override
-  public boolean equals(Object o) {
-    return sameClassAs(o) &&
-           equalsTo(getClass().cast(o));
-  }
-
-  private boolean equalsTo(AssertingSpanQuery other) {
-    return Objects.equals(in, other.in);
+  public int hashCode() {
+    final int prime = 31;
+    int result = super.hashCode();
+    result = prime * result + ((in == null) ? 0 : in.hashCode());
+    return result;
   }
 
   @Override
-  public int hashCode() {
-    return (in == null) ? 0 : in.hashCode();
+  public boolean equals(Object obj) {
+    if (this == obj) return true;
+    if (!super.equals(obj)) return false;
+    if (getClass() != obj.getClass()) return false;
+    AssertingSpanQuery other = (AssertingSpanQuery) obj;
+    if (in == null) {
+      if (other.in != null) return false;
+    } else if (!in.equals(other.in)) return false;
+    return true;
   }
 }

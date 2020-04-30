@@ -14,6 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+
 package org.apache.solr.handler.component;
 
 
@@ -39,7 +41,7 @@ public interface StatsValues {
 
   /** Accumulate the value associated with <code>docID</code>.
    *  @see #setNextReader(org.apache.lucene.index.LeafReaderContext) */
-  void accumulate(int docID) throws IOException;
+  void accumulate(int docID);
 
   /**
    * Accumulate the values based on the given value

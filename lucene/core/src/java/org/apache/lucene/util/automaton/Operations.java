@@ -29,23 +29,23 @@
 
 package org.apache.lucene.util.automaton;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.IntsRefBuilder;
 import org.apache.lucene.util.RamUsageEstimator;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Automata operations.
@@ -57,11 +57,6 @@ final public class Operations {
    * Default maximum number of states that {@link Operations#determinize} should create.
    */
   public static final int DEFAULT_MAX_DETERMINIZED_STATES = 10000;
-
-  /**
-   * Maximum level of recursion allowed in recursive operations.
-   */
-  public static final int MAX_RECURSION_LEVEL = 1000;
 
   private Operations() {}
 
@@ -340,7 +335,7 @@ final public class Operations {
     Transition[][] transitions2 = a2.getSortedTransitions();
     Automaton c = new Automaton();
     c.createState();
-    ArrayDeque<StatePair> worklist = new ArrayDeque<>();
+    LinkedList<StatePair> worklist = new LinkedList<>();
     HashMap<StatePair,StatePair> newstates = new HashMap<>();
     StatePair p = new StatePair(0, 0, 0);
     worklist.add(p);
@@ -375,8 +370,10 @@ final public class Operations {
   }
 
   /** Returns true if these two automata accept exactly the
-   *  same language.  This is a costly computation!  Both automata
-   *  must be determinized and have no dead states! */
+   *  same language.  This is a costly computation!  Note
+   *  also that a1 and a2 will be determinized as a side
+   *  effect.  Both automata must be determinized and have
+   *  no dead states! */
   public static boolean sameLanguage(Automaton a1, Automaton a2) {
     if (a1 == a2) {
       return true;
@@ -440,7 +437,7 @@ final public class Operations {
     // TODO: cutover to iterators instead
     Transition[][] transitions1 = a1.getSortedTransitions();
     Transition[][] transitions2 = a2.getSortedTransitions();
-    ArrayDeque<StatePair> worklist = new ArrayDeque<>();
+    LinkedList<StatePair> worklist = new LinkedList<>();
     HashSet<StatePair> visited = new HashSet<>();
     StatePair p = new StatePair(0, 0);
     worklist.add(p);
@@ -687,7 +684,7 @@ final public class Operations {
     // Create state 0:
     b.createState();
 
-    ArrayDeque<SortedIntSet.FrozenIntSet> worklist = new ArrayDeque<>();
+    LinkedList<SortedIntSet.FrozenIntSet> worklist = new LinkedList<>();
     Map<SortedIntSet.FrozenIntSet,Integer> newstate = new HashMap<>();
 
     worklist.add(initialset);
@@ -809,7 +806,7 @@ final public class Operations {
       return false;
     }
     
-    ArrayDeque<Integer> workList = new ArrayDeque<>();
+    LinkedList<Integer> workList = new LinkedList<>();
     BitSet seen = new BitSet(a.getNumStates());
     workList.add(0);
     seen.set(0);
@@ -912,7 +909,7 @@ final public class Operations {
     if (numStates == 0) {
       return live;
     }
-    ArrayDeque<Integer> workList = new ArrayDeque<>();
+    LinkedList<Integer> workList = new LinkedList<>();
     live.set(0);
     workList.add(0);
 
@@ -951,7 +948,7 @@ final public class Operations {
     }
     Automaton a2 = builder.finish();
 
-    ArrayDeque<Integer> workList = new ArrayDeque<>();
+    LinkedList<Integer> workList = new LinkedList<>();
     BitSet live = new BitSet(numStates);
     BitSet acceptBits = a.getAcceptStates();
     int s = 0;
@@ -1016,6 +1013,22 @@ final public class Operations {
   }
 
   /**
+   * Finds the largest entry whose value is less than or equal to c, or 0 if
+   * there is no such entry.
+   */
+  static int findIndex(int c, int[] points) {
+    int a = 0;
+    int b = points.length;
+    while (b - a > 1) {
+      int d = (a + b) >>> 1;
+      if (points[d] > c) b = d;
+      else if (points[d] < c) a = d;
+      else return d;
+    }
+    return a;
+  }
+  
+  /**
    * Returns true if the language of this automaton is finite.  The
    * automaton must not have any dead states.
    */
@@ -1023,7 +1036,7 @@ final public class Operations {
     if (a.getNumStates() == 0) {
       return true;
     }
-    return isFinite(new Transition(), a, 0, new BitSet(a.getNumStates()), new BitSet(a.getNumStates()), 0);
+    return isFinite(new Transition(), a, 0, new BitSet(a.getNumStates()), new BitSet(a.getNumStates()));
   }
   
   /**
@@ -1031,16 +1044,13 @@ final public class Operations {
    * there are never transitions to dead states.)
    */
   // TODO: not great that this is recursive... in theory a
-  // large automata could exceed java's stack so the maximum level of recursion is bounded to 1000
-  private static boolean isFinite(Transition scratch, Automaton a, int state, BitSet path, BitSet visited, int level) {
-    if (level > MAX_RECURSION_LEVEL) {
-      throw new IllegalArgumentException("input automaton is too large: " +  level);
-    }
+  // large automata could exceed java's stack
+  private static boolean isFinite(Transition scratch, Automaton a, int state, BitSet path, BitSet visited) {
     path.set(state);
     int numTransitions = a.initTransition(state, scratch);
     for(int t=0;t<numTransitions;t++) {
       a.getTransition(state, t, scratch);
-      if (path.get(scratch.dest) || (!visited.get(scratch.dest) && !isFinite(scratch, a, scratch.dest, path, visited, level+1))) {
+      if (path.get(scratch.dest) || (!visited.get(scratch.dest) && !isFinite(scratch, a, scratch.dest, path, visited))) {
         return false;
       }
     }
@@ -1272,7 +1282,7 @@ final public class Operations {
     int numStates = a.getNumStates();
     int[] states = new int[numStates];
     final BitSet visited = new BitSet(numStates);
-    int upto = topoSortStatesRecurse(a, visited, states, 0, 0, 0);
+    int upto = topoSortStatesRecurse(a, visited, states, 0, 0);
 
     if (upto < states.length) {
       // There were dead states
@@ -1291,19 +1301,14 @@ final public class Operations {
     return states;
   }
 
-  // TODO: not great that this is recursive... in theory a
-  // large automata could exceed java's stack so the maximum level of recursion is bounded to 1000
-  private static int topoSortStatesRecurse(Automaton a, BitSet visited, int[] states, int upto, int state, int level) {
-    if (level > MAX_RECURSION_LEVEL) {
-      throw new IllegalArgumentException("input automaton is too large: " + level);
-    }
+  private static int topoSortStatesRecurse(Automaton a, BitSet visited, int[] states, int upto, int state) {
     Transition t = new Transition();
     int count = a.initTransition(state, t);
     for (int i=0;i<count;i++) {
       a.getNextTransition(t);
       if (!visited.get(t.dest)) {
         visited.set(t.dest);
-        upto = topoSortStatesRecurse(a, visited, states, upto, t.dest, level+1);
+        upto = topoSortStatesRecurse(a, visited, states, upto, t.dest);
       }
     }
     states[upto] = state;

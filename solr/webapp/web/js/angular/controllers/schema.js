@@ -68,11 +68,9 @@ solrAdminApp.controller('SchemaController',
                     }
                     $scope.leftbar = leftbar;
                     $scope.core = $routeParams.core;
+                    $scope.defaultSearchField = data.default_search_field;
                     $scope.uniqueKeyField = data.unique_key_field;
-                    $scope.similarity = data.similarity; 
-                    if ($scope.similarity && $scope.similarity.className) {
-                        $scope.similarity.className = shortenPackages($scope.similarity.className); 
-                    }
+                    $scope.isDefaultSearchField = ($scope.selectedType == "Field" && $scope.name == $scope.defaultSearchField);
                     $scope.isUniqueKeyField = ($scope.selectedType == "Field" && $scope.name == $scope.uniqueKeyField);
 
                     $scope.display = getFieldProperties(data, $routeParams.core, $scope.is, $scope.name);
@@ -87,7 +85,7 @@ solrAdminApp.controller('SchemaController',
                 });
             });
             Config.get({core: $routeParams.core}, function(data) {
-                $scope.isSchemaUpdatable = (data.config.hasOwnProperty('schemaFactory') == false || data.config.schemaFactory.class == "ManagedIndexSchemaFactory");
+                $scope.isSchemaUpdatable = data.config.schemaFactory.class == "ManagedIndexSchemaFactory";
             });
         };
         $scope.refresh();
@@ -150,8 +148,7 @@ solrAdminApp.controller('SchemaController',
 
                 $scope.newField = {
                     stored: "true",
-                    indexed: "true",
-                    uninvertible: "true"
+                    indexed: "true"
                 }
                 delete $scope.addErrors;
             }
@@ -335,8 +332,8 @@ var filterFields = function(type, data, name) {
 var mergeIndexAndSchemaData = function(index, schema) {
 
     var data = {
+        default_search_field: null,
         unique_key_field: null,
-        similarity: null,
         key: {},
         fields: {},
         dynamic_fields: {},
@@ -355,8 +352,8 @@ var mergeIndexAndSchemaData = function(index, schema) {
 
     data.key = index.info.key;
 
+    data.default_search_field = schema.defaultSearchField;
     data.unique_key_field = schema.uniqueKeyField;
-    data.similarity = schema.similarity;
 
     data.dynamic_fields = schema.dynamicFields;
     data.types = schema.types;
@@ -425,11 +422,11 @@ var mergeIndexAndSchemaData = function(index, schema) {
     return data;
 };
 
-var getFieldProperties = function(data, core, is, name) {
+var getFieldProperties = function(data, core, is, field) {
 
     var display = {};
 
-    display.partialState = is.field && !!data.fields[name].partial;
+    display.partialState = is.field && !!data.fields[field].partial;
 
     display.columns = [];
     display.rows = [];
@@ -449,33 +446,23 @@ var getFieldProperties = function(data, core, is, name) {
     }
 
     // Identify the rows for our field property table
-    if (is.field && data.fields[name]) {
-        if (data.fields[name].flags) {
-            addRow('Properties', data.fields[name].flags);
+    if (is.field && data.fields[field]) {
+        if (data.fields[field].flags) {
+            addRow('Properties', data.fields[field].flags);
         }
-        if (data.fields[name].schema) {
-            addRow('Schema', data.fields[name].schema);
+        if (data.fields[field].schema) {
+            addRow('Schema', data.fields[field].schema);
         }
-        if (data.fields[name].index) {
-            addRow('Index', data.fields[name].index);
+        if (data.fields[field].index) {
+            addRow('Index', data.fields[field].index);
         }
-        display.docs = data.fields[name].docs;
-        display.docsUrl = "#/" + core + "/query?q=" + name + ":[* TO *]";
-        display.distinct = data.fields[name].distinct;
-        display.positionIncrementGap = data.fields[name].positionIncrementGap;
-        if (data.types[data.fields[name].type]) {
-          display.similarity = data.types[data.fields[name].type].similarity;
-        } else {
-          display.similarity = null;
-        }
-    } else if (is.dynamicField && data.dynamic_fields[name] && data.dynamic_fields[name].flags) {
-        addRow('Properties', data.dynamic_fields[name].flags);
-        display.similarity = data.types[data.dynamic_fields[name].type].similarity;
-    } else if (is.type && data.types[name]) {
-        display.similarity = data.types[name].similarity;
-    }
-    if (display.similarity && display.similarity.className) {
-        display.similarity.className = shortenPackages(display.similarity.className);
+        display.docs = data.fields[field].docs;
+        display.docsUrl = "#/" + core + "/query?q=" + field + ":[* TO *]";
+        display.distinct = data.fields[field].distinct;
+        display.positionIncrementGap = data.fields[field].positionIncrementGap;
+        display.similarity = data.fields[field].similarity;
+    } else if (is.dynamicField && data.dynamic_fields[field] && data.dynamic_fields[field].flags) {
+        addRow('Properties', data.dynamic_fields[field].flags);
     }
 
     // identify columns in field property table:
@@ -489,10 +476,6 @@ var getFieldProperties = function(data, core, is, name) {
     for (var i in display.rows) {
         var row = display.rows[i];
         row.cells = [];
-
-        if (!row.flags) {
-            continue; // Match the special case in the LukeRequestHandler
-        }
 
         for (var j in display.columns) {
             var flag = display.columns[j].key;
@@ -604,8 +587,21 @@ var sortedObjectArray = function(list) {
       objarr.push({"name": list[i]});
     }
     return objarr;
-};
+}
 
-var shortenPackages = function(className) {
-    return className.replace("org.apache.solr", "o.a.s").replace("org.apache.lucene", "o.a.l");
-};
+/*
+        var get_width = function get_width()
+        {
+          return $( this ).width();
+        }
+
+  var max_width = 10 + Math.max.apply( Math, $( 'p', topterms_table_element ).map( get_width ).get() );
+  topterms:
+    p { width: {{maxWidth}}px !important; }
+    ul { margin-left: {{max_width + 5 }}px !important; }
+
+  var max_width = 10 + Math.max.apply( Math, $( 'dt', histogram_holder_element ).map( get_width ).get() );
+  histogram_holder:
+    ul { margin-left: {{maxWidth}}px !important; }
+    li dt { left: {{-maxWidth}}px !important; width: {{maxWidth}}px !important; }
+*/

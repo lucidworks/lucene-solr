@@ -1,3 +1,5 @@
+package org.apache.solr.search.facet;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.facet;
+
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,12 +32,11 @@ import org.apache.solr.common.params.FacetParams;
 import org.apache.solr.common.params.RequiredSolrParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.StrUtils;
+import org.apache.solr.core.SolrCore;
 import org.apache.solr.search.QueryParsing;
 import org.apache.solr.search.SolrReturnFields;
 import org.apache.solr.search.StrParser;
 import org.apache.solr.search.SyntaxError;
-
-import static org.apache.solr.common.params.CommonParams.SORT;
 
 public class LegacyFacet {
   private SolrParams params;
@@ -174,7 +175,7 @@ public class LegacyFacet {
     String sort = params.getFieldParam(f, FacetParams.FACET_SORT, limit>0 ? FacetParams.FACET_SORT_COUNT : FacetParams.FACET_SORT_INDEX);
     String prefix = params.getFieldParam(f, FacetParams.FACET_PREFIX);
 
-    Map<String,Object> cmd = new HashMap<>();
+    Map<String,Object> cmd = new HashMap<String,Object>();
     cmd.put("field", facetValue);
     if (offset != 0) cmd.put("offset", offset);
     if (limit != 10) cmd.put("limit", limit);
@@ -184,9 +185,9 @@ public class LegacyFacet {
     if (sort.equals("count")) {
       // our default
     } else if (sort.equals("index")) {
-      cmd.put(SORT, "index asc");
+      cmd.put("sort", "index asc");
     } else {
-      cmd.put(SORT, sort);  // can be sort by one of our stats
+      cmd.put("sort", sort);  // can be sort by one of our stats
     }
 
     Map<String,Object> type = new HashMap<>(1);

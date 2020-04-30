@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,43 +16,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.Closeable;
 import java.io.IOException;
 
-/**
- * A {@link DataOutput} for appending data to a file in a {@link Directory}.
- *
- * Instances of this class are <b>not</b> thread-safe.
- *
+/** Abstract base class for output to a file in a Directory.  A random-access
+ * output stream.  Used for all Lucene index output operations.
+ 
+ * <p>{@code IndexOutput} may only be used from one thread, because it is not
+ * thread safe (it keeps internal state like file position).
+ 
  * @see Directory
  * @see IndexInput
  */
 public abstract class IndexOutput extends DataOutput implements Closeable {
-  
-  /** Full description of this output, e.g. which class such as {@code FSIndexOutput}, and the full path to the file */
-  private final String resourceDescription;
 
-  /** Just the name part from {@code resourceDescription} */
-  private final String name;
+  private final String resourceDescription;
 
   /** Sole constructor.  resourceDescription should be non-null, opaque string
    *  describing this resource; it's returned from {@link #toString}. */
-  protected IndexOutput(String resourceDescription, String name) {
+  protected IndexOutput(String resourceDescription) {
     if (resourceDescription == null) {
       throw new IllegalArgumentException("resourceDescription must not be null");
     }
     this.resourceDescription = resourceDescription;
-    this.name = name;
-  }
-
-  /** Returns the name used to create this {@code IndexOutput}.  This is especially useful when using
-   * {@link Directory#createTempOutput}. */
-  // TODO: can we somehow use this as the default resource description or something?
-  public String getName() {
-    return name;
   }
 
   /** Closes this stream to further operations. */

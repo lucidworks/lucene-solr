@@ -1,3 +1,5 @@
+package org.apache.solr.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.nio.channels.FileChannel;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import org.apache.commons.io.FileExistsException;
 
 /**
  *
@@ -49,9 +41,15 @@ public class FileUtils {
   }
 
   public static void copyFile(File src , File destination) throws IOException {
-    try (FileChannel in = new FileInputStream(src).getChannel();
-         FileChannel out = new FileOutputStream(destination).getChannel()) {
+    FileChannel in = null;
+    FileChannel out = null;
+    try {
+      in = new FileInputStream(src).getChannel();
+      out = new FileOutputStream(destination).getChannel();
       in.transferTo(0, in.size(), out);
+    } finally {
+      try { if (in != null) in.close(); } catch (IOException e) {}
+      try { if (out != null) out.close(); } catch (IOException e) {}
     }
   }
 
@@ -70,9 +68,16 @@ public class FileUtils {
     IOException exc = null;
     while(!success && retryCount < 5) {
       retryCount++;
-      try (RandomAccessFile file = new RandomAccessFile(fullFile, "rw")) {
-        file.getFD().sync();
-        success = true;
+      RandomAccessFile file = null;
+      try {
+        try {
+          file = new RandomAccessFile(fullFile, "rw");
+          file.getFD().sync();
+          success = true;
+        } finally {
+          if (file != null)
+            file.close();
+        }
       } catch (IOException ioe) {
         if (exc == null)
           exc = ioe;
@@ -89,23 +94,4 @@ public class FileUtils {
       throw exc;
   }
 
-  public static boolean fileExists(String filePathString) {
-    return new File(filePathString).exists();
-  }
-
-  // Files.createDirectories has odd behavior if the path is a symlink and it already exists
-  // _even if it's a symlink to a directory_. 
-  // 
-  // oddly, if the path to be created just contains a symlink in intermediate levels, Files.createDirectories
-  // works just fine.
-  //
-  // This works around that issue
-  public static Path createDirectories(Path path) throws IOException {
-    if (Files.exists(path) && Files.isSymbolicLink(path)) {
-      Path real = path.toRealPath();
-      if (Files.isDirectory(real)) return real;
-      throw new FileExistsException("Tried to create a directory at to an existing non-directory symlink: " + path.toString());
-    }
-    return Files.createDirectories(path);
-  }
 }

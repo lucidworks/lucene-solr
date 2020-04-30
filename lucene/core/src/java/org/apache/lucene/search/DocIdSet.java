@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Collections;
 
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Bits;
@@ -34,6 +36,11 @@ public abstract class DocIdSet implements Accountable {
     @Override
     public DocIdSetIterator iterator() {
       return DocIdSetIterator.empty();
+    }
+    
+    @Override
+    public boolean isCacheable() {
+      return true;
     }
     
     // we explicitly provide no random access, as this filter is 100% sparse and iterator exits faster
@@ -77,4 +84,19 @@ public abstract class DocIdSet implements Accountable {
     return null;
   }
 
+  /**
+   * This method is a hint for {@link CachingWrapperFilter}, if this <code>DocIdSet</code>
+   * should be cached without copying it. The default is to return
+   * <code>false</code>. If you have an own <code>DocIdSet</code> implementation
+   * that does its iteration very effective and fast without doing disk I/O,
+   * override this method and return <code>true</code>.
+   */
+  public boolean isCacheable() {
+    return false;
+  }
+
+  @Override
+  public Collection<Accountable> getChildResources() {
+    return Collections.emptyList();
+  }
 }

@@ -1,3 +1,5 @@
+package org.apache.solr.handler.dataimport;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.dataimport;
 
 import java.io.IOException;
+import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -31,15 +33,14 @@ import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.search.join.BitSetProducer;
 import org.apache.lucene.search.join.QueryBitSetProducer;
+import org.apache.lucene.search.join.BitSetProducer;
 import org.apache.lucene.search.join.ScoreMode;
 import org.apache.lucene.search.join.ToParentBlockJoinQuery;
 import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.handler.dataimport.config.ConfigNameConstants;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.search.SolrIndexSearcher;
-import org.apache.solr.util.TestHarness;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -103,15 +104,11 @@ public class TestHierarchicalDocBuilder extends AbstractDataImportHandlerTestCas
   
   @After
   public void after() {
-    if (null != req) {
-      req.close();
-      req = null;
-    }
+    req.close();
     MockDataSource.clearCache();
   }
 
   @Test
-  @AwaitsFix(bugUrl = "https://issues.apache.org/jira/browse/SOLR-12801") // this test fails easily under beasting
   public void testThreeLevelHierarchy() throws Exception {
     int parentsNum = 3; //fixed for simplicity of test
     int childrenNum = 0;
@@ -123,7 +120,7 @@ public class TestHierarchicalDocBuilder extends AbstractDataImportHandlerTestCas
 
     List<String> parentIds = createDataIterator("select * from PARENT", parentType, parentType, parentsNum);
     Collections.shuffle(parentIds, random());
-    final String parentId1 = parentIds.get(0);
+    String parentId1 = parentIds.get(0);
     String parentId2 = parentIds.get(1);
     
     //parent 1 children
@@ -134,24 +131,21 @@ public class TestHierarchicalDocBuilder extends AbstractDataImportHandlerTestCas
     childrenNum += childrenIds.size();
     
     // grand children of first parent first child
-    final String childId = childrenIds.get(0);
+    String childId = childrenIds.get(0);
     String description = "grandchild of first parent, child of " + childId + " child";
     select = "select * from GRANDCHILD where parent_id='" + childId + "'";
     List<String> grandChildrenIds = createDataIterator(select, grandChildType, description, atLeast(2));
     grandChildrenNum += grandChildrenIds.size();
     
     // grand children of first parent second child
-    {
-      String childId2 = childrenIds.get(1);
-      description = "grandchild of first parent, child of " + childId2 + " child";
-      select = "select * from GRANDCHILD where parent_id='" + childId2 + "'";
-    }
-    final List<String> grandChildrenIds2 = createDataIterator(select, grandChildType, description, atLeast(2));
+    childId = childrenIds.get(1);
+    description = "grandchild of first parent, child of " + childId + " child";
+    select = "select * from GRANDCHILD where parent_id='" + childId + "'";
+    List<String> grandChildrenIds2 = createDataIterator(select, grandChildType, description, atLeast(2));
     grandChildrenNum += grandChildrenIds2.size();
     
-    List<String> allGrandChildrenIds = new ArrayList<>(grandChildrenIds);
-    allGrandChildrenIds.addAll(grandChildrenIds2);
-        
+    grandChildrenIds.addAll(grandChildrenIds2);
+    
     // third children of first parent has no grand children
     
     // parent 2 children (no grand children)   
@@ -163,14 +157,7 @@ public class TestHierarchicalDocBuilder extends AbstractDataImportHandlerTestCas
     
     int totalDocsNum = parentsNum + childrenNum + grandChildrenNum;
     
-    String resp = runFullImport(THREE_LEVEL_HIERARCHY_CONFIG);
-    String xpath = "//arr[@name='documents']/lst[arr[@name='id']/str='"+parentId1+"']/"+
-      "arr[@name='_childDocuments_']/lst[arr[@name='id']/str='"+childId+"']/"+
-      "arr[@name='_childDocuments_']/lst[arr[@name='id']/str='"+grandChildrenIds.get(0)+"']";
-    String results = TestHarness.validateXPath(resp, 
-           xpath);
-    assertTrue("Debug documents does not contain child documents\n"+resp+"\n"+ xpath+
-                                                        "\n"+results, results == null);
+    runFullImport(threeLevelHierarchyConfig);
     
     assertTrue("Update request processor processAdd was not called", TestUpdateRequestProcessor.processAddCalled);
     assertTrue("Update request processor processCommit was not callled", TestUpdateRequestProcessor.processCommitCalled);
@@ -184,7 +171,7 @@ public class TestHierarchicalDocBuilder extends AbstractDataImportHandlerTestCas
 
     // let's check BlockJoin
     // get first parent by any grand children
-    String randomGrandChildId = allGrandChildrenIds.get(random().nextInt(allGrandChildrenIds.size()));
+    String randomGrandChildId = grandChildrenIds.get(random().nextInt(grandChildrenIds.size()));
     Query query = createToParentQuery(parentType, FIELD_ID, randomGrandChildId);
     assertSearch(query, FIELD_ID, parentId1);
 
@@ -259,7 +246,7 @@ public class TestHierarchicalDocBuilder extends AbstractDataImportHandlerTestCas
     /* The limit of search queue is doubled to catch the error in case when for some reason there are more docs than expected  */
     SolrIndexSearcher searcher = req.getSearcher();
     TopDocs result = searcher.search(query, values.length * 2);
-    assertEquals(values.length, result.totalHits.value);
+    assertEquals(values.length, result.totalHits);
     List<String> actualValues = new ArrayList<String>();
     for (int index = 0; index < values.length; ++index) {
       Document doc = searcher.doc(result.scoreDocs[index].doc);
@@ -348,9 +335,9 @@ public class TestHierarchicalDocBuilder extends AbstractDataImportHandlerTestCas
     String children = createChildren(parentType, 0, depth, parentData, holder);
     
     String rootFields = createFieldsList(FIELD_ID, "desc", "type_s");
-    String rootEntity = StrUtils.formatString(ROOT_ENTITY_TEMPLATE, parentType, "SELECT * FROM " + parentType, rootFields, children);
+    String rootEntity = StrUtils.formatString(rootEntityTemplate, parentType, "SELECT * FROM " + parentType, rootFields, children);
 
-    String config = StrUtils.formatString(DATA_CONFIG_TEMPLATE, rootEntity);
+    String config = StrUtils.formatString(dataConfigTemplate, rootEntity);
     return config;
   }
   
@@ -411,7 +398,7 @@ public class TestHierarchicalDocBuilder extends AbstractDataImportHandlerTestCas
       List<Hierarchy> childData = createMockedIterator(childName, parentData, holder);
       
       String subChildren = createChildren(childName, currentLevel + 1, maxLevel, childData, holder);
-      String child = StrUtils.formatString(CHILD_ENTITY_TEMPLATE, childName, select, fields, subChildren);
+      String child = StrUtils.formatString(childEntityTemplate, childName, select, fields, subChildren);
       builder.append(child);
       builder.append('\n');
     }
@@ -429,7 +416,7 @@ public class TestHierarchicalDocBuilder extends AbstractDataImportHandlerTestCas
     return builder.toString();
   }
 
-  private static final String THREE_LEVEL_HIERARCHY_CONFIG = "<dataConfig>\n" +
+  private final String threeLevelHierarchyConfig = "<dataConfig>\n" +
       "  <dataSource type='MockDataSource' />\n" +
       "  <document>\n" +
       "    <entity name='PARENT' query='select * from PARENT'>\n" +
@@ -451,7 +438,7 @@ public class TestHierarchicalDocBuilder extends AbstractDataImportHandlerTestCas
       "</dataConfig>";
   
   /** {0} is rootEntity block **/
-  private static final String DATA_CONFIG_TEMPLATE = "<dataConfig><dataSource type=\"MockDataSource\" />\n<document>\n {0}</document></dataConfig>";
+  private final String dataConfigTemplate = "<dataConfig><dataSource type=\"MockDataSource\" />\n<document>\n {0}</document></dataConfig>";
   
   /** 
    * {0} - entityName, 
@@ -459,7 +446,7 @@ public class TestHierarchicalDocBuilder extends AbstractDataImportHandlerTestCas
    * {2} - fieldsList
    * {3} - childEntitiesList 
    **/
-  private static final String ROOT_ENTITY_TEMPLATE = "<entity name=\"{0}\" query=\"{1}\">\n{2} {3}\n</entity>\n";
+  private final String rootEntityTemplate = "<entity name=\"{0}\" query=\"{1}\">\n{2} {3}\n</entity>\n";
   
   /** 
    * {0} - entityName, 
@@ -467,7 +454,7 @@ public class TestHierarchicalDocBuilder extends AbstractDataImportHandlerTestCas
    * {2} - fieldsList
    * {3} - childEntitiesList 
    **/
-  private static final String CHILD_ENTITY_TEMPLATE = "<entity " + ConfigNameConstants.CHILD + "=\"true\" name=\"{0}\" query=\"{1}\">\n {2} {3} </entity>\n";
+  private final String childEntityTemplate = "<entity " + ConfigNameConstants.CHILD + "=\"true\" name=\"{0}\" query=\"{1}\">\n {2} {3} </entity>\n";
   
   private BitSetProducer createParentFilter(String type) {
     BooleanQuery.Builder parentQuery = new BooleanQuery.Builder();

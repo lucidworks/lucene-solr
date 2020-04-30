@@ -16,10 +16,14 @@
  limitations under the License.
 -->
 
-<schema name="bad-schema-bogus-field-parameters" version="1.6">
-  <fieldType name="binary" class="solr.BinaryField"/>
+<schema name="bad-schema-bogus-field-parameters" version="1.5">
+  <types>
+    <fieldType name="binary" class="solr.BinaryField" />
+ </types>
 
 
-  <field name="id" type="binary" someBogusParam="true"/>
+ <fields>
+   <field name="id" type="binary" someBogusParam="true"/>
+ </fields>
 
 </schema>

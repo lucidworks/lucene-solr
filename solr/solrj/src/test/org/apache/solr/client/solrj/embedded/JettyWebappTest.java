@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.embedded;
 
 import java.io.File;
@@ -31,13 +32,12 @@ import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.solr.SolrJettyTestBase;
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.client.solrj.impl.HttpClientUtil;
 import org.apache.solr.util.ExternalPaths;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
-import org.eclipse.jetty.server.session.DefaultSessionIdManager;
+import org.eclipse.jetty.server.session.HashSessionIdManager;
 import org.eclipse.jetty.webapp.WebAppContext;
 import org.junit.Rule;
 import org.junit.rules.RuleChain;
@@ -64,8 +64,7 @@ public class JettyWebappTest extends SolrTestCaseJ4
     super.setUp();
     System.setProperty("solr.solr.home", SolrJettyTestBase.legacyExampleCollection1SolrHome());
     System.setProperty("tests.shardhandler.randomSeed", Long.toString(random().nextLong()));
-    System.setProperty("solr.tests.doContainerStreamCloseAssert", "false");
-    
+
     File dataDir = createTempDir().toFile();
     dataDir.mkdirs();
 
@@ -74,7 +73,7 @@ public class JettyWebappTest extends SolrTestCaseJ4
 
     server = new Server(port);
     // insecure: only use for tests!!!!
-    server.setSessionIdManager(new DefaultSessionIdManager(server, new Random(random().nextLong())));
+    server.setSessionIdManager(new HashSessionIdManager(new Random(random().nextLong())));
     new WebAppContext(server, path, context );
 
     ServerConnector connector = new ServerConnector(server, new HttpConnectionFactory());
@@ -96,7 +95,6 @@ public class JettyWebappTest extends SolrTestCaseJ4
     } catch( Exception ex ) {}
     System.clearProperty("tests.shardhandler.randomSeed");
     System.clearProperty("solr.data.dir");
-    System.clearProperty("solr.tests.doContainerStreamCloseAssert");
     super.tearDown();
   }
   
@@ -111,7 +109,7 @@ public class JettyWebappTest extends SolrTestCaseJ4
 
     HttpClient client = HttpClients.createDefault();
     HttpRequestBase m = new HttpGet(adminPath);
-    HttpResponse response = client.execute(m, HttpClientUtil.createNewHttpClientRequestContext());
+    HttpResponse response = client.execute(m);
     assertEquals(200, response.getStatusLine().getStatusCode());
     Header header = response.getFirstHeader("X-Frame-Options");
     assertEquals("DENY", header.getValue().toUpperCase(Locale.ROOT));

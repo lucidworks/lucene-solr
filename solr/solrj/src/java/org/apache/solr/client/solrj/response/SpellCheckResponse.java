@@ -1,3 +1,4 @@
+package org.apache.solr.client.solrj.response;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.response;
+
 import org.apache.solr.common.util.NamedList;
 
 import java.util.ArrayList;
@@ -69,7 +70,7 @@ public class SpellCheckResponse {
           NamedList<Object> expandedCollation = (NamedList<Object>) o;
           String collationQuery
             = (String) expandedCollation.get("collationQuery");
-          long hits = ((Number) expandedCollation.get("hits")).longValue();
+          int hits = (Integer) expandedCollation.get("hits");
           @SuppressWarnings("unchecked")
           NamedList<String> misspellingsAndCorrections
             = (NamedList<String>) expandedCollation.get("misspellingsAndCorrections");
@@ -211,7 +212,7 @@ public class SpellCheckResponse {
 
   }
 
-  public static class Collation {
+  public class Collation {
     private String collationQueryString;
     private List<Correction> misspellingsAndCorrections = new ArrayList<>();
     private long numberOfHits;
@@ -244,7 +245,7 @@ public class SpellCheckResponse {
 
   }
 
-  public static class Correction {
+  public class Correction {
     private String original;
     private String correction;
 

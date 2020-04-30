@@ -1,3 +1,5 @@
+package org.apache.solr.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import java.io.IOException;
-import java.io.InputStream;
+
 import java.lang.invoke.MethodHandles;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -43,7 +43,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.google.common.collect.ImmutableMap;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.Base64;
 import org.slf4j.Logger;
@@ -63,7 +62,7 @@ public final class CryptoKeys {
       m.put(e.getKey(), getX509PublicKey(e.getValue()));
 
     }
-    this.keys = ImmutableMap.copyOf(m);
+    this.keys = m;
   }
 
   /**
@@ -75,37 +74,17 @@ public final class CryptoKeys {
       boolean verified;
       try {
         verified = CryptoKeys.verify(entry.getValue(), Base64.base64ToByteArray(sig), data);
-        log.debug("verified {} ", verified);
+        log.info("verified {} ", verified);
         if (verified) return entry.getKey();
       } catch (Exception e) {
         exception = e;
-        log.debug("NOT verified  ");
+        log.info("NOT verified  ");
       }
 
     }
 
     return null;
   }
-
-  public String verify(String sig, InputStream is) {
-    exception = null;
-    for (Map.Entry<String, PublicKey> entry : keys.entrySet()) {
-      boolean verified;
-      try {
-        verified = CryptoKeys.verify(entry.getValue(), Base64.base64ToByteArray(sig), is);
-        log.debug("verified {} ", verified);
-        if (verified) return entry.getKey();
-      } catch (Exception e) {
-        exception = e;
-        log.debug("NOT verified  ");
-      }
-
-    }
-
-    return null;
-  }
-
-
 
 
   /**
@@ -126,42 +105,23 @@ public final class CryptoKeys {
    * @param data      The data tha is signed
    */
   public static boolean verify(PublicKey publicKey, byte[] sig, ByteBuffer data) throws InvalidKeyException, SignatureException {
-    data = ByteBuffer.wrap(data.array(), data.arrayOffset(), data.limit());
+    int oldPos = data.position();
+    Signature signature = null;
     try {
-      Signature signature = Signature.getInstance("SHA1withRSA");
+      signature = Signature.getInstance("SHA1withRSA");
       signature.initVerify(publicKey);
       signature.update(data);
-      return signature.verify(sig);
-    } catch (NoSuchAlgorithmException e) {
-      //wil not happen
-      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
-    }
+      boolean verify = signature.verify(sig);
+      return verify;
 
-  }
-
-  public static boolean verify(PublicKey publicKey, byte[] sig, InputStream is)
-      throws InvalidKeyException, SignatureException, IOException {
-    try {
-      Signature signature = Signature.getInstance("SHA1withRSA");
-      signature.initVerify(publicKey);
-      byte[] buf = new byte[1024];
-      while (true) {
-        int sz = is.read(buf);
-        if (sz == -1) break;
-        signature.update(buf, 0, sz);
-      }
-      try {
-        return signature.verify(sig);
-      } catch (SignatureException e) {
-        return false;
-      }
     } catch (NoSuchAlgorithmException e) {
       //will not happen
-      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
+    } finally {
+      //Signature.update resets the position. set it back to old
+      data.position(oldPos);
     }
-
+    return false;
   }
-
 
   private static byte[][] evpBytesTokey(int key_len, int iv_len, MessageDigest md,
                                         byte[] salt, byte[] data, int count) {
@@ -326,10 +286,6 @@ public final class CryptoKeys {
     private final PrivateKey privateKey;
     private final SecureRandom random = new SecureRandom();
 
-    // If this ever comes back to haunt us see the discussion at
-    // SOLR-9609 for background and code allowing this to go
-    // into security.json. Also see SOLR-12103.
-    private static final int DEFAULT_KEYPAIR_LENGTH = 2048;
 
     public RSAKeyPair() {
       KeyPairGenerator keyGen = null;
@@ -338,7 +294,7 @@ public final class CryptoKeys {
       } catch (NoSuchAlgorithmException e) {
         throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
       }
-      keyGen.initialize(DEFAULT_KEYPAIR_LENGTH);
+      keyGen.initialize(512);
       java.security.KeyPair keyPair = keyGen.genKeyPair();
       privateKey = keyPair.getPrivate();
       publicKey = keyPair.getPublic();
@@ -383,12 +339,12 @@ public final class CryptoKeys {
 
   public static void main(String[] args) throws Exception {
     RSAKeyPair keyPair = new RSAKeyPair();
-//    CLIO.out(keyPair.getPublicKeyStr());
+    System.out.println(keyPair.getPublicKeyStr());
     PublicKey pk = deserializeX509PublicKey(keyPair.getPublicKeyStr());
     byte[] payload = "Hello World!".getBytes(StandardCharsets.UTF_8);
     byte[] encrypted = keyPair.encrypt(ByteBuffer.wrap(payload));
     String cipherBase64 = Base64.byteArrayToBase64(encrypted);
-//    CLIO.out("encrypted: "+ cipherBase64);
+    System.out.println("encrypted: "+ cipherBase64);
     System.out.println("signed: "+ Base64.byteArrayToBase64(keyPair.signSha256(payload)));
     System.out.println("decrypted "+  new String(decryptRSA(encrypted , pk), StandardCharsets.UTF_8));
   }

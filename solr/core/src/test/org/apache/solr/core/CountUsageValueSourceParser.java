@@ -1,3 +1,4 @@
+package org.apache.solr.core;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
+
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -32,7 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A Mock ValueSource parser that produces ValueSources that returns a constant 
- * value but also keeps track of how many times it was asked for a value for any 
+ * value butalso keeps track of how many times it was asked for a value for any 
  * document via a static map and a user defined key.
  **/
 public class CountUsageValueSourceParser extends ValueSourceParser {

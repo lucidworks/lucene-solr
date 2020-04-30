@@ -1,3 +1,5 @@
+package org.apache.lucene.benchmark.byTask.feeds;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,25 +16,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.feeds;
-
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
+import com.spatial4j.core.shape.Shape;
 import org.apache.lucene.benchmark.byTask.utils.Config;
-import org.apache.lucene.queries.function.FunctionScoreQuery;
-import org.apache.lucene.search.DoubleValuesSource;
+import org.apache.lucene.queries.function.FunctionQuery;
+import org.apache.lucene.queries.function.ValueSource;
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.spatial.SpatialStrategy;
 import org.apache.lucene.spatial.query.SpatialArgs;
 import org.apache.lucene.spatial.query.SpatialOperation;
-import org.locationtech.spatial4j.shape.Shape;
 
 /**
  * Reads spatial data from the body field docs from an internally created {@link LineDocSource}.
- * It's parsed by {@link org.locationtech.spatial4j.context.SpatialContext#readShapeFromWkt(String)} (String)} and then
+ * It's parsed by {@link com.spatial4j.core.context.SpatialContext#readShapeFromWkt(String)} (String)} and then
  * further manipulated via a configurable {@link SpatialDocMaker.ShapeConverter}. When using point
  * data, it's likely you'll want to configure the shape converter so that the query shapes actually
  * cover a region. The queries are all created and cached in advance. This query maker works in
@@ -100,8 +102,11 @@ public class SpatialFileQueryMaker extends AbstractQueryMaker {
     Query filterQuery = strategy.makeQuery(args);
     if (score) {
       //wrap with distance computing query
-      DoubleValuesSource valueSource = strategy.makeDistanceValueSource(shape.getCenter());
-      return new FunctionScoreQuery(filterQuery, valueSource);
+      ValueSource valueSource = strategy.makeDistanceValueSource(shape.getCenter());
+      return new BooleanQuery.Builder()
+          .add(new FunctionQuery(valueSource), BooleanClause.Occur.MUST)//matches everything and provides score
+          .add(filterQuery, BooleanClause.Occur.FILTER)//filters (score isn't used)
+          .build();
     } else {
       return filterQuery; // assume constant scoring
     }

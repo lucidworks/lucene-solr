@@ -14,9 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.servlet;
 
-import java.lang.invoke.MethodHandles;
+package org.apache.solr.servlet;
 
 import org.slf4j.LoggerFactory;
 
@@ -24,7 +23,7 @@ final class CheckLoggingConfiguration {
   
   static void check() {
     try {
-      LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+      LoggerFactory.getLogger(CheckLoggingConfiguration.class);
     } catch (NoClassDefFoundError e) {
       throw new NoClassDefFoundError("Failed to initialize Apache Solr: "
           +"Could not find necessary SLF4j logging jars. If using Jetty, the SLF4j logging jars need to go in "

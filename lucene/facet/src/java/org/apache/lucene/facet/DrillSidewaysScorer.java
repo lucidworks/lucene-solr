@@ -1,3 +1,5 @@
+package org.apache.lucene.facet;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -26,9 +27,9 @@ import org.apache.lucene.search.BulkScorer;
 import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.LeafCollector;
-import org.apache.lucene.search.Scorable;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TwoPhaseIterator;
+import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.FixedBitSet;
 
@@ -43,7 +44,6 @@ class DrillSidewaysScorer extends BulkScorer {
 
   // DrillDown DocsEnums:
   private final Scorer baseScorer;
-  private final DocIdSetIterator baseIterator;
 
   private final LeafReaderContext context;
 
@@ -60,14 +60,13 @@ class DrillSidewaysScorer extends BulkScorer {
     this.dims = dims;
     this.context = context;
     this.baseScorer = baseScorer;
-    this.baseIterator = baseScorer.iterator();
     this.drillDownCollector = drillDownCollector;
     this.scoreSubDocsAtOnce = scoreSubDocsAtOnce;
   }
 
   @Override
   public long cost() {
-    return baseIterator.cost();
+    return baseScorer.cost();
   }
 
   @Override
@@ -82,7 +81,7 @@ class DrillSidewaysScorer extends BulkScorer {
     //  System.out.println("\nscore: reader=" + context.reader());
     //}
     //System.out.println("score r=" + context.reader());
-    ScoreAndDoc scorer = new ScoreAndDoc();
+    FakeScorer scorer = new FakeScorer();
     collector.setScorer(scorer);
     if (drillDownCollector != null) {
       drillDownLeafCollector = drillDownCollector.getLeafCollector(context);
@@ -95,8 +94,13 @@ class DrillSidewaysScorer extends BulkScorer {
       dim.sidewaysLeafCollector.setScorer(scorer);
     }
 
+    // TODO: if we ever allow null baseScorer ... it will
+    // mean we DO score docs out of order ... hmm, or if we
+    // change up the order of the conjuntions below
+    assert baseScorer != null;
+
     // some scorers, eg ReqExlScorer, can hit NPE if cost is called after nextDoc
-    long baseQueryCost = baseIterator.cost();
+    long baseQueryCost = baseScorer.cost();
 
     final int numDims = dims.length;
 
@@ -111,7 +115,7 @@ class DrillSidewaysScorer extends BulkScorer {
     }
 
     // Position all scorers to their first matching doc:
-    baseIterator.nextDoc();
+    baseScorer.nextDoc();
     for (DocsAndCost dim : dims) {
       dim.approximation.nextDoc();
     }
@@ -153,7 +157,7 @@ class DrillSidewaysScorer extends BulkScorer {
 
     nextDoc: while (docID != PostingsEnum.NO_MORE_DOCS) {
       if (acceptDocs != null && acceptDocs.get(docID) == false) {
-        docID = baseIterator.nextDoc();
+        docID = baseScorer.nextDoc();
         continue;
       }
       LeafCollector failedCollector = null;
@@ -178,7 +182,7 @@ class DrillSidewaysScorer extends BulkScorer {
             // More than one dim fails on this document, so
             // it's neither a hit nor a near-miss; move to
             // next doc:
-            docID = baseIterator.nextDoc();
+            docID = baseScorer.nextDoc();
             continue nextDoc;
           } else {
             failedCollector = dim.sidewaysLeafCollector;
@@ -200,7 +204,7 @@ class DrillSidewaysScorer extends BulkScorer {
         collectNearMiss(failedCollector);
       }
 
-      docID = baseIterator.nextDoc();
+      docID = baseScorer.nextDoc();
     }
   }
 
@@ -312,9 +316,9 @@ class DrillSidewaysScorer extends BulkScorer {
         int ddDocID = docIDs[slot0];
         assert ddDocID != -1;
 
-        int baseDocID = baseIterator.docID();
+        int baseDocID = baseScorer.docID();
         if (baseDocID < ddDocID) {
-          baseDocID = baseIterator.advance(ddDocID);
+          baseDocID = baseScorer.advance(ddDocID);
         }
         if (baseDocID == ddDocID) {
           //if (DEBUG) {
@@ -433,7 +437,7 @@ class DrillSidewaysScorer extends BulkScorer {
       //  System.out.println("\ncycle nextChunkStart=" + nextChunkStart + " docIds[0]=" + docIDs[0]);
       //}
       int filledCount = 0;
-      int docID = baseIterator.docID();
+      int docID = baseScorer.docID();
       //if (DEBUG) {
       //  System.out.println("  base docID=" + docID);
       //}
@@ -452,7 +456,7 @@ class DrillSidewaysScorer extends BulkScorer {
           missingDims[slot] = 0;
           counts[slot] = 1;
         }
-        docID = baseIterator.nextDoc();
+        docID = baseScorer.nextDoc();
       }
 
       if (filledCount == 0) {
@@ -580,11 +584,30 @@ class DrillSidewaysScorer extends BulkScorer {
     sidewaysCollector.collect(collectDocID);
   }
 
-  private final class ScoreAndDoc extends Scorable {
+  private final class FakeScorer extends Scorer {
+
+    public FakeScorer() {
+      super(null);
+    }
+    
+    @Override
+    public int advance(int target) {
+      throw new UnsupportedOperationException("FakeScorer doesn't support advance(int)");
+    }
 
     @Override
     public int docID() {
       return collectDocID;
+    }
+
+    @Override
+    public int freq() {
+      return 1+dims.length;
+    }
+
+    @Override
+    public int nextDoc() {
+      throw new UnsupportedOperationException("FakeScorer doesn't support nextDoc()");
     }
     
     @Override
@@ -593,10 +616,19 @@ class DrillSidewaysScorer extends BulkScorer {
     }
 
     @Override
-    public Collection<ChildScorable> getChildren() {
-      return Collections.singletonList(new ChildScorable(baseScorer, "MUST"));
+    public long cost() {
+      return baseScorer.cost();
     }
 
+    @Override
+    public Collection<ChildScorer> getChildren() {
+      return Collections.singletonList(new ChildScorer(baseScorer, "MUST"));
+    }
+
+    @Override
+    public Weight getWeight() {
+      throw new UnsupportedOperationException();
+    }
   }
 
   static class DocsAndCost {
@@ -608,9 +640,9 @@ class DrillSidewaysScorer extends BulkScorer {
     LeafCollector sidewaysLeafCollector;
 
     DocsAndCost(Scorer scorer, Collector sidewaysCollector) {
-      final TwoPhaseIterator twoPhase = scorer.twoPhaseIterator();
+      final TwoPhaseIterator twoPhase = scorer.asTwoPhaseIterator();
       if (twoPhase == null) {
-        this.approximation = scorer.iterator();
+        this.approximation = scorer;
         this.twoPhase = null;
       } else {
         this.approximation = twoPhase.approximation();

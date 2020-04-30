@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
 
 public class TestVirtualMethod extends LuceneTestCase {
 
@@ -70,26 +71,35 @@ public class TestVirtualMethod extends LuceneTestCase {
 
   @SuppressWarnings({"rawtypes","unchecked"})
   public void testExceptions() {
-    // LuceneTestCase is not a subclass and can never override publicTest(String)
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       // cast to Class to remove generics:
       publicTestMethod.getImplementationDistance((Class) LuceneTestCase.class);
-    });
+      fail("LuceneTestCase is not a subclass and can never override publicTest(String)");
+    } catch (IllegalArgumentException arg) {
+      // pass
+    }
     
-    // Method bogus() does not exist, so IAE should be thrown
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new VirtualMethod<>(TestVirtualMethod.class, "bogus");
-    });
+      fail("Method bogus() does not exist, so IAE should be thrown");
+    } catch (IllegalArgumentException arg) {
+      // pass
+    }
     
-    // Method publicTest(String) is not declared in TestClass2, so IAE should be thrown
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new VirtualMethod<>(TestClass2.class, "publicTest", String.class);
-    });
+      fail("Method publicTest(String) is not declared in TestClass2, so IAE should be thrown");
+    } catch (IllegalArgumentException arg) {
+      // pass
+    }
 
-    // try to create a second instance of the same baseClass / method combination
-    expectThrows(UnsupportedOperationException.class, () -> {
+    try {
+      // try to create a second instance of the same baseClass / method combination
       new VirtualMethod<>(TestVirtualMethod.class, "publicTest", String.class);
-    });
+      fail("Violating singleton status succeeded");
+    } catch (UnsupportedOperationException arg) {
+      // pass
+    }
   }
   
 }

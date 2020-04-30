@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -30,7 +30,7 @@ import org.junit.Before;
 //   - mix in forceMerge, addIndexes
 //   - randomoly mix in non-congruent docs
 
-@SuppressCodecs({ "SimpleText", "Direct" })
+@SuppressCodecs({ "SimpleText", "Memory", "Direct" })
 public class TestNRTThreads extends ThreadedIndexingAndSearchingTestCase {
   
   private boolean useNonNrtReaders = true;
@@ -46,7 +46,7 @@ public class TestNRTThreads extends ThreadedIndexingAndSearchingTestCase {
 
     boolean anyOpenDelFiles = false;
 
-    DirectoryReader r = DirectoryReader.open(writer);
+    DirectoryReader r = DirectoryReader.open(writer, true);
 
     while (System.currentTimeMillis() < stopTime && !failed.get()) {
       if (random().nextBoolean()) {
@@ -73,7 +73,7 @@ public class TestNRTThreads extends ThreadedIndexingAndSearchingTestCase {
         if (VERBOSE) {
           System.out.println("TEST: now open");
         }
-        r = DirectoryReader.open(writer);
+        r = DirectoryReader.open(writer, true);
       }
       if (VERBOSE) {
         System.out.println("TEST: got new reader=" + r);

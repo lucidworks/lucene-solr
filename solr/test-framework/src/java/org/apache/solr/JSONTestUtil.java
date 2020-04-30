@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr;
 
 import org.noggit.JSONParser;
@@ -71,19 +72,6 @@ public class JSONTestUtil {
     String path = pos>=0 ? pathAndExpected.substring(0,pos) : null;
     String expected = pos>=0 ? pathAndExpected.substring(pos+2) : pathAndExpected;
     return match(path, input, expected, delta);
-  }
-
-  /**
-   * @param input Object structure to parse and test against
-   * @param pathAndExpected JSON path expression + '==' + expected value
-   * @param delta tollerance allowed in comparing float/double values
-   */
-  public static String matchObj(Object input, String pathAndExpected, double delta) throws Exception {
-    int pos = pathAndExpected.indexOf("==");
-    String path = pos>=0 ? pathAndExpected.substring(0,pos) : null;
-    String expected = pos>=0 ? pathAndExpected.substring(pos+2) : pathAndExpected;
-    Object expectObj = failRepeatedKeys ? new NoDupsObjectBuilder(new JSONParser(expected)).getVal() : ObjectBuilder.fromJSON(expected);
-    return matchObj(path, input, expectObj, delta);
   }
 
   /**

@@ -1,3 +1,5 @@
+package org.apache.solr.search.grouping;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.grouping;
 
 import org.apache.lucene.search.Sort;
 import org.apache.solr.search.Grouping;
-import org.apache.solr.search.SortSpec;
 
 /**
  * Encapsulates the grouping options like fields group sort and more specified by clients.
@@ -30,8 +30,12 @@ public class GroupingSpecification {
   private String[] fields = new String[]{};
   private String[] queries = new String[]{};
   private String[] functions = new String[]{};
-  private SortSpec groupSortSpec;
-  private SortSpec withinGroupSortSpec;
+  private int offset;
+  private int limit;
+  private int groupOffset;
+  private int groupLimit;
+  private Sort groupSort;
+  private Sort sortWithinGroup;
   private boolean includeGroupCount;
   private boolean main;
   private Grouping.Format responseFormat;
@@ -74,48 +78,52 @@ public class GroupingSpecification {
     this.functions = functions;
   }
 
-  @Deprecated
-  public int getWithinGroupOffset() {
-    return withinGroupSortSpec.getOffset();
-  }
-  @Deprecated
   public int getGroupOffset() {
-    return getWithinGroupOffset();
+    return groupOffset;
   }
 
-
-  @Deprecated
-  public int getWithinGroupLimit() {
-    return withinGroupSortSpec.getCount();
+  public void setGroupOffset(int groupOffset) {
+    this.groupOffset = groupOffset;
   }
 
-  @Deprecated
   public int getGroupLimit() {
-    return getWithinGroupLimit();
+    return groupLimit;
   }
 
+  public void setGroupLimit(int groupLimit) {
+    this.groupLimit = groupLimit;
+  }
 
-  @Deprecated
   public int getOffset() {
-    return groupSortSpec.getOffset();
+    return offset;
   }
 
+  public void setOffset(int offset) {
+    this.offset = offset;
+  }
 
-  @Deprecated
   public int getLimit() {
-    return groupSortSpec.getCount();
+    return limit;
   }
 
+  public void setLimit(int limit) {
+    this.limit = limit;
+  }
 
-  @Deprecated
   public Sort getGroupSort() {
-    return groupSortSpec.getSort();
+    return groupSort;
   }
 
+  public void setGroupSort(Sort groupSort) {
+    this.groupSort = groupSort;
+  }
 
-  @Deprecated
   public Sort getSortWithinGroup() {
-    return withinGroupSortSpec.getSort();
+    return sortWithinGroup;
+  }
+
+  public void setSortWithinGroup(Sort sortWithinGroup) {
+    this.sortWithinGroup = sortWithinGroup;
   }
 
   public boolean isIncludeGroupCount() {
@@ -157,21 +165,4 @@ public class GroupingSpecification {
   public void setTruncateGroups(boolean truncateGroups) {
     this.truncateGroups = truncateGroups;
   }
-
-  public SortSpec getGroupSortSpec() {
-    return groupSortSpec;
-  }
-
-  public void setGroupSortSpec(SortSpec groupSortSpec) {
-    this.groupSortSpec = groupSortSpec;
-  }
-
-  public SortSpec getWithinGroupSortSpec() {
-    return withinGroupSortSpec;
-  }
-
-  public void setWithinGroupSortSpec(SortSpec withinGroupSortSpec) {
-    this.withinGroupSortSpec = withinGroupSortSpec;
-  }
-
 }

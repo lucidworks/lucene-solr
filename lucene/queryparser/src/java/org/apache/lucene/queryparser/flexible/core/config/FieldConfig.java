@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.core.config;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.core.config;
 
 /**
  * This class represents a field configuration.
@@ -26,13 +27,13 @@ public class FieldConfig extends AbstractQueryConfig {
   /**
    * Constructs a {@link FieldConfig}
    * 
-   * @param fieldName the field name, it must not be null
+   * @param fieldName the field name, it cannot be null
    * @throws IllegalArgumentException if the field name is null
    */
   public FieldConfig(String fieldName) {
 
     if (fieldName == null) {
-      throw new IllegalArgumentException("field name must not be null!");
+      throw new IllegalArgumentException("field name should not be null!");
     }
 
     this.fieldName = fieldName;

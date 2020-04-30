@@ -23,21 +23,33 @@ import java.util.Map;
 import javax.naming.NamingException;
 import javax.naming.spi.InitialContextFactory;
 
-import static org.mockito.Mockito.*;
+import org.easymock.EasyMock;
+import org.easymock.IAnswer;
+import org.easymock.IMocksControl;
 
 public class MockInitialContextFactory implements InitialContextFactory {
   private static final Map<String, Object> objects = new HashMap<>();
+  private final IMocksControl mockControl;
   private final javax.naming.Context context;
 
   public MockInitialContextFactory() {
-    context = mock(javax.naming.Context.class);
+    mockControl = EasyMock.createStrictControl();
+    context = mockControl.createMock(javax.naming.Context.class);
 
     try {
-      when(context.lookup(anyString())).thenAnswer(invocation -> objects.get(invocation.getArgument(0)));
+      EasyMock.expect(context.lookup((String) EasyMock.anyObject())).andAnswer(
+          new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+              return objects.get(EasyMock.getCurrentArguments()[0]);
+            }
+          }).anyTimes();
 
     } catch (NamingException e) {
       throw new RuntimeException(e);
     }
+
+    mockControl.replay();
   }
 
   @Override

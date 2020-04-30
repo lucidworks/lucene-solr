@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update;
 
 import java.util.HashMap;
@@ -24,12 +25,12 @@ import org.apache.solr.core.SolrCore;
 import org.apache.solr.handler.UpdateRequestHandler;
 import org.apache.solr.request.SolrQueryRequestBase;
 import org.apache.solr.response.SolrQueryResponse;
-import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.util.AbstractSolrTestCase;
 import org.junit.BeforeClass;
 
 
 
-public class UpdateParamsTest extends SolrTestCaseJ4 {
+public class UpdateParamsTest extends AbstractSolrTestCase {
 
   @BeforeClass
   public static void beforeClass() throws Exception {

@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.standard.nodes;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.standard.nodes;
 
 import org.apache.lucene.queryparser.flexible.core.nodes.ModifierQueryNode;
 import org.apache.lucene.queryparser.flexible.core.nodes.QueryNode;
-import org.apache.lucene.queryparser.flexible.standard.processors.BooleanQuery2ModifierNodeProcessor;
+import org.apache.lucene.queryparser.flexible.standard.processors.GroupQueryNodeProcessor;
 
 /**
  * A {@link BooleanModifierNode} has the same behaviour as
  * {@link ModifierQueryNode}, it only indicates that this modifier was added by
- * {@link BooleanQuery2ModifierNodeProcessor} and not by the user.
+ * {@link GroupQueryNodeProcessor} and not by the user. 
  * 
  * @see ModifierQueryNode
  */

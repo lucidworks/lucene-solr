@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.synonym;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.synonym;
-
 
 import java.io.IOException;
 import java.io.Reader;
@@ -36,7 +36,9 @@ import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.BytesRefHash;
 import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.CharsRefBuilder;
+import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.IntsRefBuilder;
+import org.apache.lucene.util.UnicodeUtil;
 import org.apache.lucene.util.fst.ByteSequenceOutputs;
 import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.Util;
@@ -74,11 +76,6 @@ public class SynonymMap {
     private int maxHorizontalContext;
     private final boolean dedup;
 
-    /** Default constructor, passes {@code dedup=true}. */
-    public Builder() {
-      this(true);
-    }
-
     /** If dedup is true then identical rules (same input,
      *  same output) will be added only once. */
     public Builder(boolean dedup) {
@@ -114,6 +111,8 @@ public class SynonymMap {
       reuse.setLength(upto);
       return reuse.get();
     }
+    
+
 
     /** only used for asserting! */
     private boolean hasHoles(CharsRef chars) {
@@ -321,8 +320,7 @@ public class SynonymMap {
             throw new IllegalArgumentException("term: " + text + " analyzed to a zero-length token");
           }
           if (posIncAtt.getPositionIncrement() != 1) {
-            throw new IllegalArgumentException("term: " + text + " analyzed to a token (" + termAtt +
-                                               ") with position increment != 1 (got: " + posIncAtt.getPositionIncrement() + ")");
+            throw new IllegalArgumentException("term: " + text + " analyzed to a token with posinc != 1");
           }
           reuse.grow(reuse.length() + length + 1); /* current + word + separator */
           int end = reuse.length();

@@ -1,3 +1,5 @@
+package org.apache.lucene.validation;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.validation;
 
 import org.apache.ivy.Ivy;
 import org.apache.ivy.core.LogOptions;
@@ -28,6 +29,7 @@ import org.apache.lucene.validation.ivyde.IvyNodeElementAdapter;
 import org.apache.tools.ant.BuildException;
 import org.apache.tools.ant.Project;
 import org.apache.tools.ant.Task;
+import org.apache.tools.ant.types.LogLevel;
 import org.apache.tools.ant.types.Resource;
 import org.apache.tools.ant.types.ResourceCollection;
 import org.apache.tools.ant.types.resources.FileResource;
@@ -110,9 +112,9 @@ public class LibVersionsCheckTask extends Task {
   private File ignoreConflictsFile;
 
   /**
-   * Ivy settings file: top-level-ivy-settings.xml
+   * Ivy settings file: ivy-settings.xml
    */
-  private File topLevelIvySettingsFile;
+  private File ivySettingsFile;
 
   /**
    * Location of common build dir: lucene/build/
@@ -149,7 +151,7 @@ public class LibVersionsCheckTask extends Task {
    */
   private Map<String,HashSet<String>> ignoreConflictVersions = new HashMap<>();
 
-  private static class Dependency {
+  private class Dependency {
     String org;
     String name;
     String directVersion;
@@ -179,10 +181,10 @@ public class LibVersionsCheckTask extends Task {
     centralizedVersionsFile = file;
   }
 
-  public void setTopLevelIvySettingsFile(File file) {
-    topLevelIvySettingsFile = file;
+  public void setIvySettingsFile(File file) {
+    ivySettingsFile = file;
   }
-
+  
   public void setIvyResolutionCacheDir(File dir) {
     ivyResolutionCacheDir = dir;
   }
@@ -543,11 +545,11 @@ public class LibVersionsCheckTask extends Task {
         Integer sm1 = SPECIAL_MEANINGS.get(parts1[i].toLowerCase(Locale.ROOT));
         Integer sm2 = SPECIAL_MEANINGS.get(parts2[i].toLowerCase(Locale.ROOT));
         if (sm1 != null) {
-          sm2 = sm2 == null ? 0 : sm2;
+          sm2 = sm2 == null ? new Integer(0) : sm2;
           return sm1.compareTo(sm2);
         }
         if (sm2 != null) {
-          return Integer.valueOf(0).compareTo(sm2);
+          return new Integer(0).compareTo(sm2);
         }
         return parts1[i].compareTo(parts2[i]);
       }
@@ -691,13 +693,12 @@ public class LibVersionsCheckTask extends Task {
       ivySettings.setVariable("ivy.exclude.types", "source|javadoc");
       ivySettings.setVariable("ivy.resolution-cache.dir", ivyResolutionCacheDir.getAbsolutePath());
       ivySettings.setVariable("ivy.lock-strategy", ivyLockStrategy);
-      ivySettings.setVariable("ivysettings.xml", getProject().getProperty("ivysettings.xml")); // nested settings file
       ivySettings.setBaseDir(commonBuildDir);
       ivySettings.setDefaultConflictManager(new NoConflictManager());
       ivy = Ivy.newInstance(ivySettings);
-      ivy.configure(topLevelIvySettingsFile);
+      ivy.configure(ivySettingsFile);
     } catch (Exception e) {
-      throw new BuildException("Exception reading " + topLevelIvySettingsFile.getPath() + ": " + e.toString(), e);
+      throw new BuildException("Exception reading " + ivySettingsFile.getPath() + ": " + e.toString(), e);
     }
   }
 

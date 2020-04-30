@@ -1,3 +1,5 @@
+package org.apache.solr.handler.dataimport;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.dataimport;
 
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrDocument;
@@ -29,28 +30,16 @@ public class MockSolrEntityProcessor extends SolrEntityProcessor {
   private int queryCount = 0;
 
   private int rows;
-  
-  private int start = 0;
 
   public MockSolrEntityProcessor(List<SolrTestCaseJ4.Doc> docsData, int rows) {
     this.docsData = docsData;
     this.rows = rows;
   }
 
-  //@Override
-  //protected SolrDocumentList doQuery(int start) {
-  //  queryCount++;
-  //  return getDocs(start, rows);
- // }
-  
   @Override
-  protected void buildIterator() {
-    if (rowIterator==null || (!rowIterator.hasNext() && ((SolrDocumentListIterator)rowIterator).hasMoreRows())){
-      queryCount++;
-      SolrDocumentList docs = getDocs(start, rows);
-      rowIterator = new SolrDocumentListIterator(docs);
-      start += docs.size();
-    }
+  protected SolrDocumentList doQuery(int start) {
+    queryCount++;
+    return getDocs(start, rows);
   }
 
   private SolrDocumentList getDocs(int start, int rows) {

@@ -25,18 +25,14 @@
 <config>
   <luceneMatchVersion>${tests.luceneMatchVersion:LATEST}</luceneMatchVersion>
   <xi:include href="solrconfig.snippet.randomindexconfig.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
-  <requestHandler name="/select" class="solr.SearchHandler"></requestHandler>
-  <requestHandler name="/update" class="solr.UpdateRequestHandler"  />
+  <requestHandler name="standard" class="solr.StandardRequestHandler"></requestHandler>
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
 
   <updateRequestProcessorChain name="comprehensive">
     <processor class="solr.FieldLengthUpdateProcessorFactory">
       <arr name="typeClass">
         <str>solr.TrieIntField</str>
         <str>solr.TrieLongField</str>
-        <str>solr.IntPointField</str>
-        <str>solr.LongPointField</str>
       </arr>
     </processor>
     <processor class="solr.MinFieldValueUpdateProcessorFactory">
@@ -94,7 +90,6 @@
       <!-- each set of exclusions is checked independently -->
       <lst name="exclude">
         <str name="typeClass">solr.TrieDateField</str>
-        <str name="typeClass">solr.DatePointField</str>
       </lst>
       <lst name="exclude">
         <str name="fieldRegex">.*HOSS.*</str>
@@ -145,7 +140,6 @@
   <updateRequestProcessorChain name="trim-classes">
     <processor class="solr.TrimFieldUpdateProcessorFactory">
       <str name="typeClass">solr.TrieDateField</str>
-      <str name="typeClass">solr.DatePointField</str>
       <str name="typeClass">solr.StrField</str>
     </processor>
   </updateRequestProcessorChain>
@@ -482,7 +476,7 @@
         <str name="replacement">key_feat$1</str>
       </lst>
     </processor>
-    <!-- equivalent sugar syntax to above, with slightly diff destination name -->
+    <!-- equivilent sugar syntax to above, with slightly diff destination name -->
     <processor class="solr.processor.CloneFieldUpdateProcessorFactory">
       <str name="pattern">^feat(.*)s$</str>
       <str name="replacement">best_feat$1</str>
@@ -630,22 +624,6 @@
       <str name="responseMessage">Thou shall not issue an optimize, but commits are OK!</str>
       <bool name="ignoreOptimizeOnly">true</bool>
     </processor>
-    <processor class="solr.RunUpdateProcessorFactory" />
-  </updateRequestProcessorChain>
-
-  <updateRequestProcessorChain name="tolerant-chain-max-errors-10">
-    <processor class="solr.TolerantUpdateProcessorFactory">
-      <int name="maxErrors">10</int>
-    </processor>
-    <processor class="solr.RunUpdateProcessorFactory" />
-  </updateRequestProcessorChain>
-
-  <updateRequestProcessorChain name="tolerant-chain-max-errors-not-set">
-    <processor class="solr.TolerantUpdateProcessorFactory"/>
-    <processor class="solr.RunUpdateProcessorFactory" />
-  </updateRequestProcessorChain>
-  
-  <updateRequestProcessorChain name="not-tolerant">
     <processor class="solr.RunUpdateProcessorFactory" />
   </updateRequestProcessorChain>
 

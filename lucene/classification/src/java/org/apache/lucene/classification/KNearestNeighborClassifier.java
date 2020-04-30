@@ -16,19 +16,9 @@
  */
 package org.apache.lucene.classification;
 
-import java.io.IOException;
-import java.io.StringReader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queries.mlt.MoreLikeThis;
 import org.apache.lucene.search.BooleanClause;
@@ -38,9 +28,15 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.WildcardQuery;
-import org.apache.lucene.search.similarities.BM25Similarity;
-import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.util.BytesRef;
+
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * A k-Nearest Neighbor classifier (see <code>http://en.wikipedia.org/wiki/K-nearest_neighbors</code>) based
@@ -50,84 +46,43 @@ import org.apache.lucene.util.BytesRef;
  */
 public class KNearestNeighborClassifier implements Classifier<BytesRef> {
 
-  /**
-   * a {@link MoreLikeThis} instance used to perform MLT queries
-   */
-  protected final MoreLikeThis mlt;
+  private MoreLikeThis mlt;
+  private String[] textFieldNames;
+  private String classFieldName;
+  private IndexSearcher indexSearcher;
+  private final int k;
+  private Query query;
+
+  private int minDocsFreq;
+  private int minTermFreq;
 
   /**
-   * the name of the fields used as the input text
-   */
-  protected final String[] textFieldNames;
-
-  /**
-   * the name of the field used as the output text
-   */
-  protected final String classFieldName;
-
-  /**
-   * an {@link IndexSearcher} used to perform queries
-   */
-  protected final IndexSearcher indexSearcher;
-
-  /**
-   * the no. of docs to compare in order to find the nearest neighbor to the input text
-   */
-  protected final int k;
-
-  /**
-   * a {@link Query} used to filter the documents that should be used from this classifier's underlying {@link LeafReader}
-   */
-  protected final Query query;
-
-  /**
-   * Creates a {@link KNearestNeighborClassifier}.
+   * Create a {@link Classifier} using kNN algorithm
    *
-   * @param indexReader     the reader on the index to be used for classification
-   * @param analyzer       an {@link Analyzer} used to analyze unseen text
-   * @param similarity     the {@link Similarity} to be used by the underlying {@link IndexSearcher} or {@code null}
-   *                       (defaults to {@link org.apache.lucene.search.similarities.BM25Similarity})
-   * @param query          a {@link Query} to eventually filter the docs used for training the classifier, or {@code null}
-   *                       if all the indexed docs should be used
-   * @param k              the no. of docs to select in the MLT results to find the nearest neighbor
-   * @param minDocsFreq    {@link MoreLikeThis#minDocFreq} parameter
-   * @param minTermFreq    {@link MoreLikeThis#minTermFreq} parameter
-   * @param classFieldName the name of the field used as the output for the classifier
-   * @param textFieldNames the name of the fields used as the inputs for the classifier, they can contain boosting indication e.g. title^10
    */
-  public KNearestNeighborClassifier(IndexReader indexReader, Similarity similarity, Analyzer analyzer, Query query, int k, int minDocsFreq,
-                                    int minTermFreq, String classFieldName, String... textFieldNames) {
-    this.textFieldNames = textFieldNames;
-    this.classFieldName = classFieldName;
-    this.mlt = new MoreLikeThis(indexReader);
-    this.mlt.setAnalyzer(analyzer);
-    this.mlt.setFieldNames(textFieldNames);
-    this.indexSearcher = new IndexSearcher(indexReader);
-    if (similarity != null) {
-      this.indexSearcher.setSimilarity(similarity);
-    } else {
-      this.indexSearcher.setSimilarity(new BM25Similarity());
-    }
-    if (minDocsFreq > 0) {
-      mlt.setMinDocFreq(minDocsFreq);
-    }
-    if (minTermFreq > 0) {
-      mlt.setMinTermFreq(minTermFreq);
-    }
-    this.query = query;
+  public KNearestNeighborClassifier(int k) {
     this.k = k;
   }
 
-
-  @Override
-  public ClassificationResult<BytesRef> assignClass(String text) throws IOException {
-    return classifyFromTopDocs(knnSearch(text));
+  /**
+   * Create a {@link Classifier} using kNN algorithm
+   *
+   * @param k           the number of neighbors to analyze as an <code>int</code>
+   * @param minDocsFreq the minimum number of docs frequency for MLT to be set with {@link MoreLikeThis#setMinDocFreq(int)}
+   * @param minTermFreq the minimum number of term frequency for MLT to be set with {@link MoreLikeThis#setMinTermFreq(int)}
+   */
+  public KNearestNeighborClassifier(int k, int minDocsFreq, int minTermFreq) {
+    this.k = k;
+    this.minDocsFreq = minDocsFreq;
+    this.minTermFreq = minTermFreq;
   }
 
   /**
-   * TODO
+   * {@inheritDoc}
    */
-  protected ClassificationResult<BytesRef> classifyFromTopDocs(TopDocs knnResults) throws IOException {
+  @Override
+  public ClassificationResult<BytesRef> assignClass(String text) throws IOException {
+    TopDocs knnResults = knnSearcher(text);
     List<ClassificationResult<BytesRef>> assignedClasses = buildListFromTopDocs(knnResults);
     ClassificationResult<BytesRef> assignedClass = null;
     double maxscore = -Double.MAX_VALUE;
@@ -140,23 +95,32 @@ public class KNearestNeighborClassifier implements Classifier<BytesRef> {
     return assignedClass;
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public List<ClassificationResult<BytesRef>> getClasses(String text) throws IOException {
-    TopDocs knnResults = knnSearch(text);
+    TopDocs knnResults = knnSearcher(text);
     List<ClassificationResult<BytesRef>> assignedClasses = buildListFromTopDocs(knnResults);
     Collections.sort(assignedClasses);
     return assignedClasses;
   }
-
+  
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public List<ClassificationResult<BytesRef>> getClasses(String text, int max) throws IOException {
-    TopDocs knnResults = knnSearch(text);
+    TopDocs knnResults = knnSearcher(text);
     List<ClassificationResult<BytesRef>> assignedClasses = buildListFromTopDocs(knnResults);
     Collections.sort(assignedClasses);
     return assignedClasses.subList(0, max);
   }
 
-  private TopDocs knnSearch(String text) throws IOException {
+  private TopDocs knnSearcher(String text) throws IOException{
+    if (mlt == null) {
+      throw new IOException("You must first call Classifier#train");
+    }
     BooleanQuery.Builder mltQuery = new BooleanQuery.Builder();
     for (String fieldName : textFieldNames) {
       String boost = null;
@@ -181,21 +145,14 @@ public class KNearestNeighborClassifier implements Classifier<BytesRef> {
   }
 
   //ranking of classes must be taken in consideration
-  /**
-   * build a list of classification results from search results
-   * @param topDocs the search results as a {@link TopDocs} object
-   * @return a {@link List} of {@link ClassificationResult}, one for each existing class
-   * @throws IOException if it's not possible to get the stored value of class field
-   */
-  protected List<ClassificationResult<BytesRef>> buildListFromTopDocs(TopDocs topDocs) throws IOException {
+  private List<ClassificationResult<BytesRef>> buildListFromTopDocs(TopDocs topDocs) throws IOException {
     Map<BytesRef, Integer> classCounts = new HashMap<>();
     Map<BytesRef, Double> classBoosts = new HashMap<>(); // this is a boost based on class ranking positions in topDocs
-    float maxScore = topDocs.totalHits.value == 0 ? Float.NaN : topDocs.scoreDocs[0].score;
+    float maxScore = topDocs.getMaxScore();
     for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
-      IndexableField[] storableFields = indexSearcher.doc(scoreDoc.doc).getFields(classFieldName);
-      for (IndexableField singleStorableField : storableFields) {
-        if (singleStorableField != null) {
-          BytesRef cl = new BytesRef(singleStorableField.stringValue());
+      IndexableField storableField = indexSearcher.doc(scoreDoc.doc).getField(classFieldName);
+      if (storableField != null) {
+        BytesRef cl = new BytesRef(storableField.stringValue());
         //update count
         Integer count = classCounts.get(cl);
         if (count != null) {
@@ -210,7 +167,6 @@ public class KNearestNeighborClassifier implements Classifier<BytesRef> {
           classBoosts.put(cl, totalBoost + singleBoost);
         } else {
           classBoosts.put(cl, singleBoost);
-        }
         }
       }
     }
@@ -234,15 +190,39 @@ public class KNearestNeighborClassifier implements Classifier<BytesRef> {
     }
     return returnList;
   }
-
+  /**
+   * {@inheritDoc}
+   */
   @Override
-  public String toString() {
-    return "KNearestNeighborClassifier{" +
-        "textFieldNames=" + Arrays.toString(textFieldNames) +
-        ", classFieldName='" + classFieldName + '\'' +
-        ", k=" + k +
-        ", query=" + query +
-        ", similarity=" + indexSearcher.getSimilarity() +
-        '}';
+  public void train(LeafReader leafReader, String textFieldName, String classFieldName, Analyzer analyzer) throws IOException {
+    train(leafReader, textFieldName, classFieldName, analyzer, null);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void train(LeafReader leafReader, String textFieldName, String classFieldName, Analyzer analyzer, Query query) throws IOException {
+    train(leafReader, new String[]{textFieldName}, classFieldName, analyzer, query);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void train(LeafReader leafReader, String[] textFieldNames, String classFieldName, Analyzer analyzer, Query query) throws IOException {
+    this.textFieldNames = textFieldNames;
+    this.classFieldName = classFieldName;
+    mlt = new MoreLikeThis(leafReader);
+    mlt.setAnalyzer(analyzer);
+    mlt.setFieldNames(textFieldNames);
+    indexSearcher = new IndexSearcher(leafReader);
+    if (minDocsFreq > 0) {
+      mlt.setMinDocFreq(minDocsFreq);
+    }
+    if (minTermFreq > 0) {
+      mlt.setMinTermFreq(minTermFreq);
+    }
+    this.query = query;
   }
 }

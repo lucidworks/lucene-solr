@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.pattern;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.pattern;
-
 
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -34,14 +34,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * &lt;/fieldType&gt;</pre>
  *
  * @see PatternCaptureGroupTokenFilter
- * @since 4.4.0
- * @lucene.spi {@value #NAME}
  */
 public class PatternCaptureGroupFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "patternCaptureGroup";
-
   private Pattern pattern;
   private boolean preserveOriginal = true;
   

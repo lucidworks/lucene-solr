@@ -1,3 +1,5 @@
+package org.apache.solr.search.function;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.function;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
+import org.apache.lucene.document.FloatField;
+import org.apache.lucene.document.IntField;
 import org.apache.lucene.document.NumericDocValuesField;
 import org.apache.lucene.document.SortedDocValuesField;
 import org.apache.lucene.document.TextField;
@@ -29,9 +32,6 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.RandomIndexWriter;
-import org.apache.solr.SolrTestCase;
-import org.apache.solr.legacy.LegacyFloatField;
-import org.apache.solr.legacy.LegacyIntField;
 import org.apache.lucene.queries.function.FunctionQuery;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.valuesource.FloatFieldSource;
@@ -43,6 +43,7 @@ import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -59,7 +60,7 @@ import org.junit.Test;
  * <p>
  * The exact score tests use TopDocs top to verify the exact score.
  */
-public class TestOrdValues extends SolrTestCase {
+public class TestOrdValues extends LuceneTestCase {
 
   @BeforeClass
   public static void beforeClass() throws Exception {
@@ -145,7 +146,7 @@ public class TestOrdValues extends SolrTestCase {
     }
     Query q = new FunctionQuery(vs);
     TopDocs td = s.search(q, 1000);
-    assertEquals("All docs should be matched!", N_DOCS, td.totalHits.value);
+    assertEquals("All docs should be matched!", N_DOCS, td.totalHits);
     ScoreDoc sd[] = td.scoreDocs;
     for (int i = 0; i < sd.length; i++) {
       float score = sd[i].score;
@@ -153,11 +154,11 @@ public class TestOrdValues extends SolrTestCase {
       log("-------- " + i + ". Explain doc " + id);
       log(s.explain(q, sd[i].doc));
       float expectedScore = N_DOCS - i - 1;
-      assertEquals("score of result " + i + " should be " + expectedScore + " != " + score, expectedScore, score, TEST_SCORE_TOLERANCE_DELTA);
+      assertEquals("score of result " + i + " shuould be " + expectedScore + " != " + score, expectedScore, score, TEST_SCORE_TOLERANCE_DELTA);
       String expectedId = inOrder
               ? id2String(N_DOCS - i) // in-order ==> larger  values first
               : id2String(i + 1);     // reverse  ==> smaller values first
-      assertTrue("id of result " + i + " should be " + expectedId + " != " + score, expectedId.equals(id));
+      assertTrue("id of result " + i + " shuould be " + expectedId + " != " + score, expectedId.equals(id));
     }
     r.close();
   }
@@ -209,9 +210,7 @@ public class TestOrdValues extends SolrTestCase {
 
   @AfterClass
   public static void afterClassFunctionTestSetup() throws Exception {
-    if (null != dir) {
-      dir.close();
-    }
+    dir.close();
     dir = null;
     anlzr = null;
   }
@@ -271,11 +270,11 @@ public class TestOrdValues extends SolrTestCase {
     f = newField(TEXT_FIELD, "text of doc" + scoreAndID + textLine(i), customType2); // for regular search
     d.add(f);
 
-    f = new LegacyIntField(INT_FIELD, scoreAndID, Store.YES); // for function scoring
+    f = new IntField(INT_FIELD, scoreAndID, Store.YES); // for function scoring
     d.add(f);
     d.add(new NumericDocValuesField(INT_FIELD, scoreAndID));
 
-    f = new LegacyFloatField(FLOAT_FIELD, scoreAndID, Store.YES); // for function scoring
+    f = new FloatField(FLOAT_FIELD, scoreAndID, Store.YES); // for function scoring
     d.add(f);
     d.add(new NumericDocValuesField(FLOAT_FIELD, Float.floatToRawIntBits(scoreAndID)));
 

@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.analysis.synonym;
 
 import java.io.StringReader;
@@ -66,11 +67,6 @@ public class TestWordnetSynonymParser extends BaseTokenStreamTestCase {
     /* multi words */
     assertAnalyzesTo(analyzer, "king's evil",
         new String[] { "king's", "king's", "evil", "meany" });
-
-    /* all expansions, test types */
-    assertAnalyzesTo(analyzer, "Lost in the forest",
-        new String[] { "Lost", "in", "the", "forest", "woods", "wood"},
-        new String[] { "word", "word", "word", "word", "SYNONYM", "SYNONYM" });
     analyzer.close();
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.util.fst;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.fst;
-
 
 import java.util.Arrays;
 import java.util.Random;
@@ -29,8 +29,8 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TimeUnits;
+import org.apache.lucene.util.packed.PackedInts;
 import org.junit.Ignore;
-
 import com.carrotsearch.randomizedtesting.annotations.TimeoutSuite;
 
 @Ignore("Requires tons of heap to run (30 GB hits OOME but 35 GB passes after ~4.5 hours)")
@@ -40,22 +40,22 @@ public class Test2BFST extends LuceneTestCase {
   private static long LIMIT = 3L*1024*1024*1024;
 
   public void test() throws Exception {
-    assumeWorkingMMapOnWindows();
-    
     int[] ints = new int[7];
     IntsRef input = new IntsRef(ints, 0, ints.length);
     long seed = random().nextLong();
 
     Directory dir = new MMapDirectory(createTempDir("2BFST"));
 
-    for(int iter=0;iter<1;iter++) {
+    for(int doPackIter=0;doPackIter<2;doPackIter++) {
+      boolean doPack = doPackIter == 1;
+
       // Build FST w/ NoOutputs and stop when nodeCount > 2.2B
-      {
+      if (!doPack) {
         System.out.println("\nTEST: 3B nodes; doPack=false output=NO_OUTPUTS");
         Outputs<Object> outputs = NoOutputs.getSingleton();
         Object NO_OUTPUT = outputs.getNoOutput();
         final Builder<Object> b = new Builder<>(FST.INPUT_TYPE.BYTE1, 0, 0, true, true, Integer.MAX_VALUE, outputs,
-                                                true, 15);
+                                                doPack, PackedInts.COMPACT, true, 15);
 
         int count = 0;
         Random r = new Random(seed);
@@ -134,10 +134,10 @@ public class Test2BFST extends LuceneTestCase {
       // Build FST w/ ByteSequenceOutputs and stop when FST
       // size = 3GB
       {
-        System.out.println("\nTEST: 3 GB size; outputs=bytes");
+        System.out.println("\nTEST: 3 GB size; doPack=" + doPack + " outputs=bytes");
         Outputs<BytesRef> outputs = ByteSequenceOutputs.getSingleton();
         final Builder<BytesRef> b = new Builder<>(FST.INPUT_TYPE.BYTE1, 0, 0, true, true, Integer.MAX_VALUE, outputs,
-                                                  true, 15);
+                                                  doPack, PackedInts.COMPACT, true, 15);
 
         byte[] outputBytes = new byte[20];
         BytesRef output = new BytesRef(outputBytes);
@@ -149,14 +149,11 @@ public class Test2BFST extends LuceneTestCase {
           //System.out.println("add: " + input + " -> " + output);
           b.add(input, BytesRef.deepCopyOf(output));
           count++;
-          if (count % 10000 == 0) {
-            long size = b.fstRamBytesUsed();
-            if (count % 1000000 == 0) {
-              System.out.println(count + "...: " + size + " bytes");
-            }
-            if (size > LIMIT) {
-              break;
-            }
+          if (count % 1000000 == 0) {
+            System.out.println(count + "...: " + b.fstRamBytesUsed() + " bytes");
+          }
+          if (b.fstRamBytesUsed() > LIMIT) {
+            break;
           }
           nextInput(r, ints);
         }
@@ -214,10 +211,10 @@ public class Test2BFST extends LuceneTestCase {
       // Build FST w/ PositiveIntOutputs and stop when FST
       // size = 3GB
       {
-        System.out.println("\nTEST: 3 GB size; outputs=long");
+        System.out.println("\nTEST: 3 GB size; doPack=" + doPack + " outputs=long");
         Outputs<Long> outputs = PositiveIntOutputs.getSingleton();
         final Builder<Long> b = new Builder<>(FST.INPUT_TYPE.BYTE1, 0, 0, true, true, Integer.MAX_VALUE, outputs,
-                                              true, 15);
+                                              doPack, PackedInts.COMPACT, true, 15);
 
         long output = 1;
 
@@ -229,14 +226,11 @@ public class Test2BFST extends LuceneTestCase {
           b.add(input, output);
           output += 1+r.nextInt(10);
           count++;
-          if (count % 10000 == 0) {
-            long size = b.fstRamBytesUsed();
-            if (count % 1000000 == 0) {
-              System.out.println(count + "...: " + size + " bytes");
-            }
-            if (size > LIMIT) {
-              break;
-            }
+          if (count % 1000000 == 0) {
+            System.out.println(count + "...: " + b.fstRamBytesUsed() + " bytes");
+          }
+          if (b.fstRamBytesUsed() > LIMIT) {
+            break;
           }
           nextInput(r, ints);
         }

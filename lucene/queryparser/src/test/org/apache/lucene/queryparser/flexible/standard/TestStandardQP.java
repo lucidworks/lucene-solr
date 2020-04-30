@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.standard;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.standard;
+
+import java.io.Reader;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockAnalyzer;
@@ -88,6 +91,12 @@ public class TestStandardQP extends QueryParserTestBase {
   }
   
   @Override
+  public void setAnalyzeRangeTerms(CommonQueryParserConfiguration cqpC,
+      boolean value) {
+    throw new UnsupportedOperationException();
+  }
+  
+  @Override
   public void setAutoGeneratePhraseQueries(CommonQueryParserConfiguration cqpC,
       boolean value) {
     throw new UnsupportedOperationException();
@@ -143,13 +152,26 @@ public class TestStandardQP extends QueryParserTestBase {
     WildcardQuery q = new WildcardQuery(new Term("field", "foo?ba?r"));//TODO not correct!!
     assertEquals(q, getQuery("foo\\?ba?r", qp));
   }
+
+  
+  @Override
+  public void testCollatedRange() throws Exception {
+    try {
+      setAnalyzeRangeTerms(getParser(null), true);
+      super.testCollatedRange();
+    } catch (UnsupportedOperationException e) {
+      // expected
+    }
+  }
   
   @Override
   public void testAutoGeneratePhraseQueriesOn() throws Exception {
-    expectThrows(UnsupportedOperationException.class, () -> {
+    try {
       setAutoGeneratePhraseQueries(getParser(null), true);
       super.testAutoGeneratePhraseQueriesOn();
-    });
+    } catch (UnsupportedOperationException e) {
+      // expected
+    }
   }
   
   @Override
@@ -173,6 +195,7 @@ public class TestStandardQP extends QueryParserTestBase {
     /** ordinary behavior, synonyms form uncoordinated boolean query */
     StandardQueryParser dumb = getParser(new Analyzer1());
     BooleanQuery.Builder expanded = new BooleanQuery.Builder();
+    expanded.setDisableCoord(true);
     expanded.add(new TermQuery(new Term("field", "dogs")),
         BooleanClause.Occur.SHOULD);
     expanded.add(new TermQuery(new Term("field", "dog")),
@@ -187,15 +210,4 @@ public class TestStandardQP extends QueryParserTestBase {
     //TODO test something like "SmartQueryParser()"
   }
 
-  // TODO: Remove this specialization once the flexible standard parser gets multi-word synonym support
-  @Override
-  public void testQPA() throws Exception {
-    super.testQPA();
-
-    assertQueryEquals("term phrase term", qpAnalyzer, "term (phrase1 phrase2) term");
-
-    CommonQueryParserConfiguration cqpc = getParserConfig(qpAnalyzer);
-    setDefaultOperatorAND(cqpc);
-    assertQueryEquals(cqpc, "field", "term phrase term", "+term +(+phrase1 +phrase2) +term");
-  }
 }

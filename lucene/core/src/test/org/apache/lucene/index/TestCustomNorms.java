@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 import java.io.IOException;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
@@ -26,7 +24,7 @@ import org.apache.lucene.document.Field;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.search.CollectionStatistics;
 import org.apache.lucene.search.TermStatistics;
-import org.apache.lucene.search.similarities.ClassicSimilarity;
+import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.similarities.PerFieldSimilarityWrapper;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
@@ -38,14 +36,14 @@ import org.apache.lucene.util.TestUtil;
  * 
  */
 public class TestCustomNorms extends LuceneTestCase {
-  static final String FLOAT_TEST_FIELD = "normsTestFloat";
-  static final String EXCEPTION_TEST_FIELD = "normsTestExcp";
+  final String floatTestField = "normsTestFloat";
+  final String exceptionTestField = "normsTestExcp";
 
   public void testFloatNorms() throws IOException {
 
     Directory dir = newDirectory();
     MockAnalyzer analyzer = new MockAnalyzer(random());
-    analyzer.setMaxTokenLength(TestUtil.nextInt(random(), 2, IndexWriter.MAX_TERM_LENGTH));
+    analyzer.setMaxTokenLength(TestUtil.nextInt(random(), 1, IndexWriter.MAX_TERM_LENGTH));
 
     IndexWriterConfig config = newIndexWriterConfig(analyzer);
     Similarity provider = new MySimProvider();
@@ -55,27 +53,26 @@ public class TestCustomNorms extends LuceneTestCase {
     int num = atLeast(100);
     for (int i = 0; i < num; i++) {
       Document doc = docs.nextDoc();
-      int boost = TestUtil.nextInt(random(), 1, 10);
-      String value = IntStream.range(0, boost).mapToObj(k -> Integer.toString(boost)).collect(Collectors.joining(" "));
-      Field f = new TextField(FLOAT_TEST_FIELD, value, Field.Store.YES);
+      float nextFloat = random().nextFloat();
+      Field f = new TextField(floatTestField, "" + nextFloat, Field.Store.YES);
+      f.setBoost(nextFloat);
 
       doc.add(f);
       writer.addDocument(doc);
-      doc.removeField(FLOAT_TEST_FIELD);
+      doc.removeField(floatTestField);
       if (rarely()) {
         writer.commit();
       }
     }
     writer.commit();
     writer.close();
-    DirectoryReader open = DirectoryReader.open(dir);
-    NumericDocValues norms = MultiDocValues.getNormValues(open, FLOAT_TEST_FIELD);
+    LeafReader open = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir));
+    NumericDocValues norms = open.getNormValues(floatTestField);
     assertNotNull(norms);
     for (int i = 0; i < open.maxDoc(); i++) {
       Document document = open.document(i);
-      int expected = Integer.parseInt(document.get(FLOAT_TEST_FIELD).split(" ")[0]);
-      assertEquals(i, norms.nextDoc());
-      assertEquals(expected, norms.longValue());
+      float expected = Float.parseFloat(document.get(floatTestField));
+      assertEquals(expected, Float.intBitsToFloat((int)norms.get(i)), 0.0f);
     }
     open.close();
     dir.close();
@@ -83,15 +80,25 @@ public class TestCustomNorms extends LuceneTestCase {
   }
 
   public class MySimProvider extends PerFieldSimilarityWrapper {
-    Similarity delegate = new ClassicSimilarity();
+    Similarity delegate = new DefaultSimilarity();
+
+    @Override
+    public float queryNorm(float sumOfSquaredWeights) {
+      return delegate.queryNorm(sumOfSquaredWeights);
+    }
 
     @Override
     public Similarity get(String field) {
-      if (FLOAT_TEST_FIELD.equals(field)) {
+      if (floatTestField.equals(field)) {
         return new FloatEncodingBoostSimilarity();
       } else {
         return delegate;
       }
+    }
+
+    @Override
+    public float coord(int overlap, int maxOverlap) {
+      return delegate.coord(overlap, maxOverlap);
     }
   }
 
@@ -99,11 +106,16 @@ public class TestCustomNorms extends LuceneTestCase {
 
     @Override
     public long computeNorm(FieldInvertState state) {
-      return state.getLength();
+      return Float.floatToIntBits(state.getBoost());
     }
     
     @Override
-    public SimScorer scorer(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
+    public SimWeight computeWeight(CollectionStatistics collectionStats, TermStatistics... termStats) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public SimScorer simScorer(SimWeight weight, LeafReaderContext context) throws IOException {
       throw new UnsupportedOperationException();
     }
   }

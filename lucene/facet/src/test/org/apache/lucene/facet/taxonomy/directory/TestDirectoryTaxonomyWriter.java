@@ -1,3 +1,37 @@
+package org.apache.lucene.facet.taxonomy.directory;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.apache.lucene.analysis.MockAnalyzer;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.facet.FacetField;
+import org.apache.lucene.facet.FacetTestCase;
+import org.apache.lucene.facet.FacetsConfig;
+import org.apache.lucene.facet.DrillDownQuery;
+import org.apache.lucene.facet.taxonomy.FacetLabel;
+import org.apache.lucene.facet.taxonomy.TaxonomyReader;
+import org.apache.lucene.facet.taxonomy.directory.DirectoryTaxonomyWriter.MemoryOrdinalMap;
+import org.apache.lucene.facet.taxonomy.writercache.TaxonomyWriterCache;
+import org.apache.lucene.facet.taxonomy.writercache.Cl2oTaxonomyWriterCache;
+import org.apache.lucene.facet.taxonomy.writercache.LruTaxonomyWriterCache;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig.OpenMode;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.SegmentInfos;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.store.AlreadyClosedException;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.TestUtil;
+import org.junit.Test;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,40 +48,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy.directory;
-
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.apache.lucene.analysis.MockAnalyzer;
-import org.apache.lucene.document.Document;
-import org.apache.lucene.facet.DrillDownQuery;
-import org.apache.lucene.facet.FacetField;
-import org.apache.lucene.facet.FacetTestCase;
-import org.apache.lucene.facet.FacetsConfig;
-import org.apache.lucene.facet.taxonomy.FacetLabel;
-import org.apache.lucene.facet.taxonomy.TaxonomyReader;
-import org.apache.lucene.facet.taxonomy.directory.DirectoryTaxonomyWriter.MemoryOrdinalMap;
-import org.apache.lucene.facet.taxonomy.writercache.LruTaxonomyWriterCache;
-import org.apache.lucene.facet.taxonomy.writercache.TaxonomyWriterCache;
-import org.apache.lucene.facet.taxonomy.writercache.UTF8TaxonomyWriterCache;
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig.OpenMode;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.SegmentInfos;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.store.AlreadyClosedException;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.IOUtils;
-import org.apache.lucene.util.TestUtil;
-import org.junit.Test;
-
 
 public class TestDirectoryTaxonomyWriter extends FacetTestCase {
 
@@ -65,8 +65,6 @@ public class TestDirectoryTaxonomyWriter extends FacetTestCase {
     public boolean isFull() { return true; }
     @Override
     public void clear() {}
-    @Override
-    public int size() { return 0; }
     
   };
   
@@ -92,12 +90,11 @@ public class TestDirectoryTaxonomyWriter extends FacetTestCase {
     // Verifies taxonomy commit data
     Directory dir = newDirectory();
     DirectoryTaxonomyWriter taxoWriter = new DirectoryTaxonomyWriter(dir, OpenMode.CREATE_OR_APPEND, NO_OP_CACHE);
-    assertTrue(taxoWriter.getCache() == NO_OP_CACHE);
     taxoWriter.addCategory(new FacetLabel("a"));
     taxoWriter.addCategory(new FacetLabel("b"));
     Map<String, String> userCommitData = new HashMap<>();
     userCommitData.put("testing", "1 2 3");
-    taxoWriter.setLiveCommitData(userCommitData.entrySet());
+    taxoWriter.setCommitData(userCommitData);
     taxoWriter.close();
     DirectoryReader r = DirectoryReader.open(dir);
     assertEquals("2 categories plus root should have been committed to the underlying directory", 3, r.numDocs());
@@ -112,22 +109,14 @@ public class TestDirectoryTaxonomyWriter extends FacetTestCase {
     // that the taxonomy index has been recreated.
     taxoWriter = new DirectoryTaxonomyWriter(dir, OpenMode.CREATE_OR_APPEND, NO_OP_CACHE);
     taxoWriter.addCategory(new FacetLabel("c")); // add a category so that commit will happen
-    taxoWriter.setLiveCommitData(new HashMap<String, String>(){{
+    taxoWriter.setCommitData(new HashMap<String, String>(){{
       put("just", "data");
-    }}.entrySet());
+    }});
     taxoWriter.commit();
     
     // verify taxoWriter.getCommitData()
-    Map<String,String> data = new HashMap<>();
-    Iterable<Map.Entry<String,String>> iter = taxoWriter.getLiveCommitData();
-    if (iter != null) {
-      for(Map.Entry<String,String> ent : iter) {
-        data.put(ent.getKey(), ent.getValue());
-      }
-    }
-    
     assertNotNull(DirectoryTaxonomyWriter.INDEX_EPOCH
-        + " not found in taoxWriter.commitData", data.get(DirectoryTaxonomyWriter.INDEX_EPOCH));
+        + " not found in taoxWriter.commitData", taxoWriter.getCommitData().get(DirectoryTaxonomyWriter.INDEX_EPOCH));
     taxoWriter.close();
     
     r = DirectoryReader.open(dir);
@@ -143,14 +132,15 @@ public class TestDirectoryTaxonomyWriter extends FacetTestCase {
     // Verifies that if rollback is called, DTW is closed.
     Directory dir = newDirectory();
     DirectoryTaxonomyWriter dtw = new DirectoryTaxonomyWriter(dir);
-    assertTrue(dtw.getCache() instanceof UTF8TaxonomyWriterCache);
     dtw.addCategory(new FacetLabel("a"));
     dtw.rollback();
-    // should not have succeeded to add a category following rollback.
-    expectThrows(AlreadyClosedException.class, () -> {
+    try {
       dtw.addCategory(new FacetLabel("a"));
-    });
-
+      fail("should not have succeeded to add a category following rollback.");
+    } catch (AlreadyClosedException e) {
+      // expected
+    }
+    
     dir.close();
   }
   
@@ -172,19 +162,20 @@ public class TestDirectoryTaxonomyWriter extends FacetTestCase {
     Directory dir = newDirectory();
     DirectoryTaxonomyWriter dtw = new DirectoryTaxonomyWriter(dir);
     dtw.close();
-    // should not succeed to add a category following close.
-    expectThrows(AlreadyClosedException.class, () -> {
+    try {
       dtw.addCategory(new FacetLabel("a"));
-    });
-
+      fail("should not have succeeded to add a category following close.");
+    } catch (AlreadyClosedException e) {
+      // expected
+    }
     dir.close();
   }
 
   private void touchTaxo(DirectoryTaxonomyWriter taxoWriter, FacetLabel cp) throws IOException {
     taxoWriter.addCategory(cp);
-    taxoWriter.setLiveCommitData(new HashMap<String, String>(){{
+    taxoWriter.setCommitData(new HashMap<String, String>(){{
       put("just", "data");
-    }}.entrySet());
+    }});
     taxoWriter.commit();
   }
   
@@ -193,37 +184,37 @@ public class TestDirectoryTaxonomyWriter extends FacetTestCase {
     // DirTaxoWriter lost the INDEX_EPOCH property if it was opened in
     // CREATE_OR_APPEND (or commit(userData) called twice), which could lead to
     // DirTaxoReader succeeding to refresh().
-    try (Directory dir = newDirectory()) {
+    Directory dir = newDirectory();
+    
+    DirectoryTaxonomyWriter taxoWriter = new DirectoryTaxonomyWriter(dir, OpenMode.CREATE_OR_APPEND, NO_OP_CACHE);
+    touchTaxo(taxoWriter, new FacetLabel("a"));
+    
+    TaxonomyReader taxoReader = new DirectoryTaxonomyReader(dir);
 
-      DirectoryTaxonomyWriter taxoWriter = new DirectoryTaxonomyWriter(dir, OpenMode.CREATE_OR_APPEND, NO_OP_CACHE);
-      touchTaxo(taxoWriter, new FacetLabel("a"));
+    touchTaxo(taxoWriter, new FacetLabel("b"));
+    
+    TaxonomyReader newtr = TaxonomyReader.openIfChanged(taxoReader);
+    taxoReader.close();
+    taxoReader = newtr;
+    assertEquals(1, Integer.parseInt(taxoReader.getCommitUserData().get(DirectoryTaxonomyWriter.INDEX_EPOCH)));
 
-      TaxonomyReader taxoReader = new DirectoryTaxonomyReader(dir);
+    // now recreate the taxonomy, and check that the epoch is preserved after opening DirTW again.
+    taxoWriter.close();
+    taxoWriter = new DirectoryTaxonomyWriter(dir, OpenMode.CREATE, NO_OP_CACHE);
+    touchTaxo(taxoWriter, new FacetLabel("c"));
+    taxoWriter.close();
+    
+    taxoWriter = new DirectoryTaxonomyWriter(dir, OpenMode.CREATE_OR_APPEND, NO_OP_CACHE);
+    touchTaxo(taxoWriter, new FacetLabel("d"));
+    taxoWriter.close();
 
-      touchTaxo(taxoWriter, new FacetLabel("b"));
+    newtr = TaxonomyReader.openIfChanged(taxoReader);
+    taxoReader.close();
+    taxoReader = newtr;
+    assertEquals(2, Integer.parseInt(taxoReader.getCommitUserData().get(DirectoryTaxonomyWriter.INDEX_EPOCH)));
 
-      TaxonomyReader newtr = TaxonomyReader.openIfChanged(taxoReader);
-      taxoReader.close();
-      taxoReader = newtr;
-      assertEquals(1, Integer.parseInt(taxoReader.getCommitUserData().get(DirectoryTaxonomyWriter.INDEX_EPOCH)));
-
-      // now recreate the taxonomy, and check that the epoch is preserved after opening DirTW again.
-      taxoWriter.close();
-
-      taxoWriter = new DirectoryTaxonomyWriter(dir, OpenMode.CREATE, NO_OP_CACHE);
-      touchTaxo(taxoWriter, new FacetLabel("c"));
-      taxoWriter.close();
-
-      taxoWriter = new DirectoryTaxonomyWriter(dir, OpenMode.CREATE_OR_APPEND, NO_OP_CACHE);
-      touchTaxo(taxoWriter, new FacetLabel("d"));
-      taxoWriter.close();
-
-      newtr = TaxonomyReader.openIfChanged(taxoReader);
-      taxoReader.close();
-      taxoReader = newtr;
-      assertEquals(2, Integer.parseInt(taxoReader.getCommitUserData().get(DirectoryTaxonomyWriter.INDEX_EPOCH)));
-      taxoReader.close();
-    }
+    taxoReader.close();
+    dir.close();
   }
 
   @Test
@@ -256,13 +247,13 @@ public class TestDirectoryTaxonomyWriter extends FacetTestCase {
     final TaxonomyWriterCache cache;
     if (d < 0.7) {
       // this is the fastest, yet most memory consuming
-      cache = new UTF8TaxonomyWriterCache();
+      cache = new Cl2oTaxonomyWriterCache(1024, 0.15f, 3);
     } else if (TEST_NIGHTLY && d > 0.98) {
       // this is the slowest, but tests the writer concurrency when no caching is done.
       // only pick it during NIGHTLY tests, and even then, with very low chances.
       cache = NO_OP_CACHE;
     } else {
-      // this is slower than UTF8, but less memory consuming, and exercises finding categories on disk too.
+      // this is slower than CL2O, but less memory consuming, and exercises finding categories on disk too.
       cache = new LruTaxonomyWriterCache(ncats / 10);
     }
     if (VERBOSE) {
@@ -445,7 +436,7 @@ public class TestDirectoryTaxonomyWriter extends FacetTestCase {
   public void testHugeLabel() throws Exception {
     Directory indexDir = newDirectory(), taxoDir = newDirectory();
     IndexWriter indexWriter = new IndexWriter(indexDir, newIndexWriterConfig(new MockAnalyzer(random())));
-    DirectoryTaxonomyWriter taxoWriter = new DirectoryTaxonomyWriter(taxoDir, OpenMode.CREATE, new UTF8TaxonomyWriterCache());
+    DirectoryTaxonomyWriter taxoWriter = new DirectoryTaxonomyWriter(taxoDir, OpenMode.CREATE, new Cl2oTaxonomyWriterCache(2, 1f, 1));
     FacetsConfig config = new FacetsConfig();
     
     // Add one huge label:
@@ -481,7 +472,7 @@ public class TestDirectoryTaxonomyWriter extends FacetTestCase {
     IndexSearcher searcher = new IndexSearcher(indexReader);
     DrillDownQuery ddq = new DrillDownQuery(new FacetsConfig());
     ddq.add("dim", bigs);
-    assertEquals(1, searcher.search(ddq, 10).totalHits.value);
+    assertEquals(1, searcher.search(ddq, 10).totalHits);
     
     IOUtils.close(indexReader, taxoReader, indexDir, taxoDir);
   }

@@ -1,3 +1,5 @@
+package org.apache.solr.handler.clustering.carrot2;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,21 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.clustering.carrot2;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.util.Collection;
 import java.util.Set;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.CharArraySet;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 import org.apache.lucene.analysis.commongrams.CommonGramsFilterFactory;
 import org.apache.lucene.analysis.core.StopFilterFactory;
-import org.apache.lucene.analysis.util.TokenFilterFactory;
 import org.apache.solr.analysis.TokenizerChain;
 import org.apache.solr.core.SolrCore;
-import org.apache.solr.schema.IndexSchema;
 import org.carrot2.core.LanguageCode;
 import org.carrot2.core.attribute.Init;
 import org.carrot2.core.attribute.Processing;
@@ -39,6 +37,9 @@ import org.carrot2.text.util.MutableCharArray;
 import org.carrot2.util.attribute.Attribute;
 import org.carrot2.util.attribute.Bindable;
 import org.carrot2.util.attribute.Input;
+
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
 
 /**
  * An implementation of Carrot2's {@link ILexicalDataFactory} that adds stop
@@ -57,56 +58,53 @@ public class SolrStopwordsCarrot2LexicalDataFactory implements ILexicalDataFacto
   @Init
   @Input
   @Attribute(key = "solrCore")
-  public SolrCore core;
+  private SolrCore core;
 
   @Processing
   @Input
   @Attribute(key = "solrFieldNames")
-  public Set<String> fieldNames;
+  private Set<String> fieldNames;
 
   /**
    * A lazily-built cache of stop words per field.
    */
-  private HashMap<String, List<CharArraySet>> solrStopWords = new HashMap<>();
+  private Multimap<String, CharArraySet> solrStopWords = HashMultimap.create();
 
   /**
    * Carrot2's default lexical resources to use in addition to Solr's stop
    * words.
    */
-  public DefaultLexicalDataFactory carrot2LexicalDataFactory = new DefaultLexicalDataFactory();
+  private DefaultLexicalDataFactory carrot2LexicalDataFactory = new DefaultLexicalDataFactory();
 
   /**
    * Obtains stop words for a field from the associated
    * {@link StopFilterFactory}, if any.
    */
-  private List<CharArraySet> getSolrStopWordsForField(String fieldName) {
+  private Collection<CharArraySet> getSolrStopWordsForField(String fieldName) {
     // No need to synchronize here, Carrot2 ensures that instances
     // of this class are not used by multiple threads at a time.
-    synchronized (solrStopWords) {
-      if (!solrStopWords.containsKey(fieldName)) {
-        solrStopWords.put(fieldName, new ArrayList<>());
+    if (!solrStopWords.containsKey(fieldName)) {
+      final Analyzer fieldAnalyzer = core.getLatestSchema().getFieldType(fieldName)
+          .getIndexAnalyzer();
+      if (fieldAnalyzer instanceof TokenizerChain) {
+        final TokenFilterFactory[] filterFactories = ((TokenizerChain) fieldAnalyzer)
+            .getTokenFilterFactories();
+        for (TokenFilterFactory factory : filterFactories) {
+          if (factory instanceof StopFilterFactory) {
+            // StopFilterFactory holds the stop words in a CharArraySet
+            solrStopWords.put(fieldName,
+                ((StopFilterFactory) factory).getStopWords());
+          }
 
-        IndexSchema schema = core.getLatestSchema();
-        final Analyzer fieldAnalyzer = schema.getFieldType(fieldName).getIndexAnalyzer();
-        if (fieldAnalyzer instanceof TokenizerChain) {
-          final TokenFilterFactory[] filterFactories = 
-              ((TokenizerChain) fieldAnalyzer).getTokenFilterFactories();
-          for (TokenFilterFactory factory : filterFactories) {
-            if (factory instanceof StopFilterFactory) {
-              // StopFilterFactory holds the stop words in a CharArraySet
-              CharArraySet stopWords = ((StopFilterFactory) factory).getStopWords();
-              solrStopWords.get(fieldName).add(stopWords);
-            }
-
-            if (factory instanceof CommonGramsFilterFactory) {
-              CharArraySet commonWords = ((CommonGramsFilterFactory) factory).getCommonWords();
-              solrStopWords.get(fieldName).add(commonWords);
-            }
+          if (factory instanceof CommonGramsFilterFactory) {
+            solrStopWords.put(fieldName,
+                ((CommonGramsFilterFactory) factory)
+                    .getCommonWords());
           }
         }
       }
-      return solrStopWords.get(fieldName);
     }
+    return solrStopWords.get(fieldName);
   }
 
   @Override

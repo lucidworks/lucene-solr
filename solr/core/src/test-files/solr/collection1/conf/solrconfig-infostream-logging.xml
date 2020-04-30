@@ -24,6 +24,4 @@
   <indexConfig>
     <infoStream>true</infoStream>
   </indexConfig>
-
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
 </config>

@@ -1,3 +1,5 @@
+package org.apache.solr.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util;
+
+import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.util.SimplePostTool.PageFetcher;
+import org.apache.solr.util.SimplePostTool.PageFetcherResult;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -24,24 +31,18 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.util.SimplePostTool.PageFetcher;
-import org.apache.solr.util.SimplePostTool.PageFetcherResult;
-import org.junit.Before;
-import org.junit.Test;
-
 /**
  * NOTE: do *not* use real hostnames, not even "example.com", in this test.
  *
- * A MockPageFetcher is used to prevent real HTTP requests from being executed.
+ * Even though a MockPageFetcher is used to prevent real HTTP requests from being 
+ * executed, the use of the URL class in SimplePostTool causes attempted resolution of 
+ * the hostnames.
  */ 
 public class SimplePostToolTest extends SolrTestCaseJ4 {
-
   SimplePostTool t_file, t_file_auto, t_file_rec, t_web, t_test;
   PageFetcher pf;
   
@@ -70,10 +71,8 @@ public class SimplePostToolTest extends SolrTestCaseJ4 {
     t_test = SimplePostTool.parseArgsAndInit(args);
 
     pf = new MockPageFetcher();
-    for (SimplePostTool mockable : new SimplePostTool[]{t_web, t_file_auto}) {
-      mockable.pageFetcher = pf;
-      mockable.mockMode = true;
-    }
+    SimplePostTool.pageFetcher = pf;
+    SimplePostTool.mockMode = true;
   }
   
   @Test
@@ -147,8 +146,6 @@ public class SimplePostToolTest extends SolrTestCaseJ4 {
     assertEquals("application/msword", SimplePostTool.guessType(f));
     f = new File("foobar");
     assertEquals("application/octet-stream", SimplePostTool.guessType(f));
-    f = new File("foo.jsonl");
-    assertEquals("application/json", SimplePostTool.guessType(f));
   }
 
   @Test
@@ -172,7 +169,7 @@ public class SimplePostToolTest extends SolrTestCaseJ4 {
     assertEquals(3, num);
     
     // Without respecting robots.txt
-    t_web.pageFetcher.robotsCache.put("[ff01::114]", Collections.emptyList());
+    SimplePostTool.pageFetcher.robotsCache.clear();
     t_web.recursive = 5;
     num = t_web.postWebPages(new String[] {"http://[ff01::114]/#removeme"}, 0, null);
     assertEquals(6, num);
@@ -180,9 +177,9 @@ public class SimplePostToolTest extends SolrTestCaseJ4 {
   
   @Test
   public void testRobotsExclusion() throws MalformedURLException {
-    assertFalse(t_web.pageFetcher.isDisallowedByRobots(new URL("http://[ff01::114]/")));
-    assertTrue(t_web.pageFetcher.isDisallowedByRobots(new URL("http://[ff01::114]/disallowed")));
-    assertTrue("There should be two entries parsed from robots.txt", t_web.pageFetcher.robotsCache.get("[ff01::114]").size() == 2);
+    assertFalse(SimplePostTool.pageFetcher.isDisallowedByRobots(new URL("http://[ff01::114]/")));
+    assertTrue(SimplePostTool.pageFetcher.isDisallowedByRobots(new URL("http://[ff01::114]/disallowed")));
+    assertTrue("There should be two entries parsed from robots.txt", SimplePostTool.pageFetcher.robotsCache.get("[ff01::114]").size() == 2);
   }
 
   static class MockPageFetcher extends PageFetcher {
@@ -221,13 +218,13 @@ public class SimplePostToolTest extends SolrTestCaseJ4 {
       sb.append("Disallow:  # This is void\n");
       sb.append("Disallow: /disallow # Disallow this path\n");
       sb.append("Disallow: /nonexistingpath # Disallow this path\n");
-      this.robotsCache.put("[ff01::114]", super.
+      this.robotsCache.put("[ff01::114]", SimplePostTool.pageFetcher.
           parseRobotsTxt(new ByteArrayInputStream(sb.toString().getBytes(StandardCharsets.UTF_8))));
     }
     
     @Override
     public PageFetcherResult readPageFromUrl(URL u) {
-      PageFetcherResult res = new PageFetcherResult();
+      PageFetcherResult res = (new SimplePostTool()).new PageFetcherResult();
       if (isDisallowedByRobots(u)) {
         res.httpStatus = 403;
         return res;

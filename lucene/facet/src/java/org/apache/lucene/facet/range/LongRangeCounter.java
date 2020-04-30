@@ -1,3 +1,5 @@
+package org.apache.lucene.facet.range;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.range;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -49,17 +50,17 @@ final class LongRangeCounter {
     endsMap.put(Long.MAX_VALUE, 2);
 
     for(LongRange range : ranges) {
-      Integer cur = endsMap.get(range.min);
+      Integer cur = endsMap.get(range.minIncl);
       if (cur == null) {
-        endsMap.put(range.min, 1);
+        endsMap.put(range.minIncl, 1);
       } else {
-        endsMap.put(range.min, cur.intValue() | 1);
+        endsMap.put(range.minIncl, cur.intValue() | 1);
       }
-      cur = endsMap.get(range.max);
+      cur = endsMap.get(range.maxIncl);
       if (cur == null) {
-        endsMap.put(range.max, 2);
+        endsMap.put(range.maxIncl, 2);
       } else {
-        endsMap.put(range.max, cur.intValue() | 2);
+        endsMap.put(range.maxIncl, cur.intValue() | 2);
       }
     }
 
@@ -276,7 +277,7 @@ final class LongRangeCounter {
 
     /** Recursively assigns range outputs to each node. */
     void addOutputs(int index, LongRange range) {
-      if (start >= range.min && end <= range.max) {
+      if (start >= range.minIncl && end <= range.maxIncl) {
         // Our range is fully included in the incoming
         // range; add to our output list:
         if (outputs == null) {
@@ -295,9 +296,9 @@ final class LongRangeCounter {
       indent(sb, depth);
       if (left == null) {
         assert right == null;
-        sb.append("leaf: ").append(start).append(" to ").append(end);
+        sb.append("leaf: " + start + " to " + end);
       } else {
-        sb.append("node: ").append(start).append(" to ").append(end);
+        sb.append("node: " + start + " to " + end);
       }
       if (outputs != null) {
         sb.append(" outputs=");

@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 /**
  * Just counts the total number of hits.
@@ -35,7 +35,7 @@ public class TotalHitCountCollector extends SimpleCollector {
   }
 
   @Override
-  public ScoreMode scoreMode() {
-    return ScoreMode.COMPLETE_NO_SCORES;
+  public boolean needsScores() {
+    return false;
   }
 }

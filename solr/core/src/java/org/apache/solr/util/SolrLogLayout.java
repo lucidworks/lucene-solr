@@ -1,3 +1,30 @@
+package org.apache.solr.util;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.WeakHashMap;
+
+import org.apache.log4j.Layout;
+import org.apache.log4j.Level;
+import org.apache.log4j.spi.LoggingEvent;
+import org.apache.log4j.spi.ThrowableInformation;
+import org.apache.solr.cloud.ZkController;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.StringUtils;
+import org.apache.solr.common.cloud.Replica;
+import org.apache.solr.common.util.SuppressForbidden;
+import org.apache.solr.core.SolrCore;
+import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.request.SolrRequestInfo;
+import org.slf4j.MDC;
+
+import static org.apache.solr.common.cloud.ZkStateReader.COLLECTION_PROP;
+import static org.apache.solr.common.cloud.ZkStateReader.CORE_NAME_PROP;
+import static org.apache.solr.common.cloud.ZkStateReader.NODE_NAME_PROP;
+import static org.apache.solr.common.cloud.ZkStateReader.REPLICA_PROP;
+import static org.apache.solr.common.cloud.ZkStateReader.SHARD_ID_PROP;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,50 +41,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util;
 
-import java.nio.charset.Charset;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.WeakHashMap;
-
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.core.LogEvent;
-import org.apache.logging.log4j.core.config.plugins.Plugin;
-import org.apache.logging.log4j.core.config.plugins.PluginAttribute;
-import org.apache.logging.log4j.core.config.plugins.PluginFactory;
-import org.apache.logging.log4j.core.layout.AbstractStringLayout;
-import org.apache.solr.cloud.ZkController;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.StringUtils;
-import org.apache.solr.common.cloud.DocCollection;
-import org.apache.solr.common.cloud.Replica;
-import org.apache.solr.common.util.SuppressForbidden;
-import org.apache.solr.core.SolrCore;
-import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.request.SolrRequestInfo;
-import org.slf4j.MDC;
-
-import static org.apache.solr.common.cloud.ZkStateReader.COLLECTION_PROP;
-import static org.apache.solr.common.cloud.ZkStateReader.CORE_NAME_PROP;
-import static org.apache.solr.common.cloud.ZkStateReader.NODE_NAME_PROP;
-import static org.apache.solr.common.cloud.ZkStateReader.REPLICA_PROP;
-import static org.apache.solr.common.cloud.ZkStateReader.SHARD_ID_PROP;
-
-@SuppressForbidden(reason = "class is specific to log4j2")
-@Plugin(name = "SolrLogLayout", category = "Core", elementType = "layout", printObject = true)
-public class SolrLogLayout extends AbstractStringLayout {
-
-  protected SolrLogLayout(Charset charset) {
-    super(charset);
-  }
-
-  @PluginFactory
-  public static SolrLogLayout createLayout(@PluginAttribute(value = "charset", defaultString = "UTF-8") Charset charset) {
-    return new SolrLogLayout(charset);
-  }
-
+@SuppressForbidden(reason = "class is specific to log4j")
+public class SolrLogLayout extends Layout {
   /**
    * Add this interface to a thread group and the string returned by getTag()
    * will appear in log statements of any threads under that group.
@@ -110,8 +96,22 @@ public class SolrLogLayout extends AbstractStringLayout {
   
   Map<Integer,CoreInfo> coreInfoMap = new WeakHashMap<>();
   
-  public void appendThread(StringBuilder sb) {
+  public Map<String,String> classAliases = new HashMap<>();
+  
+  public void appendThread(StringBuilder sb, LoggingEvent event) {
     Thread th = Thread.currentThread();
+    
+    /******
+     * sb.append(" T="); sb.append(th.getName()).append(' ');
+     * 
+     * // NOTE: tried creating a thread group around jetty but we seem to lose
+     * it and request // threads are in the normal "main" thread group
+     * ThreadGroup tg = th.getThreadGroup(); while (tg != null) {
+     * sb.append("(group_name=").append(tg.getName()).append(")");
+     * 
+     * if (tg instanceof TG) { sb.append(((TG)tg).getTag()); sb.append('/'); }
+     * try { tg = tg.getParent(); } catch (Throwable e) { tg = null; } }
+     ******/
     
     // NOTE: LogRecord.getThreadID is *not* equal to Thread.getId()
     sb.append(" T");
@@ -119,21 +119,23 @@ public class SolrLogLayout extends AbstractStringLayout {
   }
 
   @Override
-  public String toSerializable(LogEvent event) {
+  public String format(LoggingEvent event) {
     return _format(event);
   }
   
-  public String _format(LogEvent event) {
-    String message = event.getMessage().getFormattedMessage();
+  public String _format(LoggingEvent event) {
+    String message = (String) event.getMessage();
     if (message == null) {
       message = "";
     }
     StringBuilder sb = new StringBuilder(message.length() + 80);
     
-    long now = event.getTimeMillis();
+    long now = event.timeStamp;
     long timeFromStart = now - startTime;
+    long timeSinceLast = now - lastTime;
     lastTime = now;
-    String shortClassName = getShortClassName(event.getSource().getClassName(), event.getSource().getMethodName());
+    String shortClassName = getShortClassName(event.getLocationInformation().getClassName(),
+        event.getLocationInformation().getMethodName());
     
     /***
      * sb.append(timeFromStart).append(' ').append(timeSinceLast);
@@ -144,12 +146,9 @@ public class SolrLogLayout extends AbstractStringLayout {
      ***/
     
     SolrRequestInfo requestInfo = SolrRequestInfo.getRequestInfo();
-
-    SolrCore core;
-    try (SolrQueryRequest req = (requestInfo == null) ? null : requestInfo.getReq()) {
-      core = (req == null) ? null : req.getCore();
-    }
-    ZkController zkController;
+    SolrQueryRequest req = requestInfo == null ? null : requestInfo.getReq();
+    SolrCore core = req == null ? null : req.getCore();
+    ZkController zkController = null;
     CoreInfo info = null;
     
     if (core != null) {
@@ -160,16 +159,16 @@ public class SolrLogLayout extends AbstractStringLayout {
         coreInfoMap.put(core.hashCode(), info);
         
         if (sb.length() == 0) sb.append("ASYNC ");
-        sb.append(" NEW_CORE ").append(info.shortId);
-        sb.append(" name=").append(core.getName());
-        sb.append(" ").append(core);
+        sb.append(" NEW_CORE " + info.shortId);
+        sb.append(" name=" + core.getName());
+        sb.append(" " + core);
       }
 
-      zkController = core.getCoreContainer().getZkController();
+      zkController = core.getCoreDescriptor().getCoreContainer().getZkController();
       if (zkController != null) {
         if (info.url == null) {
           info.url = zkController.getBaseUrl() + "/" + core.getName();
-          sb.append(" url=").append(info.url).append(" node=").append(zkController.getNodeName());
+          sb.append(" url=" + info.url + " node=" + zkController.getNodeName());
         }
         
         Map<String,Object> coreProps = getReplicaProps(zkController, core);
@@ -179,7 +178,7 @@ public class SolrLogLayout extends AbstractStringLayout {
               + core.getCoreDescriptor().getCloudDescriptor()
                   .getCollectionName() + " core:" + core.getName() + " props:"
               + coreProps;
-          sb.append(" ").append(info.shortId).append("_STATE=").append(corePropsString);
+          sb.append(" " + info.shortId + "_STATE=" + corePropsString);
         }
       }
     }
@@ -190,7 +189,7 @@ public class SolrLogLayout extends AbstractStringLayout {
     // sb.append("\nL").append(record.getSequenceNumber()); // log number is
     // useful for sequencing when looking at multiple parts of a log file, but
     // ms since start should be fine.
-    appendThread(sb);
+    appendThread(sb, event);
 
     appendMDC(sb);
 
@@ -210,19 +209,20 @@ public class SolrLogLayout extends AbstractStringLayout {
     
     sb.append(' ');
     appendMultiLineString(sb, message);
-    Throwable th = event.getThrown();
-    
-    if (th != null) {
-      sb.append(' ');
-      String err = SolrException.toStr(th);
-      String ignoredMsg = SolrException.doIgnore(th, err);
-      if (ignoredMsg != null) {
-        sb.append(ignoredMsg);
-      } else {
-        sb.append(err);
+    ThrowableInformation thInfo = event.getThrowableInformation();
+    if (thInfo != null) {
+      Throwable th = event.getThrowableInformation().getThrowable();
+      if (th != null) {
+        sb.append(' ');
+        String err = SolrException.toStr(th);
+        String ignoredMsg = SolrException.doIgnore(th, err);
+        if (ignoredMsg != null) {
+          sb.append(ignoredMsg);
+        } else {
+          sb.append(err);
+        }
       }
     }
-    
     
     sb.append('\n');
     
@@ -237,11 +237,10 @@ public class SolrLogLayout extends AbstractStringLayout {
     return sb.toString();
   }
 
-  private Map<String, Object> getReplicaProps(ZkController zkController, SolrCore core) {
-    final String collectionName = core.getCoreDescriptor().getCloudDescriptor().getCollectionName();
-    DocCollection collection = zkController.getClusterState().getCollectionOrNull(collectionName);
-    Replica replica = collection.getReplica(zkController.getCoreNodeName(core.getCoreDescriptor()));
-    if (replica != null) {
+  private Map<String,Object> getReplicaProps(ZkController zkController, SolrCore core) {
+    final String collection = core.getCoreDescriptor().getCloudDescriptor().getCollectionName();
+    Replica replica = zkController.getClusterState().getReplica(collection, zkController.getCoreNodeName(core.getCoreDescriptor()));
+    if(replica!=null) {
       return replica.getProperties();
     }
     return Collections.EMPTY_MAP;
@@ -328,7 +327,7 @@ public class SolrLogLayout extends AbstractStringLayout {
     methodAlias.put(new Method(
         "org.apache.solr.update.processor.LogUpdateProcessor", "finish"), "");
   }
-
+  
   private Method classAndMethod = new Method(null, null); // don't need to be
                                                           // thread safe
   
@@ -358,6 +357,14 @@ public class SolrLogLayout extends AbstractStringLayout {
     }
     
     return sb.toString() + '.' + method;
+  }
+
+  @Override
+  public void activateOptions() {}
+
+  @Override
+  public boolean ignoresThrowable() {
+    return false;
   }
 
 

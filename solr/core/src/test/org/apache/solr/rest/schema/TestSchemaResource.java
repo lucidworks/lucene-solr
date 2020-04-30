@@ -1,3 +1,4 @@
+package org.apache.solr.rest.schema;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.rest.schema;
+
+
 import org.apache.solr.rest.SolrRestletTestBase;
 import org.junit.Test;
 
@@ -27,11 +29,17 @@ public class TestSchemaResource extends SolrRestletTestBase {
             "/response/lst[@name='schema']/str[@name='name'][.='test-rest']",
 
             "count(/response/lst[@name='schema']/float[@name='version']) = 1",
-            "/response/lst[@name='schema']/float[@name='version'][.='1.6']",
+            "/response/lst[@name='schema']/float[@name='version'][.='1.5']",
+
+            "count(/response/lst[@name='schema']/lst[@name='solrQueryParser']/str[@name='defaultOperator']) = 1",
+            "/response/lst[@name='schema']/lst[@name='solrQueryParser']/str[@name='defaultOperator'][.='OR']",
 
             "count(/response/lst[@name='schema']/str[@name='uniqueKey']) = 1",
             "/response/lst[@name='schema']/str[@name='uniqueKey'][.='id']",
         
+            "count(/response/lst[@name='schema']/str[@name='defaultSearchField']) = 1",
+            "/response/lst[@name='schema']/str[@name='defaultSearchField'][.='text']",
+
             "(/response/lst[@name='schema']/arr[@name='fieldTypes']/lst/str[@name='name'])[1] = 'HTMLstandardtok'",
             "(/response/lst[@name='schema']/arr[@name='fieldTypes']/lst/str[@name='name'])[2] = 'HTMLwhitetok'",
             "(/response/lst[@name='schema']/arr[@name='fieldTypes']/lst/str[@name='name'])[3] = 'boolean'",
@@ -103,12 +111,14 @@ public class TestSchemaResource extends SolrRestletTestBase {
 
   @Test
   public void testJSONResponse() throws Exception {
-    assertJQ("/schema", // Should work with or without a trailing slash
+    assertJQ("/schema?wt=json", // Should work with or without a trailing slash
 
              "/schema/name=='test-rest'",
-             "/schema/version==1.6",
+             "/schema/version==1.5",
+             "/schema/solrQueryParser/defaultOperator=='OR'",
              "/schema/uniqueKey=='id'",
-
+             "/schema/defaultSearchField=='text'",
+        
              "/schema/fieldTypes/[0]/name=='HTMLstandardtok'",
              "/schema/fieldTypes/[1]/name=='HTMLwhitetok'",
              "/schema/fieldTypes/[2]/name=='boolean'",
@@ -145,8 +155,10 @@ public class TestSchemaResource extends SolrRestletTestBase {
     assertQ("/schema?wt=schema.xml",  // should work with or without trailing slash on '/schema/' path
 
             "/schema/@name = 'test-rest'",
-            "/schema/@version = '1.6'",
+            "/schema/@version = '1.5'",
+            "/schema/solrQueryParser/@defaultOperator = 'OR'",
             "/schema/uniqueKey = 'id'",
+            "/schema/defaultSearchField = 'text'",
 
             "(/schema/fieldType)[1]/@name = 'HTMLstandardtok'",
             "(/schema/fieldType)[2]/@name = 'HTMLwhitetok'",

@@ -1,3 +1,5 @@
+package org.apache.solr.cloud.hdfs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud.hdfs;
 
 import java.io.IOException;
 
@@ -38,18 +39,13 @@ public class HdfsChaosMonkeySafeLeaderTest extends ChaosMonkeySafeLeaderTest {
   
   @BeforeClass
   public static void setupClass() throws Exception {
-    System.setProperty("solr.hdfs.blockcache.global", "true"); // always use global cache, this test can create a lot of directories
     dfsCluster = HdfsTestUtil.setupClass(createTempDir().toFile().getAbsolutePath());
   }
   
   @AfterClass
   public static void teardownClass() throws Exception {
-    try {
-      HdfsTestUtil.teardownClass(dfsCluster);
-    } finally {
-      dfsCluster = null;
-      System.clearProperty("solr.hdfs.blockcache.global");
-    }
+    HdfsTestUtil.teardownClass(dfsCluster);
+    dfsCluster = null;
   }
   
   @Override
@@ -59,9 +55,12 @@ public class HdfsChaosMonkeySafeLeaderTest extends ChaosMonkeySafeLeaderTest {
     // super class may hard code directory
     useFactory("org.apache.solr.core.HdfsDirectoryFactory");
   }
+
   
   @Override
   protected String getDataDir(String dataDir) throws IOException {
     return HdfsTestUtil.getDataDir(dfsCluster, dataDir);
   }
+
+
 }

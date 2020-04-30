@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,27 +16,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
-
-import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 
-import org.apache.lucene.index.MergePolicy.MergeSpecification;
+import org.apache.lucene.util.LuceneTestCase;
 import org.junit.Test;
 
-public class TestNoMergePolicy extends BaseMergePolicyTestCase {
-
-  public MergePolicy mergePolicy() {
-    return NoMergePolicy.INSTANCE;
-  }
+public class TestNoMergePolicy extends LuceneTestCase {
 
   @Test
   public void testNoMergePolicy() throws Exception {
-    MergePolicy mp = mergePolicy();
+    MergePolicy mp = NoMergePolicy.INSTANCE;
     assertNull(mp.findMerges(null, (SegmentInfos)null, null));
     assertNull(mp.findForcedMerges(null, 0, null, null));
     assertNull(mp.findForcedDeletesMerges(null, null));
@@ -68,27 +63,4 @@ public class TestNoMergePolicy extends BaseMergePolicyTestCase {
     }
   }
 
-  @Override
-  protected void assertSegmentInfos(MergePolicy policy, SegmentInfos infos) throws IOException {
-    for (SegmentCommitInfo info : infos) {
-      assertEquals(IndexWriter.SOURCE_FLUSH, info.info.getAttribute(IndexWriter.SOURCE));
-    }
-  }
-
-  @Override
-  protected void assertMerge(MergePolicy policy, MergeSpecification merge) throws IOException {
-    fail(); // should never happen
-  }
-
-  @Override
-  public void testSimulateAppendOnly() throws IOException {
-    // Reduce numbers as this merge policy doesn't work well with lots of data
-    doTestSimulateAppendOnly(mergePolicy(), 1_000_000, 10_000);
-  }
-
-  @Override
-  public void testSimulateUpdates() throws IOException {
-    // Reduce numbers as this merge policy doesn't work well with lots of data
-    doTestSimulateUpdates(mergePolicy(), 100_000, 1000);
-  }
 }

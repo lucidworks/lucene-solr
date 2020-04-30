@@ -1,3 +1,5 @@
+package org.apache.solr.update.processor;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update.processor;
 
 import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.SolrInputField;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.response.SolrQueryResponse;
+import org.apache.solr.update.AddUpdateCommand;
 import org.apache.solr.update.CommitUpdateCommand;
 import org.junit.BeforeClass;
 
 import java.io.IOException;
+import java.util.Date;
+import java.util.UUID;
 
 public class IgnoreCommitOptimizeUpdateProcessorFactoryTest extends SolrTestCaseJ4 {
 
@@ -47,7 +53,7 @@ public class IgnoreCommitOptimizeUpdateProcessorFactoryTest extends SolrTestCase
     rsp = processCommit("ignore-optimize-only-from-client-403", true);
     assertNotNull("Sending an optimize should have resulted in an exception in the response", rsp.getException());
     // commit should happen if DistributedUpdateProcessor.COMMIT_END_POINT == true
-    rsp = processCommit("ignore-commit-from-client-403", false, Boolean.TRUE);
+    rsp = processCommit("ignore-commit-from-client-403", false, new Boolean(true));
     shouldBeNull = rsp.getException();
     assertNull("Sending a commit should NOT have resulted in an exception in the response: "+shouldBeNull, shouldBeNull);
   }

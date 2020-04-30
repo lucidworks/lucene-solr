@@ -26,13 +26,12 @@ A solrconfig.xml snippet containing indexConfig settings for randomized testing.
        the RandomMergePolicy in all tests - but some tests expect very specific
        Merge behavior, so those tests can set it as needed.
   -->
-  <mergePolicyFactory class="${solr.tests.mergePolicyFactory:org.apache.solr.util.RandomMergePolicyFactory}" />
+  <mergePolicy class="${solr.tests.mergePolicy:org.apache.solr.util.RandomMergePolicy}" />
   
   <useCompoundFile>${useCompoundFile:false}</useCompoundFile>
 
   <maxBufferedDocs>${solr.tests.maxBufferedDocs}</maxBufferedDocs>
   <ramBufferSizeMB>${solr.tests.ramBufferSizeMB}</ramBufferSizeMB>
-  <ramPerThreadHardLimitMB>${solr.tests.ramPerThreadHardLimitMB}</ramPerThreadHardLimitMB>
 
   <mergeScheduler class="${solr.tests.mergeScheduler}" />
 
@@ -44,7 +43,4 @@ A solrconfig.xml snippet containing indexConfig settings for randomized testing.
        to vary the lockType canset it as needed.
   -->
   <lockType>${solr.tests.lockType:single}</lockType>
-
-  <infoStream>${solr.tests.infostream:false}</infoStream>
-
 </indexConfig>

@@ -14,16 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.core.SolrCore;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
-import org.apache.solr.update.processor.FieldMutatingUpdateProcessor.FieldNameSelector;
-
-import static org.apache.solr.update.processor.FieldMutatingUpdateProcessor.SELECT_NO_FIELDS;
-import static org.apache.solr.update.processor.FieldValueMutatingUpdateProcessor.valueMutator;
+import org.apache.solr.core.SolrCore;
 
 
 /**
@@ -35,7 +32,7 @@ import static org.apache.solr.update.processor.FieldValueMutatingUpdateProcessor
  * <p>For example, with the configuration listed below any documents 
  * containing  String values (such as "<code>abcdef</code>" or 
  * "<code>xyz</code>") in a field declared in the schema using 
- * <code>IntPointField</code> or <code>LongPointField</code> 
+ * <code>TrieIntField</code> or <code>TrieLongField</code> 
  * would have those Strings replaced with the length of those fields as an 
  * Integer 
  * (ie: <code>6</code> and <code>3</code> respectively)
@@ -43,11 +40,10 @@ import static org.apache.solr.update.processor.FieldValueMutatingUpdateProcessor
  * <pre class="prettyprint">
  * &lt;processor class="solr.FieldLengthUpdateProcessorFactory"&gt;
  *   &lt;arr name="typeClass"&gt;
- *     &lt;str&gt;solr.IntPointField&lt;/str&gt;
- *     &lt;str&gt;solr.LongPointField&lt;/str&gt;
+ *     &lt;str&gt;solr.TrieIntField&lt;/str&gt;
+ *     &lt;str&gt;solr.TrieLongField&lt;/str&gt;
  *   &lt;/arr&gt;
  * &lt;/processor&gt;</pre>
- * @since 4.0.0
  */
 public final class FieldLengthUpdateProcessorFactory extends FieldMutatingUpdateProcessorFactory {
 
@@ -59,21 +55,26 @@ public final class FieldLengthUpdateProcessorFactory extends FieldMutatingUpdate
   }
 
   @Override
-  public FieldNameSelector getDefaultSelector(final SolrCore core) {
-    return SELECT_NO_FIELDS;
-  }
+  public FieldMutatingUpdateProcessor.FieldNameSelector 
+    getDefaultSelector(final SolrCore core) {
 
+    return FieldMutatingUpdateProcessor.SELECT_NO_FIELDS;
+
+  }
+  
   @Override
   public UpdateRequestProcessor getInstance(SolrQueryRequest req,
                                             SolrQueryResponse rsp,
                                             UpdateRequestProcessor next) {
-    return valueMutator(getSelector(), next, src -> {
-      if (src instanceof CharSequence) {
-        return ((CharSequence) src).length();
+    return new FieldValueMutatingUpdateProcessor(getSelector(), next) {
+      @Override
+      protected Object mutateValue(final Object src) {
+        if (src instanceof CharSequence) {
+          return new Integer(((CharSequence)src).length());
+        }
+        return src;
       }
-      return src;
-    });
-
+    };
   }
 }
 

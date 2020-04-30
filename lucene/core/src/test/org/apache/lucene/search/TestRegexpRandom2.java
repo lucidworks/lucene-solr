@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -36,13 +36,14 @@ import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.AttributeSource;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.CharsRefBuilder;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 import org.apache.lucene.util.UnicodeUtil;
-import org.apache.lucene.util.automaton.Automaton;
 import org.apache.lucene.util.automaton.AutomatonTestUtil;
 import org.apache.lucene.util.automaton.CharacterRunAutomaton;
+import org.apache.lucene.util.automaton.Automaton;
 import org.apache.lucene.util.automaton.RegExp;
 
 /**
@@ -102,7 +103,7 @@ public class TestRegexpRandom2 extends LuceneTestCase {
   }
   
   /** a stupid regexp query that just blasts thru the terms */
-  private static class DumbRegexpQuery extends MultiTermQuery {
+  private class DumbRegexpQuery extends MultiTermQuery {
     private final Automaton automaton;
     
     DumbRegexpQuery(Term term, int flags) {
@@ -136,11 +137,6 @@ public class TestRegexpRandom2 extends LuceneTestCase {
     @Override
     public String toString(String field) {
       return field.toString() + automaton.toString();
-    }
-
-    @Override
-    public void visit(QueryVisitor visitor) {
-
     }
 
     @Override

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
-
-import java.io.IOException;
 import java.util.ArrayList;
 
 import org.apache.lucene.document.BinaryDocValuesField;
@@ -27,14 +26,11 @@ import org.apache.lucene.document.NumericDocValuesField;
 import org.apache.lucene.document.SortedDocValuesField;
 import org.apache.lucene.document.SortedNumericDocValuesField;
 import org.apache.lucene.document.SortedSetDocValuesField;
-import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
-
-import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
-
 
 /** Tests MultiDocValues versus ordinary segment merging */
 public class TestMultiDocValues extends LuceneTestCase {
@@ -60,19 +56,14 @@ public class TestMultiDocValues extends LuceneTestCase {
     DirectoryReader ir = iw.getReader();
     iw.forceMerge(1);
     DirectoryReader ir2 = iw.getReader();
-    LeafReader merged = getOnlyLeafReader(ir2);
+    LeafReader merged = getOnlySegmentReader(ir2);
     iw.close();
     
     NumericDocValues multi = MultiDocValues.getNumericValues(ir, "numbers");
     NumericDocValues single = merged.getNumericDocValues("numbers");
     for (int i = 0; i < numDocs; i++) {
-      assertEquals(i, multi.nextDoc());
-      assertEquals(i, single.nextDoc());
-      assertEquals(single.longValue(), multi.longValue());
+      assertEquals(single.get(i), multi.get(i));
     }
-    testRandomAdvance(merged.getNumericDocValues("numbers"), MultiDocValues.getNumericValues(ir, "numbers"));
-    testRandomAdvanceExact(merged.getNumericDocValues("numbers"), MultiDocValues.getNumericValues(ir, "numbers"), merged.maxDoc());
-
     ir.close();
     ir2.close();
     dir.close();
@@ -89,7 +80,6 @@ public class TestMultiDocValues extends LuceneTestCase {
     RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwc);
 
     int numDocs = TEST_NIGHTLY ? atLeast(500) : atLeast(50);
-
     for (int i = 0; i < numDocs; i++) {
       BytesRef ref = new BytesRef(TestUtil.randomUnicodeString(random()));
       field.setBytesValue(ref);
@@ -101,21 +91,16 @@ public class TestMultiDocValues extends LuceneTestCase {
     DirectoryReader ir = iw.getReader();
     iw.forceMerge(1);
     DirectoryReader ir2 = iw.getReader();
-    LeafReader merged = getOnlyLeafReader(ir2);
+    LeafReader merged = getOnlySegmentReader(ir2);
     iw.close();
-
+    
     BinaryDocValues multi = MultiDocValues.getBinaryValues(ir, "bytes");
     BinaryDocValues single = merged.getBinaryDocValues("bytes");
     for (int i = 0; i < numDocs; i++) {
-      assertEquals(i, multi.nextDoc());
-      assertEquals(i, single.nextDoc());
-      final BytesRef expected = BytesRef.deepCopyOf(single.binaryValue());
-      final BytesRef actual = multi.binaryValue();
+      final BytesRef expected = BytesRef.deepCopyOf(single.get(i));
+      final BytesRef actual = multi.get(i);
       assertEquals(expected, actual);
     }
-    testRandomAdvance(merged.getBinaryDocValues("bytes"), MultiDocValues.getBinaryValues(ir, "bytes"));
-    testRandomAdvanceExact(merged.getBinaryDocValues("bytes"), MultiDocValues.getBinaryValues(ir, "bytes"), merged.maxDoc());
-
     ir.close();
     ir2.close();
     dir.close();
@@ -146,27 +131,20 @@ public class TestMultiDocValues extends LuceneTestCase {
     DirectoryReader ir = iw.getReader();
     iw.forceMerge(1);
     DirectoryReader ir2 = iw.getReader();
-    LeafReader merged = getOnlyLeafReader(ir2);
+    LeafReader merged = getOnlySegmentReader(ir2);
     iw.close();
+    
     SortedDocValues multi = MultiDocValues.getSortedValues(ir, "bytes");
     SortedDocValues single = merged.getSortedDocValues("bytes");
     assertEquals(single.getValueCount(), multi.getValueCount());
-    while (true) {
-      assertEquals(single.nextDoc(), multi.nextDoc());
-      if (single.docID() == NO_MORE_DOCS) {
-        break;
-      }
-
-      // check value
-      final BytesRef expected = BytesRef.deepCopyOf(single.binaryValue());
-      final BytesRef actual = multi.binaryValue();
-      assertEquals(expected, actual);
-
+    for (int i = 0; i < numDocs; i++) {
       // check ord
-      assertEquals(single.ordValue(), multi.ordValue());
+      assertEquals(single.getOrd(i), multi.getOrd(i));
+      // check value
+      final BytesRef expected = BytesRef.deepCopyOf(single.get(i));
+      final BytesRef actual = multi.get(i);
+      assertEquals(expected, actual);
     }
-    testRandomAdvance(merged.getSortedDocValues("bytes"), MultiDocValues.getSortedValues(ir, "bytes"));
-    testRandomAdvanceExact(merged.getSortedDocValues("bytes"), MultiDocValues.getSortedValues(ir, "bytes"), merged.maxDoc());
     ir.close();
     ir2.close();
     dir.close();
@@ -195,25 +173,20 @@ public class TestMultiDocValues extends LuceneTestCase {
     DirectoryReader ir = iw.getReader();
     iw.forceMerge(1);
     DirectoryReader ir2 = iw.getReader();
-    LeafReader merged = getOnlyLeafReader(ir2);
+    LeafReader merged = getOnlySegmentReader(ir2);
     iw.close();
     
     SortedDocValues multi = MultiDocValues.getSortedValues(ir, "bytes");
     SortedDocValues single = merged.getSortedDocValues("bytes");
     assertEquals(single.getValueCount(), multi.getValueCount());
     for (int i = 0; i < numDocs; i++) {
-      assertEquals(i, multi.nextDoc());
-      assertEquals(i, single.nextDoc());
       // check ord
-      assertEquals(single.ordValue(), multi.ordValue());
+      assertEquals(single.getOrd(i), multi.getOrd(i));
       // check ord value
-      final BytesRef expected = BytesRef.deepCopyOf(single.binaryValue());
-      final BytesRef actual = multi.binaryValue();
+      final BytesRef expected = BytesRef.deepCopyOf(single.get(i));
+      final BytesRef actual = multi.get(i);
       assertEquals(expected, actual);
     }
-    testRandomAdvance(merged.getSortedDocValues("bytes"), MultiDocValues.getSortedValues(ir, "bytes"));
-    testRandomAdvanceExact(merged.getSortedDocValues("bytes"), MultiDocValues.getSortedValues(ir, "bytes"), merged.maxDoc());
-    
     ir.close();
     ir2.close();
     dir.close();
@@ -241,7 +214,7 @@ public class TestMultiDocValues extends LuceneTestCase {
     DirectoryReader ir = iw.getReader();
     iw.forceMerge(1);
     DirectoryReader ir2 = iw.getReader();
-    LeafReader merged = getOnlyLeafReader(ir2);
+    LeafReader merged = getOnlySegmentReader(ir2);
     iw.close();
     
     SortedSetDocValues multi = MultiDocValues.getSortedSetValues(ir, "bytes");
@@ -257,19 +230,15 @@ public class TestMultiDocValues extends LuceneTestCase {
         assertEquals(expected, actual);
       }
       // check ord list
-      while (true) {
-        int docID = single.nextDoc();
-        assertEquals(docID, multi.nextDoc());
-        if (docID == NO_MORE_DOCS) {
-          break;
-        }
-
+      for (int i = 0; i < numDocs; i++) {
+        single.setDocument(i);
         ArrayList<Long> expectedList = new ArrayList<>();
         long ord;
         while ((ord = single.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
           expectedList.add(ord);
         }
         
+        multi.setDocument(i);
         int upto = 0;
         while ((ord = multi.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
           assertEquals(expectedList.get(upto).longValue(), ord);
@@ -278,8 +247,6 @@ public class TestMultiDocValues extends LuceneTestCase {
         assertEquals(expectedList.size(), upto);
       }
     }
-    testRandomAdvance(merged.getSortedSetDocValues("bytes"), MultiDocValues.getSortedSetValues(ir, "bytes"));
-    testRandomAdvanceExact(merged.getSortedSetDocValues("bytes"), MultiDocValues.getSortedSetValues(ir, "bytes"), merged.maxDoc());
     
     ir.close();
     ir2.close();
@@ -309,7 +276,7 @@ public class TestMultiDocValues extends LuceneTestCase {
     DirectoryReader ir = iw.getReader();
     iw.forceMerge(1);
     DirectoryReader ir2 = iw.getReader();
-    LeafReader merged = getOnlyLeafReader(ir2);
+    LeafReader merged = getOnlySegmentReader(ir2);
     iw.close();
     
     SortedSetDocValues multi = MultiDocValues.getSortedSetValues(ir, "bytes");
@@ -325,18 +292,15 @@ public class TestMultiDocValues extends LuceneTestCase {
         assertEquals(expected, actual);
       }
       // check ord list
-      while (true) {
-        int docID = single.nextDoc();
-        assertEquals(docID, multi.nextDoc());
-        if (docID == NO_MORE_DOCS) {
-          break;
-        }
+      for (int i = 0; i < numDocs; i++) {
+        single.setDocument(i);
         ArrayList<Long> expectedList = new ArrayList<>();
         long ord;
         while ((ord = single.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
           expectedList.add(ord);
         }
         
+        multi.setDocument(i);
         int upto = 0;
         while ((ord = multi.nextOrd()) != SortedSetDocValues.NO_MORE_ORDS) {
           assertEquals(expectedList.get(upto).longValue(), ord);
@@ -345,9 +309,7 @@ public class TestMultiDocValues extends LuceneTestCase {
         assertEquals(expectedList.size(), upto);
       }
     }
-    testRandomAdvance(merged.getSortedSetDocValues("bytes"), MultiDocValues.getSortedSetValues(ir, "bytes"));
-    testRandomAdvanceExact(merged.getSortedSetDocValues("bytes"), MultiDocValues.getSortedSetValues(ir, "bytes"), merged.maxDoc());
-
+    
     ir.close();
     ir2.close();
     dir.close();
@@ -375,7 +337,7 @@ public class TestMultiDocValues extends LuceneTestCase {
     DirectoryReader ir = iw.getReader();
     iw.forceMerge(1);
     DirectoryReader ir2 = iw.getReader();
-    LeafReader merged = getOnlyLeafReader(ir2);
+    LeafReader merged = getOnlySegmentReader(ir2);
     iw.close();
     
     SortedNumericDocValues multi = MultiDocValues.getSortedNumericValues(ir, "nums");
@@ -385,44 +347,69 @@ public class TestMultiDocValues extends LuceneTestCase {
     } else {
       // check values
       for (int i = 0; i < numDocs; i++) {
-        if (i > single.docID()) {
-          assertEquals(single.nextDoc(), multi.nextDoc());
+        single.setDocument(i);
+        ArrayList<Long> expectedList = new ArrayList<>();
+        for (int j = 0; j < single.count(); j++) {
+          expectedList.add(single.valueAt(j));
         }
-        if (i == single.docID()) {
-          assertEquals(single.docValueCount(), multi.docValueCount());
-          for (int j = 0; j < single.docValueCount(); j++) {
-            assertEquals(single.nextValue(), multi.nextValue());
-          }
+        
+        multi.setDocument(i);
+        assertEquals(expectedList.size(), multi.count());
+        for (int j = 0; j < single.count(); j++) {
+          assertEquals(expectedList.get(j).longValue(), multi.valueAt(j));
         }
       }
     }
-    testRandomAdvance(merged.getSortedNumericDocValues("nums"), MultiDocValues.getSortedNumericValues(ir, "nums"));
-    testRandomAdvanceExact(merged.getSortedNumericDocValues("nums"), MultiDocValues.getSortedNumericValues(ir, "nums"), merged.maxDoc());
     
     ir.close();
     ir2.close();
     dir.close();
   }
+  
+  public void testDocsWithField() throws Exception {
+    Directory dir = newDirectory();
+    
+    IndexWriterConfig iwc = newIndexWriterConfig(random(), null);
+    iwc.setMergePolicy(newLogMergePolicy());
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwc);
 
-  private void testRandomAdvance(DocIdSetIterator iter1, DocIdSetIterator iter2) throws IOException {
-    assertEquals(-1, iter1.docID());
-    assertEquals(-1, iter2.docID());
-
-    while (iter1.docID() != NO_MORE_DOCS) {
-      if (random().nextBoolean()) {
-        assertEquals(iter1.nextDoc(), iter2.nextDoc());
-      } else {
-        int target = iter1.docID() + TestUtil.nextInt(random(), 1, 100);
-        assertEquals(iter1.advance(target), iter2.advance(target));
+    int numDocs = TEST_NIGHTLY ? atLeast(500) : atLeast(50);
+    for (int i = 0; i < numDocs; i++) {
+      Document doc = new Document();
+      if (random().nextInt(4) >= 0) {
+        doc.add(new NumericDocValuesField("numbers", random().nextLong()));
+      }
+      doc.add(new NumericDocValuesField("numbersAlways", random().nextLong()));
+      iw.addDocument(doc);
+      if (random().nextInt(17) == 0) {
+        iw.commit();
       }
     }
-  }
-
-  private void testRandomAdvanceExact(DocValuesIterator iter1, DocValuesIterator iter2, int maxDoc) throws IOException {
-    for (int target = random().nextInt(Math.min(maxDoc, 10)); target < maxDoc; target += random().nextInt(10)) {
-      final boolean exists1 = iter1.advanceExact(target);
-      final boolean exists2 = iter2.advanceExact(target);
-      assertEquals(exists1, exists2);
+    DirectoryReader ir = iw.getReader();
+    iw.forceMerge(1);
+    DirectoryReader ir2 = iw.getReader();
+    LeafReader merged = getOnlySegmentReader(ir2);
+    iw.close();
+    
+    Bits multi = MultiDocValues.getDocsWithField(ir, "numbers");
+    Bits single = merged.getDocsWithField("numbers");
+    if (multi == null) {
+      assertNull(single);
+    } else {
+      assertEquals(single.length(), multi.length());
+      for (int i = 0; i < numDocs; i++) {
+        assertEquals(single.get(i), multi.get(i));
+      }
     }
+    
+    multi = MultiDocValues.getDocsWithField(ir, "numbersAlways");
+    single = merged.getDocsWithField("numbersAlways");
+    assertEquals(single.length(), multi.length());
+    for (int i = 0; i < numDocs; i++) {
+      assertEquals(single.get(i), multi.get(i));
+    }
+    ir.close();
+    ir2.close();
+    dir.close();
   }
 }

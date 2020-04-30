@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
-import java.io.IOException;
-import java.util.Arrays;
 
 import org.apache.lucene.analysis.MockAnalyzer;
-import org.apache.lucene.document.BinaryDocValuesField;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.IntPoint;
-import org.apache.lucene.document.NumericDocValuesField;
-import org.apache.lucene.document.SortedDocValuesField;
-import org.apache.lucene.document.SortedNumericDocValuesField;
-import org.apache.lucene.document.SortedSetDocValuesField;
 import org.apache.lucene.index.ExitableDirectoryReader.ExitingReaderException;
-import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.PrefixQuery;
 import org.apache.lucene.search.Query;
@@ -37,12 +28,25 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 
+import java.io.IOException;
+
 /**
  * Test that uses a default/lucene Implementation of {@link QueryTimeout}
  * to exit out long running queries that take too long to iterate over Terms.
  */
 public class TestExitableDirectoryReader extends LuceneTestCase {
   private static class TestReader extends FilterLeafReader {
+
+    private static class TestFields extends FilterFields {
+      TestFields(Fields in) {
+        super(in);
+      }
+
+      @Override
+      public Terms terms(String field) throws IOException {
+        return new TestTerms(super.terms(field));
+      }
+    }
 
     private static class TestTerms extends FilterTerms {
       TestTerms(Terms in) {
@@ -74,24 +78,13 @@ public class TestExitableDirectoryReader extends LuceneTestCase {
       }
     }
 
-    public TestReader(LeafReader reader) throws IOException {
-      super(reader);
+    public TestReader(IndexReader reader) throws IOException {
+      super(SlowCompositeReaderWrapper.wrap(reader));
     }
 
     @Override
-    public Terms terms(String field) throws IOException {
-      Terms terms = super.terms(field);
-      return terms==null ? null : new TestTerms(terms);
-    }
-
-    @Override
-    public CacheHelper getCoreCacheHelper() {
-      return in.getCoreCacheHelper();
-    }
-
-    @Override
-    public CacheHelper getReaderCacheHelper() {
-      return in.getReaderCacheHelper();
+    public Fields fields() throws IOException {
+      return new TestFields(super.fields());
     }
   }
 
@@ -99,7 +92,7 @@ public class TestExitableDirectoryReader extends LuceneTestCase {
    * Tests timing out of TermsEnum iterations
    * @throws Exception on error
    */
-  public void testExitableFilterTermsIndexReader() throws Exception {
+  public void testExitableFilterIndexReader() throws Exception {
     Directory directory = newDirectory();
     IndexWriter writer = new IndexWriter(directory, newIndexWriterConfig(new MockAnalyzer(random())));
 
@@ -115,7 +108,6 @@ public class TestExitableDirectoryReader extends LuceneTestCase {
     d3.add(newTextField("default", "ones two four", Field.Store.YES));
     writer.addDocument(d3);
 
-    writer.forceMerge(1);
     writer.commit();
     writer.close();
 
@@ -126,255 +118,53 @@ public class TestExitableDirectoryReader extends LuceneTestCase {
 
     Query query = new PrefixQuery(new Term("default", "o"));
 
-    // Set a fairly high timeout value (infinite) and expect the query to complete in that time frame.
+    // Set a fairly high timeout value (1 second) and expect the query to complete in that time frame.
     // Not checking the validity of the result, all we are bothered about in this test is the timing out.
     directoryReader = DirectoryReader.open(directory);
-    exitableDirectoryReader = new ExitableDirectoryReader(directoryReader, infiniteQueryTimeout());
-    reader = new TestReader(getOnlyLeafReader(exitableDirectoryReader));
+    exitableDirectoryReader = new ExitableDirectoryReader(directoryReader, new QueryTimeoutImpl(1000));
+    reader = new TestReader(exitableDirectoryReader);
     searcher = new IndexSearcher(reader);
     searcher.search(query, 10);
     reader.close();
+    exitableDirectoryReader.close();
 
-    // Set a really low timeout value (immediate) and expect an Exception
+
+    // Set a really low timeout value (1 millisecond) and expect an Exception
     directoryReader = DirectoryReader.open(directory);
-    exitableDirectoryReader = new ExitableDirectoryReader(directoryReader, immediateQueryTimeout());
-    reader = new TestReader(getOnlyLeafReader(exitableDirectoryReader));
-    IndexSearcher slowSearcher = new IndexSearcher(reader);
-    expectThrows(ExitingReaderException.class, () -> {
-      slowSearcher.search(query, 10);
-    });
-    reader.close();
+    exitableDirectoryReader = new ExitableDirectoryReader(directoryReader, new QueryTimeoutImpl(1));
+    reader = new TestReader(exitableDirectoryReader);
+    searcher = new IndexSearcher(reader);
+    try {
+      searcher.search(query, 10);
+      fail("This query should have led to an ExitingReaderException!");
+    } catch (ExitingReaderException ex) {
+      // Do nothing, we expect this!
+    } finally {
+      reader.close();
+      exitableDirectoryReader.close();
+    }
    
     // Set maximum time out and expect the query to complete. 
     // Not checking the validity of the result, all we are bothered about in this test is the timing out.
     directoryReader = DirectoryReader.open(directory);
-    exitableDirectoryReader = new ExitableDirectoryReader(directoryReader, infiniteQueryTimeout());
-    reader = new TestReader(getOnlyLeafReader(exitableDirectoryReader));
+    exitableDirectoryReader = new ExitableDirectoryReader(directoryReader, new QueryTimeoutImpl(Long.MAX_VALUE));
+    reader = new TestReader(exitableDirectoryReader);
     searcher = new IndexSearcher(reader);
     searcher.search(query, 10);
     reader.close();
+    exitableDirectoryReader.close();
 
     // Set a negative time allowed and expect the query to complete (should disable timeouts)
     // Not checking the validity of the result, all we are bothered about in this test is the timing out.
     directoryReader = DirectoryReader.open(directory);
-    exitableDirectoryReader = new ExitableDirectoryReader(directoryReader, disabledQueryTimeout());
-    reader = new TestReader(getOnlyLeafReader(exitableDirectoryReader));
+    exitableDirectoryReader = new ExitableDirectoryReader(directoryReader, new QueryTimeoutImpl(-189034L));
+    reader = new TestReader(exitableDirectoryReader);
     searcher = new IndexSearcher(reader);
     searcher.search(query, 10);
     reader.close();
+    exitableDirectoryReader.close();
 
     directory.close();
-  }
-
-  /**
-   * Tests timing out of PointValues queries
-   *
-   * @throws Exception on error
-   */
-  public void testExitablePointValuesIndexReader() throws Exception {
-    Directory directory = newDirectory();
-    IndexWriter writer = new IndexWriter(directory, newIndexWriterConfig(new MockAnalyzer(random())));
-
-    Document d1 = new Document();
-    d1.add(new IntPoint("default", 10));
-    writer.addDocument(d1);
-
-    Document d2 = new Document();
-    d2.add(new IntPoint("default", 100));
-    writer.addDocument(d2);
-
-    Document d3 = new Document();
-    d3.add(new IntPoint("default", 1000));
-    writer.addDocument(d3);
-
-    writer.forceMerge(1);
-    writer.commit();
-    writer.close();
-
-    DirectoryReader directoryReader;
-    DirectoryReader exitableDirectoryReader;
-    IndexReader reader;
-    IndexSearcher searcher;
-
-    Query query = IntPoint.newRangeQuery("default", 10, 20);
-
-    // Set a fairly high timeout value (infinite) and expect the query to complete in that time frame.
-    // Not checking the validity of the result, all we are bothered about in this test is the timing out.
-    directoryReader = DirectoryReader.open(directory);
-    exitableDirectoryReader = new ExitableDirectoryReader(directoryReader, infiniteQueryTimeout());
-    reader = new TestReader(getOnlyLeafReader(exitableDirectoryReader));
-    searcher = new IndexSearcher(reader);
-    searcher.search(query, 10);
-    reader.close();
-
-    // Set a really low timeout value (immediate) and expect an Exception
-    directoryReader = DirectoryReader.open(directory);
-    exitableDirectoryReader = new ExitableDirectoryReader(directoryReader, immediateQueryTimeout());
-    reader = new TestReader(getOnlyLeafReader(exitableDirectoryReader));
-    IndexSearcher slowSearcher = new IndexSearcher(reader);
-    expectThrows(ExitingReaderException.class, () -> {
-      slowSearcher.search(query, 10);
-    });
-    reader.close();
-
-    // Set maximum time out and expect the query to complete.
-    // Not checking the validity of the result, all we are bothered about in this test is the timing out.
-    directoryReader = DirectoryReader.open(directory);
-    exitableDirectoryReader = new ExitableDirectoryReader(directoryReader, infiniteQueryTimeout());
-    reader = new TestReader(getOnlyLeafReader(exitableDirectoryReader));
-    searcher = new IndexSearcher(reader);
-    searcher.search(query, 10);
-    reader.close();
-
-    // Set a negative time allowed and expect the query to complete (should disable timeouts)
-    // Not checking the validity of the result, all we are bothered about in this test is the timing out.
-    directoryReader = DirectoryReader.open(directory);
-    exitableDirectoryReader = new ExitableDirectoryReader(directoryReader, disabledQueryTimeout());
-    reader = new TestReader(getOnlyLeafReader(exitableDirectoryReader));
-    searcher = new IndexSearcher(reader);
-    searcher.search(query, 10);
-    reader.close();
-
-    directory.close();
-  }
-
-  private static QueryTimeout disabledQueryTimeout() {
-    return new QueryTimeout() {
-
-      @Override
-      public boolean shouldExit() {
-        return false;
-      }
-
-      @Override
-      public boolean isTimeoutEnabled() {
-        return false;
-      }
-    };
-  }
-
-  private static QueryTimeout infiniteQueryTimeout() {
-    return new QueryTimeout() {
-
-      @Override
-      public boolean shouldExit() {
-        return false;
-      }
-
-      @Override
-      public boolean isTimeoutEnabled() {
-        return true;
-      }
-    };
-  }
-
-  private static QueryTimeout immediateQueryTimeout() {
-    return new QueryTimeout() {
-
-      @Override
-      public boolean shouldExit() {
-        return true;
-      }
-
-      @Override
-      public boolean isTimeoutEnabled() {
-        return true;
-      }
-    };
-  }
-  
-  @FunctionalInterface
-  interface DvFactory {
-    DocValuesIterator create(LeafReader leaf) throws IOException;
-  }
-  
-  public void testDocValues() throws IOException {
-    Directory directory = newDirectory();
-    IndexWriter writer = new IndexWriter(directory, newIndexWriterConfig(new MockAnalyzer(random())));
-
-    Document d1 = new Document();
-    addDVs(d1, 10);
-    writer.addDocument(d1);
-
-    Document d2 = new Document();
-    addDVs(d2, 100);
-    writer.addDocument(d2);
-
-    Document d3 = new Document();
-    addDVs(d3, 1000);
-    writer.addDocument(d3);
-
-    writer.forceMerge(1);
-    writer.commit();
-    writer.close();
-
-    DirectoryReader directoryReader;
-    DirectoryReader exitableDirectoryReader;
-
-    for (DvFactory dvFactory :   Arrays.<DvFactory>asList(
-                 (r) -> r.getSortedDocValues("sorted"),    
-                 (r) -> r.getSortedSetDocValues("sortedset"),
-                 (r) -> r.getSortedNumericDocValues("sortednumeric"),
-                 (r) -> r.getNumericDocValues("numeric"),
-                 (r) -> r.getBinaryDocValues("binary") 
-            ))
-    {
-      directoryReader = DirectoryReader.open(directory);
-      exitableDirectoryReader = new ExitableDirectoryReader(directoryReader, immediateQueryTimeout());
-      
-      {
-        IndexReader  reader = new TestReader(getOnlyLeafReader(exitableDirectoryReader));
-      
-        expectThrows(ExitingReaderException.class, () -> {
-          LeafReader leaf = reader.leaves().get(0).reader();
-          DocValuesIterator iter = dvFactory.create(leaf);
-          scan(leaf, iter);
-        });
-        reader.close();
-      }
-  
-      directoryReader = DirectoryReader.open(directory);
-      exitableDirectoryReader = new ExitableDirectoryReader(directoryReader, random().nextBoolean()? 
-          infiniteQueryTimeout() : disabledQueryTimeout());
-      {
-        IndexReader reader = new TestReader(getOnlyLeafReader(exitableDirectoryReader));
-        final LeafReader leaf = reader.leaves().get(0).reader();
-        scan(leaf, dvFactory.create(leaf));
-        assertNull(leaf.getNumericDocValues("absent"));
-        assertNull(leaf.getBinaryDocValues("absent"));
-        assertNull(leaf.getSortedDocValues("absent"));
-        assertNull(leaf.getSortedNumericDocValues("absent"));
-        assertNull(leaf.getSortedSetDocValues("absent"));
-        
-        reader.close();
-      }
-    }
-    
-    directory.close();
-  
-  }
-
-  static private void scan(LeafReader leaf, DocValuesIterator iter ) throws IOException {
-    for (iter.nextDoc(); iter.docID()!=DocIdSetIterator.NO_MORE_DOCS
-         && iter.docID()<leaf.maxDoc();) {
-      final int nextDocId = iter.docID()+1;
-      if (random().nextBoolean() && nextDocId<leaf.maxDoc()) {
-        if(random().nextBoolean()) {
-          iter.advance(nextDocId);
-        } else {
-          iter.advanceExact(nextDocId);
-        }
-      } else { 
-        iter.nextDoc();
-      }
-    }
-  }
-  private void addDVs(Document d1, int i) {
-    d1.add(new NumericDocValuesField("numeric", i));
-    d1.add(new BinaryDocValuesField("binary", new BytesRef(""+i)));
-    d1.add(new SortedDocValuesField("sorted", new BytesRef(""+i)));
-    d1.add(new SortedNumericDocValuesField("sortednumeric", i));
-    d1.add(new SortedSetDocValuesField("sortedset", new BytesRef(""+i)));
   }
 }
 

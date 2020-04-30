@@ -14,19 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
 import javax.xml.xpath.XPathConstants;
+
 import java.lang.invoke.MethodHandles;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.StrUtils;
-import org.apache.solr.common.MapSerializable;
+import org.apache.solr.core.MapSerializable;
 import org.apache.solr.core.SolrConfig;
 import org.apache.solr.core.SolrResourceLoader;
 import org.apache.solr.util.DOMUtil;
@@ -75,21 +76,20 @@ public class CacheConfig implements MapSerializable{
     this.regenerator = regenerator;
   }
 
-  public static Map<String, CacheConfig> getMultipleConfigs(SolrConfig solrConfig, String configPath) {
-    NodeList nodes = (NodeList) solrConfig.evaluate(configPath, XPathConstants.NODESET);
-    if (nodes == null || nodes.getLength() == 0) return new LinkedHashMap<>();
-    Map<String, CacheConfig> result = new HashMap<>(nodes.getLength());
-    for (int i = 0; i < nodes.getLength(); i++) {
-      CacheConfig config = getConfig(solrConfig, nodes.item(i).getNodeName(), DOMUtil.toMap(nodes.item(i).getAttributes()), configPath);
-      result.put(config.args.get(NAME), config);
+  public static CacheConfig[] getMultipleConfigs(SolrConfig solrConfig, String configPath) {
+    NodeList nodes = (NodeList)solrConfig.evaluate(configPath, XPathConstants.NODESET);
+    if (nodes==null || nodes.getLength()==0) return null;
+    CacheConfig[] configs = new CacheConfig[nodes.getLength()];
+    for (int i=0; i<nodes.getLength(); i++) {
+      configs[i] = getConfig(solrConfig, nodes.item(i).getNodeName(), DOMUtil.toMap(nodes.item(i).getAttributes()), configPath);
     }
-    return result;
+    return configs;
   }
 
 
   public static CacheConfig getConfig(SolrConfig solrConfig, String xpath) {
     Node node = solrConfig.getNode(xpath, false);
-    if(node == null || !"true".equals(DOMUtil.getAttrOrDefault(node, "enabled", "true"))) {
+    if(node == null) {
       Map<String, String> m = solrConfig.getOverlay().getEditableSubProperties(xpath);
       if(m==null) return null;
       List<String> parts = StrUtils.splitSmart(xpath, '/');
@@ -102,14 +102,9 @@ public class CacheConfig implements MapSerializable{
   public static CacheConfig getConfig(SolrConfig solrConfig, String nodeName, Map<String,String> attrs, String xpath) {
     CacheConfig config = new CacheConfig();
     config.nodeName = nodeName;
-    Map attrsCopy = new LinkedHashMap<>(attrs.size());
-    for (Map.Entry<String, String> e : attrs.entrySet()) {
-      attrsCopy.put(e.getKey(), String.valueOf(e.getValue()));
-    }
-    attrs = attrsCopy;
     config.args = attrs;
 
-    Map<String, String> map = xpath == null ? null : solrConfig.getOverlay().getEditableSubProperties(xpath);
+    Map<String, String> map = solrConfig.getOverlay().getEditableSubProperties(xpath);
     if(map != null){
       HashMap<String, String> mapCopy = new HashMap<>(config.args);
       for (Map.Entry<String, String> e : map.entrySet()) {
@@ -124,7 +119,7 @@ public class CacheConfig implements MapSerializable{
 
     SolrResourceLoader loader = solrConfig.getResourceLoader();
     config.cacheImpl = config.args.get("class");
-    if (config.cacheImpl == null) config.cacheImpl = "solr.CaffeineCache";
+    if(config.cacheImpl == null) config.cacheImpl = "solr.LRUCache";
     config.regenImpl = config.args.get("regenerator");
     config.clazz = loader.findClass(config.cacheImpl, SolrCache.class);
     if (config.regenImpl != null) {
@@ -136,7 +131,7 @@ public class CacheConfig implements MapSerializable{
 
   public SolrCache newInstance() {
     try {
-      SolrCache cache = clazz.getConstructor().newInstance();
+      SolrCache cache = clazz.newInstance();
       persistence[0] = cache.init(args, persistence[0], regenerator);
       return cache;
     } catch (Exception e) {
@@ -148,7 +143,7 @@ public class CacheConfig implements MapSerializable{
   }
 
   @Override
-  public Map<String, Object> toMap(Map<String, Object> map) {
+  public Map<String, Object> toMap() {
     Map result = Collections.unmodifiableMap(args);
     return result;
   }

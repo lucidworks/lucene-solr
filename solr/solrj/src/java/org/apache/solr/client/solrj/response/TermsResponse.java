@@ -1,3 +1,4 @@
+package org.apache.solr.client.solrj.response;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.response;
 
 import org.apache.solr.common.util.NamedList;
 
@@ -29,26 +29,17 @@ import java.util.Map;
 public class TermsResponse {
   private Map<String, List<Term>> termMap = new HashMap<>();
   
-  public TermsResponse(NamedList<NamedList<Object>> termsInfo) {
+  public TermsResponse(NamedList<NamedList<Number>> termsInfo) {
     for (int i = 0; i < termsInfo.size(); i++) {
       String fieldName = termsInfo.getName(i);
       List<Term> itemList = new ArrayList<>();
-      NamedList<Object> items = termsInfo.getVal(i);
+      NamedList<Number> items = termsInfo.getVal(i);
       
       for (int j = 0; j < items.size(); j++) {
-        String term = items.getName(j);
-        Object val = items.getVal(j);
-        Term t;
-        if (val instanceof NamedList) {
-          @SuppressWarnings("unchecked")
-          NamedList<Number> termStats = (NamedList<Number>) val;
-          t = new Term(term, termStats.get("df").longValue(), termStats.get("ttf").longValue());
-        } else {
-          t = new Term(term, ((Number) val).longValue());
-        }
+        Term t = new Term(items.getName(j), items.getVal(j).longValue());
         itemList.add(t);
       }
-
+      
       termMap.put(fieldName, itemList);
     }
   }
@@ -69,16 +60,10 @@ public class TermsResponse {
   public static class Term {
     private String term;
     private long frequency;
-    private long totalTermFreq;
 
     public Term(String term, long frequency) {
-      this(term, frequency, 0);
-    }
-
-    public Term(String term, long frequency, long totalTermFreq) {
       this.term = term;
       this.frequency = frequency;
-      this.totalTermFreq = totalTermFreq;
     }
 
     public String getTerm() {
@@ -96,21 +81,9 @@ public class TermsResponse {
     public void setFrequency(long frequency) {
       this.frequency = frequency;
     }
-
+    
     public void addFrequency(long frequency) {
       this.frequency += frequency;
-    }
-
-    public long getTotalTermFreq() {
-      return totalTermFreq;
-    }
-
-    public void setTotalTermFreq(long totalTermFreq) {
-      this.totalTermFreq = totalTermFreq;
-    }
-
-    public void addTotalTermFreq(long totalTermFreq) {
-      this.totalTermFreq += totalTermFreq;
     }
   }
 }

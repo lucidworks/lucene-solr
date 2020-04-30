@@ -1,3 +1,4 @@
+package org.apache.lucene.queries.function.valuesource;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function.valuesource;
+
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -38,7 +39,7 @@ public abstract class MultiFloatFunction extends ValueSource {
   }
 
   abstract protected String name();
-  abstract protected float func(int doc, FunctionValues[] valsArr) throws IOException;
+  abstract protected float func(int doc, FunctionValues[] valsArr);
   /** 
    * Called by {@link FunctionValues#exists} for each document.
    *
@@ -48,7 +49,7 @@ public abstract class MultiFloatFunction extends ValueSource {
    * @see FunctionValues#exists
    * @see MultiFunction#allExists
    */
-  protected boolean exists(int doc, FunctionValues[] valsArr) throws IOException {
+  protected boolean exists(int doc, FunctionValues[] valsArr) {
     return MultiFunction.allExists(doc, valsArr);
   }
 
@@ -78,14 +79,14 @@ public abstract class MultiFloatFunction extends ValueSource {
 
     return new FloatDocValues(this) {
       @Override
-      public float floatVal(int doc) throws IOException {
+      public float floatVal(int doc) {
         return func(doc, valsArr);
       }
-      public boolean exists(int doc) throws IOException {
+      public boolean exists(int doc) {
         return MultiFloatFunction.this.exists(doc, valsArr);
       }
       @Override
-      public String toString(int doc) throws IOException {
+      public String toString(int doc) {
         return MultiFunction.toString(name(), valsArr, doc);
       }
     };

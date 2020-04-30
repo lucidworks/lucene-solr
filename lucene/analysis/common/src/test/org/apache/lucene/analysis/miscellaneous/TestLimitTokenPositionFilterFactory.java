@@ -1,3 +1,4 @@
+package org.apache.lucene.analysis.miscellaneous;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
 
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.TokenStream;
@@ -41,11 +41,13 @@ public class TestLimitTokenPositionFilterFactory extends BaseTokenStreamFactoryT
   }
 
   public void testMissingParam() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       tokenFilterFactory("LimitTokenPosition");
-    });
-    assertTrue("exception doesn't mention param: " + expected.getMessage(),
-        0 < expected.getMessage().indexOf(LimitTokenPositionFilterFactory.MAX_TOKEN_POSITION_KEY));
+      fail();
+    } catch (IllegalArgumentException e) {
+      assertTrue("exception doesn't mention param: " + e.getMessage(),
+          0 < e.getMessage().indexOf(LimitTokenPositionFilterFactory.MAX_TOKEN_POSITION_KEY));
+    }
   }
 
   public void testMaxPosition1WithShingles() throws Exception {
@@ -71,11 +73,13 @@ public class TestLimitTokenPositionFilterFactory extends BaseTokenStreamFactoryT
    * Test that bogus arguments result in exception
    */
   public void testBogusArguments() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       tokenFilterFactory("LimitTokenPosition",
           "maxTokenPosition", "3",
           "bogusArg", "bogusValue");
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
   }
 }

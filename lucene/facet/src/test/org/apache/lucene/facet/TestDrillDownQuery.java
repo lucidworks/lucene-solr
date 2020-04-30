@@ -1,3 +1,5 @@
+package org.apache.lucene.facet;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet;
 
 import java.io.IOException;
 import java.util.Random;
@@ -123,7 +124,7 @@ public class TestDrillDownQuery extends FacetTestCase {
     q.add("a", "2");
     q.add("b", "1");
     TopDocs docs = searcher.search(q, 100);
-    assertEquals(5, docs.totalHits.value);
+    assertEquals(5, docs.totalHits);
   }
   
   public void testQuery() throws IOException {
@@ -134,14 +135,14 @@ public class TestDrillDownQuery extends FacetTestCase {
     q.add("a");
     QueryUtils.check(q);
     TopDocs docs = searcher.search(q, 100);
-    assertEquals(25, docs.totalHits.value);
+    assertEquals(25, docs.totalHits);
     
     // Making sure the query yields 5 documents with the facet "b" and the
     // previous (facet "a") query as a base query
     DrillDownQuery q2 = new DrillDownQuery(config, q);
     q2.add("b");
     docs = searcher.search(q2, 100);
-    assertEquals(5, docs.totalHits.value);
+    assertEquals(5, docs.totalHits);
 
     // Making sure that a query of both facet "a" and facet "b" yields 5 results
     DrillDownQuery q3 = new DrillDownQuery(config);
@@ -149,14 +150,14 @@ public class TestDrillDownQuery extends FacetTestCase {
     q3.add("b");
     docs = searcher.search(q3, 100);
     
-    assertEquals(5, docs.totalHits.value);
+    assertEquals(5, docs.totalHits);
     // Check that content:foo (which yields 50% results) and facet/b (which yields 20%)
     // would gather together 10 results (10%..) 
     Query fooQuery = new TermQuery(new Term("content", "foo"));
     DrillDownQuery q4 = new DrillDownQuery(config, fooQuery);
     q4.add("b");
     docs = searcher.search(q4, 100);
-    assertEquals(10, docs.totalHits.value);
+    assertEquals(10, docs.totalHits);
   }
   
   public void testQueryImplicitDefaultParams() throws IOException {
@@ -171,7 +172,7 @@ public class TestDrillDownQuery extends FacetTestCase {
     DrillDownQuery q2 = new DrillDownQuery(config, q);
     q2.add("b");
     TopDocs docs = searcher.search(q2, 100);
-    assertEquals(5, docs.totalHits.value);
+    assertEquals(5, docs.totalHits);
 
     // Check that content:foo (which yields 50% results) and facet/b (which yields 20%)
     // would gather together 10 results (10%..) 
@@ -179,18 +180,7 @@ public class TestDrillDownQuery extends FacetTestCase {
     DrillDownQuery q4 = new DrillDownQuery(config, fooQuery);
     q4.add("b");
     docs = searcher.search(q4, 100);
-    assertEquals(10, docs.totalHits.value);
-  }
-  
-  public void testZeroLimit() throws IOException {
-    IndexSearcher searcher = newSearcher(reader);
-    DrillDownQuery q = new DrillDownQuery(config);
-    q.add("b", "1");
-    int limit = 0;
-    FacetsCollector facetCollector = new FacetsCollector();
-    FacetsCollector.search(searcher, q, limit, facetCollector);
-    Facets facets = getTaxonomyFacetCounts(taxo, config, facetCollector, config.getDimConfig("b").indexFieldName);
-    assertNotNull(facets.getTopChildren(10, "b"));
+    assertEquals(10, docs.totalHits);
   }
   
   public void testScoring() throws IOException {
@@ -251,45 +241,5 @@ public class TestDrillDownQuery extends FacetTestCase {
     DrillDownQuery q = new DrillDownQuery(config, base);
     Query rewrite = q.rewrite(reader).rewrite(reader);
     assertEquals(base, rewrite);
-  }
-
-  public void testRequireDimensionDrillDown() throws Exception {
-    Directory dir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random(), dir, 
-                  newIndexWriterConfig(new MockAnalyzer(random(), MockTokenizer.KEYWORD, false)));
-    Directory taxoDir = newDirectory();
-    TaxonomyWriter taxoWriter = new DirectoryTaxonomyWriter(taxoDir);
-    FacetsConfig config = new FacetsConfig();
-
-    config.setRequireDimensionDrillDown("a", true);
-    config.setRequireDimensionDrillDown("b", false);
-
-    Document doc = new Document();
-    doc.add(new FacetField("a", "1"));
-    doc.add(new FacetField("b", "2"));
-    writer.addDocument(config.build(taxoWriter, doc));
-    taxoWriter.close();
-
-    IndexReader reader = writer.getReader();
-    DirectoryTaxonomyReader taxoReader = new DirectoryTaxonomyReader(taxoDir);
-    IndexSearcher searcher = newSearcher(reader);
-
-    DrillDownQuery q = new DrillDownQuery(config);
-    q.add("a", "1");
-    assertEquals(1, searcher.count(q));
-
-    q = new DrillDownQuery(config);
-    q.add("a");
-    assertEquals(1, searcher.count(q));
-
-    q = new DrillDownQuery(config);
-    q.add("b", "2");
-    assertEquals(1, searcher.count(q));
-
-    q = new DrillDownQuery(config);
-    q.add("b");
-    // no hits because we disabled dimension drill down for dimension "b":
-    assertEquals(0, searcher.count(q));
-    IOUtils.close(taxoReader, reader, writer, dir, taxoDir);
   }
 }

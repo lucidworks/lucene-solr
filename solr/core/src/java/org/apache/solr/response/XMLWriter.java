@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.response;
 
 import java.io.IOException;
@@ -103,9 +104,9 @@ public class XMLWriter extends TextResponseWriter {
     writer.write(XML_START2_NOSCHEMA);
 
     // dump response values
+    NamedList<?> lst = rsp.getValues();
     Boolean omitHeader = req.getParams().getBool(CommonParams.OMIT_HEADER);
-    if(omitHeader != null && omitHeader) rsp.removeResponseHeader();
-    final NamedList<?> lst = rsp.getValues();
+    if(omitHeader != null && omitHeader) lst.remove("responseHeader");
     int sz = lst.size();
     int start=0;
 

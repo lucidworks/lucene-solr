@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.payloads;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +16,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.payloads;
 
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BaseExplanationTestCase;
+import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.spans.SpanBoostQuery;
 import org.apache.lucene.search.spans.SpanNearQuery;
 import org.apache.lucene.search.spans.SpanOrQuery;
 import org.apache.lucene.search.spans.SpanQuery;
 import org.apache.lucene.search.spans.SpanTermQuery;
+import org.apache.lucene.util.BytesRef;
 
 /**
  * TestExplanations subclass focusing on payload queries
@@ -34,10 +37,21 @@ public class TestPayloadExplanations extends BaseExplanationTestCase {
       new MinPayloadFunction(),
       new MaxPayloadFunction(),
   };
+  
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
+    searcher.setSimilarity(new DefaultSimilarity() {
+      @Override
+      public float scorePayload(int doc, int start, int end, BytesRef payload) {
+        return 1 + (payload.hashCode() % 10);
+      }
+    });
+  }
 
   /** macro for payloadscorequery */
   private SpanQuery pt(String s, PayloadFunction fn) {
-    return new PayloadScoreQuery(new SpanTermQuery(new Term(FIELD,s)), fn, PayloadDecoder.FLOAT_DECODER, random().nextBoolean());
+    return new PayloadScoreQuery(new SpanTermQuery(new Term(FIELD,s)), fn, random().nextBoolean());
   }
   
   /* simple PayloadTermQueries */
@@ -79,7 +93,7 @@ public class TestPayloadExplanations extends BaseExplanationTestCase {
 
   public void testAllFunctions(SpanQuery query, int[] expected) throws Exception {
     for (PayloadFunction fn : functions) {
-      qtest(new PayloadScoreQuery(query, fn, PayloadDecoder.FLOAT_DECODER, random().nextBoolean()), expected);
+      qtest(new PayloadScoreQuery(query, fn, random().nextBoolean()), expected);
     }
   }
 

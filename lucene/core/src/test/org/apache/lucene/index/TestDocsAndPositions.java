@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -27,6 +27,7 @@ import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
@@ -334,7 +335,7 @@ public class TestDocsAndPositions extends LuceneTestCase {
     doc.add(newStringField("foo", "bar", Field.Store.NO));
     writer.addDocument(doc);
     DirectoryReader reader = writer.getReader();
-    LeafReader r = getOnlyLeafReader(reader);
+    LeafReader r = getOnlySegmentReader(reader);
     PostingsEnum disi = TestUtil.docs(random(), r, "foo", new BytesRef("bar"), null, PostingsEnum.NONE);
     int docid = disi.docID();
     assertEquals(-1, docid);
@@ -359,7 +360,7 @@ public class TestDocsAndPositions extends LuceneTestCase {
     doc.add(newTextField("foo", "bar", Field.Store.NO));
     writer.addDocument(doc);
     DirectoryReader reader = writer.getReader();
-    LeafReader r = getOnlyLeafReader(reader);
+    LeafReader r = getOnlySegmentReader(reader);
     PostingsEnum disi = r.postings(new Term("foo", "bar"), PostingsEnum.ALL);
     int docid = disi.docID();
     assertEquals(-1, docid);

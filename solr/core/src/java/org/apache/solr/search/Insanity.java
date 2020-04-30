@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +16,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 
+import org.apache.lucene.index.FilterLeafReader;
+import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.BinaryDocValues;
 import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfos;
-import org.apache.lucene.index.FilterLeafReader;
-import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
-import org.apache.solr.uninverting.UninvertingReader;
+import org.apache.lucene.uninverting.UninvertingReader;
 
 /** 
  * Lucene 5.0 removes "accidental" insanity, so you must explicitly
@@ -49,9 +50,8 @@ public class Insanity {
    * instead of a numeric.
    */
   public static LeafReader wrapInsanity(LeafReader sane, String insaneField) {
-    return UninvertingReader.wrap(
-        new InsaneReader(sane, insaneField),
-        Collections.singletonMap(insaneField, UninvertingReader.Type.SORTED)::get);
+    return new UninvertingReader(new InsaneReader(sane, insaneField),
+                                 Collections.singletonMap(insaneField, UninvertingReader.Type.SORTED));
   }
   
   /** Hides the proper numeric dv type for the field */
@@ -66,8 +66,7 @@ public class Insanity {
       for (FieldInfo fi : in.getFieldInfos()) {
         if (fi.name.equals(insaneField)) {
           filteredInfos.add(new FieldInfo(fi.name, fi.number, fi.hasVectors(), fi.omitsNorms(),
-                                          fi.hasPayloads(), fi.getIndexOptions(), DocValuesType.NONE, -1, Collections.emptyMap(),
-                                          fi.getPointDataDimensionCount(), fi.getPointIndexDimensionCount(), fi.getPointNumBytes(), fi.isSoftDeletesField()));
+                                          fi.hasPayloads(), fi.getIndexOptions(), DocValuesType.NONE, -1, Collections.<String,String>emptyMap()));
         } else {
           filteredInfos.add(fi);
         }
@@ -119,14 +118,13 @@ public class Insanity {
     // important to override these, so fieldcaches are shared on what we wrap
     
     @Override
-    public CacheHelper getCoreCacheHelper() {
-      return in.getCoreCacheHelper();
+    public Object getCoreCacheKey() {
+      return in.getCoreCacheKey();
     }
 
     @Override
-    public CacheHelper getReaderCacheHelper() {
-      return in.getReaderCacheHelper();
+    public Object getCombinedCoreAndDeletesKey() {
+      return in.getCombinedCoreAndDeletesKey();
     }
-
   }
 }

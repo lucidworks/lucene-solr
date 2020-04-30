@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 /** Holds one hit in {@link TopDocs}. */
 
@@ -28,7 +28,7 @@ public class ScoreDoc {
    * @see IndexSearcher#doc(int) */
   public int doc;
 
-  /** Only set by {@link TopDocs#merge}*/
+  /** Only set by {@link TopDocs#merge} */
   public int shardIndex;
 
   /** Constructs a ScoreDoc. */

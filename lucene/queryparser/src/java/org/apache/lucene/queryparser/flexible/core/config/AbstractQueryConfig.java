@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.core.config;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.core.config;
 
 import java.util.HashMap;
 
@@ -51,7 +52,7 @@ public abstract class AbstractQueryConfig {
   public <T> T get(ConfigurationKey<T> key) {
     
     if (key == null) {
-      throw new IllegalArgumentException("key must not be null!");
+      throw new IllegalArgumentException("key cannot be null!");
     }
     
     return (T) this.configMap.get(key);
@@ -68,7 +69,7 @@ public abstract class AbstractQueryConfig {
   public <T> boolean has(ConfigurationKey<T> key) {
     
     if (key == null) {
-      throw new IllegalArgumentException("key must not be null!");
+      throw new IllegalArgumentException("key cannot be null!");
     }
     
     return this.configMap.containsKey(key);
@@ -85,7 +86,7 @@ public abstract class AbstractQueryConfig {
   public <T> void set(ConfigurationKey<T> key, T value) {
     
     if (key == null) {
-      throw new IllegalArgumentException("key must not be null!");
+      throw new IllegalArgumentException("key cannot be null!");
     }
     
     if (value == null) {
@@ -107,7 +108,7 @@ public abstract class AbstractQueryConfig {
   public <T> boolean unset(ConfigurationKey<T> key) {
     
     if (key == null) {
-      throw new IllegalArgumentException("key must not be null!");
+      throw new IllegalArgumentException("key cannot be null!");
     }
     
     return this.configMap.remove(key) != null;

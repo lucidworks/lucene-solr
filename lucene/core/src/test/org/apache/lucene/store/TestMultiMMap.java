@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -46,7 +46,7 @@ public class TestMultiMMap extends BaseDirectoryTestCase {
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    assumeTrue(MMapDirectory.UNMAP_NOT_SUPPORTED_REASON, MMapDirectory.UNMAP_SUPPORTED);
+    assumeTrue("test requires a jre that supports unmapping", MMapDirectory.UNMAP_SUPPORTED);
   }
   
   public void testCloneSafety() throws Exception {
@@ -58,16 +58,24 @@ public class TestMultiMMap extends BaseDirectoryTestCase {
     IndexInput two = one.clone();
     IndexInput three = two.clone(); // clone of clone
     one.close();
-    expectThrows(AlreadyClosedException.class, () -> {
+    try {
       one.readVInt();
-    });
-    expectThrows(AlreadyClosedException.class, () -> {
+      fail("Must throw AlreadyClosedException");
+    } catch (AlreadyClosedException ignore) {
+      // pass
+    }
+    try {
       two.readVInt();
-    });
-    expectThrows(AlreadyClosedException.class, () -> {
+      fail("Must throw AlreadyClosedException");
+    } catch (AlreadyClosedException ignore) {
+      // pass
+    }
+    try {
       three.readVInt();
-    });
-
+      fail("Must throw AlreadyClosedException");
+    } catch (AlreadyClosedException ignore) {
+      // pass
+    }
     two.close();
     three.close();
     // test double close of master:
@@ -85,9 +93,12 @@ public class TestMultiMMap extends BaseDirectoryTestCase {
     IndexInput three = two.clone(); // clone of clone
     two.close();
     assertEquals(5, one.readVInt());
-    expectThrows(AlreadyClosedException.class, () -> {
+    try {
       two.readVInt();
-    });
+      fail("Must throw AlreadyClosedException");
+    } catch (AlreadyClosedException ignore) {
+      // pass
+    }
     assertEquals(5, three.readVInt());
     one.close();
     three.close();
@@ -106,19 +117,30 @@ public class TestMultiMMap extends BaseDirectoryTestCase {
     IndexInput three = one.clone(); // clone of clone
     IndexInput four = two.clone(); // clone of clone
     slicer.close();
-    expectThrows(AlreadyClosedException.class, () -> {
+    try {
       one.readInt();
-    });
-    expectThrows(AlreadyClosedException.class, () -> {
+      fail("Must throw AlreadyClosedException");
+    } catch (AlreadyClosedException ignore) {
+      // pass
+    }
+    try {
       two.readInt();
-    });
-    expectThrows(AlreadyClosedException.class, () -> {
+      fail("Must throw AlreadyClosedException");
+    } catch (AlreadyClosedException ignore) {
+      // pass
+    }
+    try {
       three.readInt();
-    });
-    expectThrows(AlreadyClosedException.class, () -> {
+      fail("Must throw AlreadyClosedException");
+    } catch (AlreadyClosedException ignore) {
+      // pass
+    }
+    try {
       four.readInt();
-    });
-
+      fail("Must throw AlreadyClosedException");
+    } catch (AlreadyClosedException ignore) {
+      // pass
+    }
     one.close();
     two.close();
     three.close();
@@ -138,14 +160,17 @@ public class TestMultiMMap extends BaseDirectoryTestCase {
     IndexInput one = slicer.slice("first int", 0, 4);
     IndexInput two = slicer.slice("second int", 4, 4);
     one.close();
-    expectThrows(AlreadyClosedException.class, () -> {
+    try {
       one.readInt();
-    });
+      fail("Must throw AlreadyClosedException");
+    } catch (AlreadyClosedException ignore) {
+      // pass
+    }
     assertEquals(2, two.readInt());
-    // reopen a new slice "another":
-    IndexInput another = slicer.slice("first int", 0, 4);
-    assertEquals(1, another.readInt());
-    another.close();
+    // reopen a new slice "one":
+    one = slicer.slice("first int", 0, 4);
+    assertEquals(1, one.readInt());
+    one.close();
     two.close();
     slicer.close();
     mmapDir.close();
@@ -386,24 +411,4 @@ public class TestMultiMMap extends BaseDirectoryTestCase {
       mmapDir.close();
     }    
   }
-
-  public void testLittleEndianLongsCrossBoundary() throws Exception {
-    try (Directory dir = new MMapDirectory(createTempDir("testLittleEndianLongsCrossBoundary"), 16)) {
-      try (IndexOutput out = dir.createOutput("littleEndianLongs", newIOContext(random()))) {
-        out.writeByte((byte) 2);
-        out.writeLong(Long.reverseBytes(3L));
-        out.writeLong(Long.reverseBytes(Long.MAX_VALUE));
-        out.writeLong(Long.reverseBytes(-3L));
-      }
-      try (IndexInput input = dir.openInput("littleEndianLongs", newIOContext(random()))) {
-        assertEquals(25, input.length());
-        assertEquals(2, input.readByte());
-        long[] l = new long[4];
-        input.readLELongs(l, 1, 3);
-        assertArrayEquals(new long[] {0L, 3L, Long.MAX_VALUE, -3L}, l);
-        assertEquals(25, input.getFilePointer());
-      }
-    }
-  }
-
 }

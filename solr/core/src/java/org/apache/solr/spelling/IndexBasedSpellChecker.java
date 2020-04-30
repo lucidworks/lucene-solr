@@ -1,3 +1,4 @@
+package org.apache.solr.spelling;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling;
+
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -30,7 +31,7 @@ import java.io.IOException;
 
 /**
  * <p>
- * A spell checker implementation that loads words from Solr as well as arbitrary Lucene indices.
+ * A spell checker implementation that loads words from Solr as well as arbitary Lucene indices.
  * </p>
  * 
  * <p>

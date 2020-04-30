@@ -14,14 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+package org.apache.solr.handler.component;
 
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.grouping.SearchGroup;
@@ -30,21 +24,26 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.util.NamedList;
+import org.apache.solr.util.RTimer;
 import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.search.CursorMark;
 import org.apache.solr.search.DocListAndSet;
-import org.apache.solr.search.DocSlice;
 import org.apache.solr.search.QParser;
-import org.apache.solr.search.QueryCommand;
-import org.apache.solr.search.QueryResult;
-import org.apache.solr.search.RankQuery;
+import org.apache.solr.search.SolrIndexSearcher;
 import org.apache.solr.search.SortSpec;
+import org.apache.solr.search.RankQuery;
 import org.apache.solr.search.grouping.GroupingSpecification;
 import org.apache.solr.search.grouping.distributed.command.QueryCommandResult;
-import org.apache.solr.util.RTimer;
+
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * This class is experimental and will be changing in the future.
@@ -61,7 +60,6 @@ public class ResponseBuilder
   public boolean doExpand;
   public boolean doStats;
   public boolean doTerms;
-  public boolean doAnalytics;
   public MergeStrategy mergeFieldHandler;
 
   private boolean needDocList = false;
@@ -138,14 +136,8 @@ public class ResponseBuilder
   public int shards_start = -1;
   public List<ShardRequest> outgoing;  // requests to be sent
   public List<ShardRequest> finished;  // requests that have received responses from all shards
+  public String preferredHostAddress = null;
   public String shortCircuitedURL;
-
-  /**
-   * This function will return true if this was a distributed search request.
-   */
-  public boolean isDistributed() {
-    return this.isDistrib;
-  }
 
   public int getShardNum(String shard) {
     for (int i = 0; i < shards.length; i++) {
@@ -166,6 +158,8 @@ public class ResponseBuilder
     }
   }
 
+  public GlobalCollectionStat globalCollectionStat;
+
   public Map<Object, ShardDoc> resultIds;
   // Maps uniqueKeyValue to ShardDoc, which may be used to
   // determine order of the doc or uniqueKey in the final
@@ -180,8 +174,6 @@ public class ResponseBuilder
   StatsInfo _statsInfo;
   TermsComponent.TermsHelper _termsHelper;
   SimpleOrderedMap<List<NamedList<Object>>> _pivots;
-  Object _analyticsRequestManager;
-  boolean _isOlapAnalytics;
 
   // Context fields for grouping
   public final Map<String, Collection<SearchGroup<BytesRef>>> mergedSearchGroups = new HashMap<>();
@@ -269,10 +261,6 @@ public class ResponseBuilder
 
   public void setResponseDocs(SolrDocumentList _responseDocs) {
     this._responseDocs = _responseDocs;
-  }
-  
-  public SolrDocumentList getResponseDocs() {
-    return this._responseDocs;
   }
 
   public boolean isDebugTrack() {
@@ -391,8 +379,8 @@ public class ResponseBuilder
     return sortSpec;
   }
 
-  public void setSortSpec(SortSpec sortSpec) {
-    this.sortSpec = sortSpec;
+  public void setSortSpec(SortSpec sort) {
+    this.sortSpec = sort;
   }
 
   public GroupingSpecification getGroupingSpec() {
@@ -415,12 +403,24 @@ public class ResponseBuilder
     this.timer = timer;
   }
 
+
+  public static class GlobalCollectionStat {
+    public final long numDocs;
+
+    public final Map<String, Long> dfMap;
+
+    public GlobalCollectionStat(int numDocs, Map<String, Long> dfMap) {
+      this.numDocs = numDocs;
+      this.dfMap = dfMap;
+    }
+  }
+
   /**
    * Creates a SolrIndexSearcher.QueryCommand from this
    * ResponseBuilder.  TimeAllowed is left unset.
    */
-  public QueryCommand createQueryCommand() {
-    QueryCommand cmd = new QueryCommand();
+  public SolrIndexSearcher.QueryCommand getQueryCommand() {
+    SolrIndexSearcher.QueryCommand cmd = new SolrIndexSearcher.QueryCommand();
     cmd.setQuery(wrap(getQuery()))
             .setFilterList(getFilters())
             .setSort(getSortSpec().getSort())
@@ -444,18 +444,10 @@ public class ResponseBuilder
   /**
    * Sets results from a SolrIndexSearcher.QueryResult.
    */
-  public void setResult(QueryResult result) {
+  public void setResult(SolrIndexSearcher.QueryResult result) {
     setResults(result.getDocListAndSet());
     if (result.isPartialResults()) {
-      rsp.getResponseHeader().asShallowMap()
-          .put(SolrQueryResponse.RESPONSE_HEADER_PARTIAL_RESULTS_KEY, Boolean.TRUE);
-      if(getResults() != null && getResults().docList==null) {
-        getResults().docList = new DocSlice(0, 0, new int[] {}, new float[] {}, 0, 0);
-      }
-    }
-    final Boolean segmentTerminatedEarly = result.getSegmentTerminatedEarly();
-    if (segmentTerminatedEarly != null) {
-      rsp.getResponseHeader().add(SolrQueryResponse.RESPONSE_HEADER_SEGMENT_TERMINATED_EARLY_KEY, segmentTerminatedEarly);
+      rsp.getResponseHeader().add("partialResults", Boolean.TRUE);
     }
     if (null != cursorMark) {
       assert null != result.getNextCursorMark() : "using cursor but no next cursor set";
@@ -482,29 +474,5 @@ public class ResponseBuilder
   }
   public void setNextCursorMark(CursorMark nextCursorMark) {
     this.nextCursorMark = nextCursorMark;
-  }
-
-  public void setAnalytics(boolean doAnalytics) {
-    this.doAnalytics = doAnalytics;
-  }
-
-  public boolean isAnalytics() {
-    return this.doAnalytics;
-  }
-
-  public void setAnalyticsRequestManager(Object analyticsRequestManager) {
-    this._analyticsRequestManager = analyticsRequestManager;
-  }
-
-  public Object getAnalyticsRequestManager() {
-    return this._analyticsRequestManager;
-  }
-
-  public void setOlapAnalytics(boolean isOlapAnalytics) {
-    this._isOlapAnalytics = isOlapAnalytics;
-  }
-
-  public boolean isOlapAnalytics() {
-    return this._isOlapAnalytics;
   }
 }

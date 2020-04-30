@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
 
 import java.io.IOException;
 
@@ -23,6 +24,7 @@ import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.apache.lucene.util.ArrayUtil;
+import org.apache.lucene.util.RamUsageEstimator;
 
 /**
  * This class converts alphabetic, numeric, and symbolic Unicode characters
@@ -134,34 +136,16 @@ public final class ASCIIFoldingFilter extends TokenFilter {
    */
   public void foldToASCII(char[] input, int length)
   {
+    if (preserveOriginal) {
+      state = captureState();
+    }
     // Worst-case length required:
     final int maxSizeNeeded = 4 * length;
     if (output.length < maxSizeNeeded) {
-      output = new char[ArrayUtil.oversize(maxSizeNeeded, Character.BYTES)];
+      output = new char[ArrayUtil.oversize(maxSizeNeeded, RamUsageEstimator.NUM_BYTES_CHAR)];
     }
 
     outputPos = foldToASCII(input, 0, output, 0, length);
-    if (preserveOriginal && needToPreserve(input, length)) {
-      state = captureState();
-    }
-  }
-
-  /**
-   * Check if foldToASCII generated a different token.
-   * @param input original term
-   * @param inputLength length of the original term
-   * @return true if foldToASCII generated a different token
-   */
-  private boolean needToPreserve(char[] input, int inputLength) {
-    if(inputLength != outputPos) {
-      return true;
-    }
-    for(int i = 0; i < inputLength; i++) {
-      if(input[i] != output[i]) {
-        return true;
-      }
-    }
-    return false;
   }
 
   /**

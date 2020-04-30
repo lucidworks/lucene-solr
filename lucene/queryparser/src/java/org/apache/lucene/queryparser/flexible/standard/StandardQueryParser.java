@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.standard;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.standard;
 
 import java.util.Locale;
 import java.util.Map;
@@ -29,7 +30,7 @@ import org.apache.lucene.queryparser.flexible.core.QueryParserHelper;
 import org.apache.lucene.queryparser.flexible.core.config.QueryConfigHandler;
 import org.apache.lucene.queryparser.flexible.standard.builders.StandardQueryTreeBuilder;
 import org.apache.lucene.queryparser.flexible.standard.config.FuzzyConfig;
-import org.apache.lucene.queryparser.flexible.standard.config.PointsConfig;
+import org.apache.lucene.queryparser.flexible.standard.config.NumericConfig;
 import org.apache.lucene.queryparser.flexible.standard.config.StandardQueryConfigHandler;
 import org.apache.lucene.queryparser.flexible.standard.config.StandardQueryConfigHandler.ConfigurationKeys;
 import org.apache.lucene.queryparser.flexible.standard.config.StandardQueryConfigHandler.Operator;
@@ -83,7 +84,7 @@ import org.apache.lucene.search.Query;
  * 
  * <p>
  * Examples of appropriately formatted queries can be found in the <a
- * href="{@docRoot}/org/apache/lucene/queryparser/classic/package-summary.html#package.description">
+ * href="{@docRoot}/org/apache/lucene/queryparser/classic/package-summary.html#package_description">
  * query syntax documentation</a>.
  * </p>
  * <p>
@@ -189,6 +190,36 @@ public class StandardQueryParser extends QueryParserHelper implements CommonQuer
    * Default: false.
    */
   @Override
+  public void setLowercaseExpandedTerms(boolean lowercaseExpandedTerms) {
+    getQueryConfigHandler().set(ConfigurationKeys.LOWERCASE_EXPANDED_TERMS, lowercaseExpandedTerms);
+  }
+  
+  /**
+   * @see #setLowercaseExpandedTerms(boolean)
+   */
+  @Override
+  public boolean getLowercaseExpandedTerms() {
+    Boolean lowercaseExpandedTerms = getQueryConfigHandler().get(ConfigurationKeys.LOWERCASE_EXPANDED_TERMS);
+    
+    if (lowercaseExpandedTerms == null) {
+      return true;
+      
+    } else {
+      return lowercaseExpandedTerms;
+    }
+    
+  }
+  
+  /**
+   * Set to <code>true</code> to allow leading wildcard characters.
+   * <p>
+   * When set, <code>*</code> or <code>?</code> are allowed as the first
+   * character of a PrefixQuery and WildcardQuery. Note that this can produce
+   * very slow queries on big indexes.
+   * <p>
+   * Default: false.
+   */
+  @Override
   public void setAllowLeadingWildcard(boolean allowLeadingWildcard) {
     getQueryConfigHandler().set(ConfigurationKeys.ALLOW_LEADING_WILDCARD, allowLeadingWildcard);
   }
@@ -261,6 +292,18 @@ public class StandardQueryParser extends QueryParserHelper implements CommonQuer
     getQueryConfigHandler().set(ConfigurationKeys.MULTI_FIELDS, fields);
     
   }
+  
+  /**
+   * Returns the fields used to expand the query when the field for a
+   * certain query is <code>null</code>
+   * 
+   * @param fields the fields used to expand the query
+   * @deprecated Use StandardQueryParser#getMultiFields() instead.
+   */
+  @Deprecated
+  public void getMultiFields(CharSequence[] fields) {
+    getQueryConfigHandler().get(ConfigurationKeys.MULTI_FIELDS);
+  }
 
   /**
    * Returns the fields used to expand the query when the field for a
@@ -292,12 +335,12 @@ public class StandardQueryParser extends QueryParserHelper implements CommonQuer
     
   }
   
-  public void setPointsConfigMap(Map<String,PointsConfig> pointsConfigMap) {
-    getQueryConfigHandler().set(ConfigurationKeys.POINTS_CONFIG_MAP, pointsConfigMap);
+  public void setNumericConfigMap(Map<String,NumericConfig> numericConfigMap) {
+    getQueryConfigHandler().set(ConfigurationKeys.NUMERIC_CONFIG_MAP, numericConfigMap);
   }
   
-  public Map<String,PointsConfig> getPointsConfigMap() {
-    return getQueryConfigHandler().get(ConfigurationKeys.POINTS_CONFIG_MAP);
+  public Map<String,NumericConfig> getNumericConfigMap() {
+    return getQueryConfigHandler().get(ConfigurationKeys.NUMERIC_CONFIG_MAP);
   }
   
   /**
@@ -324,6 +367,17 @@ public class StandardQueryParser extends QueryParserHelper implements CommonQuer
   @Override
   public TimeZone getTimeZone() {
     return getQueryConfigHandler().get(ConfigurationKeys.TIMEZONE);
+  }
+  
+  /**
+   * Sets the default slop for phrases. If zero, then exact phrase matches are
+   * required. Default value is zero.
+   * 
+   * @deprecated renamed to {@link #setPhraseSlop(int)}
+   */
+  @Deprecated
+  public void setDefaultPhraseSlop(int defaultPhraseSlop) {
+    getQueryConfigHandler().set(ConfigurationKeys.PHRASE_SLOP, defaultPhraseSlop);
   }
   
   /**
@@ -458,6 +512,18 @@ public class StandardQueryParser extends QueryParserHelper implements CommonQuer
    */
   public DateTools.Resolution getDateResolution() {
     return getQueryConfigHandler().get(ConfigurationKeys.DATE_RESOLUTION);
+  }
+
+  /**
+   * Sets the {@link Resolution} used for each field
+   * 
+   * @param dateRes a collection that maps a field to its {@link Resolution}
+   * 
+   * @deprecated this method was renamed to {@link #setDateResolutionMap(Map)} 
+   */
+  @Deprecated
+  public void setDateResolution(Map<CharSequence, DateTools.Resolution> dateRes) {
+    setDateResolutionMap(dateRes);
   }
   
   /**

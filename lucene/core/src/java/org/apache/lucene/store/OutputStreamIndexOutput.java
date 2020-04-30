@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -37,8 +37,8 @@ public class OutputStreamIndexOutput extends IndexOutput {
    * @param bufferSize the buffer size in bytes used to buffer writes internally.
    * @throws IllegalArgumentException if the given buffer size is less or equal to <tt>0</tt>
    */
-  public OutputStreamIndexOutput(String resourceDescription, String name, OutputStream out, int bufferSize) {
-    super(resourceDescription, name);
+  public OutputStreamIndexOutput(String resourceDescription, OutputStream out, int bufferSize) {
+    super(resourceDescription);
     this.os = new BufferedOutputStream(new CheckedOutputStream(out, crc), bufferSize);
   }
 

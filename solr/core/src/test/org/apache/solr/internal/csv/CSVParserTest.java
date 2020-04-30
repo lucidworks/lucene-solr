@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -37,7 +37,7 @@ public class CSVParserTest extends TestCase {
   /**
    * TestCSVParser.
    */
-  static class TestCSVParser extends CSVParser {
+  class TestCSVParser extends CSVParser {
     /**
      * Test parser to investigate the type of the internal Token.
      * @param in a Reader
@@ -446,7 +446,7 @@ public class CSVParserTest extends TestCase {
       };
 
 
-    CSVStrategy strategy = new CSVStrategy(',','\'',CSVStrategy.COMMENTS_DISABLED,'/',false,false,true,true,"\n");
+    CSVStrategy strategy = new CSVStrategy(',','\'',CSVStrategy.COMMENTS_DISABLED,'/',false,false,true,true);
 
     CSVParser parser = new CSVParser(new StringReader(code), strategy);
     String[][] tmp = parser.getAllValues();
@@ -474,8 +474,7 @@ public class CSVParserTest extends TestCase {
       };
 
 
-    CSVStrategy strategy = new CSVStrategy
-        (',', CSVStrategy.ENCAPSULATOR_DISABLED, CSVStrategy.COMMENTS_DISABLED, '/', false, false, true, true, "\n");
+    CSVStrategy strategy = new CSVStrategy(',',CSVStrategy.ENCAPSULATOR_DISABLED,CSVStrategy.COMMENTS_DISABLED,'/',false,false,true,true);
 
     CSVParser parser = new CSVParser(new StringReader(code), strategy);
     String[][] tmp = parser.getAllValues();
@@ -530,9 +529,8 @@ public class CSVParserTest extends TestCase {
 
     public void testUnicodeEscape() throws IOException {
       String code = "abc,\\u0070\\u0075\\u0062\\u006C\\u0069\\u0063";
-      CSVStrategy strategy = (CSVStrategy)CSVStrategy.DEFAULT_STRATEGY.clone();
-      strategy.setUnicodeEscapeInterpretation(true);
-      CSVParser parser = new CSVParser(new StringReader(code), strategy);
+      CSVParser parser = new CSVParser(new StringReader(code));
+      parser.getStrategy().setUnicodeEscapeInterpretation(true);
       String[] data = parser.getLine();
       assertEquals(2, data.length);
       assertEquals("abc", data[0]);

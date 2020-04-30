@@ -1,3 +1,5 @@
+package org.apache.lucene.util.fst;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.fst;
-
 
 import java.io.IOException;
 
-import org.apache.lucene.store.ByteArrayDataOutput;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.IntsRefBuilder;
+import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.fst.FST.INPUT_TYPE; // javadoc
+import org.apache.lucene.util.packed.PackedInts;
 
 // TODO: could we somehow stream an FST to disk while we
 // build it?
@@ -50,31 +51,6 @@ import org.apache.lucene.util.fst.FST.INPUT_TYPE; // javadoc
  */
 
 public class Builder<T> {
-
-  /**
-   * Default oversizing factor used to decide whether to encode a node with direct addressing or binary search.
-   * Default is 1: ensure no oversizing on average.
-   * <p>
-   * This factor does not determine whether to encode a node with a list of variable length arcs or with
-   * fixed length arcs. It only determines the effective encoding of a node that is already known to be
-   * encoded with fixed length arcs.
-   * See {@code FST.shouldExpandNodeWithFixedLengthArcs()}
-   * and {@code FST.shouldExpandNodeWithDirectAddressing()}.
-   * <p>
-   * For English words we measured 217K nodes, only 3.27% nodes are encoded with fixed length arcs,
-   * and 99.99% of them with direct addressing. Overall FST memory reduced by 1.67%.
-   * <p>
-   * For worst case we measured 168K nodes, 50% of them are encoded with fixed length arcs,
-   * and 14% of them with direct encoding. Overall FST memory reduced by 0.8%.
-   * <p>
-   * Use {@code TestFstDirectAddressing.main()}
-   * and {@code TestFstDirectAddressing.testWorstCaseForDirectAddressing()}
-   * to evaluate a change.
-   *
-   * @see #setDirectAddressingMaxOversizingFactor
-   */
-  static final float DIRECT_ADDRESSING_MAX_OVERSIZING_FACTOR = 1.0f;
-
   private final NodeHash<T> dedupHash;
   final FST<T> fst;
   private final T NO_OUTPUT;
@@ -94,6 +70,10 @@ public class Builder<T> {
   private final int shareMaxTailLength;
 
   private final IntsRefBuilder lastInput = new IntsRefBuilder();
+  
+  // for packing
+  private final boolean doPackFST;
+  private final float acceptableOverheadRatio;
 
   // NOTE: cutting this over to ArrayList instead loses ~6%
   // in build performance on 9.8M Wikipedia terms; so we
@@ -108,28 +88,23 @@ public class Builder<T> {
   long lastFrozenNode;
 
   // Reused temporarily while building the FST:
-  int[] numBytesPerArc = new int[4];
-  int[] numLabelBytesPerArc = new int[numBytesPerArc.length];
-  final FixedLengthArcsBuffer fixedLengthArcsBuffer = new FixedLengthArcsBuffer();
+  int[] reusedBytesPerArc = new int[4];
 
   long arcCount;
   long nodeCount;
-  long binarySearchNodeCount;
-  long directAddressingNodeCount;
 
-  boolean allowFixedLengthArcs;
-  float directAddressingMaxOversizingFactor = DIRECT_ADDRESSING_MAX_OVERSIZING_FACTOR;
-  long directAddressingExpansionCredit;
+  boolean allowArrayArcs;
 
   BytesStore bytes;
 
   /**
-   * Instantiates an FST/FSA builder without any pruning. A shortcut to {@link
-   * #Builder(FST.INPUT_TYPE, int, int, boolean, boolean, int, Outputs, boolean, int)} with
-   * pruning options turned off.
+   * Instantiates an FST/FSA builder without any pruning. A shortcut
+   * to {@link #Builder(FST.INPUT_TYPE, int, int, boolean,
+   * boolean, int, Outputs, boolean, float,
+   * boolean, int)} with pruning options turned off.
    */
   public Builder(FST.INPUT_TYPE inputType, Outputs<T> outputs) {
-    this(inputType, 0, 0, true, true, Integer.MAX_VALUE, outputs, true, 15);
+    this(inputType, 0, 0, true, true, Integer.MAX_VALUE, outputs, false, PackedInts.COMPACT, true, 15);
   }
 
   /**
@@ -169,9 +144,14 @@ public class Builder<T> {
    *    FSA, use {@link NoOutputs#getSingleton()} and {@link NoOutputs#getNoOutput()} as the
    *    singleton output object.
    *
-   * @param allowFixedLengthArcs Pass false to disable the fixed length arc optimization (binary search or
-   *    direct addressing) while building the FST; this will make the resulting FST smaller but slower to
-   *    traverse.
+   * @param doPackFST Pass true to create a packed FST.
+   * 
+   * @param acceptableOverheadRatio How to trade speed for space when building the FST. This option
+   *    is only relevant when doPackFST is true. @see PackedInts#getMutable(int, int, float)
+   *
+   * @param allowArrayArcs Pass false to disable the array arc optimization
+   *    while building the FST; this will make the resulting
+   *    FST smaller but slower to traverse.
    *
    * @param bytesPageBits How many bits wide to make each
    *    byte[] block in the BytesStore; if you know the FST
@@ -180,13 +160,16 @@ public class Builder<T> {
    */
   public Builder(FST.INPUT_TYPE inputType, int minSuffixCount1, int minSuffixCount2, boolean doShareSuffix,
                  boolean doShareNonSingletonNodes, int shareMaxTailLength, Outputs<T> outputs,
-                 boolean allowFixedLengthArcs, int bytesPageBits) {
+                 boolean doPackFST, float acceptableOverheadRatio, boolean allowArrayArcs,
+                 int bytesPageBits) {
     this.minSuffixCount1 = minSuffixCount1;
     this.minSuffixCount2 = minSuffixCount2;
     this.doShareNonSingletonNodes = doShareNonSingletonNodes;
     this.shareMaxTailLength = shareMaxTailLength;
-    this.allowFixedLengthArcs = allowFixedLengthArcs;
-    fst = new FST<>(inputType, outputs, bytesPageBits);
+    this.doPackFST = doPackFST;
+    this.acceptableOverheadRatio = acceptableOverheadRatio;
+    this.allowArrayArcs = allowArrayArcs;
+    fst = new FST<>(inputType, outputs, doPackFST, acceptableOverheadRatio, bytesPageBits);
     bytes = fst.bytes;
     assert bytes != null;
     if (doShareSuffix) {
@@ -202,27 +185,6 @@ public class Builder<T> {
     for(int idx=0;idx<frontier.length;idx++) {
       frontier[idx] = new UnCompiledNode<>(this, idx);
     }
-  }
-
-  /**
-   * Overrides the default the maximum oversizing of fixed array allowed to enable direct addressing
-   * of arcs instead of binary search.
-   * <p>
-   * Setting this factor to a negative value (e.g. -1) effectively disables direct addressing,
-   * only binary search nodes will be created.
-   *
-   * @see #DIRECT_ADDRESSING_MAX_OVERSIZING_FACTOR
-   */
-  public Builder<T> setDirectAddressingMaxOversizingFactor(float factor) {
-    directAddressingMaxOversizingFactor = factor;
-    return this;
-  }
-
-  /**
-   * @see #setDirectAddressingMaxOversizingFactor(float)
-   */
-  public float getDirectAddressingMaxOversizingFactor() {
-    return directAddressingMaxOversizingFactor;
   }
 
   public long getTermCount() {
@@ -441,7 +403,9 @@ public class Builder<T> {
     final int prefixLenPlus1 = pos1+1;
       
     if (frontier.length < input.length+1) {
-      final UnCompiledNode<T>[] next = ArrayUtil.grow(frontier, input.length+1);
+      @SuppressWarnings({"rawtypes","unchecked"}) final UnCompiledNode<T>[] next =
+        new UnCompiledNode[ArrayUtil.oversize(input.length+1, RamUsageEstimator.NUM_BYTES_OBJECT_REF)];
+      System.arraycopy(frontier, 0, next, 0, frontier.length);
       for(int idx=frontier.length;idx<next.length;idx++) {
         next[idx] = new UnCompiledNode<>(this, idx);
       }
@@ -535,7 +499,11 @@ public class Builder<T> {
     //if (DEBUG) System.out.println("  builder.finish root.isFinal=" + root.isFinal + " root.output=" + root.output);
     fst.finish(compileNode(root, lastInput.length()).node);
 
-    return fst;
+    if (doPackFST) {
+      return fst.pack(this, 3, Math.max(10, (int) (getNodeCount()/4)), acceptableOverheadRatio);
+    } else {
+      return fst;
+    }
   }
 
   private void compileAllTargets(UnCompiledNode<T> node, int tailLength) throws IOException {
@@ -636,9 +604,11 @@ public class Builder<T> {
 
     public void addArc(int label, Node target) {
       assert label >= 0;
-      assert numArcs == 0 || label > arcs[numArcs-1].label: "arc[numArcs-1].label=" + arcs[numArcs-1].label + " new label=" + label + " numArcs=" + numArcs;
+      assert numArcs == 0 || label > arcs[numArcs-1].label: "arc[-1].label=" + arcs[numArcs-1].label + " new label=" + label + " numArcs=" + numArcs;
       if (numArcs == arcs.length) {
-        final Arc<T>[] newArcs = ArrayUtil.grow(arcs, numArcs+1);
+        @SuppressWarnings({"rawtypes","unchecked"}) final Arc<T>[] newArcs =
+          new Arc[ArrayUtil.oversize(numArcs+1, RamUsageEstimator.NUM_BYTES_OBJECT_REF)];
+        System.arraycopy(arcs, 0, newArcs, 0, arcs.length);
         for(int arcIdx=numArcs;arcIdx<newArcs.length;arcIdx++) {
           newArcs[arcIdx] = new Arc<>();
         }
@@ -689,54 +659,6 @@ public class Builder<T> {
         output = owner.fst.outputs.add(outputPrefix, output);
         assert owner.validOutput(output);
       }
-    }
-  }
-
-  /**
-   * Reusable buffer for building nodes with fixed length arcs (binary search or direct addressing).
-   */
-  static class FixedLengthArcsBuffer {
-
-    // Initial capacity is the max length required for the header of a node with fixed length arcs:
-    // header(byte) + numArcs(vint) + numBytes(vint)
-    private byte[] bytes = new byte[11];
-    private final ByteArrayDataOutput bado = new ByteArrayDataOutput(bytes);
-
-    /** Ensures the capacity of the internal byte array. Enlarges it if needed. */
-    FixedLengthArcsBuffer ensureCapacity(int capacity) {
-      if (bytes.length < capacity) {
-        bytes = new byte[ArrayUtil.oversize(capacity, Byte.BYTES)];
-        bado.reset(bytes);
-      }
-      return this;
-    }
-
-    FixedLengthArcsBuffer resetPosition() {
-      bado.reset(bytes);
-      return this;
-    }
-
-    FixedLengthArcsBuffer writeByte(byte b) {
-      bado.writeByte(b);
-      return this;
-    }
-
-    FixedLengthArcsBuffer writeVInt(int i) {
-      try {
-        bado.writeVInt(i);
-      } catch (IOException e) { // Never thrown.
-        throw new RuntimeException(e);
-      }
-      return this;
-    }
-
-    int getPosition() {
-      return bado.getPosition();
-    }
-
-    /** Gets the internal byte array. */
-    byte[] getBytes() {
-      return bytes;
     }
   }
 }

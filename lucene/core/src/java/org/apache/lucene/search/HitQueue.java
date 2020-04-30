@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import org.apache.lucene.util.PriorityQueue;
 
@@ -58,20 +58,20 @@ final class HitQueue extends PriorityQueue<ScoreDoc> {
    *          the requested size of this queue.
    * @param prePopulate
    *          specifies whether to pre-populate the queue with sentinel values.
+   * @see #getSentinelObject()
    */
   HitQueue(int size, boolean prePopulate) {
-    super(size, () -> {
-      if (prePopulate) {
-        // Always set the doc Id to MAX_VALUE so that it won't be favored by
-        // lessThan. This generally should not happen since if score is not NEG_INF,
-        // TopScoreDocCollector will always add the object to the queue.
-        return new ScoreDoc(Integer.MAX_VALUE, Float.NEGATIVE_INFINITY);
-      } else {
-        return null;
-      }
-    });
+    super(size, prePopulate);
   }
 
+  @Override
+  protected ScoreDoc getSentinelObject() {
+    // Always set the doc Id to MAX_VALUE so that it won't be favored by
+    // lessThan. This generally should not happen since if score is not NEG_INF,
+    // TopScoreDocCollector will always add the object to the queue.
+    return new ScoreDoc(Integer.MAX_VALUE, Float.NEGATIVE_INFINITY);
+  }
+  
   @Override
   protected final boolean lessThan(ScoreDoc hitA, ScoreDoc hitB) {
     if (hitA.score == hitB.score)

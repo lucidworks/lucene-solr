@@ -1,3 +1,20 @@
+package org.apache.lucene.benchmark.byTask.tasks;
+
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+import org.apache.lucene.benchmark.byTask.PerfRunData;
+import org.apache.lucene.benchmark.byTask.feeds.DocMaker;
+import org.apache.lucene.benchmark.byTask.utils.StreamUtils;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.index.IndexableField;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +31,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.tasks;
-
-import java.io.BufferedWriter;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-
-import org.apache.lucene.benchmark.byTask.PerfRunData;
-import org.apache.lucene.benchmark.byTask.feeds.DocMaker;
-import org.apache.lucene.benchmark.byTask.utils.StreamUtils;
-import org.apache.lucene.document.Document;
-import org.apache.lucene.index.IndexableField;
-
 
 /**
  * A {@link WriteLineDocTask} which for Wikipedia input, will write category pages 

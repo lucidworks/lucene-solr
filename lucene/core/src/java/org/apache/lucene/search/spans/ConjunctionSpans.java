@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
 
 import java.io.IOException;
 import java.util.List;
@@ -23,6 +23,7 @@ import java.util.List;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.ConjunctionDISI;
 import org.apache.lucene.search.TwoPhaseIterator;
+import org.apache.lucene.search.similarities.Similarity;
 
 /**
  * Common super class for multiple sub spans required in a document.
@@ -33,12 +34,13 @@ abstract class ConjunctionSpans extends Spans {
   boolean atFirstInCurrentDoc; // a first start position is available in current doc for nextStartPosition
   boolean oneExhaustedInCurrentDoc; // one subspans exhausted in current doc
 
-  ConjunctionSpans(List<Spans> subSpans) {
+  ConjunctionSpans(List<Spans> subSpans, SpanWeight weight, Similarity.SimScorer docScorer) {
+    super(weight, docScorer);
     if (subSpans.size() < 2) {
       throw new IllegalArgumentException("Less than 2 subSpans.size():" + subSpans.size());
     }
     this.subSpans = subSpans.toArray(new Spans[subSpans.size()]);
-    this.conjunction = ConjunctionDISI.intersectSpans(subSpans);
+    this.conjunction = ConjunctionDISI.intersect(subSpans);
     this.atFirstInCurrentDoc = true; // ensure for doc -1 that start/end positions are -1
   }
 

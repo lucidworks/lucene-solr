@@ -1,3 +1,5 @@
+package org.apache.solr.handler.extraction;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,24 +16,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.extraction;
 
+import javax.xml.parsers.DocumentBuilderFactory;
 import java.beans.BeanInfo;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.beans.PropertyEditor;
 import java.beans.PropertyEditorManager;
-import java.lang.invoke.MethodHandles;
+import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
 import org.apache.solr.core.SolrResourceLoader;
-import org.apache.solr.util.SafeXMLParsing;
 import org.apache.tika.parser.ParseContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
@@ -39,8 +38,6 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 public class ParseContextConfig {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-  
   private final Map<Class<?>, Object> entries = new HashMap<>();
 
   /** Creates an empty Config without any settings (used as placeholder). */
@@ -58,7 +55,9 @@ public class ParseContextConfig {
   }
   
   private static Document loadConfigFile(SolrResourceLoader resourceLoader, String parseContextConfigLoc) throws Exception {
-    return SafeXMLParsing.parseConfigXML(log, resourceLoader, parseContextConfigLoc);
+    try (InputStream in = resourceLoader.openResource(parseContextConfigLoc)) {
+      return DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in, parseContextConfigLoc);
+    }
   }
 
   private void extract(Element element, SolrResourceLoader loader) throws Exception {

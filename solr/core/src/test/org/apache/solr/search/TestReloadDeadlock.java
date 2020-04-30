@@ -1,3 +1,6 @@
+package org.apache.solr.search;
+
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +17,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
-
 
 import com.carrotsearch.randomizedtesting.annotations.TimeoutSuite;
 import org.apache.lucene.util.LuceneTestCase.Nightly;
@@ -41,7 +42,7 @@ import static org.apache.solr.update.processor.DistributingUpdateProcessorFactor
 // DistributedUpdateProcessor.versionAdd(DistributedUpdateProcessor.java:1016)
 // and the like in a "real" failure. If we have false=fails we should probably bump this timeout.
 // See SOLR-7836
-@TimeoutSuite(millis = 7 * TimeUnits.MINUTE)
+@TimeoutSuite(millis = 5 * TimeUnits.MINUTE)
 @Nightly
 public class TestReloadDeadlock extends TestRTGBase {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -187,17 +188,17 @@ public class TestReloadDeadlock extends TestRTGBase {
         thread.join(10000); // Normally they'll all return immediately (or close to that).
       }
     } catch (InterruptedException ie) {
-      fail("Shouldn't have sat around here this long waiting for the threads to join.");
+      fail("Sholdn't have sat around here this long waiting for the threads to join.");
     }
     for (Thread thread : threads) { // Probably a silly test, but what the heck.
-      assertFalse("All threads should be dead, but at least thread " + thread.getName() + " is not", thread.isAlive());
+      assertFalse("All threads shoul be dead, but at least thread " + thread.getName() + " is not", thread.isAlive());
     }
   }
 
   private void addDoc(int id, long nextVal, long version) throws Exception {
     ifVerbose("adding id", id, "val=", nextVal, "version", version);
 
-    Long returnedVersion = addAndGetVersion(sdoc("id", Integer.toString(id), FIELD, Long.toString(nextVal),
+    Long returnedVersion = addAndGetVersion(sdoc("id", Integer.toString(id), field, Long.toString(nextVal),
         "_version_", Long.toString(version)), params(DISTRIB_UPDATE_PARAM, FROM_LEADER));
     if (returnedVersion != null) {
       assertEquals(version, returnedVersion.longValue());

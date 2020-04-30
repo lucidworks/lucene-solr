@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,122 +16,103 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
-
-import java.io.IOException;
-import java.lang.invoke.MethodHandles;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
 
 import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
-import org.apache.solr.common.SolrDocument;
-import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrException;
+import org.apache.solr.common.SolrDocumentList;
+import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.Slice;
-import org.apache.solr.common.cloud.ZkStateReader;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
+import org.junit.After;
+import org.junit.Before;
+
+import org.apache.commons.lang.StringUtils;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.*;
+
+import java.io.IOException;
+import java.lang.invoke.MethodHandles;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Tests using fromIndex that points to a collection in SolrCloud mode.
  */
-public class DistribJoinFromCollectionTest extends SolrCloudTestCase{
+public class DistribJoinFromCollectionTest extends AbstractFullDistribZkTestBase {
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  final private static String[] scoreModes = {"avg","max","min","total"};
-
-//    resetExceptionIgnores();
-  private static String toColl = "to_2x2";
-  private static String fromColl = "from_1x4";
-
-  private static String toDocId;
+  public DistribJoinFromCollectionTest() {
+    super();
+  }
   
-  @BeforeClass
-  public static void setupCluster() throws Exception {
-    final Path configDir = Paths.get(TEST_HOME(), "collection1", "conf");
+  @Before
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
+    System.setProperty("numShards", Integer.toString(sliceCount));
+  }
+  
+  @Override
+  @After
+  public void tearDown() throws Exception {    
+    try {
+      super.tearDown();
+    } catch (Exception exc) {}
+    resetExceptionIgnores();
+  }
 
-    String configName = "solrCloudCollectionConfig";
-    int nodeCount = 5;
-    configureCluster(nodeCount)
-       .addConfig(configName, configDir)
-       .configure();
-    
-    
-    Map<String, String> collectionProperties = new HashMap<>();
-    collectionProperties.put("config", "solrconfig-tlog.xml" );
-    collectionProperties.put("schema", "schema.xml"); 
-    
+  @Test
+  public void test() throws Exception {
     // create a collection holding data for the "to" side of the JOIN
-    
-    int shards = 2;
-    int replicas = 2 ;
-    CollectionAdminRequest.createCollection(toColl, configName, shards, replicas)
-        .setProperties(collectionProperties)
-        .process(cluster.getSolrClient());
+    String toColl = "to_2x2";
+    createCollection(toColl, 2, 2, 2);
+    ensureAllReplicasAreActive(toColl, "shard1", 2, 2, 30);
+    ensureAllReplicasAreActive(toColl, "shard2", 2, 2, 30);
 
     // get the set of nodes where replicas for the "to" collection exist
     Set<String> nodeSet = new HashSet<>();
-    ZkStateReader zkStateReader = cluster.getSolrClient().getZkStateReader();
-    ClusterState cs = zkStateReader.getClusterState();
-    for (Slice slice : cs.getCollection(toColl).getActiveSlices())
+    ClusterState cs = cloudClient.getZkStateReader().getClusterState();
+    for (Slice slice : cs.getActiveSlices(toColl))
       for (Replica replica : slice.getReplicas())
         nodeSet.add(replica.getNodeName());
     assertTrue(nodeSet.size() > 0);
 
     // deploy the "from" collection to all nodes where the "to" collection exists
-    CollectionAdminRequest.createCollection(fromColl, configName, 1, 4)
-        .setCreateNodeSet(String.join(",", nodeSet))
-        .setProperties(collectionProperties)
-        .process(cluster.getSolrClient());
+    String fromColl = "from_1x2";
+    createCollection(null, fromColl, 1, nodeSet.size(), 1, null, StringUtils.join(nodeSet,","));
+    ensureAllReplicasAreActive(fromColl, "shard1", 1, nodeSet.size(), 30);
 
-    toDocId = indexDoc(toColl, 1001, "a", null, "b");
+    // both to and from collections are up and active, index some docs ...
+    Integer toDocId = indexDoc(toColl, 1001, "a", null, "b");
     indexDoc(fromColl, 2001, "a", "c", null);
 
     Thread.sleep(1000); // so the commits fire
 
-  }
-
-  @Test
-  public void testScore() throws Exception {
     //without score
-    testJoins(toColl, fromColl, toDocId, true);
-  }
-  
-  @Test
-  public void testNoScore() throws Exception {
-    //with score
     testJoins(toColl, fromColl, toDocId, false);
-    
-  }
-  
-  @AfterClass
-  public static void shutdown() {
+
+    //with score
+    testJoins(toColl, fromColl, toDocId, true);
+
     log.info("DistribJoinFromCollectionTest logic complete ... deleting the " + toColl + " and " + fromColl + " collections");
 
     // try to clean up
     for (String c : new String[]{ toColl, fromColl }) {
       try {
-        CollectionAdminRequest.Delete req =  CollectionAdminRequest.deleteCollection(c);
-        req.process(cluster.getSolrClient());
+        CollectionAdminRequest.Delete req = new CollectionAdminRequest.Delete()
+                .setCollectionName(c);
+        req.process(cloudClient);
       } catch (Exception e) {
         // don't fail the test
         log.warn("Could not delete collection {} after test completed due to: " + e, c);
@@ -139,90 +122,86 @@ public class DistribJoinFromCollectionTest extends SolrCloudTestCase{
     log.info("DistribJoinFromCollectionTest succeeded ... shutting down now!");
   }
 
-  private void testJoins(String toColl, String fromColl, String toDocId, boolean isScoresTest)
-      throws SolrServerException, IOException, InterruptedException {
+  private void testJoins(String toColl, String fromColl, Integer toDocId, boolean isScoresTest)
+      throws SolrServerException, IOException {
     // verify the join with fromIndex works
-    final String fromQ = "match_s:c^2";
-    CloudSolrClient client = cluster.getSolrClient();
-    {
-    final String joinQ = "{!join " + anyScoreMode(isScoresTest)
-                   + "from=join_s fromIndex=" + fromColl + 
-                   " to=join_s}" + fromQ;
+    final String[] scoreModes = {"avg","max","min","total"};
+    String joinQ = "{!join " + anyScoreMode(isScoresTest, scoreModes)
+                   + "from=join_s fromIndex=" + fromColl + " to=join_s}match_s:c";
     QueryRequest qr = new QueryRequest(params("collection", toColl, "q", joinQ, "fl", "id,get_s,score"));
-    QueryResponse rsp = new QueryResponse(client.request(qr), client);
+    QueryResponse rsp = new QueryResponse(cloudClient.request(qr), cloudClient);
     SolrDocumentList hits = rsp.getResults();
-    assertTrue("Expected 1 doc, got "+hits, hits.getNumFound() == 1);
+    assertTrue("Expected 1 doc", hits.getNumFound() == 1);
     SolrDocument doc = hits.get(0);
     assertEquals(toDocId, doc.getFirstValue("id"));
     assertEquals("b", doc.getFirstValue("get_s"));
     assertScore(isScoresTest, doc);
-    }
 
     //negative test before creating an alias
-    checkAbsentFromIndex(fromColl, toColl, isScoresTest);
+    checkAbsentFromIndex(fromColl, toColl, isScoresTest, scoreModes);
 
     // create an alias for the fromIndex and then query through the alias
     String alias = fromColl+"Alias";
-    CollectionAdminRequest.createAlias(alias, fromColl).process(client);
+    CollectionAdminRequest.CreateAlias request = new CollectionAdminRequest.CreateAlias();
+    request.setAliasName(alias);
+    request.setAliasedCollections(fromColl);
+    request.process(cloudClient);
 
-    {
-      final String joinQ = "{!join " + anyScoreMode(isScoresTest)
-              + "from=join_s fromIndex=" + alias + " to=join_s}"+fromQ;
-      final QueryRequest qr = new QueryRequest(params("collection", toColl, "q", joinQ, "fl", "id,get_s,score"));
-      final QueryResponse rsp = new QueryResponse(client.request(qr), client);
-      final SolrDocumentList hits = rsp.getResults();
-      assertTrue("Expected 1 doc", hits.getNumFound() == 1);
-      SolrDocument doc = hits.get(0);
-      assertEquals(toDocId, doc.getFirstValue("id"));
-      assertEquals("b", doc.getFirstValue("get_s"));
-      assertScore(isScoresTest, doc);
-    }
+    joinQ = "{!join " + anyScoreMode(isScoresTest, scoreModes)
+            + "from=join_s fromIndex=" + alias + " to=join_s}match_s:c";
+    qr = new QueryRequest(params("collection", toColl, "q", joinQ, "fl", "id,get_s,score"));
+    rsp = new QueryResponse(cloudClient.request(qr), cloudClient);
+    hits = rsp.getResults();
+    assertTrue("Expected 1 doc", hits.getNumFound() == 1);
+    doc = hits.get(0);
+    assertEquals(toDocId, doc.getFirstValue("id"));
+    assertEquals("b", doc.getFirstValue("get_s"));
+    assertScore(isScoresTest, doc);
 
     //negative test after creating an alias
-    checkAbsentFromIndex(fromColl, toColl, isScoresTest);
+    checkAbsentFromIndex(fromColl, toColl, isScoresTest, scoreModes);
 
-    {
-      // verify join doesn't work if no match in the "from" index
-      final String joinQ = "{!join " + (anyScoreMode(isScoresTest))
-              + "from=join_s fromIndex=" + fromColl + " to=join_s}match_s:d";
-      final QueryRequest  qr = new QueryRequest(params("collection", toColl, "q", joinQ, "fl", "id,get_s,score"));
-      final QueryResponse  rsp = new QueryResponse(client.request(qr), client);
-      final SolrDocumentList hits = rsp.getResults();
-      assertTrue("Expected no hits", hits.getNumFound() == 0);
-    }
+    // verify join doesn't work if no match in the "from" index
+    joinQ = "{!join " + (anyScoreMode(isScoresTest, scoreModes))
+            + "from=join_s fromIndex=" + fromColl + " to=join_s}match_s:d";
+    qr = new QueryRequest(params("collection", toColl, "q", joinQ, "fl", "id,get_s,score"));
+    rsp = new QueryResponse(cloudClient.request(qr), cloudClient);
+    hits = rsp.getResults();
+    assertTrue("Expected no hits", hits.getNumFound() == 0);
+    assertScore(isScoresTest, doc);
   }
 
   private void assertScore(boolean isScoresTest, SolrDocument doc) {
     if (isScoresTest) {
-      assertThat("score join doesn't return 1.0",doc.getFirstValue("score").toString(), not("1.0"));
+      assertThat(doc.getFirstValue("score").toString(), not("1.0"));
     } else {
-      assertEquals("Solr join has constant score", "1.0", doc.getFirstValue("score").toString());
+      assertEquals("1.0", doc.getFirstValue("score").toString());
     }
   }
 
-  private String anyScoreMode(boolean isScoresTest) {
+  private String anyScoreMode(boolean isScoresTest, String[] scoreModes) {
     return isScoresTest ? "score=" + (scoreModes[random().nextInt(scoreModes.length)]) + " " : "";
   }
 
-  private void checkAbsentFromIndex(String fromColl, String toColl, boolean isScoresTest) throws SolrServerException, IOException {
+  private void checkAbsentFromIndex(String fromColl, String toColl, boolean isScoresTest, String[] scoreModes) throws SolrServerException, IOException {
     final String wrongName = fromColl + "WrongName";
-    final String joinQ = "{!join " + (anyScoreMode(isScoresTest))
+    final String joinQ = "{!join " + (anyScoreMode(isScoresTest, scoreModes))
         + "from=join_s fromIndex=" + wrongName + " to=join_s}match_s:c";
     final QueryRequest qr = new QueryRequest(params("collection", toColl, "q", joinQ, "fl", "id,get_s,score"));
     try {
-      cluster.getSolrClient().request(qr);
+      cloudClient.request(qr);
     } catch (HttpSolrClient.RemoteSolrException ex) {
       assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, ex.code());
       assertTrue(ex.getMessage().contains(wrongName));
     }
   }
 
-  protected static String indexDoc(String collection, int id, String joinField, String matchField, String getField) throws Exception {
+  protected Integer indexDoc(String collection, int id, String joinField, String matchField, String getField) throws Exception {
     UpdateRequest up = new UpdateRequest();
     up.setCommitWithin(50);
     up.setParam("collection", collection);
     SolrInputDocument doc = new SolrInputDocument();
-    String docId = "" + id;
+    Integer docId = new Integer(id);
     doc.addField("id", docId);
     doc.addField("join_s", joinField);
     if (matchField != null)
@@ -230,7 +209,7 @@ public class DistribJoinFromCollectionTest extends SolrCloudTestCase{
     if (getField != null)
       doc.addField("get_s", getField);
     up.add(doc);
-    cluster.getSolrClient().request(up);
+    cloudClient.request(up);
     return docId;
   }
 }

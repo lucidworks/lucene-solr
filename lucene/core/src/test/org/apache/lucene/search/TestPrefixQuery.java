@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -83,7 +83,7 @@ public class TestPrefixQuery extends LuceneTestCase {
     PrefixQuery query = new PrefixQuery(new Term("field", ""));
     IndexSearcher searcher = newSearcher(reader);
 
-    assertEquals(1, searcher.search(query, 1000).totalHits.value);
+    assertEquals(1, searcher.search(query, 1000).totalHits);
     writer.close();
     reader.close();
     directory.close();
@@ -124,7 +124,7 @@ public class TestPrefixQuery extends LuceneTestCase {
           count++;
         }
       }
-      assertEquals(count, s.count(q));
+      assertEquals(count, s.search(q, 1).totalHits);
     }
     r.close();
     w.close();

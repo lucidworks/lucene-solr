@@ -1,3 +1,5 @@
+package org.apache.solr.update.processor;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update.processor;
+
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -42,7 +44,6 @@ import org.apache.solr.update.DeleteUpdateCommand;
  *   &lt;str name="pattern "&gt;\s&lt;/str&gt;
  *   &lt;str name="replacement"&gt;_&lt;/str&gt;
  * &lt;/processor&gt;</pre>
- * @since 5.0.0
  */
 
 public class FieldNameMutatingUpdateProcessorFactory  extends UpdateRequestProcessorFactory{

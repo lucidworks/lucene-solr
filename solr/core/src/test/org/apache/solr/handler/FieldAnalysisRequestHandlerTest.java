@@ -14,12 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+package org.apache.solr.handler;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockTokenizer;
@@ -32,21 +28,30 @@ import org.apache.lucene.analysis.tokenattributes.FlagsAttribute;
 import org.apache.lucene.analysis.tokenattributes.FlagsAttributeImpl;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 import org.apache.lucene.analysis.util.TokenizerFactory;
+import org.apache.lucene.util.Attribute;
 import org.apache.lucene.util.AttributeFactory;
+import org.apache.lucene.util.AttributeImpl;
+import org.apache.lucene.util.AttributeReflector;
 import org.apache.solr.analysis.TokenizerChain;
-import org.apache.solr.client.solrj.request.FieldAnalysisRequest;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.AnalysisParams;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
+import org.apache.solr.client.solrj.request.FieldAnalysisRequest;
 import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.schema.CustomAnalyzerStrField;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.TextField;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * A test for {@link FieldAnalysisRequestHandler}.
@@ -55,7 +60,7 @@ import org.junit.Test;
  * @since solr 1.4
  */
 public class FieldAnalysisRequestHandlerTest extends AnalysisRequestHandlerTestBase {
-  
+
   private FieldAnalysisRequestHandler handler;
 
   @Override
@@ -68,20 +73,6 @@ public class FieldAnalysisRequestHandlerTest extends AnalysisRequestHandlerTestB
   @BeforeClass
   public static void beforeClass() throws Exception {
     initCore("solrconfig.xml", "schema.xml");
-  }
-  
-  @Test
-  public void testPointField() throws Exception {
-    FieldAnalysisRequest request = new FieldAnalysisRequest();
-    request.addFieldType("pint");
-    request.setFieldValue("5");
-    
-    NamedList<NamedList> nl = handler.handleAnalysisRequest(request, h.getCore().getLatestSchema());
-    NamedList pintNL = (NamedList)nl.get("field_types").get("pint");
-    NamedList indexNL = (NamedList)pintNL.get("index");
-    ArrayList analyzerNL = (ArrayList)indexNL.get("org.apache.solr.schema.FieldType$DefaultAnalyzer$1");
-    String text = (String)((NamedList)analyzerNL.get(0)).get("text"); 
-    assertEquals("5", text);
   }
 
   /**
@@ -156,9 +147,15 @@ public class FieldAnalysisRequestHandlerTest extends AnalysisRequestHandlerTestB
     params.remove(CommonParams.Q);
     params.remove(AnalysisParams.QUERY);
     params.remove(AnalysisParams.FIELD_VALUE);
-    try (SolrQueryRequest solrQueryRequest = new LocalSolrQueryRequest(h.getCore(), params)) {
-      SolrException ex = expectThrows(SolrException.class, () -> handler.resolveAnalysisRequest(solrQueryRequest));
-      assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, ex.code());
+    try {
+      request = handler.resolveAnalysisRequest(req);
+      fail("Analysis request must fail if all of q, analysis.query or analysis.value are absent");
+    } catch (SolrException e) {
+      if (e.code() != SolrException.ErrorCode.BAD_REQUEST.code)  {
+        fail("Unexpected exception");
+      }
+    } catch (Exception e) {
+      fail("Unexpected exception");
     }
 
     req.close();
@@ -204,8 +201,8 @@ public class FieldAnalysisRequestHandlerTest extends AnalysisRequestHandlerTestB
     assertToken(tokenList.get(7), new TokenInfo("lazy", null, "<ALPHANUM>", 34, 38, 8, new int[]{8}, null, false));
     assertToken(tokenList.get(8), new TokenInfo("brown", null, "<ALPHANUM>", 39, 44, 9, new int[]{9}, null, true));
     assertToken(tokenList.get(9), new TokenInfo("dogs", null, "<ALPHANUM>", 45, 49, 10, new int[]{10}, null, false));
-    tokenList = indexPart.get("org.apache.lucene.analysis.core.LowerCaseFilter");
-    assertNotNull("Expcting LowerCaseFilter analysis breakdown", tokenList);
+    tokenList = indexPart.get("org.apache.lucene.analysis.standard.StandardFilter");
+    assertNotNull("Expcting StandardFilter analysis breakdown", tokenList);
     assertEquals(tokenList.size(), 10);
     assertToken(tokenList.get(0), new TokenInfo("the", null, "<ALPHANUM>", 0, 3, 1, new int[]{1,1}, null, false));
     assertToken(tokenList.get(1), new TokenInfo("quick", null, "<ALPHANUM>", 4, 9, 2, new int[]{2,2}, null, false));
@@ -217,28 +214,41 @@ public class FieldAnalysisRequestHandlerTest extends AnalysisRequestHandlerTestB
     assertToken(tokenList.get(7), new TokenInfo("lazy", null, "<ALPHANUM>", 34, 38, 8, new int[]{8,8}, null, false));
     assertToken(tokenList.get(8), new TokenInfo("brown", null, "<ALPHANUM>", 39, 44, 9, new int[]{9,9}, null, true));
     assertToken(tokenList.get(9), new TokenInfo("dogs", null, "<ALPHANUM>", 45, 49, 10, new int[]{10,10}, null, false));
+    tokenList = indexPart.get("org.apache.lucene.analysis.core.LowerCaseFilter");
+    assertNotNull("Expcting LowerCaseFilter analysis breakdown", tokenList);
+    assertEquals(tokenList.size(), 10);
+    assertToken(tokenList.get(0), new TokenInfo("the", null, "<ALPHANUM>", 0, 3, 1, new int[]{1,1,1}, null, false));
+    assertToken(tokenList.get(1), new TokenInfo("quick", null, "<ALPHANUM>", 4, 9, 2, new int[]{2,2,2}, null, false));
+    assertToken(tokenList.get(2), new TokenInfo("red", null, "<ALPHANUM>", 10, 13, 3, new int[]{3,3,3}, null, false));
+    assertToken(tokenList.get(3), new TokenInfo("fox", null, "<ALPHANUM>", 14, 17, 4, new int[]{4,4,4}, null, true));
+    assertToken(tokenList.get(4), new TokenInfo("jumped", null, "<ALPHANUM>", 18, 24, 5, new int[]{5,5,5}, null, false));
+    assertToken(tokenList.get(5), new TokenInfo("over", null, "<ALPHANUM>", 25, 29, 6, new int[]{6,6,6}, null, false));
+    assertToken(tokenList.get(6), new TokenInfo("the", null, "<ALPHANUM>", 30, 33, 7, new int[]{7,7,7}, null, false));
+    assertToken(tokenList.get(7), new TokenInfo("lazy", null, "<ALPHANUM>", 34, 38, 8, new int[]{8,8,8}, null, false));
+    assertToken(tokenList.get(8), new TokenInfo("brown", null, "<ALPHANUM>", 39, 44, 9, new int[]{9,9,9}, null, true));
+    assertToken(tokenList.get(9), new TokenInfo("dogs", null, "<ALPHANUM>", 45, 49, 10, new int[]{10,10,10}, null, false));
     tokenList = indexPart.get("org.apache.lucene.analysis.core.StopFilter");
     assertNotNull("Expcting StopFilter analysis breakdown", tokenList);
-    assertEquals(tokenList.size(), 8);
-    assertToken(tokenList.get(0), new TokenInfo("quick", null, "<ALPHANUM>", 4, 9, 2, new int[]{2,2,2}, null, false));
-    assertToken(tokenList.get(1), new TokenInfo("red", null, "<ALPHANUM>", 10, 13, 3, new int[]{3,3,3}, null, false));
-    assertToken(tokenList.get(2), new TokenInfo("fox", null, "<ALPHANUM>", 14, 17, 4, new int[]{4,4,4}, null, true));
-    assertToken(tokenList.get(3), new TokenInfo("jumped", null, "<ALPHANUM>", 18, 24, 5, new int[]{5,5,5}, null, false));
-    assertToken(tokenList.get(4), new TokenInfo("over", null, "<ALPHANUM>", 25, 29, 6, new int[]{6,6,6}, null, false));
-    assertToken(tokenList.get(5), new TokenInfo("lazy", null, "<ALPHANUM>", 34, 38, 8, new int[]{8,8,8}, null, false));
-    assertToken(tokenList.get(6), new TokenInfo("brown", null, "<ALPHANUM>", 39, 44, 9, new int[]{9,9,9}, null, true));
-    assertToken(tokenList.get(7), new TokenInfo("dogs", null, "<ALPHANUM>", 45, 49, 10, new int[]{10,10,10}, null, false));
-    tokenList = indexPart.get("org.apache.lucene.analysis.en.PorterStemFilter");
-    assertNotNull("Expcting PorterStemFilter analysis breakdown", tokenList);
     assertEquals(tokenList.size(), 8);
     assertToken(tokenList.get(0), new TokenInfo("quick", null, "<ALPHANUM>", 4, 9, 2, new int[]{2,2,2,2}, null, false));
     assertToken(tokenList.get(1), new TokenInfo("red", null, "<ALPHANUM>", 10, 13, 3, new int[]{3,3,3,3}, null, false));
     assertToken(tokenList.get(2), new TokenInfo("fox", null, "<ALPHANUM>", 14, 17, 4, new int[]{4,4,4,4}, null, true));
-    assertToken(tokenList.get(3), new TokenInfo("jump", null, "<ALPHANUM>", 18, 24, 5, new int[]{5,5,5,5}, null, false));
+    assertToken(tokenList.get(3), new TokenInfo("jumped", null, "<ALPHANUM>", 18, 24, 5, new int[]{5,5,5,5}, null, false));
     assertToken(tokenList.get(4), new TokenInfo("over", null, "<ALPHANUM>", 25, 29, 6, new int[]{6,6,6,6}, null, false));
-    assertToken(tokenList.get(5), new TokenInfo("lazi", null, "<ALPHANUM>", 34, 38, 8, new int[]{8,8,8,8}, null, false));
+    assertToken(tokenList.get(5), new TokenInfo("lazy", null, "<ALPHANUM>", 34, 38, 8, new int[]{8,8,8,8}, null, false));
     assertToken(tokenList.get(6), new TokenInfo("brown", null, "<ALPHANUM>", 39, 44, 9, new int[]{9,9,9,9}, null, true));
-    assertToken(tokenList.get(7), new TokenInfo("dog", null, "<ALPHANUM>", 45, 49, 10, new int[]{10,10,10,10}, null, false));
+    assertToken(tokenList.get(7), new TokenInfo("dogs", null, "<ALPHANUM>", 45, 49, 10, new int[]{10,10,10,10}, null, false));
+    tokenList = indexPart.get("org.apache.lucene.analysis.en.PorterStemFilter");
+    assertNotNull("Expcting PorterStemFilter analysis breakdown", tokenList);
+    assertEquals(tokenList.size(), 8);
+    assertToken(tokenList.get(0), new TokenInfo("quick", null, "<ALPHANUM>", 4, 9, 2, new int[]{2,2,2,2,2}, null, false));
+    assertToken(tokenList.get(1), new TokenInfo("red", null, "<ALPHANUM>", 10, 13, 3, new int[]{3,3,3,3,3}, null, false));
+    assertToken(tokenList.get(2), new TokenInfo("fox", null, "<ALPHANUM>", 14, 17, 4, new int[]{4,4,4,4,4}, null, true));
+    assertToken(tokenList.get(3), new TokenInfo("jump", null, "<ALPHANUM>", 18, 24, 5, new int[]{5,5,5,5,5}, null, false));
+    assertToken(tokenList.get(4), new TokenInfo("over", null, "<ALPHANUM>", 25, 29, 6, new int[]{6,6,6,6,6}, null, false));
+    assertToken(tokenList.get(5), new TokenInfo("lazi", null, "<ALPHANUM>", 34, 38, 8, new int[]{8,8,8,8,8}, null, false));
+    assertToken(tokenList.get(6), new TokenInfo("brown", null, "<ALPHANUM>", 39, 44, 9, new int[]{9,9,9,9,9}, null, true));
+    assertToken(tokenList.get(7), new TokenInfo("dog", null, "<ALPHANUM>", 45, 49, 10, new int[]{10,10,10,10,10}, null, false));
 
     NamedList<List<NamedList>> queryPart = textType.get("query");
     assertNotNull("expecting a query token analysis for field type 'text'", queryPart);
@@ -248,21 +258,26 @@ public class FieldAnalysisRequestHandlerTest extends AnalysisRequestHandlerTestB
     assertEquals("Expecting StandardTokenizer to produce 2 tokens from '" + request.getQuery() + "'", 2, tokenList.size());
     assertToken(tokenList.get(0), new TokenInfo("fox", null, "<ALPHANUM>", 0, 3, 1, new int[]{1}, null, false));
     assertToken(tokenList.get(1), new TokenInfo("brown", null, "<ALPHANUM>", 4, 9, 2, new int[]{2}, null, false));
-    tokenList = queryPart.get("org.apache.lucene.analysis.core.LowerCaseFilter");
-    assertNotNull("Expcting LowerCaseFilter analysis breakdown", tokenList);
+    tokenList = queryPart.get("org.apache.lucene.analysis.standard.StandardFilter");
+    assertNotNull("Expcting StandardFilter analysis breakdown", tokenList);
     assertEquals(2, tokenList.size());
     assertToken(tokenList.get(0), new TokenInfo("fox", null, "<ALPHANUM>", 0, 3, 1, new int[]{1,1}, null, false));
     assertToken(tokenList.get(1), new TokenInfo("brown", null, "<ALPHANUM>", 4, 9, 2, new int[]{2,2}, null, false));
-    tokenList = queryPart.get("org.apache.lucene.analysis.core.StopFilter");
-    assertNotNull("Expcting StopFilter analysis breakdown", tokenList);
+    tokenList = queryPart.get("org.apache.lucene.analysis.core.LowerCaseFilter");
+    assertNotNull("Expcting LowerCaseFilter analysis breakdown", tokenList);
     assertEquals(2, tokenList.size());
     assertToken(tokenList.get(0), new TokenInfo("fox", null, "<ALPHANUM>", 0, 3, 1, new int[]{1,1,1}, null, false));
     assertToken(tokenList.get(1), new TokenInfo("brown", null, "<ALPHANUM>", 4, 9, 2, new int[]{2,2,2}, null, false));
-    tokenList = queryPart.get("org.apache.lucene.analysis.en.PorterStemFilter");
-    assertNotNull("Expcting PorterStemFilter analysis breakdown", tokenList);
+    tokenList = queryPart.get("org.apache.lucene.analysis.core.StopFilter");
+    assertNotNull("Expcting StopFilter analysis breakdown", tokenList);
     assertEquals(2, tokenList.size());
     assertToken(tokenList.get(0), new TokenInfo("fox", null, "<ALPHANUM>", 0, 3, 1, new int[]{1,1,1,1}, null, false));
     assertToken(tokenList.get(1), new TokenInfo("brown", null, "<ALPHANUM>", 4, 9, 2, new int[]{2,2,2,2}, null, false));
+    tokenList = queryPart.get("org.apache.lucene.analysis.en.PorterStemFilter");
+    assertNotNull("Expcting PorterStemFilter analysis breakdown", tokenList);
+    assertEquals(2, tokenList.size());
+    assertToken(tokenList.get(0), new TokenInfo("fox", null, "<ALPHANUM>", 0, 3, 1, new int[]{1,1,1,1,1}, null, false));
+    assertToken(tokenList.get(1), new TokenInfo("brown", null, "<ALPHANUM>", 4, 9, 2, new int[]{2,2,2,2,2}, null, false));
 
     NamedList<NamedList> nameTextType = fieldTypes.get("nametext");
     assertNotNull("expecting result for field type 'nametext'", nameTextType);
@@ -372,7 +387,7 @@ public class FieldAnalysisRequestHandlerTest extends AnalysisRequestHandlerTestB
   }
 
   @Test
-  public void testPositionHistoryWithWDGF() throws Exception {
+  public void testPositionHistoryWithWDF() throws Exception {
 
     FieldAnalysisRequest request = new FieldAnalysisRequest();
     request.addFieldType("skutype1");
@@ -397,12 +412,12 @@ public class FieldAnalysisRequestHandlerTest extends AnalysisRequestHandlerTestB
     assertToken(tokenList.get(1), new TokenInfo("3456-12", null, "word", 4, 11, 2, new int[]{2}, null, false));
     assertToken(tokenList.get(2), new TokenInfo("a", null, "word", 12, 13, 3, new int[]{3}, null, false));
     assertToken(tokenList.get(3), new TokenInfo("Test", null, "word", 14, 18, 4, new int[]{4}, null, false));
-    tokenList = indexPart.get("org.apache.lucene.analysis.miscellaneous.WordDelimiterGraphFilter");
-    assertNotNull("Expcting WordDelimiterGraphFilter analysis breakdown", tokenList);
+    tokenList = indexPart.get("org.apache.lucene.analysis.miscellaneous.WordDelimiterFilter");
+    assertNotNull("Expcting WordDelimiterFilter analysis breakdown", tokenList);
     assertEquals(6, tokenList.size());
     assertToken(tokenList.get(0), new TokenInfo("hi", null, "word", 0, 2, 1, new int[]{1,1}, null, false));
-    assertToken(tokenList.get(1), new TokenInfo("345612", null, "word", 4, 11, 2, new int[]{2,2}, null, false));
-    assertToken(tokenList.get(2), new TokenInfo("3456", null, "word", 4, 8, 2, new int[]{2,2}, null, false));
+    assertToken(tokenList.get(1), new TokenInfo("3456", null, "word", 4, 8, 2, new int[]{2,2}, null, false));
+    assertToken(tokenList.get(2), new TokenInfo("345612", null, "word", 4, 11, 2, new int[]{2,2}, null, false));
     assertToken(tokenList.get(3), new TokenInfo("12", null, "word", 9, 11, 3, new int[]{2,3}, null, false));
     assertToken(tokenList.get(4), new TokenInfo("a", null, "word", 12, 13, 4, new int[]{3,4}, null, false));
     assertToken(tokenList.get(5), new TokenInfo("Test", null, "word", 14, 18, 5, new int[]{4,5}, null, false));
@@ -410,8 +425,8 @@ public class FieldAnalysisRequestHandlerTest extends AnalysisRequestHandlerTestB
     assertNotNull("Expcting LowerCaseFilter analysis breakdown", tokenList);
     assertEquals(6, tokenList.size());
     assertToken(tokenList.get(0), new TokenInfo("hi", null, "word", 0, 2, 1, new int[]{1,1,1}, null, false));
-    assertToken(tokenList.get(1), new TokenInfo("345612", null, "word", 4, 11, 2, new int[]{2,2,2}, null, false));
-    assertToken(tokenList.get(2), new TokenInfo("3456", null, "word", 4, 8, 2, new int[]{2,2,2}, null, false));
+    assertToken(tokenList.get(1), new TokenInfo("3456", null, "word", 4, 8, 2, new int[]{2,2,2}, null, false));
+    assertToken(tokenList.get(2), new TokenInfo("345612", null, "word", 4, 11, 2, new int[]{2,2,2}, null, false));
     assertToken(tokenList.get(3), new TokenInfo("12", null, "word", 9, 11, 3, new int[]{2,3,3}, null, false));
     assertToken(tokenList.get(4), new TokenInfo("a", null, "word", 12, 13, 4, new int[]{3,4,4}, null, false));
     assertToken(tokenList.get(5), new TokenInfo("test", null, "word", 14, 18, 5, new int[]{4,5,5}, null, false));
@@ -426,7 +441,7 @@ public class FieldAnalysisRequestHandlerTest extends AnalysisRequestHandlerTestB
     NamedList<NamedList> result = handler.handleAnalysisRequest(request, h.getCore().getLatestSchema());
     NamedList<List<NamedList>> tokens = (NamedList<List<NamedList>>)
         ((NamedList)result.get("field_types").get("location_rpt")).get("index");
-    List<NamedList> tokenList = tokens.get("org.apache.lucene.spatial.prefix.PrefixTreeStrategy$ShapeTokenStream");
+    List<NamedList> tokenList = tokens.get("org.apache.lucene.spatial.prefix.BytesRefIteratorTokenStream");
 
 
     List<String> vals = new ArrayList<>(tokenList.size());
@@ -445,14 +460,14 @@ public class FieldAnalysisRequestHandlerTest extends AnalysisRequestHandlerTestB
     request.setShowMatch(false);
     FieldType fieldType = new TextField();
     Analyzer analyzer = new TokenizerChain(
-        new TokenizerFactory(Collections.emptyMap()) {
+        new TokenizerFactory(Collections.<String, String>emptyMap()) {
           @Override
           public Tokenizer create(AttributeFactory factory) {
             return new CustomTokenizer(factory);
           }
         },
         new TokenFilterFactory[] {
-            new TokenFilterFactory(Collections.emptyMap()) {
+            new TokenFilterFactory(Collections.<String, String>emptyMap()) {
               @Override
               public TokenStream create(TokenStream input) {
                 return new CustomTokenFilter(input);
@@ -467,14 +482,6 @@ public class FieldAnalysisRequestHandlerTest extends AnalysisRequestHandlerTestB
     List<NamedList> tokenInfoList = (List<NamedList>) result.findRecursive("index", CustomTokenFilter.class.getName());
     // '1' from CustomTokenFilter plus 900 from CustomFlagsAttributeImpl.
     assertEquals(901, tokenInfoList.get(0).get("org.apache.lucene.analysis.tokenattributes.FlagsAttribute#flags"));
-  }
-
-  @Test(expected = Exception.class)
-  public void testNoDefaultField() throws Exception {
-    ModifiableSolrParams params = new ModifiableSolrParams();
-    params.add(CommonParams.Q, "fox brown");
-    SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), params);
-    handler.resolveAnalysisRequest(req);
   }
 
   /** A custom impl of a standard attribute impl; test this instance is used. */

@@ -1,3 +1,5 @@
+package org.apache.solr.request.json;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +16,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.request.json;
 
+
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.solr.common.SolrException;
+import org.noggit.JSONParser;
 
 public class ObjectUtil {
 
@@ -105,14 +108,10 @@ public class ObjectUtil {
         // OK, now we need to merge values
         handler.handleConflict(outer, path, key, val, existingVal);
       }
-    } else if (val instanceof Map) {
+    } else {
       // merging at top level...
       Map<String,Object> newMap = (Map<String,Object>)val;
       handler.mergeMap(outer, newMap, path);
-    } else {
-      // todo: find a way to return query param in error message
-      throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
-          "Expected JSON Object but got " + val.getClass().getSimpleName() + "=" + val);
     }
   }
 

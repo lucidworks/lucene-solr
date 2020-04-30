@@ -1,3 +1,5 @@
+package org.apache.lucene.util.automaton;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.automaton;
-
 
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IntsRef;
@@ -133,11 +133,14 @@ public class FiniteStringsIteratorTest extends LuceneTestCase {
 
 
   public void testWithCycle() throws Exception {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       Automaton a = new RegExp("abc.*", RegExp.NONE).toAutomaton();
       FiniteStringsIterator iterator = new FiniteStringsIterator(a);
       getFiniteStrings(iterator);
-    });
+      fail("did not hit exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
   }
 
   public void testSingletonNoLimit() {

@@ -34,7 +34,7 @@ public class NoCacheHeaderTest extends CacheHeaderTestBase {
   // as its home. it could interfere with other tests!
   @BeforeClass
   public static void beforeTest() throws Exception {
-    createAndStartJetty(TEST_HOME(), "solr/collection1/conf/solrconfig-nocache.xml", null);
+    createJetty(TEST_HOME(), "solr/collection1/conf/solrconfig-nocache.xml", null);
   }
 
   // The tests

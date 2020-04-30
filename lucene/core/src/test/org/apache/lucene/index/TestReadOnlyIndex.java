@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.FilePermission;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.PrivilegedExceptionAction;
 import java.util.PropertyPermission;
 
 import org.apache.lucene.analysis.Analyzer;
@@ -27,7 +28,6 @@ import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
@@ -46,7 +46,7 @@ public class TestReadOnlyIndex extends LuceneTestCase {
 
   @BeforeClass
   public static void buildIndex() throws Exception {
-    indexPath = Files.createTempDirectory("readonlyindex").toAbsolutePath();
+    indexPath = Files.createTempDirectory("readonlyindex");
     
     // borrows from TestDemo, but not important to keep in sync with demo
     Analyzer analyzer = new MockAnalyzer(random());
@@ -66,7 +66,7 @@ public class TestReadOnlyIndex extends LuceneTestCase {
   }
   
   public void testReadOnlyIndex() throws Exception {
-    runWithRestrictedPermissions(this::doTestReadOnlyIndex,
+    runWithRestrictedPermissions(doTestReadOnlyIndex,
         // add some basic permissions (because we are limited already - so we grant all important ones):
         new RuntimePermission("*"),
         new PropertyPermission("*", "read"),
@@ -76,29 +76,28 @@ public class TestReadOnlyIndex extends LuceneTestCase {
     );
   }
   
-  private Void doTestReadOnlyIndex() throws Exception {
-    Directory dir = FSDirectory.open(indexPath); 
-    IndexReader ireader = DirectoryReader.open(dir); 
-    IndexSearcher isearcher = newSearcher(ireader);
-    
-    // borrows from TestDemo, but not important to keep in sync with demo
-
-    assertEquals(1, isearcher.count(new TermQuery(new Term("fieldname", longTerm))));
-    Query query = new TermQuery(new Term("fieldname", "text"));
-    TopDocs hits = isearcher.search(query, 1);
-    assertEquals(1, hits.totalHits.value);
-    // Iterate through the results:
-    for (int i = 0; i < hits.scoreDocs.length; i++) {
-      Document hitDoc = isearcher.doc(hits.scoreDocs[i].doc);
-      assertEquals(text, hitDoc.get("fieldname"));
+  private final PrivilegedExceptionAction<Void> doTestReadOnlyIndex = new PrivilegedExceptionAction<Void>() {
+    @Override
+    public Void run() throws Exception {
+      Directory dir = FSDirectory.open(indexPath); 
+      IndexReader ireader = DirectoryReader.open(dir); 
+      IndexSearcher isearcher = newSearcher(ireader);
+      
+      // borrows from TestDemo, but not important to keep in sync with demo
+  
+      assertEquals(1, isearcher.search(new TermQuery(new Term("fieldname", longTerm)), 1).totalHits);
+      Query query = new TermQuery(new Term("fieldname", "text"));
+      TopDocs hits = isearcher.search(query, 1);
+      assertEquals(1, hits.totalHits);
+      // Iterate through the results:
+      for (int i = 0; i < hits.scoreDocs.length; i++) {
+        Document hitDoc = isearcher.doc(hits.scoreDocs[i].doc);
+        assertEquals(text, hitDoc.get("fieldname"));
+      }
+      
+      ireader.close();
+      return null; // void
     }
-
-    // Test simple phrase query
-    PhraseQuery phraseQuery = new PhraseQuery("fieldname", "to", "be");
-    assertEquals(1, isearcher.count(phraseQuery));
-
-    ireader.close();
-    return null; // void
-  }
+  };
   
 }

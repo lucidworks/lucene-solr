@@ -1,3 +1,4 @@
+package org.apache.solr.update.processor;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update.processor;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -36,9 +37,6 @@ import org.apache.solr.core.SolrCore;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.util.plugin.SolrCoreAware;
 
-/**
- * @since 3.1
- **/
 public class SignatureUpdateProcessorFactory 
   extends UpdateRequestProcessorFactory 
   implements SolrCoreAware {
@@ -55,7 +53,7 @@ public class SignatureUpdateProcessorFactory
   @Override
   public void init(final NamedList args) {
     if (args != null) {
-      SolrParams params = args.toSolrParams();
+      SolrParams params = SolrParams.toSolrParams(args);
       boolean enabled = params.getBool("enabled", true);
       this.enabled = enabled;
 

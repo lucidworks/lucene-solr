@@ -14,15 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.util.hll;
 
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 import org.junit.Test;
 
 /**
  * Tests {@link HLLUtil} static methods.
  */
-public class HLLUtilTest extends SolrTestCase {
+public class HLLUtilTest extends LuceneTestCase {
     /**
      * Tests that {@link HLLUtil#largeEstimatorCutoff(int, int)} is the same
      * as a trivial implementation.

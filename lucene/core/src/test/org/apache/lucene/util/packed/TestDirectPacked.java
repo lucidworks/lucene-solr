@@ -1,3 +1,5 @@
+package org.apache.lucene.util.packed;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.packed;
-
 
 import java.util.Random;
 
+import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
-import org.apache.lucene.util.LongValues;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
+import org.apache.lucene.util.packed.DirectReader;
+import org.apache.lucene.util.packed.DirectWriter;
 
 public class TestDirectPacked extends LuceneTestCase {
   
@@ -44,7 +46,7 @@ public class TestDirectPacked extends LuceneTestCase {
     writer.finish();
     output.close();
     IndexInput input = dir.openInput("foo", IOContext.DEFAULT);
-    LongValues reader = DirectReader.getInstance(input.randomAccessSlice(0, input.length()), bitsPerValue, 0);
+    NumericDocValues reader = DirectReader.getInstance(input.randomAccessSlice(0, input.length()), bitsPerValue, 0);
     assertEquals(1, reader.get(0));
     assertEquals(0, reader.get(1));
     assertEquals(2, reader.get(2));
@@ -64,11 +66,12 @@ public class TestDirectPacked extends LuceneTestCase {
     writer.add(0);
     writer.add(2);
     writer.add(1);
-    IllegalStateException expected = expectThrows(IllegalStateException.class, () -> {
+    try {
       writer.finish();
-    });
-    assertTrue(expected.getMessage().startsWith("Wrong number of values added"));
-
+      fail("didn't get expected exception");
+    } catch (IllegalStateException expected) {
+      assertTrue(expected.getMessage().startsWith("Wrong number of values added"));
+    }
     output.close();
     dir.close();
   }
@@ -108,7 +111,7 @@ public class TestDirectPacked extends LuceneTestCase {
       writer.finish();
       output.close();
       IndexInput input = directory.openInput(name, IOContext.DEFAULT);
-      LongValues reader = DirectReader.getInstance(input.randomAccessSlice(0, input.length()), bitsRequired, offset);
+      NumericDocValues reader = DirectReader.getInstance(input.randomAccessSlice(0, input.length()), bitsRequired, offset);
       for (int j = 0; j < original.length; j++) {
         assertEquals("bpv=" + bpv, original[j], reader.get(j));
       }

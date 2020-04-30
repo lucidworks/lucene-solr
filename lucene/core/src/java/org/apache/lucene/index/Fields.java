@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,21 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.Iterator;
 
-import org.apache.lucene.codecs.FieldsProducer;
+/** Flex API for access to fields and terms
+ *  @lucene.experimental */
 
-/**
- * Provides a {@link Terms} index for fields that have it, and lists which fields do.
- * This is primarily an internal/experimental API (see {@link FieldsProducer}),
- * although it is also used to expose the set of term vectors per document.
- *
- * @lucene.experimental
- */
 public abstract class Fields implements Iterable<String> {
 
   /** Sole constructor. (For invocation by subclass 

@@ -14,31 +14,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.util;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
-import org.apache.lucene.index.Term;
-import org.apache.lucene.search.BooleanClause;
-import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.DisjunctionMaxQuery;
-import org.apache.lucene.search.PhraseQuery;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.TermQuery;
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.common.SolrException;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.search.QParser;
 import org.apache.solr.util.SolrPluginUtils.DisjunctionMaxQueryParser;
+import org.apache.solr.search.SolrIndexSearcher;
+import org.apache.solr.search.DocList;
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrDocumentList;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.PhraseQuery;
+import org.apache.lucene.search.DisjunctionMaxQuery;
+import org.apache.lucene.search.BooleanQuery;
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.MatchAllDocsQuery;
+import org.apache.lucene.search.BooleanClause.Occur;
 import org.junit.BeforeClass;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Set;
+import java.util.HashSet;
 
 /**
  * Tests that the functions in SolrPluginUtils work as advertised.
@@ -48,6 +53,52 @@ public class SolrPluginUtilsTest extends SolrTestCaseJ4 {
   @BeforeClass
   public static void beforeClass() throws Exception {
     initCore("solrconfig.xml","schema.xml");
+  }
+
+  @Test
+  public void testDocListConversion() throws Exception {
+    assertU("", adoc("id", "3234", "val_i", "1", 
+                     "val_dynamic", "quick red fox"));
+    assertU("", adoc("id", "3235", "val_i", "1", 
+                     "val_dynamic", "quick green fox"));
+    assertU("", adoc("id", "3236", "val_i", "1", 
+                     "val_dynamic", "quick brown fox"));
+    assertU("", commit());
+
+    RefCounted<SolrIndexSearcher> holder = h.getCore().getSearcher();
+    try {
+      SolrIndexSearcher srchr = holder.get();
+      SolrIndexSearcher.QueryResult qr = new SolrIndexSearcher.QueryResult();
+      SolrIndexSearcher.QueryCommand cmd = new SolrIndexSearcher.QueryCommand();
+      cmd.setQuery(new MatchAllDocsQuery());
+      cmd.setLen(10);
+      qr = srchr.search(qr, cmd);
+      
+      DocList docs = qr.getDocList();
+      assertEquals("wrong docs size", 3, docs.size());
+      Set<String> fields = new HashSet<>();
+      fields.add("val_dynamic");
+      fields.add("dynamic_val");
+      fields.add("range_facet_l"); // copied from id
+      
+      SolrDocumentList list = SolrPluginUtils.docListToSolrDocumentList(docs, srchr, fields, null);
+      assertEquals("wrong list Size", docs.size(), list.size());
+      for (SolrDocument document : list) {
+        
+        assertTrue("unexpected field", ! document.containsKey("val_i"));
+        assertTrue("unexpected id field", ! document.containsKey("id"));
+
+        assertTrue("original field", document.containsKey("val_dynamic"));
+        assertTrue("dyn copy field", document.containsKey("dynamic_val"));
+        assertTrue("copy field", document.containsKey("range_facet_l"));
+        
+        assertNotNull("original field null", document.get("val_dynamic"));
+        assertNotNull("dyn copy field null", document.get("dynamic_val"));
+        assertNotNull("copy field null", document.get("range_facet_l"));
+      }
+    } finally {
+      if (null != holder) holder.decref();
+    }
   }
 
   @Test
@@ -127,11 +178,11 @@ public class SolrPluginUtilsTest extends SolrTestCaseJ4 {
     Query out;
     String t;
 
-    SolrQueryRequest req = req("df", "text");
+    SolrQueryRequest req = req();
     QParser qparser = QParser.getParser("hi", "dismax", req);
 
     DisjunctionMaxQueryParser qp =
-      new SolrPluginUtils.DisjunctionMaxQueryParser(qparser, req.getParams().get("df"));
+      new SolrPluginUtils.DisjunctionMaxQueryParser(qparser, req.getSchema().getDefaultSearchFieldName());
 
     qp.addAlias("hoss", 0.01f, SolrPluginUtils.parseFieldBoosts
                 ("title^2.0 title_stemmed name^1.2 subject^0.5"));
@@ -148,7 +199,7 @@ public class SolrPluginUtilsTest extends SolrTestCaseJ4 {
     assertTrue(t+" sanity test isn't TermQuery: " + out.getClass(),
                out instanceof TermQuery);
     assertEquals(t+" sanity test is wrong field",
-                 qp.getDefaultField(),
+                 h.getCore().getLatestSchema().getDefaultSearchFieldName(),
                  ((TermQuery)out).getTerm().field());
 
     t = "subject:XXXXXXXX";
@@ -337,115 +388,6 @@ public class SolrPluginUtilsTest extends SolrTestCaseJ4 {
     SolrPluginUtils.setMinShouldMatch(q, "50%");
     assertEquals(2, q.build().getMinimumNumberShouldMatch());
         
-  }
-
-  @Test
-  public void testMinShouldMatchBadQueries() {
-    Exception e = expectThrows(SolrException.class, () -> calcMSM(2, "1<"));
-    assertEquals("Invalid 'mm' spec: '1<'. Expecting values before and after '<'" , e.getMessage());
-    e = expectThrows(SolrException.class, () -> calcMSM(2, "1<x"));
-    assertEquals("Invalid 'mm' spec. Expecting an integer.", e.getMessage());
-    e = expectThrows(SolrException.class, () -> calcMSM(1, "x%"));
-    assertEquals("Invalid 'mm' spec. Expecting an integer.", e.getMessage());
-    e = expectThrows(SolrException.class, () -> calcMSM(1, "%%"));
-    assertEquals("Invalid 'mm' spec. Expecting an integer.", e.getMessage());
-    e = expectThrows(SolrException.class, () -> calcMSM(1, "x"));
-    assertEquals("Invalid 'mm' spec. Expecting an integer.", e.getMessage());
-    
-    e = expectThrows(SolrException.class, () -> calcMSM(10, "2<-25% 9<X"));
-    assertEquals("Invalid 'mm' spec. Expecting an integer." , e.getMessage());
-    e = expectThrows(SolrException.class, () -> calcMSM(10, "2<-25% 9<"));
-    assertEquals("Invalid 'mm' spec: '9<'. Expecting values before and after '<'" , e.getMessage());
-  }
-
-  @Test
-  public void testMinShouldMatchAutoRelax() {
-    /* The basics should not be affected by autoRelax */
-    BooleanQuery.Builder q = new BooleanQuery.Builder();
-    q.add(new TermQuery(new Term("a","b")), Occur.SHOULD);
-    q.add(new TermQuery(new Term("a","c")), Occur.SHOULD);
-    q.add(new TermQuery(new Term("a","d")), Occur.SHOULD);
-    q.add(new TermQuery(new Term("a","d")), Occur.SHOULD);
-
-    SolrPluginUtils.setMinShouldMatch(q, "0", true);
-    assertEquals(0, q.build().getMinimumNumberShouldMatch());
-
-    SolrPluginUtils.setMinShouldMatch(q, "1", true);
-    assertEquals(1, q.build().getMinimumNumberShouldMatch());
-
-    SolrPluginUtils.setMinShouldMatch(q, "50%", true);
-    assertEquals(2, q.build().getMinimumNumberShouldMatch());
-
-    SolrPluginUtils.setMinShouldMatch(q, "99", true);
-    assertEquals(4, q.build().getMinimumNumberShouldMatch());
-
-    q.add(new TermQuery(new Term("a","e")), Occur.MUST);
-    q.add(new TermQuery(new Term("a","f")), Occur.MUST);
-
-    SolrPluginUtils.setMinShouldMatch(q, "50%", true);
-    assertEquals(2, q.build().getMinimumNumberShouldMatch());
-
-    /* Simulate stopwords through uneven disjuncts */
-    q = new BooleanQuery.Builder();
-    q.add(new DisjunctionMaxQuery(Collections.singleton(new TermQuery(new Term("a","foo"))), 0.0f), Occur.SHOULD);
-    DisjunctionMaxQuery dmq = new DisjunctionMaxQuery(
-        Arrays.asList(
-            new TermQuery(new Term("a","foo")),
-            new TermQuery(new Term("b","foo"))),
-        0f);
-    q.add(dmq, Occur.SHOULD);
-    dmq = new DisjunctionMaxQuery(
-        Arrays.asList(
-            new TermQuery(new Term("a","bar")),
-            new TermQuery(new Term("b","bar"))),
-        0f);
-    q.add(dmq, Occur.SHOULD);
-
-    // Without relax
-    SolrPluginUtils.setMinShouldMatch(q, "100%", false);
-    assertEquals(3, q.build().getMinimumNumberShouldMatch());
-
-    // With relax
-    SolrPluginUtils.setMinShouldMatch(q, "100%", true);
-    assertEquals(2, q.build().getMinimumNumberShouldMatch());
-
-    // Still same result with a MUST clause extra
-    q.add(new TermQuery(new Term("a","must")), Occur.MUST);
-    SolrPluginUtils.setMinShouldMatch(q, "100%", true);
-    assertEquals(2, q.build().getMinimumNumberShouldMatch());
-
-    // Combination of dismax and non-dismax SHOULD clauses
-    q.add(new TermQuery(new Term("b","should")), Occur.SHOULD);
-    SolrPluginUtils.setMinShouldMatch(q, "100%", true);
-    assertEquals(3, q.build().getMinimumNumberShouldMatch());
-  }
-
-  private static class InvokeSettersTestClass {
-    private float aFloat = random().nextFloat();
-    public float getAFloat() {
-      return aFloat;
-    }
-    public void setAFloat(float aFloat) {
-      this.aFloat = aFloat;
-    }
-    public void setAFloat(String aFloat) {
-      this.aFloat = Float.parseFloat(aFloat);
-    }
-  }
-
-  @Test
-  public void testInvokeSetters() {
-    final Float theFloat = random().nextFloat();
-    implTestInvokeSetters(theFloat, theFloat);
-    implTestInvokeSetters(theFloat, theFloat.toString());
-  }
-
-  public void implTestInvokeSetters(final Float theFloat, final Object theFloatObject) {
-    final InvokeSettersTestClass bean = new InvokeSettersTestClass();
-    final Map<String,Object> initArgs = new HashMap<>();
-    initArgs.put("aFloat", theFloatObject);
-    SolrPluginUtils.invokeSetters(bean, initArgs.entrySet());
-    assertEquals(bean.getAFloat(), theFloat.floatValue(), 0.0);
   }
 
   /** macro */

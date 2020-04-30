@@ -1,3 +1,4 @@
+package org.apache.lucene.search.vectorhighlight;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.vectorhighlight;
+
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
@@ -27,16 +28,16 @@ import java.util.Set;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.queries.function.FunctionScoreQuery;
+import org.apache.lucene.queries.CustomScoreQuery;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BoostQuery;
 import org.apache.lucene.search.ConstantScoreQuery;
 import org.apache.lucene.search.DisjunctionMaxQuery;
+import org.apache.lucene.search.FilteredQuery;
 import org.apache.lucene.search.MultiTermQuery;
 import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.SynonymQuery;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.vectorhighlight.FieldTermStack.TermInfo;
 
@@ -61,7 +62,7 @@ public class FieldQuery {
   // The maximum number of different matching terms accumulated from any one MultiTermQuery
   private static final int MAX_MTQ_TERMS = 1024;
 
-  public FieldQuery(Query query, IndexReader reader, boolean phraseHighlight, boolean fieldMatch) throws IOException {
+  FieldQuery( Query query, IndexReader reader, boolean phraseHighlight, boolean fieldMatch ) throws IOException {
     this.fieldMatch = fieldMatch;
     Set<Query> flatQueries = new LinkedHashSet<>();
     flatten( query, reader, flatQueries, 1f );
@@ -94,11 +95,19 @@ public class FieldQuery {
     this (query, null, phraseHighlight, fieldMatch);
   }
 
-  protected void flatten( Query sourceQuery, IndexReader reader, Collection<Query> flatQueries, float boost ) throws IOException {
-    while (sourceQuery instanceof BoostQuery) {
-      BoostQuery bq = (BoostQuery) sourceQuery;
-      sourceQuery = bq.getQuery();
-      boost *= bq.getBoost();
+  void flatten( Query sourceQuery, IndexReader reader, Collection<Query> flatQueries, float boost ) throws IOException{
+    while (true) {
+      if (sourceQuery.getBoost() != 1f) {
+        boost *= sourceQuery.getBoost();
+        sourceQuery = sourceQuery.clone();
+        sourceQuery.setBoost(1f);
+      } else if (sourceQuery instanceof BoostQuery) {
+        BoostQuery bq = (BoostQuery) sourceQuery;
+        sourceQuery = bq.getQuery();
+        boost *= bq.getBoost();
+      } else {
+        break;
+      }
     }
     if( sourceQuery instanceof BooleanQuery ){
       BooleanQuery bq = (BooleanQuery)sourceQuery;
@@ -120,12 +129,6 @@ public class FieldQuery {
       if( !flatQueries.contains( sourceQuery ) )
         flatQueries.add( sourceQuery );
     }
-    else if ( sourceQuery instanceof SynonymQuery ){
-      SynonymQuery synQuery = (SynonymQuery) sourceQuery;
-      for( Term term : synQuery.getTerms()) {
-        flatten( new TermQuery(term), reader, flatQueries, boost);
-      }
-    }
     else if( sourceQuery instanceof PhraseQuery ){
       PhraseQuery pq = (PhraseQuery)sourceQuery;
       if( pq.getTerms().length == 1 )
@@ -139,10 +142,15 @@ public class FieldQuery {
       if (q != null) {
         flatten( q, reader, flatQueries, boost);
       }
-    } else if (sourceQuery instanceof FunctionScoreQuery) {
-      final Query q = ((FunctionScoreQuery) sourceQuery).getWrappedQuery();
+    } else if (sourceQuery instanceof FilteredQuery) {
+      final Query q = ((FilteredQuery) sourceQuery).getQuery();
       if (q != null) {
-        flatten(q, reader, flatQueries, boost);
+        flatten( q, reader, flatQueries, boost);
+      }
+    } else if (sourceQuery instanceof CustomScoreQuery) {
+      final Query q = ((CustomScoreQuery) sourceQuery).getSubQuery();
+      if (q != null) {
+        flatten( q, reader, flatQueries, boost);
       }
     } else if (reader != null) {
       Query query = sourceQuery;

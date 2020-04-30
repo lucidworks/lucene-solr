@@ -1,3 +1,7 @@
+package org.apache.solr.cloud;
+
+import java.lang.invoke.MethodHandles;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +18,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
-
-import java.lang.invoke.MethodHandles;
 
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -47,7 +48,7 @@ class StoppableSearchThread extends AbstractFullDistribZkTestBase.StoppableThrea
     Random random = LuceneTestCase.random();
     int numSearches = 0;
 
-    while (!stop) {
+    while (true && !stop) {
       numSearches++;
       try {
         //to come to the aid of their country.

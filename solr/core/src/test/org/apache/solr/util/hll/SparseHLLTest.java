@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.util.hll;
 
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 import org.junit.Test;
 
 import com.carrotsearch.hppc.IntByteHashMap;
@@ -26,7 +27,7 @@ import com.carrotsearch.randomizedtesting.RandomizedTest;
 /**
  * Tests {@link HLL} of type {@link HLLType#SPARSE}.
  */
-public class SparseHLLTest extends SolrTestCase {
+public class SparseHLLTest extends LuceneTestCase {
     private static final int log2m = 11;
 
     /**

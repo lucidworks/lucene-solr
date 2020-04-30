@@ -14,13 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
+
+import java.io.IOException;
 
 import org.apache.solr.common.SolrException;
 import static org.apache.solr.common.SolrException.ErrorCode.*;
+import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
+import org.apache.solr.update.AddUpdateCommand;
 
 /**
  * <p>
@@ -45,7 +50,6 @@ import org.apache.solr.response.SolrQueryResponse;
  *   &lt;str name="value"&gt;unknown&lt;/str&gt;
  * &lt;/processor&gt;
  * </pre>
- * @since 4.0.0
  */
 public class DefaultValueUpdateProcessorFactory
   extends AbstractDefaultValueUpdateProcessorFactory {

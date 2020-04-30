@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.spelling;
 
 import java.io.IOException;
@@ -23,6 +24,7 @@ import java.util.Collections;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.lucene.analysis.Token;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
@@ -88,7 +90,7 @@ public class SpellingQueryConverter extends QueryConverter  {
     NMTOKEN = "([" + sb.toString() + "]|" + SURROGATE_PAIR + ")+";
   }
 
-  final static String PATTERN = "(?:(?!(" + NMTOKEN + ":|[\\^.]\\d+)))[^^.:(\\s][\\p{L}_\\-0-9]+";
+  final static String PATTERN = "(?:(?!(" + NMTOKEN + ":|\\d+)))[\\p{L}_\\-0-9]+";
   // previous version: Pattern.compile("(?:(?!(\\w+:|\\d+)))\\w+");
   protected Pattern QUERY_REGEX = Pattern.compile(PATTERN);
   
@@ -102,8 +104,6 @@ public class SpellingQueryConverter extends QueryConverter  {
     if (original == null) { // this can happen with q.alt = and no query
       return Collections.emptyList();
     }
-    boolean mightContainRangeQuery = (original.indexOf('[') != -1 || original.indexOf('{') != -1)
-        && (original.indexOf(']') != -1 || original.indexOf('}') != -1);
     Collection<Token> result = new ArrayList<>();
     Matcher matcher = QUERY_REGEX.matcher(original);
     String nextWord = null;
@@ -123,10 +123,7 @@ public class SpellingQueryConverter extends QueryConverter  {
       if(matcher.find()) {
         nextWord = matcher.group(0);
         nextStartIndex = matcher.start();
-      }  
-      if(mightContainRangeQuery && "TO".equals(word)) {
-        continue;
-      }
+      }      
       if("AND".equals(word) || "OR".equals(word) || "NOT".equals(word)) {
         lastBooleanOp = word;        
         continue;

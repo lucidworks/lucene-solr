@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.io.IOException;
 import java.util.Random;
@@ -492,56 +492,5 @@ public class TestFixedBitSet extends BaseBitSetTestCase<FixedBitSet> {
     bitSet1.andNot(bitSet2);
     
     assertEquals(bitSet1.cardinality(), andNotCount);
-  }
-
-  public void testCopyOf() {
-    Random random = random();
-    int numBits = TestUtil.nextInt(random, 1000, 2000);
-    int count = TestUtil.nextInt(random, 0, numBits - 1);
-    int[] bits = makeIntArray(random, count, 0, numBits - 1);
-    FixedBitSet fixedBitSet = new FixedBitSet(numBits);
-    for (int e : bits) {
-      fixedBitSet.set(e);
-    }
-    for (boolean readOnly : new boolean[] {false, true}) {
-      Bits bitsToCopy = readOnly ? fixedBitSet.asReadOnlyBits() : fixedBitSet;
-      FixedBitSet mutableCopy = FixedBitSet.copyOf(bitsToCopy);
-      assertNotSame(mutableCopy, bitsToCopy);
-      assertEquals(mutableCopy, fixedBitSet);
-    }
-
-    final Bits bitsToCopy = new Bits() {
-
-      @Override
-      public boolean get(int index) {
-        return fixedBitSet.get(index);
-      }
-
-      @Override
-      public int length() {
-        return fixedBitSet.length();
-      }
-    };
-    FixedBitSet mutableCopy = FixedBitSet.copyOf(bitsToCopy);
-
-    assertNotSame(bitsToCopy, mutableCopy);
-    assertNotSame(fixedBitSet, mutableCopy);
-    assertEquals(mutableCopy, fixedBitSet);
-  }
-
-  public void testAsBits() {
-    FixedBitSet set = new FixedBitSet(10);
-    set.set(3);
-    set.set(4);
-    set.set(9);
-    Bits bits = set.asReadOnlyBits();
-    assertFalse(bits instanceof FixedBitSet);
-    assertEquals(set.length(), bits.length());
-    for (int i = 0; i < set.length(); ++i) {
-      assertEquals(set.get(i), bits.get(i));
-    }
-    // Further changes are reflected
-    set.set(5);
-    assertTrue(bits.get(5));
   }
 }

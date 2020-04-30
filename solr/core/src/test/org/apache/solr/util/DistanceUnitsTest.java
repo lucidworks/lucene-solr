@@ -1,3 +1,8 @@
+package org.apache.solr.util;
+
+import com.spatial4j.core.distance.DistanceUtils;
+import org.apache.lucene.util.LuceneTestCase;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +19,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util;
 
-import org.apache.solr.SolrTestCase;
-import org.locationtech.spatial4j.distance.DistanceUtils;
-
-public class DistanceUnitsTest extends SolrTestCase {
+public class DistanceUnitsTest extends LuceneTestCase {
 
   public void testAddNewUnits() throws Exception {
     DistanceUnits.addUnits("lightyears", 6.73430542e-12, 9.4605284e12 * DistanceUtils.KM_TO_DEG);

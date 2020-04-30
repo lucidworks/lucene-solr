@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
 import org.apache.lucene.util.AttributeSource;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefIterator;
 
@@ -42,16 +43,21 @@ import org.apache.lucene.util.BytesRefIterator;
  * @lucene.experimental */
 public abstract class TermsEnum implements BytesRefIterator {
 
+  private AttributeSource atts = null;
+
   /** Sole constructor. (For invocation by subclass 
    *  constructors, typically implicit.) */
   protected TermsEnum() {
   }
 
   /** Returns the related attributes. */
-  public abstract AttributeSource attributes();
+  public AttributeSource attributes() {
+    if (atts == null) atts = new AttributeSource();
+    return atts;
+  }
   
   /** Represents returned result from {@link #seekCeil}. */
-  public enum SeekStatus {
+  public static enum SeekStatus {
     /** The term was not found, and the end of iteration was hit. */
     END,
     /** The precise term was found. */
@@ -60,15 +66,13 @@ public abstract class TermsEnum implements BytesRefIterator {
     NOT_FOUND
   };
 
-  /**
-   * Attempts to seek to the exact term, returning true if the term is found. If this returns false, the enum is
-   * unpositioned. For some codecs, seekExact may be substantially faster than {@link #seekCeil}.
-   * <p>
-   * 
-   *
-   * @return true if the term is found; return false if the enum is unpositioned.
-   */
-  public abstract boolean seekExact(BytesRef text) throws IOException;
+  /** Attempts to seek to the exact term, returning
+   *  true if the term is found.  If this returns false, the
+   *  enum is unpositioned.  For some codecs, seekExact may
+   *  be substantially faster than {@link #seekCeil}. */
+  public boolean seekExact(BytesRef text) throws IOException {
+    return seekCeil(text) == SeekStatus.FOUND;
+  }
 
   /** Seeks to the specified term, if it exists, or to the
    *  next (ceiling) term.  Returns SeekStatus to
@@ -105,7 +109,11 @@ public abstract class TermsEnum implements BytesRefIterator {
    * @param term the term the TermState corresponds to
    * @param state the {@link TermState}
    * */
-  public abstract void seekExact(BytesRef term, TermState state) throws IOException;
+  public void seekExact(BytesRef term, TermState state) throws IOException {
+    if (!seekExact(term)) {
+      throw new IllegalArgumentException("term=" + term + " does not exist");
+    }
+  }
 
   /** Returns current term. Do not call this when the enum
    *  is unpositioned. */
@@ -124,7 +132,8 @@ public abstract class TermsEnum implements BytesRefIterator {
 
   /** Returns the total number of occurrences of this term
    *  across all documents (the sum of the freq() for each
-   *  doc that has this term). Note that, like
+   *  doc that has this term).  This will be -1 if the
+   *  codec doesn't support this measure.  Note that, like
    *  other term measures, this measure does not take
    *  deleted documents into account. */
   public abstract long totalTermFreq() throws IOException;
@@ -151,7 +160,8 @@ public abstract class TermsEnum implements BytesRefIterator {
   /** Get {@link PostingsEnum} for the current term, with
    *  control over whether freqs, positions, offsets or payloads
    *  are required.  Do not call this when the enum is
-   *  unpositioned.  This method will not return null.
+   *  unpositioned.  This method may return null if the postings
+   *  information required is not available from the index
    *  <p>
    *  <b>NOTE</b>: the returned iterator may return deleted documents, so
    *  deleted documents have to be checked on top of the {@link PostingsEnum}.
@@ -163,12 +173,6 @@ public abstract class TermsEnum implements BytesRefIterator {
   public abstract PostingsEnum postings(PostingsEnum reuse, int flags) throws IOException;
 
   /**
-   * Return a {@link ImpactsEnum}.
-   * @see #postings(PostingsEnum, int)
-   */
-  public abstract ImpactsEnum impacts(int flags) throws IOException;
-  
-  /**
    * Expert: Returns the TermsEnums internal state to position the TermsEnum
    * without re-seeking the term dictionary.
    * <p>
@@ -179,7 +183,14 @@ public abstract class TermsEnum implements BytesRefIterator {
    * @see TermState
    * @see #seekExact(BytesRef, TermState)
    */
-  public abstract TermState termState() throws IOException;
+  public TermState termState() throws IOException {
+    return new TermState() {
+      @Override
+      public void copyFrom(TermState other) {
+        throw new UnsupportedOperationException();
+      }
+    };
+  }
 
   /** An empty TermsEnum for quickly returning an empty instance e.g.
    * in {@link org.apache.lucene.search.MultiTermQuery}
@@ -188,7 +199,7 @@ public abstract class TermsEnum implements BytesRefIterator {
    * This should not be a problem, as the enum is always empty and
    * the existence of unused Attributes does not matter.
    */
-  public static final TermsEnum EMPTY = new BaseTermsEnum() {
+  public static final TermsEnum EMPTY = new TermsEnum() {    
     @Override
     public SeekStatus seekCeil(BytesRef term) { return SeekStatus.END; }
     
@@ -219,12 +230,7 @@ public abstract class TermsEnum implements BytesRefIterator {
     public PostingsEnum postings(PostingsEnum reuse, int flags) {
       throw new IllegalStateException("this method should never be called");
     }
-
-    @Override
-    public ImpactsEnum impacts(int flags) throws IOException {
-      throw new IllegalStateException("this method should never be called");
-    }
-
+      
     @Override
     public BytesRef next() {
       return null;
@@ -246,4 +252,106 @@ public abstract class TermsEnum implements BytesRefIterator {
     }
 
   };
+  
+  /** Get {@link DocsEnum} for the current term.  Do not
+   *  call this when the enum is unpositioned.  This method
+   *  will not return null.
+   *  
+   * @param liveDocs unset bits are documents that should not
+   * be returned
+   * @param reuse pass a prior DocsEnum for possible reuse 
+   * @deprecated Use {@link #postings(PostingsEnum)} instead */
+  @Deprecated
+  public final DocsEnum docs(Bits liveDocs, DocsEnum reuse) throws IOException {
+    return docs(liveDocs, reuse, DocsEnum.FLAG_FREQS);
+  }
+
+  /** Get {@link DocsEnum} for the current term, with
+   *  control over whether freqs are required.  Do not
+   *  call this when the enum is unpositioned.  This method
+   *  will not return null.
+   *  
+   * @param liveDocs unset bits are documents that should not
+   * be returned
+   * @param reuse pass a prior DocsEnum for possible reuse
+   * @param flags specifies which optional per-document values
+   *        you require; see {@link DocsEnum#FLAG_FREQS} 
+   * @see #docs(Bits, DocsEnum, int) 
+   * @deprecated Use {@link #postings(PostingsEnum, int)} instead */
+  @Deprecated
+  public final DocsEnum docs(Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
+    final int newFlags;
+    if (flags == DocsEnum.FLAG_FREQS) {
+      newFlags = PostingsEnum.FREQS;
+    } else if (flags == DocsEnum.FLAG_NONE) {
+      newFlags = PostingsEnum.NONE;
+    } else {
+      throw new IllegalArgumentException("Invalid legacy docs flags: " + flags);
+    }
+    PostingsEnum actualReuse = DocsAndPositionsEnum.unwrap(reuse);
+    PostingsEnum postings = postings(actualReuse, newFlags);
+    if (postings == null) {
+      throw new AssertionError();
+    } else if (postings == actualReuse
+        && liveDocs == DocsAndPositionsEnum.unwrapliveDocs(reuse)) {
+      return reuse;
+    } else {
+      return DocsAndPositionsEnum.wrap(postings, liveDocs);
+    }
+  };
+
+  /** Get {@link DocsAndPositionsEnum} for the current term.
+   *  Do not call this when the enum is unpositioned.  This
+   *  method will return null if positions were not
+   *  indexed.
+   *  
+   *  @param liveDocs unset bits are documents that should not
+   *  be returned
+   *  @param reuse pass a prior DocsAndPositionsEnum for possible reuse
+   *  @see #docsAndPositions(Bits, DocsAndPositionsEnum, int)
+   *  @deprecated Use {@link #postings(PostingsEnum, int)} instead */
+  @Deprecated
+  public final DocsAndPositionsEnum docsAndPositions(Bits liveDocs, DocsAndPositionsEnum reuse) throws IOException {
+    return docsAndPositions(liveDocs, reuse, DocsAndPositionsEnum.FLAG_OFFSETS | DocsAndPositionsEnum.FLAG_PAYLOADS);
+  }
+
+  /** Get {@link DocsAndPositionsEnum} for the current term,
+   *  with control over whether offsets and payloads are
+   *  required.  Some codecs may be able to optimize their
+   *  implementation when offsets and/or payloads are not required.
+   *  Do not call this when the enum is unpositioned.  This
+   *  will return null if positions were not indexed.
+
+   *  @param liveDocs unset bits are documents that should not
+   *  be returned
+   *  @param reuse pass a prior DocsAndPositionsEnum for possible reuse
+   *  @param flags specifies which optional per-position values you
+   *         require; see {@link DocsAndPositionsEnum#FLAG_OFFSETS} and 
+   *         {@link DocsAndPositionsEnum#FLAG_PAYLOADS}. 
+   *  @deprecated Use {@link #postings(PostingsEnum, int)} instead */
+  @Deprecated
+  public final DocsAndPositionsEnum docsAndPositions(Bits liveDocs, DocsAndPositionsEnum reuse, int flags) throws IOException {
+    final int newFlags;
+    if (flags == (DocsAndPositionsEnum.FLAG_OFFSETS | DocsAndPositionsEnum.FLAG_PAYLOADS)) {
+      newFlags = PostingsEnum.OFFSETS | PostingsEnum.PAYLOADS; 
+    } else if (flags == DocsAndPositionsEnum.FLAG_OFFSETS) {
+      newFlags = PostingsEnum.OFFSETS;
+    } else if (flags == DocsAndPositionsEnum.FLAG_PAYLOADS) {
+      newFlags = PostingsEnum.PAYLOADS;
+    } else if (flags == DocsAndPositionsEnum.FLAG_NONE) {
+      newFlags = PostingsEnum.POSITIONS;
+    } else {
+      throw new IllegalArgumentException("Invalid legacy docsAndPositions flags: " + flags);
+    }
+    PostingsEnum actualReuse = DocsAndPositionsEnum.unwrap(reuse);
+    PostingsEnum postings = postings(actualReuse, newFlags | DocsAndPositionsEnum.OLD_NULL_SEMANTICS);
+    if (postings == null) {
+      return null; // if no positions were indexed
+    } else if (postings == actualReuse
+        && liveDocs == DocsAndPositionsEnum.unwrapliveDocs(reuse)) {
+      return reuse;
+    } else {
+      return DocsAndPositionsEnum.wrap(postings, liveDocs);
+    }
+  }
 }

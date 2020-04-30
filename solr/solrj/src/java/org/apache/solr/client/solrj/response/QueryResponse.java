@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.response;
 
 import java.util.ArrayList;
@@ -26,7 +27,6 @@ import java.util.TreeMap;
 
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.beans.DocumentObjectBinder;
-import org.apache.solr.client.solrj.response.json.NestableJsonFacet;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.params.CursorMarkParams;
 import org.apache.solr.common.util.NamedList;
@@ -49,11 +49,9 @@ public class QueryResponse extends SolrResponseBase
   private NamedList<Object> _highlightingInfo = null;
   private NamedList<Object> _spellInfo = null;
   private List<NamedList<Object>> _clusterInfo = null;
-  private NamedList<Object> _jsonFacetingInfo = null;
   private Map<String,NamedList<Object>> _suggestInfo = null;
   private NamedList<Object> _statsInfo = null;
-  private NamedList<NamedList<Object>> _termsInfo = null;
-  private NamedList<SolrDocumentList> _moreLikeThisInfo = null;
+  private NamedList<NamedList<Number>> _termsInfo = null;
   private String _cursorMarkNext = null;
 
   // Grouping response
@@ -81,9 +79,6 @@ public class QueryResponse extends SolrResponseBase
   // Clustering Response
   private ClusteringResponse _clusterResponse = null;
 
-  // Json Faceting Response
-  private NestableJsonFacet _jsonFacetingResponse = null;
-
   // Suggester Response
   private SuggesterResponse _suggestResponse = null;
 
@@ -95,7 +90,7 @@ public class QueryResponse extends SolrResponseBase
   
   // Debug Info
   private Map<String,Object> _debugMap = null;
-  private Map<String,Object> _explainMap = null;
+  private Map<String,String> _explainMap = null;
 
   // utility variable used for automatic binding -- it should not be serialized
   private transient final SolrClient solrClient;
@@ -162,10 +157,6 @@ public class QueryResponse extends SolrResponseBase
         _clusterInfo = (ArrayList<NamedList<Object>>) res.getVal(i);
         extractClusteringInfo(_clusterInfo);
       }
-      else if ("facets".equals(n)) {
-        _jsonFacetingInfo = (NamedList<Object>) res.getVal(i);
-        // Don't call extractJsonFacetingInfo(_jsonFacetingInfo) here in an effort to do it lazily
-      }
       else if ( "suggest".equals( n ) )  {
         _suggestInfo = (Map<String,NamedList<Object>>) res.getVal( i );
         extractSuggesterInfo(_suggestInfo);
@@ -175,11 +166,8 @@ public class QueryResponse extends SolrResponseBase
         extractStatsInfo( _statsInfo );
       }
       else if ( "terms".equals( n ) ) {
-        _termsInfo = (NamedList<NamedList<Object>>) res.getVal( i );
+        _termsInfo = (NamedList<NamedList<Number>>) res.getVal( i );
         extractTermsInfo( _termsInfo );
-      }
-      else if ( "moreLikeThis".equals( n ) ) {
-        _moreLikeThisInfo = (NamedList<SolrDocumentList>) res.getVal( i );
       }
       else if ( CursorMarkParams.CURSOR_MARK_NEXT.equals( n ) ) {
         _cursorMarkNext = (String) res.getVal( i );
@@ -196,15 +184,11 @@ public class QueryResponse extends SolrResponseBase
     _clusterResponse = new ClusteringResponse(clusterInfo);
   }
 
-  private void extractJsonFacetingInfo(NamedList<Object> facetInfo) {
-    _jsonFacetingResponse = new NestableJsonFacet(facetInfo);
-  }
-
   private void extractSuggesterInfo(Map<String, NamedList<Object>> suggestInfo) {
     _suggestResponse = new SuggesterResponse(suggestInfo);
   }
 
-  private void extractTermsInfo(NamedList<NamedList<Object>> termsInfo) {
+  private void extractTermsInfo(NamedList<NamedList<Number>> termsInfo) {
     _termsResponse = new TermsResponse(termsInfo);
   }
   
@@ -239,9 +223,9 @@ public class QueryResponse extends SolrResponseBase
 
     // Parse out interesting bits from the debug info
     _explainMap = new HashMap<>();
-    NamedList<Object> explain = (NamedList<Object>)_debugMap.get( "explain" );
+    NamedList<String> explain = (NamedList<String>)_debugMap.get( "explain" );
     if( explain != null ) {
-      for( Map.Entry<String, Object> info : explain ) {
+      for( Map.Entry<String, String> info : explain ) {
         String key = info.getKey();
         _explainMap.put( key, info.getValue() );
       }
@@ -349,6 +333,30 @@ public class QueryResponse extends SolrResponseBase
       }
     }
     
+    //Parse date facets
+    NamedList<NamedList<Object>> df = (NamedList<NamedList<Object>>) info.get("facet_dates");
+    if (df != null) {
+      // System.out.println(df);
+      _facetDates = new ArrayList<>( df.size() );
+      for (Map.Entry<String, NamedList<Object>> facet : df) {
+        // System.out.println("Key: " + facet.getKey() + " Value: " + facet.getValue());
+        NamedList<Object> values = facet.getValue();
+        String gap = (String) values.get("gap");
+        Date end = (Date) values.get("end");
+        FacetField f = new FacetField(facet.getKey(), gap, end);
+        
+        for (Map.Entry<String, Object> entry : values)   {
+          try {
+            f.add(entry.getKey(), Long.parseLong(entry.getValue().toString()));
+          } catch (NumberFormatException e) {
+            //Ignore for non-number responses which are already handled above
+          }
+        }
+        
+        _facetDates.add(f);
+      }
+    }
+
     //Parse range facets
     NamedList<NamedList<Object>> rf = (NamedList<NamedList<Object>>) info.get("facet_ranges");
     if (rf != null) {
@@ -397,7 +405,7 @@ public class QueryResponse extends SolrResponseBase
         Number between = (Number) values.get("between");
 
         rangeFacet = new RangeFacet.Numeric(facet.getKey(), start, end, gap, before, after, between);
-      } else if (rawGap instanceof String && values.get("start") instanceof Date) {
+      } else {
         String gap = (String) rawGap;
         Date start = (Date) values.get("start");
         Date end = (Date) values.get("end");
@@ -407,18 +415,8 @@ public class QueryResponse extends SolrResponseBase
         Number between = (Number) values.get("between");
 
         rangeFacet = new RangeFacet.Date(facet.getKey(), start, end, gap, before, after, between);
-      } else {
-        String gap = (String) rawGap;
-        String start = (String) values.get("start");
-        String end = (String) values.get("end");
-        
-        Number before = (Number) values.get("before");
-        Number after = (Number) values.get("after");
-        Number between = (Number) values.get("between");
-        
-        rangeFacet = new RangeFacet.Currency(facet.getKey(), start, end, gap, before, after, between);
       }
-      
+
       NamedList<Integer> counts = (NamedList<Integer>) values.get("counts");
       for (Map.Entry<String, Integer> entry : counts)   {
         rangeFacet.addCount(entry.getKey(), entry.getValue());
@@ -522,7 +520,7 @@ public class QueryResponse extends SolrResponseBase
     return _debugMap;
   }
 
-  public Map<String, Object> getExplainMap() {
+  public Map<String, String> getExplainMap() {
     return _explainMap;
   }
 
@@ -567,21 +565,12 @@ public class QueryResponse extends SolrResponseBase
     return _clusterResponse;
   }
 
-  public NestableJsonFacet getJsonFacetingResponse() {
-    if (_jsonFacetingInfo != null && _jsonFacetingResponse == null) extractJsonFacetingInfo(_jsonFacetingInfo);
-    return _jsonFacetingResponse;
-  }
-
   public SuggesterResponse getSuggesterResponse() {
     return _suggestResponse;
   }
 
   public TermsResponse getTermsResponse() {
     return _termsResponse;
-  }
-
-  public NamedList<SolrDocumentList> getMoreLikeThis() {
-    return _moreLikeThisInfo;
   }
   
   /**

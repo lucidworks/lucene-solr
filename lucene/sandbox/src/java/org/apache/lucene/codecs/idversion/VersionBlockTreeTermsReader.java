@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.idversion;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.idversion;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -137,7 +138,7 @@ public final class VersionBlockTreeTermsReader extends FieldsProducer {
         if (sumDocFreq < docCount) {  // #postings must be >= #docs with field
           throw new CorruptIndexException("invalid sumDocFreq: " + sumDocFreq + " docCount: " + docCount, in);
         }
-        if (sumTotalTermFreq < sumDocFreq) { // #positions must be >= #postings
+        if (sumTotalTermFreq != -1 && sumTotalTermFreq < sumDocFreq) { // #positions must be >= #postings
           throw new CorruptIndexException("invalid sumTotalTermFreq: " + sumTotalTermFreq + " sumDocFreq: " + sumDocFreq, in);
         }
         final long indexStartFP = indexIn.readVLong();
@@ -233,7 +234,8 @@ public final class VersionBlockTreeTermsReader extends FieldsProducer {
   
   @Override
   public Collection<Accountable> getChildResources() {
-    List<Accountable> resources = new ArrayList<>(Accountables.namedAccountables("field", fields));
+    List<Accountable> resources = new ArrayList<>();
+    resources.addAll(Accountables.namedAccountables("field", fields));
     resources.add(Accountables.namedAccountable("delegate", postingsReader));
     return Collections.unmodifiableList(resources);
   }

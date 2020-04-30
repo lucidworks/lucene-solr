@@ -1,3 +1,5 @@
+package org.apache.solr.common.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,24 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.util;
+
+import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.util.RecordingJSONParser;
 
 import java.io.IOException;
 import java.io.StringReader;
-import java.lang.ref.WeakReference;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
-
-import org.apache.commons.lang3.StringUtils;
-import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.util.RecordingJSONParser;
 
 
 public class TestJsonRecordReader extends SolrTestCaseJ4 {
-
   public void testOneLevelSplit() throws IOException {
     String json = "{\n" +
         " \"a\":\"A\" ,\n" +
@@ -43,6 +40,8 @@ public class TestJsonRecordReader extends SolrTestCaseJ4 {
         "     {\"c\":\"C2\",\"d\":\"D2\"}\n" +
         " ]\n" +
         "}";
+//    System.out.println(json);
+//    All parameters are mapped with field name
     JsonRecordReader streamer = JsonRecordReader.getInst("/b", Arrays.asList(
         "a_s:/a",
         "c_s:/b/c",
@@ -114,73 +113,6 @@ public class TestJsonRecordReader extends SolrTestCaseJ4 {
     assertNull(((Map) records.get(1)).get("s"));
     assertNull(((Map) records.get(2)).get("s"));
 
-
-  }
-
-  public void testSrcField() throws Exception {
-    String json = "{\n" +
-        "  \"id\" : \"123\",\n" +
-        "  \"description\": \"Testing /json/docs srcField 1\",\n" +
-        "\n" +
-        "  \"nested_data\" : {\n" +
-        "    \"nested_inside\" : \"check check check 1\"\n" +
-        "  }\n" +
-        "}";
-
-    String json2 =
-        " {\n" +
-            "  \"id\" : \"345\",\n" +
-            "  \"payload\": \""+ StringUtils.repeat("0123456789", 819) +
-            "\",\n" +
-            "  \"description\": \"Testing /json/docs srcField 2\",\n" +
-            "\n" +
-            "  \"nested_data\" : {\n" +
-            "    \"nested_inside\" : \"check check check 2\"\n" +
-            "  }\n" +
-            "}";
-
-    String json3 =
-        " {\n" +
-            "  \"id\" : \"678\",\n" +
-            "  \"description\": \"Testing /json/docs srcField 3\",\n" +
-            "\n" +
-            "  \"nested_data\" : {\n" +
-            "    \"nested_inside\" : \"check check check 3\"\n" +
-            "  }\n" +
-            "}";
-
-
-    JsonRecordReader streamer = JsonRecordReader.getInst("/", Arrays.asList("id:/id"));
-    RecordingJSONParser parser = new RecordingJSONParser(new StringReader(json + json2 + json3));
-
-    streamer.streamRecords(parser, new JsonRecordReader.Handler() {
-      int count = 0;
-
-      @Override
-      public void handle(Map<String, Object> record, String path) {
-        count++;
-        String buf = parser.getBuf();
-        parser.resetBuf();
-
-        Map m = (Map) Utils.fromJSONString(buf);
-        if (count == 1) {
-          assertEquals(m.get("id"), "123");
-          assertEquals(m.get("description"), "Testing /json/docs srcField 1");
-          assertEquals(((Map) m.get("nested_data")).get("nested_inside"), "check check check 1");
-        }
-        if (count++ == 2) {
-          assertEquals(m.get("id"), "345");
-          assertEquals(m.get("description"), "Testing /json/docs srcField 2");
-          assertEquals(((Map) m.get("nested_data")).get("nested_inside"), "check check check 2");
-        }
-        if (count++ == 3) {
-          assertEquals(m.get("id"), "678");
-          assertEquals(m.get("description"), "Testing /json/docs srcField 3");
-          assertEquals(((Map) m.get("nested_data")).get("nested_inside"), "check check check 3");
-        }
-
-      }
-    });
 
   }
 
@@ -269,44 +201,6 @@ public class TestJsonRecordReader extends SolrTestCaseJ4 {
 
   }
 
-  public void testNestedDocs() throws Exception {
-    String json = "{a:{" +
-        "b:{c:d}," +
-        "x:y" +
-        "}}";
-    JsonRecordReader streamer = JsonRecordReader.getInst("/|/a/b", Arrays.asList("/a/x", "/a/b/*"));
-    streamer.streamRecords(new StringReader(json), (record, path) -> {
-      assertEquals(record.get("x"), "y");
-      assertEquals(((Map) record.get("b")).get("c"), "d");
-    });
-    json = "{a:{" +
-        "b:[{c:c1, e:e1},{c:c2, e :e2, d:{p:q}}]," +
-        "x:y" +
-        "}}";
-    streamer.streamRecords(new StringReader(json), (record, path) -> {
-      assertEquals(record.get("x"), "y");
-      List l = (List) record.get("b");
-      Map m = (Map) l.get(0);
-      assertEquals(m.get("c"), "c1");
-      assertEquals(m.get("e"), "e1");
-      m = (Map) l.get(1);
-      assertEquals(m.get("c"), "c2");
-      assertEquals(m.get("e"), "e2");
-    });
-    streamer = JsonRecordReader.getInst("/|/a/b", Arrays.asList("$FQN:/**"));
-    streamer.streamRecords(new StringReader(json), (record, path) -> {
-      assertEquals(record.get("a.x"), "y");
-      List l = (List) record.get("b");
-      Map m = (Map) l.get(0);
-      assertEquals(m.get("c"), "c1");
-      assertEquals(m.get("e"), "e1");
-      m = (Map) l.get(1);
-      assertEquals(m.get("c"), "c2");
-      assertEquals(m.get("e"), "e2");
-      assertEquals(m.get("d.p"), "q");
-    });
-  }
-
   public void testNestedJsonWithFloats() throws Exception {
 
     String json = "{\n" +
@@ -360,25 +254,6 @@ public class TestJsonRecordReader extends SolrTestCaseJ4 {
         assertFalse(e.getValue() instanceof List);
       }
     }
-  }
-
-  public void testArrayOfRootObjects() throws Exception {
-    String json = "[{'fieldA':'A1'}, {'fieldB':'B2'}]";
-    JsonRecordReader streamer;
-    List<Map<String, Object>> records;
-
-    final AtomicReference<WeakReference<String>> ref = new AtomicReference<>();
-    streamer = JsonRecordReader.getInst("/", Collections.singletonList("$FQN:/**"));
-    streamer.streamRecords(new StringReader(json), (record, path) -> {
-      System.gc();
-      if (ref.get() != null) {
-        assertNull("This reference is still intact :" + ref.get().get(), ref.get().get());
-      }
-      String fName = record.keySet().iterator().next();
-      ref.set(new WeakReference<>(fName));
-    });
-
-
   }
 
   public void testAIOOBE() throws IOException {
@@ -723,8 +598,12 @@ public class TestJsonRecordReader extends SolrTestCaseJ4 {
     RecordingJSONParser parser = new RecordingJSONParser(new StringReader(json));
     JsonRecordReader recordReader = JsonRecordReader.getInst("/",Collections.singletonList("/**"));
     try {
-      recordReader.streamRecords(parser, (record, path) -> {
-      });   /*don't care*/
+      recordReader.streamRecords(parser, new JsonRecordReader.Handler() {
+        @Override
+        public void handle(Map<String, Object> record, String path) {
+          /*don't care*/
+        }
+      });
     } catch (RuntimeException e) {
       parser.error("").printStackTrace();
       throw e;

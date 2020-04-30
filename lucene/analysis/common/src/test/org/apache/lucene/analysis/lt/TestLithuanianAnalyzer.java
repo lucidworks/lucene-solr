@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.lt;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.lt;
-
 
 import java.io.IOException;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
-import org.apache.lucene.analysis.CharArraySet;
+import org.apache.lucene.analysis.util.CharArraySet;
 
 public class TestLithuanianAnalyzer extends BaseTokenStreamTestCase {
   

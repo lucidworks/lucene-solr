@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import org.apache.lucene.document.Field;
-import org.apache.lucene.index.MultiTerms;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.Terms;
@@ -96,7 +96,8 @@ public class TestWildcard extends LuceneTestCase {
     wq.setRewriteMethod(MultiTermQuery.SCORING_BOOLEAN_REWRITE);
     assertMatches(searcher, wq, 0);
     Query q = searcher.rewrite(wq);
-    assertTrue(q instanceof MatchNoDocsQuery);
+    assertTrue(q instanceof BooleanQuery);
+    assertEquals(0, ((BooleanQuery) q).clauses().size());
     reader.close();
     indexStore.close();
   }
@@ -116,7 +117,7 @@ public class TestWildcard extends LuceneTestCase {
     
     wq = new WildcardQuery(new Term("field", "*"));
     assertMatches(searcher, wq, 2);
-    Terms terms = MultiTerms.getTerms(searcher.getIndexReader(), "field");
+    Terms terms = MultiFields.getTerms(searcher.getIndexReader(), "field");
     assertFalse(wq.getTermsEnum(terms).getClass().getSimpleName().contains("AutomatonTermsEnum"));
     reader.close();
     indexStore.close();

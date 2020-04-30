@@ -1,3 +1,5 @@
+package org.apache.solr.handler.clustering.carrot2;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.clustering.carrot2;
-
-import java.util.ArrayList;
 import java.util.List;
 
 import org.carrot2.core.Cluster;
@@ -37,6 +36,8 @@ import org.carrot2.util.attribute.Bindable;
 import org.carrot2.util.attribute.Input;
 import org.carrot2.util.attribute.Output;
 
+import com.google.common.collect.Lists;
+
 /**
  * A mock Carrot2 clustering algorithm that outputs stem of each token of each
  * document as a separate cluster. Useful only in tests.
@@ -47,14 +48,14 @@ public class EchoStemsClusteringAlgorithm extends ProcessingComponentBase
   @Input
   @Processing
   @Attribute(key = AttributeNames.DOCUMENTS)
-  public List<Document> documents;
+  private List<Document> documents;
   
   @Output
   @Processing
   @Attribute(key = AttributeNames.CLUSTERS)
-  public List<Cluster> clusters;
-
-  public BasicPreprocessingPipeline preprocessing = new BasicPreprocessingPipeline();
+  private List<Cluster> clusters;
+  
+  BasicPreprocessingPipeline preprocessing = new BasicPreprocessingPipeline();
   
   @Override
   public void process() throws ProcessingException {
@@ -63,7 +64,7 @@ public class EchoStemsClusteringAlgorithm extends ProcessingComponentBase
     final AllTokens allTokens = preprocessingContext.allTokens;
     final AllWords allWords = preprocessingContext.allWords;
     final AllStems allStems = preprocessingContext.allStems;
-    clusters = new ArrayList<>();
+    clusters = Lists.newArrayListWithCapacity(allTokens.image.length);
     for (int i = 0; i < allTokens.image.length; i++) {
       if (allTokens.wordIndex[i] >= 0) {
         clusters.add(new Cluster(new String(

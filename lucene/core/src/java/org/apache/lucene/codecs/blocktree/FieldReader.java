@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.blocktree;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.blocktree;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -25,7 +26,6 @@ import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.ByteArrayDataInput;
-import org.apache.lucene.store.ByteBufferIndexInput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Accountables;
@@ -34,7 +34,6 @@ import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.automaton.CompiledAutomaton;
 import org.apache.lucene.util.fst.ByteSequenceOutputs;
 import org.apache.lucene.util.fst.FST;
-import org.apache.lucene.util.fst.OffHeapFSTStore;
 
 /**
  * BlockTree's implementation of {@link Terms}.
@@ -62,18 +61,17 @@ public final class FieldReader extends Terms implements Accountable {
   final BlockTreeTermsReader parent;
 
   final FST<BytesRef> index;
-  final boolean isFSTOffHeap;
   //private boolean DEBUG;
 
   FieldReader(BlockTreeTermsReader parent, FieldInfo fieldInfo, long numTerms, BytesRef rootCode, long sumTotalTermFreq, long sumDocFreq, int docCount,
-              long indexStartFP, int longsSize, IndexInput indexIn, BytesRef minTerm, BytesRef maxTerm, boolean openedFromWriter, BlockTreeTermsReader.FSTLoadMode fstLoadMode) throws IOException {
+              long indexStartFP, int longsSize, IndexInput indexIn, BytesRef minTerm, BytesRef maxTerm) throws IOException {
     assert numTerms > 0;
     this.fieldInfo = fieldInfo;
     //DEBUG = BlockTreeTermsReader.DEBUG && fieldInfo.name.equals("id");
     this.parent = parent;
     this.numTerms = numTerms;
-    this.sumTotalTermFreq = sumTotalTermFreq;
-    this.sumDocFreq = sumDocFreq;
+    this.sumTotalTermFreq = sumTotalTermFreq; 
+    this.sumDocFreq = sumDocFreq; 
     this.docCount = docCount;
     this.indexStartFP = indexStartFP;
     this.rootCode = rootCode;
@@ -83,33 +81,15 @@ public final class FieldReader extends Terms implements Accountable {
     // if (DEBUG) {
     //   System.out.println("BTTR: seg=" + segment + " field=" + fieldInfo.name + " rootBlockCode=" + rootCode + " divisor=" + indexDivisor);
     // }
+
     rootBlockFP = (new ByteArrayDataInput(rootCode.bytes, rootCode.offset, rootCode.length)).readVLong() >>> BlockTreeTermsReader.OUTPUT_FLAGS_NUM_BITS;
-    // Initialize FST offheap if index is MMapDirectory and
-    // docCount != sumDocFreq implying field is not primary key
+
     if (indexIn != null) {
-      switch (fstLoadMode) {
-        case ON_HEAP:
-          isFSTOffHeap = false;
-          break;
-        case OFF_HEAP:
-          isFSTOffHeap = true;
-          break;
-        case OPTIMIZE_UPDATES_OFF_HEAP:
-          isFSTOffHeap = ((this.docCount != this.sumDocFreq) || openedFromWriter == false);
-          break;
-        case AUTO:
-          isFSTOffHeap = ((this.docCount != this.sumDocFreq) || openedFromWriter == false) && indexIn instanceof ByteBufferIndexInput;
-          break;
-        default:
-          throw new IllegalStateException("unknown enum constant: " + fstLoadMode);
-      }
       final IndexInput clone = indexIn.clone();
+      //System.out.println("start=" + indexStartFP + " field=" + fieldInfo.name);
       clone.seek(indexStartFP);
-      if (isFSTOffHeap) {
-        index = new FST<>(clone, ByteSequenceOutputs.getSingleton(), new OffHeapFSTStore());
-      } else {
-        index = new FST<>(clone, ByteSequenceOutputs.getSingleton());
-      }
+      index = new FST<>(clone, ByteSequenceOutputs.getSingleton());
+        
       /*
         if (false) {
         final String dotFileName = segment + "_" + fieldInfo.name + ".dot";
@@ -120,7 +100,6 @@ public final class FieldReader extends Terms implements Accountable {
         }
       */
     } else {
-      isFSTOffHeap = false;
       index = null;
     }
   }
@@ -148,6 +127,7 @@ public final class FieldReader extends Terms implements Accountable {
   /** For debugging -- used by CheckIndex too*/
   @Override
   public Stats getStats() throws IOException {
+    // TODO: add auto-prefix terms into stats
     return new SegmentTermsEnum(this).computeBlockStats();
   }
 
@@ -202,10 +182,7 @@ public final class FieldReader extends Terms implements Accountable {
     //System.out.println("intersect: " + compiled.type + " a=" + compiled.automaton);
     // TODO: we could push "it's a range" or "it's a prefix" down into IntersectTermsEnum?
     // can we optimize knowing that...?
-    if (compiled.type != CompiledAutomaton.AUTOMATON_TYPE.NORMAL) {
-      throw new IllegalArgumentException("please use CompiledAutomaton.getTermsEnum instead");
-    }
-    return new IntersectTermsEnum(this, compiled.automaton, compiled.runAutomaton, compiled.commonSuffixRef, startTerm);
+    return new IntersectTermsEnum(this, compiled.automaton, compiled.runAutomaton, compiled.commonSuffixRef, startTerm, compiled.sinkState);
   }
     
   @Override
@@ -224,14 +201,6 @@ public final class FieldReader extends Terms implements Accountable {
 
   @Override
   public String toString() {
-    return "BlockTreeTerms(seg=" + parent.segment +" terms=" + numTerms + ",postings=" + sumDocFreq + ",positions=" + sumTotalTermFreq + ",docs=" + docCount + ")";
+    return "BlockTreeTerms(terms=" + numTerms + ",postings=" + sumDocFreq + ",positions=" + sumTotalTermFreq + ",docs=" + docCount + ")";
   }
-
-  /**
-   * Returns <code>true</code> iff the FST is read off-heap.
-   */
-  public boolean isFstOffHeap() {
-    return isFSTOffHeap;
-  }
-
 }

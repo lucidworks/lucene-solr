@@ -1,3 +1,5 @@
+package org.apache.lucene.search.similarities;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.similarities;
 
-
-import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.lucene.search.Explanation;
@@ -96,7 +95,7 @@ public class IBSimilarity extends SimilarityBase {
   }
   
   @Override
-  protected double score(BasicStats stats, double freq, double docLen) {
+  protected float score(BasicStats stats, float freq, float docLen) {
     return stats.getBoost() *
         distribution.score(
             stats,
@@ -106,32 +105,16 @@ public class IBSimilarity extends SimilarityBase {
 
   @Override
   protected void explain(
-      List<Explanation> subs, BasicStats stats, double freq, double docLen) {
-    if (stats.getBoost() != 1.0d) {
-      subs.add(Explanation.match((float)stats.getBoost(), "boost, query boost"));
+      List<Explanation> subs, BasicStats stats, int doc, float freq, float docLen) {
+    if (stats.getBoost() != 1.0f) {
+      subs.add(Explanation.match(stats.getBoost(), "boost"));
     }
     Explanation normExpl = normalization.explain(stats, freq, docLen);
     Explanation lambdaExpl = lambda.explain(stats);
     subs.add(normExpl);
     subs.add(lambdaExpl);
-    subs.add(distribution.explain(stats, normExpl.getValue().floatValue(), lambdaExpl.getValue().floatValue()));
+    subs.add(distribution.explain(stats, normExpl.getValue(), lambdaExpl.getValue()));
   }
-
-  @Override
-  protected Explanation explain(
-      BasicStats stats, Explanation freq, double docLen) {
-    List<Explanation> subs = new ArrayList<>();
-    explain(subs, stats, freq.getValue().doubleValue(), docLen);
-
-    return Explanation.match(
-        (float) score(stats, freq.getValue().doubleValue(), docLen),
-        "score(" + getClass().getSimpleName() + ", freq=" +
-            freq.getValue() +"), computed as boost * " +
-            "distribution.score(stats, normalization.tfn(stats, freq," +
-            " docLen), lambda.lambda(stats)) from:",
-        subs);
-  }
-
   
   /**
    * The name of IB methods follow the pattern

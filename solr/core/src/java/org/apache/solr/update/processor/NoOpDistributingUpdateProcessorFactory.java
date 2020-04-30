@@ -14,32 +14,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
+import org.apache.solr.common.util.NamedList;
+import org.apache.solr.core.SolrCore;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 
 /**
  * A No-Op implementation of DistributingUpdateProcessorFactory that 
- * allways returns the next processor instead of inserting a new URP in front of it.
+ * allways returns null.
  * <p> 
  * This implementation may be useful for Solr installations in which neither 
  * the <code>{@link DistributedUpdateProcessorFactory}</code> nor any custom 
  * implementation of <code>{@link DistributingUpdateProcessorFactory}</code> 
  * is desired (ie: shards are managed externally from Solr)
  * </p>
- * @since 4.0.0
  */
 public class NoOpDistributingUpdateProcessorFactory 
   extends UpdateRequestProcessorFactory 
   implements DistributingUpdateProcessorFactory {    
 
-  /** Returns the next
+  /** Returns null 
    */
   @Override
   public UpdateRequestProcessor getInstance(SolrQueryRequest req, 
                                             SolrQueryResponse rsp, 
                                             UpdateRequestProcessor next ) {
-    return next;
+    return null;
   }
 }

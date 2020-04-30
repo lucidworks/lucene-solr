@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -26,7 +26,7 @@ import java.util.concurrent.CountDownLatch;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.SingleTermsEnum;
 import org.apache.lucene.index.Term;
@@ -49,7 +49,7 @@ public class TestAutomatonQuery extends LuceneTestCase {
   private IndexReader reader;
   private IndexSearcher searcher;
 
-  private static final String FN = "field";
+  private final String FN = "field";
   
   @Override
   public void setUp() throws Exception {
@@ -85,11 +85,11 @@ public class TestAutomatonQuery extends LuceneTestCase {
     return new Term(FN, value);
   }
   
-  private long automatonQueryNrHits(AutomatonQuery query) throws IOException {
+  private int automatonQueryNrHits(AutomatonQuery query) throws IOException {
     if (VERBOSE) {
       System.out.println("TEST: run aq=" + query);
     }
-    return searcher.search(query, 5).totalHits.value;
+    return searcher.search(query, 5).totalHits;
   }
   
   private void assertAutomatonHits(int expected, Automaton automaton)
@@ -181,7 +181,7 @@ public class TestAutomatonQuery extends LuceneTestCase {
    */
   public void testRewriteSingleTerm() throws IOException {
     AutomatonQuery aq = new AutomatonQuery(newTerm("bogus"), Automata.makeString("piece"));
-    Terms terms = MultiTerms.getTerms(searcher.getIndexReader(), FN);
+    Terms terms = MultiFields.getTerms(searcher.getIndexReader(), FN);
     assertTrue(aq.getTermsEnum(terms) instanceof SingleTermsEnum);
     assertEquals(1, automatonQueryNrHits(aq));
   }
@@ -204,7 +204,7 @@ public class TestAutomatonQuery extends LuceneTestCase {
     AutomatonQuery aq = new AutomatonQuery(newTerm("bogus"), Automata.makeEmpty());
     // not yet available: assertTrue(aq.getEnum(searcher.getIndexReader())
     // instanceof EmptyTermEnum);
-    Terms terms = MultiTerms.getTerms(searcher.getIndexReader(), FN);
+    Terms terms = MultiFields.getTerms(searcher.getIndexReader(), FN);
     assertSame(TermsEnum.EMPTY, aq.getTermsEnum(terms));
     assertEquals(0, automatonQueryNrHits(aq));
   }

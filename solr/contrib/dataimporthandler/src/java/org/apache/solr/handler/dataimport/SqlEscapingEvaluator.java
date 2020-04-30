@@ -1,3 +1,9 @@
+package org.apache.solr.handler.dataimport;
+
+import static org.apache.solr.handler.dataimport.DataImportHandlerException.SEVERE;
+
+import java.util.List;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +20,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.dataimport;
-
-import static org.apache.solr.handler.dataimport.DataImportHandlerException.SEVERE;
-
-import java.util.List;
 
 /**
  * <p> Escapes values in SQL queries.  It escapes the value of the given expression 

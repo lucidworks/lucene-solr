@@ -1,3 +1,5 @@
+package org.apache.lucene.queries;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries;
-
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
+import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.BooleanClause.Occur;
@@ -33,8 +32,9 @@ import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BoostQuery;
 import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
 import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.similarities.Similarity;
+import org.apache.lucene.util.ToStringUtils;
 
 /**
  * A query that executes high-frequency terms in a optional sub-query to prevent
@@ -42,7 +42,10 @@ import org.apache.lucene.search.TermQuery;
  * builds 2 queries off the {@link #add(Term) added} terms: low-frequency
  * terms are added to a required boolean clause and high-frequency terms are
  * added to an optional boolean clause. The optional clause is only executed if
- * the required "low-frequency" clause matches. In most cases, high-frequency terms are
+ * the required "low-frequency" clause matches. Scores produced by this query
+ * will be slightly different than plain {@link BooleanQuery} scorer mainly due to
+ * differences in the {@link Similarity#coord(int,int) number of leaf queries}
+ * in the required boolean clause. In most cases, high-frequency terms are
  * unlikely to significantly contribute to the document score unless at least
  * one of the low-frequency terms are matched.  This query can improve
  * query execution times significantly if applicable.
@@ -65,6 +68,7 @@ public class CommonTermsQuery extends Query {
    * to do so.
    */
   protected final List<Term> terms = new ArrayList<>();
+  protected final boolean disableCoord;
   protected final float maxTermFrequency;
   protected final Occur lowFreqOccur;
   protected final Occur highFreqOccur;
@@ -90,6 +94,29 @@ public class CommonTermsQuery extends Query {
    */
   public CommonTermsQuery(Occur highFreqOccur, Occur lowFreqOccur,
       float maxTermFrequency) {
+    this(highFreqOccur, lowFreqOccur, maxTermFrequency, false);
+  }
+  
+  /**
+   * Creates a new {@link CommonTermsQuery}
+   * 
+   * @param highFreqOccur
+   *          {@link Occur} used for high frequency terms
+   * @param lowFreqOccur
+   *          {@link Occur} used for low frequency terms
+   * @param maxTermFrequency
+   *          a value in [0..1) (or absolute number &gt;=1) representing the
+   *          maximum threshold of a terms document frequency to be considered a
+   *          low frequency term.
+   * @param disableCoord
+   *          disables {@link Similarity#coord(int,int)} in scoring for the low
+   *          / high frequency sub-queries
+   * @throws IllegalArgumentException
+   *           if {@link Occur#MUST_NOT} is pass as lowFreqOccur or
+   *           highFreqOccur
+   */
+  public CommonTermsQuery(Occur highFreqOccur, Occur lowFreqOccur,
+      float maxTermFrequency, boolean disableCoord) {
     if (highFreqOccur == Occur.MUST_NOT) {
       throw new IllegalArgumentException(
           "highFreqOccur should be MUST or SHOULD but was MUST_NOT");
@@ -98,6 +125,7 @@ public class CommonTermsQuery extends Query {
       throw new IllegalArgumentException(
           "lowFreqOccur should be MUST or SHOULD but was MUST_NOT");
     }
+    this.disableCoord = disableCoord;
     this.highFreqOccur = highFreqOccur;
     this.lowFreqOccur = lowFreqOccur;
     this.maxTermFrequency = maxTermFrequency;
@@ -118,28 +146,22 @@ public class CommonTermsQuery extends Query {
   
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
     if (this.terms.isEmpty()) {
-      return new MatchNoDocsQuery("CommonTermsQuery with no terms");
+      return new MatchNoDocsQuery();
     } else if (this.terms.size() == 1) {
       return newTermQuery(this.terms.get(0), null);
     }
     final List<LeafReaderContext> leaves = reader.leaves();
     final int maxDoc = reader.maxDoc();
-    final TermStates[] contextArray = new TermStates[terms.size()];
+    final TermContext[] contextArray = new TermContext[terms.size()];
     final Term[] queryTerms = this.terms.toArray(new Term[0]);
-    collectTermStates(reader, leaves, contextArray, queryTerms);
+    collectTermContext(reader, leaves, contextArray, queryTerms);
     return buildQuery(maxDoc, contextArray, queryTerms);
   }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    Term[] selectedTerms = terms.stream().filter(t -> visitor.acceptField(t.field())).toArray(Term[]::new);
-    if (selectedTerms.length > 0) {
-      QueryVisitor v = visitor.getSubVisitor(Occur.SHOULD, this);
-      v.consumeTerms(this, selectedTerms);
-    }
-  }
-
+  
   protected int calcLowFreqMinimumNumberShouldMatch(int numOptional) {
     return minNrShouldMatch(lowFreqMinNrShouldMatch, numOptional);
   }
@@ -156,21 +178,21 @@ public class CommonTermsQuery extends Query {
   }
   
   protected Query buildQuery(final int maxDoc,
-                             final TermStates[] contextArray, final Term[] queryTerms) {
+      final TermContext[] contextArray, final Term[] queryTerms) {
     List<Query> lowFreqQueries = new ArrayList<>();
     List<Query> highFreqQueries = new ArrayList<>();
     for (int i = 0; i < queryTerms.length; i++) {
-      TermStates termStates = contextArray[i];
-      if (termStates == null) {
+      TermContext termContext = contextArray[i];
+      if (termContext == null) {
         lowFreqQueries.add(newTermQuery(queryTerms[i], null));
       } else {
-        if ((maxTermFrequency >= 1f && termStates.docFreq() > maxTermFrequency)
-            || (termStates.docFreq() > (int) Math.ceil(maxTermFrequency
+        if ((maxTermFrequency >= 1f && termContext.docFreq() > maxTermFrequency)
+            || (termContext.docFreq() > (int) Math.ceil(maxTermFrequency
                 * (float) maxDoc))) {
           highFreqQueries
-              .add(newTermQuery(queryTerms[i], termStates));
+              .add(newTermQuery(queryTerms[i], termContext));
         } else {
-          lowFreqQueries.add(newTermQuery(queryTerms[i], termStates));
+          lowFreqQueries.add(newTermQuery(queryTerms[i], termContext));
         }
       }
     }
@@ -196,9 +218,11 @@ public class CommonTermsQuery extends Query {
       }
     }
     BooleanQuery.Builder builder = new BooleanQuery.Builder();
+    builder.setDisableCoord(true);
 
     if (lowFreqQueries.isEmpty() == false) {
       BooleanQuery.Builder lowFreq = new BooleanQuery.Builder();
+      lowFreq.setDisableCoord(disableCoord);
       for (Query query : lowFreqQueries) {
         lowFreq.add(query, lowFreqOccur);
       }
@@ -208,6 +232,7 @@ public class CommonTermsQuery extends Query {
     }
     if (highFreqQueries.isEmpty() == false) {
       BooleanQuery.Builder highFreq = new BooleanQuery.Builder();
+      highFreq.setDisableCoord(disableCoord);
       for (Query query : highFreqQueries) {
         highFreq.add(query, highFreqOccur);
       }
@@ -218,15 +243,16 @@ public class CommonTermsQuery extends Query {
     return builder.build();
   }
   
-  public void collectTermStates(IndexReader reader,
-                                List<LeafReaderContext> leaves, TermStates[] contextArray,
-                                Term[] queryTerms) throws IOException {
+  public void collectTermContext(IndexReader reader,
+      List<LeafReaderContext> leaves, TermContext[] contextArray,
+      Term[] queryTerms) throws IOException {
     TermsEnum termsEnum = null;
     for (LeafReaderContext context : leaves) {
+      final Fields fields = context.reader().fields();
       for (int i = 0; i < queryTerms.length; i++) {
         Term term = queryTerms[i];
-        TermStates termStates = contextArray[i];
-        final Terms terms = context.reader().terms(term.field());
+        TermContext termContext = contextArray[i];
+        final Terms terms = fields.terms(term.field());
         if (terms == null) {
           // field does not exist
           continue;
@@ -236,12 +262,12 @@ public class CommonTermsQuery extends Query {
         
         if (termsEnum == TermsEnum.EMPTY) continue;
         if (termsEnum.seekExact(term.bytes())) {
-          if (termStates == null) {
-            contextArray[i] = new TermStates(reader.getContext(),
+          if (termContext == null) {
+            contextArray[i] = new TermContext(reader.getContext(),
                 termsEnum.termState(), context.ord, termsEnum.docFreq(),
                 termsEnum.totalTermFreq());
           } else {
-            termStates.register(termsEnum.termState(), context.ord,
+            termContext.register(termsEnum.termState(), context.ord,
                 termsEnum.docFreq(), termsEnum.totalTermFreq());
           }
           
@@ -249,6 +275,15 @@ public class CommonTermsQuery extends Query {
         
       }
     }
+  }
+  
+  /**
+   * Returns true iff {@link Similarity#coord(int,int)} is disabled in scoring
+   * for the high and low frequency query instance. The top level query will
+   * always disable coords.
+   */
+  public boolean isCoordDisabled() {
+    return disableCoord;
   }
   
   /**
@@ -307,49 +342,6 @@ public class CommonTermsQuery extends Query {
     return highFreqMinNrShouldMatch;
   }
   
-  /**
-   * Gets the list of terms.
-   */
-  public List<Term> getTerms() {
-    return Collections.unmodifiableList(terms);
-  }
-  
-  /**
-   * Gets the maximum threshold of a terms document frequency to be considered a
-   * low frequency term.
-   */
-  public float getMaxTermFrequency() {
-    return maxTermFrequency;
-  }
-  
-  /**
-   * Gets the {@link Occur} used for low frequency terms.
-   */
-  public Occur getLowFreqOccur() {
-    return lowFreqOccur;
-  }
-  
-  /**
-   * Gets the {@link Occur} used for high frequency terms.
-   */
-  public Occur getHighFreqOccur() {
-    return highFreqOccur;
-  }
-  
-  /**
-   * Gets the boost used for low frequency terms.
-   */
-  public float getLowFreqBoost() {
-    return lowFreqBoost;
-  }
-  
-  /**
-   * Gets the boost used for high frequency terms.
-   */
-  public float getHighFreqBoost() {
-    return highFreqBoost;
-  }
-  
   @Override
   public String toString(String field) {
     StringBuilder buffer = new StringBuilder();
@@ -373,49 +365,59 @@ public class CommonTermsQuery extends Query {
       buffer.append(getHighFreqMinimumNumberShouldMatch());
       buffer.append(")");
     }
+    buffer.append(ToStringUtils.boost(getBoost()));
     return buffer.toString();
   }
   
   @Override
   public int hashCode() {
     final int prime = 31;
-    int result = classHash();
+    int result = super.hashCode();
+    result = prime * result + (disableCoord ? 1231 : 1237);
     result = prime * result + Float.floatToIntBits(highFreqBoost);
-    result = prime * result + Objects.hashCode(highFreqOccur);
-    result = prime * result + Objects.hashCode(lowFreqOccur);
+    result = prime * result
+        + ((highFreqOccur == null) ? 0 : highFreqOccur.hashCode());
     result = prime * result + Float.floatToIntBits(lowFreqBoost);
+    result = prime * result
+        + ((lowFreqOccur == null) ? 0 : lowFreqOccur.hashCode());
     result = prime * result + Float.floatToIntBits(maxTermFrequency);
     result = prime * result + Float.floatToIntBits(lowFreqMinNrShouldMatch);
     result = prime * result + Float.floatToIntBits(highFreqMinNrShouldMatch);
-    result = prime * result + Objects.hashCode(terms);
+    result = prime * result + ((terms == null) ? 0 : terms.hashCode());
     return result;
   }
-
+  
   @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           equalsTo(getClass().cast(other));
-  }
-
-  private boolean equalsTo(CommonTermsQuery other) {
-    return Float.floatToIntBits(highFreqBoost) == Float.floatToIntBits(other.highFreqBoost) &&
-           highFreqOccur == other.highFreqOccur &&
-           lowFreqOccur == other.lowFreqOccur &&
-           Float.floatToIntBits(lowFreqBoost) == Float.floatToIntBits(other.lowFreqBoost) &&
-           Float.floatToIntBits(maxTermFrequency) == Float.floatToIntBits(other.maxTermFrequency) &&
-           lowFreqMinNrShouldMatch == other.lowFreqMinNrShouldMatch &&
-           highFreqMinNrShouldMatch == other.highFreqMinNrShouldMatch &&
-           terms.equals(other.terms);
+  public boolean equals(Object obj) {
+    if (this == obj) return true;
+    if (!super.equals(obj)) return false;
+    if (getClass() != obj.getClass()) return false;
+    CommonTermsQuery other = (CommonTermsQuery) obj;
+    if (disableCoord != other.disableCoord) return false;
+    if (Float.floatToIntBits(highFreqBoost) != Float
+        .floatToIntBits(other.highFreqBoost)) return false;
+    if (highFreqOccur != other.highFreqOccur) return false;
+    if (Float.floatToIntBits(lowFreqBoost) != Float
+        .floatToIntBits(other.lowFreqBoost)) return false;
+    if (lowFreqOccur != other.lowFreqOccur) return false;
+    if (Float.floatToIntBits(maxTermFrequency) != Float
+        .floatToIntBits(other.maxTermFrequency)) return false;
+    if (lowFreqMinNrShouldMatch != other.lowFreqMinNrShouldMatch) return false;
+    if (highFreqMinNrShouldMatch != other.highFreqMinNrShouldMatch) return false;
+    if (terms == null) {
+      if (other.terms != null) return false;
+    } else if (!terms.equals(other.terms)) return false;
+    return true;
   }
 
   /**
    * Builds a new TermQuery instance.
    * <p>This is intended for subclasses that wish to customize the generated queries.</p>
    * @param term term
-   * @param termStates the TermStates to be used to create the low level term query. Can be <code>null</code>.
+   * @param context the TermContext to be used to create the low level term query. Can be <code>null</code>.
    * @return new TermQuery instance
    */
-  protected Query newTermQuery(Term term, TermStates termStates) {
-    return termStates == null ? new TermQuery(term) : new TermQuery(term, termStates);
+  protected Query newTermQuery(Term term, TermContext context) {
+    return context == null ? new TermQuery(term) : new TermQuery(term, context);
   }
 }

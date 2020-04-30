@@ -1,3 +1,5 @@
+package org.apache.lucene.search.similarities;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.similarities;
-
 
 /**
  * Log-logistic distribution.
@@ -30,8 +30,8 @@ public class DistributionLL extends Distribution {
   public DistributionLL() {}
 
   @Override
-  public final double score(BasicStats stats, double tfn, double lambda) {
-    return -Math.log(lambda / (tfn + lambda));
+  public final float score(BasicStats stats, float tfn, float lambda) {
+    return (float)-Math.log(lambda / (tfn + lambda));
   }
   
   @Override

@@ -1,3 +1,5 @@
+package org.apache.lucene.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.document;
-
 
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
@@ -24,11 +24,15 @@ import java.util.List;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.search.Query;
@@ -52,9 +56,9 @@ public class TestDocument extends LuceneTestCase {
     
     FieldType ft = new FieldType();
     ft.setStored(true);
-    Field stringFld = new Field("string", binaryVal, ft);
-    StoredField binaryFld = new StoredField("binary", binaryVal.getBytes(StandardCharsets.UTF_8));
-    StoredField binaryFld2 = new StoredField("binary", binaryVal2.getBytes(StandardCharsets.UTF_8));
+    IndexableField stringFld = new Field("string", binaryVal, ft);
+    IndexableField binaryFld = new StoredField("binary", binaryVal.getBytes(StandardCharsets.UTF_8));
+    IndexableField binaryFld2 = new StoredField("binary", binaryVal2.getBytes(StandardCharsets.UTF_8));
     
     doc.add(stringFld);
     doc.add(binaryFld);
@@ -129,15 +133,18 @@ public class TestDocument extends LuceneTestCase {
     doc.removeFields("indexed_not_tokenized");
     assertEquals(0, doc.getFields().size());
   }
-
+  
   public void testConstructorExceptions() throws Exception {
     FieldType ft = new FieldType();
     ft.setStored(true);
     new Field("name", "value", ft); // okay
     new StringField("name", "value", Field.Store.NO); // okay
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new Field("name", "value", new FieldType());
-    });
+      fail();
+    } catch (IllegalArgumentException e) {
+      // expected exception
+    }
 
     Directory dir = newDirectory();
     RandomIndexWriter w = new RandomIndexWriter(random(), dir);
@@ -147,32 +154,14 @@ public class TestDocument extends LuceneTestCase {
     ft2.setStored(true);
     ft2.setStoreTermVectors(true);
     doc.add(new Field("name", "value", ft2));
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       w.addDocument(doc);
-    });
+      fail();
+    } catch (IllegalArgumentException e) {
+      // expected exception
+    }
     w.close();
     dir.close();
-  }
-
-  public void testClearDocument() {
-    Document doc = makeDocumentWithFields();
-    assertEquals(10, doc.getFields().size());
-    doc.clear();
-    assertEquals(0, doc.getFields().size());
-  }
-
-  /** test that Document.getFields() actually returns an immutable list */
-  public void testGetFieldsImmutable() {
-    Document doc = makeDocumentWithFields();
-    assertEquals(10, doc.getFields().size());
-    List<IndexableField> fields = doc.getFields();
-    expectThrows(UnsupportedOperationException.class, () -> {
-      fields.add(new StringField("name", "value", Field.Store.NO));
-    });
-
-    expectThrows(UnsupportedOperationException.class, () -> {
-      fields.clear();
-    });
   }
   
   /**
@@ -199,7 +188,7 @@ public class TestDocument extends LuceneTestCase {
     
     IndexSearcher searcher = newSearcher(reader);
     
-    // search for something that does exist
+    // search for something that does exists
     Query query = new TermQuery(new Term("keyword", "test1"));
     
     // ensure that queries return expected results without DateFilter first
@@ -330,20 +319,84 @@ public class TestDocument extends LuceneTestCase {
   }
   
   // LUCENE-3616
-  public void testInvalidFields() {
-    expectThrows(IllegalArgumentException.class, () -> {
+  public void testInvalidFields() throws Exception {
+    try {
       Tokenizer tok = new MockTokenizer();
       tok.setReader(new StringReader(""));
       new Field("foo", tok, StringField.TYPE_STORED);
-    });
+      fail("did not hit expected exc");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
+  }
+
+  // LUCENE-3682
+  public void testTransitionAPI() throws Exception {
+    Directory dir = newDirectory();
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
+
+    Document doc = new Document();
+    doc.add(new Field("stored", "abc", Field.Store.YES, Field.Index.NO));
+    doc.add(new Field("stored_indexed", "abc xyz", Field.Store.YES, Field.Index.NOT_ANALYZED));
+    doc.add(new Field("stored_tokenized", "abc xyz", Field.Store.YES, Field.Index.ANALYZED));
+    doc.add(new Field("indexed", "abc xyz", Field.Store.NO, Field.Index.NOT_ANALYZED));
+    doc.add(new Field("tokenized", "abc xyz", Field.Store.NO, Field.Index.ANALYZED));
+    doc.add(new Field("tokenized_reader", new StringReader("abc xyz")));
+    doc.add(new Field("tokenized_tokenstream", w.w.getAnalyzer().tokenStream("tokenized_tokenstream", new StringReader("abc xyz"))));
+    doc.add(new Field("binary", new byte[10]));
+    doc.add(new Field("tv", "abc xyz", Field.Store.NO, Field.Index.ANALYZED, Field.TermVector.YES));
+    doc.add(new Field("tv_pos", "abc xyz", Field.Store.NO, Field.Index.ANALYZED, Field.TermVector.WITH_POSITIONS));
+    doc.add(new Field("tv_off", "abc xyz", Field.Store.NO, Field.Index.ANALYZED, Field.TermVector.WITH_OFFSETS));
+    doc.add(new Field("tv_pos_off", "abc xyz", Field.Store.NO, Field.Index.ANALYZED, Field.TermVector.WITH_POSITIONS_OFFSETS));
+    w.addDocument(doc);
+    IndexReader r = w.getReader();
+    w.close();
+
+    doc = r.document(0);
+    // 4 stored fields
+    assertEquals(4, doc.getFields().size());
+    assertEquals("abc", doc.get("stored"));
+    assertEquals("abc xyz", doc.get("stored_indexed"));
+    assertEquals("abc xyz", doc.get("stored_tokenized"));
+    final BytesRef br = doc.getBinaryValue("binary");
+    assertNotNull(br);
+    assertEquals(10, br.length);
+
+    IndexSearcher s = new IndexSearcher(r);
+    assertEquals(1, s.search(new TermQuery(new Term("stored_indexed", "abc xyz")), 1).totalHits);
+    assertEquals(1, s.search(new TermQuery(new Term("stored_tokenized", "abc")), 1).totalHits);
+    assertEquals(1, s.search(new TermQuery(new Term("stored_tokenized", "xyz")), 1).totalHits);
+    assertEquals(1, s.search(new TermQuery(new Term("indexed", "abc xyz")), 1).totalHits);
+    assertEquals(1, s.search(new TermQuery(new Term("tokenized", "abc")), 1).totalHits);
+    assertEquals(1, s.search(new TermQuery(new Term("tokenized", "xyz")), 1).totalHits);
+    assertEquals(1, s.search(new TermQuery(new Term("tokenized_reader", "abc")), 1).totalHits);
+    assertEquals(1, s.search(new TermQuery(new Term("tokenized_reader", "xyz")), 1).totalHits);
+    assertEquals(1, s.search(new TermQuery(new Term("tokenized_tokenstream", "abc")), 1).totalHits);
+    assertEquals(1, s.search(new TermQuery(new Term("tokenized_tokenstream", "xyz")), 1).totalHits);
+
+    for(String field : new String[] {"tv", "tv_pos", "tv_off", "tv_pos_off"}) {
+      Fields tvFields = r.getTermVectors(0);
+      Terms tvs = tvFields.terms(field);
+      assertNotNull(tvs);
+      assertEquals(2, tvs.size());
+      TermsEnum tvsEnum = tvs.iterator();
+      assertEquals(new BytesRef("abc"), tvsEnum.next());
+      final PostingsEnum dpEnum = tvsEnum.postings(null, PostingsEnum.ALL);
+      assertNotNull(dpEnum);
+      assertEquals(new BytesRef("xyz"), tvsEnum.next());
+      assertNull(tvsEnum.next());
+    }
+
+    r.close();
+    dir.close();
   }
   
   public void testNumericFieldAsString() throws Exception {
     Document doc = new Document();
-    doc.add(new StoredField("int", 5));
+    doc.add(new IntField("int", 5, Field.Store.YES));
     assertEquals("5", doc.get("int"));
     assertNull(doc.get("somethingElse"));
-    doc.add(new StoredField("int", 4));
+    doc.add(new IntField("int", 4, Field.Store.YES));
     assertArrayEquals(new String[] { "5", "4" }, doc.getValues("int"));
     
     Directory dir = newDirectory();

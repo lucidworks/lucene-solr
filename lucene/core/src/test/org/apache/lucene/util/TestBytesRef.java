@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 public class TestBytesRef extends LuceneTestCase {
   public void testEmpty() {
@@ -47,13 +47,5 @@ public class TestBytesRef extends LuceneTestCase {
     
     // only for 4.x
     assertEquals("\uFFFF", new BytesRef("\uFFFF").utf8ToString());
-  }
-
-  public void testInvalidDeepCopy() {
-    BytesRef from = new BytesRef(new byte[] { 1, 2 });
-    from.offset += 1; // now invalid
-    expectThrows(IndexOutOfBoundsException.class, () -> {
-      BytesRef.deepCopyOf(from);
-    });
   }
 }

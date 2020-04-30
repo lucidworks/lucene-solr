@@ -1,19 +1,3 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.apache.solr.update.processor;
 
 import java.lang.invoke.MethodHandles;
@@ -38,6 +22,23 @@ import org.apache.solr.schema.SimplePreAnalyzedParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 /**
  * <p>An update processor that parses configured fields of any document being added
  * using {@link PreAnalyzedField} with the configured format parser.</p>
@@ -54,7 +55,7 @@ import org.slf4j.LoggerFactory;
  * <p>This update processor uses {@link PreAnalyzedParser}
  * to parse the original field content (interpreted as a string value), and thus
  * obtain the stored part and the token stream part. Then it creates the "template"
- * {@link Field}-s using the original {@link SchemaField#createFields(Object)}
+ * {@link Field}-s using the original {@link SchemaField#createFields(Object, float)}
  * as declared in the current schema. Finally it sets the pre-analyzed parts if
  * available (string value and the token
  * stream value) on the first field of these "template" fields. If the declared
@@ -99,7 +100,6 @@ import org.slf4j.LoggerFactory;
  *  &lt;/updateRequestProcessorChain&gt;
  *  </pre>
  *
- * @since 4.3.0
  */
 public class PreAnalyzedUpdateProcessorFactory extends FieldMutatingUpdateProcessorFactory {
   
@@ -156,16 +156,17 @@ class PreAnalyzedUpdateProcessor extends FieldMutatingUpdateProcessor {
       return null;
     }
     SolrInputField res = new SolrInputField(src.getName());
+    res.setBoost(src.getBoost());
     for (Object o : src) {
       if (o == null) {
         continue;
       }
-      Field pre = (Field)parser.createField(sf, o);
+      Field pre = (Field)parser.createField(sf, o, 1.0f);
       if (pre != null) {
-        res.addValue(pre);
+        res.addValue(pre, 1.0f);
       } else { // restore the original value
         log.warn("Could not parse field {} - using original value as is: {}", src.getName(), o);
-        res.addValue(o);
+        res.addValue(o, 1.0f);
       }
     }
     return res;

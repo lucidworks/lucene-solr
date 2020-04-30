@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.blocktreeords;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.blocktreeords;
-
 
 //import java.io.*;
 //import java.nio.charset.StandardCharsets;
@@ -25,13 +25,15 @@ import java.io.PrintStream;
 
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.blocktreeords.FSTOrdsOutputs.Output;
-import org.apache.lucene.index.BaseTermsEnum;
-import org.apache.lucene.index.ImpactsEnum;
+import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.TermState;
+import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.ArrayUtil;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.IntsRef;
@@ -41,7 +43,7 @@ import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.Util;
 
 /** Iterates through terms in this field. */
-public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
+public final class OrdsSegmentTermsEnum extends TermsEnum {
 
   // Lazy init:
   IndexInput in;
@@ -271,7 +273,7 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
 
       arc = arcs[0];
       assert arc.isFinal();
-      output = arc.output();
+      output = arc.output;
       targetUpto = 0;
           
       OrdsSegmentTermsEnumFrame lastFrame = stack[0];
@@ -294,9 +296,9 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
           break;
         }
         arc = arcs[1+targetUpto];
-        assert arc.label() == (target.bytes[target.offset + targetUpto] & 0xFF): "arc.label=" + (char) arc.label() + " targetLabel=" + (char) (target.bytes[target.offset + targetUpto] & 0xFF);
-        if (arc.output() != OrdsBlockTreeTermsWriter.NO_OUTPUT) {
-          output = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.output());
+        assert arc.label == (target.bytes[target.offset + targetUpto] & 0xFF): "arc.label=" + (char) arc.label + " targetLabel=" + (char) (target.bytes[target.offset + targetUpto] & 0xFF);
+        if (arc.output != OrdsBlockTreeTermsWriter.NO_OUTPUT) {
+          output = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.output);
         }
         if (arc.isFinal()) {
           lastFrame = stack[1+lastFrame.ord];
@@ -374,19 +376,19 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
 
       // Empty string prefix must have an output (block) in the index!
       assert arc.isFinal();
-      assert arc.output() != null;
+      assert arc.output != null;
 
       // if (DEBUG) {
       //   System.out.println("    no seek state; push root frame");
       // }
 
-      output = arc.output();
+      output = arc.output;
 
       currentFrame = staticFrame;
 
       //term.length = 0;
       targetUpto = 0;
-      currentFrame = pushFrame(arc, OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.nextFinalOutput()), 0);
+      currentFrame = pushFrame(arc, OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.nextFinalOutput), 0);
     }
 
     positioned = true;
@@ -443,9 +445,9 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
         arc = nextArc;
         term.setByteAt(targetUpto, (byte) targetLabel);
         // Aggregate output as we go:
-        assert arc.output() != null;
-        if (arc.output() != OrdsBlockTreeTermsWriter.NO_OUTPUT) {
-          output = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.output());
+        assert arc.output != null;
+        if (arc.output != OrdsBlockTreeTermsWriter.NO_OUTPUT) {
+          output = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.output);
         }
 
         // if (DEBUG) {
@@ -455,7 +457,7 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
 
         if (arc.isFinal()) {
           //if (DEBUG) System.out.println("    arc is final!");
-          currentFrame = pushFrame(arc, OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.nextFinalOutput()), targetUpto);
+          currentFrame = pushFrame(arc, OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.nextFinalOutput), targetUpto);
           //if (DEBUG) System.out.println("    curFrame.ord=" + currentFrame.ord + " hasTerms=" + currentFrame.hasTerms);
         }
       }
@@ -529,7 +531,7 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
 
       arc = arcs[0];
       assert arc.isFinal();
-      output = arc.output();
+      output = arc.output;
       targetUpto = 0;
           
       OrdsSegmentTermsEnumFrame lastFrame = stack[0];
@@ -552,14 +554,14 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
           break;
         }
         arc = arcs[1+targetUpto];
-        assert arc.label() == (target.bytes[target.offset + targetUpto] & 0xFF): "arc.label=" + (char) arc.label() + " targetLabel=" + (char) (target.bytes[target.offset + targetUpto] & 0xFF);
+        assert arc.label == (target.bytes[target.offset + targetUpto] & 0xFF): "arc.label=" + (char) arc.label + " targetLabel=" + (char) (target.bytes[target.offset + targetUpto] & 0xFF);
         // TODO: we could save the outputs in local
         // byte[][] instead of making new objs ever
         // seek; but, often the FST doesn't have any
         // shared bytes (but this could change if we
         // reverse vLong byte order)
-        if (arc.output() != OrdsBlockTreeTermsWriter.NO_OUTPUT) {
-          output = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.output());
+        if (arc.output != OrdsBlockTreeTermsWriter.NO_OUTPUT) {
+          output = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.output);
         }
         if (arc.isFinal()) {
           lastFrame = stack[1+lastFrame.ord];
@@ -632,19 +634,19 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
 
       // Empty string prefix must have an output (block) in the index!
       assert arc.isFinal();
-      assert arc.output() != null;
+      assert arc.output != null;
 
       //if (DEBUG) {
       //System.out.println("    no seek state; push root frame");
       //}
 
-      output = arc.output();
+      output = arc.output;
 
       currentFrame = staticFrame;
 
       //term.length = 0;
       targetUpto = 0;
-      currentFrame = pushFrame(arc, OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.nextFinalOutput()), 0);
+      currentFrame = pushFrame(arc, OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.nextFinalOutput), 0);
     }
 
     positioned = true;
@@ -701,9 +703,9 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
         term.setByteAt(targetUpto, (byte) targetLabel);
         arc = nextArc;
         // Aggregate output as we go:
-        assert arc.output() != null;
-        if (arc.output() != OrdsBlockTreeTermsWriter.NO_OUTPUT) {
-          output = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.output());
+        assert arc.output != null;
+        if (arc.output != OrdsBlockTreeTermsWriter.NO_OUTPUT) {
+          output = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.output);
         }
 
         //if (DEBUG) {
@@ -713,7 +715,7 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
 
         if (arc.isFinal()) {
           //if (DEBUG) System.out.println("    arc is final!");
-          currentFrame = pushFrame(arc, OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.nextFinalOutput()), targetUpto);
+          currentFrame = pushFrame(arc, OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.nextFinalOutput), targetUpto);
           //if (DEBUG) System.out.println("    curFrame.ord=" + currentFrame.ord + " hasTerms=" + currentFrame.hasTerms);
         }
       }
@@ -766,8 +768,8 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
         }
         if (fr.index != null) {
           assert !isSeekFrame || f.arc != null: "isSeekFrame=" + isSeekFrame + " f.arc=" + f.arc;
-          if (f.prefix > 0 && isSeekFrame && f.arc.label() != (term.byteAt(f.prefix-1)&0xFF)) {
-            out.println("      broken seek state: arc.label=" + (char) f.arc.label() + " vs term byte=" + (char) (term.byteAt(f.prefix-1)&0xFF));
+          if (f.prefix > 0 && isSeekFrame && f.arc.label != (term.byteAt(f.prefix-1)&0xFF)) {
+            out.println("      broken seek state: arc.label=" + (char) f.arc.label + " vs term byte=" + (char) (term.byteAt(f.prefix-1)&0xFF));
             throw new RuntimeException("seek state is broken");
           }
           Output output = Util.get(fr.index, prefix);
@@ -923,6 +925,14 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
 
   @Override
   public PostingsEnum postings(PostingsEnum reuse, int flags) throws IOException {
+
+    if (PostingsEnum.featureRequested(flags, DocsAndPositionsEnum.OLD_NULL_SEMANTICS)) {
+      if (fr.fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) < 0) {
+        // Positions were not indexed:
+        return null;
+      }
+    }
+
     assert !eof;
     //if (DEBUG) {
     //System.out.println("BTTR.docs seg=" + segment);
@@ -932,19 +942,6 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
     //System.out.println("  state=" + currentFrame.state);
     //}
     return fr.parent.postingsReader.postings(fr.fieldInfo, currentFrame.state, reuse, flags);
-  }
-
-  @Override
-  public ImpactsEnum impacts(int flags) throws IOException {
-    assert !eof;
-    //if (DEBUG) {
-    //System.out.println("BTTR.docs seg=" + segment);
-    //}
-    currentFrame.decodeMetaData();
-    //if (DEBUG) {
-    //System.out.println("  state=" + currentFrame.state);
-    //}
-    return fr.parent.postingsReader.impacts(fr.fieldInfo, currentFrame.state, flags);
   }
 
   @Override
@@ -1052,7 +1049,7 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
     final IntsRefBuilder result = new IntsRefBuilder();
 
     fr.index.getFirstArc(arc);
-    Output output = arc.output();
+    Output output = arc.output;
     int upto = 0;
 
     int bestUpto = 0;
@@ -1069,7 +1066,7 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
     while (true) {
       // System.out.println("  loop: output=" + output.startOrd + "-" + (Long.MAX_VALUE-output.endOrd) + " upto=" + upto + " arc=" + arc + " final?=" + arc.isFinal());
       if (arc.isFinal()) {
-        final Output finalOutput = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.nextFinalOutput());
+        final Output finalOutput = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.nextFinalOutput);
         // System.out.println("  isFinal: " + finalOutput.startOrd + "-" + (Long.MAX_VALUE-finalOutput.endOrd));
         if (targetOrd >= finalOutput.startOrd && targetOrd <= Long.MAX_VALUE-finalOutput.endOrd) {
           // Only one range should match across all arc leaving this node
@@ -1082,19 +1079,21 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
       if (FST.targetHasArcs(arc)) {
         // System.out.println("  targetHasArcs");
         result.grow(1+upto);
-        fr.index.readFirstRealTargetArc(arc.target(), arc, fstReader);
+        
+        fr.index.readFirstRealTargetArc(arc.target, arc, fstReader);
 
-        if (arc.bytesPerArc() != 0 && arc.nodeFlags() == FST.ARCS_FOR_BINARY_SEARCH) {
+        if (arc.bytesPerArc != 0) {
           // System.out.println("  array arcs");
+
           int low = 0;
-          int high = arc.numArcs() -1;
+          int high = arc.numArcs-1;
           int mid = 0;
           //System.out.println("bsearch: numArcs=" + arc.numArcs + " target=" + targetOutput + " output=" + output);
           boolean found = false;
           while (low <= high) {
             mid = (low + high) >>> 1;
-            fstReader.setPosition(arc.posArcsStart());
-            fstReader.skipBytes(arc.bytesPerArc() *mid);
+            fstReader.setPosition(arc.posArcsStart);
+            fstReader.skipBytes(arc.bytesPerArc*mid);
             final byte flags = fstReader.readByte();
             fr.index.readLabel(fstReader);
             final Output minArcOutput;
@@ -1115,7 +1114,10 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
             }
           }
 
-          if (found == false) {
+          if (found) {
+            // Keep recursing
+            arc.arcIdx = mid-1;
+          } else {
             result.setLength(bestUpto);
             InputOutput io = new InputOutput();
             io.input = result.get();
@@ -1124,10 +1126,11 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
             return io;
           }
 
+          fr.index.readNextRealArc(arc, fstReader);
+
           // Recurse on this arc:
-          fr.index.readArcByIndex(arc, fstReader, mid);
-          result.setIntAt(upto++, arc.label());
-          output = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.output());
+          result.setIntAt(upto++, arc.label);
+          output = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.output);
 
         } else {
           // System.out.println("    non-array arc");
@@ -1137,14 +1140,14 @@ public final class OrdsSegmentTermsEnum extends BaseTermsEnum {
 
             // This is the min output we'd hit if we follow
             // this arc:
-            final Output minArcOutput = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.output());
+            final Output minArcOutput = OrdsBlockTreeTermsWriter.FST_OUTPUTS.add(output, arc.output);
             long endOrd = Long.MAX_VALUE - minArcOutput.endOrd;
             // System.out.println("    endOrd=" + endOrd + " targetOrd=" + targetOrd);
 
             if (targetOrd >= minArcOutput.startOrd && targetOrd <= endOrd) {
               // Recurse on this arc:
               output = minArcOutput;
-              result.setIntAt(upto++, arc.label());
+              result.setIntAt(upto++, arc.label);
               break;
             } else if (targetOrd < endOrd || arc.isLast()) {
               result.setLength(bestUpto);

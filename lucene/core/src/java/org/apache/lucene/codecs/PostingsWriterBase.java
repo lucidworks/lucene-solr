@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs;
-
 
 import org.apache.lucene.codecs.blocktree.BlockTreeTermsWriter;
 import org.apache.lucene.index.FieldInfo;
@@ -60,7 +60,7 @@ public abstract class PostingsWriterBase implements Closeable {
    *  FixedBitSet} for every docID written.  If no docs
    *  were written, this method should return null, and the
    *  terms dict will skip the term. */
-  public abstract BlockTermState writeTerm(BytesRef term, TermsEnum termsEnum, FixedBitSet docsSeen, NormsProducer norms) throws IOException;
+  public abstract BlockTermState writeTerm(BytesRef term, TermsEnum termsEnum, FixedBitSet docsSeen) throws IOException;
 
   /**
    * Encode metadata as long[] and byte[]. {@code absolute} controls whether 

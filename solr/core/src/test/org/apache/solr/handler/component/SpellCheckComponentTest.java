@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.component;
 
 import java.io.File;
@@ -43,7 +44,7 @@ import org.junit.Test;
 @Slow
 @SuppressTempFileChecks(bugUrl = "https://issues.apache.org/jira/browse/SOLR-1877 Spellcheck IndexReader leak bug?")
 public class SpellCheckComponentTest extends SolrTestCaseJ4 {
-  static String rh = "/spellCheckCompRH";
+  static String rh = "spellCheckCompRH";
 
 
   @BeforeClass
@@ -60,12 +61,12 @@ public class SpellCheckComponentTest extends SolrTestCaseJ4 {
     assertU((adoc("id", "2", "lowerfilt", "This is a document")));
     assertU((adoc("id", "3", "lowerfilt", "another document")));
     //bunch of docs that are variants on blue
-    assertU((adoc("id", "4", "lowerfilt", "this blue")));
-    assertU((adoc("id", "5", "lowerfilt", "this blud")));
-    assertU((adoc("id", "6", "lowerfilt", "this boue")));
-    assertU((adoc("id", "7", "lowerfilt", "this glue")));
-    assertU((adoc("id", "8", "lowerfilt", "this blee")));
-    assertU((adoc("id", "9", "lowerfilt", "pixmaa 12345")));
+    assertU((adoc("id", "4", "lowerfilt", "blue")));
+    assertU((adoc("id", "5", "lowerfilt", "blud")));
+    assertU((adoc("id", "6", "lowerfilt", "boue")));
+    assertU((adoc("id", "7", "lowerfilt", "glue")));
+    assertU((adoc("id", "8", "lowerfilt", "blee")));
+    assertU((adoc("id", "9", "lowerfilt", "pixmaa")));
     assertU((commit()));
   }
   
@@ -77,52 +78,6 @@ public class SpellCheckComponentTest extends SolrTestCaseJ4 {
     assertU((commit()));
 
   }
-  
-  @Test
-  public void testMaximumResultsForSuggest() throws Exception {
-   assertJQ(req("qt",rh, SpellCheckComponent.COMPONENT_NAME, "true", SpellingParams.SPELLCHECK_BUILD, "true", "q","lowerfilt:(this OR brwn)",
-        SpellingParams.SPELLCHECK_COUNT,"5", SpellingParams.SPELLCHECK_EXTENDED_RESULTS,"false", SpellingParams.SPELLCHECK_MAX_RESULTS_FOR_SUGGEST, "7")
-        ,"/spellcheck/suggestions/[0]=='brwn'"
-        ,"/spellcheck/suggestions/[1]/numFound==1"
-     );
-
-   expectThrows(Exception.class, () -> {
-     assertJQ(req("qt",rh, SpellCheckComponent.COMPONENT_NAME, "true", SpellingParams.SPELLCHECK_BUILD, "true", "q","lowerfilt:(this OR brwn)",
-         SpellingParams.SPELLCHECK_COUNT,"5", SpellingParams.SPELLCHECK_EXTENDED_RESULTS,"false", SpellingParams.SPELLCHECK_MAX_RESULTS_FOR_SUGGEST, "6")
-         ,"/spellcheck/suggestions/[1]/numFound==1"
-     );
-   });
-
-    assertJQ(req("qt",rh, SpellCheckComponent.COMPONENT_NAME, "true", SpellingParams.SPELLCHECK_BUILD, "true", "q","lowerfilt:(this OR brwn)",
-        "fq", "id:[0 TO 9]", /*returns 10, less selective */ "fq", "lowerfilt:th*", /* returns 8, most selective */
-        SpellingParams.SPELLCHECK_COUNT,"5", SpellingParams.SPELLCHECK_EXTENDED_RESULTS,"false", SpellingParams.SPELLCHECK_MAX_RESULTS_FOR_SUGGEST, ".90")
-        ,"/spellcheck/suggestions/[0]=='brwn'"
-        ,"/spellcheck/suggestions/[1]/numFound==1"
-     );
-
-    expectThrows(Exception.class, () -> {
-      assertJQ(req("qt",rh, SpellCheckComponent.COMPONENT_NAME, "true", SpellingParams.SPELLCHECK_BUILD, "true", "q","lowerfilt:(this OR brwn)",
-          "fq", "id:[0 TO 9]", /*returns 10, less selective */ "fq", "lowerfilt:th*", /* returns 8, most selective */
-          SpellingParams.SPELLCHECK_COUNT,"5", SpellingParams.SPELLCHECK_EXTENDED_RESULTS,"false", SpellingParams.SPELLCHECK_MAX_RESULTS_FOR_SUGGEST, ".80")
-          ,"/spellcheck/suggestions/[1]/numFound==1"
-      );
-    });
-    
-    assertJQ(req("qt",rh, SpellCheckComponent.COMPONENT_NAME, "true", SpellingParams.SPELLCHECK_BUILD, "true", "q","lowerfilt:(this OR brwn)",
-        "fq", "id:[0 TO 9]", SpellingParams.SPELLCHECK_MAX_RESULTS_FOR_SUGGEST_FQ, "id:[0 TO 9]", 
-        SpellingParams.SPELLCHECK_COUNT,"5", SpellingParams.SPELLCHECK_EXTENDED_RESULTS,"false", SpellingParams.SPELLCHECK_MAX_RESULTS_FOR_SUGGEST, ".70")
-        ,"/spellcheck/suggestions/[0]=='brwn'"
-        ,"/spellcheck/suggestions/[1]/numFound==1"
-     );
-
-    expectThrows(Exception.class, () -> {
-      assertJQ(req("qt",rh, SpellCheckComponent.COMPONENT_NAME, "true", SpellingParams.SPELLCHECK_BUILD, "true", "q","lowerfilt:(this OR brwn)",
-          "fq", "id:[0 TO 9]", SpellingParams.SPELLCHECK_MAX_RESULTS_FOR_SUGGEST_FQ, "lowerfilt:th*",
-          SpellingParams.SPELLCHECK_COUNT,"5", SpellingParams.SPELLCHECK_EXTENDED_RESULTS,"false", SpellingParams.SPELLCHECK_MAX_RESULTS_FOR_SUGGEST, ".64")
-          ,"/spellcheck/suggestions/[1]/numFound==1"
-      );
-    });
-  } 
   
   @Test
   public void testExtendedResultsCount() throws Exception {
@@ -142,19 +97,12 @@ public class SpellCheckComponentTest extends SolrTestCaseJ4 {
        ,"/spellcheck=={'suggestions':['documemt',{'numFound':1,'startOffset':0,'endOffset':8,'suggestion':['document']}]}"
     );
   }
-  
-  @Test
-  public void testNumericQuery() throws Exception {
-    assertJQ(req("qt",rh, SpellCheckComponent.COMPONENT_NAME, "true", "q","12346")
-       ,"/spellcheck=={'suggestions':['12346',{'numFound':1,'startOffset':0,'endOffset':5,'suggestion':['12345']}]}"
-    );
-  }
 
 
   @Test
   public void testPerDictionary() throws Exception {
     assertJQ(req("json.nl","map", "qt",rh, SpellCheckComponent.COMPONENT_NAME, "true", SpellingParams.SPELLCHECK_BUILD, "true", "q","documemt"
-        , SpellingParams.SPELLCHECK_DICT, "perDict", SpellingParams.SPELLCHECK_PREFIX + "perDict.foo", "bar", SpellingParams.SPELLCHECK_PREFIX + "perDict.bar", "foo")
+        , SpellingParams.SPELLCHECK_DICT, "perDict", SpellingParams.SPELLCHECK_PREFIX + ".perDict.foo", "bar", SpellingParams.SPELLCHECK_PREFIX + ".perDict.bar", "foo")
        ,"/spellcheck/suggestions/bar=={'numFound':1, 'startOffset':0, 'endOffset':1, 'suggestion':['foo']}"
        ,"/spellcheck/suggestions/foo=={'numFound':1, 'startOffset':2, 'endOffset':3, 'suggestion':['bar']}"        
     );
@@ -176,42 +124,6 @@ public class SpellCheckComponentTest extends SolrTestCaseJ4 {
     );
   }
   
-
-  @Test
-  public void testCollateExtendedResultsWithJsonNl() throws Exception {
-    final String q = "documemtsss broens";
-    final String jsonNl = "map";
-    final boolean collateExtendedResults = random().nextBoolean();
-    final List<String> testsList = new ArrayList<String>();
-    if (collateExtendedResults) {
-      testsList.add("/spellcheck/collations/collation/collationQuery=='document brown'");
-      testsList.add("/spellcheck/collations/collation/hits==0");
-      switch (jsonNl) {
-        case "map":
-          testsList.add("/spellcheck/collations/collation/misspellingsAndCorrections/documemtsss=='document'");
-          testsList.add("/spellcheck/collations/collation/misspellingsAndCorrections/broens=='brown'");
-          break;
-        default:
-          fail("unexpected json.nl choice: "+jsonNl);
-          break;
-      }
-    } else {
-      testsList.add("/spellcheck/collations/collation=='document brown'");
-    }
-    final String[] testsArray = new String[testsList.size()];
-    implTestCollateExtendedResultsWithJsonNl(q, jsonNl, collateExtendedResults, testsList.toArray(testsArray));
-  }
-
-  private void implTestCollateExtendedResultsWithJsonNl(String q, String jsonNl, boolean collateExtendedResults, String ... tests) throws Exception {
-    final SolrQueryRequest solrQueryRequest = req(
-        CommonParams.QT, rh,
-        CommonParams.Q, q,
-        "json.nl", jsonNl,
-        SpellCheckComponent.COMPONENT_NAME, "true",
-        SpellingParams.SPELLCHECK_COLLATE_EXTENDED_RESULTS, Boolean.toString(collateExtendedResults),
-        SpellingParams.SPELLCHECK_COLLATE, "true");
-    assertJQ(solrQueryRequest, tests);
-  }
 
   @Test
   public void testCorrectSpelling() throws Exception {
@@ -248,7 +160,7 @@ public class SpellCheckComponentTest extends SolrTestCaseJ4 {
   public void testReloadOnStart() throws Exception {
     assertU(adoc("id", "0", "lowerfilt", "This is a title"));
     assertU(commit());
-    SolrQueryRequest request = req("qt", "/spellCheckCompRH", "q", "*:*",
+    SolrQueryRequest request = req("qt", "spellCheckCompRH", "q", "*:*",
         "spellcheck.q", "ttle", "spellcheck", "true", "spellcheck.dictionary",
         "default", "spellcheck.build", "true");
     assertQ(request, "//arr[@name='suggestion'][.='title']");
@@ -265,7 +177,7 @@ public class SpellCheckComponentTest extends SolrTestCaseJ4 {
     checker.init(args);
     checker.inform(h.getCore());
 
-    request = req("qt", "/spellCheckCompRH", "q", "*:*", "spellcheck.q", "ttle",
+    request = req("qt", "spellCheckCompRH", "q", "*:*", "spellcheck.q", "ttle",
         "spellcheck", "true", "spellcheck.dictionary", "default",
         "spellcheck.reload", "true");
     List<SearchComponent> components = new ArrayList<>();
@@ -287,7 +199,7 @@ public class SpellCheckComponentTest extends SolrTestCaseJ4 {
     @SuppressWarnings("unchecked")
     @Test
   public void testRebuildOnCommit() throws Exception {
-    SolrQueryRequest req = req("q", "lowerfilt:lucenejavt", "qt", "/spellCheckCompRH", "spellcheck", "true");
+    SolrQueryRequest req = req("q", "lowerfilt:lucenejavt", "qt", "spellCheckCompRH", "spellcheck", "true");
     String response = h.query(req);
     assertFalse("No suggestions should be returned", response.contains("lucenejava"));
     
@@ -324,9 +236,9 @@ public class SpellCheckComponentTest extends SolrTestCaseJ4 {
         params.add(SpellingParams.SPELLCHECK_EXTENDED_RESULTS,"true");
         params.add(CommonParams.Q, "anotheq");
 
-        SolrRequestHandler handler = core.getRequestHandler("/spellCheckCompRH");
+        SolrRequestHandler handler = core.getRequestHandler("spellCheckCompRH");
         SolrQueryResponse rsp = new SolrQueryResponse();
-        rsp.addResponseHeader(new SimpleOrderedMap());
+        rsp.add("responseHeader", new SimpleOrderedMap());
         SolrQueryRequest req = new LocalSolrQueryRequest(core, params);
         handler.handleRequest(req, rsp);
         req.close();
@@ -339,7 +251,7 @@ public class SpellCheckComponentTest extends SolrTestCaseJ4 {
         params.remove(SpellingParams.SPELLCHECK_DICT);
         params.add(SpellingParams.SPELLCHECK_DICT, "threshold_direct");
         rsp = new SolrQueryResponse();
-        rsp.addResponseHeader(new SimpleOrderedMap());
+        rsp.add("responseHeader", new SimpleOrderedMap());
         req = new LocalSolrQueryRequest(core, params);
         handler.handleRequest(req, rsp);
         req.close();

@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.standard;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.standard;
 
 import java.io.IOException;
+import java.io.Reader;
+
 import org.apache.lucene.analysis.*;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
@@ -24,6 +27,7 @@ import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.apache.lucene.analysis.tokenattributes.TypeAttribute;
 import org.apache.lucene.queryparser.flexible.core.QueryNodeException;
 import org.apache.lucene.queryparser.flexible.standard.config.StandardQueryConfigHandler;
+import org.apache.lucene.queryparser.flexible.standard.config.StandardQueryConfigHandler.Operator;
 import org.apache.lucene.util.LuceneTestCase;
 
 /**
@@ -85,16 +89,16 @@ public class TestMultiAnalyzerQPHelper extends LuceneTestCase {
         .toString());
 
     // phrase with non-default boost:
-    assertEquals("(\"(multi multi2) foo\")^2.0", qp.parse("\"multi foo\"^2", "")
+    assertEquals("\"(multi multi2) foo\"^2.0", qp.parse("\"multi foo\"^2", "")
         .toString());
 
     // phrase after changing default slop
-    qp.setPhraseSlop(99);
+    qp.setDefaultPhraseSlop(99);
     assertEquals("\"(multi multi2) foo\"~99 bar", qp.parse("\"multi foo\" bar",
         "").toString());
     assertEquals("\"(multi multi2) foo\"~99 \"foo bar\"~2", qp.parse(
         "\"multi foo\" \"foo bar\"~2", "").toString());
-    qp.setPhraseSlop(0);
+    qp.setDefaultPhraseSlop(0);
 
     // non-default operator:
     qp.setDefaultOperator(StandardQueryConfigHandler.Operator.AND);
@@ -139,7 +143,7 @@ public class TestMultiAnalyzerQPHelper extends LuceneTestCase {
    * Expands "multi" to "multi" and "multi2", both at the same position, and
    * expands "triplemulti" to "triplemulti", "multi3", and "multi2".
    */
-  private static class MultiAnalyzer extends Analyzer {
+  private class MultiAnalyzer extends Analyzer {
 
     @Override
     public TokenStreamComponents createComponents(String fieldName) {
@@ -148,7 +152,7 @@ public class TestMultiAnalyzerQPHelper extends LuceneTestCase {
     }
   }
 
-  private static final class TestFilter extends TokenFilter {
+  private final class TestFilter extends TokenFilter {
 
     private String prevType;
     private int prevStartOffset;
@@ -206,7 +210,7 @@ public class TestMultiAnalyzerQPHelper extends LuceneTestCase {
    * Analyzes "the quick brown" as: quick(incr=2) brown(incr=1). Does not work
    * correctly for input other than "the quick brown ...".
    */
-  private static class PosIncrementAnalyzer extends Analyzer {
+  private class PosIncrementAnalyzer extends Analyzer {
 
     @Override
     public TokenStreamComponents createComponents(String fieldName) {
@@ -215,7 +219,7 @@ public class TestMultiAnalyzerQPHelper extends LuceneTestCase {
     }
   }
 
-  private static class TestPosIncrementFilter extends TokenFilter {
+  private class TestPosIncrementFilter extends TokenFilter {
 
     private final CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);
     private final PositionIncrementAttribute posIncrAtt = addAttribute(PositionIncrementAttribute.class);

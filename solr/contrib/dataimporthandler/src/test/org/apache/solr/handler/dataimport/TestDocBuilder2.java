@@ -66,7 +66,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
     rows.add(createMap("id", "1", "desC", "one"));
     MockDataSource.setIterator("select * from x", rows.iterator());
 
-    runFullImport(DATA_CONFIG_WITH_CASE_INSENSITIVE_FIELDS);
+    runFullImport(dataConfigWithCaseInsensitiveFields);
 
     assertQ(req("id:1"), "//*[@numFound='1']");
     assertTrue("Start event listener was not called", StartEventListener.executed);
@@ -81,7 +81,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
     rows.add(createMap("id", "1", "FORCE_ERROR", "true"));
     MockDataSource.setIterator("select * from x", rows.iterator());
 
-    runFullImport(DATA_CONFIG_WITH_ERROR_HANDLER);
+    runFullImport(dataConfigWithErrorHandler);
 
     assertTrue("Error event listener was not called", ErrorEventListener.executed);
     assertTrue(ErrorEventListener.lastException.getMessage().contains("ForcedException"));
@@ -94,7 +94,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
     rows.add(createMap("id", "1", "desc", "one"));
     MockDataSource.setIterator("select * from x", rows.iterator());
 
-    runFullImport(DATA_CONFIG_WITH_DYNAMIC_TRANSFORMER);
+    runFullImport(dataConfigWithDynamicTransformer);
 
     assertQ(req("id:1"), "//*[@numFound='1']");
     assertQ(req("dynamic_s:test"), "//*[@numFound='1']");
@@ -110,23 +110,9 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
     LocalSolrQueryRequest request = lrf.makeRequest("command", "full-import",
             "debug", "on", "clean", "true", "commit", "true",
             "category", "search",
-            "dataConfig", REQUEST_PARAM_AS_VARIABLE);
+            "dataConfig", requestParamAsVariable);
     h.query("/dataimport", request);
     assertQ(req("desc:ApacheSolr"), "//*[@numFound='1']");
-  }
-
-  @Test
-  @SuppressWarnings("unchecked")
-  public void testDynamicFieldNames() throws Exception {
-    List rows = new ArrayList();
-    rows.add(createMap("mypk", "101", "text", "ApacheSolr"));
-    MockDataSource.setIterator("select * from x", rows.iterator());
-
-    LocalSolrQueryRequest request = lrf.makeRequest("command", "full-import",
-        "debug", "on", "clean", "true", "commit", "true",
-        "dataConfig", DATA_CONFIG_WITH_DYNAMIC_FIELD_NAMES);
-    h.query("/dataimport", request);
-    assertQ(req("id:101"), "//*[@numFound='1']", "//*[@name='101_s']");
   }
 
   @Test
@@ -139,7 +125,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
     LocalSolrQueryRequest request = lrf.makeRequest("command", "full-import",
             "debug", "on", "clean", "true", "commit", "true",
             "mypk", "id", "text", "desc",
-            "dataConfig", DATA_CONFIG_WITH_TEMPLATIZED_FIELD_NAMES);
+            "dataConfig", dataConfigWithTemplatizedFieldNames);
     h.query("/dataimport", request);
     assertQ(req("id:101"), "//*[@numFound='1']");
   }
@@ -162,7 +148,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
     rows.add(createMap("id", "2", "desc", "two", DocBuilder.SKIP_DOC, "true"));
     MockDataSource.setIterator("select * from x", rows.iterator());
 
-    runFullImport(DATA_CONFIG_WITH_DYNAMIC_TRANSFORMER);
+    runFullImport(dataConfigWithDynamicTransformer);
 
     assertQ(req("id:1"), "//*[@numFound='1']");
     assertQ(req("id:2"), "//*[@numFound='0']");
@@ -176,7 +162,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
     rows.add(createMap("id", "2", "desc", "two", DocBuilder.SKIP_ROW, "true"));
     MockDataSource.setIterator("select * from x", rows.iterator());
 
-    runFullImport(DATA_CONFIG_WITH_DYNAMIC_TRANSFORMER);
+    runFullImport(dataConfigWithDynamicTransformer);
 
     assertQ(req("id:1"), "//*[@numFound='1']");
     assertQ(req("id:2"), "//*[@numFound='0']");
@@ -196,7 +182,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
     rows.add(createMap("name_s", "xyz", DocBuilder.SKIP_ROW, "true"));
     MockDataSource.setIterator("4", rows.iterator());
 
-    runFullImport(DATA_CONFIG_WITH_TWO_ENTITIES);
+    runFullImport(dataConfigWithTwoEntities);
     assertQ(req("id:3"), "//*[@numFound='1']");
     assertQ(req("id:4"), "//*[@numFound='1']");
     assertQ(req("name_s:abcd"), "//*[@numFound='1']");
@@ -211,7 +197,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
     rows.add(createMap("id", "2", "desc", "two", "$stopTransform", "true"));
     MockDataSource.setIterator("select * from x", rows.iterator());
 
-    runFullImport(DATA_CONFIG_FOR_SKIP_TRANSFORM);
+    runFullImport(dataConfigForSkipTransform);
 
     assertQ(req("id:1"), "//*[@numFound='1']");
     assertQ(req("id:2"), "//*[@numFound='1']");
@@ -227,7 +213,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
     rows.add(createMap("id", "3", "desc", "two", DocBuilder.DELETE_DOC_BY_ID, "2"));
     MockDataSource.setIterator("select * from x", rows.iterator());
 
-    runFullImport(DATA_CONFIG_FOR_SKIP_TRANSFORM);
+    runFullImport(dataConfigForSkipTransform);
 
     assertQ(req("id:1"), "//*[@numFound='1']");
     assertQ(req("id:2"), "//*[@numFound='0']");
@@ -243,7 +229,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
     rows.add(createMap("id", "3", "desc", "two", DocBuilder.DELETE_DOC_BY_QUERY, "desc:one"));
     MockDataSource.setIterator("select * from x", rows.iterator());
 
-    runFullImport(DATA_CONFIG_FOR_SKIP_TRANSFORM);
+    runFullImport(dataConfigForSkipTransform);
 
     assertQ(req("id:1"), "//*[@numFound='0']");
     assertQ(req("id:2"), "//*[@numFound='0']");
@@ -256,7 +242,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
     rows = new ArrayList();
     rows.add(createMap(DocBuilder.DELETE_DOC_BY_ID, "3"));
     MockDataSource.setIterator("select * from x", rows.iterator());
-    runFullImport(DATA_CONFIG_FOR_SKIP_TRANSFORM, createMap("clean","false"));
+    runFullImport(dataConfigForSkipTransform, createMap("clean","false"));
     assertQ(req("id:3"), "//*[@numFound='0']");
     
     assertTrue("Update request processor processDelete was not called", TestUpdateRequestProcessor.processDeleteCalled);
@@ -267,19 +253,19 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
   @Test
   @Ignore("Fix Me. See SOLR-4103.")
   public void testFileListEntityProcessor_lastIndexTime() throws Exception  {
-    File tmpdir = createTempDir().toFile();
+    File tmpdir = File.createTempFile("test", "tmp", createTempDir().toFile());
 
     Map<String, String> params = createMap("baseDir", tmpdir.getAbsolutePath());
 
     createFile(tmpdir, "a.xml", "a.xml".getBytes(StandardCharsets.UTF_8), true);
     createFile(tmpdir, "b.xml", "b.xml".getBytes(StandardCharsets.UTF_8), true);
     createFile(tmpdir, "c.props", "c.props".getBytes(StandardCharsets.UTF_8), true);
-    runFullImport(DATA_CONFIG_FILE_LIST, params);
+    runFullImport(dataConfigFileList, params);
     assertQ(req("*:*"), "//*[@numFound='3']");
 
     // Add a new file after a full index is done
     createFile(tmpdir, "t.xml", "t.xml".getBytes(StandardCharsets.UTF_8), false);
-    runFullImport(DATA_CONFIG_FILE_LIST, params);
+    runFullImport(dataConfigFileList, params);
     // we should find only 1 because by default clean=true is passed
     // and this particular import should find only one file t.xml
     assertQ(req("*:*"), "//*[@numFound='1']");
@@ -342,7 +328,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
     }
   }
 
-  private static final String REQUEST_PARAM_AS_VARIABLE = "<dataConfig>\n" +
+  private final String requestParamAsVariable = "<dataConfig>\n" +
           "    <dataSource type=\"MockDataSource\" />\n" +
           "    <document>\n" +
           "        <entity name=\"books\" query=\"select * from books where category='${dataimporter.request.category}'\">\n" +
@@ -352,7 +338,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
           "    </document>\n" +
           "</dataConfig>";
 
-   private static final String DATA_CONFIG_WITH_DYNAMIC_TRANSFORMER = "<dataConfig> <dataSource type=\"MockDataSource\"/>\n" +
+   private final String dataConfigWithDynamicTransformer = "<dataConfig> <dataSource type=\"MockDataSource\"/>\n" +
           "    <document>\n" +
           "        <entity name=\"books\" query=\"select * from x\"" +
            "                transformer=\"TestDocBuilder2$AddDynamicFieldTransformer\">\n" +
@@ -362,7 +348,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
           "    </document>\n" +
           "</dataConfig>";
 
-  private static final String DATA_CONFIG_FOR_SKIP_TRANSFORM = "<dataConfig> <dataSource  type=\"MockDataSource\"/>\n" +
+  private final String dataConfigForSkipTransform = "<dataConfig> <dataSource  type=\"MockDataSource\"/>\n" +
           "    <document>\n" +
           "        <entity name=\"books\" query=\"select * from x\"" +
            "                transformer=\"TemplateTransformer\">\n" +
@@ -373,7 +359,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
           "    </document>\n" +
           "</dataConfig>";
 
-  private static final String DATA_CONFIG_WITH_TWO_ENTITIES = "<dataConfig><dataSource type=\"MockDataSource\"/>\n" +
+  private final String dataConfigWithTwoEntities = "<dataConfig><dataSource type=\"MockDataSource\"/>\n" +
           "    <document>\n" +
           "        <entity name=\"books\" query=\"select * from x\">" +
           "            <field column=\"id\" />\n" +
@@ -385,7 +371,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
           "    </document>\n" +
           "</dataConfig>";
 
-  private static final String DATA_CONFIG_WITH_CASE_INSENSITIVE_FIELDS = "<dataConfig> <dataSource  type=\"MockDataSource\"/>\n" +
+  private final String dataConfigWithCaseInsensitiveFields = "<dataConfig> <dataSource  type=\"MockDataSource\"/>\n" +
           "    <document onImportStart=\"TestDocBuilder2$StartEventListener\" onImportEnd=\"TestDocBuilder2$EndEventListener\">\n" +
           "        <entity name=\"books\" query=\"select * from x\">\n" +
           "            <field column=\"ID\" />\n" +
@@ -394,7 +380,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
           "    </document>\n" +
           "</dataConfig>";
 
-  private static final String DATA_CONFIG_WITH_ERROR_HANDLER = "<dataConfig> <dataSource  type=\"MockDataSource\"/>\n" +
+  private final String dataConfigWithErrorHandler = "<dataConfig> <dataSource  type=\"MockDataSource\"/>\n" +
           "    <document onError=\"TestDocBuilder2$ErrorEventListener\">\n" +
           "        <entity name=\"books\" query=\"select * from x\" transformer=\"TestDocBuilder2$ForcedExceptionTransformer\">\n" +
           "            <field column=\"id\" />\n" +
@@ -403,7 +389,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
           "    </document>\n" +
           "</dataConfig>";
 
-  private static final String DATA_CONFIG_WITH_TEMPLATIZED_FIELD_NAMES = "<dataConfig><dataSource  type=\"MockDataSource\"/>\n" +
+  private final String dataConfigWithTemplatizedFieldNames = "<dataConfig><dataSource  type=\"MockDataSource\"/>\n" +
           "    <document>\n" +
           "        <entity name=\"books\" query=\"select * from x\">\n" +
           "            <field column=\"mypk\" name=\"${dih.request.mypk}\" />\n" +
@@ -412,16 +398,7 @@ public class TestDocBuilder2 extends AbstractDataImportHandlerTestCase {
           "    </document>\n" +
           "</dataConfig>";
 
-  private static final String DATA_CONFIG_WITH_DYNAMIC_FIELD_NAMES = "<dataConfig><dataSource  type=\"MockDataSource\"/>\n" +
-      "    <document>\n" +
-      "        <entity name=\"books\" query=\"select * from x\">\n" +
-      "            <field column=\"mypk\" name=\"id\" />\n" +
-      "            <field column=\"text\" name=\"${books.mypk}_s\" />\n" +
-      "        </entity>\n" +
-      "    </document>\n" +
-      "</dataConfig>";
-
-  private static final String DATA_CONFIG_FILE_LIST = "<dataConfig>\n" +
+  private final String dataConfigFileList = "<dataConfig>\n" +
           "\t<document>\n" +
           "\t\t<entity name=\"x\" processor=\"FileListEntityProcessor\" \n" +
           "\t\t\t\tfileName=\".*\" newerThan=\"${dih.last_index_time}\" \n" +

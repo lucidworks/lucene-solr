@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.core;
 
 import java.util.Arrays;
@@ -144,7 +145,6 @@ public class QueryResultKeyTest extends SolrTestCaseJ4 {
     assertNotNull(key1);
     assertNotNull(key2);
     assertEquals(key1.hashCode(), key2.hashCode());
-    assertEquals(key1.ramBytesUsed(), key2.ramBytesUsed());
     assertEquals(key1, key2);
     assertEquals(key2, key1);
   }
@@ -160,9 +160,9 @@ public class QueryResultKeyTest extends SolrTestCaseJ4 {
   /**
    * returns a "small" list of "small" random numbers.  The idea behind this method is 
    * that multiple calls have a decent change of returning two arrays which are the 
-   * same size and contain the same numbers but in a differed order.
+   * same size and contain the same numbers but in a differnet order.
    *
-   * the array is guaranteed to always have at least 1 element
+   * the array is garunteed to always have at least 1 element
    */
   private int[] smallArrayOfRandomNumbers() {
     int size = TestUtil.nextInt(random(), 1, 5);

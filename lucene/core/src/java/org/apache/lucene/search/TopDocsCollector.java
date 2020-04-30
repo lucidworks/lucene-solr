@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 
 import org.apache.lucene.util.PriorityQueue;
@@ -35,7 +35,7 @@ public abstract class TopDocsCollector<T extends ScoreDoc> implements Collector 
 
   /** This is used in case topDocs() is called with illegal parameters, or there
    *  simply aren't (enough) results. */
-  protected static final TopDocs EMPTY_TOPDOCS = new TopDocs(new TotalHits(0, TotalHits.Relation.EQUAL_TO), new ScoreDoc[0]);
+  protected static final TopDocs EMPTY_TOPDOCS = new TopDocs(0, new ScoreDoc[0], Float.NaN);
   
   /**
    * The priority queue which holds the top documents. Note that different
@@ -43,14 +43,11 @@ public abstract class TopDocsCollector<T extends ScoreDoc> implements Collector 
    * HitQueue for example aggregates the top scoring documents, while other PQ
    * implementations may hold documents sorted by other criteria.
    */
-  protected final PriorityQueue<T> pq;
+  protected PriorityQueue<T> pq;
 
   /** The total number of documents that the collector encountered. */
   protected int totalHits;
-
-  /** Whether {@link #totalHits} is exact or a lower bound. */
-  protected TotalHits.Relation totalHitsRelation = TotalHits.Relation.EQUAL_TO;
-
+  
   protected TopDocsCollector(PriorityQueue<T> pq) {
     this.pq = pq;
   }
@@ -72,7 +69,7 @@ public abstract class TopDocsCollector<T extends ScoreDoc> implements Collector 
    * topDocs were invalid.
    */
   protected TopDocs newTopDocs(ScoreDoc[] results, int start) {
-    return results == null ? EMPTY_TOPDOCS : new TopDocs(new TotalHits(totalHits, totalHitsRelation), results);
+    return results == null ? EMPTY_TOPDOCS : new TopDocs(totalHits, results);
   }
   
   /** The total number of documents that matched this query. */

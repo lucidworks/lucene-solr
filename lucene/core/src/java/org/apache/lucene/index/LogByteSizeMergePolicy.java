@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -44,8 +44,8 @@ public class LogByteSizeMergePolicy extends LogMergePolicy {
   }
   
   @Override
-  protected long size(SegmentCommitInfo info, MergeContext mergeContext) throws IOException {
-    return sizeBytes(info, mergeContext);
+  protected long size(SegmentCommitInfo info, IndexWriter writer) throws IOException {
+    return sizeBytes(info, writer);
   }
 
   /** <p>Determines the largest segment (measured by total

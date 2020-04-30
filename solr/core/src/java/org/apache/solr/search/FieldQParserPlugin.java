@@ -18,6 +18,7 @@ package org.apache.solr.search;
 
 import org.apache.lucene.search.Query;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.SchemaField;
@@ -32,6 +33,10 @@ import org.apache.solr.schema.SchemaField;
  */
 public class FieldQParserPlugin extends QParserPlugin {
   public static final String NAME = "field";
+
+  @Override
+  public void init(NamedList args) {
+  }
 
   @Override
   public QParser createParser(String qstr, SolrParams localParams, SolrParams params, SolrQueryRequest req) {

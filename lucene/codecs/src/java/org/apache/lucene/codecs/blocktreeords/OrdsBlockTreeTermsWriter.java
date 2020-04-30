@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.blocktreeords;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.blocktreeords;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -24,7 +24,6 @@ import java.util.List;
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
-import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsWriterBase;
 import org.apache.lucene.codecs.blocktree.BlockTreeTermsWriter; // javadocs
 import org.apache.lucene.codecs.blocktreeords.FSTOrdsOutputs.Output;
@@ -49,6 +48,7 @@ import org.apache.lucene.util.fst.Builder;
 import org.apache.lucene.util.fst.BytesRefFSTEnum;
 import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.Util;
+import org.apache.lucene.util.packed.PackedInts;
 
 /*
   TODO:
@@ -214,7 +214,7 @@ public final class OrdsBlockTreeTermsWriter extends FieldsConsumer {
   }
 
   @Override
-  public void write(Fields fields, NormsProducer norms) throws IOException {
+  public void write(Fields fields) throws IOException {
 
     String lastField = null;
     for(String field : fields) {
@@ -234,7 +234,7 @@ public final class OrdsBlockTreeTermsWriter extends FieldsConsumer {
         if (term == null) {
           break;
         }
-        termsWriter.write(term, termsEnum, norms);
+        termsWriter.write(term, termsEnum);
       }
 
       termsWriter.finish();
@@ -363,7 +363,8 @@ public final class OrdsBlockTreeTermsWriter extends FieldsConsumer {
 
       final Builder<Output> indexBuilder = new Builder<>(FST.INPUT_TYPE.BYTE1,
                                                          0, 0, true, false, Integer.MAX_VALUE,
-                                                         FST_OUTPUTS, true, 15);
+                                                         FST_OUTPUTS, false,
+                                                         PackedInts.COMPACT, true, 15);
       //if (DEBUG) {
       //  System.out.println("  compile index for prefix=" + prefix);
       //}
@@ -772,7 +773,7 @@ public final class OrdsBlockTreeTermsWriter extends FieldsConsumer {
     }
     
     /** Writes one term's worth of postings. */
-    public void write(BytesRef text, TermsEnum termsEnum, NormsProducer norms) throws IOException {
+    public void write(BytesRef text, TermsEnum termsEnum) throws IOException {
       /*
       if (DEBUG) {
         int[] tmp = new int[lastTerm.length];
@@ -781,7 +782,7 @@ public final class OrdsBlockTreeTermsWriter extends FieldsConsumer {
       }
       */
 
-      BlockTermState state = postingsWriter.writeTerm(text, termsEnum, docsSeen, norms);
+      BlockTermState state = postingsWriter.writeTerm(text, termsEnum, docsSeen);
       if (state != null) {
         assert state.docFreq != 0;
         assert fieldInfo.getIndexOptions() == IndexOptions.DOCS || state.totalTermFreq >= state.docFreq: "postingsWriter=" + postingsWriter;

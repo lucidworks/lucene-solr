@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -51,7 +51,7 @@ public class TestTrackingDirectoryWrapper extends BaseDirectoryTestCase {
     TrackingDirectoryWrapper dir = new TrackingDirectoryWrapper(new RAMDirectory());
     dir.createOutput("foo", newIOContext(random())).close();
     assertEquals(asSet("foo"), dir.getCreatedFiles());
-    dir.rename("foo", "bar");
+    dir.renameFile("foo", "bar");
     assertEquals(asSet("bar"), dir.getCreatedFiles());
   }
   

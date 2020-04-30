@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update;
 
 import org.apache.solr.request.SolrQueryRequest;
@@ -34,7 +35,7 @@ public class CommitUpdateCommand extends UpdateCommand {
    *
    * @see org.apache.lucene.index.IndexWriter#forceMerge(int)
    */
-  public int maxOptimizeSegments = Integer.MAX_VALUE; // So we respect MaxMergeSegmentsMB by default
+  public int maxOptimizeSegments = 1;
 
   public CommitUpdateCommand(SolrQueryRequest req, boolean optimize) {
     super(req);

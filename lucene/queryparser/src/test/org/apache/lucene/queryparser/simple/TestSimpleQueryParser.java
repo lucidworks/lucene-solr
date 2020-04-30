@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.simple;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.simple;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -35,6 +36,7 @@ import org.apache.lucene.search.PrefixQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.util.TestUtil;
 import org.apache.lucene.util.TestUtil;
 import org.apache.lucene.util.automaton.LevenshteinAutomata;
 
@@ -88,7 +90,7 @@ public class TestSimpleQueryParser extends LuceneTestCase {
     Query expected = new FuzzyQuery(new Term("field", "foobar"), 2);
 
     assertEquals(expected, parse("foobar~2"));
-    assertEquals(expected, parse("foobar~"));
+    assertEquals(regular, parse("foobar~"));
     assertEquals(regular, parse("foobar~a"));
     assertEquals(regular, parse("foobar~1a"));
 
@@ -477,6 +479,7 @@ public class TestSimpleQueryParser extends LuceneTestCase {
     weights.put("field1", 10f);
 
     BooleanQuery.Builder expected = new BooleanQuery.Builder();
+    expected.setDisableCoord(true);
     Query field0 = new TermQuery(new Term("field0", "foo"));
     field0 = new BoostQuery(field0, 5f);
     expected.add(field0, Occur.SHOULD);
@@ -497,6 +500,7 @@ public class TestSimpleQueryParser extends LuceneTestCase {
 
     BooleanQuery.Builder expected = new BooleanQuery.Builder();
     BooleanQuery.Builder foo = new BooleanQuery.Builder();
+    foo.setDisableCoord(true);
     Query field0 = new TermQuery(new Term("field0", "foo"));
     field0 = new BoostQuery(field0, 5f);
     foo.add(field0, Occur.SHOULD);
@@ -506,6 +510,7 @@ public class TestSimpleQueryParser extends LuceneTestCase {
     expected.add(foo.build(), Occur.SHOULD);
 
     BooleanQuery.Builder bar = new BooleanQuery.Builder();
+    bar.setDisableCoord(true);
     field0 = new TermQuery(new Term("field0", "bar"));
     field0 = new BoostQuery(field0, 5f);
     bar.add(field0, Occur.SHOULD);
@@ -622,12 +627,5 @@ public class TestSimpleQueryParser extends LuceneTestCase {
       parse(sb.toString()); // no exception
       parseKeyword(sb.toString(), TestUtil.nextInt(random(), 0, 1024)); // no exception
     }
-  }
-
-  public void testStarBecomesMatchAll() throws Exception {
-    Query q = parse("*");
-    assertEquals(q, new MatchAllDocsQuery());
-    q = parse(" *   ");
-    assertEquals(q, new MatchAllDocsQuery());
   }
 }

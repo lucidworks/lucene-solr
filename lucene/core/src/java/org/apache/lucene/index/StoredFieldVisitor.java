@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -30,7 +30,7 @@ import org.apache.lucene.document.DocumentStoredFieldVisitor;
  * <p><b>NOTE</b>: a {@code StoredFieldVisitor} implementation
  * should not try to load or visit other stored documents in
  * the same reader because the implementation of stored
- * fields for most codecs is not reentrant and you will see
+ * fields for most codecs is not reeentrant and you will see
  * strange exceptions as a result.
  *
  * <p>See {@link DocumentStoredFieldVisitor}, which is a

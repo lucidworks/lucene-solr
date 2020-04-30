@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
@@ -184,6 +184,10 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
 
   public void testNoExtraFiles() throws IOException {
     Directory directory = newDirectory();
+    if (directory instanceof MockDirectoryWrapper) {
+      // test uses IW unref'ed helper which is unaware of retries
+      ((MockDirectoryWrapper)directory).setEnableVirusScanner(false);
+    }
     IndexWriter writer = new IndexWriter(directory, newIndexWriterConfig(new MockAnalyzer(random()))
                                                       .setMaxBufferedDocs(2));
 
@@ -213,6 +217,9 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
 
   public void testNoWaitClose() throws IOException {
     Directory directory = newDirectory();
+    if (directory instanceof MockDirectoryWrapper) {
+      ((MockDirectoryWrapper) directory).setPreventDoubleWrite(false);
+    }
     Document doc = new Document();
     Field idField = newStringField("id", "", Field.Store.YES);
     doc.add(idField);
@@ -392,12 +399,18 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
 
   public void testInvalidMaxMergeCountAndThreads() throws Exception {
     ConcurrentMergeScheduler cms = new ConcurrentMergeScheduler();
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       cms.setMaxMergesAndThreads(ConcurrentMergeScheduler.AUTO_DETECT_MERGES_AND_THREADS, 3);
-    });
-    expectThrows(IllegalArgumentException.class, () -> {
+      fail("did not hit exception");
+    } catch (IllegalArgumentException iae) {
+      // good
+    }
+    try {
       cms.setMaxMergesAndThreads(3, ConcurrentMergeScheduler.AUTO_DETECT_MERGES_AND_THREADS);
-    });
+      fail("did not hit exception");
+    } catch (IllegalArgumentException iae) {
+      // good
+    }
   }
 
   public void testLiveMaxMergeCount() throws Exception {
@@ -552,7 +565,7 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
       }
     }.start();
 
-    while (w.getDocStats().numDocs != 8) {
+    while (w.numDocs() != 8) {
       Thread.sleep(10);
     }
 
@@ -596,13 +609,19 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
     assertEquals(4, cms.getMaxMergeCount());
     assertEquals(3, cms.getMaxThreadCount());
 
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       cms.setMaxMergesAndThreads(ConcurrentMergeScheduler.AUTO_DETECT_MERGES_AND_THREADS, 4);
-    });
+      fail("did not hit exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
 
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       cms.setMaxMergesAndThreads(4, ConcurrentMergeScheduler.AUTO_DETECT_MERGES_AND_THREADS);
-    });
+      fail("did not hit exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
 
     cms.setMaxMergesAndThreads(ConcurrentMergeScheduler.AUTO_DETECT_MERGES_AND_THREADS, ConcurrentMergeScheduler.AUTO_DETECT_MERGES_AND_THREADS);
     assertEquals(ConcurrentMergeScheduler.AUTO_DETECT_MERGES_AND_THREADS, cms.getMaxMergeCount());
@@ -649,7 +668,7 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
     w.close();
 
     iwc = newIndexWriterConfig(new MockAnalyzer(random()));
-    AtomicBoolean failed = new AtomicBoolean();
+    final AtomicBoolean failed = new AtomicBoolean();
     ConcurrentMergeScheduler cms = new ConcurrentMergeScheduler() {
         @Override
         protected void doStall() {

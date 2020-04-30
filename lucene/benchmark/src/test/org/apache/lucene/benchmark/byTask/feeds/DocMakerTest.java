@@ -1,3 +1,5 @@
+package org.apache.lucene.benchmark.byTask.feeds;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.feeds;
-
 
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -94,7 +94,7 @@ public class DocMakerTest extends BenchmarkTestCase {
     IndexReader reader = DirectoryReader.open(runData.getDirectory());
     IndexSearcher searcher = newSearcher(reader);
     TopDocs td = searcher.search(new TermQuery(new Term("key", "value")), 10);
-    assertEquals(numExpectedResults, td.totalHits.value);
+    assertEquals(numExpectedResults, td.totalHits);
     reader.close();
   }
   

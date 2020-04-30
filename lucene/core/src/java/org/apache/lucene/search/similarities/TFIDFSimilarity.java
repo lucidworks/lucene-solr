@@ -1,3 +1,5 @@
+package org.apache.lucene.search.similarities;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.similarities;
 
-
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.lucene.index.FieldInvertState;
-import org.apache.lucene.index.IndexOptions;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.search.CollectionStatistics;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.search.TermStatistics;
-import org.apache.lucene.util.SmallFloat;
+import org.apache.lucene.util.BytesRef;
 
 
 /**
@@ -153,7 +156,10 @@ import org.apache.lucene.util.SmallFloat;
  *  </li>
  *
  *  <li>A document may match a multi term query without containing all
- *  the terms of that query (this is correct for some of the queries).
+ *  the terms of that query (this is correct for some of the queries),
+ *  and users can further reward documents matching more query terms
+ *  through a coordination factor, which is usually larger when
+ *  more terms are matched: <i>coord-factor(q,d)</i>.
  *  </li>
  * </ul>
  *
@@ -169,6 +175,7 @@ import org.apache.lucene.util.SmallFloat;
  *        <tr>
  *          <td valign="middle" align="right" rowspan="1">
  *            score(q,d) &nbsp; = &nbsp;
+ *            <span style="color: #FF9933">coord-factor(q,d)</span> &middot; &nbsp;
  *            <span style="color: #CCCC00">query-boost(q)</span> &middot; &nbsp;
  *          </td>
  *          <td valign="middle" align="center">
@@ -230,6 +237,11 @@ import org.apache.lucene.util.SmallFloat;
  *   And this is exactly what normalizing the query vector <i>V(q)</i>
  *   provides: comparability (to a certain extent) of two or more queries.
  *   </li>
+ *
+ *   <li>Applying query normalization on the scores helps to keep the
+ *   scores around the unit vector, hence preventing loss of score data
+ *   because of floating point precision limitations.
+ *   </li>
  *  </ul>
  *  </li>
  *
@@ -254,6 +266,10 @@ import org.apache.lucene.util.SmallFloat;
  *   <tr>
  *     <td valign="middle" align="right" rowspan="1">
  *       score(q,d) &nbsp; = &nbsp;
+ *       <A HREF="#formula_coord"><span style="color: #FF9933">coord(q,d)</span></A> &nbsp;&middot;&nbsp;
+ *       <A HREF="#formula_queryNorm"><span style="color: #FF33CC">queryNorm(q)</span></A> &nbsp;&middot;&nbsp;
+ *     </td>
+ *     <td valign="bottom" align="center" rowspan="1" style="text-align: center">
  *       <big><big><big>&sum;</big></big></big>
  *     </td>
  *     <td valign="middle" align="right" rowspan="1">
@@ -292,13 +308,13 @@ import org.apache.lucene.util.SmallFloat;
  *      two term-queries with that same term and hence the computation would still be correct (although
  *      not very efficient).
  *      The default computation for <i>tf(t in d)</i> in
- *      {@link org.apache.lucene.search.similarities.ClassicSimilarity#tf(float) ClassicSimilarity} is:
+ *      {@link org.apache.lucene.search.similarities.DefaultSimilarity#tf(float) DefaultSimilarity} is:
  *
  *      <br>&nbsp;<br>
  *      <table cellpadding="2" cellspacing="2" border="0" style="width:auto; margin-left:auto; margin-right:auto" summary="term frequency computation">
  *        <tr>
  *          <td valign="middle" align="right" rowspan="1">
- *            {@link org.apache.lucene.search.similarities.ClassicSimilarity#tf(float) tf(t in d)} &nbsp; = &nbsp;
+ *            {@link org.apache.lucene.search.similarities.DefaultSimilarity#tf(float) tf(t in d)} &nbsp; = &nbsp;
  *          </td>
  *          <td valign="top" align="center" rowspan="1">
  *               frequency<sup><big>&frac12;</big></sup>
@@ -317,20 +333,20 @@ import org.apache.lucene.util.SmallFloat;
  *      <i>idf(t)</i> appears for <i>t</i> in both the query and the document,
  *      hence it is squared in the equation.
  *      The default computation for <i>idf(t)</i> in
- *      {@link org.apache.lucene.search.similarities.ClassicSimilarity#idf(long, long) ClassicSimilarity} is:
+ *      {@link org.apache.lucene.search.similarities.DefaultSimilarity#idf(long, long) DefaultSimilarity} is:
  *
  *      <br>&nbsp;<br>
  *      <table cellpadding="2" cellspacing="2" border="0" style="width:auto; margin-left:auto; margin-right:auto" summary="inverse document frequency computation">
  *        <tr>
  *          <td valign="middle" align="right">
- *            {@link org.apache.lucene.search.similarities.ClassicSimilarity#idf(long, long) idf(t)}&nbsp; = &nbsp;
+ *            {@link org.apache.lucene.search.similarities.DefaultSimilarity#idf(long, long) idf(t)}&nbsp; = &nbsp;
  *          </td>
  *          <td valign="middle" align="center">
  *            1 + log <big>(</big>
  *          </td>
  *          <td valign="middle" align="center">
  *            <table summary="inverse document frequency computation">
- *               <tr><td align="center" style="text-align: center"><small>docCount+1</small></td></tr>
+ *               <tr><td align="center" style="text-align: center"><small>numDocs</small></td></tr>
  *               <tr><td align="center" style="text-align: center">&ndash;&ndash;&ndash;&ndash;&ndash;&ndash;&ndash;&ndash;&ndash;</td></tr>
  *               <tr><td align="center" style="text-align: center"><small>docFreq+1</small></td></tr>
  *            </table>
@@ -341,6 +357,84 @@ import org.apache.lucene.util.SmallFloat;
  *        </tr>
  *      </table>
  *      <br>&nbsp;<br>
+ *    </li>
+ *
+ *    <li>
+ *      <A NAME="formula_coord"></A>
+ *      <b><i>coord(q,d)</i></b>
+ *      is a score factor based on how many of the query terms are found in the specified document.
+ *      Typically, a document that contains more of the query's terms will receive a higher score
+ *      than another document with fewer query terms.
+ *      This is a search time factor computed in
+ *      {@link #coord(int, int) coord(q,d)}
+ *      by the Similarity in effect at search time.
+ *      <br>&nbsp;<br>
+ *    </li>
+ *
+ *    <li><b>
+ *      <A NAME="formula_queryNorm"></A>
+ *      <i>queryNorm(q)</i>
+ *      </b>
+ *      is a normalizing factor used to make scores between queries comparable.
+ *      This factor does not affect document ranking (since all ranked documents are multiplied by the same factor),
+ *      but rather just attempts to make scores from different queries (or even different indexes) comparable.
+ *      This is a search time factor computed by the Similarity in effect at search time.
+ *
+ *      The default computation in
+ *      {@link org.apache.lucene.search.similarities.DefaultSimilarity#queryNorm(float) DefaultSimilarity}
+ *      produces a <a href="http://en.wikipedia.org/wiki/Euclidean_norm#Euclidean_norm">Euclidean norm</a>:
+ *      <br>&nbsp;<br>
+ *      <table cellpadding="1" cellspacing="0" border="0" style="width:auto; margin-left:auto; margin-right:auto" summary="query normalization computation">
+ *        <tr>
+ *          <td valign="middle" align="right" rowspan="1">
+ *            queryNorm(q)  &nbsp; = &nbsp;
+ *            {@link org.apache.lucene.search.similarities.DefaultSimilarity#queryNorm(float) queryNorm(sumOfSquaredWeights)}
+ *            &nbsp; = &nbsp;
+ *          </td>
+ *          <td valign="middle" align="center" rowspan="1">
+ *            <table summary="query normalization computation">
+ *               <tr><td align="center" style="text-align: center"><big>1</big></td></tr>
+ *               <tr><td align="center" style="text-align: center"><big>
+ *                  &ndash;&ndash;&ndash;&ndash;&ndash;&ndash;&ndash;&ndash;&ndash;&ndash;&ndash;&ndash;&ndash;&ndash;
+ *               </big></td></tr>
+ *               <tr><td align="center" style="text-align: center">sumOfSquaredWeights<sup><big>&frac12;</big></sup></td></tr>
+ *            </table>
+ *          </td>
+ *        </tr>
+ *      </table>
+ *      <br>&nbsp;<br>
+ *
+ *      The sum of squared weights (of the query terms) is
+ *      computed by the query {@link org.apache.lucene.search.Weight} object.
+ *      For example, a {@link org.apache.lucene.search.BooleanQuery}
+ *      computes this value as:
+ *
+ *      <br>&nbsp;<br>
+ *      <table cellpadding="1" cellspacing="0" border="0" style="width:auto; margin-left:auto; margin-right:auto" summary="sum of squared weights computation">
+ *        <tr>
+ *          <td valign="middle" align="right" rowspan="1">
+ *            {@link org.apache.lucene.search.Weight#getValueForNormalization() sumOfSquaredWeights} &nbsp; = &nbsp;
+ *            {@link org.apache.lucene.search.BoostQuery#getBoost() q.getBoost()} <sup><big>2</big></sup>
+ *            &nbsp;&middot;&nbsp;
+ *          </td>
+ *          <td valign="bottom" align="center" rowspan="1" style="text-align: center">
+ *            <big><big><big>&sum;</big></big></big>
+ *          </td>
+ *          <td valign="middle" align="right" rowspan="1">
+ *            <big><big>(</big></big>
+ *            <A HREF="#formula_idf">idf(t)</A> &nbsp;&middot;&nbsp;
+ *            <A HREF="#formula_termBoost">t.getBoost()</A>
+ *            <big><big>) <sup>2</sup> </big></big>
+ *          </td>
+ *        </tr>
+ *        <tr valign="top">
+ *          <td></td>
+ *          <td align="center" style="text-align: center"><small>t in q</small></td>
+ *          <td></td>
+ *        </tr>
+ *      </table>
+ *      <br>&nbsp;<br>
+ *
  *    </li>
  *
  *    <li>
@@ -361,9 +455,49 @@ import org.apache.lucene.util.SmallFloat;
  *
  *    <li>
  *      <A NAME="formula_norm"></A>
- *      <b><i>norm(t,d)</i></b> is an index-time boost factor that solely
- *      depends on the number of tokens of this field in the document, so
- *      that shorter fields contribute more to the score.
+ *      <b><i>norm(t,d)</i></b> encapsulates a few (indexing time) boost and length factors:
+ *
+ *      <ul>
+ *        <li><b>Field boost</b> - set by calling
+ *        {@link org.apache.lucene.document.Field#setBoost(float) field.setBoost()}
+ *        before adding the field to a document.
+ *        </li>
+ *        <li><b>lengthNorm</b> - computed
+ *        when the document is added to the index in accordance with the number of tokens
+ *        of this field in the document, so that shorter fields contribute more to the score.
+ *        LengthNorm is computed by the Similarity class in effect at indexing.
+ *        </li>
+ *      </ul>
+ *      The {@link #computeNorm} method is responsible for
+ *      combining all of these factors into a single float.
+ *
+ *      <p>
+ *      When a document is added to the index, all the above factors are multiplied.
+ *      If the document has multiple fields with the same name, all their boosts are multiplied together:
+ *
+ *      <br>&nbsp;<br>
+ *      <table cellpadding="1" cellspacing="0" border="0" style="width:auto; margin-left:auto; margin-right:auto" summary="index-time normalization">
+ *        <tr>
+ *          <td valign="middle" align="right" rowspan="1">
+ *            norm(t,d) &nbsp; = &nbsp;
+ *            lengthNorm
+ *            &nbsp;&middot;&nbsp;
+ *          </td>
+ *          <td valign="bottom" align="center" rowspan="1" style="text-align: center">
+ *            <big><big><big>&prod;</big></big></big>
+ *          </td>
+ *          <td valign="middle" align="right" rowspan="1">
+ *            {@link org.apache.lucene.index.IndexableField#boost() f.boost}()
+ *          </td>
+ *        </tr>
+ *        <tr valign="top">
+ *          <td></td>
+ *          <td align="center" style="text-align: center"><small>field <i><b>f</b></i> in <i>d</i> named as <i><b>t</b></i></small></td>
+ *          <td></td>
+ *        </tr>
+ *      </table>
+ *      Note that search time is too late to modify this <i>norm</i> part of scoring, 
+ *      e.g. by using a different {@link Similarity} for search.
  *    </li>
  * </ol>
  *
@@ -371,40 +505,44 @@ import org.apache.lucene.util.SmallFloat;
  * @see IndexSearcher#setSimilarity(Similarity)
  */
 public abstract class TFIDFSimilarity extends Similarity {
-
+  
   /**
    * Sole constructor. (For invocation by subclass 
    * constructors, typically implicit.)
    */
   public TFIDFSimilarity() {}
-
-  /** 
-   * True if overlap tokens (tokens with a position of increment of zero) are
-   * discounted from the document's length.
-   */
-  protected boolean discountOverlaps = true;
-
-  /** Determines whether overlap tokens (Tokens with
-   *  0 position increment) are ignored when computing
-   *  norm.  By default this is true, meaning overlap
-   *  tokens do not count when computing norms.
+  
+  /** Computes a score factor based on the fraction of all query terms that a
+   * document contains.  This value is multiplied into scores.
    *
-   *  @lucene.experimental
+   * <p>The presence of a large portion of the query terms indicates a better
+   * match with the query, so implementations of this method usually return
+   * larger values when the ratio between these parameters is large and smaller
+   * values when the ratio between them is small.
    *
-   *  @see #computeNorm
+   * @param overlap the number of query terms matched in the document
+   * @param maxOverlap the total number of terms in the query
+   * @return a score factor based on term overlap with the query
    */
-  public void setDiscountOverlaps(boolean v) {
-    discountOverlaps = v;
-  }
-
-  /**
-   * Returns true if overlap tokens are discounted from the document's length. 
-   * @see #setDiscountOverlaps 
+  @Override
+  public abstract float coord(int overlap, int maxOverlap);
+  
+  /** Computes the normalization value for a query given the sum of the squared
+   * weights of each of the query terms.  This value is multiplied into the
+   * weight of each query term. While the classic query normalization factor is
+   * computed as 1/sqrt(sumOfSquaredWeights), other implementations might
+   * completely ignore sumOfSquaredWeights (ie return 1).
+   *
+   * <p>This does not affect ranking, but the default implementation does make scores
+   * from different queries more comparable than they would be by eliminating the
+   * magnitude of the Query vector as a factor in the score.
+   *
+   * @param sumOfSquaredWeights the sum of the squares of query term weights
+   * @return a normalization factor for query weights
    */
-  public boolean getDiscountOverlaps() {
-    return discountOverlaps;
-  }
-
+  @Override
+  public abstract float queryNorm(float sumOfSquaredWeights);
+  
   /** Computes a score factor based on a term or phrase's frequency in a
    * document.  This value is multiplied by the {@link #idf(long, long)}
    * factor for each term in the query and these products are then summed to
@@ -428,14 +566,14 @@ public abstract class TFIDFSimilarity extends Similarity {
    * The default implementation uses:
    * 
    * <pre class="prettyprint">
-   * idf(docFreq, docCount);
+   * idf(docFreq, searcher.maxDoc());
    * </pre>
    * 
-   * Note that {@link CollectionStatistics#docCount()} is used instead of
+   * Note that {@link CollectionStatistics#maxDoc()} is used instead of
    * {@link org.apache.lucene.index.IndexReader#numDocs() IndexReader#numDocs()} because also 
    * {@link TermStatistics#docFreq()} is used, and when the latter 
-   * is inaccurate, so is {@link CollectionStatistics#docCount()}, and in the same direction.
-   * In addition, {@link CollectionStatistics#docCount()} does not skew when fields are sparse.
+   * is inaccurate, so is {@link CollectionStatistics#maxDoc()}, and in the same direction.
+   * In addition, {@link CollectionStatistics#maxDoc()} is more efficient to compute
    *   
    * @param collectionStats collection-level statistics
    * @param termStats term-level statistics for the term
@@ -444,11 +582,9 @@ public abstract class TFIDFSimilarity extends Similarity {
    */
   public Explanation idfExplain(CollectionStatistics collectionStats, TermStatistics termStats) {
     final long df = termStats.docFreq();
-    final long docCount = collectionStats.docCount();
-    final float idf = idf(df, docCount);
-    return Explanation.match(idf, "idf(docFreq, docCount)", 
-        Explanation.match(df, "docFreq, number of documents containing term"),
-        Explanation.match(docCount, "docCount, total number of documents with field"));
+    final long max = collectionStats.maxDoc();
+    final float idf = idf(df, max);
+    return Explanation.match(idf, "idf(docFreq=" + df + ", maxDocs=" + max + ")");
   }
 
   /**
@@ -465,14 +601,16 @@ public abstract class TFIDFSimilarity extends Similarity {
    *         for each term.
    */
   public Explanation idfExplain(CollectionStatistics collectionStats, TermStatistics termStats[]) {
-    double idf = 0d; // sum into a double before casting into a float
+    final long max = collectionStats.maxDoc();
+    float idf = 0.0f;
     List<Explanation> subs = new ArrayList<>();
     for (final TermStatistics stat : termStats ) {
-      Explanation idfExplain = idfExplain(collectionStats, stat);
-      subs.add(idfExplain);
-      idf += idfExplain.getValue().floatValue();
+      final long df = stat.docFreq();
+      final float termIdf = idf(df, max);
+      subs.add(Explanation.match(termIdf, "idf(docFreq=" + df + ", maxDocs=" + max + ")"));
+      idf += termIdf;
     }
-    return Explanation.match((float) idf, "idf(), sum of:", subs);
+    return Explanation.match(idf, "idf(), sum of:", subs);
   }
 
   /** Computes a score factor based on a term's document frequency (the number
@@ -485,96 +623,184 @@ public abstract class TFIDFSimilarity extends Similarity {
    * and smaller values for common terms.
    *
    * @param docFreq the number of documents which contain the term
-   * @param docCount the total number of documents in the collection
+   * @param numDocs the total number of documents in the collection
    * @return a score factor based on the term's document frequency
    */
-  public abstract float idf(long docFreq, long docCount);
+  public abstract float idf(long docFreq, long numDocs);
 
   /**
    * Compute an index-time normalization value for this field instance.
+   * <p>
+   * This value will be stored in a single byte lossy representation by 
+   * {@link #encodeNormValue(float)}.
    * 
-   * @param length the number of terms in the field, optionally {@link #setDiscountOverlaps(boolean) discounting overlaps}
-   * @return a length normalization value
+   * @param state statistics of the current field (such as length, boost, etc)
+   * @return an index-time normalization value
    */
-  public abstract float lengthNorm(int length);
+  public abstract float lengthNorm(FieldInvertState state);
   
   @Override
   public final long computeNorm(FieldInvertState state) {
-    final int numTerms;
-    if (state.getIndexOptions() == IndexOptions.DOCS && state.getIndexCreatedVersionMajor() >= 8) {
-      numTerms = state.getUniqueTermCount();
-    } else if (discountOverlaps) {
-      numTerms = state.getLength() - state.getNumOverlap();
-    } else {
-      numTerms = state.getLength();
-    }
-    return SmallFloat.intToByte4(numTerms);
+    float normValue = lengthNorm(state);
+    return encodeNormValue(normValue);
   }
+  
+  /**
+   * Decodes a normalization factor stored in an index.
+   * 
+   * @see #encodeNormValue(float)
+   */
+  public abstract float decodeNormValue(long norm);
+
+  /** Encodes a normalization factor for storage in an index. */
+  public abstract long encodeNormValue(float f);
+ 
+  /** Computes the amount of a sloppy phrase match, based on an edit distance.
+   * This value is summed for each sloppy phrase match in a document to form
+   * the frequency to be used in scoring instead of the exact term count.
+   *
+   * <p>A phrase match with a small edit distance to a document passage more
+   * closely matches the document, so implementations of this method usually
+   * return larger values when the edit distance is small and smaller values
+   * when it is large.
+   *
+   * @see PhraseQuery#getSlop()
+   * @param distance the edit distance of this sloppy phrase match
+   * @return the frequency increment for this match
+   */
+  public abstract float sloppyFreq(int distance);
+
+  /**
+   * Calculate a scoring factor based on the data in the payload.  Implementations
+   * are responsible for interpreting what is in the payload.  Lucene makes no assumptions about
+   * what is in the byte array.
+   *
+   * @param doc The docId currently being scored.
+   * @param start The start position of the payload
+   * @param end The end position of the payload
+   * @param payload The payload byte array to be scored
+   * @return An implementation dependent float to be used as a scoring factor
+   */
+  public abstract float scorePayload(int doc, int start, int end, BytesRef payload);
 
   @Override
-  public final SimScorer scorer(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
+  public final SimWeight computeWeight(CollectionStatistics collectionStats, TermStatistics... termStats) {
     final Explanation idf = termStats.length == 1
     ? idfExplain(collectionStats, termStats[0])
     : idfExplain(collectionStats, termStats);
-    float[] normTable = new float[256];
-    for (int i = 1; i < 256; ++i) {
-      int length = SmallFloat.byte4ToInt((byte) i);
-      float norm = lengthNorm(length);
-      normTable[i] = norm;
-    }
-    normTable[0] = 1f / normTable[255];
-    return new TFIDFScorer(boost, idf, normTable);
+    return new IDFStats(collectionStats.field(), idf);
   }
 
+  @Override
+  public final SimScorer simScorer(SimWeight stats, LeafReaderContext context) throws IOException {
+    IDFStats idfstats = (IDFStats) stats;
+    return new TFIDFSimScorer(idfstats, context.reader().getNormValues(idfstats.field));
+  }
+  
+  private final class TFIDFSimScorer extends SimScorer {
+    private final IDFStats stats;
+    private final float weightValue;
+    private final NumericDocValues norms;
+    
+    TFIDFSimScorer(IDFStats stats, NumericDocValues norms) throws IOException {
+      this.stats = stats;
+      this.weightValue = stats.value;
+      this.norms = norms;
+    }
+    
+    @Override
+    public float score(int doc, float freq) {
+      final float raw = tf(freq) * weightValue; // compute tf(f)*weight
+      
+      return norms == null ? raw : raw * decodeNormValue(norms.get(doc));  // normalize for field
+    }
+    
+    @Override
+    public float computeSlopFactor(int distance) {
+      return sloppyFreq(distance);
+    }
+
+    @Override
+    public float computePayloadFactor(int doc, int start, int end, BytesRef payload) {
+      return scorePayload(doc, start, end, payload);
+    }
+
+    @Override
+    public Explanation explain(int doc, Explanation freq) {
+      return explainScore(doc, freq, stats, norms);
+    }
+  }
   
   /** Collection statistics for the TF-IDF model. The only statistic of interest
    * to this model is idf. */
-  class TFIDFScorer extends SimScorer {
+  private static class IDFStats extends SimWeight {
+    private final String field;
     /** The idf and its explanation */
     private final Explanation idf;
-    private final float boost;
-    private final float queryWeight;
-    final float[] normTable;
+    private float queryNorm;
+    private float boost;
+    private float queryWeight;
+    private float value;
     
-    public TFIDFScorer(float boost, Explanation idf, float[] normTable) {
+    public IDFStats(String field, Explanation idf) {
       // TODO: Validate?
+      this.field = field;
       this.idf = idf;
+      normalize(1f, 1f);
+    }
+
+    @Override
+    public float getValueForNormalization() {
+      // TODO: (sorta LUCENE-1907) make non-static class and expose this squaring via a nice method to subclasses?
+      return queryWeight * queryWeight;  // sum of squared weights
+    }
+
+    @Override
+    public void normalize(float queryNorm, float boost) {
       this.boost = boost;
-      this.queryWeight = boost * idf.getValue().floatValue();
-      this.normTable = normTable;
-    }
-
-    @Override
-    public float score(float freq, long norm) {
-      final float raw = tf(freq) * queryWeight; // compute tf(f)*weight
-      float normValue = normTable[(int) (norm & 0xFF)];
-      return raw * normValue;  // normalize for field
-    }
-
-    @Override
-    public Explanation explain(Explanation freq, long norm) {
-      return explainScore(freq, norm, normTable);
-    }
-
-    private Explanation explainScore(Explanation freq, long encodedNorm, float[] normTable) {
-      List<Explanation> subs = new ArrayList<Explanation>();
-      if (boost != 1F) {
-        subs.add(Explanation.match(boost, "boost"));
-      }
-      subs.add(idf);
-      Explanation tf = Explanation.match(tf(freq.getValue().floatValue()), "tf(freq="+freq.getValue()+"), with freq of:", freq);
-      subs.add(tf);
-
-      float norm = normTable[(int) (encodedNorm & 0xFF)];
-      
-      Explanation fieldNorm = Explanation.match(norm, "fieldNorm");
-      subs.add(fieldNorm);
-      
-      return Explanation.match(
-          queryWeight * tf.getValue().floatValue() * norm,
-          "score(freq="+freq.getValue()+"), product of:",
-          subs);
+      this.queryNorm = queryNorm;
+      queryWeight = queryNorm * boost * idf.getValue();
+      value = queryWeight * idf.getValue();         // idf for document
     }
   }  
 
+  private Explanation explainQuery(IDFStats stats) {
+    List<Explanation> subs = new ArrayList<>();
+
+    Explanation boostExpl = Explanation.match(stats.boost, "boost");
+    if (stats.boost != 1.0f)
+      subs.add(boostExpl);
+    subs.add(stats.idf);
+
+    Explanation queryNormExpl = Explanation.match(stats.queryNorm,"queryNorm");
+    subs.add(queryNormExpl);
+
+    return Explanation.match(
+        boostExpl.getValue() * stats.idf.getValue() * queryNormExpl.getValue(),
+        "queryWeight, product of:", subs);
+  }
+
+  private Explanation explainField(int doc, Explanation freq, IDFStats stats, NumericDocValues norms) {
+    Explanation tfExplanation = Explanation.match(tf(freq.getValue()), "tf(freq="+freq.getValue()+"), with freq of:", freq);
+    Explanation fieldNormExpl = Explanation.match(
+        norms != null ? decodeNormValue(norms.get(doc)) : 1.0f,
+        "fieldNorm(doc=" + doc + ")");
+
+    return Explanation.match(
+        tfExplanation.getValue() * stats.idf.getValue() * fieldNormExpl.getValue(),
+        "fieldWeight in " + doc + ", product of:",
+        tfExplanation, stats.idf, fieldNormExpl);
+  }
+
+  private Explanation explainScore(int doc, Explanation freq, IDFStats stats, NumericDocValues norms) {
+    Explanation queryExpl = explainQuery(stats);
+    Explanation fieldExpl = explainField(doc, freq, stats, norms);
+    if (queryExpl.getValue() == 1f) {
+      return fieldExpl;
+    }
+    return Explanation.match(
+        queryExpl.getValue() * fieldExpl.getValue(),
+        "score(doc="+doc+",freq="+freq.getValue()+"), product of:",
+        queryExpl, fieldExpl);
+  }
 }

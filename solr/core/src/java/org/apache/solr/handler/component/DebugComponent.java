@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.component;
 
 import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -39,9 +41,6 @@ import org.apache.solr.common.util.SuppressForbidden;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.search.DocList;
 import org.apache.solr.search.QueryParsing;
-import org.apache.solr.search.SolrIndexSearcher;
-import org.apache.solr.search.facet.FacetDebugInfo;
-import org.apache.solr.search.stats.StatsCache;
 import org.apache.solr.util.SolrPluginUtils;
 
 import static org.apache.solr.common.params.CommonParams.FQ;
@@ -78,12 +77,11 @@ public class DebugComponent extends SearchComponent
       map.put(ResponseBuilder.STAGE_DONE, "DONE");
       stages = Collections.unmodifiableMap(map);
   }
-
+  
   @Override
   public void prepare(ResponseBuilder rb) throws IOException
   {
     if(rb.isDebugTrack() && rb.isDistrib) {
-      rb.setNeedDocList(true);
       doDebugTrack(rb);
     }
   }
@@ -93,9 +91,6 @@ public class DebugComponent extends SearchComponent
   public void process(ResponseBuilder rb) throws IOException
   {
     if( rb.isDebug() ) {
-      SolrQueryRequest req = rb.req;
-      StatsCache statsCache = req.getSearcher().getStatsCache();
-      req.getContext().put(SolrIndexSearcher.STATS_SOURCE, statsCache.get(req));
       DocList results = null;
       //some internal grouping requests won't have results value set
       if(rb.getResults() != null) {
@@ -114,16 +109,6 @@ public class DebugComponent extends SearchComponent
         info.addAll( stdinfo );
       }
 
-      FacetDebugInfo fdebug = (FacetDebugInfo)(rb.req.getContext().get("FacetDebugInfo"));
-      if (fdebug != null) {
-        info.add("facet-trace", fdebug.getFacetDebugInfo());
-      }
-
-      fdebug = (FacetDebugInfo)(rb.req.getContext().get("FacetDebugInfo-nonJson"));
-      if (fdebug != null) {
-        info.add("facet-debug", fdebug.getFacetDebugInfo());
-      }
-      
       if (rb.req.getJSON() != null) {
         info.add(JSON, rb.req.getJSON());
       }
@@ -150,27 +135,23 @@ public class DebugComponent extends SearchComponent
 
 
   private void doDebugTrack(ResponseBuilder rb) {
-    String rid = getRequestId(rb.req);
+    SolrQueryRequest req = rb.req;
+    String rid = req.getParams().get(CommonParams.REQUEST_ID);
+    if(rid == null || "".equals(rid)) {
+      rid = generateRid(rb);
+      ModifiableSolrParams params = new ModifiableSolrParams(req.getParams());
+      params.add(CommonParams.REQUEST_ID, rid);//add rid to the request so that shards see it
+      req.setParams(params);
+    }
     rb.addDebug(rid, "track", CommonParams.REQUEST_ID);//to see it in the response
     rb.rsp.addToLog(CommonParams.REQUEST_ID, rid); //to see it in the logs of the landing core
     
   }
 
-  public static String getRequestId(SolrQueryRequest req) {
-    String rid = req.getParams().get(CommonParams.REQUEST_ID);
-    if(rid == null || "".equals(rid)) {
-      rid = generateRid(req);
-      ModifiableSolrParams params = new ModifiableSolrParams(req.getParams());
-      params.add(CommonParams.REQUEST_ID, rid);//add rid to the request so that shards see it
-      req.setParams(params);
-    }
-    return rid;
-  }
-
   @SuppressForbidden(reason = "Need currentTimeMillis, only used for naming")
-  private static String generateRid(SolrQueryRequest req) {
-    String hostName = req.getCore().getCoreContainer().getHostName();
-    return hostName + "-" + req.getCore().getName() + "-" + System.currentTimeMillis() + "-" + ridCounter.getAndIncrement();
+  private String generateRid(ResponseBuilder rb) {
+    String hostName = rb.req.getCore().getCoreDescriptor().getCoreContainer().getHostName();
+    return hostName + "-" + rb.req.getCore().getName() + "-" + System.currentTimeMillis() + "-" + ridCounter.getAndIncrement();
   }
 
   @Override
@@ -180,11 +161,6 @@ public class DebugComponent extends SearchComponent
     // Turn on debug to get explain only when retrieving fields
     if ((sreq.purpose & ShardRequest.PURPOSE_GET_FIELDS) != 0) {
       sreq.purpose |= ShardRequest.PURPOSE_GET_DEBUG;
-      // always distribute the latest version of global stats
-      sreq.purpose |= ShardRequest.PURPOSE_SET_TERM_STATS;
-      StatsCache statsCache = rb.req.getSearcher().getStatsCache();
-      statsCache.sendGlobalStats(rb, sreq);
-
       if (rb.isDebugAll()) {
         sreq.params.set(CommonParams.DEBUG_QUERY, "true");
       } else {
@@ -371,9 +347,9 @@ public class DebugComponent extends SearchComponent
         }
 
         if (didx == -1) {
-          tmp.add(skey, merge(sval, null, Collections.emptySet()));
+          tmp.add(skey, merge(sval, null, Collections.<String>emptySet()));
         } else {
-          dl.setVal(didx, merge(sval, dl.getVal(didx), Collections.emptySet()));
+          dl.setVal(didx, merge(sval, dl.getVal(didx), Collections.<String>emptySet()));
         }
       }
       dl.addAll(tmp);
@@ -393,7 +369,7 @@ public class DebugComponent extends SearchComponent
 
   
   /////////////////////////////////////////////
-  ///  SolrInfoBean
+  ///  SolrInfoMBean
   ////////////////////////////////////////////
 
   @Override
@@ -402,7 +378,7 @@ public class DebugComponent extends SearchComponent
   }
 
   @Override
-  public Category getCategory() {
-    return Category.OTHER;
+  public URL[] getDocs() {
+    return null;
   }
 }

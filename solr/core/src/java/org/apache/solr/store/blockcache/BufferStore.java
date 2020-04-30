@@ -1,3 +1,5 @@
+package org.apache.solr.store.blockcache;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.store.blockcache;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -39,7 +40,7 @@ public class BufferStore implements Store {
     }
   };
 
-  private final static ConcurrentMap<Integer, BufferStore> bufferStores = new ConcurrentHashMap<>(8192, 0.75f, 512);
+  private final static ConcurrentMap<Integer, BufferStore> bufferStores = new ConcurrentHashMap<>();
 
   private final BlockingQueue<byte[]> buffers;
 
@@ -48,15 +49,6 @@ public class BufferStore implements Store {
   private final AtomicLong shardBuffercacheAllocate;
   private final AtomicLong shardBuffercacheLost;
 
-  /**
-   * For testing only
-   *
-   * @lucene.internal
-   */
-  static void clearBufferStores() {
-    bufferStores.clear();
-  }
-  
   public synchronized static void initNewBuffer(int bufferSize, long totalAmount) {
     initNewBuffer(bufferSize, totalAmount, null);
   }

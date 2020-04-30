@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.admin;
 
 import org.apache.solr.cloud.ZkSolrResourceLoader;
@@ -33,6 +34,8 @@ import org.apache.solr.handler.RequestHandlerBase;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.RawResponseWriter;
 import org.apache.solr.response.SolrQueryResponse;
+import org.apache.solr.schema.IndexSchema;
+import org.apache.solr.schema.ManagedIndexSchema;
 import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -127,7 +130,7 @@ public class ShowFileRequestHandler extends RequestHandlerBase
   public void handleRequestBody(SolrQueryRequest req, SolrQueryResponse rsp)
       throws InterruptedException, KeeperException, IOException {
 
-    CoreContainer coreContainer = req.getCore().getCoreContainer();
+    CoreContainer coreContainer = req.getCore().getCoreDescriptor().getCoreContainer();
     if (coreContainer.isZooKeeperAware()) {
       showFromZooKeeper(req, rsp, coreContainer);
     } else {
@@ -272,6 +275,19 @@ public class ShowFileRequestHandler extends RequestHandlerBase
       }
       return true;
     }
+
+    // Make sure that if the schema is managed, we don't allow editing. Don't really want to put
+    // this in the init since we're not entirely sure when the managed schema will get initialized relative to this
+    // handler.
+    SolrCore core = req.getCore();
+    IndexSchema schema = core.getLatestSchema();
+    if (schema instanceof ManagedIndexSchema) {
+      String managed = schema.getResourceName();
+
+      if (fname.equalsIgnoreCase(managed)) {
+        return true;
+      }
+    }
     return false;
   }
 
@@ -363,9 +379,5 @@ public class ShowFileRequestHandler extends RequestHandlerBase
   @Override
   public String getDescription() {
     return "Admin Config File -- view or update config files directly";
-  }
-  @Override
-  public Category getCategory() {
-    return Category.ADMIN;
   }
 }

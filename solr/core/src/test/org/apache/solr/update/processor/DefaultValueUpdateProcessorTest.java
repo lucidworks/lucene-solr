@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
 import java.util.Date;
@@ -23,9 +24,12 @@ import java.io.IOException;
 
 import org.apache.solr.SolrTestCaseJ4;
 
+import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.SolrInputField;
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.params.SolrParams;
+
 import org.apache.solr.core.SolrCore;
 
 import org.apache.solr.request.SolrQueryRequest;
@@ -34,8 +38,12 @@ import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.response.SolrQueryResponse;
 
 import org.apache.solr.update.AddUpdateCommand;
+import org.apache.solr.update.processor.UpdateRequestProcessor;
+import org.apache.solr.update.processor.UpdateRequestProcessorChain;
 
+import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Test;
 
 public class DefaultValueUpdateProcessorTest extends SolrTestCaseJ4 {
 
@@ -102,11 +110,12 @@ public class DefaultValueUpdateProcessorTest extends SolrTestCaseJ4 {
   /** 
    * Convenience method for building up SolrInputFields
    */
-  SolrInputField field(String name, Object... values) {
+  SolrInputField field(String name, float boost, Object... values) {
     SolrInputField f = new SolrInputField(name);
     for (Object v : values) {
-      f.addValue(v);
+      f.addValue(v, 1.0F);
     }
+    f.setBoost(boost);
     return f;
   }
 
@@ -114,7 +123,7 @@ public class DefaultValueUpdateProcessorTest extends SolrTestCaseJ4 {
    * Convenience method for building up SolrInputFields with default boost
    */
   SolrInputField f(String name, Object... values) {
-    return field(name, values);
+    return field(name, 1.0F, values);
   }
 
 

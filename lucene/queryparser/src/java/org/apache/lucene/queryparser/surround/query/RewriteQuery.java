@@ -1,3 +1,4 @@
+package org.apache.lucene.queryparser.surround.query;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.surround.query;
-import java.io.IOException;
-import java.util.Objects;
 
-import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.search.Query;
 
 abstract class RewriteQuery<SQ extends SrndQuery> extends Query {
@@ -30,13 +27,10 @@ abstract class RewriteQuery<SQ extends SrndQuery> extends Query {
       SQ srndQuery,
       String fieldName,
       BasicQueryFactory qf) {
-    this.srndQuery = Objects.requireNonNull(srndQuery);
-    this.fieldName = Objects.requireNonNull(fieldName);
-    this.qf = Objects.requireNonNull(qf);
+    this.srndQuery = srndQuery;
+    this.fieldName = fieldName;
+    this.qf = qf;
   }
-
-  @Override
-  abstract public Query rewrite(IndexReader reader) throws IOException;
 
   @Override
   public String toString(String field) {
@@ -50,22 +44,24 @@ abstract class RewriteQuery<SQ extends SrndQuery> extends Query {
 
   @Override
   public int hashCode() {
-    return classHash()
-      ^ fieldName.hashCode()
-      ^ qf.hashCode()
-      ^ srndQuery.hashCode();
+    return super.hashCode()
+    ^ fieldName.hashCode()
+    ^ qf.hashCode()
+    ^ srndQuery.hashCode();
   }
 
   @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           equalsTo(getClass().cast(other));
+  public boolean equals(Object obj) {
+    if (obj == null)
+      return false;
+    if (! getClass().equals(obj.getClass()))
+      return false;
+    @SuppressWarnings("unchecked") RewriteQuery<SQ> other = (RewriteQuery<SQ>)obj;
+    return super.equals(obj)
+      && fieldName.equals(other.fieldName)
+      && qf.equals(other.qf)
+      && srndQuery.equals(other.srndQuery);
   }
 
-  private boolean equalsTo(RewriteQuery<?> other) {
-    return fieldName.equals(other.fieldName) && 
-           qf.equals(other.qf) && 
-           srndQuery.equals(other.srndQuery);
-  }
 }
 

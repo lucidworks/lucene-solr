@@ -1,3 +1,5 @@
+package org.apache.solr.update;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
-import java.util.concurrent.Callable;
-import java.util.concurrent.Future;
 import java.util.concurrent.locks.Lock;
 
 import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.search.Sort;
 import org.apache.solr.cloud.ActionThrottle;
-import org.apache.solr.cloud.RecoveryStrategy;
-import org.apache.solr.common.AlreadyClosedException;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.CoreDescriptor;
 import org.apache.solr.core.DirectoryFactory;
@@ -45,23 +41,17 @@ public abstract class SolrCoreState {
   
   protected boolean closed = false;
   private final Object updateLock = new Object();
-  private final Object reloadLock = new Object();
   
   public Object getUpdateLock() {
     return updateLock;
   }
-  
-  public Object getReloadLock() {
-    return reloadLock;
-  }
-  
   
   private int solrCoreStateRefCnt = 1;
 
   public void increfSolrCoreState() {
     synchronized (this) {
       if (solrCoreStateRefCnt == 0) {
-        throw new CoreIsClosedException("IndexWriter has been closed");
+        throw new IllegalStateException("IndexWriter has been closed");
       }
       solrCoreStateRefCnt++;
     }
@@ -80,7 +70,7 @@ public abstract class SolrCoreState {
     
     if (close) {
       try {
-        log.debug("Closing SolrCoreState");
+        log.info("Closing SolrCoreState");
         close(closer);
       } catch (Exception e) {
         log.error("Error closing SolrCoreState", e);
@@ -137,25 +127,13 @@ public abstract class SolrCoreState {
   public abstract void rollbackIndexWriter(SolrCore core) throws IOException;
   
   /**
-   * Get the current Sort of the current IndexWriter's MergePolicy..
-   *
-   * @throws IOException If there is a low-level I/O error.
-   */
-  public abstract Sort getMergePolicySort() throws IOException;
-
-  /**
    * @return the {@link DirectoryFactory} that should be used.
    */
   public abstract DirectoryFactory getDirectoryFactory();
 
-  /**
-   * @return the {@link org.apache.solr.cloud.RecoveryStrategy.Builder} that should be used.
-   */
-  public abstract RecoveryStrategy.Builder getRecoveryStrategyBuilder();
-
 
   public interface IndexWriterCloser {
-    void closeWriter(IndexWriter writer) throws IOException;
+    public void closeWriter(IndexWriter writer) throws IOException;
   }
 
   public abstract void doRecovery(CoreContainer cc, CoreDescriptor cd);
@@ -172,41 +150,4 @@ public abstract class SolrCoreState {
   public abstract boolean getLastReplicateIndexSuccess();
 
   public abstract void setLastReplicateIndexSuccess(boolean success);
-
-  public static class CoreIsClosedException extends AlreadyClosedException {
-    
-    public CoreIsClosedException() {
-      super();
-    }
-    
-    public CoreIsClosedException(String s) {
-      super(s);
-    }
-  }
-
-  public abstract Lock getRecoveryLock();
-
-  // These are needed to properly synchronize the bootstrapping when the
-  // in the target DC require a full sync.
-  public abstract boolean getCdcrBootstrapRunning();
-
-  public abstract void setCdcrBootstrapRunning(boolean cdcrRunning);
-
-  public abstract Future<Boolean> getCdcrBootstrapFuture();
-
-  public abstract void setCdcrBootstrapFuture(Future<Boolean> cdcrBootstrapFuture);
-
-  public abstract Callable getCdcrBootstrapCallable();
-
-  public abstract void setCdcrBootstrapCallable(Callable cdcrBootstrapCallable);
-
-  public Throwable getTragicException() throws IOException {
-    RefCounted<IndexWriter> ref = getIndexWriter(null);
-    if (ref == null) return null;
-    try {
-      return ref.get().getTragicException();
-    } finally {
-      ref.decref();
-    }
-  }
 }

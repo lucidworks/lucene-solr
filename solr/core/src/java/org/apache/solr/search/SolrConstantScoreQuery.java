@@ -1,3 +1,21 @@
+package org.apache.solr.search;
+
+import java.io.IOException;
+import java.util.Map;
+
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.queries.function.ValueSource;
+import org.apache.lucene.search.ConstantScoreScorer;
+import org.apache.lucene.search.ConstantScoreWeight;
+import org.apache.lucene.search.DocIdSet;
+import org.apache.lucene.search.DocIdSetIterator;
+import org.apache.lucene.search.Filter;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.Scorer;
+import org.apache.lucene.search.Weight;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,24 +32,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
-
-import java.io.IOException;
-import java.util.Map;
-import java.util.Objects;
-
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.queries.function.ValueSource;
-import org.apache.lucene.search.ConstantScoreScorer;
-import org.apache.lucene.search.ConstantScoreWeight;
-import org.apache.lucene.search.DocIdSet;
-import org.apache.lucene.search.DocIdSetIterator;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
-import org.apache.lucene.search.Scorer;
-import org.apache.lucene.search.Weight;
 
 /**
  * A query that wraps a filter and simply returns a constant score equal to the
@@ -85,11 +85,9 @@ public class SolrConstantScoreQuery extends Query implements ExtendedQuery {
 
   protected class ConstantWeight extends ConstantScoreWeight {
     private Map context;
-    private ScoreMode scoreMode;
 
-    public ConstantWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-      super(SolrConstantScoreQuery.this, boost);
-      this.scoreMode = scoreMode;
+    public ConstantWeight(IndexSearcher searcher) throws IOException {
+      super(SolrConstantScoreQuery.this);
       this.context = ValueSource.newContext(searcher);
       if (filter instanceof SolrFilter)
         ((SolrFilter)filter).createWeight(context, searcher);
@@ -105,19 +103,14 @@ public class SolrConstantScoreQuery extends Query implements ExtendedQuery {
       if (iterator == null) {
         return null;
       }
-      return new ConstantScoreScorer(this, score(), scoreMode, iterator);
-    }
-
-    @Override
-    public boolean isCacheable(LeafReaderContext ctx) {
-      return false;
+      return new ConstantScoreScorer(this, score(), iterator);
     }
 
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    return new SolrConstantScoreQuery.ConstantWeight(searcher, scoreMode, boost);
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    return new SolrConstantScoreQuery.ConstantWeight(searcher);
   }
 
   /** Prints a user-readable version of this query. */
@@ -128,20 +121,17 @@ public class SolrConstantScoreQuery extends Query implements ExtendedQuery {
 
   /** Returns true if <code>o</code> is equal to this. */
   @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           Objects.equals(filter, ((SolrConstantScoreQuery) other).filter);
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (super.equals(o) == false) return false;
+    SolrConstantScoreQuery other = (SolrConstantScoreQuery)o;
+    return filter.equals(other.filter);
   }
 
   /** Returns a hash code value for this object. */
   @Override
   public int hashCode() {
-    return 31 * classHash() + filter.hashCode();
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    visitor.visitLeaf(this);
+    return 31 * super.hashCode() + filter.hashCode();
   }
 
 }

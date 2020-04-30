@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
 import java.io.IOException;
 
@@ -22,6 +23,7 @@ import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PayloadAttribute;
 import org.apache.lucene.codecs.TermVectorsWriter;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.RamUsageEstimator;
 
 final class TermVectorsConsumerPerField extends TermsHashPerField {
 
@@ -109,7 +111,6 @@ final class TermVectorsConsumerPerField extends TermsHashPerField {
 
   @Override
   boolean start(IndexableField field, boolean first) {
-    super.start(field, first);
     assert field.fieldType().indexOptions() != IndexOptions.NONE;
 
     if (first) {
@@ -225,7 +226,7 @@ final class TermVectorsConsumerPerField extends TermsHashPerField {
   void newTerm(final int termID) {
     TermVectorsPostingsArray postings = termVectorsPostingsArray;
 
-    postings.freqs[termID] = getTermFreq();
+    postings.freqs[termID] = 1;
     postings.lastOffsets[termID] = 0;
     postings.lastPositions[termID] = 0;
     
@@ -236,23 +237,9 @@ final class TermVectorsConsumerPerField extends TermsHashPerField {
   void addTerm(final int termID) {
     TermVectorsPostingsArray postings = termVectorsPostingsArray;
 
-    postings.freqs[termID] += getTermFreq();
+    postings.freqs[termID]++;
 
     writeProx(postings, termID);
-  }
-
-  private int getTermFreq() {
-    int freq = termFreqAtt.getTermFrequency();
-    if (freq != 1) {
-      if (doVectorPositions) {
-        throw new IllegalArgumentException("field \"" + fieldInfo.name + "\": cannot index term vector positions while using custom TermFrequencyAttribute");
-      }
-      if (doVectorOffsets) {
-        throw new IllegalArgumentException("field \"" + fieldInfo.name + "\": cannot index term vector offsets while using custom TermFrequencyAttribute");
-      }
-    }
-
-    return freq;
   }
 
   @Override
@@ -296,7 +283,7 @@ final class TermVectorsConsumerPerField extends TermsHashPerField {
 
     @Override
     int bytesPerPosting() {
-      return super.bytesPerPosting() + 3 * Integer.BYTES;
+      return super.bytesPerPosting() + 3 * RamUsageEstimator.NUM_BYTES_INT;
     }
   }
 }

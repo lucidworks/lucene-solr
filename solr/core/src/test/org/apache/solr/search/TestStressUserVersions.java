@@ -1,3 +1,6 @@
+package org.apache.solr.search;
+
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +17,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
+import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.util.TestHarness;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.noggit.ObjectBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
@@ -25,14 +34,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-
-import org.apache.solr.common.util.Utils;
-import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.util.TestHarness;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 
 public class TestStressUserVersions extends TestRTGBase {
@@ -74,7 +75,7 @@ public class TestStressUserVersions extends TestRTGBase {
     final int ndocs = 5 + (random().nextBoolean() ? random().nextInt(25) : random().nextInt(200));
     int nWriteThreads = 5 + random().nextInt(25);
 
-    final int maxConcurrentCommits = nWriteThreads;
+    final int maxConcurrentCommits = nWriteThreads;   // number of committers at a time... it should be <= maxWarmingSearchers
 
     // query variables
     final int percentRealtimeQuery = 75;
@@ -90,7 +91,7 @@ public class TestStressUserVersions extends TestRTGBase {
      final int ndocs = 1;
      int nWriteThreads = 2;
 
-     final int maxConcurrentCommits = nWriteThreads;
+     final int maxConcurrentCommits = nWriteThreads;   // number of committers at a time... it should be <= maxWarmingSearchers
 
      // query variables
      final int percentRealtimeQuery = 101;
@@ -203,7 +204,7 @@ public class TestStressUserVersions extends TestRTGBase {
               } else {
                 verbose("adding id", id, "val=", nextVal,"version",version);
 
-                Long returnedVersion = addAndGetVersion(sdoc("id", Integer.toString(id), FIELD, Long.toString(nextVal), vfield, Long.toString(version)), null);
+                Long returnedVersion = addAndGetVersion(sdoc("id", Integer.toString(id), field, Long.toString(nextVal), vfield, Long.toString(version)), null);
 
                 // only update model if the version is newer
                 synchronized (model) {
@@ -272,7 +273,7 @@ public class TestStressUserVersions extends TestRTGBase {
               }
 
               String response = h.query(sreq);
-              Map rsp = (Map) Utils.fromJSONString(response);
+              Map rsp = (Map)ObjectBuilder.fromJSON(response);
               List doclist = (List)(((Map)rsp.get("response")).get("docs"));
               if (doclist.size() == 0) {
                 // there's no info we can get back with a delete, so not much we can check without further synchronization
@@ -282,7 +283,7 @@ public class TestStressUserVersions extends TestRTGBase {
                 long foundVer = (Long)(((Map)doclist.get(0)).get(vfield));
 
                 if (isLive) {
-                  long foundVal = (Long)(((Map)doclist.get(0)).get(FIELD));
+                  long foundVal = (Long)(((Map)doclist.get(0)).get(field));
                   if (foundVer < Math.abs(info.version)
                       || (foundVer == info.version && foundVal != info.val) ) {    // if the version matches, the val must
                     log.error("ERROR, id=" + id + " found=" + response + " model" + info);
@@ -290,7 +291,7 @@ public class TestStressUserVersions extends TestRTGBase {
                   }
                 } else {
                   // if the doc is deleted (via tombstone), it shouldn't have a value on it.
-                  assertNull( ((Map)doclist.get(0)).get(FIELD) );
+                  assertNull( ((Map)doclist.get(0)).get(field) );
 
                   if (foundVer < Math.abs(info.version)) {
                     log.error("ERROR, id=" + id + " found=" + response + " model" + info);

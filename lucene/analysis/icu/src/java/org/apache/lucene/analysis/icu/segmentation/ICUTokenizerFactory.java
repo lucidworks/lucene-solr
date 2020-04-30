@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.icu.segmentation;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.icu.segmentation;
-
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -33,6 +33,7 @@ import org.apache.lucene.util.IOUtils;
 
 import com.ibm.icu.lang.UCharacter;
 import com.ibm.icu.lang.UProperty;
+import com.ibm.icu.lang.UScript;
 import com.ibm.icu.text.BreakIterator;
 import com.ibm.icu.text.RuleBasedBreakIterator;
 
@@ -72,20 +73,12 @@ import com.ibm.icu.text.RuleBasedBreakIterator;
  *                rulefiles="Latn:my.Latin.rules.rbbi,Cyrl:my.Cyrillic.rules.rbbi"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
 public class ICUTokenizerFactory extends TokenizerFactory implements ResourceLoaderAware {
-
-  /** SPI name */
-  public static final String NAME = "icu";
-
   static final String RULEFILES = "rulefiles";
   private final Map<Integer,String> tailored;
   private ICUTokenizerConfig config;
   private final boolean cjkAsWords;
-  private final boolean myanmarAsWords;
   
   /** Creates a new ICUTokenizerFactory */
   public ICUTokenizerFactory(Map<String,String> args) {
@@ -102,7 +95,6 @@ public class ICUTokenizerFactory extends TokenizerFactory implements ResourceLoa
       }
     }
     cjkAsWords = getBoolean(args, "cjkAsWords", true);
-    myanmarAsWords = getBoolean(args, "myanmarAsWords", true);
     if (!args.isEmpty()) {
       throw new IllegalArgumentException("Unknown parameters: " + args);
     }
@@ -112,20 +104,20 @@ public class ICUTokenizerFactory extends TokenizerFactory implements ResourceLoa
   public void inform(ResourceLoader loader) throws IOException {
     assert tailored != null : "init must be called first!";
     if (tailored.isEmpty()) {
-      config = new DefaultICUTokenizerConfig(cjkAsWords, myanmarAsWords);
+      config = new DefaultICUTokenizerConfig(cjkAsWords);
     } else {
-      final BreakIterator breakers[] = new BreakIterator[1 + UCharacter.getIntPropertyMaxValue(UProperty.SCRIPT)];
+      final BreakIterator breakers[] = new BreakIterator[UScript.CODE_LIMIT];
       for (Map.Entry<Integer,String> entry : tailored.entrySet()) {
         int code = entry.getKey();
         String resourcePath = entry.getValue();
         breakers[code] = parseRules(resourcePath, loader);
       }
-      config = new DefaultICUTokenizerConfig(cjkAsWords, myanmarAsWords) {
+      config = new DefaultICUTokenizerConfig(cjkAsWords) {
         
         @Override
-        public RuleBasedBreakIterator getBreakIterator(int script) {
+        public BreakIterator getBreakIterator(int script) {
           if (breakers[script] != null) {
-            return (RuleBasedBreakIterator) breakers[script].clone();
+            return (BreakIterator) breakers[script].clone();
           } else {
             return super.getBreakIterator(script);
           }

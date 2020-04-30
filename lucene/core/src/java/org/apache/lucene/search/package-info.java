@@ -44,7 +44,7 @@
  * <p>
  * Once a Query has been created and submitted to the {@link org.apache.lucene.search.IndexSearcher IndexSearcher}, the scoring
  * process begins. After some infrastructure setup, control finally passes to the {@link org.apache.lucene.search.Weight Weight}
- * implementation and its {@link org.apache.lucene.search.Scorer Scorer} or {@link org.apache.lucene.search.BulkScorer BulkScorer}
+ * implementation and its {@link org.apache.lucene.search.Scorer Scorer} or {@link org.apache.lucene.search.BulkScorer BulkScore}
  * instances. See the <a href="#algorithm">Algorithm</a> section for more notes on the process.
  *     <!-- FILL IN MORE HERE -->   
  *     <!-- TODO: this page over-links the same things too many times -->
@@ -95,11 +95,9 @@
  *             If a query is made up of all SHOULD clauses, then every document in the result
  *             set matches at least one of these clauses.</p></li>
  * 
- *         <li><p>{@link org.apache.lucene.search.BooleanClause.Occur#MUST MUST} &mdash; Use this operator when a clause is required to occur in the result set and should
- *             contribute to the score. Every document in the result set will match all such clauses.</p></li>
- * 
- *         <li><p>{@link org.apache.lucene.search.BooleanClause.Occur#FILTER FILTER} &mdash; Use this operator when a clause is required to occur in the result set but
- *             should not contribute to the score. Every document in the result set will match all such clauses.</p></li>
+ *         <li><p>{@link org.apache.lucene.search.BooleanClause.Occur#MUST MUST} &mdash; Use this operator when a clause is required to occur in the result set. Every
+ *             document in the result set will match
+ *             all such clauses.</p></li>
  * 
  *         <li><p>{@link org.apache.lucene.search.BooleanClause.Occur#MUST_NOT MUST NOT} &mdash; Use this operator when a
  *             clause must not occur in the result set. No
@@ -115,7 +113,7 @@
  *     {@link org.apache.lucene.search.TermQuery TermQuery} clauses,
  *     for example by {@link org.apache.lucene.search.WildcardQuery WildcardQuery}.
  *     The default setting for the maximum number
- *     of clauses is 1024, but this can be changed via the
+ *     of clauses 1024, but this can be changed via the
  *     static method {@link org.apache.lucene.search.BooleanQuery#setMaxClauseCount(int)}.
  * 
  * <h3>Phrases</h3>
@@ -151,16 +149,33 @@
  *     </ol>
  * 
  * <h3>
- *     {@link org.apache.lucene.search.PointRangeQuery PointRangeQuery}
+ *     {@link org.apache.lucene.search.TermRangeQuery TermRangeQuery}
  * </h3>
  * 
  * <p>The
- *     {@link org.apache.lucene.search.PointRangeQuery PointRangeQuery}
+ *     {@link org.apache.lucene.search.TermRangeQuery TermRangeQuery}
+ *     matches all documents that occur in the
+ *     exclusive range of a lower
+ *     {@link org.apache.lucene.index.Term Term}
+ *     and an upper
+ *     {@link org.apache.lucene.index.Term Term}
+ *     according to {@link org.apache.lucene.util.BytesRef#compareTo BytesRef.compareTo()}. It is not intended
+ *     for numerical ranges; use {@link org.apache.lucene.search.NumericRangeQuery NumericRangeQuery} instead.
+ * 
+ *     For example, one could find all documents
+ *     that have terms beginning with the letters <tt>a</tt> through <tt>c</tt>.
+ * 
+ * <h3>
+ *     {@link org.apache.lucene.search.NumericRangeQuery NumericRangeQuery}
+ * </h3>
+ * 
+ * <p>The
+ *     {@link org.apache.lucene.search.NumericRangeQuery NumericRangeQuery}
  *     matches all documents that occur in a numeric range.
- *     For PointRangeQuery to work, you must index the values
- *     using a one of the numeric fields ({@link org.apache.lucene.document.IntPoint IntPoint},
- *     {@link org.apache.lucene.document.LongPoint LongPoint}, {@link org.apache.lucene.document.FloatPoint FloatPoint},
- *     or {@link org.apache.lucene.document.DoublePoint DoublePoint}).
+ *     For NumericRangeQuery to work, you must index the values
+ *     using a one of the numeric fields ({@link org.apache.lucene.document.IntField IntField},
+ *     {@link org.apache.lucene.document.LongField LongField}, {@link org.apache.lucene.document.FloatField FloatField},
+ *     or {@link org.apache.lucene.document.DoubleField DoubleField}).
  * 
  * <h3>
  *     {@link org.apache.lucene.search.PrefixQuery PrefixQuery},
@@ -187,7 +202,7 @@
  * <h3>
  *     {@link org.apache.lucene.search.FuzzyQuery FuzzyQuery}
  * </h3>
- *
+ * 
  * <p>A
  *     {@link org.apache.lucene.search.FuzzyQuery FuzzyQuery}
  *     matches documents that contain terms similar to the specified term. Similarity is
@@ -211,7 +226,7 @@
  *    <a href="http://en.wikipedia.org/wiki/Information_retrieval#Model_types">models</a>, including:
  *    <ul>
  *      <li><a href="http://en.wikipedia.org/wiki/Vector_Space_Model">Vector Space Model (VSM)</a></li>
- *      <li><a href="http://en.wikipedia.org/wiki/Probabilistic_relevance_model">Probabilistic Models</a> such as 
+ *      <li><a href="http://en.wikipedia.org/wiki/Probabilistic_relevance_model">Probablistic Models</a> such as 
  *          <a href="http://en.wikipedia.org/wiki/Probabilistic_relevance_model_(BM25)">Okapi BM25</a> and
  *          <a href="http://en.wikipedia.org/wiki/Divergence-from-randomness_model">DFR</a></li>
  *      <li><a href="http://en.wikipedia.org/wiki/Language_model">Language models</a></li>
@@ -254,12 +269,30 @@
  *    Fields and the other in one Field may return different scores for the same query due to length
  *    normalization.
  * <h3>Score Boosting</h3>
- * <p>Lucene allows influencing the score contribution of various parts of the query by wrapping with
- *    {@link org.apache.lucene.search.BoostQuery}.</p>
+ * <p>Lucene allows influencing search results by "boosting" at different times:
+ *    <ul>                   
+ *       <li><b>Index-time boost</b> by calling
+ *        {@link org.apache.lucene.document.Field#setBoost(float) Field.setBoost()} before a document is 
+ *        added to the index.</li>
+ *       <li><b>Query-time boost</b> by applying a boost to a query by wrapping with
+ *       {@link org.apache.lucene.search.BoostQuery}.</li>
+ *    </ul>    
+ * <p>Indexing time boosts are pre-processed for storage efficiency and written to
+ *    storage for a field as follows:
+ *    <ul>
+ *        <li>All boosts of that field (i.e. all boosts under the same field name in that doc) are 
+ *            multiplied.</li>
+ *        <li>The boost is then encoded into a normalization value by the Similarity
+ *            object at index-time: {@link org.apache.lucene.search.similarities.Similarity#computeNorm computeNorm()}.
+ *            The actual encoding depends upon the Similarity implementation, but note that most
+ *            use a lossy encoding (such as multiplying the boost with document length or similar, packed
+ *            into a single byte!).</li>
+ *        <li>Decoding of any index-time normalization values and integration into the document's score is also performed 
+ *            at search time by the Similarity.</li>
+ *     </ul>
  * 
  * <a name="changingScoring"></a>
  * <h2>Changing Scoring &mdash; Similarity</h2>
- * <h3>Changing the scoring formula</h3>
  * <p>
  * Changing {@link org.apache.lucene.search.similarities.Similarity Similarity} is an easy way to 
  * influence scoring, this is done at index-time with 
@@ -275,54 +308,14 @@
  * extend by plugging in a different component (e.g. term frequency normalizer).
  * <p>
  * Finally, you can extend the low level {@link org.apache.lucene.search.similarities.Similarity Similarity} directly
- * to implement a new retrieval model.
+ * to implement a new retrieval model, or to use external scoring factors particular to your application. For example,
+ * a custom Similarity can access per-document values via {@link org.apache.lucene.index.NumericDocValues} and 
+ * integrate them into the score.
  * <p>
  * See the {@link org.apache.lucene.search.similarities} package documentation for information
  * on the built-in available scoring models and extending or changing Similarity.
- *
- * <h3>Integrating field values into the score</h3>
- * <p>While similarities help score a document relatively to a query, it is also common for documents to hold
- * features that measure the quality of a match. Such features are best integrated into the score by indexing
- * a {@link org.apache.lucene.document.FeatureField FeatureField} with the document at index-time, and then
- * combining the similarity score and the feature score using a linear combination. For instance the below
- * query matches the same documents as {@code originalQuery} and computes scores as
- * {@code similarityScore + 0.7 * featureScore}:
- * <pre class="prettyprint">
- * Query originalQuery = new BooleanQuery.Builder()
- *     .add(new TermQuery(new Term("body", "apache")), Occur.SHOULD)
- *     .add(new TermQuery(new Term("body", "lucene")), Occur.SHOULD)
- *     .build();
- * Query featureQuery = FeatureField.newSaturationQuery("features", "pagerank");
- * Query query = new BooleanQuery.Builder()
- *     .add(originalQuery, Occur.MUST)
- *     .add(new BoostQuery(featureQuery, 0.7f), Occur.SHOULD)
- *     .build();
- * </pre>
  * 
- * <p>A less efficient yet more flexible way of modifying scores is to index scoring features into
- * doc-value fields and then combine them with the similarity score using a
- * <a href="{@docRoot}/../queries/org/apache/lucene/queries/function/FunctionScoreQuery.html">FunctionScoreQuery</a>
- * from the <a href="{@docRoot}/../queries/overview-summary.html">queries module</a>. For instance
- * the below example shows how to compute scores as {@code similarityScore * Math.log(popularity)}
- * using the <a href="{@docRoot}/../expressions/overview-summary.html">expressions module</a> and
- * assuming that values for the {@code popularity} field have been set in a
- * {@link org.apache.lucene.document.NumericDocValuesField NumericDocValuesField} at index time:
- * <pre class="prettyprint">
- *   // compile an expression:
- *   Expression expr = JavascriptCompiler.compile("_score * ln(popularity)");
- *
- *   // SimpleBindings just maps variables to SortField instances
- *   SimpleBindings bindings = new SimpleBindings();
- *   bindings.add(new SortField("_score", SortField.Type.SCORE));
- *   bindings.add(new SortField("popularity", SortField.Type.INT));
- *
- *   // create a query that matches based on 'originalQuery' but
- *   // scores using expr
- *   Query query = new FunctionScoreQuery(
- *       originalQuery,
- *       expr.getDoubleValuesSource(bindings));
- * </pre>
- *
+ * 
  * <a name="customQueriesExpert"></a>
  * <h2>Custom Queries &mdash; Expert Level</h2>
  * 
@@ -337,14 +330,15 @@
  *             {@link org.apache.lucene.search.Query Query} &mdash; The abstract object representation of the
  *             user's information need.</li>
  *         <li>
- *             {@link org.apache.lucene.search.Weight Weight} &mdash; A specialization of a Query for a given
- *             index. This typically associates a Query object with index statistics that are later used to
- *             compute document scores.
+ *             {@link org.apache.lucene.search.Weight Weight} &mdash; The internal interface representation of
+ *             the user's Query, so that Query objects may be reused.
+ *             This is global (across all segments of the index) and
+ *             generally will require global statistics (such as docFreq
+ *             for a given term across all segments).</li>
  *         <li>
- *             {@link org.apache.lucene.search.Scorer Scorer} &mdash; The core class of the scoring process:
- *             for a given segment, scorers return {@link org.apache.lucene.search.Scorer#iterator iterators}
- *             over matches and give a way to compute the {@link org.apache.lucene.search.Scorer#score score}
- *             of these matches.</li>
+ *             {@link org.apache.lucene.search.Scorer Scorer} &mdash; An abstract class containing common
+ *             functionality for scoring. Provides both scoring and
+ *             explanation capabilities.  This is created per-segment.</li>
  *         <li>
  *             {@link org.apache.lucene.search.BulkScorer BulkScorer} &mdash; An abstract class that scores
  *       a range of documents.  A default implementation simply iterates through the hits from
@@ -363,7 +357,7 @@
  *         {@link org.apache.lucene.search.Query Query} class has several methods that are important for
  *         derived classes:
  *         <ol>
- *             <li>{@link org.apache.lucene.search.Query#createWeight(IndexSearcher,ScoreMode,float) createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost)} &mdash; A
+ *             <li>{@link org.apache.lucene.search.Query#createWeight(IndexSearcher,boolean) createWeight(IndexSearcher searcher,boolean)} &mdash; A
  *                 {@link org.apache.lucene.search.Weight Weight} is the internal representation of the
  *                 Query, so each Query implementation must
  *                 provide an implementation of Weight. See the subsection on <a
@@ -372,7 +366,7 @@
  *             <li>{@link org.apache.lucene.search.Query#rewrite(org.apache.lucene.index.IndexReader) rewrite(IndexReader reader)} &mdash; Rewrites queries into primitive queries. Primitive queries are:
  *                 {@link org.apache.lucene.search.TermQuery TermQuery},
  *                 {@link org.apache.lucene.search.BooleanQuery BooleanQuery}, <span
- *                     >and other queries that implement {@link org.apache.lucene.search.Query#createWeight(IndexSearcher,ScoreMode,float) createWeight(IndexSearcher searcher,ScoreMode scoreMode, float boost)}</span></li>
+ *                     >and other queries that implement {@link org.apache.lucene.search.Query#createWeight(IndexSearcher,boolean) createWeight(IndexSearcher searcher,boolean,float)}</span></li>
  *         </ol>
  * <a name="weightClass"></a>
  * <h3>The Weight Interface</h3>
@@ -381,8 +375,33 @@
  *         interface provides an internal representation of the Query so that it can be reused. Any
  *         {@link org.apache.lucene.search.IndexSearcher IndexSearcher}
  *         dependent state should be stored in the Weight implementation,
- *         not in the Query class. The interface defines four main methods:
+ *         not in the Query class. The interface defines five methods that must be implemented:
  *         <ol>
+ *             <li>
+ *                 {@link org.apache.lucene.search.Weight#getQuery getQuery()} &mdash; Pointer to the
+ *                 Query that this Weight represents.</li>
+ *             <li>
+ *                 {@link org.apache.lucene.search.Weight#getValueForNormalization() getValueForNormalization()} &mdash; 
+ *                 A weight can return a floating point value to indicate its magnitude for query normalization. Typically
+ *                 a weight such as TermWeight that scores via a {@link org.apache.lucene.search.similarities.Similarity Similarity} 
+ *                 will just defer to the Similarity's implementation: 
+ *                 {@link org.apache.lucene.search.similarities.Similarity.SimWeight#getValueForNormalization SimWeight#getValueForNormalization()}.
+ *                 For example, with {@link org.apache.lucene.search.similarities.TFIDFSimilarity Lucene's classic vector-space formula}, this
+ *                 is implemented as the sum of squared weights: <code>(idf * boost)<sup>2</sup></code></li>
+ *             <li>
+ *                 {@link org.apache.lucene.search.Weight#normalize(float,float) normalize(float norm, float boost)} &mdash; 
+ *                 Performs query normalization: 
+ *                 <ul>
+ *                 <li><code>boost</code>: A query-boost factor from any wrapping queries that should be multiplied into every
+ *                 document's score. For example, a TermQuery that is wrapped within a BooleanQuery with a boost of <code>5</code> would
+ *                 receive this value at this time. This allows the TermQuery (the leaf node in this case) to compute this up-front
+ *                 a single time (e.g. by multiplying into the IDF), rather than for every document.</li> 
+ *                 <li><code>norm</code>: Passes in a a normalization factor which may
+ *                 allow for comparing scores between queries.</li>
+ *                 </ul>
+ *                 Typically a weight such as TermWeight
+ *                 that scores via a {@link org.apache.lucene.search.similarities.Similarity Similarity} will just defer to the Similarity's implementation:
+ *                 {@link org.apache.lucene.search.similarities.Similarity.SimWeight#normalize SimWeight#normalize(float,float)}.</li>
  *             <li>
  *                 {@link org.apache.lucene.search.Weight#scorer scorer()} &mdash;
  *                 Construct a new {@link org.apache.lucene.search.Scorer Scorer} for this Weight. See <a href="#scorerClass">The Scorer Class</a>
@@ -390,22 +409,17 @@
  *                 given the Query.
  *             </li>
  *             <li>
+ *                 {@link org.apache.lucene.search.Weight#bulkScorer bulkScorer()} &mdash;
+ *                 Construct a new {@link org.apache.lucene.search.BulkScorer BulkScorer} for this Weight. See <a href="#bulkScorerClass">The BulkScorer Class</a>
+ *                 below for help defining a BulkScorer. This is an optional method, and most queries do not implement it.
+ *             </li>
+ *             <li>
  *                 {@link org.apache.lucene.search.Weight#explain(org.apache.lucene.index.LeafReaderContext, int) 
  *                   explain(LeafReaderContext context, int doc)} &mdash; Provide a means for explaining why a given document was
  *                 scored the way it was.
  *                 Typically a weight such as TermWeight
  *                 that scores via a {@link org.apache.lucene.search.similarities.Similarity Similarity} will make use of the Similarity's implementation:
- *                 {@link org.apache.lucene.search.similarities.Similarity.SimScorer#explain(Explanation, long) SimScorer#explain(Explanation freq, long norm)}.
- *             </li>
- *             <li>
- *                 {@link org.apache.lucene.search.Weight#extractTerms(java.util.Set) extractTerms(Set&lt;Term&gt; terms)} &mdash; Extract terms that
- *                 this query operates on. This is typically used to support distributed search: knowing the terms that a query operates on helps
- *                 merge index statistics of these terms so that scores are computed over a subset of the data like they would if all documents
- *                 were in the same index.
- *             </li>
- *             <li>
- *                 {@link org.apache.lucene.search.Weight#matches matches(LeafReaderContext context, int doc)} &mdash; Give information about positions
- *                 and offsets of matches. This is typically useful to implement highlighting.
+ *                 {@link org.apache.lucene.search.similarities.Similarity.SimScorer#explain(int, Explanation) SimScorer#explain(int doc, Explanation freq)}.
  *             </li>
  *         </ol>
  * <a name="scorerClass"></a>
@@ -413,14 +427,13 @@
  *     <p>The
  *         {@link org.apache.lucene.search.Scorer Scorer}
  *         abstract class provides common scoring functionality for all Scorer implementations and
- *         is the heart of the Lucene scoring process. The Scorer defines the following methods which
- *         must be implemented:
+ *         is the heart of the Lucene scoring process. The Scorer defines the following abstract (some of them are not
+ *         yet abstract, but will be in future versions and should be considered as such now) methods which
+ *         must be implemented (some of them inherited from {@link org.apache.lucene.search.DocIdSetIterator DocIdSetIterator}):
  *         <ol>
  *             <li>
- *                 {@link org.apache.lucene.search.Scorer#iterator iterator()} &mdash; Return a
- *                 {@link org.apache.lucene.search.DocIdSetIterator DocIdSetIterator} that can iterate over all
- *                 document that matches this Query.
- *             </li>
+ *                 {@link org.apache.lucene.search.Scorer#nextDoc nextDoc()} &mdash; Advances to the next
+ *                 document that matches this Query, returning true if and only if there is another document that matches.</li>
  *             <li>
  *                 {@link org.apache.lucene.search.Scorer#docID docID()} &mdash; Returns the id of the
  *                 {@link org.apache.lucene.document.Document Document} that contains the match.
@@ -429,7 +442,20 @@
  *                 {@link org.apache.lucene.search.Scorer#score score()} &mdash; Return the score of the
  *                 current document. This value can be determined in any appropriate way for an application. For instance, the
  *                 {@link org.apache.lucene.search.TermScorer TermScorer} simply defers to the configured Similarity:
- *                 {@link org.apache.lucene.search.similarities.Similarity.SimScorer#score(float, long) SimScorer.score(float freq, long norm)}.
+ *                 {@link org.apache.lucene.search.similarities.Similarity.SimScorer#score(int, float) SimScorer.score(int doc, float freq)}.
+ *             </li>
+ *             <li>
+ *                 {@link org.apache.lucene.search.Scorer#freq freq()} &mdash; Returns the number of matches
+ *                 for the current document. This value can be determined in any appropriate way for an application. For instance, the
+ *                 {@link org.apache.lucene.search.TermScorer TermScorer} simply defers to the term frequency from the inverted index:
+ *                 {@link org.apache.lucene.index.PostingsEnum#freq PostingsEnum.freq()}.
+ *             </li>
+ *             <li>
+ *                 {@link org.apache.lucene.search.Scorer#advance advance()} &mdash; Skip ahead in
+ *                 the document matches to the document whose id is greater than
+ *                 or equal to the passed in value. In many instances, advance can be
+ *                 implemented more efficiently than simply looping through all the matching documents until
+ *                 the target document is identified.
  *             </li>
  *             <li>
  *                 {@link org.apache.lucene.search.Scorer#getChildren getChildren()} &mdash; Returns any child subscorers
@@ -480,27 +506,32 @@
  * <p>Assuming we are not sorting (since sorting doesn't affect the raw Lucene score),
  *    we call one of the search methods of the IndexSearcher, passing in the
  *    {@link org.apache.lucene.search.Weight Weight} object created by
- *    {@link org.apache.lucene.search.IndexSearcher#createWeight(org.apache.lucene.search.Query,ScoreMode,float)
- *     IndexSearcher.createWeight(Query,ScoreMode,float)} and the number of results we want.
+ *    {@link org.apache.lucene.search.IndexSearcher#createNormalizedWeight(org.apache.lucene.search.Query,boolean)
+ *     IndexSearcher.createNormalizedWeight(Query,boolean)} and the number of results we want.
  *    This method returns a {@link org.apache.lucene.search.TopDocs TopDocs} object,
  *    which is an internal collection of search results. The IndexSearcher creates
  *    a {@link org.apache.lucene.search.TopScoreDocCollector TopScoreDocCollector} and
- *    passes it along with the Weight to another expert search method (for
+ *    passes it along with the Weight, Filter to another expert search method (for
  *    more on the {@link org.apache.lucene.search.Collector Collector} mechanism,
  *    see {@link org.apache.lucene.search.IndexSearcher IndexSearcher}). The TopScoreDocCollector
  *    uses a {@link org.apache.lucene.util.PriorityQueue PriorityQueue} to collect the
  *    top results for the search.
+ * <p>If a Filter is being used, some initial setup is done to determine which docs to include. 
+ *    Otherwise, we ask the Weight for a {@link org.apache.lucene.search.Scorer Scorer} for each
+ *    {@link org.apache.lucene.index.IndexReader IndexReader} segment and proceed by calling
+ *    {@link org.apache.lucene.search.BulkScorer#score(org.apache.lucene.search.LeafCollector,org.apache.lucene.util.Bits) BulkScorer.score(LeafCollector,Bits)}.
  * <p>At last, we are actually going to score some documents. The score method takes in the Collector
- *    (most likely the TopScoreDocCollector or TopFieldCollector) and does its business. Of course, here 
+ *    (most likely the TopScoreDocCollector or TopFieldCollector) and does its business.Of course, here 
  *    is where things get involved. The {@link org.apache.lucene.search.Scorer Scorer} that is returned
  *    by the {@link org.apache.lucene.search.Weight Weight} object depends on what type of Query was
  *    submitted. In most real world applications with multiple query terms, the 
  *    {@link org.apache.lucene.search.Scorer Scorer} is going to be a <code>BooleanScorer2</code> created
  *    from {@link org.apache.lucene.search.BooleanWeight BooleanWeight} (see the section on
  *    <a href="#customQueriesExpert">custom queries</a> for info on changing this).
- * <p>Assuming a BooleanScorer2, we get a internal Scorer based on the required, optional and prohibited parts of the query.
+ * <p>Assuming a BooleanScorer2, we first initialize the Coordinator, which is used to apply the coord() 
+ *   factor. We then get a internal Scorer based on the required, optional and prohibited parts of the query.
  *   Using this internal Scorer, the BooleanScorer2 then proceeds into a while loop based on the 
- *   {@link org.apache.lucene.search.DocIdSetIterator#nextDoc DocIdSetIterator.nextDoc()} method. The nextDoc() method advances 
+ *   {@link org.apache.lucene.search.Scorer#nextDoc Scorer.nextDoc()} method. The nextDoc() method advances 
  *   to the next document matching the query. This is an abstract method in the Scorer class and is thus 
  *   overridden by all derived  implementations. If you have a simple OR query your internal Scorer is most 
  *   likely a DisjunctionSumScorer, which essentially combines the scorers from the sub scorers of the OR'd terms.

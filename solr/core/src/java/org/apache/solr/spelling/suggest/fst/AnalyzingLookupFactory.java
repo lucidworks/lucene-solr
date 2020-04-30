@@ -1,3 +1,5 @@
+package org.apache.solr.spelling.suggest.fst;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling.suggest.fst;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.search.suggest.Lookup;
@@ -119,7 +120,8 @@ public class AnalyzingLookupFactory extends LookupFactory {
     ? Boolean.valueOf(params.get(PRESERVE_POSITION_INCREMENTS).toString())
     : false;
 
-    return new AnalyzingSuggester(getTempDir(), "suggester", indexAnalyzer, queryAnalyzer, flags, maxSurfaceFormsPerAnalyzedForm,
+    
+    return new AnalyzingSuggester(indexAnalyzer, queryAnalyzer, flags, maxSurfaceFormsPerAnalyzedForm,
         maxGraphExpansions, preservePositionIncrements);
   }
 

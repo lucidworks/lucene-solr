@@ -23,7 +23,6 @@ import org.apache.solr.response.SolrQueryResponse;
 
 /**
  * Creates URLClassifyProcessor
- * @since 3.6.0
  */
 public class URLClassifyProcessorFactory extends UpdateRequestProcessorFactory {
   
@@ -32,7 +31,7 @@ public class URLClassifyProcessorFactory extends UpdateRequestProcessorFactory {
   @Override
   public void init(@SuppressWarnings("rawtypes") final NamedList args) {
     if (args != null) {
-      this.params = args.toSolrParams();
+      this.params = SolrParams.toSolrParams(args);
     }
   }
   

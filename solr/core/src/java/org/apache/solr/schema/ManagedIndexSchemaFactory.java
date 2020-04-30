@@ -1,3 +1,4 @@
+package org.apache.solr.schema;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
+
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -50,8 +51,8 @@ public class ManagedIndexSchemaFactory extends IndexSchemaFactory implements Sol
   public static final String DEFAULT_MANAGED_SCHEMA_RESOURCE_NAME = "managed-schema";
   public static final String MANAGED_SCHEMA_RESOURCE_NAME = "managedSchemaResourceName";
 
-  private boolean isMutable = true;
-  private String managedSchemaResourceName = DEFAULT_MANAGED_SCHEMA_RESOURCE_NAME;
+  private boolean isMutable;
+  private String managedSchemaResourceName;
   public String getManagedSchemaResourceName() { return managedSchemaResourceName; }
   private SolrConfig config;
   private SolrResourceLoader loader;
@@ -67,8 +68,8 @@ public class ManagedIndexSchemaFactory extends IndexSchemaFactory implements Sol
 
   @Override
   public void init(NamedList args) {
-    SolrParams params = args.toSolrParams();
-    isMutable = params.getBool("mutable", true);
+    SolrParams params = SolrParams.toSolrParams(args);
+    isMutable = params.getBool("mutable", false);
     args.remove("mutable");
     managedSchemaResourceName = params.get(MANAGED_SCHEMA_RESOURCE_NAME, DEFAULT_MANAGED_SCHEMA_RESOURCE_NAME);
     args.remove(MANAGED_SCHEMA_RESOURCE_NAME);
@@ -97,7 +98,7 @@ public class ManagedIndexSchemaFactory extends IndexSchemaFactory implements Sol
    * the instantiated IndexSchema is persisted to the managed schema file named in the
    * managedSchemaResourceName param, in the directory given by 
    * {@link org.apache.solr.core.SolrResourceLoader#getConfigDir()}, or if configs are
-   * in ZooKeeper, under {@link org.apache.solr.cloud.ZkSolrResourceLoader#getConfigSetZkPath()}.
+   * in ZooKeeper, under {@link org.apache.solr.cloud.ZkSolrResourceLoader#configSetZkPath}.
    *
    * After the managed schema file is persisted, the original schema file is
    * renamed by appending the extension named in {@link #UPGRADED_SCHEMA_EXTENSION}.
@@ -152,7 +153,6 @@ public class ManagedIndexSchemaFactory extends IndexSchemaFactory implements Sol
             byte[] data = zkClient.getData(managedSchemaPath, null, stat, true);
             schemaZkVersion = stat.getVersion();
             schemaInputStream = new ByteArrayInputStream(data);
-            loadedResource = managedSchemaPath;
             warnIfNonManagedSchemaExists();
           } catch (Exception e1) {
             if (e1 instanceof InterruptedException) {
@@ -168,13 +168,22 @@ public class ManagedIndexSchemaFactory extends IndexSchemaFactory implements Sol
     }
     InputSource inputSource = new InputSource(schemaInputStream);
     inputSource.setSystemId(SystemIdResolver.createSystemIdFromResourceName(loadedResource));
-    schema = new ManagedIndexSchema(config, loadedResource, inputSource, isMutable,
-                                    managedSchemaResourceName, schemaZkVersion, getSchemaUpdateLock());
+    try {
+      schema = new ManagedIndexSchema(config, loadedResource, inputSource, isMutable, 
+                                      managedSchemaResourceName, schemaZkVersion, getSchemaUpdateLock());
+    } catch (KeeperException e) {
+      final String msg = "Error instantiating ManagedIndexSchema";
+      log.error(msg, e);
+      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, msg, e);
+    } catch (InterruptedException e) {
+      // Restore the interrupted status
+      Thread.currentThread().interrupt();
+      log.warn("", e);
+    }
+
     if (shouldUpgrade) {
       // Persist the managed schema if it doesn't already exist
-      synchronized (schema.getSchemaUpdateLock()) {
-        upgradeToManagedSchema();
-      }
+      upgradeToManagedSchema();
     }
 
     return schema;
@@ -337,13 +346,7 @@ public class ManagedIndexSchemaFactory extends IndexSchemaFactory implements Sol
           zkCmdExecutor.ensureExists(upgradedSchemaPath, zkController.getZkClient());
           zkController.getZkClient().setData(upgradedSchemaPath, bytes, true);
           // Then delete the non-managed schema znode
-          if (zkController.getZkClient().exists(nonManagedSchemaPath, true)) {
-            try {
-              zkController.getZkClient().delete(nonManagedSchemaPath, -1, true);
-            } catch (KeeperException.NoNodeException ex) {
-              // ignore - someone beat us to it
-            }
-          }
+          zkController.getZkClient().delete(nonManagedSchemaPath, -1, true);
 
           // Set the resource name to the managed schema so that the CoreAdminHandler returns a findable filename 
           schema.setResourceName(managedSchemaResourceName);
@@ -371,21 +374,9 @@ public class ManagedIndexSchemaFactory extends IndexSchemaFactory implements Sol
   public void inform(SolrCore core) {
     this.core = core;
     if (loader instanceof ZkSolrResourceLoader) {
-      this.zkIndexSchemaReader = new ZkIndexSchemaReader(this, core);
+      this.zkIndexSchemaReader = new ZkIndexSchemaReader(this);
       ZkSolrResourceLoader zkLoader = (ZkSolrResourceLoader)loader;
       zkLoader.setZkIndexSchemaReader(this.zkIndexSchemaReader);
-      try {
-        zkIndexSchemaReader.refreshSchemaFromZk(-1); // update immediately if newer is available
-        core.setLatestSchema(getSchema());
-      } catch (KeeperException e) {
-        String msg = "Error attempting to access " + zkLoader.getConfigSetZkPath() + "/" + managedSchemaResourceName;
-        log.error(msg, e);
-        throw new SolrException(ErrorCode.SERVER_ERROR, msg, e);
-      } catch (InterruptedException e) {
-        // Restore the interrupted status
-        Thread.currentThread().interrupt();
-        log.warn("", e);
-      }
     } else {
       this.zkIndexSchemaReader = null;
     }

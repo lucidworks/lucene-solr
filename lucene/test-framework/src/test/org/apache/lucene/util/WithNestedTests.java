@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -22,6 +23,13 @@ import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import org.apache.lucene.util.FailureMarker;
+import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.util.TestRuleIgnoreAfterMaxFailures;
+import org.apache.lucene.util.TestRuleIgnoreTestSuites;
+import org.apache.lucene.util.TestRuleMarkFailure;
+import org.apache.lucene.util.TestRuleRestoreSystemProperties;
 import org.apache.lucene.util.LuceneTestCase.SuppressSysoutChecks;
 import org.junit.After;
 import org.junit.Assert;

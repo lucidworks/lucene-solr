@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -60,7 +60,7 @@ public class TestBinaryTerms extends LuceneTestCase {
       bytes.bytes[1] = (byte) (255 - i);
       bytes.length = 2;
       TopDocs docs = is.search(new TermQuery(new Term("bytes", bytes)), 5);
-      assertEquals(1, docs.totalHits.value);
+      assertEquals(1, docs.totalHits);
       assertEquals("" + i, is.doc(docs.scoreDocs[0].doc).get("id"));
     }
     

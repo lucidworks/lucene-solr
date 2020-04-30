@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,27 +16,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CopyOnWriteArraySet;
 
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.DocValuesProducer;
 import org.apache.lucene.codecs.FieldInfosFormat;
 import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.NormsProducer;
-import org.apache.lucene.codecs.PointsReader;
 import org.apache.lucene.codecs.StoredFieldsReader;
 import org.apache.lucene.codecs.TermVectorsReader;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.util.Bits;
-import org.apache.lucene.util.IOUtils;
 
 /**
  * IndexReader implementation over a single segment. 
@@ -46,13 +41,7 @@ import org.apache.lucene.util.IOUtils;
 public final class SegmentReader extends CodecReader {
        
   private final SegmentCommitInfo si;
-  // this is the original SI that IW uses internally but it's mutated behind the scenes
-  // and we don't want this SI to be used for anything. Yet, IW needs this to do maintainance
-  // and lookup pooled readers etc.
-  private final SegmentCommitInfo originalSi;
-  private final LeafMetaData metaData;
   private final Bits liveDocs;
-  private final Bits hardLiveDocs;
 
   // Normally set to si.maxDoc - si.delDocCount, unless we
   // were created as an NRT reader from IW, in which case IW
@@ -61,27 +50,19 @@ public final class SegmentReader extends CodecReader {
 
   final SegmentCoreReaders core;
   final SegmentDocValues segDocValues;
-
-  /** True if we are holding RAM only liveDocs or DV updates, i.e. the SegmentCommitInfo delGen doesn't match our liveDocs. */
-  final boolean isNRT;
   
   final DocValuesProducer docValuesProducer;
   final FieldInfos fieldInfos;
-
+  
   /**
    * Constructs a new SegmentReader with a new core.
    * @throws CorruptIndexException if the index is corrupt
    * @throws IOException if there is a low-level IO error
    */
-  SegmentReader(SegmentCommitInfo si, int createdVersionMajor, boolean openedFromWriter, IOContext context, Map<String, String> readerAttributes) throws IOException {
-    this.si = si.clone();
-    this.originalSi = si;
-    this.metaData = new LeafMetaData(createdVersionMajor, si.info.getMinVersion(), si.info.getIndexSort());
-
-    // We pull liveDocs/DV updates from disk:
-    this.isNRT = false;
-    
-    core = new SegmentCoreReaders(si.info.dir, si, openedFromWriter, context, readerAttributes);
+  // TODO: why is this public?
+  public SegmentReader(SegmentCommitInfo si, IOContext context) throws IOException {
+    this.si = si;
+    core = new SegmentCoreReaders(this, si.info.dir, si, context);
     segDocValues = new SegmentDocValues();
     
     boolean success = false;
@@ -89,16 +70,16 @@ public final class SegmentReader extends CodecReader {
     try {
       if (si.hasDeletions()) {
         // NOTE: the bitvector is stored using the regular directory, not cfs
-        hardLiveDocs = liveDocs = codec.liveDocsFormat().readLiveDocs(directory(), si, IOContext.READONCE);
+        liveDocs = codec.liveDocsFormat().readLiveDocs(directory(), si, IOContext.READONCE);
       } else {
         assert si.getDelCount() == 0;
-        hardLiveDocs = liveDocs = null;
+        liveDocs = null;
       }
       numDocs = si.info.maxDoc() - si.getDelCount();
       
       fieldInfos = initFieldInfos();
       docValuesProducer = initDocValuesProducer();
-      assert assertLiveDocs(isNRT, hardLiveDocs, liveDocs);
+
       success = true;
     } finally {
       // With lock-less commits, it's entirely possible (and
@@ -113,22 +94,27 @@ public final class SegmentReader extends CodecReader {
   }
 
   /** Create new SegmentReader sharing core from a previous
-   *  SegmentReader and using the provided liveDocs, and recording
-   *  whether those liveDocs were carried in ram (isNRT=true). */
-  SegmentReader(SegmentCommitInfo si, SegmentReader sr, Bits liveDocs, Bits hardLiveDocs, int numDocs, boolean isNRT) throws IOException {
+   *  SegmentReader and loading new live docs from a new
+   *  deletes file.  Used by openIfChanged. */
+  SegmentReader(SegmentCommitInfo si, SegmentReader sr) throws IOException {
+    this(si, sr,
+         si.info.getCodec().liveDocsFormat().readLiveDocs(si.info.dir, si, IOContext.READONCE),
+         si.info.maxDoc() - si.getDelCount());
+  }
+
+  /** Create new SegmentReader sharing core from a previous
+   *  SegmentReader and using the provided in-memory
+   *  liveDocs.  Used by IndexWriter to provide a new NRT
+   *  reader */
+  SegmentReader(SegmentCommitInfo si, SegmentReader sr, Bits liveDocs, int numDocs) throws IOException {
     if (numDocs > si.info.maxDoc()) {
       throw new IllegalArgumentException("numDocs=" + numDocs + " but maxDoc=" + si.info.maxDoc());
     }
     if (liveDocs != null && liveDocs.length() != si.info.maxDoc()) {
       throw new IllegalArgumentException("maxDoc=" + si.info.maxDoc() + " but liveDocs.size()=" + liveDocs.length());
     }
-    this.si = si.clone();
-    this.originalSi = si;
-    this.metaData = sr.getMetaData();
+    this.si = si;
     this.liveDocs = liveDocs;
-    this.hardLiveDocs = hardLiveDocs;
-    assert assertLiveDocs(isNRT, hardLiveDocs, liveDocs);
-    this.isNRT = isNRT;
     this.numDocs = numDocs;
     this.core = sr.core;
     core.incRef();
@@ -146,35 +132,19 @@ public final class SegmentReader extends CodecReader {
     }
   }
 
-  private static boolean assertLiveDocs(boolean isNRT, Bits hardLiveDocs, Bits liveDocs) {
-    if (isNRT) {
-      assert hardLiveDocs == null || liveDocs != null : " liveDocs must be non null if hardLiveDocs are non null";
-    } else {
-      assert hardLiveDocs == liveDocs : "non-nrt case must have identical liveDocs";
-    }
-    return true;
-  }
-
   /**
    * init most recent DocValues for the current commit
    */
   private DocValuesProducer initDocValuesProducer() throws IOException {
+    final Directory dir = core.cfsReader != null ? core.cfsReader : si.info.dir;
 
-    if (fieldInfos.hasDocValues() == false) {
+    if (!fieldInfos.hasDocValues()) {
       return null;
+    } else if (si.hasFieldUpdates()) {
+      return new SegmentDocValuesProducer(si, dir, core.coreFieldInfos, fieldInfos, segDocValues);
     } else {
-      Directory dir;
-      if (core.cfsReader != null) {
-        dir = core.cfsReader;
-      } else {
-        dir = si.info.dir;
-      }
-      if (si.hasFieldUpdates()) {
-        return new SegmentDocValuesProducer(si, dir, core.coreFieldInfos, fieldInfos, segDocValues);
-      } else {
-        // simple case, no DocValues updates
-        return segDocValues.getDocValuesProducer(-1L, si, dir, fieldInfos);
-      }
+      // simple case, no DocValues updates
+      return segDocValues.getDocValuesProducer(-1L, si, dir, fieldInfos);
     }
   }
   
@@ -204,10 +174,14 @@ public final class SegmentReader extends CodecReader {
     try {
       core.decRef();
     } finally {
-      if (docValuesProducer instanceof SegmentDocValuesProducer) {
-        segDocValues.decRef(((SegmentDocValuesProducer)docValuesProducer).dvGens);
-      } else if (docValuesProducer != null) {
-        segDocValues.decRef(Collections.singletonList(-1L));
+      try {
+        super.doClose();
+      } finally {
+        if (docValuesProducer instanceof SegmentDocValuesProducer) {
+          segDocValues.decRef(((SegmentDocValuesProducer)docValuesProducer).dvGens);
+        } else if (docValuesProducer != null) {
+          segDocValues.decRef(Collections.singletonList(-1L));
+        }
       }
     }
   }
@@ -242,12 +216,6 @@ public final class SegmentReader extends CodecReader {
     return core.fieldsReaderLocal.get();
   }
   
-  @Override
-  public PointsReader getPointsReader() {
-    ensureOpen();
-    return core.pointsReader;
-  }
-
   @Override
   public NormsProducer getNormsReader() {
     ensureOpen();
@@ -295,76 +263,31 @@ public final class SegmentReader extends CodecReader {
     return si.info.dir;
   }
 
-  private final Set<ClosedListener> readerClosedListeners = new CopyOnWriteArraySet<>();
-
+  // This is necessary so that cloned SegmentReaders (which
+  // share the underlying postings data) will map to the
+  // same entry for CachingWrapperFilter.  See LUCENE-1579.
   @Override
-  void notifyReaderClosedListeners() throws IOException {
-    synchronized(readerClosedListeners) {
-      IOUtils.applyToAll(readerClosedListeners, l -> l.onClose(readerCacheHelper.getKey()));
-    }
-  }
-
-  private final IndexReader.CacheHelper readerCacheHelper = new IndexReader.CacheHelper() {
-    private final IndexReader.CacheKey cacheKey = new IndexReader.CacheKey();
-
-    @Override
-    public CacheKey getKey() {
-      return cacheKey;
-    }
-
-    @Override
-    public void addClosedListener(ClosedListener listener) {
-      ensureOpen();
-      readerClosedListeners.add(listener);
-    }
-  };
-
-  @Override
-  public CacheHelper getReaderCacheHelper() {
-    return readerCacheHelper;
-  }
-
-  /** Wrap the cache helper of the core to add ensureOpen() calls that make
-   *  sure users do not register closed listeners on closed indices. */
-  private final IndexReader.CacheHelper coreCacheHelper = new IndexReader.CacheHelper() {
-
-    @Override
-    public CacheKey getKey() {
-      return core.getCacheHelper().getKey();
-    }
-
-    @Override
-    public void addClosedListener(ClosedListener listener) {
-      ensureOpen();
-      core.getCacheHelper().addClosedListener(listener);
-    }
-  };
-
-  @Override
-  public CacheHelper getCoreCacheHelper() {
-    return coreCacheHelper;
+  public Object getCoreCacheKey() {
+    // NOTE: if this ever changes, be sure to fix
+    // SegmentCoreReader.notifyCoreClosedListeners to match!
+    // Today it passes "this" as its coreCacheKey:
+    return core;
   }
 
   @Override
-  public LeafMetaData getMetaData() {
-    return metaData;
+  public Object getCombinedCoreAndDeletesKey() {
+    return this;
   }
 
-  /**
-   * Returns the original SegmentInfo passed to the segment reader on creation time.
-   * {@link #getSegmentInfo()} returns a clone of this instance.
-   */
-  SegmentCommitInfo getOriginalSegmentInfo() {
-    return originalSi;
+  @Override
+  public void addCoreClosedListener(CoreClosedListener listener) {
+    ensureOpen();
+    core.addCoreClosedListener(listener);
   }
-
-  /**
-   * Returns the live docs that are not hard-deleted. This is an expert API to be used with
-   * soft-deletes to filter out document that hard deleted for instance due to aborted documents or to distinguish
-   * soft and hard deleted documents ie. a rolled back tombstone.
-   * @lucene.experimental
-   */
-  public Bits getHardLiveDocs() {
-    return hardLiveDocs;
+  
+  @Override
+  public void removeCoreClosedListener(CoreClosedListener listener) {
+    ensureOpen();
+    core.removeCoreClosedListener(listener);
   }
 }

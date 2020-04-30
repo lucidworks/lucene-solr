@@ -1,3 +1,5 @@
+package org.apache.lucene.benchmark.byTask.feeds;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.feeds;
-
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -75,9 +75,13 @@ public class TrecContentSourceTest extends LuceneTestCase {
   }
   
   private void assertNoMoreDataException(StringableTrecSource stdm) throws Exception {
-    expectThrows(NoMoreDataException.class, () -> {
+    boolean thrown = false;
+    try {
       stdm.getNextDocData(null);
-    });
+    } catch (NoMoreDataException e) {
+      thrown = true;
+    }
+    assertTrue("Expecting NoMoreDataException", thrown);
   }
   
   public void testOneDocument() throws Exception {

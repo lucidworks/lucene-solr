@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -72,7 +72,6 @@ public class SimpleFSDirectory extends FSDirectory {
   @Override
   public IndexInput openInput(String name, IOContext context) throws IOException {
     ensureOpen();
-    ensureCanRead(name);
     Path path = directory.resolve(name);
     SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ);
     return new SimpleFSIndexInput("SimpleFSIndexInput(path=\"" + path + "\")", channel, context);
@@ -130,7 +129,7 @@ public class SimpleFSDirectory extends FSDirectory {
     @Override
     public IndexInput slice(String sliceDescription, long offset, long length) throws IOException {
       if (offset < 0 || length < 0 || offset + length > this.length()) {
-        throw new IllegalArgumentException("slice() " + sliceDescription + " out of bounds: offset=" + offset + ",length=" + length + ",fileLength="  + this.length() + ": "  + this);
+        throw new IllegalArgumentException("slice() " + sliceDescription + " out of bounds: "  + this);
       }
       return new SimpleFSIndexInput(getFullSliceDescription(sliceDescription), channel, off + offset, length, getBufferSize());
     }
@@ -191,10 +190,6 @@ public class SimpleFSDirectory extends FSDirectory {
     }
 
     @Override
-    protected void seekInternal(long pos) throws IOException {
-      if (pos > length()) {
-        throw new EOFException("read past EOF: pos=" + pos + " vs length=" + length() + ": " + this);
-      }
-    }
+    protected void seekInternal(long pos) throws IOException {}
   }
 }

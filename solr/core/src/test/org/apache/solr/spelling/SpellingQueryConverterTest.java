@@ -14,16 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.spelling;
+
+import org.apache.lucene.analysis.Token;
+import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
+import org.apache.lucene.util.LuceneTestCase;
+import org.apache.solr.common.util.NamedList;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-
-import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
-import org.apache.solr.SolrTestCase;
-import org.apache.solr.common.util.NamedList;
-import org.junit.Test;
 
 
 /**
@@ -32,7 +34,7 @@ import org.junit.Test;
  *
  * @since solr 1.3
  */
-public class SpellingQueryConverterTest extends SolrTestCase {
+public class SpellingQueryConverterTest extends LuceneTestCase {
 
   @Test
   public void test() throws Exception {
@@ -43,21 +45,7 @@ public class SpellingQueryConverterTest extends SolrTestCase {
     assertTrue("tokens is null and it shouldn't be", tokens != null);
     assertTrue("tokens Size: " + tokens.size() + " is not: " + 1, tokens.size() == 1);
   }
-  
-  @Test
-  public void testNumeric() throws Exception {
-    SpellingQueryConverter converter = new SpellingQueryConverter();
-    converter.init(new NamedList());
-    converter.setAnalyzer(new WhitespaceAnalyzer());
-    String[] queries = {"12345", "foo:12345", "12345 67890", "foo:(12345 67890)", "foo:(life 67890)", "12345 life",
-        "+12345 +life", "-12345 life"};
-    int[] tokensToExpect = {1, 1, 2, 2, 2, 2, 2, 2};
-    for (int i = 0; i < queries.length; i++) {
-      Collection<Token> tokens = converter.convert(queries[i]);
-      assertTrue("tokens Size: " + tokens.size() + " is not: " + tokensToExpect[i], tokens.size() == tokensToExpect[i]);
-    }
-  }
-  
+
   @Test
   public void testSpecialChars()  {
     SpellingQueryConverter converter = new SpellingQueryConverter();
@@ -93,16 +81,6 @@ public class SpellingQueryConverterTest extends SolrTestCase {
     assertTrue("tokens is null and it shouldn't be", tokens != null);
     assertEquals("tokens Size: " + tokens.size() + " is not 1", 1, tokens.size());
     assertTrue("Token offsets do not match", isOffsetCorrect(original, tokens));
-    
-    String firstKeyword = "value1";
-    String secondKeyword = "value2";
-    original = "field-with-parenthesis:(" + firstKeyword + " " + secondKeyword + ")";
-    tokens = converter.convert(original);
-    assertTrue("tokens is null and it shouldn't be", tokens != null);
-    assertEquals("tokens Size: " + tokens.size() + " is not 2", 2, tokens.size());
-    assertTrue("Token offsets do not match", isOffsetCorrect(original, tokens));
-    assertTrue("first Token is not " + firstKeyword, new ArrayList<>(tokens).get(0).toString().equals(firstKeyword));
-    assertTrue("second Token is not " + secondKeyword, new ArrayList<>(tokens).get(1).toString().equals(secondKeyword));    
   }
 
   private boolean isOffsetCorrect(String s, Collection<Token> tokens) {

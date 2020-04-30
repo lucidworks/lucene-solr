@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis;
 
 import java.io.Reader;
 import java.io.StringReader;
@@ -109,7 +110,7 @@ public class TestMockAnalyzer extends BaseTokenStreamTestCase {
         new int[] { 0, 2 },
         new int[] { 2, 4 },
         new int[] { 1, 1 },
-        5
+        new Integer(5)
     );
     checkRandomData(random(), a, 100);
   }
@@ -130,7 +131,7 @@ public class TestMockAnalyzer extends BaseTokenStreamTestCase {
         new int[] { 0 },
         new int[] { 3 },
         new int[] { 1 },
-        5
+        new Integer(5)
     );
     checkRandomData(random(), a, 100);
   }
@@ -198,13 +199,13 @@ public class TestMockAnalyzer extends BaseTokenStreamTestCase {
         new String[] { "test", "123", "toolo", "ng", "ok" },
         new int[] { 0, 5, 9, 14, 17 },
         new int[] { 4, 8, 14, 16, 19 },
-        20);
+        new Integer(20));
     
     assertTokenStreamContents(whitespace.tokenStream("bogus", "test 123 toolo"),
         new String[] { "test", "123", "toolo" },
         new int[] { 0, 5, 9 },
         new int[] { 4, 8, 14 },
-        14);
+        new Integer(14));
   }
   
   public void testLUCENE_3042() throws Exception {
@@ -315,7 +316,7 @@ public class TestMockAnalyzer extends BaseTokenStreamTestCase {
     doc.add(new Field("f", "a", ft));
     doc.add(new Field("f", "a", ft));
     writer.addDocument(doc);
-    final LeafReader reader = getOnlyLeafReader(writer.getReader());
+    final LeafReader reader = getOnlySegmentReader(writer.getReader());
     final Fields fields = reader.getTermVectors(0);
     final Terms terms = fields.terms("f");
     final TermsEnum te = terms.iterator();

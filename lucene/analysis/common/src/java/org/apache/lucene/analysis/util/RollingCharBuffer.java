@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.util;
 
 import java.io.IOException;
 import java.io.Reader;
 
 import org.apache.lucene.util.ArrayUtil;
+import org.apache.lucene.util.RamUsageEstimator;
 
 /** Acts like a forever growing char[] as you read
  *  characters into it from the provided reader, but
@@ -69,7 +71,7 @@ public final class RollingCharBuffer {
       }
       if (count == buffer.length) {
         // Grow
-        final char[] newBuffer = new char[ArrayUtil.oversize(1+count, Character.BYTES)];
+        final char[] newBuffer = new char[ArrayUtil.oversize(1+count, RamUsageEstimator.NUM_BYTES_CHAR)];
         //System.out.println(Thread.currentThread().getName() + ": cb grow " + newBuffer.length);
         System.arraycopy(buffer, nextWrite, newBuffer, 0, buffer.length - nextWrite);
         System.arraycopy(buffer, 0, newBuffer, buffer.length - nextWrite, nextWrite);

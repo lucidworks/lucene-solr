@@ -1,3 +1,5 @@
+package org.apache.solr.search.facet;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.facet;
+
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.queries.function.FunctionValues;
+import org.apache.solr.search.QueryContext;
+
+
+import java.io.IOException;
 
 public abstract class StrAggValueSource extends AggValueSource {
   protected String arg;

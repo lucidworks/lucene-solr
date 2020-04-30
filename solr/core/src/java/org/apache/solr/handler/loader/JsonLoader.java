@@ -1,3 +1,4 @@
+package org.apache.solr.handler.loader;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.loader;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.solr.common.SolrException;
@@ -52,17 +51,12 @@ import org.apache.solr.update.RollbackUpdateCommand;
 import org.apache.solr.update.processor.UpdateRequestProcessor;
 import org.apache.solr.util.RecordingJSONParser;
 import org.noggit.JSONParser;
-import org.noggit.JSONParser.ParseException;
 import org.noggit.ObjectBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static java.util.stream.Collectors.toList;
-import static org.apache.solr.common.params.CommonParams.ID;
 import static org.apache.solr.common.params.CommonParams.JSON;
 import static org.apache.solr.common.params.CommonParams.PATH;
-import static org.apache.solr.common.params.CommonParams.VERSION_FIELD;
-import static org.apache.solr.common.params.ShardParams._ROUTE_;
 
 
 /**
@@ -70,8 +64,7 @@ import static org.apache.solr.common.params.ShardParams._ROUTE_;
  */
 public class JsonLoader extends ContentStreamLoader {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-  private static final AtomicBoolean WARNED_ABOUT_INDEX_TIME_BOOSTS = new AtomicBoolean();
-  public static final String CHILD_DOC_KEY = "_childDocuments_";
+  private static final String CHILD_DOC_KEY = "_childDocuments_";
 
   @Override
   public String getDefaultWT() {
@@ -94,7 +87,7 @@ public class JsonLoader extends ContentStreamLoader {
     protected final int commitWithin;
     protected final boolean overwrite;
 
-    SingleThreadedJsonLoader(SolrQueryRequest req, SolrQueryResponse rsp, UpdateRequestProcessor processor) {
+    public SingleThreadedJsonLoader(SolrQueryRequest req, SolrQueryResponse rsp, UpdateRequestProcessor processor) {
       this.processor = processor;
       this.req = req;
       this.rsp = rsp;
@@ -119,10 +112,7 @@ public class JsonLoader extends ContentStreamLoader {
         }
 
         this.processUpdate(reader);
-      } catch (ParseException e) {
-        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Cannot parse provided JSON: " + e.getMessage());
-      }
-      finally {
+      } finally {
         IOUtils.closeQuietly(reader);
       }
     }
@@ -228,13 +218,15 @@ public class JsonLoader extends ContentStreamLoader {
               docs = new ArrayList();
               rsp.add("docs", docs);
             }
-            changeChildDoc(copy);
             docs.add(copy);
           } else {
             AddUpdateCommand cmd = new AddUpdateCommand(req);
             cmd.commitWithin = commitWithin;
             cmd.overwrite = overwrite;
-            cmd.solrDoc = buildDoc(copy);
+            cmd.solrDoc = new SolrInputDocument();
+            for (Map.Entry<String, Object> entry : copy.entrySet()) {
+              cmd.solrDoc.setField(entry.getKey(), entry.getValue());
+            }
             try {
               processor.processAdd(cmd);
             } catch (IOException e) {
@@ -243,31 +235,6 @@ public class JsonLoader extends ContentStreamLoader {
           }
         }
       });
-    }
-
-    private SolrInputDocument buildDoc(Map<String, Object> m) {
-      SolrInputDocument result = new SolrInputDocument();
-      for (Map.Entry<String, Object> e : m.entrySet()) {
-        if (mapEntryIsChildDoc(e.getValue())) { // parse child documents
-          if (e.getValue() instanceof List) {
-            List value = (List) e.getValue();
-            for (Object o : value) {
-              if (o instanceof Map) {
-                // retain the value as a list, even if the list contains a single value.
-                if(!result.containsKey(e.getKey())) {
-                  result.setField(e.getKey(), new ArrayList<>(1));
-                }
-                result.addField(e.getKey(), buildDoc((Map) o));
-              }
-            }
-          } else if (e.getValue() instanceof Map) {
-            result.addField(e.getKey(), buildDoc((Map) e.getValue()));
-          }
-        } else {
-          result.setField(e.getKey(), e.getValue());
-        }
-      }
-      return result;
     }
 
     private Map<String, Object> getDocMap(Map<String, Object> record, JSONParser parser, String srcField, boolean mapUniqueKeyOnly) {
@@ -374,15 +341,15 @@ public class JsonLoader extends ContentStreamLoader {
         if (ev == JSONParser.STRING) {
           String key = parser.getString();
           if (parser.wasKey()) {
-            if (ID.equals(key)) {
+            if ("id".equals(key)) {
               cmd.setId(getString(parser.nextEvent()));
             } else if ("query".equals(key)) {
               cmd.setQuery(parser.getString());
             } else if ("commitWithin".equals(key)) {
               cmd.commitWithin = (int) parser.getLong();
-            } else if (VERSION_FIELD.equals(key)) {
+            } else if ("_version_".equals(key)) {
               cmd.setVersion(parser.getLong());
-            } else if (_ROUTE_.equals(key)) {
+            } else if ("_route_".equals(key)) {
               cmd.setRoute(parser.getString());
             } else {
               throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Unknown key '" + key + "' at [" + parser.getPosition() + "]");
@@ -447,6 +414,8 @@ public class JsonLoader extends ContentStreamLoader {
       cmd.commitWithin = commitWithin;
       cmd.overwrite = overwrite;
 
+      float boost = 1.0f;
+
       while (true) {
         int ev = parser.nextEvent();
         if (ev == JSONParser.STRING) {
@@ -464,13 +433,7 @@ public class JsonLoader extends ContentStreamLoader {
             } else if (UpdateRequestHandler.COMMIT_WITHIN.equals(key)) {
               cmd.commitWithin = (int) parser.getLong();
             } else if ("boost".equals(key)) {
-              String boost = parser.getNumberChars().toString();
-              String message = "Ignoring document boost: " + boost + " as index-time boosts are not supported anymore";
-              if (WARNED_ABOUT_INDEX_TIME_BOOSTS.compareAndSet(false, true)) {
-                log.warn(message);
-              } else {
-                log.debug(message);
-              }
+              boost = Float.parseFloat(parser.getNumberChars().toString());
             } else {
               throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Unknown key '" + key + "' at [" + parser.getPosition() + "]");
             }
@@ -483,6 +446,7 @@ public class JsonLoader extends ContentStreamLoader {
           if (cmd.solrDoc == null) {
             throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Missing solr document at [" + parser.getPosition() + "]");
           }
+          cmd.solrDoc.setDocumentBoost(boost);
           return cmd;
         } else {
           throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
@@ -536,7 +500,7 @@ public class JsonLoader extends ContentStreamLoader {
         }
         String fieldName = parser.getString();
 
-        if (fieldName.equals(JsonLoader.CHILD_DOC_KEY)) { // somewhat legacy
+        if (fieldName.equals(JsonLoader.CHILD_DOC_KEY)) {
           ev = parser.nextEvent();
           assertEvent(ev, JSONParser.ARRAY_START);
           while ((ev = parser.nextEvent()) != JSONParser.ARRAY_END) {
@@ -545,18 +509,95 @@ public class JsonLoader extends ContentStreamLoader {
             sdoc.addChildDocument(parseDoc(ev));
           }
         } else {
-          ev = parser.nextEvent();
-          Object val = parseFieldValue(ev, fieldName);
+          SolrInputField sif = new SolrInputField(fieldName);
+          parseFieldValue(sif);
+          // pulling out the pieces may seem weird, but it's because
           // SolrInputDocument.addField will do the right thing
           // if the doc already has another value for this field
           // (ie: repeating fieldname keys)
-          sdoc.addField(fieldName, val);
+          sdoc.addField(sif.getName(), sif.getValue(), sif.getBoost());
         }
 
       }
     }
 
-    private Object parseFieldValue(int ev, String fieldName) throws IOException {
+    private void parseFieldValue(SolrInputField sif) throws IOException {
+      int ev = parser.nextEvent();
+      if (ev == JSONParser.OBJECT_START) {
+        parseExtendedFieldValue(sif, ev);
+      } else {
+        Object val = parseNormalFieldValue(ev, sif.getName());
+        sif.setValue(val, 1.0f);
+      }
+    }
+
+    private void parseExtendedFieldValue(SolrInputField sif, int ev) throws IOException {
+      assert ev == JSONParser.OBJECT_START;
+
+      float boost = 1.0f;
+      Object normalFieldValue = null;
+      Map<String, Object> extendedInfo = null;
+
+      for (; ; ) {
+        ev = parser.nextEvent();
+        switch (ev) {
+          case JSONParser.STRING:
+            String label = parser.getString();
+            if ("boost".equals(label)) {
+              ev = parser.nextEvent();
+              if (ev != JSONParser.NUMBER &&
+                  ev != JSONParser.LONG &&
+                  ev != JSONParser.BIGNUMBER) {
+                throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Boost should have number. "
+                    + "Unexpected " + JSONParser.getEventString(ev) + " at [" + parser.getPosition() + "], field=" + sif.getName());
+              }
+
+              boost = (float) parser.getDouble();
+            } else if ("value".equals(label)) {
+              normalFieldValue = parseNormalFieldValue(parser.nextEvent(), sif.getName());
+            } else {
+              // If we encounter other unknown map keys, then use a map
+              if (extendedInfo == null) {
+                extendedInfo = new HashMap<>(2);
+              }
+              // for now, the only extended info will be field values
+              // we could either store this as an Object or a SolrInputField
+              Object val = parseNormalFieldValue(parser.nextEvent(), sif.getName());
+              extendedInfo.put(label, val);
+            }
+            break;
+
+          case JSONParser.OBJECT_END:
+            if (extendedInfo != null) {
+              if (normalFieldValue != null) {
+                extendedInfo.put("value", normalFieldValue);
+              }
+              sif.setValue(extendedInfo, boost);
+            } else {
+              sif.setValue(normalFieldValue, boost);
+            }
+            return;
+
+          default:
+            throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Error parsing JSON extended field value. "
+                + "Unexpected " + JSONParser.getEventString(ev) + " at [" + parser.getPosition() + "], field=" + sif.getName());
+        }
+      }
+    }
+
+
+    private Object parseNormalFieldValue(int ev, String fieldName) throws IOException {
+      if (ev == JSONParser.ARRAY_START) {
+        List<Object> val = parseArrayFieldValue(ev, fieldName);
+        return val;
+      } else {
+        Object val = parseSingleFieldValue(ev, fieldName);
+        return val;
+      }
+    }
+
+
+    private Object parseSingleFieldValue(int ev, String fieldName) throws IOException {
       switch (ev) {
         case JSONParser.STRING:
           return parser.getString();
@@ -573,13 +614,12 @@ public class JsonLoader extends ContentStreamLoader {
           return null;
         case JSONParser.ARRAY_START:
           return parseArrayFieldValue(ev, fieldName);
-        case JSONParser.OBJECT_START:
-          return parseObjectFieldValue(ev, fieldName);
         default:
           throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Error parsing JSON field value. "
               + "Unexpected " + JSONParser.getEventString(ev) + " at [" + parser.getPosition() + "], field=" + fieldName);
       }
     }
+
 
     private List<Object> parseArrayFieldValue(int ev, String fieldName) throws IOException {
       assert ev == JSONParser.ARRAY_START;
@@ -590,54 +630,10 @@ public class JsonLoader extends ContentStreamLoader {
         if (ev == JSONParser.ARRAY_END) {
           return lst;
         }
-        lst.add(parseFieldValue(ev, fieldName));
+        Object val = parseSingleFieldValue(ev, fieldName);
+        lst.add(val);
       }
     }
-
-    /**
-     * Parses this object as either a map for atomic update, or a child document.
-     */
-    private Object parseObjectFieldValue(int ev, String fieldName) throws IOException {
-      assert ev == JSONParser.OBJECT_START;
-
-      SolrInputDocument extendedSolrDocument = parseDoc(ev);
-      // is this a partial update or a child doc?
-      if (isChildDoc(extendedSolrDocument)) {
-        return extendedSolrDocument;
-      } else {
-        //return extendedSolrDocument.toMap(new HashMap<>(extendedSolrDocument.size()));  not quite right
-        Map<String, Object> map = new HashMap<>(extendedSolrDocument.size());
-        for (SolrInputField inputField : extendedSolrDocument) {
-          map.put(inputField.getName(), inputField.getValue());
-        }
-        return map;
-      }
-    }
-
-    private boolean isChildDoc(SolrInputDocument extendedFieldValue) {
-      return extendedFieldValue.containsKey(req.getSchema().getUniqueKeyField().getName());
-    }
-
-    private boolean mapEntryIsChildDoc(Object val) {
-      if(val instanceof List) {
-        List listVal = (List) val;
-        if (listVal.size() == 0) return false;
-        return  listVal.get(0) instanceof Map;
-      }
-      return val instanceof Map;
-    }
-  }
-
-  private static Object changeChildDoc(Object o) {
-    if (o instanceof List) {
-      return ((List) o)
-          .stream()
-          .map(JsonLoader::changeChildDoc)
-          .collect(toList());
-    }
-    Map m = (Map) o;
-    if (m.containsKey(null)) m.put(CHILD_DOC_KEY, changeChildDoc(m.remove(null)));
-    return m;
   }
 
 }

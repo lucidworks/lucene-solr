@@ -1,3 +1,5 @@
+package org.apache.lucene.util.packed;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.packed;
-
 
 import static org.apache.lucene.util.packed.PackedInts.checkBlockSize;
 import static org.apache.lucene.util.packed.PackedInts.numBlocks;
+
+import java.util.Collection;
+import java.util.Collections;
 
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.ArrayUtil;
@@ -29,7 +32,7 @@ import org.apache.lucene.util.RamUsageEstimator;
  * Base implementation for {@link PagedMutable} and {@link PagedGrowableWriter}.
  * @lucene.internal
  */
-public abstract class AbstractPagedMutable<T extends AbstractPagedMutable<T>> extends LongValues implements Accountable {
+abstract class AbstractPagedMutable<T extends AbstractPagedMutable<T>> extends LongValues implements Accountable {
 
   static final int MIN_BLOCK_SIZE = 1 << 6;
   static final int MAX_BLOCK_SIZE = 1 << 30;
@@ -84,7 +87,7 @@ public abstract class AbstractPagedMutable<T extends AbstractPagedMutable<T>> ex
 
   @Override
   public final long get(long index) {
-    assert index >= 0 && index < size: "index=" + index + " size=" + size;
+    assert index >= 0 && index < size;
     final int pageIndex = pageIndex(index);
     final int indexInPage = indexInPage(index);
     return subMutables[pageIndex].get(indexInPage);
@@ -101,8 +104,8 @@ public abstract class AbstractPagedMutable<T extends AbstractPagedMutable<T>> ex
   protected long baseRamBytesUsed() {
     return RamUsageEstimator.NUM_BYTES_OBJECT_HEADER
         + RamUsageEstimator.NUM_BYTES_OBJECT_REF
-        + Long.BYTES
-        + 3 * Integer.BYTES;
+        + RamUsageEstimator.NUM_BYTES_LONG
+        + 3 * RamUsageEstimator.NUM_BYTES_INT;
   }
 
   @Override
@@ -113,6 +116,11 @@ public abstract class AbstractPagedMutable<T extends AbstractPagedMutable<T>> ex
       bytesUsed += gw.ramBytesUsed();
     }
     return bytesUsed;
+  }
+  
+  @Override
+  public Collection<Accountable> getChildResources() {
+    return Collections.emptyList();
   }
 
   protected abstract T newUnfilledCopy(long newSize);
@@ -161,4 +169,5 @@ public abstract class AbstractPagedMutable<T extends AbstractPagedMutable<T>> ex
   public final String toString() {
     return getClass().getSimpleName() + "(size=" + size() + ",pageSize=" + pageSize() + ")";
   }
+
 }

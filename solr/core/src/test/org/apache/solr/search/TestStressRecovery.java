@@ -17,6 +17,16 @@
 package org.apache.solr.search;
 
 
+import org.apache.lucene.util.Constants;
+import org.noggit.ObjectBuilder;
+import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.update.UpdateHandler;
+import org.apache.solr.update.UpdateLog;
+import org.apache.solr.update.VersionInfo;
+import org.apache.solr.util.TestHarness;
+import org.junit.BeforeClass;
+import org.junit.Test;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -30,34 +40,14 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.apache.lucene.util.Constants;
-import org.apache.lucene.util.LuceneTestCase;
-import org.apache.solr.common.util.Utils;
-import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.update.UpdateHandler;
-import org.apache.solr.update.UpdateLog;
-import org.apache.solr.update.VersionInfo;
-import org.apache.solr.util.TestHarness;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
 import static org.apache.solr.core.SolrCore.verbose;
 import static org.apache.solr.update.processor.DistributingUpdateProcessorFactory.DISTRIB_UPDATE_PARAM;
 
-@LuceneTestCase.AwaitsFix(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // 6-Sep-2018
-// can fail due to NPE uncaught exception in stress thread, probably because of null core
 public class TestStressRecovery extends TestRTGBase {
 
-  @Before
-  public void beforeClass() throws Exception {
-    randomizeUpdateLogImpl();
+  @BeforeClass
+  public static void beforeClass() throws Exception {
     initCore("solrconfig-tlog.xml","schema15.xml");
-  }
-  
-  @After
-  public void afterClass() {
-    deleteCore();
   }
 
 
@@ -68,10 +58,10 @@ public class TestStressRecovery extends TestRTGBase {
   // This version simulates updates coming from the leader and sometimes being reordered
   // and tests the ability to buffer updates and apply them later
   @Test
-  // 12-Jun-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // 04-May-2018
-  // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // 6-Sep-2018
   public void testStressRecovery() throws Exception {
     assumeFalse("FIXME: This test is horribly slow sometimes on Windows!", Constants.WINDOWS);
+    clearIndex();
+    assertU(commit());
 
     final int commitPercent = 5 + random().nextInt(10);
     final int softCommitPercent = 30+random().nextInt(75); // what percent of the commits are soft
@@ -80,12 +70,12 @@ public class TestStressRecovery extends TestRTGBase {
     final int ndocs = 5 + (random().nextBoolean() ? random().nextInt(25) : random().nextInt(200));
     int nWriteThreads = 2 + random().nextInt(10);  // fewer write threads to give recovery thread more of a chance
 
-    final int maxConcurrentCommits = nWriteThreads;
+    final int maxConcurrentCommits = nWriteThreads;   // number of committers at a time... it should be <= maxWarmingSearchers
 
     // query variables
     final int percentRealtimeQuery = 75;
     final int percentGetLatestVersions = random().nextInt(4);
-    final AtomicLong operations = new AtomicLong(atLeast(35));  // number of recovery loops to perform
+    final AtomicLong operations = new AtomicLong(atLeast(100));  // number of recovery loops to perform
     int nReadThreads = 2 + random().nextInt(10);  // fewer read threads to give writers more of a chance
 
     initModel(ndocs);
@@ -238,7 +228,7 @@ public class TestStressRecovery extends TestRTGBase {
               } else {
                 verbose("adding id", id, "val=", nextVal,"version",version);
 
-                Long returnedVersion = addAndGetVersion(sdoc("id", Integer.toString(id), FIELD, Long.toString(nextVal), "_version_",Long.toString(version)), params(DISTRIB_UPDATE_PARAM,FROM_LEADER));
+                Long returnedVersion = addAndGetVersion(sdoc("id", Integer.toString(id), field, Long.toString(nextVal), "_version_",Long.toString(version)), params(DISTRIB_UPDATE_PARAM,FROM_LEADER));
                 if (returnedVersion != null) {
                   assertEquals(version, returnedVersion.longValue());
                 }
@@ -314,13 +304,13 @@ public class TestStressRecovery extends TestRTGBase {
               }
 
               String response = h.query(sreq);
-              Map rsp = (Map) Utils.fromJSONString(response);
+              Map rsp = (Map)ObjectBuilder.fromJSON(response);
               List doclist = (List)(((Map)rsp.get("response")).get("docs"));
               if (doclist.size() == 0) {
                 // there's no info we can get back with a delete, so not much we can check without further synchronization
               } else {
                 assertEquals(1, doclist.size());
-                long foundVal = (Long)(((Map)doclist.get(0)).get(FIELD));
+                long foundVal = (Long)(((Map)doclist.get(0)).get(field));
                 long foundVer = (Long)(((Map)doclist.get(0)).get("_version_"));
                 if (foundVer < Math.abs(info.version)
                     || (foundVer == info.version && foundVal != info.val) ) {    // if the version matches, the val must
@@ -374,11 +364,9 @@ public class TestStressRecovery extends TestRTGBase {
         UpdateLog.RecoveryInfo recInfo = null;
 
         int writeThreadNumber = 0;
-        int cnt = 5000;
         while (recInfo == null) {
           try {
             // wait a short period of time for recovery to complete (and to give a chance for more writers to concurrently add docs)
-            cnt--;
             recInfo = recoveryInfoF.get(random().nextInt(100/nWriteThreads), TimeUnit.MILLISECONDS);
           } catch (TimeoutException e) {
             // idle one more write thread
@@ -393,13 +381,9 @@ public class TestStressRecovery extends TestRTGBase {
             // throttle readers so they don't steal too much CPU from the recovery thread
             readPermission.drainPermits();
           }
-          if (cnt == 0) {
-            break;
-          }
         }
-        if (recInfo != null) {
-          bufferedAddsApplied += recInfo.adds;
-        }
+
+        bufferedAddsApplied += recInfo.adds;
       }
 
       // put all writers back at full blast

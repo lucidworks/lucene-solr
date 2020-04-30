@@ -1,3 +1,4 @@
+package org.apache.lucene.search.vectorhighlight;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.vectorhighlight;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
@@ -196,7 +197,7 @@ public class FieldTermStack {
     // this is a circular list, so with no syns, just points to itself
     private TermInfo next;
 
-    TermInfo(String text, int startOffset, int endOffset, int position, float weight){
+    public TermInfo( String text, int startOffset, int endOffset, int position, float weight ){
       this.text = text;
       this.startOffset = startOffset;
       this.endOffset = endOffset;
@@ -219,7 +220,9 @@ public class FieldTermStack {
     
     @Override
     public String toString(){
-      return text + '(' + startOffset + ',' + endOffset + ',' + position + ')';
+      StringBuilder sb = new StringBuilder();
+      sb.append( text ).append( '(' ).append(startOffset).append( ',' ).append( endOffset ).append( ',' ).append( position ).append( ')' );
+      return sb.toString();
     }
 
     @Override
@@ -246,7 +249,10 @@ public class FieldTermStack {
         return false;
       }
       TermInfo other = (TermInfo) obj;
-      return position == other.position;
+      if (position != other.position) {
+        return false;
+      }
+      return true;
     }
   }
 }

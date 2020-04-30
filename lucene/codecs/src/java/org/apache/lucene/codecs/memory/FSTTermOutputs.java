@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.memory;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.memory;
-
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.IndexOptions;
@@ -77,6 +79,11 @@ class FSTTermOutputs extends Outputs<FSTTermOutputs.TermData> {
         ramBytesUsed += RamUsageEstimator.sizeOf(bytes);
       }
       return ramBytesUsed;
+    }
+
+    @Override
+    public Collection<Accountable> getChildResources() {
+      return Collections.emptyList();
     }
     
     // NOTE: actually, FST nodes are seldom 

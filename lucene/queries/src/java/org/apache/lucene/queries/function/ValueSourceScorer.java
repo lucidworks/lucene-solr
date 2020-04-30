@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,21 +16,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function;
 
 import java.io.IOException;
 
-import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TwoPhaseIterator;
-import org.apache.lucene.search.Weight;
 
 /**
  * {@link Scorer} which returns the result of {@link FunctionValues#floatVal(int)} as
  * the score for a document, and which filters out documents that don't match {@link #matches(int)}.
  * This Scorer has a {@link TwoPhaseIterator}.  This is similar to {@link FunctionQuery},
- * with an added filter.
+ * but this one has no {@link org.apache.lucene.search.Weight} normalization factors/multipliers
+ * and that one doesn't filter either.
  * <p>
  * Note: If the scores are needed, then the underlying value will probably be
  * fetched/computed twice -- once to filter and next to return the score.  If that's non-trivial then
@@ -43,14 +44,14 @@ public abstract class ValueSourceScorer extends Scorer {
   private final TwoPhaseIterator twoPhaseIterator;
   private final DocIdSetIterator disi;
 
-  protected ValueSourceScorer(Weight weight, LeafReaderContext readerContext, FunctionValues values) {
-    super(weight);
+  //TODO use LeafReaderContext not IndexReader?
+  protected ValueSourceScorer(IndexReader reader, FunctionValues values) {
+    super(null);//no weight
     this.values = values;
-    final DocIdSetIterator approximation = DocIdSetIterator.all(readerContext.reader().maxDoc()); // no approximation!
-    this.twoPhaseIterator = new TwoPhaseIterator(approximation) {
+    this.twoPhaseIterator = new TwoPhaseIterator(DocIdSetIterator.all(reader.maxDoc())) { // no approximation!
       @Override
       public boolean matches() throws IOException {
-        return ValueSourceScorer.this.matches(approximation.docID());
+        return ValueSourceScorer.this.matches(docID());
       }
 
       @Override
@@ -62,21 +63,26 @@ public abstract class ValueSourceScorer extends Scorer {
   }
 
   /** Override to decide if this document matches. It's called by {@link TwoPhaseIterator#matches()}. */
-  public abstract boolean matches(int doc) throws IOException;
+  public abstract boolean matches(int doc);
 
   @Override
-  public DocIdSetIterator iterator() {
-    return disi;
-  }
-
-  @Override
-  public TwoPhaseIterator twoPhaseIterator() {
+  public TwoPhaseIterator asTwoPhaseIterator() {
     return twoPhaseIterator;
   }
 
   @Override
   public int docID() {
     return disi.docID();
+  }
+
+  @Override
+  public int nextDoc() throws IOException {
+    return disi.nextDoc();
+  }
+
+  @Override
+  public int advance(int target) throws IOException {
+    return disi.advance(target);
   }
 
   @Override
@@ -90,8 +96,12 @@ public abstract class ValueSourceScorer extends Scorer {
   }
 
   @Override
-  public float getMaxScore(int upTo) throws IOException {
-    return Float.POSITIVE_INFINITY;
+  public int freq() throws IOException {
+    return 1;
   }
 
+  @Override
+  public long cost() {
+    return disi.cost();
+  }
 }

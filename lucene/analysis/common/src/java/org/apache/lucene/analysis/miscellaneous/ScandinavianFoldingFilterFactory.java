@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
-
-
-import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
+
+import java.util.Map;
 
 /**
  * Factory for {@link ScandinavianFoldingFilter}.
@@ -31,13 +31,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  *     &lt;filter class="solr.ScandinavianFoldingFilterFactory"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- * @since 4.4.0
- * @lucene.spi {@value #NAME}
  */
 public class ScandinavianFoldingFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "scandinavianFolding";
 
   public ScandinavianFoldingFilterFactory(Map<String,String> args) {
     super(args);
@@ -47,12 +42,7 @@ public class ScandinavianFoldingFilterFactory extends TokenFilterFactory {
   }
 
   @Override
-  public TokenStream create(TokenStream input) {
+  public ScandinavianFoldingFilter create(TokenStream input) {
     return new ScandinavianFoldingFilter(input);
-  }
-
-  @Override
-  public TokenStream normalize(TokenStream input) {
-    return create(input);
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.solr.schema;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
 
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.SolrQuery;
@@ -57,14 +58,14 @@ public class IndexSchemaRuntimeFieldTest extends SolrTestCaseJ4 {
 
     assertQ("Make sure they got in", req
             ,"//*[@numFound='1']"
-            ,"//result/doc[1]/str[@name='id'][.='10']"
+            ,"//result/doc[1]/int[@name='id'][.='10']"
             );
 
     // Check to see if our copy field made it out safely
     query.setQuery( "dynamic_runtime:aaa" );
     assertQ("Make sure they got in", req
             ,"//*[@numFound='1']"
-            ,"//result/doc[1]/str[@name='id'][.='10']"
+            ,"//result/doc[1]/int[@name='id'][.='10']"
             );
     clearIndex();
   }

@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,35 +16,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.net.URI;
-import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AccessDeniedException;
 import java.nio.file.FileStore;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
-import java.nio.file.NoSuchFileException;
-import java.nio.file.OpenOption;
 import java.nio.file.Path;
-import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileAttributeView;
 import java.nio.file.attribute.FileStoreAttributeView;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Random;
-import java.util.Set;
 import java.util.UUID;
 
 import org.apache.lucene.mockfile.FilterFileSystem;
@@ -119,9 +109,12 @@ public class TestIOUtils extends LuceneTestCase {
     
     // exception: file doesn't exist
     Path fake = dir.resolve("nonexistent");
-    expectThrows(IOException.class, () -> {
+    try {
       IOUtils.spins(fake);
-    });
+      fail();
+    } catch (IOException expected) {
+      // ok
+    }
   }
   
   // fake up a filestore to test some underlying methods
@@ -210,7 +203,7 @@ public class TestIOUtils extends LuceneTestCase {
     final Map<String,FileStore> filesToStore;
     final Path root;
     
-    public MockLinuxFileSystemProvider(FileSystem delegateInstance, final Map<String,FileStore> filesToStore, Path root) {
+    public MockLinuxFileSystemProvider(final FileSystem delegateInstance, final Map<String,FileStore> filesToStore, Path root) {
       super("mocklinux://", delegateInstance);
       final Collection<FileStore> allStores = new HashSet<>(filesToStore.values());
       this.fileSystem = new FilterFileSystem(this, delegateInstance) {
@@ -483,43 +476,6 @@ public class TestIOUtils extends LuceneTestCase {
     // no exception
   }
 
-  private static final class AccessDeniedWhileOpeningDirectoryFileSystem extends FilterFileSystemProvider {
-
-    AccessDeniedWhileOpeningDirectoryFileSystem(final FileSystem delegate) {
-      super("access_denied://", Objects.requireNonNull(delegate));
-    }
-
-    @Override
-    public FileChannel newFileChannel(
-        final Path path,
-        final Set<? extends OpenOption> options,
-        final FileAttribute<?>... attrs) throws IOException {
-      if (Files.isDirectory(path)) {
-        throw new AccessDeniedException(path.toString());
-      }
-      return delegate.newFileChannel(path, options, attrs);
-    }
-
-  }
-
-  public void testFsyncAccessDeniedOpeningDirectory() throws Exception {
-    final Path path = createTempDir().toRealPath();
-    final FileSystem fs = new AccessDeniedWhileOpeningDirectoryFileSystem(path.getFileSystem()).getFileSystem(URI.create("file:///"));
-    final Path wrapped = new FilterPath(path, fs);
-    if (Constants.WINDOWS) {
-      // no exception, we early return and do not even try to open the directory
-      IOUtils.fsync(wrapped, true);
-    } else {
-      expectThrows(AccessDeniedException.class, () -> IOUtils.fsync(wrapped, true));
-    }
-  }
-
-  public void testFsyncNonExistentDirectory() throws Exception {
-    final Path dir = FilterPath.unwrap(createTempDir()).toRealPath();
-    final Path nonExistentDir = dir.resolve("non-existent");
-    expectThrows(NoSuchFileException.class, () -> IOUtils.fsync(nonExistentDir, true));
-  }
-
   public void testFsyncFile() throws Exception {
     Path dir = createTempDir();
     dir = FilterPath.unwrap(dir).toRealPath();
@@ -532,21 +488,6 @@ public class TestIOUtils extends LuceneTestCase {
     }
     IOUtils.fsync(somefile, false);
     // no exception
-  }
-
-  public void testApplyToAll() {
-    ArrayList<Integer> closed = new ArrayList<>();
-    RuntimeException runtimeException = expectThrows(RuntimeException.class, () ->
-        IOUtils.applyToAll(Arrays.asList(1, 2), i -> {
-          closed.add(i);
-          throw new RuntimeException("" + i);
-        }));
-    assertEquals("1", runtimeException.getMessage());
-    assertEquals(1, runtimeException.getSuppressed().length);
-    assertEquals("2", runtimeException.getSuppressed()[0].getMessage());
-    assertEquals(2, closed.size());
-    assertEquals(1, closed.get(0).intValue());
-    assertEquals(2, closed.get(1).intValue());
   }
 
 }

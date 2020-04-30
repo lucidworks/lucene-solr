@@ -1,3 +1,5 @@
+package org.apache.solr.update.processor;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update.processor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,9 +31,6 @@ public class RuntimeUrp extends SimpleUpdateProcessorFactory {
     UpdateRequestProcessorChain processorChain = req.getCore().getUpdateProcessorChain(req.getParams());
     List<String>  names = new ArrayList<>();
     for (UpdateRequestProcessorFactory p : processorChain.getProcessors()) {
-      if (p instanceof UpdateRequestProcessorChain.LazyUpdateProcessorFactoryHolder.LazyUpdateRequestProcessorFactory) {
-        p = ((UpdateRequestProcessorChain.LazyUpdateProcessorFactoryHolder.LazyUpdateRequestProcessorFactory) p).getDelegate();
-      }
       names.add(p.getClass().getSimpleName());
     }
     cmd.solrDoc.addField("processors_s", StrUtils.join(names,'>'));

@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.math.BigInteger;
 
@@ -149,20 +149,5 @@ public final class MathUtil {
     return mult * Math.log((1.0d + a) / (1.0d - a));
   }
 
-  /**
-   * Return a relative error bound for a sum of {@code numValues} positive doubles,
-   * computed using recursive summation, ie. sum = x1 + ... + xn.
-   * NOTE: This only works if all values are POSITIVE so that Σ |xi| == |Σ xi|.
-   * This uses formula 3.5 from Higham, Nicholas J. (1993),
-   * "The accuracy of floating point summation", SIAM Journal on Scientific Computing.
-   */
-  public static double sumRelativeErrorBound(int numValues) {
-    if (numValues <= 1) {
-      return 0;
-    }
-    // u = unit roundoff in the paper, also called machine precision or machine epsilon
-    double u = Math.scalb(1.0, -52);
-    return (numValues - 1) * u;
-  }
 
 }

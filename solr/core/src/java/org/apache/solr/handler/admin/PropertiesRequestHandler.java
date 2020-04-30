@@ -14,17 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.admin;
 
 import java.io.IOException;
-import java.util.Enumeration;
 
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.handler.RequestHandlerBase;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
-import org.apache.solr.util.RedactionUtils;
 
 import static org.apache.solr.common.params.CommonParams.NAME;
 
@@ -34,45 +33,27 @@ import static org.apache.solr.common.params.CommonParams.NAME;
  */
 public class PropertiesRequestHandler extends RequestHandlerBase
 {
-
-  public static final String REDACT_STRING = RedactionUtils.getRedactString();
-
   @Override
   public void handleRequestBody(SolrQueryRequest req, SolrQueryResponse rsp) throws IOException 
   {
-    NamedList<String> props = new SimpleOrderedMap<>();
+    Object props = null;
     String name = req.getParams().get(NAME);
     if( name != null ) {
-      String property = getSecuredPropertyValue(name);
-      props.add( name, property);
+      NamedList<String> p = new SimpleOrderedMap<>();
+      p.add( name, System.getProperty(name) );
+      props = p;
     }
     else {
-      Enumeration<?> enumeration = System.getProperties().propertyNames();
-      while(enumeration.hasMoreElements()){
-        name = (String) enumeration.nextElement();
-        props.add(name, getSecuredPropertyValue(name));
-      }
+      props = System.getProperties();
     }
     rsp.add( "system.properties", props );
     rsp.setHttpCaching(false);
   }
-
-  private String getSecuredPropertyValue(String name) {
-    if(RedactionUtils.isSystemPropertySensitive(name)){
-      return REDACT_STRING;
-    }
-    return System.getProperty(name);
-  }
-
+  
   //////////////////////// SolrInfoMBeans methods //////////////////////
 
   @Override
   public String getDescription() {
     return "Get System Properties";
-  }
-
-  @Override
-  public Category getCategory() {
-    return Category.ADMIN;
   }
 }

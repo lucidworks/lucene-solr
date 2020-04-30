@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,20 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 
 import org.apache.lucene.codecs.DocValuesProducer;
 import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.NormsProducer;
-import org.apache.lucene.codecs.PointsReader;
 import org.apache.lucene.codecs.StoredFieldsReader;
 import org.apache.lucene.codecs.TermVectorsReader;
+import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Bits;
 
 /**
@@ -48,7 +48,7 @@ public final class SlowCodecReaderWrapper {
    */
   public static CodecReader wrap(final LeafReader reader) throws IOException {
     if (reader instanceof CodecReader) {
-      return (CodecReader) reader;
+      return (CodecReader)reader;
     } else {
       // simulate it slowly, over the leafReader api:
       reader.checkIntegrity();
@@ -94,11 +94,6 @@ public final class SlowCodecReaderWrapper {
         }
 
         @Override
-        public PointsReader getPointsReader() {
-          return pointValuesToReader(reader);
-        }
-
-        @Override
         public Bits getLiveDocs() {
           return reader.getLiveDocs();
         }
@@ -114,51 +109,16 @@ public final class SlowCodecReaderWrapper {
         }
 
         @Override
-        public CacheHelper getCoreCacheHelper() {
-          return reader.getCoreCacheHelper();
+        public void addCoreClosedListener(CoreClosedListener listener) {
+          reader.addCoreClosedListener(listener);
         }
 
         @Override
-        public CacheHelper getReaderCacheHelper() {
-          return reader.getReaderCacheHelper();
-        }
-
-        @Override
-        public String toString() {
-          return "SlowCodecReaderWrapper(" + reader + ")";
-        }
-
-        @Override
-        public LeafMetaData getMetaData() {
-          return reader.getMetaData();
+        public void removeCoreClosedListener(CoreClosedListener listener) {
+          reader.removeCoreClosedListener(listener);
         }
       };
     }
-  }
-
-  private static PointsReader pointValuesToReader(LeafReader reader) {
-    return new PointsReader() {
-
-      @Override
-      public PointValues getValues(String field) throws IOException {
-        return reader.getPointValues(field);
-      }
-
-      @Override
-      public void checkIntegrity() throws IOException {
-        // We already checkIntegrity the entire reader up front
-      }
-
-      @Override
-      public void close() {
-      }
-
-      @Override
-      public long ramBytesUsed() {
-        return 0;
-      }
-
-    };
   }
   
   private static NormsProducer readerToNormsProducer(final LeafReader reader) {
@@ -182,6 +142,11 @@ public final class SlowCodecReaderWrapper {
       public long ramBytesUsed() {
         return 0;
       }
+
+      @Override
+      public Collection<Accountable> getChildResources() {
+        return Collections.emptyList();
+      }
     };
   }
 
@@ -189,7 +154,7 @@ public final class SlowCodecReaderWrapper {
     return new DocValuesProducer() {
 
       @Override
-      public NumericDocValues getNumeric(FieldInfo field) throws IOException {
+      public NumericDocValues getNumeric(FieldInfo field) throws IOException {  
         return reader.getNumericDocValues(field.name);
       }
 
@@ -214,6 +179,11 @@ public final class SlowCodecReaderWrapper {
       }
 
       @Override
+      public Bits getDocsWithField(FieldInfo field) throws IOException {
+        return reader.getDocsWithField(field.name);
+      }
+
+      @Override
       public void checkIntegrity() throws IOException {
         // We already checkIntegrity the entire reader up front
       }
@@ -225,6 +195,11 @@ public final class SlowCodecReaderWrapper {
       @Override
       public long ramBytesUsed() {
         return 0;
+      }
+      
+      @Override
+      public Collection<Accountable> getChildResources() {
+        return Collections.emptyList();
       }
     };
   }
@@ -254,6 +229,11 @@ public final class SlowCodecReaderWrapper {
       public long ramBytesUsed() {
         return 0;
       }
+      
+      @Override
+      public Collection<Accountable> getChildResources() {
+        return Collections.emptyList();
+      }
     };
   }
 
@@ -282,31 +262,30 @@ public final class SlowCodecReaderWrapper {
       public long ramBytesUsed() {
         return 0;
       }
+      
+      @Override
+      public Collection<Accountable> getChildResources() {
+        return Collections.emptyList();
+      }
     };
   }
 
   private static FieldsProducer readerToFieldsProducer(final LeafReader reader) throws IOException {
-    ArrayList<String> indexedFields = new ArrayList<>();
-    for (FieldInfo fieldInfo : reader.getFieldInfos()) {
-      if (fieldInfo.getIndexOptions() != IndexOptions.NONE) {
-        indexedFields.add(fieldInfo.name);
-      }
-    }
-    Collections.sort(indexedFields);
+    final Fields fields = reader.fields();
     return new FieldsProducer() {
       @Override
       public Iterator<String> iterator() {
-        return indexedFields.iterator();
+        return fields.iterator();
       }
 
       @Override
       public Terms terms(String field) throws IOException {
-        return reader.terms(field);
+        return fields.terms(field);
       }
 
       @Override
       public int size() {
-        return indexedFields.size();
+        return fields.size();
       }
 
       @Override
@@ -321,6 +300,11 @@ public final class SlowCodecReaderWrapper {
       @Override
       public long ramBytesUsed() {
         return 0;
+      }
+      
+      @Override
+      public Collection<Accountable> getChildResources() {
+        return Collections.emptyList();
       }
     };
   }

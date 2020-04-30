@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.core;
-
 
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.util.CharTokenizer;
@@ -50,20 +50,6 @@ public class LetterTokenizer extends CharTokenizer {
     super(factory);
   }
   
-  /**
-   * Construct a new LetterTokenizer using a given
-   * {@link org.apache.lucene.util.AttributeFactory}.
-   *
-   * @param factory the attribute factory to use for this {@link Tokenizer}
-   * @param maxTokenLen maximum token length the tokenizer will emit. 
-   *        Must be greater than 0 and less than MAX_TOKEN_LENGTH_LIMIT (1024*1024)
-   * @throws IllegalArgumentException if maxTokenLen is invalid.
-
-   */
-  public LetterTokenizer(AttributeFactory factory, int maxTokenLen) {
-    super(factory, maxTokenLen);
-  }
-
   /** Collects only characters which satisfy
    * {@link Character#isLetter(int)}.*/
   @Override

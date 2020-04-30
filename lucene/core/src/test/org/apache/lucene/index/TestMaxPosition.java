@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import org.apache.lucene.analysis.CannedTokenStream;
 import org.apache.lucene.analysis.Token;
@@ -45,12 +45,15 @@ public class TestMaxPosition extends LuceneTestCase {
       t2.setPayload(new BytesRef(new byte[] { 0x1 } ));
     }
     doc.add(new TextField("foo", new CannedTokenStream(new Token[] {t1, t2})));
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       iw.addDocument(doc);
-    });
+      fail("did not hit exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
 
     // Document should not be visible:
-    IndexReader r = DirectoryReader.open(iw);
+    IndexReader r = DirectoryReader.open(iw, true);
     assertEquals(0, r.numDocs());
     r.close();
 
@@ -76,9 +79,9 @@ public class TestMaxPosition extends LuceneTestCase {
     iw.addDocument(doc);
 
     // Document should be visible:
-    IndexReader r = DirectoryReader.open(iw);
+    IndexReader r = DirectoryReader.open(iw, true);
     assertEquals(1, r.numDocs());
-    PostingsEnum postings = MultiTerms.getTermPostingsEnum(r, "foo", new BytesRef("foo"));
+    PostingsEnum postings = MultiFields.getTermPositionsEnum(r, "foo", new BytesRef("foo"));
 
     // "foo" appears in docID=0
     assertEquals(0, postings.nextDoc());

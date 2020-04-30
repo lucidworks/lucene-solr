@@ -1,3 +1,4 @@
+package org.apache.solr.client.solrj.request;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +15,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.request;
 
-import java.io.File;
+
+import org.apache.solr.common.util.ContentStream;
+import org.apache.solr.common.util.ContentStreamBase;
+
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-
-import org.apache.commons.io.IOUtils;
-import org.apache.solr.common.util.ContentStream;
-import org.apache.solr.common.util.ContentStreamBase;
 
 
 /**
@@ -53,25 +51,6 @@ public class ContentStreamUpdateRequest extends AbstractUpdateRequest {
   @Override
   public Collection<ContentStream> getContentStreams() throws IOException {
     return contentStreams;
-  }
-
-  @Override
-  public RequestWriter.ContentWriter getContentWriter(String expectedType) {
-    if (contentStreams == null || contentStreams.isEmpty() || contentStreams.size() > 1) return null;
-    ContentStream stream = contentStreams.get(0);
-    return new RequestWriter.ContentWriter() {
-      @Override
-      public void write(OutputStream os) throws IOException {
-        try(InputStream inStream = stream.getStream()) {
-          IOUtils.copy(inStream, os);
-        }
-      }
-
-      @Override
-      public String getContentType() {
-        return stream.getContentType();
-      }
-    };
   }
 
   /**

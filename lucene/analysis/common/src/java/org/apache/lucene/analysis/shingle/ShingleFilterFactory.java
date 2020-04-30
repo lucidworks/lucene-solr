@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.shingle;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.shingle;
-
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
@@ -32,15 +32,8 @@ import java.util.Map;
  *             outputUnigrams="true" outputUnigramsIfNoShingles="false" tokenSeparator=" " fillerToken="_"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
 public class ShingleFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "shingle";
-
   private final int minShingleSize;
   private final int maxShingleSize;
   private final boolean outputUnigrams;

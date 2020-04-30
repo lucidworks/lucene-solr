@@ -1,3 +1,5 @@
+package org.apache.solr.search.similarities;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.similarities;
 
 import org.apache.lucene.search.similarities.AfterEffectB;
 import org.apache.lucene.search.similarities.AfterEffectL;
-import org.apache.lucene.search.similarities.BasicModelG;
 import org.apache.lucene.search.similarities.BasicModelIF;
+import org.apache.lucene.search.similarities.BasicModelP;
 import org.apache.lucene.search.similarities.DFRSimilarity;
 import org.apache.lucene.search.similarities.NormalizationH2;
 import org.apache.lucene.search.similarities.NormalizationH3;
@@ -45,7 +46,7 @@ public class TestDFRSimilarityFactory extends BaseSimilarityTestCase {
     assertEquals(NormalizationH2.class, dfr.getNormalization().getClass());
   }
   
-  /** dfr with parametrized normalization */
+  /** dfr with parameterized normalization */
   public void testParameters() throws Exception {
     Similarity sim = getSimilarity("text_params");
     assertEquals(DFRSimilarity.class, sim.getClass());
@@ -62,7 +63,7 @@ public class TestDFRSimilarityFactory extends BaseSimilarityTestCase {
     Similarity sim = getSimilarity("text_paramc");
     assertEquals(DFRSimilarity.class, sim.getClass());
     DFRSimilarity dfr = (DFRSimilarity) sim;
-    assertEquals(BasicModelG.class, dfr.getBasicModel().getClass());
+    assertEquals(BasicModelP.class, dfr.getBasicModel().getClass());
     assertEquals(AfterEffectL.class, dfr.getAfterEffect().getClass());
     assertEquals(NormalizationH2.class, dfr.getNormalization().getClass());
     NormalizationH2 norm = (NormalizationH2) dfr.getNormalization();

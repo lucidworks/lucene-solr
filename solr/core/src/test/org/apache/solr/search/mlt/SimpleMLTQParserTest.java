@@ -1,3 +1,5 @@
+package org.apache.solr.search.mlt;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.mlt;
+
+import java.util.ArrayList;
 
 import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.params.CommonParams;
-import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.response.SolrQueryResponse;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -77,77 +82,63 @@ public class SimpleMLTQParserTest extends SolrTestCaseJ4 {
 
     assertU(commit());
 
-    // for score tiebreaker, use doc ID order
-    final SolrParams sortParams = params("sort", "score desc, id asc");
-    
-    assertQ(req(sortParams, CommonParams.Q, "{!mlt qf=lowerfilt}17"),
-        "//result/doc[1]/str[@name='id'][.='13']",
-        "//result/doc[2]/str[@name='id'][.='14']",
-        "//result/doc[3]/str[@name='id'][.='15']",
-        "//result/doc[4]/str[@name='id'][.='16']",
-        "//result/doc[5]/str[@name='id'][.='18']",
-        "//result/doc[6]/str[@name='id'][.='19']",
-        "//result/doc[7]/str[@name='id'][.='20']",
-        "//result/doc[8]/str[@name='id'][.='21']",
-        "//result/doc[9]/str[@name='id'][.='22']",
-        "//result/doc[10]/str[@name='id'][.='23']"
+    ModifiableSolrParams params = new ModifiableSolrParams();
+    params.set(CommonParams.Q, "{!mlt qf=lowerfilt}17");
+    assertQ(req(params),
+        "//result/doc[1]/int[@name='id'][.='13']",
+        "//result/doc[2]/int[@name='id'][.='14']",
+        "//result/doc[3]/int[@name='id'][.='15']",
+        "//result/doc[4]/int[@name='id'][.='16']",
+        "//result/doc[5]/int[@name='id'][.='18']",
+        "//result/doc[6]/int[@name='id'][.='19']",
+        "//result/doc[7]/int[@name='id'][.='20']",
+        "//result/doc[8]/int[@name='id'][.='21']",
+        "//result/doc[9]/int[@name='id'][.='22']",
+        "//result/doc[10]/int[@name='id'][.='23']"
     );
 
-    assertQ(req(sortParams, CommonParams.Q, "{!mlt qf=lowerfilt boost=true}17"),
-        "//result/doc[1]/str[@name='id'][.='13']",
-        "//result/doc[2]/str[@name='id'][.='14']",
-        "//result/doc[3]/str[@name='id'][.='15']",
-        "//result/doc[4]/str[@name='id'][.='16']",
-        "//result/doc[5]/str[@name='id'][.='18']",
-        "//result/doc[6]/str[@name='id'][.='19']",
-        "//result/doc[7]/str[@name='id'][.='20']",
-        "//result/doc[8]/str[@name='id'][.='21']",
-        "//result/doc[9]/str[@name='id'][.='22']",
-        "//result/doc[10]/str[@name='id'][.='23']"
+    params = new ModifiableSolrParams();
+    params.set(CommonParams.Q, "{!mlt qf=lowerfilt boost=true}17");
+    assertQ(req(params),
+        "//result/doc[1]/int[@name='id'][.='13']",
+        "//result/doc[2]/int[@name='id'][.='14']",
+        "//result/doc[3]/int[@name='id'][.='15']",
+        "//result/doc[4]/int[@name='id'][.='16']",
+        "//result/doc[5]/int[@name='id'][.='18']",
+        "//result/doc[6]/int[@name='id'][.='19']",
+        "//result/doc[7]/int[@name='id'][.='20']",
+        "//result/doc[8]/int[@name='id'][.='21']",
+        "//result/doc[9]/int[@name='id'][.='22']",
+        "//result/doc[10]/int[@name='id'][.='23']"
     );
 
-    assertQ(req(sortParams, CommonParams.Q, "{!mlt qf=lowerfilt,lowerfilt1^1000 boost=false mintf=0 mindf=0}30"),
-        "//result/doc[1]/str[@name='id'][.='31']",
-        "//result/doc[2]/str[@name='id'][.='13']",
-        "//result/doc[3]/str[@name='id'][.='14']",
-        "//result/doc[4]/str[@name='id'][.='18']",
-        "//result/doc[5]/str[@name='id'][.='20']",
-        "//result/doc[6]/str[@name='id'][.='22']",
-        "//result/doc[7]/str[@name='id'][.='23']",
-        "//result/doc[8]/str[@name='id'][.='32']",
-        "//result/doc[9]/str[@name='id'][.='15']",
-        "//result/doc[10]/str[@name='id'][.='16']"
+    params = new ModifiableSolrParams();
+    params.set(CommonParams.Q, "{!mlt qf=lowerfilt mindf=0 mintf=1}26");
+    params.set(CommonParams.DEBUG, "true");
+    assertQ(req(params),
+        "//result/doc[1]/int[@name='id'][.='29']",
+        "//result/doc[2]/int[@name='id'][.='27']",
+        "//result/doc[3]/int[@name='id'][.='28']"
     );
 
-    assertQ(req(sortParams, CommonParams.Q, "{!mlt qf=lowerfilt,lowerfilt1^1000 boost=true mintf=0 mindf=0}30"),
-        "//result/doc[1]/str[@name='id'][.='29']",
-        "//result/doc[2]/str[@name='id'][.='31']",
-        "//result/doc[3]/str[@name='id'][.='32']",
-        "//result/doc[4]/str[@name='id'][.='13']",
-        "//result/doc[5]/str[@name='id'][.='14']",
-        "//result/doc[6]/str[@name='id'][.='18']",
-        "//result/doc[7]/str[@name='id'][.='20']",
-        "//result/doc[8]/str[@name='id'][.='22']",
-        "//result/doc[9]/str[@name='id'][.='23']",
-        "//result/doc[10]/str[@name='id'][.='15']"
-    );
-
-    assertQ(req(sortParams, CommonParams.Q, "{!mlt qf=lowerfilt mindf=0 mintf=1}26"),
-        "//result/doc[1]/str[@name='id'][.='29']",
-        "//result/doc[2]/str[@name='id'][.='27']",
-        "//result/doc[3]/str[@name='id'][.='28']"
-    );
-
-    assertQ(req(CommonParams.Q, "{!mlt qf=lowerfilt mindf=10 mintf=1}26"),
+    params = new ModifiableSolrParams();
+    params.set(CommonParams.Q, "{!mlt qf=lowerfilt mindf=10 mintf=1}26");
+    params.set(CommonParams.DEBUG, "true");
+    assertQ(req(params),
         "//result[@numFound='0']"
     );
 
-    assertQ(req(CommonParams.Q, "{!mlt qf=lowerfilt minwl=3 mintf=1 mindf=1}26"),
+    params = new ModifiableSolrParams();
+    params.set(CommonParams.Q, "{!mlt qf=lowerfilt minwl=3 mintf=1 mindf=1}26");
+    params.set(CommonParams.DEBUG, "true");
+    assertQ(req(params),
         "//result[@numFound='3']"
     );
 
-    assertQ(req(CommonParams.Q, "{!mlt qf=lowerfilt minwl=4 mintf=1 mindf=1}26",
-                CommonParams.DEBUG, "true"),
+    params = new ModifiableSolrParams();
+    params.set(CommonParams.Q, "{!mlt qf=lowerfilt minwl=4 mintf=1 mindf=1}26");
+    params.set(CommonParams.DEBUG, "true");
+    assertQ(req(params),
         "//result[@numFound='0']"
     );
   }

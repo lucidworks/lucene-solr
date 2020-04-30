@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.commongrams;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.commongrams;
-
 
 import java.io.IOException;
 import java.util.Map;
 
-import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.en.EnglishAnalyzer;
-import org.apache.lucene.analysis.util.ResourceLoader;
-import org.apache.lucene.analysis.util.ResourceLoaderAware;
-import org.apache.lucene.analysis.util.TokenFilterFactory;
+import org.apache.lucene.analysis.core.StopAnalyzer;
+import org.apache.lucene.analysis.util.*;
 
 /**
  * Constructs a {@link CommonGramsFilter}.
@@ -37,16 +34,9 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  *     &lt;filter class="solr.CommonGramsFilterFactory" words="commongramsstopwords.txt" ignoreCase="false"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
 public class CommonGramsFilterFactory extends TokenFilterFactory implements ResourceLoaderAware {
-
-  /** SPI name */
-  public static final String NAME = "commonGrams";
-
-  // TODO: shared base class for Stop/Keep/CommonGrams?
+  // TODO: shared base class for Stop/Keep/CommonGrams? 
   private CharArraySet commonWords;
   private final String commonWordFiles;
   private final String format;
@@ -72,7 +62,7 @@ public class CommonGramsFilterFactory extends TokenFilterFactory implements Reso
         commonWords = getWordSet(loader, commonWordFiles, ignoreCase);
       }
     } else {
-      commonWords = EnglishAnalyzer.ENGLISH_STOP_WORDS_SET;
+      commonWords = StopAnalyzer.ENGLISH_STOP_WORDS_SET;
     }
   }
 

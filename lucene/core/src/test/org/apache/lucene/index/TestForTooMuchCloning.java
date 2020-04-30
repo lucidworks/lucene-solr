@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
@@ -71,7 +71,7 @@ public class TestForTooMuchCloning extends LuceneTestCase {
                                                      new BytesRef("\uFFFF"),
                                                      true,
                                                      true), 10);
-    assertTrue(hits.totalHits.value > 0);
+    assertTrue(hits.totalHits > 0);
     final int queryCloneCount = dir.getInputCloneCount() - cloneCount;
     //System.out.println("query clone count=" + queryCloneCount);
     assertTrue("too many calls to IndexInput.clone during TermRangeQuery: " + queryCloneCount, queryCloneCount < 50);

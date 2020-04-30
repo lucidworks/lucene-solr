@@ -14,22 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler;
 
-import java.io.IOException;
-import java.io.Reader;
-import java.lang.invoke.MethodHandles;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Pattern;
-
-import org.apache.lucene.document.Document;
 import org.apache.lucene.index.ExitableDirectoryReader;
+import org.apache.lucene.document.Document;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queries.mlt.MoreLikeThis;
@@ -38,16 +27,16 @@ import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BoostQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.util.CharsRefBuilder;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.StringUtils;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.FacetParams;
-import org.apache.solr.common.params.MoreLikeThisParams.TermStyle;
 import org.apache.solr.common.params.MoreLikeThisParams;
+import org.apache.solr.common.params.MoreLikeThisParams.TermStyle;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.ContentStream;
 import org.apache.solr.common.util.NamedList;
+import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.handler.component.FacetComponent;
 import org.apache.solr.request.SimpleFacets;
 import org.apache.solr.request.SolrQueryRequest;
@@ -70,6 +59,19 @@ import org.apache.solr.util.SolrPluginUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.Reader;
+import java.lang.invoke.MethodHandles;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+
 /**
  * Solr MoreLikeThis --
  * 
@@ -83,13 +85,7 @@ public class MoreLikeThisHandler extends RequestHandlerBase
   private static final Pattern splitList = Pattern.compile(",| ");
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-
-  static final String ERR_MSG_QUERY_OR_TEXT_REQUIRED =
-      "MoreLikeThis requires either a query (?q=) or text to find similar documents.";
-
-  static final String ERR_MSG_SINGLE_STREAM_ONLY =
-      "MoreLikeThis does not support multiple ContentStreams";
-
+  
   @Override
   public void init(NamedList args) {
     super.init(args);
@@ -124,7 +120,7 @@ public class MoreLikeThisHandler extends RequestHandlerBase
           if (q != null) {
             QParser parser = QParser.getParser(q, defType, req);
             query = parser.getQuery();
-            sortSpec = parser.getSortSpec(true);
+            sortSpec = parser.getSort(true);
           }
 
           String[] fqs = req.getParams().getParams(CommonParams.FQ);
@@ -132,7 +128,7 @@ public class MoreLikeThisHandler extends RequestHandlerBase
             filters = new ArrayList<>();
             for (String fq : fqs) {
               if (fq != null && fq.trim().length() != 0) {
-                QParser fqp = QParser.getParser(fq, req);
+                QParser fqp = QParser.getParser(fq, null, req);
                 filters.add(fqp.getQuery());
               }
             }
@@ -148,7 +144,7 @@ public class MoreLikeThisHandler extends RequestHandlerBase
         // Hold on to the interesting terms if relevant
         TermStyle termStyle = TermStyle.get(params.get(MoreLikeThisParams.INTERESTING_TERMS));
         List<InterestingTerm> interesting = (termStyle == TermStyle.NONE)
-            ? null : new ArrayList<>(mlt.mlt.getMaxQueryTerms());
+            ? null : new ArrayList<InterestingTerm>(mlt.mlt.getMaxQueryTerms());
 
         DocListAndSet mltDocs = null;
 
@@ -165,13 +161,13 @@ public class MoreLikeThisHandler extends RequestHandlerBase
               }
               if (iter.hasNext()) {
                 throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
-                    ERR_MSG_SINGLE_STREAM_ONLY);
+                    "MoreLikeThis does not support multiple ContentStreams");
               }
             }
           }
 
-          int start = params.getInt(CommonParams.START, CommonParams.START_DEFAULT);
-          int rows = params.getInt(CommonParams.ROWS, CommonParams.ROWS_DEFAULT);
+          int start = params.getInt(CommonParams.START, 0);
+          int rows = params.getInt(CommonParams.ROWS, 10);
 
           // Find documents MoreLikeThis - either with a reader or a query
           // --------------------------------------------------------------------------------
@@ -200,7 +196,7 @@ public class MoreLikeThisHandler extends RequestHandlerBase
             }
           } else {
             throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
-                ERR_MSG_QUERY_OR_TEXT_REQUIRED);
+                "MoreLikeThis requires either a query (?q=) or text to find similar documents.");
           }
 
         } finally {
@@ -212,7 +208,7 @@ public class MoreLikeThisHandler extends RequestHandlerBase
         if (mltDocs == null) {
           mltDocs = new DocListAndSet(); // avoid NPE
         }
-        rsp.addResponse(mltDocs.docList);
+        rsp.add("response", mltDocs.docList);
 
 
         if (interesting != null) {
@@ -258,7 +254,7 @@ public class MoreLikeThisHandler extends RequestHandlerBase
           dbgQuery = true;
           dbgResults = true;
         }
-        // TODO resolve duplicated code with DebugComponent.  Perhaps it should be added to doStandardDebug?
+        // Copied from StandardRequestHandler... perhaps it should be added to doStandardDebug?
         if (dbg == true) {
           try {
             NamedList<Object> dbgInfo = SolrPluginUtils.doStandardDebug(req, q, mlt.getRawMLTQuery(), mltDocs.docList, dbgQuery, dbgResults);
@@ -289,7 +285,17 @@ public class MoreLikeThisHandler extends RequestHandlerBase
   {
     public Term term;
     public float boost;
-
+        
+    public static Comparator<InterestingTerm> BOOST_ORDER = new Comparator<InterestingTerm>() {
+      @Override
+      public int compare(InterestingTerm t1, InterestingTerm t2) {
+        float d = t1.boost - t2.boost;
+        if( d == 0 ) {
+          return 0;
+        }
+        return (d>0)?1:-1;
+      }
+    };
   }
   
   /**
@@ -344,13 +350,6 @@ public class MoreLikeThisHandler extends RequestHandlerBase
       mlt.setMaxQueryTerms(     params.getInt(MoreLikeThisParams.MAX_QUERY_TERMS,       MoreLikeThis.DEFAULT_MAX_QUERY_TERMS));
       mlt.setMaxNumTokensParsed(params.getInt(MoreLikeThisParams.MAX_NUM_TOKENS_PARSED, MoreLikeThis.DEFAULT_MAX_NUM_TOKENS_PARSED));
       mlt.setBoost(            params.getBool(MoreLikeThisParams.BOOST, false ) );
-      
-      // There is no default for maxDocFreqPct. Also, it's a bit oddly expressed as an integer value 
-      // (percentage of the collection's documents count). We keep Lucene's convention here. 
-      if (params.getInt(MoreLikeThisParams.MAX_DOC_FREQ_PCT) != null) {
-        mlt.setMaxDocFreqPct(params.getInt(MoreLikeThisParams.MAX_DOC_FREQ_PCT));
-      }
-
       boostFields = SolrPluginUtils.parseFieldBoosts(params.getParams(MoreLikeThisParams.QF));
     }
     
@@ -374,6 +373,7 @@ public class MoreLikeThisHandler extends RequestHandlerBase
       BooleanQuery boostedQuery = (BooleanQuery)mltquery;
       if (boostFields.size() > 0) {
         BooleanQuery.Builder newQ = new BooleanQuery.Builder();
+        newQ.setDisableCoord(boostedQuery.isCoordDisabled());
         newQ.setMinimumNumberShouldMatch(boostedQuery.getMinimumNumberShouldMatch());
         for (BooleanClause clause : boostedQuery) {
           Query q = clause.getQuery();
@@ -398,7 +398,7 @@ public class MoreLikeThisHandler extends RequestHandlerBase
       rawMLTQuery = mlt.like(id);
       boostedMLTQuery = getBoostedQuery( rawMLTQuery );
       if( terms != null ) {
-        fillInterestingTermsFromMLTQuery( boostedMLTQuery, terms );
+        fillInterestingTermsFromMLTQuery( rawMLTQuery, terms );
       }
 
       // exclude current document from results
@@ -420,31 +420,10 @@ public class MoreLikeThisHandler extends RequestHandlerBase
 
     public DocListAndSet getMoreLikeThis( Reader reader, int start, int rows, List<Query> filters, List<InterestingTerm> terms, int flags ) throws IOException
     {
-      // SOLR-5351: if only check against a single field, use the reader directly. Otherwise we
-      // repeat the stream's content for multiple fields so that query terms can be pulled from any
-      // of those fields.
-      String [] fields = mlt.getFieldNames();
-      if (fields.length == 1) {
-        rawMLTQuery = mlt.like(fields[0], reader);
-      } else {
-        CharsRefBuilder buffered = new CharsRefBuilder();
-        char [] chunk = new char [1024];
-        int len;
-        while ((len = reader.read(chunk)) >= 0) {
-          buffered.append(chunk, 0, len);
-        }
-
-        Collection<Object> streamValue = Collections.singleton(buffered.get().toString());
-        Map<String, Collection<Object>> multifieldDoc = new HashMap<>(fields.length);
-        for (String field : fields) {
-          multifieldDoc.put(field, streamValue);
-        }
-
-        rawMLTQuery = mlt.like(multifieldDoc);
-      }
-
+      // analyzing with the first field: previous (stupid) behavior
+      rawMLTQuery = mlt.like(mlt.getFieldNames()[0], reader);
       boostedMLTQuery = getBoostedQuery( rawMLTQuery );
-      if (terms != null) {
+      if( terms != null ) {
         fillInterestingTermsFromMLTQuery( boostedMLTQuery, terms );
       }
       DocListAndSet results = new DocListAndSet();
@@ -456,6 +435,23 @@ public class MoreLikeThisHandler extends RequestHandlerBase
       return results;
     }
 
+    @Deprecated
+    public NamedList<DocList> getMoreLikeThese( DocList docs, int rows, int flags ) throws IOException
+    {
+      IndexSchema schema = searcher.getSchema();
+      NamedList<DocList> mlt = new SimpleOrderedMap<>();
+      DocIterator iterator = docs.iterator();
+      while( iterator.hasNext() ) {
+        int id = iterator.nextDoc();
+        
+        DocListAndSet sim = getMoreLikeThis( id, 0, rows, null, null, flags );
+        String name = schema.printableUniqueKey( reader.document( id ) );
+
+        mlt.add(name, sim.docList);
+      }
+      return mlt;
+    }
+    
     public NamedList<BooleanQuery> getMoreLikeTheseQuery(DocList docs)
         throws IOException {
       IndexSchema schema = searcher.getSchema();
@@ -515,5 +511,13 @@ public class MoreLikeThisHandler extends RequestHandlerBase
   @Override
   public String getDescription() {
     return "Solr MoreLikeThis";
+  }
+
+  @Override
+  public URL[] getDocs() {
+    try {
+      return new URL[] { new URL("http://wiki.apache.org/solr/MoreLikeThis") };
+    }
+    catch( MalformedURLException ex ) { return null; }
   }
 }

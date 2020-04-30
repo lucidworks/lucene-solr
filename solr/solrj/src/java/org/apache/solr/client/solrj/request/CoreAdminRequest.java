@@ -14,23 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.request;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
+package org.apache.solr.client.solrj.request;
 
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.response.CoreAdminResponse;
-import org.apache.solr.client.solrj.util.SolrIdentifierValidator;
 import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.CoreAdminParams;
 import org.apache.solr.common.params.CoreAdminParams.CoreAdminAction;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.ContentStream;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
 
 /**
  * This class is experimental and subject to change.
@@ -98,18 +100,6 @@ public class CoreAdminRequest extends SolrRequest<CoreAdminResponse> {
     public Boolean getIsLoadOnStartup() { return loadOnStartup; }
     public Boolean getIsTransient() { return isTransient; }
     public String getCollectionConfigName() { return collectionConfigName;}
-    
-    /**
-     * Provide the name of the core to be created.
-     * 
-     * Core names must consist entirely of periods, underscores and alphanumerics.  Other characters are not allowed.
-     * 
-     * @throws IllegalArgumentException if the core name contains invalid characters.
-     */
-    @Override
-    public void setCoreName(String coreName) {
-      this.core = SolrIdentifierValidator.validateCoreName(coreName);
-    }
     
     @Override
     public SolrParams getParams() {
@@ -332,6 +322,34 @@ public class CoreAdminRequest extends SolrRequest<CoreAdminResponse> {
     }
   }
   
+    //a persist core request
+  public static class Persist extends CoreAdminRequest {
+    protected String fileName = null;
+    
+    public Persist() {
+      action = CoreAdminAction.PERSIST;
+    }
+    
+    public void setFileName(String name) {
+      fileName = name;
+    }
+    public String getFileName() {
+      return fileName;
+    }
+    @Override
+    public SolrParams getParams() {
+      if( action == null ) {
+        throw new RuntimeException( "no action specified!" );
+      }
+      ModifiableSolrParams params = new ModifiableSolrParams();
+      params.set( CoreAdminParams.ACTION, action.toString() );
+      if (fileName != null) {
+        params.set( CoreAdminParams.FILE, fileName);
+      }
+      return params;
+    }
+  }
+  
   public static class OverrideLastPublished extends CoreAdminRequest {
     protected String state;
 
@@ -451,63 +469,6 @@ public class CoreAdminRequest extends SolrRequest<CoreAdminResponse> {
 
   }
 
-  public static class CreateSnapshot extends CoreAdminRequest {
-    private String commitName;
-
-    public CreateSnapshot(String commitName) {
-      super();
-      this.action = CoreAdminAction.CREATESNAPSHOT;
-      if(commitName == null) {
-        throw new NullPointerException("Please specify non null value for commitName parameter.");
-      }
-      this.commitName = commitName;
-    }
-
-    public String getCommitName() {
-      return commitName;
-    }
-
-    @Override
-    public SolrParams getParams() {
-      ModifiableSolrParams params = new ModifiableSolrParams(super.getParams());
-      params.set(CoreAdminParams.COMMIT_NAME, this.commitName);
-      return params;
-    }
-  }
-
-  public static class DeleteSnapshot extends CoreAdminRequest {
-    private String commitName;
-
-    public DeleteSnapshot(String commitName) {
-      super();
-      this.action = CoreAdminAction.DELETESNAPSHOT;
-
-      if(commitName == null) {
-        throw new NullPointerException("Please specify non null value for commitName parameter.");
-      }
-      this.commitName = commitName;
-    }
-
-    public String getCommitName() {
-      return commitName;
-    }
-
-    @Override
-    public SolrParams getParams() {
-      ModifiableSolrParams params = new ModifiableSolrParams(super.getParams());
-      params.set(CoreAdminParams.COMMIT_NAME, this.commitName);
-      return params;
-    }
-  }
-
-  public static class ListSnapshots extends CoreAdminRequest {
-    public ListSnapshots() {
-      super();
-      this.action = CoreAdminAction.LISTSNAPSHOTS;
-    }
-  }
-
-
   public CoreAdminRequest()
   {
     super( METHOD.GET, "/admin/cores" );
@@ -518,7 +479,7 @@ public class CoreAdminRequest extends SolrRequest<CoreAdminResponse> {
     super( METHOD.GET, path );
   }
 
-  public void setCoreName( String coreName )
+  public final void setCoreName( String coreName )
   {
     this.core = coreName;
   }
@@ -565,6 +526,10 @@ public class CoreAdminRequest extends SolrRequest<CoreAdminResponse> {
   //
   //---------------------------------------------------------------------------------------
 
+  @Override
+  public Collection<ContentStream> getContentStreams() throws IOException {
+    return null;
+  }
 
   @Override
   protected CoreAdminResponse createResponse(SolrClient client) {
@@ -599,48 +564,13 @@ public class CoreAdminRequest extends SolrRequest<CoreAdminResponse> {
     return req.process(client);
   }
 
-  /**
-   * Rename an existing core.
-   * 
-   * @throws IllegalArgumentException if the new core name contains invalid characters.
-   */
-  public static CoreAdminResponse renameCore(String coreName, String newName, SolrClient client )
-      throws SolrServerException, IOException {
+  public static CoreAdminResponse renameCore(String coreName, String newName, SolrClient client ) throws SolrServerException, IOException
+  {
     CoreAdminRequest req = new CoreAdminRequest();
     req.setCoreName(coreName);
-    req.setOtherCoreName(SolrIdentifierValidator.validateCoreName(newName));
+    req.setOtherCoreName(newName);
     req.setAction( CoreAdminAction.RENAME );
     return req.process( client );
-  }
-
-  /**
-   * Swap two existing cores.
-   * @param core1 name of the first core
-   * @param core2 name of the other core
-   * @param client SolrClient to use
-   * @return response
-   * @throws SolrServerException if one or both cores don't exist
-   * @throws IOException on IO errors
-   */
-  public static CoreAdminResponse swapCore(String core1, String core2, SolrClient client)
-      throws SolrServerException, IOException {
-    CoreAdminRequest req = new CoreAdminRequest();
-    req.setCoreName(core1);
-    req.setOtherCoreName(core2);
-    req.setAction( CoreAdminAction.SWAP );
-    return req.process( client );
-  }
-
-  public static CoreStatus getCoreStatus(String coreName, SolrClient client) throws SolrServerException, IOException {
-    return getCoreStatus(coreName, true, client);
-  }
-
-  public static CoreStatus getCoreStatus(String coreName, boolean getIndexInfo, SolrClient client)
-      throws SolrServerException, IOException {
-    CoreAdminRequest req = new CoreAdminRequest();
-    req.setAction(CoreAdminAction.STATUS);
-    req.setIndexInfoNeeded(getIndexInfo);
-    return new CoreStatus(req.process(client).getCoreStatus(coreName));
   }
 
   public static CoreAdminResponse getStatus( String name, SolrClient client ) throws SolrServerException, IOException

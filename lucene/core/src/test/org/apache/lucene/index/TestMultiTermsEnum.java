@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.Collection;
@@ -27,12 +27,24 @@ import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.StringField;
+import org.apache.lucene.index.CodecReader;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.FieldInfo;
+import org.apache.lucene.index.FieldInfos;
+import org.apache.lucene.index.FilterCodecReader;
+import org.apache.lucene.index.FilteredTermsEnum;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.util.TestUtil;
 
 public class TestMultiTermsEnum extends LuceneTestCase {
 
@@ -44,7 +56,7 @@ public class TestMultiTermsEnum extends LuceneTestCase {
     document.add(new StringField("deleted", "0", Field.Store.YES));
     writer.addDocument(document);
 
-    DirectoryReader reader = DirectoryReader.open(writer);
+    DirectoryReader reader = DirectoryReader.open(writer, true);
     writer.close();
 
     Directory directory2 = new RAMDirectory();
@@ -137,22 +149,26 @@ public class TestMultiTermsEnum extends LuceneTestCase {
 
         @Override
         public long size() throws IOException {
-          throw new UnsupportedOperationException();
+          // Docs say we can return -1 if we don't know.
+          return -1;
         }
 
         @Override
         public long getSumTotalTermFreq() throws IOException {
-          throw new UnsupportedOperationException();
+          // Docs say we can return -1 if we don't know.
+          return -1;
         }
 
         @Override
         public long getSumDocFreq() throws IOException {
-          throw new UnsupportedOperationException();
+          // Docs say we can return -1 if we don't know.
+          return -1;
         }
 
         @Override
         public int getDocCount() throws IOException {
-          throw new UnsupportedOperationException();
+          // Docs say we can return -1 if we don't know.
+          return -1;
         }
 
         @Override
@@ -222,7 +238,7 @@ public class TestMultiTermsEnum extends LuceneTestCase {
       }
 
       @Override
-      public FieldsProducer getMergeInstance() {
+      public FieldsProducer getMergeInstance() throws IOException {
         return create(delegate.getMergeInstance(), newFieldInfo);
       }
 
@@ -249,16 +265,6 @@ public class TestMultiTermsEnum extends LuceneTestCase {
       public void close() throws IOException {
         delegate.close();
       }
-    }
-
-    @Override
-    public CacheHelper getCoreCacheHelper() {
-      return null;
-    }
-
-    @Override
-    public CacheHelper getReaderCacheHelper() {
-      return null;
     }
   }
 }

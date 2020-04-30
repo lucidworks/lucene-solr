@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -41,19 +41,6 @@ public final class ReaderManager extends ReferenceManager<DirectoryReader> {
    * 
    * @param writer
    *          the IndexWriter to open the IndexReader from.
-   * 
-   * @throws IOException If there is a low-level I/O error
-   */
-  public ReaderManager(IndexWriter writer) throws IOException {
-    this(writer, true, false);
-  }
-
-  /**
-   * Expert: creates and returns a new ReaderManager from the given
-   * {@link IndexWriter}, controlling whether past deletions should be applied.
-   * 
-   * @param writer
-   *          the IndexWriter to open the IndexReader from.
    * @param applyAllDeletes
    *          If <code>true</code>, all buffered deletes will be applied (made
    *          visible) in the {@link IndexSearcher} / {@link DirectoryReader}.
@@ -63,13 +50,11 @@ public final class ReaderManager extends ReferenceManager<DirectoryReader> {
    *          tolerate deleted documents being returned you might gain some
    *          performance by passing <code>false</code>. See
    *          {@link DirectoryReader#openIfChanged(DirectoryReader, IndexWriter, boolean)}.
-   * @param writeAllDeletes
-   *          If <code>true</code>, new deletes will be forcefully written to index files.
    * 
    * @throws IOException If there is a low-level I/O error
    */
-  public ReaderManager(IndexWriter writer, boolean applyAllDeletes, boolean writeAllDeletes) throws IOException {
-    current = DirectoryReader.open(writer, applyAllDeletes, writeAllDeletes);
+  public ReaderManager(IndexWriter writer, boolean applyAllDeletes) throws IOException {
+    current = DirectoryReader.open(writer, applyAllDeletes);
   }
   
   /**

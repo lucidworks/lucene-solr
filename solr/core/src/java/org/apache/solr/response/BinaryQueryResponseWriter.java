@@ -1,3 +1,4 @@
+package org.apache.solr.response;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.response;
+
+
 import java.io.OutputStream;
 import java.io.IOException;
 
@@ -31,7 +33,7 @@ import org.apache.solr.request.SolrQueryRequest;
  */
 public interface BinaryQueryResponseWriter extends QueryResponseWriter{
 
-    /**Use it to write the response in a binary format
+    /**Use it to write the reponse in a binary format
      */
     public void write(OutputStream out, SolrQueryRequest request, SolrQueryResponse response) throws IOException;
 }

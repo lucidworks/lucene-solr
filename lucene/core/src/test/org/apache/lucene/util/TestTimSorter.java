@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
-import java.util.Comparator;
 
 public class TestTimSorter extends BaseSortTestCase {
 
@@ -26,6 +25,6 @@ public class TestTimSorter extends BaseSortTestCase {
 
   @Override
   public Sorter newSorter(Entry[] arr) {
-    return new ArrayTimSorter<>(arr, Comparator.naturalOrder(), TestUtil.nextInt(random(), 0, arr.length));
+    return new ArrayTimSorter<>(arr, ArrayUtil.<Entry>naturalComparator(), TestUtil.nextInt(random(), 0, arr.length));
   }
 }

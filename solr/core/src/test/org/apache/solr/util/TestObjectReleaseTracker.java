@@ -1,3 +1,5 @@
+package org.apache.solr.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,27 +16,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util;
 
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestRuleLimitSysouts.Limit;
-import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.util.ObjectReleaseTracker;
 import org.junit.Test;
 
 
 @Limit(bytes=150000) // raise limit as this writes to sys err
-public class TestObjectReleaseTracker extends SolrTestCaseJ4 {
+public class TestObjectReleaseTracker extends LuceneTestCase {
   
   @Test
   public void testObjectReleaseTracker() {
     ObjectReleaseTracker.track(new Object());
     ObjectReleaseTracker.release(new Object());
-    assertNotNull(SolrTestCaseJ4.clearObjectTrackerAndCheckEmpty(1));
-    assertNull(SolrTestCaseJ4.clearObjectTrackerAndCheckEmpty(1));
+    assertNotNull(ObjectReleaseTracker.clearObjectTrackerAndCheckEmpty());
+    assertNull(ObjectReleaseTracker.clearObjectTrackerAndCheckEmpty());
     Object obj = new Object();
     ObjectReleaseTracker.track(obj);
     ObjectReleaseTracker.release(obj);
-    assertNull(SolrTestCaseJ4.clearObjectTrackerAndCheckEmpty(1));
+    assertNull(ObjectReleaseTracker.clearObjectTrackerAndCheckEmpty());
     
     Object obj1 = new Object();
     ObjectReleaseTracker.track(obj1);
@@ -46,7 +47,7 @@ public class TestObjectReleaseTracker extends SolrTestCaseJ4 {
     ObjectReleaseTracker.release(obj1);
     ObjectReleaseTracker.release(obj2);
     ObjectReleaseTracker.release(obj3);
-    assertNull(SolrTestCaseJ4.clearObjectTrackerAndCheckEmpty(1));
+    assertNull(ObjectReleaseTracker.clearObjectTrackerAndCheckEmpty());
     
     ObjectReleaseTracker.track(obj1);
     ObjectReleaseTracker.track(obj2);
@@ -55,7 +56,7 @@ public class TestObjectReleaseTracker extends SolrTestCaseJ4 {
     ObjectReleaseTracker.release(obj1);
     ObjectReleaseTracker.release(obj2);
     // ObjectReleaseTracker.release(obj3);
-    assertNotNull(SolrTestCaseJ4.clearObjectTrackerAndCheckEmpty(1));
-    assertNull(SolrTestCaseJ4.clearObjectTrackerAndCheckEmpty(1));
+    assertNotNull(ObjectReleaseTracker.clearObjectTrackerAndCheckEmpty());
+    assertNull(ObjectReleaseTracker.clearObjectTrackerAndCheckEmpty());
   }
 }

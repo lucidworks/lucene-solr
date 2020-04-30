@@ -1,3 +1,5 @@
+package org.apache.lucene.util.packed;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.packed;
-
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Collections;
 
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.RandomAccessInput;
@@ -46,6 +48,7 @@ public final class DirectMonotonicReader {
   public static class Meta implements Accountable {
     private static final long BASE_RAM_BYTES_USED = RamUsageEstimator.shallowSizeOfInstance(Meta.class);
 
+    final long numValues;
     final int blockShift;
     final int numBlocks;
     final long[] mins;
@@ -54,6 +57,7 @@ public final class DirectMonotonicReader {
     final long[] offsets;
 
     Meta(long numValues, int blockShift) {
+      this.numValues = numValues;
       this.blockShift = blockShift;
       long numBlocks = numValues >>> blockShift;
       if ((numBlocks << blockShift) < numValues) {
@@ -73,6 +77,11 @@ public final class DirectMonotonicReader {
           + RamUsageEstimator.sizeOf(avgs)
           + RamUsageEstimator.sizeOf(bpvs)
           + RamUsageEstimator.sizeOf(offsets);
+    }
+
+    @Override
+    public Collection<Accountable> getChildResources() {
+      return Collections.emptyList();
     }
   }
 

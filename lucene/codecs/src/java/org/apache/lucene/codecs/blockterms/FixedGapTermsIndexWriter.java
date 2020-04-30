@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.blockterms;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.blockterms;
-
 
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.RAMOutputStream;
@@ -150,13 +150,7 @@ public class FixedGapTermsIndexWriter extends TermsIndexWriterBase {
 
     @Override
     public void add(BytesRef text, TermStats stats, long termsFilePointer) throws IOException {
-      final int indexedTermLength;
-      if (numIndexTerms == 0) {
-        // no previous term: no bytes to write
-        indexedTermLength = 0;
-      } else {
-        indexedTermLength = indexedTermPrefixLength(lastTerm.get(), text);
-      }
+      final int indexedTermLength = indexedTermPrefixLength(lastTerm.get(), text);
       //System.out.println("FGW: add text=" + text.utf8ToString() + " " + text + " fp=" + termsFilePointer);
 
       // write only the min prefix that shows the diff

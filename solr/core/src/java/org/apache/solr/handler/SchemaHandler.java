@@ -1,3 +1,5 @@
+package org.apache.solr.handler;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,28 +16,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler;
+
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
-import org.apache.solr.api.Api;
-import org.apache.solr.api.ApiBag;
 import org.apache.solr.cloud.ZkSolrResourceLoader;
 import org.apache.solr.common.SolrException;
-import org.apache.solr.common.params.MapSolrParams;
-import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.ContentStream;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
-import org.apache.solr.common.util.StrUtils;
-import org.apache.solr.common.util.Utils;
-import org.apache.solr.core.SolrCore;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestHandler;
 import org.apache.solr.response.SolrQueryResponse;
@@ -43,70 +38,49 @@ import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.ManagedIndexSchema;
 import org.apache.solr.schema.SchemaManager;
 import org.apache.solr.schema.ZkIndexSchemaReader;
-import org.apache.solr.security.AuthorizationContext;
-import org.apache.solr.security.PermissionNameProvider;
-import org.apache.solr.util.plugin.SolrCoreAware;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static java.util.Collections.singletonMap;
 import static org.apache.solr.common.params.CommonParams.JSON;
-import static org.apache.solr.schema.IndexSchema.SchemaProps.Handler.COPY_FIELDS;
-import static org.apache.solr.schema.IndexSchema.SchemaProps.Handler.DYNAMIC_FIELDS;
-import static org.apache.solr.schema.IndexSchema.SchemaProps.Handler.FIELDS;
-import static org.apache.solr.schema.IndexSchema.SchemaProps.Handler.FIELD_TYPES;
+import static org.apache.solr.core.ConfigSetProperties.IMMUTABLE_CONFIGSET_ARG;
 
-public class SchemaHandler extends RequestHandlerBase implements SolrCoreAware, PermissionNameProvider {
+public class SchemaHandler extends RequestHandlerBase {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   private boolean isImmutableConfigSet = false;
 
-  private static final Map<String, String> level2;
-
-  static {
-    Map s = Utils.makeMap(
-        FIELD_TYPES.nameLower, null,
-        FIELDS.nameLower, "fl",
-        DYNAMIC_FIELDS.nameLower, "fl",
-        COPY_FIELDS.nameLower, null
-    );
-
-    level2 = Collections.unmodifiableMap(s);
+  @Override
+  public void init(NamedList args) {
+    super.init(args);
+    Object immutable = args.get(IMMUTABLE_CONFIGSET_ARG);
+    isImmutableConfigSet = immutable  != null ? Boolean.parseBoolean(immutable.toString()) : false;
   }
-
 
   @Override
   public void handleRequestBody(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
-    RequestHandlerUtils.setWt(req, JSON);
+    SolrConfigHandler.setWt(req, JSON);
     String httpMethod = (String) req.getContext().get("httpMethod");
     if ("POST".equals(httpMethod)) {
       if (isImmutableConfigSet) {
-        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "ConfigSet is immutable");
+        rsp.add("errors", "ConfigSet is immutable");
+        return;
       }
       if (req.getContentStreams() == null) {
-        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "no stream");
+        rsp.add("errors", "no stream");
+        return;
       }
 
-      try {
-        List errs = new SchemaManager(req).performOperations();
-        if (!errs.isEmpty())
-          throw new ApiBag.ExceptionWithErrObject(SolrException.ErrorCode.BAD_REQUEST,"error processing commands", errs);
-      } catch (IOException e) {
-        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Error reading input String " + e.getMessage(), e);
+      for (ContentStream stream : req.getContentStreams()) {
+        try {
+          List errs = new SchemaManager(req).performOperations(stream.getReader());
+          if (!errs.isEmpty()) rsp.add("errors", errs);
+        } catch (IOException e) {
+          rsp.add("errors", Collections.singletonList("Error reading input String " + e.getMessage()));
+          rsp.setException(e);
+        }
+        break;
       }
     } else {
       handleGET(req, rsp);
-    }
-  }
-
-  @Override
-  public PermissionNameProvider.Name getPermissionName(AuthorizationContext ctx) {
-    switch (ctx.getHttpMethod()) {
-      case "GET":
-        return PermissionNameProvider.Name.SCHEMA_READ_PERM;
-      case "POST":
-        return PermissionNameProvider.Name.SCHEMA_EDIT_PERM;
-      default:
-        return null;
     }
   }
 
@@ -135,6 +109,21 @@ public class SchemaHandler extends RequestHandlerBase implements SolrCoreAware, 
           rsp.add(IndexSchema.NAME, schemaName);
           break;
         }
+        case "/schema/defaultsearchfield": {
+          final String defaultSearchFieldName = req.getSchema().getDefaultSearchFieldName();
+          if (null == defaultSearchFieldName) {
+            final String message = "undefined " + IndexSchema.DEFAULT_SEARCH_FIELD;
+            throw new SolrException(SolrException.ErrorCode.NOT_FOUND, message);
+          }
+          rsp.add(IndexSchema.DEFAULT_SEARCH_FIELD, defaultSearchFieldName);
+          break;
+        }
+        case "/schema/solrqueryparser": {
+          SimpleOrderedMap<Object> props = new SimpleOrderedMap<>();
+          props.add(IndexSchema.DEFAULT_OPERATOR, req.getSchema().getQueryParserDefaultOperator());
+          rsp.add(IndexSchema.SOLR_QUERY_PARSER, props);
+          break;
+        }
         case "/schema/zkversion": {
           int refreshIfBelowVersion = -1;
           Object refreshParam = req.getParams().get("refreshIfBelowVersion");
@@ -158,39 +147,11 @@ public class SchemaHandler extends RequestHandlerBase implements SolrCoreAware, 
           rsp.add("zkversion", zkVersion);
           break;
         }
+        case "/schema/solrqueryparser/defaultoperator": {
+          rsp.add(IndexSchema.DEFAULT_OPERATOR, req.getSchema().getQueryParserDefaultOperator());
+          break;
+        }
         default: {
-          List<String> parts = StrUtils.splitSmart(path, '/', true);
-          if (parts.size() > 1 && level2.containsKey(parts.get(1))) {
-            String realName = parts.get(1);
-            String fieldName = IndexSchema.nameMapping.get(realName);
-
-            String pathParam = level2.get(realName);
-            if (parts.size() > 2) {
-              req.setParams(SolrParams.wrapDefaults(new MapSolrParams(singletonMap(pathParam, parts.get(2))), req.getParams()));
-            }
-            Map propertyValues = req.getSchema().getNamedPropertyValues(realName, req.getParams());
-            Object o = propertyValues.get(fieldName);
-            if(parts.size()> 2) {
-              String name = parts.get(2);
-              if (o instanceof List) {
-                List list = (List) o;
-                for (Object obj : list) {
-                  if (obj instanceof SimpleOrderedMap) {
-                    SimpleOrderedMap simpleOrderedMap = (SimpleOrderedMap) obj;
-                    if(name.equals(simpleOrderedMap.get("name"))) {
-                      rsp.add(fieldName.substring(0, realName.length() - 1), simpleOrderedMap);
-                      return;
-                    }
-                  }
-                }
-              }
-              throw new SolrException(SolrException.ErrorCode.NOT_FOUND, "No such path " + path);
-            } else {
-              rsp.add(fieldName, o);
-            }
-            return;
-          }
-
           throw new SolrException(SolrException.ErrorCode.NOT_FOUND, "No such path " + path);
         }
       }
@@ -201,55 +162,24 @@ public class SchemaHandler extends RequestHandlerBase implements SolrCoreAware, 
   }
 
   private static Set<String> subPaths = new HashSet<>(Arrays.asList(
-      "version",
-      "uniquekey",
-      "name",
-      "similarity",
-      "defaultsearchfield",
-      "solrqueryparser",
-      "zkversion"
+      "/version",
+      "/uniquekey",
+      "/name",
+      "/similarity",
+      "/defaultsearchfield",
+      "/solrqueryparser",
+      "/zkversion",
+      "/solrqueryparser/defaultoperator"
   ));
-  static {
-    subPaths.addAll(level2.keySet());
-  }
 
   @Override
   public SolrRequestHandler getSubHandler(String subPath) {
-    List<String> parts = StrUtils.splitSmart(subPath, '/', true);
-    String prefix =  parts.get(0);
-    if(subPaths.contains(prefix)) return this;
-
+    if (subPaths.contains(subPath)) return this;
     return null;
   }
 
   @Override
   public String getDescription() {
     return "CRUD operations over the Solr schema";
-  }
-
-  @Override
-  public Category getCategory() {
-    return Category.ADMIN;
-  }
-
-  @Override
-  public void inform(SolrCore core) {
-    isImmutableConfigSet = SolrConfigHandler.getImmutable(core);
-  }
-
-  @Override
-  public Collection<Api> getApis() {
-    return ApiBag.wrapRequestHandlers(this, "core.SchemaRead",
-        "core.SchemaRead.fields",
-        "core.SchemaRead.copyFields",
-        "core.SchemaEdit",
-        "core.SchemaRead.dynamicFields_fieldTypes"
-        );
-
-  }
-
-  @Override
-  public Boolean registerV2() {
-    return Boolean.TRUE;
   }
 }

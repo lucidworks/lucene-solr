@@ -14,11 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.common.params;
 
 import java.util.Locale;
-
-import org.apache.solr.common.SolrException;
 
 /**
  * @since solr 1.3
@@ -30,6 +29,9 @@ public abstract class CoreAdminParams
 
   /** Should the STATUS request include index info **/
   public final static String INDEX_INFO = "indexInfo";
+
+  /** Persistent -- should it save the cores state? **/
+  public final static String PERSISTENT = "persistent";
   
   /** If you rename something, what is the new name **/
   public final static String NAME = "name";
@@ -77,6 +79,15 @@ public abstract class CoreAdminParams
   
   /** The shard id in solr cloud */
   public final static String SHARD = "shard";
+  
+  /** The shard range in solr cloud */
+  public final static String SHARD_RANGE = "shard.range";
+
+  /** The shard range in solr cloud */
+  public final static String SHARD_STATE = "shard.state";
+
+  /** The parent shard if applicable */
+  public final static String SHARD_PARENT = "shard.parent";
 
   /** The target core to which a split index should be written to
    * Multiple targetCores can be specified by multiple targetCore parameters */
@@ -84,9 +95,7 @@ public abstract class CoreAdminParams
 
   /** The hash ranges to be used to split a shard or an index */
   public final static String RANGES = "ranges";
-
-  public final static String GET_RANGES = "getRanges";
-
+  
   public static final String ROLES = "roles";
 
   public static final String REQUESTID = "requestid";
@@ -103,8 +112,6 @@ public abstract class CoreAdminParams
 
   public static final String DELETE_INSTANCE_DIR = "deleteInstanceDir";
 
-  public static final String DELETE_METRICS_HISTORY = "deleteMetricsHistory";
-
   public static final String LOAD_ON_STARTUP = "loadOnStartup";
   
   public static final String TRANSIENT = "transient";
@@ -112,76 +119,40 @@ public abstract class CoreAdminParams
   // Node to create a replica on for ADDREPLICA at least.
   public static final String NODE = "node";
 
-  /**
-   * A parameter to specify the name of the backup repository to be used.
-   */
-  public static final String BACKUP_REPOSITORY = "repository";
-
-  /**
-   * A parameter to specify the location where the backup should be stored.
-   */
-  public static final String BACKUP_LOCATION = "location";
-
-  /**
-   * A parameter to specify the name of the commit to be stored during the backup operation.
-   */
-  public static final String COMMIT_NAME = "commitName";
-
-  /**
-   * A boolean parameter specifying if a core is being created as part of a new collection
-   */
-  public static final String NEW_COLLECTION = "newCollection";
-
-  /**
-   * Tells the CoreAdminHandler that the new Core will be a replica of a particular {@link org.apache.solr.common.cloud.Replica.Type}
-   */
-  public static final String REPLICA_TYPE = "replicaType";
-
   public enum CoreAdminAction {
-    STATUS(true),
+    STATUS,  
+    LOAD,
     UNLOAD,
     RELOAD,
     CREATE,
+    PERSIST,
     SWAP,
     RENAME,
     MERGEINDEXES,
     SPLIT,
     PREPRECOVERY,
-    REQUESTRECOVERY,
+    REQUESTRECOVERY, 
     REQUESTSYNCSHARD,
+    CREATEALIAS,
     DELETEALIAS,
     REQUESTBUFFERUPDATES,
     REQUESTAPPLYUPDATES,
+    LOAD_ON_STARTUP,
+    TRANSIENT,
     OVERSEEROP,
-    REQUESTSTATUS(true),
+    REQUESTSTATUS,
     REJOINLEADERELECTION,
     //internal API used by force shard leader election
     FORCEPREPAREFORLEADERSHIP,
-    INVOKE,
-    //Internal APIs to backup and restore a core
-    BACKUPCORE,
-    RESTORECORE,
-    CREATESNAPSHOT,
-    DELETESNAPSHOT,
-    LISTSNAPSHOTS;
+    INVOKE;
 
-    public final boolean isRead;
-
-    CoreAdminAction(boolean isRead) {
-      this.isRead = isRead;
-    }
-
-    CoreAdminAction() {
-      this.isRead = false;
-    }
-
-    public static CoreAdminAction get( String p ) {
-      if (p != null) {
+    public static CoreAdminAction get( String p )
+    {
+      if( p != null ) {
         try {
-          return CoreAdminAction.valueOf(p.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-          throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Wrong core admin action");
+          return CoreAdminAction.valueOf( p.toUpperCase(Locale.ROOT) );
         }
+        catch( Exception ex ) {}
       }
       return null; 
     }

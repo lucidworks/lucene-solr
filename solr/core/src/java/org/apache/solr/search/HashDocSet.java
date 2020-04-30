@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
 import java.util.Collection;
@@ -290,7 +291,7 @@ public final class HashDocSet extends DocSetBase {
   }
 
   @Override
-  public HashDocSet clone() {
+  protected HashDocSet clone() {
     return new HashDocSet(this);
   }
 

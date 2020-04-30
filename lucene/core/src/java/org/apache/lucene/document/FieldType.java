@@ -1,3 +1,5 @@
+package org.apache.lucene.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +16,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.document;
-
-
-import java.util.HashMap;
-import java.util.Map;
 
 import org.apache.lucene.analysis.Analyzer; // javadocs
 import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexableFieldType;
-import org.apache.lucene.index.PointValues;
+import org.apache.lucene.search.NumericRangeQuery; // javadocs
+import org.apache.lucene.util.NumericUtils;
 
 /**
  * Describes the properties of a field.
  */
-public class FieldType implements IndexableFieldType  {
+public class FieldType implements IndexableFieldType {
+
+  /** Data type of the numeric value
+   * @since 3.2
+   */
+  public enum NumericType {
+    /** 32-bit integer numeric type */
+    INT, 
+    /** 64-bit long numeric type */
+    LONG, 
+    /** 32-bit float numeric type */
+    FLOAT, 
+    /** 64-bit double numeric type */
+    DOUBLE
+  }
 
   private boolean stored;
   private boolean tokenized = true;
@@ -39,17 +51,15 @@ public class FieldType implements IndexableFieldType  {
   private boolean storeTermVectorPayloads;
   private boolean omitNorms;
   private IndexOptions indexOptions = IndexOptions.NONE;
+  private NumericType numericType;
   private boolean frozen;
+  private int numericPrecisionStep = NumericUtils.PRECISION_STEP_DEFAULT;
   private DocValuesType docValuesType = DocValuesType.NONE;
-  private int dataDimensionCount;
-  private int indexDimensionCount;
-  private int dimensionNumBytes;
-  private Map<String, String> attributes;
 
   /**
    * Create a new mutable FieldType with all of the properties from <code>ref</code>
    */
-  public FieldType(IndexableFieldType ref) {
+  public FieldType(FieldType ref) {
     this.stored = ref.stored();
     this.tokenized = ref.tokenized();
     this.storeTermVectors = ref.storeTermVectors();
@@ -58,13 +68,9 @@ public class FieldType implements IndexableFieldType  {
     this.storeTermVectorPayloads = ref.storeTermVectorPayloads();
     this.omitNorms = ref.omitNorms();
     this.indexOptions = ref.indexOptions();
+    this.numericType = ref.numericType();
+    this.numericPrecisionStep = ref.numericPrecisionStep();
     this.docValuesType = ref.docValuesType();
-    this.dataDimensionCount = ref.pointDataDimensionCount();
-    this.indexDimensionCount = ref.pointIndexDimensionCount();
-    this.dimensionNumBytes = ref.pointNumBytes();
-    if (ref.getAttributes() != null) {
-      this.attributes = new HashMap<>(ref.getAttributes());
-    }
     // Do not copy frozen!
   }
   
@@ -279,103 +285,66 @@ public class FieldType implements IndexableFieldType  {
   public void setIndexOptions(IndexOptions value) {
     checkIfFrozen();
     if (value == null) {
-      throw new NullPointerException("IndexOptions must not be null");
+      throw new NullPointerException("IndexOptions cannot be null");
     }
     this.indexOptions = value;
   }
 
   /**
-   * Enables points indexing.
+   * Specifies the field's numeric type.
+   * @param type numeric type, or null if the field has no numeric type.
+   * @throws IllegalStateException if this FieldType is frozen against
+   *         future modifications.
+   * @see #numericType()
    */
-  public void setDimensions(int dimensionCount, int dimensionNumBytes) {
-    this.setDimensions(dimensionCount, dimensionCount, dimensionNumBytes);
-  }
-
-  /**
-   * Enables points indexing with selectable dimension indexing.
-   */
-  public void setDimensions(int dataDimensionCount, int indexDimensionCount, int dimensionNumBytes) {
-    if (dataDimensionCount < 0) {
-      throw new IllegalArgumentException("dataDimensionCount must be >= 0; got " + dataDimensionCount);
-    }
-    if (dataDimensionCount > PointValues.MAX_DIMENSIONS) {
-      throw new IllegalArgumentException("dataDimensionCount must be <= " + PointValues.MAX_DIMENSIONS + "; got " + dataDimensionCount);
-    }
-    if (indexDimensionCount < 0) {
-      throw new IllegalArgumentException("indexDimensionCount must be >= 0; got " + indexDimensionCount);
-    }
-    if (indexDimensionCount > dataDimensionCount) {
-      throw new IllegalArgumentException("indexDimensionCount must be <= dataDimensionCount: " + dataDimensionCount + "; got " + indexDimensionCount);
-    }
-    if (dimensionNumBytes < 0) {
-      throw new IllegalArgumentException("dimensionNumBytes must be >= 0; got " + dimensionNumBytes);
-    }
-    if (dimensionNumBytes > PointValues.MAX_NUM_BYTES) {
-      throw new IllegalArgumentException("dimensionNumBytes must be <= " + PointValues.MAX_NUM_BYTES + "; got " + dimensionNumBytes);
-    }
-    if (dataDimensionCount == 0) {
-      if (indexDimensionCount != 0) {
-        throw new IllegalArgumentException("when dataDimensionCount is 0, indexDimensionCount must be 0; got " + indexDimensionCount);
-      }
-      if (dimensionNumBytes != 0) {
-        throw new IllegalArgumentException("when dataDimensionCount is 0, dimensionNumBytes must be 0; got " + dimensionNumBytes);
-      }
-    } else if (indexDimensionCount == 0) {
-      throw new IllegalArgumentException("when dataDimensionCount is > 0, indexDimensionCount must be > 0; got " + indexDimensionCount);
-    } else if (dimensionNumBytes == 0) {
-      if (dataDimensionCount != 0) {
-        throw new IllegalArgumentException("when dimensionNumBytes is 0, dataDimensionCount must be 0; got " + dataDimensionCount);
-      }
-    }
-
-    this.dataDimensionCount = dataDimensionCount;
-    this.indexDimensionCount = indexDimensionCount;
-    this.dimensionNumBytes = dimensionNumBytes;
-  }
-
-  @Override
-  public int pointDataDimensionCount() {
-    return dataDimensionCount;
-  }
-
-  @Override
-  public int pointIndexDimensionCount() {
-    return indexDimensionCount;
-  }
-
-  @Override
-  public int pointNumBytes() {
-    return dimensionNumBytes;
-  }
-
-  /**
-   * Puts an attribute value.
-   * <p>
-   * This is a key-value mapping for the field that the codec can use
-   * to store additional metadata.
-   * <p>
-   * If a value already exists for the field, it will be replaced with
-   * the new value. This method is not thread-safe, user must not add attributes
-   * while other threads are indexing documents with this field type.
-   *
-   * @lucene.experimental
-   */
-  public String putAttribute(String key, String value) {
+  public void setNumericType(NumericType type) {
     checkIfFrozen();
-    if (attributes == null) {
-      attributes = new HashMap<>();
-    }
-    return attributes.put(key, value);
+    numericType = type;
   }
 
-  @Override
-  public Map<String, String> getAttributes() {
-    return attributes;
+  /** 
+   * NumericType: if non-null then the field's value will be indexed
+   * numerically so that {@link NumericRangeQuery} can be used at 
+   * search time. 
+   * <p>
+   * The default is <code>null</code> (no numeric type) 
+   * @see #setNumericType(NumericType)
+   */
+  public NumericType numericType() {
+    return numericType;
+  }
+
+  /**
+   * Sets the numeric precision step for the field.
+   * @param precisionStep numeric precision step for the field
+   * @throws IllegalArgumentException if precisionStep is less than 1. 
+   * @throws IllegalStateException if this FieldType is frozen against
+   *         future modifications.
+   * @see #numericPrecisionStep()
+   */
+  public void setNumericPrecisionStep(int precisionStep) {
+    checkIfFrozen();
+    if (precisionStep < 1) {
+      throw new IllegalArgumentException("precisionStep must be >= 1 (got " + precisionStep + ")");
+    }
+    this.numericPrecisionStep = precisionStep;
+  }
+
+  /** 
+   * Precision step for numeric field. 
+   * <p>
+   * This has no effect if {@link #numericType()} returns null.
+   * <p>
+   * The default is {@link NumericUtils#PRECISION_STEP_DEFAULT}
+   * @see #setNumericPrecisionStep(int)
+   */
+  public int numericPrecisionStep() {
+    return numericPrecisionStep;
   }
 
   /** Prints a Field for human consumption. */
   @Override
-  public String toString() {
+  public final String toString() {
     StringBuilder result = new StringBuilder();
     if (stored()) {
       result.append("stored");
@@ -406,17 +375,12 @@ public class FieldType implements IndexableFieldType  {
         result.append(",indexOptions=");
         result.append(indexOptions);
       }
-    }
-    if (dataDimensionCount != 0) {
-      if (result.length() > 0) {
-        result.append(",");
+      if (numericType != null) {
+        result.append(",numericType=");
+        result.append(numericType);
+        result.append(",numericPrecisionStep=");
+        result.append(numericPrecisionStep);
       }
-      result.append("pointDataDimensionCount=");
-      result.append(dataDimensionCount);
-      result.append(",pointIndexDimensionCount=");
-      result.append(indexDimensionCount);
-      result.append(",pointNumBytes=");
-      result.append(dimensionNumBytes);
     }
     if (docValuesType != DocValuesType.NONE) {
       if (result.length() > 0) {
@@ -450,7 +414,7 @@ public class FieldType implements IndexableFieldType  {
   public void setDocValuesType(DocValuesType type) {
     checkIfFrozen();
     if (type == null) {
-      throw new NullPointerException("DocValuesType must not be null");
+      throw new NullPointerException("DocValuesType cannot be null");
     }
     docValuesType = type;
   }
@@ -459,11 +423,10 @@ public class FieldType implements IndexableFieldType  {
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + dataDimensionCount;
-    result = prime * result + indexDimensionCount;
-    result = prime * result + dimensionNumBytes;
     result = prime * result + ((docValuesType == null) ? 0 : docValuesType.hashCode());
     result = prime * result + indexOptions.hashCode();
+    result = prime * result + numericPrecisionStep;
+    result = prime * result + ((numericType == null) ? 0 : numericType.hashCode());
     result = prime * result + (omitNorms ? 1231 : 1237);
     result = prime * result + (storeTermVectorOffsets ? 1231 : 1237);
     result = prime * result + (storeTermVectorPayloads ? 1231 : 1237);
@@ -480,11 +443,10 @@ public class FieldType implements IndexableFieldType  {
     if (obj == null) return false;
     if (getClass() != obj.getClass()) return false;
     FieldType other = (FieldType) obj;
-    if (dataDimensionCount != other.dataDimensionCount) return false;
-    if (indexDimensionCount != other.indexDimensionCount) return false;
-    if (dimensionNumBytes != other.dimensionNumBytes) return false;
     if (docValuesType != other.docValuesType) return false;
     if (indexOptions != other.indexOptions) return false;
+    if (numericPrecisionStep != other.numericPrecisionStep) return false;
+    if (numericType != other.numericType) return false;
     if (omitNorms != other.omitNorms) return false;
     if (storeTermVectorOffsets != other.storeTermVectorOffsets) return false;
     if (storeTermVectorPayloads != other.storeTermVectorPayloads) return false;

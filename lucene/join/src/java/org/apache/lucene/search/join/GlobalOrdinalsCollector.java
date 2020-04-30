@@ -1,3 +1,5 @@
+package org.apache.lucene.search.join;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.join;
-
-import java.io.IOException;
 
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.OrdinalMap;
+import org.apache.lucene.index.MultiDocValues;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.LeafCollector;
-import org.apache.lucene.search.Scorable;
+import org.apache.lucene.search.Scorer;
 import org.apache.lucene.util.LongBitSet;
 import org.apache.lucene.util.LongValues;
+
+import java.io.IOException;
 
 /**
  * A collector that collects all ordinals from a specified field matching the query.
@@ -37,9 +38,9 @@ final class GlobalOrdinalsCollector implements Collector {
 
   final String field;
   final LongBitSet collectedOrds;
-  final OrdinalMap ordinalMap;
+  final MultiDocValues.OrdinalMap ordinalMap;
 
-  GlobalOrdinalsCollector(String field, OrdinalMap ordinalMap, long valueCount) {
+  GlobalOrdinalsCollector(String field, MultiDocValues.OrdinalMap ordinalMap, long valueCount) {
     this.field = field;
     this.ordinalMap = ordinalMap;
     this.collectedOrds = new LongBitSet(valueCount);
@@ -50,8 +51,8 @@ final class GlobalOrdinalsCollector implements Collector {
   }
 
   @Override
-  public org.apache.lucene.search.ScoreMode scoreMode() {
-    return org.apache.lucene.search.ScoreMode.COMPLETE_NO_SCORES;
+  public boolean needsScores() {
+    return false;
   }
 
   @Override
@@ -77,15 +78,15 @@ final class GlobalOrdinalsCollector implements Collector {
 
     @Override
     public void collect(int doc) throws IOException {
-      if (docTermOrds.advanceExact(doc)) {
-        long segmentOrd = docTermOrds.ordValue();
-        long globalOrd = segmentOrdToGlobalOrdLookup.get(segmentOrd);
+      final long segmentOrd = docTermOrds.getOrd(doc);
+      if (segmentOrd != -1) {
+        final long globalOrd = segmentOrdToGlobalOrdLookup.get(segmentOrd);
         collectedOrds.set(globalOrd);
       }
     }
 
     @Override
-    public void setScorer(Scorable scorer) throws IOException {
+    public void setScorer(Scorer scorer) throws IOException {
     }
   }
 
@@ -99,13 +100,14 @@ final class GlobalOrdinalsCollector implements Collector {
 
     @Override
     public void collect(int doc) throws IOException {
-      if (docTermOrds.advanceExact(doc)) {
-        collectedOrds.set(docTermOrds.ordValue());
+      final long segmentOrd = docTermOrds.getOrd(doc);
+      if (segmentOrd != -1) {
+        collectedOrds.set(segmentOrd);
       }
     }
 
     @Override
-    public void setScorer(Scorable scorer) throws IOException {
+    public void setScorer(Scorer scorer) throws IOException {
     }
   }
 

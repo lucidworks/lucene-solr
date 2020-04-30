@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
 
 import java.io.IOException;
+import java.util.Random;
 
 import org.apache.lucene.index.LeafReaderContext;
 
@@ -25,25 +27,27 @@ import org.apache.lucene.index.LeafReaderContext;
  */
 class AssertingCollector extends FilterCollector {
 
+  private final Random random;
   private int maxDoc = -1;
 
   /** Wrap the given collector in order to add assertions. */
-  public static Collector wrap(Collector in) {
+  public static Collector wrap(Random random, Collector in) {
     if (in instanceof AssertingCollector) {
       return in;
     }
-    return new AssertingCollector(in);
+    return new AssertingCollector(random, in);
   }
 
-  private AssertingCollector(Collector in) {
+  private AssertingCollector(Random random, Collector in) {
     super(in);
+    this.random = random;
   }
 
   @Override
   public LeafCollector getLeafCollector(LeafReaderContext context) throws IOException {
     final LeafCollector in = super.getLeafCollector(context);
     final int docBase = context.docBase;
-    return new AssertingLeafCollector(in, 0, DocIdSetIterator.NO_MORE_DOCS) {
+    return new AssertingLeafCollector(random, in, 0, DocIdSetIterator.NO_MORE_DOCS) {
       @Override
       public void collect(int doc) throws IOException {
         // check that documents are scored in order globally,

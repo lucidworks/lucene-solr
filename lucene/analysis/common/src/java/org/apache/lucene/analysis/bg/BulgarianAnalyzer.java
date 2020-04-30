@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.bg;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,21 +16,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.bg;
-
 
 import java.io.IOException;
 import java.io.Reader;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.LowerCaseFilter;
-import org.apache.lucene.analysis.StopFilter;
-import org.apache.lucene.analysis.StopwordAnalyzerBase;
+import org.apache.lucene.analysis.core.LowerCaseFilter;
+import org.apache.lucene.analysis.core.StopFilter;
+import org.apache.lucene.analysis.miscellaneous.SetKeywordMarkerFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
-import org.apache.lucene.analysis.miscellaneous.SetKeywordMarkerFilter;
+import org.apache.lucene.analysis.standard.StandardFilter;
 import org.apache.lucene.analysis.standard.StandardTokenizer;
+import org.apache.lucene.analysis.standard.std40.StandardTokenizer40;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.analysis.util.StopwordAnalyzerBase;
+import org.apache.lucene.util.Version;
 
 /**
  * {@link Analyzer} for Bulgarian.
@@ -36,8 +39,6 @@ import org.apache.lucene.analysis.standard.StandardTokenizer;
  * This analyzer implements light-stemming as specified by: <i> Searching
  * Strategies for the Bulgarian Language </i>
  * http://members.unine.ch/jacques.savoy/Papers/BUIR.pdf
- *
- * @since 3.1
  */
 public final class BulgarianAnalyzer extends StopwordAnalyzerBase {
 
@@ -112,23 +113,24 @@ public final class BulgarianAnalyzer extends StopwordAnalyzerBase {
    * @return A
    *         {@link org.apache.lucene.analysis.Analyzer.TokenStreamComponents}
    *         built from an {@link StandardTokenizer} filtered with
-   *         {@link LowerCaseFilter}, {@link StopFilter}
+   *         {@link StandardFilter}, {@link LowerCaseFilter}, {@link StopFilter}
    *         , {@link SetKeywordMarkerFilter} if a stem exclusion set is
    *         provided and {@link BulgarianStemFilter}.
    */
   @Override
   public TokenStreamComponents createComponents(String fieldName) {
-    final Tokenizer source = new StandardTokenizer();
-    TokenStream result = new LowerCaseFilter(source);
+    final Tokenizer source;
+    if (getVersion().onOrAfter(Version.LUCENE_4_7_0)) {
+      source = new StandardTokenizer();
+    } else {
+      source = new StandardTokenizer40();
+    }
+    TokenStream result = new StandardFilter(source);
+    result = new LowerCaseFilter(result);
     result = new StopFilter(result, stopwords);
     if(!stemExclusionSet.isEmpty())
       result = new SetKeywordMarkerFilter(result, stemExclusionSet);
     result = new BulgarianStemFilter(result);
     return new TokenStreamComponents(source, result);
-  }
-
-  @Override
-  protected TokenStream normalize(String fieldName, TokenStream in) {
-    return new LowerCaseFilter(in);
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
 
 import java.io.IOException;
 import java.util.Objects;
 
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
+import org.apache.lucene.util.ToStringUtils;
 
 /**
  * <p>Wrapper to allow {@link SpanQuery} objects participate in composite 
@@ -92,25 +90,23 @@ public final class FieldMaskingSpanQuery extends SpanQuery {
   // ...this is done to be more consistent with things like SpanFirstQuery
 
   @Override
-  public SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    return maskedQuery.createWeight(searcher, scoreMode, boost);
+  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    return maskedQuery.createWeight(searcher, needsScores);
   }
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
+    FieldMaskingSpanQuery clone = null;
+
     SpanQuery rewritten = (SpanQuery) maskedQuery.rewrite(reader);
     if (rewritten != maskedQuery) {
       return new FieldMaskingSpanQuery(rewritten, field);
     }
 
     return super.rewrite(reader);
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    if (visitor.acceptField(field)) {
-      maskedQuery.visit(visitor.getSubVisitor(BooleanClause.Occur.MUST, this));
-    }
   }
 
   @Override
@@ -121,24 +117,25 @@ public final class FieldMaskingSpanQuery extends SpanQuery {
     buffer.append(")");
     buffer.append(" as ");
     buffer.append(this.field);
+    buffer.append(ToStringUtils.boost(getBoost()));
     return buffer.toString();
   }
   
   @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           equalsTo(getClass().cast(other));
+  public boolean equals(Object o) {
+    if (! super.equals(o)) {
+      return false;
+    }
+    FieldMaskingSpanQuery other = (FieldMaskingSpanQuery) o;
+    return (this.getField().equals(other.getField())
+            && this.getMaskedQuery().equals(other.getMaskedQuery()));
+
   }
   
-  private boolean equalsTo(FieldMaskingSpanQuery other) {
-    return getField().equals(other.getField()) && 
-           getMaskedQuery().equals(other.getMaskedQuery());
-  }
-
   @Override
   public int hashCode() {
-    return classHash() ^ 
-           getMaskedQuery().hashCode() ^ 
-           getField().hashCode();
+    return super.hashCode()
+          ^ getMaskedQuery().hashCode()
+          ^ getField().hashCode();
   }
 }

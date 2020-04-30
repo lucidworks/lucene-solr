@@ -1,3 +1,5 @@
+package org.apache.lucene.search.similarities;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.similarities;
-
 
 import org.apache.lucene.search.Explanation;
 
@@ -37,12 +37,33 @@ public abstract class AfterEffect {
    */
   public AfterEffect() {}
 
-  /** Returns the product of the after effect with {@code 1+tfn}.
-   *  This may not depend on the value of {@code tfn}. */
-  public abstract double scoreTimes1pTfn(BasicStats stats);
+  /** Returns the aftereffect score. */
+  public abstract float score(BasicStats stats, float tfn);
   
   /** Returns an explanation for the score. */
-  public abstract Explanation explain(BasicStats stats, double tfn);
+  public abstract Explanation explain(BasicStats stats, float tfn);
+
+  /** Implementation used when there is no aftereffect. */
+  public static final class NoAfterEffect extends AfterEffect {
+    
+    /** Sole constructor: parameter-free */
+    public NoAfterEffect() {}
+    
+    @Override
+    public final float score(BasicStats stats, float tfn) {
+      return 1f;
+    }
+
+    @Override
+    public final Explanation explain(BasicStats stats, float tfn) {
+      return Explanation.match(1, "no aftereffect");
+    }
+    
+    @Override
+    public String toString() {
+      return "";
+    }
+  }
   
   /**
    * Subclasses must override this method to return the code of the

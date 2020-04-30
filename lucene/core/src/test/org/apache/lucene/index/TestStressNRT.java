@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -73,7 +73,6 @@ public class TestStressNRT extends LuceneTestCase {
     final int ndocs = atLeast(50);
     final int nWriteThreads = TestUtil.nextInt(random(), 1, TEST_NIGHTLY ? 10 : 5);
     final int maxConcurrentCommits = TestUtil.nextInt(random(), 1, TEST_NIGHTLY ? 10 : 5);   // number of committers at a time... needed if we want to avoid commit errors due to exceeding the max
-    final boolean useSoftDeletes = random().nextInt(10) < 3;
     
     final boolean tombstones = random().nextBoolean();
 
@@ -105,16 +104,12 @@ public class TestStressNRT extends LuceneTestCase {
 
     List<Thread> threads = new ArrayList<>();
 
-    Directory dir = newMaybeVirusCheckingDirectory();
+    Directory dir = newDirectory();
 
-    final RandomIndexWriter writer = new RandomIndexWriter(random(), dir, newIndexWriterConfig(new MockAnalyzer(random())), useSoftDeletes);
+    final RandomIndexWriter writer = new RandomIndexWriter(random(), dir, newIndexWriterConfig(new MockAnalyzer(random())));
     writer.setDoRandomForceMergeAssert(false);
     writer.commit();
-    if (useSoftDeletes) {
-      reader = new SoftDeletesDirectoryReaderWrapper(DirectoryReader.open(dir), writer.w.getConfig().getSoftDeletesField());
-    } else {
-      reader = DirectoryReader.open(dir);
-    }
+    reader = DirectoryReader.open(dir);
 
     for (int i=0; i<nWriteThreads; i++) {
       Thread thread = new Thread("WRITER"+i) {
@@ -146,12 +141,12 @@ public class TestStressNRT extends LuceneTestCase {
                       if (VERBOSE) {
                         System.out.println("TEST: " + Thread.currentThread().getName() + ": call writer.getReader");
                       }
-                      newReader = writer.getReader();
+                      newReader = writer.getReader(true);
                     } else {
                       if (VERBOSE) {
                         System.out.println("TEST: " + Thread.currentThread().getName() + ": reopen reader=" + oldReader + " version=" + version);
                       }
-                      newReader = DirectoryReader.openIfChanged(oldReader, writer.w);
+                      newReader = DirectoryReader.openIfChanged(oldReader, writer.w, true);
                     }
                   } else {
                     // assertU(commit());
@@ -340,11 +335,11 @@ public class TestStressNRT extends LuceneTestCase {
               Query q = new TermQuery(new Term("id",Integer.toString(id)));
               TopDocs results = searcher.search(q, 10);
 
-              if (results.totalHits.value == 0 && tombstones) {
+              if (results.totalHits == 0 && tombstones) {
                 // if we couldn't find the doc, look for its tombstone
                 q = new TermQuery(new Term("id","-"+Integer.toString(id)));
                 results = searcher.search(q, 1);
-                if (results.totalHits.value == 0) {
+                if (results.totalHits == 0) {
                   if (val == -1L) {
                     // expected... no doc was added yet
                     r.decRef();
@@ -354,17 +349,17 @@ public class TestStressNRT extends LuceneTestCase {
                 }
               }
 
-              if (results.totalHits.value == 0 && !tombstones) {
+              if (results.totalHits == 0 && !tombstones) {
                 // nothing to do - we can't tell anything from a deleted doc without tombstones
               } else {
                 // we should have found the document, or its tombstone
-                if (results.totalHits.value != 1) {
+                if (results.totalHits != 1) {
                   System.out.println("FAIL: hits id:" + id + " val=" + val);
                   for(ScoreDoc sd : results.scoreDocs) {
                     final Document doc = r.document(sd.doc);
                     System.out.println("  docID=" + sd.doc + " id:" + doc.get("id") + " foundVal=" + doc.get(field));
                   }
-                  fail("id=" + id + " reader=" + r + " totalHits=" + results.totalHits.value);
+                  fail("id=" + id + " reader=" + r + " totalHits=" + results.totalHits);
                 }
                 Document doc = searcher.doc(results.scoreDocs[0].doc);
                 long foundVal = Long.parseLong(doc.get(field));

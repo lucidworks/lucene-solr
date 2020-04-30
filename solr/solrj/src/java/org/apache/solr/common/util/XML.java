@@ -14,12 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.common.util;
 
-import java.io.IOException;
 import java.io.Writer;
+import java.io.IOException;
 import java.util.Map;
-import java.util.stream.Stream;
 
 /**
  *
@@ -38,7 +38,9 @@ public class XML {
   private static final String[] attribute_escapes=
   {"#0;","#1;","#2;","#3;","#4;","#5;","#6;","#7;","#8;",null,null,"#11;","#12;",null,"#14;","#15;","#16;","#17;","#18;","#19;","#20;","#21;","#22;","#23;","#24;","#25;","#26;","#27;","#28;","#29;","#30;","#31;",null,null,"&quot;",null,null,null,"&amp;",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,"&lt;"};
 
-  /*
+
+
+  /*****************************************
    #Simple python script used to generate the escape table above.  -YCS
    #
    #use individual char arrays or one big char array for better efficiency
@@ -64,9 +66,13 @@ public class XML {
      result += val + ','
 
    print result
-  */
+   ****************************************/
 
 
+/*********
+ *
+ * @throws IOException If there is a low-level I/O error.
+ */
   public static void escapeCharData(String str, Writer out) throws IOException {
     escape(str, out, chardata_escapes);
   }
@@ -79,41 +85,16 @@ public class XML {
     escape(chars, start, length, out, attribute_escapes);
   }
 
-  /** does NOT escape character data in val; it must already be valid XML.  Attributes are always escaped. */
-  public final static void writeUnescapedXML(Writer out, String tag, String val, Object... attrs) throws IOException {
-    writeXML(out, tag, (writer1) -> writer1.write(val), attrs);
-  }
 
-  /** escapes character data in val and attributes */
-  public final static void writeXML(Writer out, String tag, String val, Object... attrs) throws IOException {
-    final Writable writable = val != null ? (writer1) -> XML.escapeCharData(val, writer1) : null;
-    writeXML(out, tag, writable, attrs);
-  }
-
-  /** escapes character data in val and attributes */
-  public static void writeXML(Writer out, String tag, String val, Map<String, String> attrs) throws IOException {
-    writeXML(out, tag, val, attrs.entrySet().stream().flatMap((entry) -> Stream.of(entry.getKey(), entry.getValue())).toArray());
-  }
-
-  /** @lucene.internal */
-  public final static void writeXML(Writer out, String tag, Writable valWritable, Object... attrs) throws IOException {
+  public final static void writeXML(Writer out, String tag, String val) throws IOException {
     out.write('<');
     out.write(tag);
-    final int attrsLen = attrs == null ? 0 : attrs.length;
-    for (int i = 0; i< attrsLen; i++) {
-      out.write(' ');
-      out.write(attrs[i++].toString());
-      out.write('=');
-      out.write('"');
-      escapeAttributeValue(attrs[i].toString(), out);
-      out.write('"');
-    }
-    if (valWritable == null) {
+    if (val == null) {
       out.write('/');
       out.write('>');
     } else {
       out.write('>');
-      valWritable.write(out);
+      escapeCharData(val,out);
       out.write('<');
       out.write('/');
       out.write(tag);
@@ -121,9 +102,79 @@ public class XML {
     }
   }
 
-  @FunctionalInterface
-  public interface Writable {
-    void write(Writer w) throws IOException;
+  /** does NOT escape character data in val, must already be valid XML */
+  public final static void writeUnescapedXML(Writer out, String tag, String val, Object... attrs) throws IOException {
+    out.write('<');
+    out.write(tag);
+    for (int i=0; i<attrs.length; i++) {
+      out.write(' ');
+      out.write(attrs[i++].toString());
+      out.write('=');
+      out.write('"');
+      out.write(attrs[i].toString());
+      out.write('"');
+    }
+    if (val == null) {
+      out.write('/');
+      out.write('>');
+    } else {
+      out.write('>');
+      out.write(val);
+      out.write('<');
+      out.write('/');
+      out.write(tag);
+      out.write('>');
+    }
+  }
+
+  /** escapes character data in val */
+  public final static void writeXML(Writer out, String tag, String val, Object... attrs) throws IOException {
+    out.write('<');
+    out.write(tag);
+    for (int i=0; i<attrs.length; i++) {
+      out.write(' ');
+      out.write(attrs[i++].toString());
+      out.write('=');
+      out.write('"');
+      escapeAttributeValue(attrs[i].toString(), out);
+      out.write('"');
+    }
+    if (val == null) {
+      out.write('/');
+      out.write('>');
+    } else {
+      out.write('>');
+      escapeCharData(val,out);
+      out.write('<');
+      out.write('/');
+      out.write(tag);
+      out.write('>');
+    }
+  }
+
+  /** escapes character data in val */
+  public static void writeXML(Writer out, String tag, String val, Map<String, String> attrs) throws IOException {
+    out.write('<');
+    out.write(tag);
+    for (Map.Entry<String, String> entry : attrs.entrySet()) {
+      out.write(' ');
+      out.write(entry.getKey());
+      out.write('=');
+      out.write('"');
+      escapeAttributeValue(entry.getValue(), out);
+      out.write('"');
+    }
+    if (val == null) {
+      out.write('/');
+      out.write('>');
+    } else {
+      out.write('>');
+      escapeCharData(val,out);
+      out.write('<');
+      out.write('/');
+      out.write(tag);
+      out.write('>');
+    }
   }
 
   private static void escape(char [] chars, int offset, int length, Writer out, String [] escapes) throws IOException{

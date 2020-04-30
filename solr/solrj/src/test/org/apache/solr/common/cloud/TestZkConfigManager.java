@@ -14,8 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.common.cloud;
 
+import com.google.common.base.Charsets;
 import com.google.common.base.Throwables;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.cloud.ZkTestServer;
@@ -29,7 +31,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.NoSuchAlgorithmException;
@@ -42,23 +43,15 @@ public class TestZkConfigManager extends SolrTestCaseJ4 {
   private static ZkTestServer zkServer;
 
   @BeforeClass
-  public static void startZkServer() throws Exception {
-    zkServer = new ZkTestServer(createTempDir("zkData"));
+  public static void startZkServer() throws InterruptedException {
+    zkServer = new ZkTestServer(createTempDir("zkData").toString());
     zkServer.run();
   }
 
   @AfterClass
   public static void shutdownZkServer() throws IOException, InterruptedException {
-    if (null != zkServer) {
-      zkServer.shutdown();
-    }
+    zkServer.shutdown();
     zkServer = null;
-  }
-
-  @Test
-  public void testConstants() throws Exception {
-    assertEquals("/configs", ZkConfigManager.CONFIGS_ZKNODE);
-    assertEquals("^\\..*$", ZkConfigManager.UPLOAD_FILENAME_EXCLUDE_REGEX);
   }
 
   @Test
@@ -71,7 +64,7 @@ public class TestZkConfigManager extends SolrTestCaseJ4 {
       ZkConfigManager configManager = new ZkConfigManager(zkClient);
       assertEquals(0, configManager.listConfigs().size());
 
-      byte[] testdata = "test data".getBytes(StandardCharsets.UTF_8);
+      byte[] testdata = "test data".getBytes(Charsets.UTF_8);
 
       Path tempConfig = createTempDir("config");
       Files.createFile(tempConfig.resolve("file1"));
@@ -104,7 +97,7 @@ public class TestZkConfigManager extends SolrTestCaseJ4 {
       assertArrayEquals(testdata, checkdata);
 
       // uploading to the same config overwrites
-      byte[] overwritten = "new test data".getBytes(StandardCharsets.UTF_8);
+      byte[] overwritten = "new test data".getBytes(Charsets.UTF_8);
       Files.write(tempConfig.resolve("file1"), overwritten);
       configManager.uploadConfigDir(tempConfig, "testconfig");
 
@@ -117,13 +110,6 @@ public class TestZkConfigManager extends SolrTestCaseJ4 {
       // uploading same files to a new name creates a new config
       configManager.uploadConfigDir(tempConfig, "config2");
       assertEquals(2, configManager.listConfigs().size());
-
-      // Test copying a config works in both flavors
-      configManager.copyConfigDir("config2", "config2copy");
-      configManager.copyConfigDir("config2", "config2copy2", null);
-      configs = configManager.listConfigs();
-      assertTrue("config2copy should exist", configs.contains("config2copy"));
-      assertTrue("config2copy2 should exist", configs.contains("config2copy2"));
     }
   }
 
@@ -156,7 +142,7 @@ public class TestZkConfigManager extends SolrTestCaseJ4 {
       @Override
       protected Collection<ZkCredentials> createCredentials() {
         List<ZkCredentials> credentials = new ArrayList<>();
-        credentials.add(new ZkCredentials("digest", (readOnlyUsername + ":" + readOnlyPassword).getBytes(StandardCharsets.UTF_8)));
+        credentials.add(new ZkCredentials("digest", (readOnlyUsername + ":" + readOnlyPassword).getBytes(Charsets.UTF_8)));
         return credentials;
       }
     };
@@ -165,7 +151,7 @@ public class TestZkConfigManager extends SolrTestCaseJ4 {
       @Override
       protected Collection<ZkCredentials> createCredentials() {
         List<ZkCredentials> credentials = new ArrayList<>();
-        credentials.add(new ZkCredentials("digest", (writeableUsername + ":" + writeablePassword).getBytes(StandardCharsets.UTF_8)));
+        credentials.add(new ZkCredentials("digest", (writeableUsername + ":" + writeablePassword).getBytes(Charsets.UTF_8)));
         return credentials;
       }
     };

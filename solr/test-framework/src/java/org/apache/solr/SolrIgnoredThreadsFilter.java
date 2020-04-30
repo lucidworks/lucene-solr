@@ -1,3 +1,10 @@
+package org.apache.solr;
+
+import org.apache.lucene.search.TimeLimitingCollector.TimerThread;
+
+import com.carrotsearch.randomizedtesting.ThreadFilter;
+
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +21,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr;
-
-import org.apache.lucene.search.TimeLimitingCollector.TimerThread;
-
-import com.carrotsearch.randomizedtesting.ThreadFilter;
-
 
 /**
  * This ignores those threads in Solr for which there is no way to
@@ -40,23 +41,23 @@ public class SolrIgnoredThreadsFilter implements ThreadFilter {
     if (threadName.equals(TimerThread.THREAD_NAME)) {
       return true;
     }
-    
-    // due to netty - will stop on it's own
-    if (threadName.startsWith("globalEventExecutor")) {
+
+    if (threadName.startsWith("facetExecutor-") || 
+        threadName.startsWith("cmdDistribExecutor-") ||
+        threadName.startsWith("httpShardExecutor-")) {
       return true;
     }
     
-    // HttpClient Connection evictor threads can take a moment to wake and shutdown
-    if (threadName.startsWith("Connection evictor")) {
+    // This is a bug in ZooKeeper where they call System.exit(11) when
+    // this thread receives an interrupt signal.
+    if (threadName.startsWith("SyncThread")) {
       return true;
     }
-    
-    // These is a java pool for the collection stream api
-    if (threadName.startsWith("ForkJoinPool.")) {
-      return true;
-    }
-    
-    if (threadName.startsWith("Image Fetcher")) {
+
+    // THESE ARE LIKELY BUGS - these threads should be closed!
+    if (threadName.startsWith("Overseer-") ||
+        threadName.startsWith("aliveCheckExecutor-") ||
+        threadName.startsWith("concurrentUpdateScheduler-")) {
       return true;
     }
 

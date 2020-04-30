@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.admin;
 
 import java.io.File;
@@ -58,7 +59,6 @@ public class CoreAdminCreateDiscoverTest extends SolrTestCaseJ4 {
   @AfterClass
   public static void afterClass() throws Exception {
     admin = null; // Release it or the test harness complains.
-    solrHomeDirectory = null;
   }
 
   private static void setupCore(String coreName, boolean blivet) throws IOException {
@@ -164,7 +164,8 @@ public class CoreAdminCreateDiscoverTest extends SolrTestCaseJ4 {
     assertNull("Exception on create", resp.getException());
 
     // Try to create another core with a different name, but the same instance dir
-    SolrException e = expectThrows(SolrException.class, () -> {
+    SolrQueryResponse resp2 = new SolrQueryResponse();
+    try {
       admin.handleRequestBody
           (req(CoreAdminParams.ACTION,
               CoreAdminParams.CoreAdminAction.CREATE.toString(),
@@ -173,9 +174,13 @@ public class CoreAdminCreateDiscoverTest extends SolrTestCaseJ4 {
               CoreAdminParams.CONFIG, "solrconfig_ren.xml",
               CoreAdminParams.SCHEMA, "schema_ren.xml",
               CoreAdminParams.DATA_DIR, data.getAbsolutePath()),
-              new SolrQueryResponse());
-    });
-    assertTrue(e.getMessage().contains("already defined there"));
+              resp2);
+      fail("Creating two cores with a shared instance dir should throw an exception");
+    }
+    catch (SolrException e) {
+      assertTrue(e.getMessage().contains("already defined there"));
+    }
+
   }
 
   @Test

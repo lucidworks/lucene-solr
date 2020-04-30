@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.pt;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,21 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.pt;
 
+import static org.apache.lucene.analysis.VocabularyAssert.assertVocabulary;
 
 import java.io.IOException;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
-import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.core.KeywordTokenizer;
 import org.apache.lucene.analysis.miscellaneous.SetKeywordMarkerFilter;
-
-import static org.apache.lucene.analysis.VocabularyAssert.assertVocabulary;
+import org.apache.lucene.analysis.util.CharArraySet;
 
 /**
  * Simple tests for {@link PortugueseStemFilter}

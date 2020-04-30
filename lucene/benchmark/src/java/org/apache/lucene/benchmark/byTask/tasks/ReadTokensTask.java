@@ -1,3 +1,5 @@
+package org.apache.lucene.benchmark.byTask.tasks;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.tasks;
-
 
 import java.io.Reader;
 import java.util.List;
@@ -26,7 +26,11 @@ import org.apache.lucene.analysis.tokenattributes.TermToBytesRefAttribute;
 import org.apache.lucene.benchmark.byTask.PerfRunData;
 import org.apache.lucene.benchmark.byTask.feeds.DocMaker;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.index.IndexOptions;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.IntField;
+import org.apache.lucene.document.LongField;
+import org.apache.lucene.document.FloatField;
+import org.apache.lucene.document.DoubleField;
 import org.apache.lucene.index.IndexableField;
 
 /**
@@ -69,8 +73,11 @@ public class ReadTokensTask extends PerfTask {
     Analyzer analyzer = getRunData().getAnalyzer();
     int tokenCount = 0;
     for(final IndexableField field : fields) {
-      if (field.fieldType().indexOptions() == IndexOptions.NONE ||
-          field.fieldType().tokenized() == false) {
+      if (!field.fieldType().tokenized() ||
+          field instanceof IntField ||
+          field instanceof LongField ||
+          field instanceof FloatField ||
+          field instanceof DoubleField) {
         continue;
       }
       

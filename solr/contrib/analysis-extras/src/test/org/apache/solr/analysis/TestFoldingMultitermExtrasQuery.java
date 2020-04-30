@@ -1,3 +1,5 @@
+package org.apache.solr.analysis;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.analysis;
 
 import java.io.File;
 
@@ -23,7 +24,6 @@ import org.apache.solr.SolrTestCaseJ4;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-// See: https://issues.apache.org/jira/browse/SOLR-12028 Tests cannot remove files on Windows machines occasionally
 public class TestFoldingMultitermExtrasQuery extends SolrTestCaseJ4 {
 
   public String getCoreName() {

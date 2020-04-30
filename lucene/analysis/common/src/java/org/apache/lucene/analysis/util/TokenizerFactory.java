@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.util;
-
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
@@ -27,8 +27,6 @@ import java.util.Set;
 /**
  * Abstract parent class for analysis factories that create {@link Tokenizer}
  * instances.
- *
- * @since 3.1
  */
 public abstract class TokenizerFactory extends AbstractAnalysisFactory {
 
@@ -49,16 +47,7 @@ public abstract class TokenizerFactory extends AbstractAnalysisFactory {
   public static Set<String> availableTokenizers() {
     return loader.availableServices();
   }
-
-  /** looks up a SPI name for the specified tokenizer factory */
-  public static String findSPIName(Class<? extends TokenizerFactory> serviceClass) {
-    try {
-      return lookupSPIName(serviceClass);
-    } catch (NoSuchFieldException | IllegalAccessException | IllegalStateException e) {
-      throw new IllegalStateException(e);
-    }
-  }
-
+  
   /** 
    * Reloads the factory list from the given {@link ClassLoader}.
    * Changes to the factories are visible after the method ends, all

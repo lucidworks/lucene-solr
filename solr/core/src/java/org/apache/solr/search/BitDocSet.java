@@ -14,16 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Objects;
 
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.search.BitsFilteredDocIdSet;
 import org.apache.lucene.search.DocIdSet;
 import org.apache.lucene.search.DocIdSetIterator;
+import org.apache.lucene.search.Filter;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.BitDocIdSet;
 import org.apache.lucene.util.BitSetIterator;
@@ -261,18 +263,17 @@ public class BitDocSet extends DocSetBase {
   }
   
   @Override
-  public BitDocSet clone() {
+  protected BitDocSet clone() {
     return new BitDocSet(bits.clone(), size);
   }
 
   @Override
   public Filter getTopFilter() {
+    final FixedBitSet bs = bits;
     // TODO: if cardinality isn't cached, do a quick measure of sparseness
     // and return null from bits() if too sparse.
 
     return new Filter() {
-      final FixedBitSet bs = bits;
-
       @Override
       public DocIdSet getDocIdSet(final LeafReaderContext context, final Bits acceptDocs) {
         LeafReader reader = context.reader();
@@ -284,7 +285,8 @@ public class BitDocSet extends DocSetBase {
         }
 
         final int base = context.docBase;
-        final int max = base + reader.maxDoc();   // one past the max doc in this segment.
+        final int maxDoc = reader.maxDoc();
+        final int max = base + maxDoc;   // one past the max doc in this segment.
 
         return BitsFilteredDocIdSet.wrap(new DocIdSet() {
           @Override
@@ -300,11 +302,10 @@ public class BitDocSet extends DocSetBase {
 
               @Override
               public int nextDoc() {
-                int next = pos+1;
-                if (next >= max) {
+                if (pos >= bs.length() - 1) {
                   return adjustedDoc = NO_MORE_DOCS;
                 } else {
-                  pos = bs.nextSetBit(next);
+                  pos = bs.nextSetBit(pos + 1);
                   return adjustedDoc = pos < max ? pos - base : NO_MORE_DOCS;
                 }
               }
@@ -313,7 +314,7 @@ public class BitDocSet extends DocSetBase {
               public int advance(int target) {
                 if (target == NO_MORE_DOCS) return adjustedDoc = NO_MORE_DOCS;
                 int adjusted = target + base;
-                if (adjusted >= max) {
+                if (adjusted >= bs.length()) {
                   return adjustedDoc = NO_MORE_DOCS;
                 } else {
                   pos = bs.nextSetBit(adjusted);
@@ -325,7 +326,6 @@ public class BitDocSet extends DocSetBase {
               public long cost() {
                 // we don't want to actually compute cardinality, but
                 // if it's already been computed, we use it (pro-rated for the segment)
-                int maxDoc = max-base;
                 if (size != -1) {
                   return (long)(size * ((FixedBitSet.bits2words(maxDoc)<<6) / (float)bs.length()));
                 } else {
@@ -333,6 +333,11 @@ public class BitDocSet extends DocSetBase {
                 }
               }
             };
+          }
+
+          @Override
+          public boolean isCacheable() {
+            return true;
           }
 
           @Override
@@ -350,28 +355,16 @@ public class BitDocSet extends DocSetBase {
 
               @Override
               public int length() {
-                return max-base;
+                return maxDoc;
               }
             };
           }
 
         }, acceptDocs2);
       }
-
       @Override
       public String toString(String field) {
         return "BitSetDocTopFilter";
-      }
-
-      @Override
-      public boolean equals(Object other) {
-        return sameClassAs(other) &&
-               Objects.equals(bs, getClass().cast(other).bs);
-      }
-      
-      @Override
-      public int hashCode() {
-        return classHash() * 31 + bs.hashCode();
       }
     };
   }
@@ -384,13 +377,5 @@ public class BitDocSet extends DocSetBase {
   @Override
   public Collection<Accountable> getChildResources() {
     return Collections.emptyList();
-  }
-
-  @Override
-  public String toString() {
-    return "BitDocSet{" +
-        "size=" + size() +
-        ",ramUsed=" + RamUsageEstimator.humanReadableUnits(ramBytesUsed()) +
-        '}';
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -29,7 +29,6 @@ import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.search.TopScoreDocCollector;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.store.MockDirectoryWrapper;
@@ -40,7 +39,7 @@ import org.apache.lucene.util.TestUtil;
 import org.apache.lucene.util.TimeUnits;
 import com.carrotsearch.randomizedtesting.annotations.TimeoutSuite;
 
-@SuppressCodecs({ "SimpleText", "Direct" })
+@SuppressCodecs({ "SimpleText", "Memory", "Direct" })
 @TimeoutSuite(millis = 8 * TimeUnits.HOUR)
 public class TestIndexWriterMaxDocs extends LuceneTestCase {
 
@@ -68,14 +67,12 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
       assertEquals(IndexWriter.MAX_DOCS, ir.maxDoc());
       assertEquals(IndexWriter.MAX_DOCS, ir.numDocs());
       IndexSearcher searcher = new IndexSearcher(ir);
-      TopScoreDocCollector collector = TopScoreDocCollector.create(10, Integer.MAX_VALUE);
-      searcher.search(new TermQuery(new Term("field", "text")), collector);
-      TopDocs hits = collector.topDocs();
-      assertEquals(IndexWriter.MAX_DOCS, hits.totalHits.value);
+      TopDocs hits = searcher.search(new TermQuery(new Term("field", "text")), 10);
+      assertEquals(IndexWriter.MAX_DOCS, hits.totalHits);
 
       // Sort by docID reversed:
       hits = searcher.search(new TermQuery(new Term("field", "text")), 10, new Sort(new SortField(null, SortField.Type.DOC, true)));
-      assertEquals(IndexWriter.MAX_DOCS, hits.totalHits.value);
+      assertEquals(IndexWriter.MAX_DOCS, hits.totalHits);
       assertEquals(10, hits.scoreDocs.length);
       assertEquals(IndexWriter.MAX_DOCS-1, hits.scoreDocs[0].doc);
       ir.close();
@@ -97,10 +94,12 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
       }
 
       // 11th document should fail:
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w.addDocument(new Document());
-      });
-
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
       w.close();
       dir.close();
     } finally {
@@ -118,10 +117,12 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
       }
 
       // 11th document should fail:
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w.addDocuments(Collections.singletonList(new Document()));
-      });
-
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
       w.close();
       dir.close();
     } finally {
@@ -139,10 +140,12 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
       }
 
       // 11th document should fail:
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w.updateDocument(new Term("field", "foo"), new Document());
-      });
-
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
       w.close();
       dir.close();
     } finally {
@@ -160,10 +163,12 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
       }
 
       // 11th document should fail:
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w.updateDocuments(new Term("field", "foo"), Collections.singletonList(new Document()));
-      });
-
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
       w.close();
       dir.close();
     } finally {
@@ -189,7 +194,7 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
 
       w.forceMerge(1);
 
-      assertEquals(5, w.getDocStats().maxDoc);
+      assertEquals(5, w.maxDoc());
 
       // Add 5 more docs
       for(int i=0;i<5;i++) {
@@ -197,10 +202,12 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
       }
 
       // 11th document should fail:
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w.addDocument(new Document());
-      });
-
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
       w.close();
       dir.close();
     } finally {
@@ -233,7 +240,7 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
 
       w.forceMerge(1);
 
-      assertEquals(5, w.getDocStats().maxDoc);
+      assertEquals(5, w.maxDoc());
 
       // Add 5 more docs
       for(int i=0;i<5;i++) {
@@ -241,10 +248,12 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
       }
 
       // 11th document should fail:
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w.addDocument(new Document());
-      });
-
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
       w.close();
       dir.close();
     } finally {
@@ -265,16 +274,20 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
       Directory dir2 = newDirectory();
       IndexWriter w2 = new IndexWriter(dir2, new IndexWriterConfig(null));
       w2.addDocument(new Document());
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w2.addIndexes(new Directory[] {dir});
-      });
-
-      assertEquals(1, w2.getDocStats().maxDoc);
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
+      assertEquals(1, w2.maxDoc());
       DirectoryReader ir = DirectoryReader.open(dir);
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         TestUtil.addIndexesSlowly(w2, ir);
-      });
-
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
       w2.close();
       ir.close();
       dir.close();
@@ -349,10 +362,12 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
     Arrays.fill(subReaders, ir);
     subReaders[subReaders.length-1] = ir2;
 
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new MultiReader(subReaders);
-    });
-
+      fail("didn't hit exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
     ir.close();
     ir2.close();
     dir.close();
@@ -457,9 +472,12 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
   }
 
   public void testTooLargeMaxDocs() throws Exception {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       IndexWriter.setMaxDocs(Integer.MAX_VALUE);
-    });
+      fail("didn't hit exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
   }
 
   // LUCENE-6299
@@ -469,16 +487,20 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
       Directory dir = newDirectory();
       IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(null));
       w.addDocument(new Document());
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w.addDocument(new Document());
-      });
-
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
       w.deleteAll();
       w.addDocument(new Document());
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w.addDocument(new Document());
-      });
-
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
       w.close();
       dir.close();
     } finally {
@@ -495,17 +517,21 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
       w.addDocument(new Document());
       w.getReader().close();
       w.addDocument(new Document());
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w.addDocument(new Document());
-      });
-
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
       w.deleteAll();
       w.addDocument(new Document());
       w.addDocument(new Document());
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w.addDocument(new Document());
-      });
-
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
       w.close();
       dir.close();
     } finally {
@@ -522,17 +548,21 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
       w.addDocument(new Document());
       w.commit();
       w.addDocument(new Document());
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w.addDocument(new Document());
-      });
-
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
       w.deleteAll();
       w.addDocument(new Document());
       w.addDocument(new Document());
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w.addDocument(new Document());
-      });
-
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
       w.close();
       dir.close();
     } finally {
@@ -546,9 +576,9 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
     setIndexWriterMaxDocs(limit);
     try {
       Directory dir = newDirectory();
-      IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(null));
+      final IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(null));
 
-      CountDownLatch startingGun = new CountDownLatch(1);
+      final CountDownLatch startingGun = new CountDownLatch(1);
       Thread[] threads = new Thread[limit];
       for(int i=0;i<limit;i++) {
         threads[i] = new Thread() {
@@ -571,18 +601,22 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
         thread.join();
       }
 
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w.addDocument(new Document());
-      });
-
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
       w.deleteAll();
       for(int i=0;i<limit;i++) {
         w.addDocument(new Document());
       }        
-      expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w.addDocument(new Document());
-      });
-
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
       w.close();
       dir.close();
     } finally {
@@ -598,21 +632,24 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
       IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(null));
       w.addDocument(new Document());
       w.close();
-
-      IndexWriter w2 = new IndexWriter(dir, new IndexWriterConfig(null));
-      w2.addDocument(new Document());
-      expectThrows(IllegalArgumentException.class, () -> {
-        w2.addDocument(new Document());
-      });
-
-      w2.deleteAll();
-      w2.addDocument(new Document());
-      w2.addDocument(new Document());
-      expectThrows(IllegalArgumentException.class, () -> {
-        w2.addDocument(new Document());
-      });
-
-      w2.close();
+      w = new IndexWriter(dir, new IndexWriterConfig(null));
+      w.addDocument(new Document());
+      try {
+        w.addDocument(new Document());
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
+      w.deleteAll();
+      w.addDocument(new Document());
+      w.addDocument(new Document());
+      try {
+        w.addDocument(new Document());
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
+      w.close();
       dir.close();
     } finally {
       restoreIndexWriterMaxDocs();
@@ -627,12 +664,14 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
       IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(null));
       w.addDocument(new Document());
       w.close();
-      IndexWriter w2 = new IndexWriter(dir, new IndexWriterConfig(null));
-      expectThrows(IllegalArgumentException.class, () -> {
-        w2.addDocument(new Document());
-      });
-
-      w2.close();
+      w = new IndexWriter(dir, new IndexWriterConfig(null));
+      try {
+        w.addDocument(new Document());
+        fail("didn't hit exception");
+      } catch (IllegalArgumentException iae) {
+        // expected
+      }
+      w.close();
       dir.close();
     } finally {
       restoreIndexWriterMaxDocs();
@@ -648,10 +687,11 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
     w.close();
 
     setIndexWriterMaxDocs(1);
-    try {
-      expectThrows(CorruptIndexException.class, () -> {
-        DirectoryReader.open(dir);
-      });
+    try {       
+      DirectoryReader.open(dir);
+      fail("didn't hit exception");
+    } catch (CorruptIndexException cie) {
+      // expected
     } finally {
       restoreIndexWriterMaxDocs();
     }
@@ -668,10 +708,11 @@ public class TestIndexWriterMaxDocs extends LuceneTestCase {
     w.close();
 
     setIndexWriterMaxDocs(1);
-    try {
-      expectThrows(CorruptIndexException.class, () -> {
-        new IndexWriter(dir, new IndexWriterConfig(null));
-      });
+    try {       
+      new IndexWriter(dir, new IndexWriterConfig(null));
+      fail("didn't hit exception");
+    } catch (CorruptIndexException cie) {
+      // expected
     } finally {
       restoreIndexWriterMaxDocs();
     }

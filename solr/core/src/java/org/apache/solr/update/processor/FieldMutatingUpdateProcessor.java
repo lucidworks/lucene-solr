@@ -14,18 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.function.Function;
 import java.util.regex.Pattern;
 
-import org.apache.solr.common.SolrException;
+import static org.apache.solr.common.SolrException.ErrorCode.BAD_REQUEST;
+import static org.apache.solr.common.SolrException.ErrorCode.SERVER_ERROR;
+import static org.apache.solr.update.processor.FieldMutatingUpdateProcessorFactory.SelectorParams;
+
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.SolrInputField;
+import org.apache.solr.common.SolrException;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SolrResourceLoader;
 import org.apache.solr.schema.FieldType;
@@ -33,10 +37,6 @@ import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.update.AddUpdateCommand;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static org.apache.solr.common.SolrException.ErrorCode.BAD_REQUEST;
-import static org.apache.solr.common.SolrException.ErrorCode.SERVER_ERROR;
-import static org.apache.solr.update.processor.FieldMutatingUpdateProcessorFactory.SelectorParams;
 
 /**
  * Reusable base class for UpdateProcessors that will consider 
@@ -121,15 +121,27 @@ public abstract class FieldMutatingUpdateProcessor
   /**
    * Interface for identifying which fields should be mutated
    */
-  public interface FieldNameSelector {
-    boolean shouldMutate(final String fieldName);
+  public static interface FieldNameSelector {
+    public boolean shouldMutate(final String fieldName);
   }
 
   /** Singleton indicating all fields should be mutated */
-  public static final FieldNameSelector SELECT_ALL_FIELDS = fieldName -> true;
+  public static final FieldNameSelector SELECT_ALL_FIELDS 
+    = new FieldNameSelector() {
+        @Override
+        public boolean shouldMutate(final String fieldName) {
+          return true;
+        }
+      };
 
   /** Singleton indicating no fields should be mutated */
-  public static final FieldNameSelector SELECT_NO_FIELDS = fieldName -> false;
+  public static final FieldNameSelector SELECT_NO_FIELDS 
+    = new FieldNameSelector() {
+        @Override
+        public boolean shouldMutate(final String fieldName) {
+          return false;
+        }
+      };
 
   /** 
    * Wraps two FieldNameSelectors such that the FieldNameSelector 
@@ -154,11 +166,21 @@ public abstract class FieldMutatingUpdateProcessor
     }
     
     if (SELECT_ALL_FIELDS == includes) {
-      return fieldName -> ! excludes.shouldMutate(fieldName);
+      return new FieldNameSelector() {
+        @Override
+        public boolean shouldMutate(final String fieldName) {
+          return ! excludes.shouldMutate(fieldName);
+        }
+      };
     }
 
-    return fieldName -> (includes.shouldMutate(fieldName)
-            && ! excludes.shouldMutate(fieldName));
+    return new FieldNameSelector() {
+      @Override
+      public boolean shouldMutate(final String fieldName) {
+        return (includes.shouldMutate(fieldName)
+                && ! excludes.shouldMutate(fieldName));
+      }
+    };
   }
 
   /**
@@ -180,7 +202,12 @@ public abstract class FieldMutatingUpdateProcessor
 
     final ConfigurableFieldNameSelectorHelper helper =
       new ConfigurableFieldNameSelectorHelper(loader, params);
-    return fieldName -> helper.shouldMutateBasedOnSchema(fieldName, core.getLatestSchema());
+    return new FieldNameSelector() {
+      @Override
+      public boolean shouldMutate(String fieldName) {
+        return helper.shouldMutateBasedOnSchema(fieldName, core.getLatestSchema());
+      }
+    };
   }
 
   /**
@@ -203,7 +230,12 @@ public abstract class FieldMutatingUpdateProcessor
 
     final ConfigurableFieldNameSelectorHelper helper =
       new ConfigurableFieldNameSelectorHelper(loader, params);
-    return fieldName -> helper.shouldMutateBasedOnSchema(fieldName, schema);
+    return new FieldNameSelector() {
+      @Override
+      public boolean shouldMutate(String fieldName) {
+        return helper.shouldMutateBasedOnSchema(fieldName, schema);
+      }
+    };
   }
   
   private static final class ConfigurableFieldNameSelectorHelper {
@@ -286,16 +318,5 @@ public abstract class FieldMutatingUpdateProcessor
       return false;
     }
    }
-  public static FieldMutatingUpdateProcessor mutator(FieldNameSelector selector,
-                                              UpdateRequestProcessor next,
-                                              Function<SolrInputField,SolrInputField> fun){
-    return new FieldMutatingUpdateProcessor(selector, next) {
-      @Override
-      protected SolrInputField mutate(SolrInputField src) {
-        return fun.apply(src);
-      }
-    };
-
-  }
 }
 

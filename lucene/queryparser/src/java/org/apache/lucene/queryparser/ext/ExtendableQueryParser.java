@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.ext;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.ext;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.queryparser.ext.Extensions.Pair;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.util.Version;
 
 /**
  * The {@link ExtendableQueryParser} enables arbitrary query parser extension

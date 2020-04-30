@@ -1,3 +1,5 @@
+package org.apache.solr.common.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.util;
 
 import java.util.*;
 
@@ -50,15 +51,10 @@ public class SimpleOrderedMap<T> extends NamedList<T> {
    * Creates an instance backed by an explicitly specified list of
    * pairwise names/values.
    *
-   * <p>
-   * TODO: this method was formerly public, now that it's not we can change the impl details of 
-   * this class to be based on a Map.Entry[] 
-   * </p>
-   *
    * @param nameValuePairs underlying List which should be used to implement a SimpleOrderedMap; modifying this List will affect the SimpleOrderedMap.
-   * @lucene.internal
    */
-  private SimpleOrderedMap(List<Object> nameValuePairs) {
+  @Deprecated
+  public SimpleOrderedMap(List<Object> nameValuePairs) {
     super(nameValuePairs);
   }
   

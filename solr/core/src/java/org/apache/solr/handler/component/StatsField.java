@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.component;
 
 import java.io.IOException;
@@ -28,7 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.lucene.document.FieldType.NumericType;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionQuery;
 import org.apache.lucene.queries.function.ValueSource;
@@ -45,7 +47,6 @@ import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.request.DocValuesStats;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.schema.IndexSchema;
-import org.apache.solr.schema.NumberType;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.DocIterator;
 import org.apache.solr.search.DocSet;
@@ -57,8 +58,8 @@ import org.apache.solr.search.SyntaxError;
 import org.apache.solr.util.hll.HLL;
 import org.apache.solr.util.hll.HLLType;
 
-import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
+import com.google.common.hash.HashFunction;
 
 /**
  * Models all of the information associated with a single {@link StatsParams#STATS_FIELD}
@@ -137,7 +138,7 @@ public class StatsField {
      *        order to compute <i>this</i> stat over the entire distributed result set.
      * @param selfDep indicates that when computing this stat across a distributed result 
      *        set, each shard must compute this stat <i>in addition to</i> any other 
-     *        distributed dependencies.
+     *        distributed dependences.
      * @see #getDistribDeps
      */
     Stat(boolean selfDep, Stat... deps) {
@@ -149,7 +150,7 @@ public class StatsField {
     }
     
     /**
-     * Given a String, returns the corresponding Stat enum value if any, otherwise returns null.
+     * Given a String, returns the corrisponding Stat enum value if any, otherwise returns null.
      */
     public static Stat forName(String paramKey) {
       try {
@@ -180,7 +181,7 @@ public class StatsField {
   }
 
   /**
-   * the equivalent stats if "calcdistinct" is specified
+   * the equivilent stats if "calcdistinct" is specified
    * @see Stat#countDistinct
    * @see Stat#distinctValues
    */
@@ -245,20 +246,16 @@ public class StatsField {
       } else {
         // we have a non trivial request to compute stats over a query (or function)
 
-        // NOTE we could use QParser.getParser(...) here, but that would redundantly
+        // NOTE we could use QParser.getParser(...) here, but that would redundently
         // reparse everything.  ( TODO: refactor a common method in QParser ?)
         QParserPlugin qplug = rb.req.getCore().getQueryPlugin(parserName);
-        if (qplug == null) {
-          throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "invalid query parser '" + parserName +
-              (originalParam == null? "'": "' for query '" + originalParam + "'"));
-        }
-        QParser qp = qplug.createParser(localParams.get(QueryParsing.V),
+        QParser qp =  qplug.createParser(localParams.get(QueryParsing.V), 
                                          localParams, params, rb.req);
 
         // figure out what type of query we are dealing, get the most direct ValueSource
         vs = extractValueSource(qp.parse());
 
-        // if this ValueSource directly corresponds to a SchemaField, act as if
+        // if this ValueSource directly corrisponds to a SchemaField, act as if
         // we were asked to compute stats on it directly
         // ie:  "stats.field={!func key=foo}field(foo)" == "stats.field=foo"
         sf = extractSchemaField(vs, searcher.getSchema());
@@ -420,7 +417,7 @@ public class StatsField {
       return StatsValuesFactory.createStatsValues(this);
     }
 
-    if (null != schemaField && !schemaField.getType().isPointField()
+    if (null != schemaField 
         && (schemaField.multiValued() || schemaField.getType().multiValuedFieldCache())) {
 
       // TODO: should this also be used for single-valued string fields? (should work fine)
@@ -640,17 +637,17 @@ public class StatsField {
         return null;
       }
 
-      final NumberType hashableNumType = getHashableNumericType(field);
+      final NumericType hashableNumType = getHashableNumericType(field);
 
       // some sane defaults
-      int log2m = 13;   // roughly equivalent to "cardinality='0.33'"
+      int log2m = 13;   // roughly equivilent to "cardinality='0.33'"
       int regwidth = 6; // with decent hash, this is plenty for all valid long hashes
 
-      if (NumberType.FLOAT.equals(hashableNumType) || NumberType.INTEGER.equals(hashableNumType)) {
+      if (NumericType.FLOAT.equals(hashableNumType) || NumericType.INT.equals(hashableNumType)) {
         // for 32bit values, we can adjust our default regwidth down a bit
         regwidth--;
 
-        // NOTE: EnumField uses LegacyNumericType.INT, and in theory we could be super conservative
+        // NOTE: EnumField uses NumericType.INT, and in theory we could be super conservative
         // with it, but there's no point - just let the EXPLICIT HLL handle it
       }
 
@@ -710,7 +707,7 @@ public class StatsField {
       if (null == hasher) {
         // if this is a function, or a non Long field, pre-hashed is invalid
         // NOTE: we ignore hashableNumType - it's LONG for non numerics like Strings
-        if (null == field || !(NumberType.LONG.equals(field.getType().getNumberType()) || NumberType.DATE.equals(field.getType().getNumberType()))) { 
+        if (null == field || !NumericType.LONG.equals(field.getType().getNumericType())) {
           throw new SolrException(ErrorCode.BAD_REQUEST, "hllPreHashed is only supported with Long based fields");
         }
       }
@@ -743,16 +740,16 @@ public class StatsField {
   }
 
   /**
-   * Returns the effective {@link NumberType} for the field for the purposes of hash values.
-   * ie: If the field has an explict NumberType that is returned; If the field has no explicit
-   * NumberType then {@link NumberType#LONG} is returned;  If field is null, then
-   * {@link NumberType#FLOAT} is assumed for ValueSource.
+   * Returns the effective {@link NumericType} for the field for the purposes of hash values.  
+   * ie: If the field has an explict NumericType that is returned; If the field has no explicit 
+   * NumericType then {@link NumericType#LONG} is returned;  If field is null, then 
+   * {@link NumericType#FLOAT} is assumed for ValueSource.
    */
-  private static NumberType getHashableNumericType(SchemaField field) {
+  private static NumericType getHashableNumericType(SchemaField field) {
     if (null == field) {
-      return NumberType.FLOAT;
+      return NumericType.FLOAT;
     }
-    final NumberType result = field.getType().getNumberType();
-    return null == result ? NumberType.LONG : result;
+    final NumericType result = field.getType().getNumericType();
+    return null == result ? NumericType.LONG : result;
   }
 }

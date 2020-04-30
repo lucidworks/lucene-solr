@@ -1,3 +1,16 @@
+package org.apache.solr.cloud;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.apache.solr.client.solrj.SolrClient;
+import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.request.UpdateRequest;
+import org.apache.solr.common.SolrInputDocument;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +27,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
-import org.apache.solr.client.solrj.SolrClient;
-import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.request.UpdateRequest;
-import org.apache.solr.common.SolrInputDocument;
 
 public class StoppableIndexingThread extends AbstractFullDistribZkTestBase.StoppableThread {
   static String t1 = "a_t";
@@ -132,7 +133,7 @@ public class StoppableIndexingThread extends AbstractFullDistribZkTestBase.Stopp
       
       if (docs.size() > 0 && pauseBetweenUpdates) {
         try {
-          Thread.sleep(AbstractFullDistribZkTestBase.random().nextInt(500) + 50);
+          Thread.currentThread().sleep(AbstractFullDistribZkTestBase.random().nextInt(500) + 50);
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
         }

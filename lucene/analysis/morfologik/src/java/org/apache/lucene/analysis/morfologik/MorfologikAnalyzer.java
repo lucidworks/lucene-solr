@@ -1,4 +1,6 @@
 // -*- c-basic-offset: 2 -*-
+package org.apache.lucene.analysis.morfologik;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -15,21 +17,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.morfologik;
 
 import java.io.Reader;
 
 import morfologik.stemming.Dictionary;
 import morfologik.stemming.polish.PolishStemmer;
+
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.Tokenizer;
+import org.apache.lucene.analysis.standard.StandardFilter;
 import org.apache.lucene.analysis.standard.StandardTokenizer;
 
 /**
  * {@link org.apache.lucene.analysis.Analyzer} using Morfologik library.
  * @see <a href="http://morfologik.blogspot.com/">Morfologik project page</a>
- *
- * @since 4.0.0
  */
 public class MorfologikAnalyzer extends Analyzer {
   private final Dictionary dictionary;
@@ -59,7 +60,7 @@ public class MorfologikAnalyzer extends Analyzer {
    * @param field ignored field name
    * @return A {@link org.apache.lucene.analysis.Analyzer.TokenStreamComponents}
    *         built from an {@link StandardTokenizer} filtered with
-   *         {@link MorfologikFilter}.
+   *         {@link StandardFilter} and {@link MorfologikFilter}.
    */
   @Override
   protected TokenStreamComponents createComponents(final String field) {
@@ -67,7 +68,6 @@ public class MorfologikAnalyzer extends Analyzer {
     
     return new TokenStreamComponents(
         src, 
-        new MorfologikFilter(src, dictionary));
+        new MorfologikFilter(new StandardFilter(src), dictionary));
   }
-
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
-
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Comparator;
 
-import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
@@ -28,6 +27,7 @@ import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionLengthAttribute;
 import org.apache.lucene.analysis.tokenattributes.TypeAttribute;
+import org.apache.lucene.analysis.util.CharArraySet;
 import org.apache.lucene.util.AttributeSource;
 
 /**
@@ -81,7 +81,8 @@ public class FingerprintFilter extends TokenFilter {
 
   @Override
   public final boolean incrementToken() throws IOException {
-    if (inputEnded) {
+    if (uniqueTerms != null) {
+      // We have already built the single output token - there's no more 
       return false;
     }
     boolean result = buildSingleOutputToken();
@@ -176,7 +177,6 @@ public class FingerprintFilter extends TokenFilter {
       }
     });
 
-    //TODO lets append directly to termAttribute?
     StringBuilder sb = new StringBuilder();
     for (Object item : items) {
       if (sb.length() >= 1) {
@@ -204,6 +204,9 @@ public class FingerprintFilter extends TokenFilter {
     }
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void reset() throws IOException {
     super.reset();

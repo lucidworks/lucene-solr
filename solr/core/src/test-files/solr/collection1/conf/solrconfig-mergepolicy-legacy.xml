@@ -20,12 +20,12 @@
 <config>
   <luceneMatchVersion>${tests.luceneMatchVersion:LATEST}</luceneMatchVersion>
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
 
   <indexConfig>
+    <mergeFactor>7</mergeFactor>
     <useCompoundFile>${useCompoundFile:false}</useCompoundFile>
   </indexConfig>
 
-  <requestHandler name="/select" class="solr.SearchHandler"></requestHandler>
+  <requestHandler name="standard" class="solr.StandardRequestHandler"></requestHandler>
 
 </config>

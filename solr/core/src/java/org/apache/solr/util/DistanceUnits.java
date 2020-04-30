@@ -1,3 +1,13 @@
+package org.apache.solr.util;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
+import com.google.common.collect.ImmutableMap;
+import com.spatial4j.core.distance.DistanceUtils;
+import org.apache.solr.schema.AbstractSpatialFieldType;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +24,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-
-import com.google.common.collect.ImmutableMap;
-import org.locationtech.spatial4j.distance.DistanceUtils;
-import org.apache.solr.schema.AbstractSpatialFieldType;
 
 /**
  * Used with a spatial field type for all distance measurements.
@@ -40,6 +41,10 @@ public class DistanceUnits {
   public final static DistanceUnits MILES = new DistanceUnits(MILES_PARAM, DistanceUtils.EARTH_MEAN_RADIUS_MI, 
       DistanceUtils.MILES_TO_KM * DistanceUtils.KM_TO_DEG);
   public final static DistanceUnits DEGREES = new DistanceUnits(DEGREES_PARAM, 180.0/Math.PI, 1.0);
+
+  // Previously, distance based filtering was done with km, but scores were based on degrees
+  @Deprecated
+  public final static DistanceUnits BACKCOMPAT = new DistanceUnits("backcompat", DistanceUtils.EARTH_MEAN_RADIUS_KM, 1.0);
 
   //volatile so other threads see when we replace when copy-on-write
   private static volatile Map<String, DistanceUnits> instances = ImmutableMap.of(

@@ -1,3 +1,21 @@
+package org.apache.solr.cloud;
+
+import java.io.File;
+import java.lang.invoke.MethodHandles;
+import java.nio.charset.Charset;
+
+import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.common.cloud.SolrZkClient;
+import org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider;
+import org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider;
+import org.apache.zookeeper.CreateMode;
+import org.apache.zookeeper.KeeperException.NoAuthException;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,32 +32,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
-
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
-import java.lang.invoke.MethodHandles;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Properties;
-import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.common.cloud.SecurityAwareZkACLProvider;
-import org.apache.solr.common.cloud.SolrZkClient;
-import org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider;
-import org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider;
-import org.apache.zookeeper.CreateMode;
-import org.apache.zookeeper.KeeperException.NoAuthException;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import com.carrotsearch.randomizedtesting.annotations.ParametersFactory;
 
 public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
   
@@ -49,39 +41,7 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
   
   protected ZkTestServer zkServer;
   
-  protected Path zkDir;
-
-  private static File credentialsFile = null;
-
-  @ParametersFactory
-  public static Iterable<Object[]> parameters() {
-    return Arrays.<Object[]>asList(new Object[] { false },
-                                   new Object[] { true });
-  }
-
-  public VMParamsZkACLAndCredentialsProvidersTest(Boolean useFile) throws Exception {
-    assert null != useFile;
-    credentialsFile = null;
-    if (useFile) {
-      credentialsFile = createTempFile(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_FILE_VM_PARAM_NAME, "properties").toFile();
-    }
-  }
-
-  /** Does the correct thing with credential props depending on wether a file is being used */
-  public static void setCredentialProps(Properties props) throws Exception {
-    if (null != credentialsFile) {
-      System.setProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_FILE_VM_PARAM_NAME,
-                         credentialsFile.getAbsolutePath());
-      try (Writer out = new OutputStreamWriter(new FileOutputStream(credentialsFile), StandardCharsets.UTF_8)) {
-        props.store(out, null);
-      }
-    } else {
-      for (String prop : props.stringPropertyNames()) {
-        // NOTE: don't use 'System.setProperties(props)' ... it completely replaces the set of all sys props
-        System.setProperty(prop, props.getProperty(prop));
-      }
-    }
-  }
+  protected String zkDir;
   
   @BeforeClass
   public static void beforeClass() {
@@ -99,25 +59,24 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
     log.info("####SETUP_START " + getTestName());
     createTempDir();
     
-    zkDir = createTempDir().resolve("zookeeper/server1/data");
+    zkDir = createTempDir() + File.separator
+        + "zookeeper/server1/data";
     log.info("ZooKeeper dataDir:" + zkDir);
     zkServer = new ZkTestServer(zkDir);
-    zkServer.run(false);
+    zkServer.run();
     
     System.setProperty("zkHost", zkServer.getZkAddress());
     
     setSecuritySystemProperties();
 
     SolrZkClient zkClient = new SolrZkClient(zkServer.getZkHost(),
-        AbstractZkTestCase.TIMEOUT, AbstractZkTestCase.TIMEOUT, null, null, null);
+        AbstractZkTestCase.TIMEOUT, 60000, null, null, null);
     zkClient.makePath("/solr", false, true);
     zkClient.close();
 
     zkClient = new SolrZkClient(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT);
     zkClient.create("/protectedCreateNode", "content".getBytes(DATA_ENCODING), CreateMode.PERSISTENT, false);
     zkClient.makePath("/protectedMakePathNode", "content".getBytes(DATA_ENCODING), CreateMode.PERSISTENT, false);
-
-    zkClient.create(SecurityAwareZkACLProvider.SECURITY_ZNODE_PATH, "content".getBytes(DATA_ENCODING), CreateMode.PERSISTENT, false);
     zkClient.close();
     
     clearSecuritySystemProperties();
@@ -125,8 +84,7 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
     zkClient = new SolrZkClient(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT);
     // Currently no credentials on ZK connection, because those same VM-params are used for adding ACLs, and here we want
     // no (or completely open) ACLs added. Therefore hack your way into being authorized for creating anyway
-    zkClient.getSolrZooKeeper().addAuthInfo("digest", ("connectAndAllACLUsername:connectAndAllACLPassword")
-        .getBytes(StandardCharsets.UTF_8));
+    zkClient.getSolrZooKeeper().addAuthInfo("digest", ("connectAndAllACLUsername:connectAndAllACLPassword").getBytes("UTF-8"));
     zkClient.create("/unprotectedCreateNode", "content".getBytes(DATA_ENCODING), CreateMode.PERSISTENT, false);
     zkClient.makePath("/unprotectedMakePathNode", "content".getBytes(DATA_ENCODING), CreateMode.PERSISTENT, false);
     zkClient.close();
@@ -149,9 +107,7 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
     
     SolrZkClient zkClient = new SolrZkClient(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT);
     try {
-      doTest(zkClient,
-          false, false, false, false, false,
-          false, false, false, false, false);
+      doTest(zkClient, false, false, false, false, false);
     } finally {
       zkClient.close();
     }
@@ -163,9 +119,7 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
     
     SolrZkClient zkClient = new SolrZkClient(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT);
     try {
-      doTest(zkClient,
-          false, false, false, false, false,
-          false, false, false, false, false);
+      doTest(zkClient, false, false, false, false, false);
     } finally {
       zkClient.close();
     }
@@ -177,9 +131,7 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
 
     SolrZkClient zkClient = new SolrZkClient(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT);
     try {
-      doTest(zkClient,
-          true, true, true, true, true,
-          true, true, true, true, true);
+      doTest(zkClient, true, true, true, true, true);
     } finally {
       zkClient.close();
     }
@@ -191,23 +143,17 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
 
     SolrZkClient zkClient = new SolrZkClient(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT);
     try {
-      doTest(zkClient,
-          true, true, false, false, false,
-          false, false, false, false, false);
+      doTest(zkClient, true, true, false, false, false);
     } finally {
       zkClient.close();
     }
   }
     
-  protected static void doTest(
-      SolrZkClient zkClient,
-      boolean getData, boolean list, boolean create, boolean setData, boolean delete,
-      boolean secureGet, boolean secureList, boolean secureCreate, boolean secureSet, boolean secureDelete) throws Exception {
+  protected static void doTest(SolrZkClient zkClient, boolean getData, boolean list, boolean create, boolean setData, boolean delete) throws Exception {
     doTest(zkClient, "/protectedCreateNode", getData, list, create, setData, delete);
     doTest(zkClient, "/protectedMakePathNode", getData, list, create, setData, delete);
     doTest(zkClient, "/unprotectedCreateNode", true, true, true, true, delete);
     doTest(zkClient, "/unprotectedMakePathNode", true, true, true, true, delete);
-    doTest(zkClient, SecurityAwareZkACLProvider.SECURITY_ZNODE_PATH, secureGet, secureList, secureCreate, secureSet, secureDelete);
   }
   
   protected static void doTest(SolrZkClient zkClient, String path, boolean getData, boolean list, boolean create, boolean setData, boolean delete) throws Exception {
@@ -234,10 +180,7 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
         zkClient.delete(path + "/subnode", -1, false);
       }
     } catch (NoAuthException nae) {
-      if (create) {
-        nae.printStackTrace();
-        fail("No NoAuthException expected");
-      }
+      if (create) fail("No NoAuthException expected");
       // expected
     }
     
@@ -276,47 +219,31 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
     clearSecuritySystemProperties();
   }
   
-  private void useWrongCredentials() throws Exception {
+  private void useWrongCredentials() {
     clearSecuritySystemProperties();
     
     System.setProperty(SolrZkClient.ZK_ACL_PROVIDER_CLASS_NAME_VM_PARAM_NAME, VMParamsSingleSetCredentialsDigestZkCredentialsProvider.class.getName());
-    
-    Properties props = new Properties();
-    
-    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME, "connectAndAllACLUsername");
-    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME, "connectAndAllACLPasswordWrong");
-
-    setCredentialProps(props);
+    System.setProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME, "connectAndAllACLUsername");
+    System.setProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME, "connectAndAllACLPasswordWrong");
   }
-
-  private void useAllCredentials() throws Exception {
+  
+  private void useAllCredentials() {
     clearSecuritySystemProperties();
     
     System.setProperty(SolrZkClient.ZK_CRED_PROVIDER_CLASS_NAME_VM_PARAM_NAME, VMParamsSingleSetCredentialsDigestZkCredentialsProvider.class.getName());
-    
-    Properties props = new Properties();
-    
-    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME, "connectAndAllACLUsername");
-    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME, "connectAndAllACLPassword");
-    
-    setCredentialProps(props);
+    System.setProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME, "connectAndAllACLUsername");
+    System.setProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME, "connectAndAllACLPassword");
   }
-
-  private void useReadonlyCredentials() throws Exception {
+  
+  private void useReadonlyCredentials() {
     clearSecuritySystemProperties();
-    
+
     System.setProperty(SolrZkClient.ZK_CRED_PROVIDER_CLASS_NAME_VM_PARAM_NAME, VMParamsSingleSetCredentialsDigestZkCredentialsProvider.class.getName());
-    
-    Properties props = new Properties();
-    
-    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME, "readonlyACLUsername");
-    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME, "readonlyACLPassword");
-
-    setCredentialProps(props);
+    System.setProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME, "readonlyACLUsername");
+    System.setProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME, "readonlyACLPassword");
   }
-
+  
   private void setSecuritySystemProperties() {
-    clearSecuritySystemProperties();
     System.setProperty(SolrZkClient.ZK_ACL_PROVIDER_CLASS_NAME_VM_PARAM_NAME, VMParamsAllAndReadonlyDigestZkACLProvider.class.getName());
     System.setProperty(SolrZkClient.ZK_CRED_PROVIDER_CLASS_NAME_VM_PARAM_NAME, VMParamsSingleSetCredentialsDigestZkCredentialsProvider.class.getName());
     System.setProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME, "connectAndAllACLUsername");
@@ -328,7 +255,6 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
   private void clearSecuritySystemProperties() {
     System.clearProperty(SolrZkClient.ZK_ACL_PROVIDER_CLASS_NAME_VM_PARAM_NAME);
     System.clearProperty(SolrZkClient.ZK_CRED_PROVIDER_CLASS_NAME_VM_PARAM_NAME);
-    System.clearProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_FILE_VM_PARAM_NAME);
     System.clearProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME);
     System.clearProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME);
     System.clearProperty(VMParamsAllAndReadonlyDigestZkACLProvider.DEFAULT_DIGEST_READONLY_USERNAME_VM_PARAM_NAME);

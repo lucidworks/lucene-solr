@@ -1,3 +1,4 @@
+package org.apache.solr.search.function.distance;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.function.distance;
+
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -67,7 +68,7 @@ public class VectorDistanceFunction extends ValueSource {
    * @param dv2 The values from the second MultiValueSource
    * @return The distance
    */
-  protected double distance(int doc, FunctionValues dv1, FunctionValues dv2) throws IOException {
+  protected double distance(int doc, FunctionValues dv1, FunctionValues dv2) {
     //Handle some special cases:
     double[] vals1 = new double[source1.dimension()];
     double[] vals2 = new double[source1.dimension()];
@@ -159,12 +160,12 @@ public class VectorDistanceFunction extends ValueSource {
     return new DoubleDocValues(this) {
 
       @Override
-      public double doubleVal(int doc) throws IOException {
+      public double doubleVal(int doc) {
         return distance(doc, vals1, vals2);
       }
 
       @Override
-      public String toString(int doc) throws IOException {
+      public String toString(int doc) {
         StringBuilder sb = new StringBuilder();
         sb.append(name()).append('(').append(power).append(',');
         boolean firstTime = true;

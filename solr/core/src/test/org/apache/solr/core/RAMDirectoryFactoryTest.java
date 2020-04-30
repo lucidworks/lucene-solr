@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.core;
 
 import java.io.IOException;
@@ -21,13 +22,13 @@ import java.io.IOException;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.LockFactory;
 import org.apache.lucene.store.RAMDirectory;
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.core.DirectoryFactory.DirContext;
 
 /**
  * Test-case for RAMDirectoryFactory
  */
-public class RAMDirectoryFactoryTest extends SolrTestCase {
+public class RAMDirectoryFactoryTest extends LuceneTestCase {
 
   public void test() throws Exception {
     dotestOpenReturnsTheSameForSamePath();
@@ -43,22 +44,20 @@ public class RAMDirectoryFactoryTest extends SolrTestCase {
       }
     };
     String path = "/fake/path";
-    Directory dir1 = factory.get(path, DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
-    Directory dir2 = factory.get(path, DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
+    Directory dir1 = factory.get(path, DirContext.DEFAULT, "single");
+    Directory dir2 = factory.get(path, DirContext.DEFAULT, "single");
     assertEquals("RAMDirectoryFactory should not create new instance of RefCntRamDirectory " +
         "every time open() is called for the same path", dir1, dir2);
 
     factory.release(dir1);
     factory.release(dir2);
-    factory.close();
   }
 
   private void dotestOpenSucceedForEmptyDir() throws IOException {
     RAMDirectoryFactory factory = new RAMDirectoryFactory();
-    Directory dir = factory.get("/fake/path", DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
+    Directory dir = factory.get("/fake/path", DirContext.DEFAULT, "single");
     assertNotNull("RAMDirectoryFactory should create RefCntRamDirectory even if the path doen't lead " +
         "to index directory on the file system", dir);
     factory.release(dir);
-    factory.close();
   }
 }

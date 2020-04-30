@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.fst;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.fst;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Comparator;
 
-import org.apache.lucene.codecs.CodecUtil;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefIterator;
 import org.apache.lucene.util.IOUtils;
@@ -34,54 +34,52 @@ import org.apache.lucene.util.OfflineSorter;
  * @lucene.internal
  */
 public class ExternalRefSorter implements BytesRefSorter, Closeable {
-  private final OfflineSorter sorter;
+  private final OfflineSorter sort;
   private OfflineSorter.ByteSequencesWriter writer;
-  private IndexOutput input;
-  private String sortedFileName;
+  private Path input;
+  private Path sorted;
   
   /**
    * Will buffer all sequences to a temporary file and then sort (all on-disk).
    */
-  public ExternalRefSorter(OfflineSorter sorter) throws IOException {
-    this.sorter = sorter;
-    this.input = sorter.getDirectory().createTempOutput(sorter.getTempFileNamePrefix(), "RefSorterRaw", IOContext.DEFAULT);
-    this.writer = new OfflineSorter.ByteSequencesWriter(this.input);
+  public ExternalRefSorter(OfflineSorter sort) throws IOException {
+    this.sort = sort;
+    this.input = Files.createTempFile(OfflineSorter.getDefaultTempDir(), "RefSorter-", ".raw");
+    this.writer = new OfflineSorter.ByteSequencesWriter(input);
   }
   
   @Override
   public void add(BytesRef utf8) throws IOException {
-    if (writer == null) {
-      throw new IllegalStateException();
-    }
+    if (writer == null) throw new IllegalStateException();
     writer.write(utf8);
   }
   
   @Override
   public BytesRefIterator iterator() throws IOException {
-    if (sortedFileName == null) {
+    if (sorted == null) {
       closeWriter();
       
+      sorted = Files.createTempFile(OfflineSorter.getDefaultTempDir(), "RefSorter-", ".sorted");
       boolean success = false;
       try {
-        sortedFileName = sorter.sort(input.getName());
+        sort.sort(input, sorted);
         success = true;
       } finally {
         if (success) {
-          sorter.getDirectory().deleteFile(input.getName());
+          Files.delete(input);
         } else {
-          IOUtils.deleteFilesIgnoringExceptions(sorter.getDirectory(), input.getName());
+          IOUtils.deleteFilesIgnoringExceptions(input);
         }
       }
       
       input = null;
     }
     
-    return new ByteSequenceIterator(new OfflineSorter.ByteSequencesReader(sorter.getDirectory().openChecksumInput(sortedFileName, IOContext.READONCE), sortedFileName));
+    return new ByteSequenceIterator(new OfflineSorter.ByteSequencesReader(sorted));
   }
   
   private void closeWriter() throws IOException {
     if (writer != null) {
-      CodecUtil.writeFooter(input);
       writer.close();
       writer = null;
     }
@@ -92,22 +90,25 @@ public class ExternalRefSorter implements BytesRefSorter, Closeable {
    */
   @Override
   public void close() throws IOException {
+    boolean success = false;
     try {
       closeWriter();
+      success = true;
     } finally {
-      IOUtils.deleteFilesIgnoringExceptions(sorter.getDirectory(),
-                                            input == null ? null : input.getName(),
-                                            sortedFileName);
+      if (success) {
+        IOUtils.deleteFilesIfExist(input, sorted);
+      } else {
+        IOUtils.deleteFilesIgnoringExceptions(input, sorted);
+      }
     }
   }
   
   /**
    * Iterate over byte refs in a file.
    */
-  // TODO: this class is a bit silly ... sole purpose is to "remove" Closeable from what #iterator returns:
-  static class ByteSequenceIterator implements BytesRefIterator {
+  class ByteSequenceIterator implements BytesRefIterator {
     private final OfflineSorter.ByteSequencesReader reader;
-    private BytesRef scratch;
+    private BytesRef scratch = new BytesRef();
     
     public ByteSequenceIterator(OfflineSorter.ByteSequencesReader reader) {
       this.reader = reader;
@@ -115,11 +116,19 @@ public class ExternalRefSorter implements BytesRefSorter, Closeable {
     
     @Override
     public BytesRef next() throws IOException {
+      if (scratch == null) {
+        return null;
+      }
       boolean success = false;
       try {
-        scratch = reader.next();
-        if (scratch == null) {
-          reader.close();
+        byte[] next = reader.read();
+        if (next != null) {
+          scratch.bytes = next;
+          scratch.length = next.length;
+          scratch.offset = 0;
+        } else {
+          IOUtils.close(reader);
+          scratch = null;
         }
         success = true;
         return scratch;
@@ -133,6 +142,6 @@ public class ExternalRefSorter implements BytesRefSorter, Closeable {
 
   @Override
   public Comparator<BytesRef> getComparator() {
-    return sorter.getComparator();
+    return sort.getComparator();
   }
 }

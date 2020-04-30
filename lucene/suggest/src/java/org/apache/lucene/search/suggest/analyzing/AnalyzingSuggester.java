@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.analyzing;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.analyzing;
+
+import static org.apache.lucene.util.automaton.Operations.DEFAULT_MAX_DETERMINIZED_STATES;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -28,16 +33,12 @@ import java.util.Set;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.TokenStreamToAutomaton;
-import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.search.suggest.InputIterator;
 import org.apache.lucene.search.suggest.Lookup;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.ByteArrayDataOutput;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Accountables;
 import org.apache.lucene.util.ArrayUtil;
@@ -54,16 +55,14 @@ import org.apache.lucene.util.automaton.Operations;
 import org.apache.lucene.util.automaton.Transition;
 import org.apache.lucene.util.fst.Builder;
 import org.apache.lucene.util.fst.ByteSequenceOutputs;
-import org.apache.lucene.util.fst.FST.BytesReader;
 import org.apache.lucene.util.fst.FST;
-import org.apache.lucene.util.fst.PairOutputs.Pair;
+import org.apache.lucene.util.fst.FST.BytesReader;
 import org.apache.lucene.util.fst.PairOutputs;
+import org.apache.lucene.util.fst.PairOutputs.Pair;
 import org.apache.lucene.util.fst.PositiveIntOutputs;
+import org.apache.lucene.util.fst.Util;
 import org.apache.lucene.util.fst.Util.Result;
 import org.apache.lucene.util.fst.Util.TopResults;
-import org.apache.lucene.util.fst.Util;
-
-import static org.apache.lucene.util.automaton.Operations.DEFAULT_MAX_DETERMINIZED_STATES;
 
 /**
  * Suggester that first analyzes the surface form, adds the
@@ -117,8 +116,7 @@ import static org.apache.lucene.util.automaton.Operations.DEFAULT_MAX_DETERMINIZ
  * 
  * @lucene.experimental
  */
-// redundant 'implements Accountable' to workaround javadocs bugs
-public class AnalyzingSuggester extends Lookup implements Accountable {
+public class AnalyzingSuggester extends Lookup {
  
   /**
    * FST&lt;Weight,Surface&gt;: 
@@ -151,14 +149,14 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
   private final boolean preserveSep;
 
   /** Include this flag in the options parameter to {@link
-   *  #AnalyzingSuggester(Directory,String,Analyzer,Analyzer,int,int,int,boolean)} to always
+   *  #AnalyzingSuggester(Analyzer,Analyzer,int,int,int,boolean)} to always
    *  return the exact match first, regardless of score.  This
    *  has no performance impact but could result in
    *  low-quality suggestions. */
   public static final int EXACT_FIRST = 1;
 
   /** Include this flag in the options parameter to {@link
-   *  #AnalyzingSuggester(Directory,String,Analyzer,Analyzer,int,int,int,boolean)} to preserve
+   *  #AnalyzingSuggester(Analyzer,Analyzer,int,int,int,boolean)} to preserve
    *  token separators when matching. */
   public static final int PRESERVE_SEP = 2;
 
@@ -180,9 +178,6 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
    *  SynonymFilter). */
   private final int maxGraphExpansions;
 
-  private final Directory tempDir;
-  private final String tempFileNamePrefix;
-
   /** Highest number of analyzed paths we saw for any single
    *  input surface form.  For analyzers that never create
    *  graphs this will always be 1. */
@@ -199,21 +194,21 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
   private long count = 0;
 
   /**
-   * Calls {@link #AnalyzingSuggester(Directory,String,Analyzer,Analyzer,int,int,int,boolean)
+   * Calls {@link #AnalyzingSuggester(Analyzer,Analyzer,int,int,int,boolean)
    * AnalyzingSuggester(analyzer, analyzer, EXACT_FIRST |
    * PRESERVE_SEP, 256, -1, true)}
    */
-  public AnalyzingSuggester(Directory tempDir, String tempFileNamePrefix, Analyzer analyzer) {
-    this(tempDir, tempFileNamePrefix, analyzer, analyzer, EXACT_FIRST | PRESERVE_SEP, 256, -1, true);
+  public AnalyzingSuggester(Analyzer analyzer) {
+    this(analyzer, analyzer, EXACT_FIRST | PRESERVE_SEP, 256, -1, true);
   }
 
   /**
-   * Calls {@link #AnalyzingSuggester(Directory,String,Analyzer,Analyzer,int,int,int,boolean)
+   * Calls {@link #AnalyzingSuggester(Analyzer,Analyzer,int,int,int,boolean)
    * AnalyzingSuggester(indexAnalyzer, queryAnalyzer, EXACT_FIRST |
    * PRESERVE_SEP, 256, -1, true)}
    */
-  public AnalyzingSuggester(Directory tempDir, String tempFileNamePrefix, Analyzer indexAnalyzer, Analyzer queryAnalyzer) {
-    this(tempDir, tempFileNamePrefix, indexAnalyzer, queryAnalyzer, EXACT_FIRST | PRESERVE_SEP, 256, -1, true);
+  public AnalyzingSuggester(Analyzer indexAnalyzer, Analyzer queryAnalyzer) {
+    this(indexAnalyzer, queryAnalyzer, EXACT_FIRST | PRESERVE_SEP, 256, -1, true);
   }
 
   /**
@@ -234,7 +229,7 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
    * @param preservePositionIncrements Whether position holes
    *   should appear in the automata
    */
-  public AnalyzingSuggester(Directory tempDir, String tempFileNamePrefix, Analyzer indexAnalyzer, Analyzer queryAnalyzer, int options, int maxSurfaceFormsPerAnalyzedForm, int maxGraphExpansions,
+  public AnalyzingSuggester(Analyzer indexAnalyzer, Analyzer queryAnalyzer, int options, int maxSurfaceFormsPerAnalyzedForm, int maxGraphExpansions,
       boolean preservePositionIncrements) {
     this.indexAnalyzer = indexAnalyzer;
     this.queryAnalyzer = queryAnalyzer;
@@ -258,8 +253,6 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
     }
     this.maxGraphExpansions = maxGraphExpansions;
     this.preservePositionIncrements = preservePositionIncrements;
-    this.tempDir = tempDir;
-    this.tempFileNamePrefix = tempFileNamePrefix;
   }
 
   /** Returns byte size of the underlying FST. */
@@ -332,7 +325,6 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
   TokenStreamToAutomaton getTokenStreamToAutomaton() {
     final TokenStreamToAutomaton tsta = new TokenStreamToAutomaton();
     tsta.setPreservePositionIncrements(preservePositionIncrements);
-    tsta.setFinalOffsetGapAsHole(true);
     return tsta;
   }
   
@@ -390,11 +382,9 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
       } else {
         scratchA.offset = readerA.getPosition();
         scratchB.offset = readerB.getPosition();
-        scratchA.length = readerA.length() - readerA.getPosition();
-        scratchB.length = readerB.length() - readerB.getPosition();
+        scratchA.length = a.length - scratchA.offset;
+        scratchB.length = b.length - scratchB.offset;
       }
-      assert scratchA.isValid();
-      assert scratchB.isValid();
    
       return scratchA.compareTo(scratchB);
     }
@@ -405,12 +395,12 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
     if (iterator.hasContexts()) {
       throw new IllegalArgumentException("this suggester doesn't support contexts");
     }
+    String prefix = getClass().getSimpleName();
+    Path directory = OfflineSorter.getDefaultTempDir();
+    Path tempInput = Files.createTempFile(directory, prefix, ".input");
+    Path tempSorted = Files.createTempFile(directory, prefix, ".sorted");
 
     hasPayloads = iterator.hasPayloads();
-
-    OfflineSorter sorter = new OfflineSorter(tempDir, tempFileNamePrefix, new AnalyzingComparator(hasPayloads));
-
-    IndexOutput tempInput = tempDir.createTempOutput(tempFileNamePrefix, "input", IOContext.DEFAULT);
 
     OfflineSorter.ByteSequencesWriter writer = new OfflineSorter.ByteSequencesWriter(tempInput);
     OfflineSorter.ByteSequencesReader reader = null;
@@ -418,8 +408,7 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
 
     TokenStreamToAutomaton ts2a = getTokenStreamToAutomaton();
 
-    String tempSortedFileName = null;
-
+    boolean success = false;
     count = 0;
     byte buffer[] = new byte[8];
     try {
@@ -484,16 +473,15 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
 
         maxAnalyzedPathsForOneInput = Math.max(maxAnalyzedPathsForOneInput, finiteStrings.size());
       }
-      CodecUtil.writeFooter(tempInput);
       writer.close();
 
       // Sort all input/output pairs (required by FST.Builder):
-      tempSortedFileName = sorter.sort(tempInput.getName());
+      new OfflineSorter(new AnalyzingComparator(hasPayloads)).sort(tempInput, tempSorted);
 
       // Free disk space:
-      tempDir.deleteFile(tempInput.getName());
+      Files.delete(tempInput);
 
-      reader = new OfflineSorter.ByteSequencesReader(tempDir.openChecksumInput(tempSortedFileName, IOContext.READONCE), tempSortedFileName);
+      reader = new OfflineSorter.ByteSequencesReader(tempSorted);
      
       PairOutputs<Long,BytesRef> outputs = new PairOutputs<>(PositiveIntOutputs.getSingleton(), ByteSequenceOutputs.getSingleton());
       Builder<Pair<Long,BytesRef>> builder = new Builder<>(FST.INPUT_TYPE.BYTE1, outputs);
@@ -512,12 +500,8 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
       Set<BytesRef> seenSurfaceForms = new HashSet<>();
 
       int dedup = 0;
-      while (true) {
-        BytesRef bytes = reader.next();
-        if (bytes == null) {
-          break;
-        }
-        input.reset(bytes.bytes, bytes.offset, bytes.length);
+      while (reader.read(scratch)) {
+        input.reset(scratch.bytes(), 0, scratch.length());
         short analyzedLength = input.readShort();
         analyzed.grow(analyzedLength+2);
         input.readBytes(analyzed.bytes(), 0, analyzedLength);
@@ -525,13 +509,13 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
 
         long cost = input.readInt();
 
-        surface.bytes = bytes.bytes;
+        surface.bytes = scratch.bytes();
         if (hasPayloads) {
           surface.length = input.readShort();
           surface.offset = input.getPosition();
         } else {
           surface.offset = input.getPosition();
-          surface.length = bytes.length - surface.offset;
+          surface.length = scratch.length() - surface.offset;
         }
         
         if (previousAnalyzed == null) {
@@ -573,11 +557,11 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
           builder.add(scratchInts.get(), outputs.newPair(cost, BytesRef.deepCopyOf(surface)));
         } else {
           int payloadOffset = input.getPosition() + surface.length;
-          int payloadLength = bytes.length - payloadOffset;
+          int payloadLength = scratch.length() - payloadOffset;
           BytesRef br = new BytesRef(surface.length + 1 + payloadLength);
           System.arraycopy(surface.bytes, surface.offset, br.bytes, 0, surface.length);
           br.bytes[surface.length] = PAYLOAD_SEP;
-          System.arraycopy(bytes.bytes, payloadOffset, br.bytes, surface.length+1, payloadLength);
+          System.arraycopy(scratch.bytes(), payloadOffset, br.bytes, surface.length+1, payloadLength);
           br.length = br.bytes.length;
           builder.add(scratchInts.get(), outputs.newPair(cost, br));
         }
@@ -585,9 +569,16 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
       fst = builder.finish();
 
       //Util.dotToFile(fst, "/tmp/suggest.dot");
+      
+      success = true;
     } finally {
       IOUtils.closeWhileHandlingException(reader, writer);
-      IOUtils.deleteFilesIgnoringExceptions(tempDir, tempInput.getName(), tempSortedFileName);
+      
+      if (success) {
+        IOUtils.deleteFilesIfExist(tempInput, tempSorted);
+      } else {
+        IOUtils.deleteFilesIgnoringExceptions(tempInput, tempSorted);
+      }
     }
   }
 
@@ -727,7 +718,7 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
           if (fst.findTargetArc(END_BYTE, path.fstNode, scratchArc, bytesReader) != null) {
             // This node has END_BYTE arc leaving, meaning it's an
             // "exact" match:
-            searcher.addStartPaths(scratchArc, fst.outputs.add(path.output, scratchArc.output()), false, path.input);
+            searcher.addStartPaths(scratchArc, fst.outputs.add(path.output, scratchArc.output), false, path.input);
           }
         }
 
@@ -868,7 +859,7 @@ public class AnalyzingSuggester extends Lookup implements Accountable {
     // Turn tokenstream into automaton:
     Automaton automaton = null;
     try (TokenStream ts = queryAnalyzer.tokenStream("", key.toString())) {
-      automaton = getTokenStreamToAutomaton().toAutomaton(ts);
+        automaton = getTokenStreamToAutomaton().toAutomaton(ts);
     }
 
     automaton = replaceSep(automaton);

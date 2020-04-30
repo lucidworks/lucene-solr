@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.request;
 
 import java.io.ByteArrayInputStream;
@@ -30,21 +31,19 @@ import org.apache.solr.client.solrj.impl.XMLResponseParser;
 import org.apache.solr.response.BinaryQueryResponseWriter;
 import org.apache.solr.response.QueryResponseWriter;
 import org.apache.solr.response.SolrQueryResponse;
-import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.util.AbstractSolrTestCase;
 import org.apache.solr.util.RTimer;
 import org.junit.BeforeClass;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-public class TestWriterPerf extends SolrTestCaseJ4 {
+public class TestWriterPerf extends AbstractSolrTestCase {
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   @BeforeClass
   public static void beforeClass() throws Exception {
-    // we need DVs on point fields to compute stats & facets
-    if (Boolean.getBoolean(NUMERIC_POINTS_SYSPROP)) System.setProperty(NUMERIC_DOCVALUES_SYSPROP,"true");
     initCore("solrconfig-functionquery.xml", "schema11.xml");
   }
   

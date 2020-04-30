@@ -1,3 +1,7 @@
+package org.apache.lucene.facet.taxonomy.writercache;
+
+import org.apache.lucene.facet.taxonomy.FacetLabel;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +18,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy.writercache;
-
-import org.apache.lucene.facet.taxonomy.FacetLabel;
 
 /**
- * An LRU cache of mapping from name to int.
+ * An an LRU cache of mapping from name to int.
  * Used to cache Ordinals of category paths.
  * It uses as key, hash of the path instead of the path.
  * This way the cache takes less RAM, but correctness depends on
@@ -35,12 +36,12 @@ public class NameHashIntCacheLRU extends NameIntCacheLRU {
 
   @Override
   Object key(FacetLabel name) {
-    return name.longHashCode();
+    return new Long(name.longHashCode());
   }
 
   @Override
   Object key(FacetLabel name, int prefixLen) {
-    return name.subpath(prefixLen).longHashCode();
+    return new Long(name.subpath(prefixLen).longHashCode());
   }
   
 }

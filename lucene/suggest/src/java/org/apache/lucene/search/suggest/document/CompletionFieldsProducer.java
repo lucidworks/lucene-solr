@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.document;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -32,13 +33,13 @@ import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.IndexFileNames;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.Terms;
-import org.apache.lucene.search.suggest.document.CompletionPostingsFormat.FSTLoadMode;
 import org.apache.lucene.store.ChecksumIndexInput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Accountables;
 import org.apache.lucene.util.IOUtils;
 
+import static org.apache.lucene.search.suggest.document.CompletionPostingsFormat.CODEC_NAME;
 import static org.apache.lucene.search.suggest.document.CompletionPostingsFormat.COMPLETION_CODEC_VERSION;
 import static org.apache.lucene.search.suggest.document.CompletionPostingsFormat.COMPLETION_VERSION_CURRENT;
 import static org.apache.lucene.search.suggest.document.CompletionPostingsFormat.DICT_EXTENSION;
@@ -71,7 +72,7 @@ final class CompletionFieldsProducer extends FieldsProducer {
     this.readers = readers;
   }
 
-  CompletionFieldsProducer(String codecName, SegmentReadState state, FSTLoadMode fstLoadMode) throws IOException {
+  CompletionFieldsProducer(SegmentReadState state) throws IOException {
     String indexFile = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, INDEX_EXTENSION);
     delegateFieldsProducer = null;
     boolean success = false;
@@ -80,12 +81,12 @@ final class CompletionFieldsProducer extends FieldsProducer {
       // open up dict file containing all fsts
       String dictFile = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, DICT_EXTENSION);
       dictIn = state.directory.openInput(dictFile, state.context);
-      CodecUtil.checkIndexHeader(dictIn, codecName, COMPLETION_CODEC_VERSION, COMPLETION_VERSION_CURRENT, state.segmentInfo.getId(), state.segmentSuffix);
+      CodecUtil.checkIndexHeader(dictIn, CODEC_NAME, COMPLETION_CODEC_VERSION, COMPLETION_VERSION_CURRENT, state.segmentInfo.getId(), state.segmentSuffix);
       // just validate the footer for the dictIn
       CodecUtil.retrieveChecksum(dictIn);
 
       // open up index file (fieldNumber, offset)
-      CodecUtil.checkIndexHeader(index, codecName, COMPLETION_CODEC_VERSION, COMPLETION_VERSION_CURRENT, state.segmentInfo.getId(), state.segmentSuffix);
+      CodecUtil.checkIndexHeader(index, CODEC_NAME, COMPLETION_CODEC_VERSION, COMPLETION_VERSION_CURRENT, state.segmentInfo.getId(), state.segmentSuffix);
       // load delegate PF
       PostingsFormat delegatePostingsFormat = PostingsFormat.forName(index.readString());
       delegateFieldsProducer = delegatePostingsFormat.fieldsProducer(state);
@@ -101,7 +102,7 @@ final class CompletionFieldsProducer extends FieldsProducer {
         byte type = index.readByte();
         FieldInfo fieldInfo = state.fieldInfos.fieldInfo(fieldNumber);
         // we don't load the FST yet
-        readers.put(fieldInfo.name, new CompletionsTermsReader(dictIn, offset, minWeight, maxWeight, type, fstLoadMode));
+        readers.put(fieldInfo.name, new CompletionsTermsReader(dictIn, offset, minWeight, maxWeight, type));
       }
       CodecUtil.checkFooter(index);
       success = true;
@@ -133,7 +134,7 @@ final class CompletionFieldsProducer extends FieldsProducer {
   }
 
   @Override
-  public FieldsProducer getMergeInstance() {
+  public FieldsProducer getMergeInstance() throws IOException {
     return new CompletionFieldsProducer(delegateFieldsProducer, readers);
   }
 

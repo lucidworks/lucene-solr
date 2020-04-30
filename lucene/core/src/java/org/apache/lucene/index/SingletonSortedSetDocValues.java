@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,80 +16,45 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
-
-import java.io.IOException;
 
 import org.apache.lucene.util.BytesRef;
 
 /** 
- * Exposes multi-valued iterator view over a single-valued iterator.
+ * Exposes multi-valued view over a single-valued instance.
  * <p>
  * This can be used if you want to have one multi-valued implementation
  * that works for single or multi-valued types.
  */
-final class SingletonSortedSetDocValues extends SortedSetDocValues {
+final class SingletonSortedSetDocValues extends RandomAccessOrds {
   private final SortedDocValues in;
+  private long currentOrd;
   private long ord;
   
   /** Creates a multi-valued view over the provided SortedDocValues */
   public SingletonSortedSetDocValues(SortedDocValues in) {
-    if (in.docID() != -1) {
-      throw new IllegalStateException("iterator has already been used: docID=" + in.docID());
-    }
     this.in = in;
+    assert NO_MORE_ORDS == -1; // this allows our nextOrd() to work for missing values without a check
   }
 
   /** Return the wrapped {@link SortedDocValues} */
   public SortedDocValues getSortedDocValues() {
-    if (in.docID() != -1) {
-      throw new IllegalStateException("iterator has already been used: docID=" + in.docID());
-    }
     return in;
   }
 
   @Override
-  public int docID() {
-    return in.docID();
-  }
-
-  @Override
   public long nextOrd() {
-    long v = ord;
-    ord = NO_MORE_ORDS;
+    long v = currentOrd;
+    currentOrd = NO_MORE_ORDS;
     return v;
   }
 
   @Override
-  public int nextDoc() throws IOException {
-    int docID = in.nextDoc();
-    if (docID != NO_MORE_DOCS) {
-      ord = in.ordValue();
-    }
-    return docID;
+  public void setDocument(int docID) {
+    currentOrd = ord = in.getOrd(docID);
   }
 
   @Override
-  public int advance(int target) throws IOException {
-    int docID = in.advance(target);
-    if (docID != NO_MORE_DOCS) {
-      ord = in.ordValue();
-    }
-    return docID;
-  }
-
-  @Override
-  public boolean advanceExact(int target) throws IOException {
-    if (in.advanceExact(target)) {
-      ord = in.ordValue();
-      return true;
-    }
-    return false;
-  }
-
-  @Override
-  public BytesRef lookupOrd(long ord) throws IOException {
+  public BytesRef lookupOrd(long ord) {
     // cast is ok: single-valued cannot exceed Integer.MAX_VALUE
     return in.lookupOrd((int) ord);
   }
@@ -98,17 +65,22 @@ final class SingletonSortedSetDocValues extends SortedSetDocValues {
   }
 
   @Override
-  public long lookupTerm(BytesRef key) throws IOException {
+  public long lookupTerm(BytesRef key) {
     return in.lookupTerm(key);
   }
 
   @Override
-  public TermsEnum termsEnum() throws IOException {
-    return in.termsEnum();
+  public long ordAt(int index) {
+    return ord;
   }
 
   @Override
-  public long cost() {
-    return in.cost();
+  public int cardinality() {
+    return (int) (ord >>> 63) ^ 1;
+  }
+
+  @Override
+  public TermsEnum termsEnum() {
+    return in.termsEnum();
   }
 }

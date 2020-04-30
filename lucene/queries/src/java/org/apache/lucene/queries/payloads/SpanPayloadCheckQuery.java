@@ -1,3 +1,4 @@
+package org.apache.lucene.queries.payloads;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,31 +15,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.payloads;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
-import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.Terms;
-import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.LeafSimScorer;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
+import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.spans.FilterSpans;
 import org.apache.lucene.search.spans.FilterSpans.AcceptStatus;
 import org.apache.lucene.search.spans.SpanCollector;
 import org.apache.lucene.search.spans.SpanQuery;
-import org.apache.lucene.search.spans.SpanScorer;
 import org.apache.lucene.search.spans.SpanWeight;
 import org.apache.lucene.search.spans.Spans;
 import org.apache.lucene.util.BytesRef;
@@ -66,25 +59,9 @@ public class SpanPayloadCheckQuery extends SpanQuery {
   }
 
   @Override
-  public SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    SpanWeight matchWeight = match.createWeight(searcher, scoreMode, boost);
-    return new SpanPayloadCheckWeight(searcher, scoreMode.needsScores() ? getTermStates(matchWeight) : null, matchWeight, boost);
-  }
-
-  @Override
-  public Query rewrite(IndexReader reader) throws IOException {
-    Query matchRewritten = match.rewrite(reader);
-    if (match != matchRewritten && matchRewritten instanceof SpanQuery) {
-      return new SpanPayloadCheckQuery((SpanQuery)matchRewritten, payloadToMatch);
-    }
-    return super.rewrite(reader);
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    if (visitor.acceptField(match.getField())) {
-      match.visit(visitor.getSubVisitor(BooleanClause.Occur.MUST, this));
-    }
+  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    SpanWeight matchWeight = match.createWeight(searcher, false);
+    return new SpanPayloadCheckWeight(searcher, needsScores ? getTermContexts(matchWeight) : null, matchWeight);
   }
 
   /**
@@ -94,8 +71,8 @@ public class SpanPayloadCheckQuery extends SpanQuery {
 
     final SpanWeight matchWeight;
 
-    public SpanPayloadCheckWeight(IndexSearcher searcher, Map<Term, TermStates> termStates, SpanWeight matchWeight, float boost) throws IOException {
-      super(SpanPayloadCheckQuery.this, searcher, termStates, boost);
+    public SpanPayloadCheckWeight(IndexSearcher searcher, Map<Term, TermContext> termContexts, SpanWeight matchWeight) throws IOException {
+      super(SpanPayloadCheckQuery.this, searcher, termContexts);
       this.matchWeight = matchWeight;
     }
 
@@ -105,15 +82,15 @@ public class SpanPayloadCheckQuery extends SpanQuery {
     }
 
     @Override
-    public void extractTermStates(Map<Term, TermStates> contexts) {
-      matchWeight.extractTermStates(contexts);
+    public void extractTermContexts(Map<Term, TermContext> contexts) {
+      matchWeight.extractTermContexts(contexts);
     }
 
     @Override
     public Spans getSpans(final LeafReaderContext context, Postings requiredPostings) throws IOException {
       final PayloadChecker collector = new PayloadChecker();
       Spans matchSpans = matchWeight.getSpans(context, requiredPostings.atLeast(Postings.PAYLOADS));
-      return (matchSpans == null) ? null : new FilterSpans(matchSpans) {
+      return (matchSpans == null) ? null : new FilterSpans(matchSpans, getSimScorer(context)) {
         @Override
         protected AcceptStatus accept(Spans candidate) throws IOException {
           collector.reset();
@@ -124,7 +101,7 @@ public class SpanPayloadCheckQuery extends SpanQuery {
     }
 
     @Override
-    public SpanScorer scorer(LeafReaderContext context) throws IOException {
+    public Scorer scorer(LeafReaderContext context) throws IOException {
       if (field == null)
         return null;
 
@@ -133,19 +110,8 @@ public class SpanPayloadCheckQuery extends SpanQuery {
         throw new IllegalStateException("field \"" + field + "\" was indexed without position data; cannot run SpanQuery (query=" + parentQuery + ")");
       }
 
-      final Spans spans = getSpans(context, Postings.PAYLOADS);
-      if (spans == null) {
-        return null;
-      }
-      final LeafSimScorer docScorer = getSimScorer(context);
-      return new SpanScorer(this, spans, docScorer);
+      return getSpans(context, Postings.PAYLOADS);
     }
-
-    @Override
-    public boolean isCacheable(LeafReaderContext ctx) {
-      return matchWeight.isCacheable(ctx);
-    }
-
   }
 
   private class PayloadChecker implements SpanCollector {
@@ -190,7 +156,7 @@ public class SpanPayloadCheckQuery extends SpanQuery {
   @Override
   public String toString(String field) {
     StringBuilder buffer = new StringBuilder();
-    buffer.append("SpanPayloadCheckQuery(");
+    buffer.append("spanPayCheck(");
     buffer.append(match.toString(field));
     buffer.append(", payloadRef: ");
     for (BytesRef bytes : payloadToMatch) {
@@ -202,17 +168,18 @@ public class SpanPayloadCheckQuery extends SpanQuery {
   }
 
   @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           payloadToMatch.equals(((SpanPayloadCheckQuery) other).payloadToMatch) &&
-           match.equals(((SpanPayloadCheckQuery) other).match);
+  public boolean equals(Object o) {
+    if (! super.equals(o)) {
+      return false;
+    }
+    SpanPayloadCheckQuery other = (SpanPayloadCheckQuery)o;
+    return this.payloadToMatch.equals(other.payloadToMatch);
   }
 
   @Override
   public int hashCode() {
-    int result = classHash();
-    result = 31 * result + Objects.hashCode(match);
-    result = 31 * result + Objects.hashCode(payloadToMatch);
-    return result;
+    int h = super.hashCode();
+    h = (h * 63) ^ payloadToMatch.hashCode();
+    return h;
   }
 }

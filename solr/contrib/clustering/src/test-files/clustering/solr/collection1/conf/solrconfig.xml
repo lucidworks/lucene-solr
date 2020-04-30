@@ -25,7 +25,6 @@
   <dataDir>${solr.data.dir:}</dataDir>
 
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
 
   <indexConfig>
     <lockType>single</lockType>
@@ -63,6 +62,31 @@
     </autoCommit>
     -->
 
+    <!-- The RunExecutableListener executes an external command.
+         exe - the name of the executable to run
+         dir - dir to use as the current working directory. default="."
+         wait - the calling thread waits until the executable returns. default="true"
+         args - the arguments to pass to the program.  default=nothing
+         env - environment variables to set.  default=nothing
+      -->
+    <!-- A postCommit event is fired after every commit or optimize command
+    <listener event="postCommit" class="solr.RunExecutableListener">
+      <str name="exe">solr/bin/snapshooter</str>
+      <str name="dir">.</str>
+      <bool name="wait">true</bool>
+      <arr name="args"> <str>arg1</str> <str>arg2</str> </arr>
+      <arr name="env"> <str>MYVAR=val1</str> </arr>
+    </listener>
+    -->
+    <!-- A postOptimize event is fired only after every optimize command, useful
+         in conjunction with index distribution to only distribute optimized indicies 
+    <listener event="postOptimize" class="solr.RunExecutableListener">
+      <str name="exe">snapshooter</str>
+      <str name="dir">solr/bin</str>
+      <bool name="wait">true</bool>
+    </listener>
+    -->
+
   </updateHandler>
 
 
@@ -70,7 +94,7 @@
     <!-- Maximum number of clauses in a boolean query... can affect
         range or prefix queries that expand to big boolean
         queries.  An exception is thrown if exceeded.  -->
-    <maxBooleanClauses>${solr.max.booleanClauses:1024}</maxBooleanClauses>
+    <maxBooleanClauses>1024</maxBooleanClauses>
 
     
     <!-- Cache used by SolrIndexSearcher for filters (DocSets),
@@ -187,13 +211,22 @@
          warming. -->
     <useColdSearcher>false</useColdSearcher>
 
+    <!-- Maximum number of searchers that may be warming in the background
+      concurrently.  An error is returned if this limit is exceeded. Recommend
+      1-2 for read-only slaves, higher for masters w/o cache warming. -->
+    <maxWarmingSearchers>2</maxWarmingSearchers>
+
   </query>
 
-  <requestDispatcher>
-    <!--Make sure your system has some authentication before enabling remote streaming!
-    <requestParsers enableRemoteStreaming="false" multipartUploadLimitInKB="-1" />
+  <!-- 
+    Let the dispatch filter handler /select?qt=XXX
+    handleSelect=true will use consistent error handling for /select and /update
+    handleSelect=false will use solr1.1 style error formatting
     -->
-
+  <requestDispatcher handleSelect="true" >
+    <!--Make sure your system has some authentication before enabling remote streaming!  -->
+    <requestParsers enableRemoteStreaming="false" multipartUploadLimitInKB="2048" />
+        
     <!-- Set HTTP caching related parameters (for proxy caches and clients).
           
          To get the behaviour of Solr 1.2 (ie: no caching related headers)
@@ -230,8 +263,17 @@
        <!-- <cacheControl>max-age=30, public</cacheControl> -->
     </httpCaching>
   </requestDispatcher>
-
-  <requestHandler name="/select" class="solr.SearchHandler">
+  
+      
+  <!-- requestHandler plugins... incoming queries will be dispatched to the
+     correct handler based on the path or the 'qt' param.
+     Names starting with a '/' are accessed with the a path equal to the 
+     registered name.  Names without a leading '/' are accessed with:
+      http://host/app/select?qt=name
+     If no qt is defined, the requestHandler that declares default="true"
+     will be used.
+  -->
+  <requestHandler name="standard" class="solr.SearchHandler" default="true">
     <!-- default values for query parameters -->
      <lst name="defaults">
        <str name="echoParams">explicit</str>
@@ -305,6 +347,11 @@
       <str name="carrot.resourcesDir">clustering/custom</str>
     </lst>
     <lst name="engine">
+      <str name="name">lexical-resource-check-custom-resource-dir-deprecated</str>
+      <str name="carrot.algorithm">org.apache.solr.handler.clustering.carrot2.LexicalResourcesCheckClusteringAlgorithm</str>
+      <str name="carrot.lexicalResourcesDir">clustering/custom</str>
+    </lst>
+    <lst name="engine">
       <str name="name">custom-duplicating-tokenizer</str>
       <str name="carrot.algorithm">org.apache.solr.handler.clustering.carrot2.EchoTokensClusteringAlgorithm</str>
       <str name="PreprocessingPipeline.tokenizerFactory">org.apache.solr.handler.clustering.carrot2.DuplicatingTokenizerFactory</str>
@@ -373,6 +420,14 @@
     </lst>
   </searchComponent>
 
+  <!-- Echo the request contents back to the client -->
+  <requestHandler name="/debug/dump" class="solr.DumpRequestHandler" >
+    <lst name="defaults">
+     <str name="echoParams">explicit</str> <!-- for all params (including the default etc) use: 'all' -->
+     <str name="echoHandler">true</str>
+    </lst>
+  </requestHandler>
+  
   <highlighting>
    <!-- Configure the standard fragmenter -->
    <!-- This could most likely be commented out in the "default" case -->

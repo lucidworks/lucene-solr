@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.IOException;
 import java.util.Collections;
@@ -76,7 +76,7 @@ public class TestLockFactory extends LuceneTestCase {
         }
     }
 
-    static class MockLockFactory extends LockFactory {
+    class MockLockFactory extends LockFactory {
 
         public Map<String,Lock> locksCreated = Collections.synchronizedMap(new HashMap<String,Lock>());
 
@@ -87,7 +87,7 @@ public class TestLockFactory extends LuceneTestCase {
             return lock;
         }
 
-        public static class MockLock extends Lock {
+        public class MockLock extends Lock {
 
             @Override
             public void close() {

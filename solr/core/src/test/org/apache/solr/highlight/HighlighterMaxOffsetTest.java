@@ -1,3 +1,5 @@
+package org.apache.solr.highlight;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.highlight;
 
 import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.request.SolrQueryRequest;
 import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -101,8 +103,7 @@ public class HighlighterMaxOffsetTest extends SolrTestCaseJ4 {
 
   private static void assertHighlighting(String field) throws Exception {
     assertQ(req("q", "id:DOC1", 
-                "df", "content",
-                "hl.q", "JPEG",
+                "hl.q", "JPEG", 
                 "indent", "true", 
                 "hl", "true", 
                 "hl.fl", field, 

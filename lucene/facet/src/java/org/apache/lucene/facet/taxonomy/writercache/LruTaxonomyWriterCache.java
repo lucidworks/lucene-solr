@@ -1,3 +1,8 @@
+ package org.apache.lucene.facet.taxonomy.writercache;
+
+import org.apache.lucene.facet.taxonomy.FacetLabel;
+import org.apache.lucene.facet.taxonomy.writercache.TaxonomyWriterCache;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +19,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy.writercache;
-
-import org.apache.lucene.facet.taxonomy.FacetLabel;
 
 /**
  * LRU {@link TaxonomyWriterCache} - good choice for huge taxonomies.
@@ -31,12 +33,8 @@ public class LruTaxonomyWriterCache implements TaxonomyWriterCache {
    * function, LRU_STRING should be used.
    */
   public enum LRUType {
-    /** Use only the label's 64 bit longHashCode as the hash key. Do not
-     *  check equals, unlike most hash maps.
-     *  Note that while these hashes are very likely to be unique, the chance
-     *  of a collision is still greater than zero. If such an unlikely event
-     *  occurs, your document will get an incorrect facet.
-     */
+    /** Use the label's hash as the key; this can lead to
+     *  silent conflicts! */
     LRU_HASHED,
 
     /** Use the label as the hash key; this is always
@@ -46,15 +44,15 @@ public class LruTaxonomyWriterCache implements TaxonomyWriterCache {
 
   private NameIntCacheLRU cache;
 
-  /** Creates this with {@link LRUType#LRU_STRING} method. */
+  /** Creates this with {@link LRUType#LRU_HASHED} method. */
   public LruTaxonomyWriterCache(int cacheSize) {
     // TODO (Facet): choose between NameHashIntCacheLRU and NameIntCacheLRU.
     // For guaranteed correctness - not relying on no-collisions in the hash
     // function, NameIntCacheLRU should be used:
     // On the other hand, NameHashIntCacheLRU takes less RAM but if there
-    // are collisions two different paths would be mapped to the same
-    // ordinal...
-    this(cacheSize, LRUType.LRU_STRING);
+    // are collisions (which we never found) two different paths would be
+    // mapped to the same ordinal...
+    this(cacheSize, LRUType.LRU_HASHED);
   }
 
   /** Creates this with the specified method. */
@@ -63,8 +61,8 @@ public class LruTaxonomyWriterCache implements TaxonomyWriterCache {
     // For guaranteed correctness - not relying on no-collisions in the hash
     // function, NameIntCacheLRU should be used:
     // On the other hand, NameHashIntCacheLRU takes less RAM but if there
-    // are collisions two different paths would be mapped to the same
-    // ordinal...
+    // are collisions (which we never found) two different paths would be
+    // mapped to the same ordinal...
     if (lruType == LRUType.LRU_HASHED) {
       this.cache = new NameHashIntCacheLRU(cacheSize);
     } else {
@@ -89,11 +87,6 @@ public class LruTaxonomyWriterCache implements TaxonomyWriterCache {
   }
 
   @Override
-  public int size() {
-    return cache.getSize();
-  }
-  
-  @Override
   public synchronized int get(FacetLabel categoryPath) {
     Integer res = cache.get(categoryPath);
     if (res == null) {
@@ -105,14 +98,14 @@ public class LruTaxonomyWriterCache implements TaxonomyWriterCache {
 
   @Override
   public synchronized boolean put(FacetLabel categoryPath, int ordinal) {
-    boolean ret = cache.put(categoryPath, ordinal);
+    boolean ret = cache.put(categoryPath, new Integer(ordinal));
     // If the cache is full, we need to clear one or more old entries
     // from the cache. However, if we delete from the cache a recent
     // addition that isn't yet in our reader, for this entry to be
     // visible to us we need to make sure that the changes have been
     // committed and we reopen the reader. Because this is a slow
     // operation, we don't delete entries one-by-one but rather in bulk
-    // (put() removes the 1/3rd oldest entries).
+    // (put() removes the 2/3rd oldest entries).
     if (ret) {
       cache.makeRoomLRU();
     }

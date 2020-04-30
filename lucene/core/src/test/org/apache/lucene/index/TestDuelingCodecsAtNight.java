@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import org.apache.lucene.util.LuceneTestCase.Nightly;
 import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
@@ -24,7 +24,7 @@ import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
  * Just like TestDuelingCodecs, only with a lot more documents.
  */
 @Nightly
-@SuppressCodecs({"Direct"}) // it can be too much for these codecs
+@SuppressCodecs({"Memory", "Direct"}) // it can be too much for these codecs
 public class TestDuelingCodecsAtNight extends TestDuelingCodecs {
 
   // use a big number of documents

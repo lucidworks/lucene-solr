@@ -1,3 +1,8 @@
+package org.apache.lucene.facet.taxonomy.writercache;
+
+import org.apache.lucene.facet.taxonomy.FacetLabel;
+import org.apache.lucene.facet.taxonomy.directory.DirectoryTaxonomyWriter;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +19,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy.writercache;
-
-import org.apache.lucene.facet.taxonomy.FacetLabel;
-import org.apache.lucene.facet.taxonomy.directory.DirectoryTaxonomyWriter;
 
 /**
  * TaxonomyWriterCache is a relatively simple interface for a cache of
@@ -94,7 +95,5 @@ public interface TaxonomyWriterCache {
    * assume that the cache is still operable after this method returns.
    */
   public void clear();
-
-  /** How many labels are currently stored in the cache. */
-  public int size();
+  
 }

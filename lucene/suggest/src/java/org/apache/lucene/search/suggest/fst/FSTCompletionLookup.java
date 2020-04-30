@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.fst;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.fst;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.search.suggest.InputIterator;
 import org.apache.lucene.search.suggest.Lookup;
 import org.apache.lucene.search.suggest.fst.FSTCompletion.Completion;
@@ -32,16 +34,15 @@ import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.ByteArrayDataOutput;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Accountables;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.CharsRefBuilder;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.OfflineSorter;
+import org.apache.lucene.util.OfflineSorter.SortInfo;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.NoOutputs;
@@ -75,7 +76,7 @@ public class FSTCompletionLookup extends Lookup implements Accountable {
    * An invalid bucket count if we're creating an object
    * of this class from an existing FST.
    * 
-   * @see #FSTCompletionLookup(Directory, String, FSTCompletion, boolean)
+   * @see #FSTCompletionLookup(FSTCompletion, boolean)
    */
   private static int INVALID_BUCKETS_COUNT = -1;
   
@@ -87,9 +88,6 @@ public class FSTCompletionLookup extends Lookup implements Accountable {
    * <p>Empirical pick.
    */
   private final static int sharedTailLength = 5;
-
-  private final Directory tempDir;
-  private final String tempFileNamePrefix;
 
   private int buckets;
   private boolean exactMatchFirst;
@@ -108,20 +106,13 @@ public class FSTCompletionLookup extends Lookup implements Accountable {
   private long count = 0;
 
   /**
-   * This constructor should only be used to read a previously saved suggester.
-   */
-  public FSTCompletionLookup() {
-    this(null, null);
-  }
-
-  /**
    * This constructor prepares for creating a suggested FST using the
    * {@link #build(InputIterator)} method. The number of weight
    * discretization buckets is set to {@link FSTCompletion#DEFAULT_BUCKETS} and
    * exact matches are promoted to the top of the suggestions list.
    */
-  public FSTCompletionLookup(Directory tempDir, String tempFileNamePrefix) {
-    this(tempDir, tempFileNamePrefix, FSTCompletion.DEFAULT_BUCKETS, true);
+  public FSTCompletionLookup() {
+    this(FSTCompletion.DEFAULT_BUCKETS, true);
   }
 
   /**
@@ -137,11 +128,9 @@ public class FSTCompletionLookup extends Lookup implements Accountable {
    *          suggestions list. Otherwise they appear in the order of
    *          discretized weight and alphabetical within the bucket.
    */
-  public FSTCompletionLookup(Directory tempDir, String tempFileNamePrefix, int buckets, boolean exactMatchFirst) {
+  public FSTCompletionLookup(int buckets, boolean exactMatchFirst) {
     this.buckets = buckets;
     this.exactMatchFirst = exactMatchFirst;
-    this.tempDir = tempDir;
-    this.tempFileNamePrefix = tempFileNamePrefix;
   }
 
   /**
@@ -154,8 +143,8 @@ public class FSTCompletionLookup extends Lookup implements Accountable {
    *          suggestions list. Otherwise they appear in the order of
    *          discretized weight and alphabetical within the bucket.
    */
-  public FSTCompletionLookup(Directory tempDir, String tempFileNamePrefix, FSTCompletion completion, boolean exactMatchFirst) {
-    this(tempDir, tempFileNamePrefix, INVALID_BUCKETS_COUNT, exactMatchFirst);
+  public FSTCompletionLookup(FSTCompletion completion, boolean exactMatchFirst) {
+    this(INVALID_BUCKETS_COUNT, exactMatchFirst);
     this.normalCompletion = new FSTCompletion(
         completion.getFST(), false, exactMatchFirst);
     this.higherWeightsCompletion =  new FSTCompletion(
@@ -170,23 +159,23 @@ public class FSTCompletionLookup extends Lookup implements Accountable {
     if (iterator.hasContexts()) {
       throw new IllegalArgumentException("this suggester doesn't support contexts");
     }
-
-    OfflineSorter sorter = new OfflineSorter(tempDir, tempFileNamePrefix);
-    ExternalRefSorter externalSorter = new ExternalRefSorter(sorter);
-    IndexOutput tempInput = tempDir.createTempOutput(tempFileNamePrefix, "input", IOContext.DEFAULT);
-    String tempSortedFileName = null;
+    Path tempInput = Files.createTempFile(
+        OfflineSorter.getDefaultTempDir(), FSTCompletionLookup.class.getSimpleName(), ".input");
+    Path tempSorted = Files.createTempFile(
+        OfflineSorter.getDefaultTempDir(), FSTCompletionLookup.class.getSimpleName(), ".sorted");
 
     OfflineSorter.ByteSequencesWriter writer = new OfflineSorter.ByteSequencesWriter(tempInput);
     OfflineSorter.ByteSequencesReader reader = null;
+    ExternalRefSorter sorter = null;
 
     // Push floats up front before sequences to sort them. For now, assume they are non-negative.
     // If negative floats are allowed some trickery needs to be done to find their byte order.
+    boolean success = false;
     count = 0;
     try {
       byte [] buffer = new byte [0];
       ByteArrayDataOutput output = new ByteArrayDataOutput(buffer);
       BytesRef spare;
-      int inputLineCount = 0;
       while ((spare = iterator.next()) != null) {
         if (spare.length + 4 >= buffer.length) {
           buffer = ArrayUtil.grow(buffer, spare.length + 4);
@@ -196,46 +185,41 @@ public class FSTCompletionLookup extends Lookup implements Accountable {
         output.writeInt(encodeWeight(iterator.weight()));
         output.writeBytes(spare.bytes, spare.offset, spare.length);
         writer.write(buffer, 0, output.getPosition());
-        inputLineCount++;
       }
-      CodecUtil.writeFooter(tempInput);
       writer.close();
 
       // We don't know the distribution of scores and we need to bucket them, so we'll sort
       // and divide into equal buckets.
-      tempSortedFileName = sorter.sort(tempInput.getName());
-      tempDir.deleteFile(tempInput.getName());
-
+      SortInfo info = new OfflineSorter().sort(tempInput, tempSorted);
+      Files.delete(tempInput);
       FSTCompletionBuilder builder = new FSTCompletionBuilder(
-          buckets, externalSorter, sharedTailLength);
+          buckets, sorter = new ExternalRefSorter(new OfflineSorter()), sharedTailLength);
 
-      reader = new OfflineSorter.ByteSequencesReader(tempDir.openChecksumInput(tempSortedFileName, IOContext.READONCE), tempSortedFileName);
+      final int inputLines = info.lines;
+      reader = new OfflineSorter.ByteSequencesReader(tempSorted);
       long line = 0;
       int previousBucket = 0;
       int previousScore = 0;
       ByteArrayDataInput input = new ByteArrayDataInput();
+      BytesRefBuilder tmp1 = new BytesRefBuilder();
       BytesRef tmp2 = new BytesRef();
-      while (true) {
-        BytesRef scratch = reader.next();
-        if (scratch == null) {
-          break;
-        }
-        input.reset(scratch.bytes, scratch.offset, scratch.length);
+      while (reader.read(tmp1)) {
+        input.reset(tmp1.bytes());
         int currentScore = input.readInt();
 
         int bucket;
         if (line > 0 && currentScore == previousScore) {
           bucket = previousBucket;
         } else {
-          bucket = (int) (line * buckets / inputLineCount);
+          bucket = (int) (line * buckets / inputLines);
         }
         previousScore = currentScore;
         previousBucket = bucket;
 
         // Only append the input, discard the weight.
-        tmp2.bytes = scratch.bytes;
-        tmp2.offset = scratch.offset + input.getPosition();
-        tmp2.length = scratch.length - input.getPosition();
+        tmp2.bytes = tmp1.bytes();
+        tmp2.offset = input.getPosition();
+        tmp2.length = tmp1.length() - input.getPosition();
         builder.add(tmp2, bucket);
 
         line++;
@@ -247,9 +231,15 @@ public class FSTCompletionLookup extends Lookup implements Accountable {
       this.normalCompletion = new FSTCompletion(
           higherWeightsCompletion.getFST(), false, exactMatchFirst);
       
+      success = true;
     } finally {
-      IOUtils.closeWhileHandlingException(reader, writer, externalSorter);
-      IOUtils.deleteFilesIgnoringExceptions(tempDir, tempInput.getName(), tempSortedFileName);
+      IOUtils.closeWhileHandlingException(reader, writer, sorter);
+
+      if (success) {
+        Files.delete(tempSorted);
+      } else {
+        IOUtils.deleteFilesIgnoringExceptions(tempInput, tempSorted);
+      }
     }
   }
   
@@ -295,9 +285,8 @@ public class FSTCompletionLookup extends Lookup implements Accountable {
   @Override
   public synchronized boolean store(DataOutput output) throws IOException {
     output.writeVLong(count);
-    if (normalCompletion == null || normalCompletion.getFST() == null) {
+    if (this.normalCompletion == null || normalCompletion.getFST() == null) 
       return false;
-    }
     normalCompletion.getFST().save(output);
     return true;
   }

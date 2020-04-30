@@ -1,3 +1,5 @@
+package org.apache.lucene.search.vectorhighlight;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.vectorhighlight;
 
 import java.io.IOException;
+import java.io.Reader;
+import java.util.HashSet;
+import java.util.Set;
+
 import org.apache.lucene.analysis.*;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.search.BooleanQuery;

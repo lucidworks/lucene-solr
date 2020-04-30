@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.synonym;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.synonym;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.core.FlattenGraphFilter;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
@@ -30,8 +31,11 @@ import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.AttributeSource;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.CharsRefBuilder;
+import org.apache.lucene.util.RamUsageEstimator;
+import org.apache.lucene.util.UnicodeUtil;
 import org.apache.lucene.util.fst.FST;
 
 /**
@@ -80,9 +84,6 @@ import org.apache.lucene.util.fst.FST;
  * used for parsing.  Subsequent tokens simply pass through
  * and are not parsed.  A future improvement would be to
  * allow these tokens to also be matched.</p>
- *
- * @deprecated Use {@link SynonymGraphFilter} instead, but be sure to also
- * use {@link FlattenGraphFilter} at index time (not at search time) as well.
  */ 
 
 // TODO: maybe we should resolve token -> wordID then run
@@ -107,7 +108,6 @@ import org.apache.lucene.util.fst.FST;
 //
 // Another possible solution is described at http://www.cis.uni-muenchen.de/people/Schulz/Pub/dictle5.ps
 
-@Deprecated
 public final class SynonymFilter extends TokenFilter {
 
   public static final String TYPE_SYNONYM = "SYNONYM";
@@ -204,15 +204,15 @@ public final class SynonymFilter extends TokenFilter {
 
     public void add(char[] output, int offset, int len, int endOffset, int posLength) {
       if (count == outputs.length) {
-        outputs = ArrayUtil.grow(outputs, count+1);
+        outputs = Arrays.copyOf(outputs, ArrayUtil.oversize(1+count, RamUsageEstimator.NUM_BYTES_OBJECT_REF));
       }
       if (count == endOffsets.length) {
-        final int[] next = new int[ArrayUtil.oversize(1+count, Integer.BYTES)];
+        final int[] next = new int[ArrayUtil.oversize(1+count, RamUsageEstimator.NUM_BYTES_INT)];
         System.arraycopy(endOffsets, 0, next, 0, count);
         endOffsets = next;
       }
       if (count == posLengths.length) {
-        final int[] next = new int[ArrayUtil.oversize(1+count, Integer.BYTES)];
+        final int[] next = new int[ArrayUtil.oversize(1+count, RamUsageEstimator.NUM_BYTES_INT)];
         System.arraycopy(posLengths, 0, next, 0, count);
         posLengths = next;
       }
@@ -330,7 +330,7 @@ public final class SynonymFilter extends TokenFilter {
     BytesRef pendingOutput = fst.outputs.getNoOutput();
     fst.getFirstArc(scratchArc);
 
-    assert scratchArc.output() == fst.outputs.getNoOutput();
+    assert scratchArc.output == fst.outputs.getNoOutput();
 
     int tokenCount = 0;
 
@@ -399,7 +399,7 @@ public final class SynonymFilter extends TokenFilter {
         }
 
         // Accum the output
-        pendingOutput = fst.outputs.add(pendingOutput, scratchArc.output());
+        pendingOutput = fst.outputs.add(pendingOutput, scratchArc.output);
         //System.out.println("    char=" + buffer[bufUpto] + " output=" + pendingOutput + " arc.output=" + scratchArc.output);
         bufUpto += Character.charCount(codePoint);
       }
@@ -407,7 +407,7 @@ public final class SynonymFilter extends TokenFilter {
       // OK, entire token matched; now see if this is a final
       // state:
       if (scratchArc.isFinal()) {
-        matchOutput = fst.outputs.add(pendingOutput, scratchArc.nextFinalOutput());
+        matchOutput = fst.outputs.add(pendingOutput, scratchArc.nextFinalOutput);
         matchInputLength = tokenCount;
         matchEndOffset = inputEndOffset;
         //System.out.println("  found matchLength=" + matchInputLength + " output=" + matchOutput);
@@ -423,7 +423,7 @@ public final class SynonymFilter extends TokenFilter {
       } else {
         // More matching is possible -- accum the output (if
         // any) of the WORD_SEP arc:
-        pendingOutput = fst.outputs.add(pendingOutput, scratchArc.output());
+        pendingOutput = fst.outputs.add(pendingOutput, scratchArc.output);
         if (nextRead == nextWrite) {
           capture();
         }

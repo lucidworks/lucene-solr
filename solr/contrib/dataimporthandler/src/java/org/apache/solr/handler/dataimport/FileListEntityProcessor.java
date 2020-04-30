@@ -20,13 +20,7 @@ import java.io.File;
 import java.io.FilenameFilter;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.TimeZone;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -159,14 +153,10 @@ public class FileListEntityProcessor extends EntityProcessorBase {
     }
     m = Evaluator.IN_SINGLE_QUOTES.matcher(dateStr);
     if (m.find()) {
-      String expr = m.group(1);
-      //TODO refactor DateMathParser.parseMath a bit to have a static method for this logic.
-      if (expr.startsWith("NOW")) {
-        expr = expr.substring("NOW".length());
-      }
+      String expr = null;
+      expr = m.group(1).replaceAll("NOW", "");
       try {
-        // DWS TODO: is this TimeZone the right default for us?  Deserves explanation if so.
-        return new DateMathParser(TimeZone.getDefault()).parseMath(expr);
+        return new DateMathParser(TimeZone.getDefault(), Locale.ROOT).parseMath(expr);
       } catch (ParseException exp) {
         throw new DataImportHandlerException(DataImportHandlerException.SEVERE,
                 "Invalid expression for date", exp);

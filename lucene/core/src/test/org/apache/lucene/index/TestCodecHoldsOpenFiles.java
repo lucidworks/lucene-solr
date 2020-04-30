@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
+import java.io.IOException;
 
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.IntPoint;
-import org.apache.lucene.document.NumericDocValuesField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.store.BaseDirectoryWrapper;
 import org.apache.lucene.util.LuceneTestCase;
@@ -35,9 +35,6 @@ public class TestCodecHoldsOpenFiles extends LuceneTestCase {
     for(int i=0;i<numDocs;i++) {
       Document doc = new Document();
       doc.add(newField("foo", "bar", TextField.TYPE_NOT_STORED));
-      doc.add(new IntPoint("doc", i));
-      doc.add(new IntPoint("doc2d", i, i));
-      doc.add(new NumericDocValuesField("dv", i));
       w.addDocument(doc);
     }
 
@@ -45,8 +42,14 @@ public class TestCodecHoldsOpenFiles extends LuceneTestCase {
     w.commit();
     w.close();
 
-    for (String name : d.listAll()) {
-      d.deleteFile(name);
+    for(String fileName : d.listAll()) {
+      try {
+        d.deleteFile(fileName);
+        // may succeed, e.g. if the file is completely read into RAM.
+      } catch (IOException ioe) {
+        // ignore: this means codec (correctly) is holding
+        // the file open
+      }
     }
 
     for(LeafReaderContext cxt : r.leaves()) {

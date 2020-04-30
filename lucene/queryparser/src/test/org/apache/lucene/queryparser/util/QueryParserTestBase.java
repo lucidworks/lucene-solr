@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.util;
 
 import java.io.IOException;
 import java.text.DateFormat;
@@ -24,17 +25,10 @@ import java.util.GregorianCalendar;
 import java.util.Locale;
 import java.util.TimeZone;
 
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.LowerCaseFilter;
-import org.apache.lucene.analysis.MockAnalyzer;
-import org.apache.lucene.analysis.MockSynonymFilter;
-import org.apache.lucene.analysis.MockTokenFilter;
-import org.apache.lucene.analysis.MockTokenizer;
-import org.apache.lucene.analysis.TokenFilter;
-import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.Tokenizer;
+import org.apache.lucene.analysis.*;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
+import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.apache.lucene.document.DateTools;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -42,27 +36,15 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.queryparser.classic.QueryParser;
+//import org.apache.lucene.queryparser.classic.CharStream;
+//import org.apache.lucene.queryparser.classic.ParseException;
+//import org.apache.lucene.queryparser.classic.QueryParser;
+//import org.apache.lucene.queryparser.classic.QueryParserBase;
 import org.apache.lucene.queryparser.classic.QueryParserBase;
-import org.apache.lucene.queryparser.classic.TestQueryParser;
+//import org.apache.lucene.queryparser.classic.QueryParserTokenManager;
 import org.apache.lucene.queryparser.flexible.standard.CommonQueryParserConfiguration;
-import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.*;
 import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.BoostQuery;
-import org.apache.lucene.search.FuzzyQuery;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.MatchAllDocsQuery;
-import org.apache.lucene.search.MatchNoDocsQuery;
-import org.apache.lucene.search.MultiTermQuery;
-import org.apache.lucene.search.PhraseQuery;
-import org.apache.lucene.search.PrefixQuery;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.RegexpQuery;
-import org.apache.lucene.search.ScoreDoc;
-import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.search.TermRangeQuery;
-import org.apache.lucene.search.WildcardQuery;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.automaton.Automata;
@@ -165,6 +147,8 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
 
   public abstract void setDefaultOperatorAND(CommonQueryParserConfiguration cqpC);
 
+  public abstract void setAnalyzeRangeTerms(CommonQueryParserConfiguration cqpC, boolean value);
+
   public abstract void setAutoGeneratePhraseQueries(CommonQueryParserConfiguration cqpC, boolean value);
 
   public abstract void setDateResolution(CommonQueryParserConfiguration cqpC, CharSequence field, DateTools.Resolution value);
@@ -179,26 +163,13 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
     return getQuery(query, (Analyzer)null);
   }
 
-  public void assertQueryEquals(String query, Analyzer a, String result) throws Exception {
+  public void assertQueryEquals(String query, Analyzer a, String result)
+    throws Exception {
     Query q = getQuery(query, a);
     String s = q.toString("field");
     if (!s.equals(result)) {
       fail("Query /" + query + "/ yielded /" + s
            + "/, expecting /" + result + "/");
-    }
-  }
-
-  public void assertMatchNoDocsQuery(String queryString, Analyzer a) throws Exception {
-    assertMatchNoDocsQuery(getQuery(queryString, a));
-  }
-
-  public void assertMatchNoDocsQuery(Query query) throws Exception {
-    if (query instanceof MatchNoDocsQuery) {
-      // good
-    } else if (query instanceof BooleanQuery && ((BooleanQuery) query).clauses().size() == 0) {
-      // good
-    } else {
-      fail("expected MatchNoDocsQuery or an empty BooleanQuery but got: " + query);
     }
   }
 
@@ -221,9 +192,10 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
     }
   }
 
-  public void assertWildcardQueryEquals(String query, String result, boolean allowLeadingWildcard)
+  public void assertWildcardQueryEquals(String query, boolean lowercase, String result, boolean allowLeadingWildcard)
     throws Exception {
     CommonQueryParserConfiguration cqpC = getParserConfig(null);
+    cqpC.setLowercaseExpandedTerms(lowercase);
     cqpC.setAllowLeadingWildcard(allowLeadingWildcard);
     Query q = getQuery(query, cqpC);
     String s = q.toString("field");
@@ -233,9 +205,18 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
     }
   }
 
-  public void assertWildcardQueryEquals(String query, String result)
+  public void assertWildcardQueryEquals(String query, boolean lowercase, String result)
     throws Exception {
-    assertWildcardQueryEquals(query, result, false);
+    assertWildcardQueryEquals(query, lowercase, result, false);
+  }
+
+  public void assertWildcardQueryEquals(String query, String result) throws Exception {
+    Query q = getQuery(query);
+    String s = q.toString("field");
+    if (!s.equals(result)) {
+      fail("WildcardQuery /" + query + "/ yielded /" + s + "/, expecting /"
+          + result + "/");
+    }
   }
 
   public Query getQueryDOA(String query, Analyzer a)
@@ -283,7 +264,7 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
     }
   }
 
-  private static class SimpleCJKAnalyzer extends Analyzer {
+  private class SimpleCJKAnalyzer extends Analyzer {
     @Override
     public TokenStreamComponents createComponents(String fieldName) {
       return new TokenStreamComponents(new SimpleCJKTokenizer());
@@ -348,9 +329,6 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
   
     PhraseQuery expected = new PhraseQuery("field", "中", "国");
     CommonQueryParserConfiguration qp = getParserConfig(analyzer);
-    if (qp instanceof QueryParser) { // Always true, since TestStandardQP overrides this method
-      ((QueryParser)qp).setSplitOnWhitespace(true); // LUCENE-7533
-    }
     setAutoGeneratePhraseQueries(qp, true);
     assertEquals(expected, getQuery("中国",qp));
   }
@@ -390,13 +368,13 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
     assertTrue(getQuery("hello") instanceof TermQuery);
     assertTrue(getQuery("\"hello there\"") instanceof PhraseQuery);
 
-    assertQueryEquals("germ term^2.0", null, "germ (term)^2.0");
-    assertQueryEquals("(term)^2.0", null, "(term)^2.0");
+    assertQueryEquals("germ term^2.0", null, "germ term^2.0");
+    assertQueryEquals("(term)^2.0", null, "term^2.0");
     assertQueryEquals("(germ term)^2.0", null, "(germ term)^2.0");
-    assertQueryEquals("term^2.0", null, "(term)^2.0");
-    assertQueryEquals("term^2", null, "(term)^2.0");
-    assertQueryEquals("\"germ term\"^2.0", null, "(\"germ term\")^2.0");
-    assertQueryEquals("\"term germ\"^2", null, "(\"term germ\")^2.0");
+    assertQueryEquals("term^2.0", null, "term^2.0");
+    assertQueryEquals("term^2", null, "term^2.0");
+    assertQueryEquals("\"germ term\"^2.0", null, "\"germ term\"^2.0");
+    assertQueryEquals("\"term germ\"^2", null, "\"term germ\"^2.0");
 
     assertQueryEquals("(foo OR bar) AND (baz OR boo)", null,
                       "+(foo bar) +(baz boo)");
@@ -437,12 +415,12 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
     assertQueryEquals("\"term germ\"~2 flork", null, "\"term germ\"~2 flork");
     assertQueryEquals("\"term\"~2", null, "term");
     assertQueryEquals("\" \"~2 germ", null, "germ");
-    assertQueryEquals("\"term germ\"~2^2", null, "(\"term germ\"~2)^2.0");
+    assertQueryEquals("\"term germ\"~2^2", null, "\"term germ\"~2^2.0");
   }
 
   public void testNumber() throws Exception {
 // The numbers go away because SimpleAnalzyer ignores them
-    assertMatchNoDocsQuery("3", null);
+    assertQueryEquals("3", null, "");
     assertQueryEquals("term 1.0 1 2", null, "term");
     assertQueryEquals("term term1 term2", null, "term term term");
 
@@ -454,14 +432,14 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
 
   public void testWildcard() throws Exception {
     assertQueryEquals("term*", null, "term*");
-    assertQueryEquals("term*^2", null, "(term*)^2.0");
+    assertQueryEquals("term*^2", null, "term*^2.0");
     assertQueryEquals("term~", null, "term~2");
     assertQueryEquals("term~1", null, "term~1");
     assertQueryEquals("term~0.7", null, "term~1");
-    assertQueryEquals("term~^3", null, "(term~2)^3.0");
-    assertQueryEquals("term^3~", null, "(term~2)^3.0");
+    assertQueryEquals("term~^3", null, "term~2^3.0");
+    assertQueryEquals("term^3~", null, "term~2^3.0");
     assertQueryEquals("term*germ", null, "term*germ");
-    assertQueryEquals("term*germ^3", null, "(term*germ)^3.0");
+    assertQueryEquals("term*germ^3", null, "term*germ^3.0");
 
     assertTrue(getQuery("term*") instanceof PrefixQuery);
     assertTrue(getQuery("term*^2") instanceof BoostQuery);
@@ -484,37 +462,57 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
    */
 // First prefix queries:
     // by default, convert to lowercase:
-    assertWildcardQueryEquals("Term*", "term*");
+    assertWildcardQueryEquals("Term*", true, "term*");
     // explicitly set lowercase:
-    assertWildcardQueryEquals("term*", "term*");
-    assertWildcardQueryEquals("Term*", "term*");
-    assertWildcardQueryEquals("TERM*", "term*");
+    assertWildcardQueryEquals("term*", true, "term*");
+    assertWildcardQueryEquals("Term*", true, "term*");
+    assertWildcardQueryEquals("TERM*", true, "term*");
+    // explicitly disable lowercase conversion:
+    assertWildcardQueryEquals("term*", false, "term*");
+    assertWildcardQueryEquals("Term*", false, "Term*");
+    assertWildcardQueryEquals("TERM*", false, "TERM*");
 // Then 'full' wildcard queries:
     // by default, convert to lowercase:
     assertWildcardQueryEquals("Te?m", "te?m");
     // explicitly set lowercase:
-    assertWildcardQueryEquals("te?m", "te?m");
-    assertWildcardQueryEquals("Te?m", "te?m");
-    assertWildcardQueryEquals("TE?M", "te?m");
-    assertWildcardQueryEquals("Te?m*gerM", "te?m*germ");
+    assertWildcardQueryEquals("te?m", true, "te?m");
+    assertWildcardQueryEquals("Te?m", true, "te?m");
+    assertWildcardQueryEquals("TE?M", true, "te?m");
+    assertWildcardQueryEquals("Te?m*gerM", true, "te?m*germ");
+    // explicitly disable lowercase conversion:
+    assertWildcardQueryEquals("te?m", false, "te?m");
+    assertWildcardQueryEquals("Te?m", false, "Te?m");
+    assertWildcardQueryEquals("TE?M", false, "TE?M");
+    assertWildcardQueryEquals("Te?m*gerM", false, "Te?m*gerM");
 //  Fuzzy queries:
     assertWildcardQueryEquals("Term~", "term~2");
+    assertWildcardQueryEquals("Term~", true, "term~2");
+    assertWildcardQueryEquals("Term~", false, "Term~2");
 //  Range queries:
     assertWildcardQueryEquals("[A TO C]", "[a TO c]");
+    assertWildcardQueryEquals("[A TO C]", true, "[a TO c]");
+    assertWildcardQueryEquals("[A TO C]", false, "[A TO C]");
     // Test suffix queries: first disallow
-    Exception ex = expectThrows(Exception.class, () -> {
-      assertWildcardQueryEquals("*Term", "*term", false);
-    });
-    assertTrue(isQueryParserException(ex));
-
-    ex = expectThrows(Exception.class, () -> {
-      assertWildcardQueryEquals("?Term", "?term");
-    });
-    assertTrue(isQueryParserException(ex));
-
+    try {
+      assertWildcardQueryEquals("*Term", true, "*term");
+    } catch(Exception pe) {
+      // expected exception
+      if(!isQueryParserException(pe)){
+        fail();
+      }
+    }
+    try {
+      assertWildcardQueryEquals("?Term", true, "?term");
+      fail();
+    } catch(Exception pe) {
+      // expected exception
+      if(!isQueryParserException(pe)){
+        fail();
+      }
+    }
     // Test suffix queries: then allow
-    assertWildcardQueryEquals("*Term", "*term", true);
-    assertWildcardQueryEquals("?Term", "?term", true);
+    assertWildcardQueryEquals("*Term", true, "*term", true);
+    assertWildcardQueryEquals("?Term", true, "?term", true);
   }
   
   public void testLeadingWildcardType() throws Exception {
@@ -526,7 +524,7 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
   }
 
   public void testQPA() throws Exception {
-    assertQueryEquals("term term^3.0 term", qpAnalyzer, "term (term)^3.0 term");
+    assertQueryEquals("term term^3.0 term", qpAnalyzer, "term term^3.0 term");
     assertQueryEquals("term stop^3.0 term", qpAnalyzer, "term term");
     
     assertQueryEquals("term term term", qpAnalyzer, "term term term");
@@ -538,28 +536,25 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
     assertQueryEquals("term -(stop) term", qpAnalyzer, "term term");
     
     assertQueryEquals("drop AND stop AND roll", qpAnalyzer, "+drop +roll");
-
-// TODO: Re-enable once flexible standard parser gets multi-word synonym support
-//    assertQueryEquals("term phrase term", qpAnalyzer,
-//                      "term phrase1 phrase2 term");
+    assertQueryEquals("term phrase term", qpAnalyzer,
+                      "term (phrase1 phrase2) term");
     assertQueryEquals("term AND NOT phrase term", qpAnalyzer,
                       "+term -(phrase1 phrase2) term");
-    assertMatchNoDocsQuery("stop^3", qpAnalyzer);
-    assertMatchNoDocsQuery("stop", qpAnalyzer);
-    assertMatchNoDocsQuery("(stop)^3", qpAnalyzer);
-    assertMatchNoDocsQuery("((stop))^3", qpAnalyzer);
-    assertMatchNoDocsQuery("(stop^3)", qpAnalyzer);
-    assertMatchNoDocsQuery("((stop)^3)", qpAnalyzer);
-    assertMatchNoDocsQuery("(stop)", qpAnalyzer);
-    assertMatchNoDocsQuery("((stop))", qpAnalyzer);
+    assertQueryEquals("stop^3", qpAnalyzer, "");
+    assertQueryEquals("stop", qpAnalyzer, "");
+    assertQueryEquals("(stop)^3", qpAnalyzer, "");
+    assertQueryEquals("((stop))^3", qpAnalyzer, "");
+    assertQueryEquals("(stop^3)", qpAnalyzer, "");
+    assertQueryEquals("((stop)^3)", qpAnalyzer, "");
+    assertQueryEquals("(stop)", qpAnalyzer, "");
+    assertQueryEquals("((stop))", qpAnalyzer, "");
     assertTrue(getQuery("term term term", qpAnalyzer) instanceof BooleanQuery);
     assertTrue(getQuery("term +stop", qpAnalyzer) instanceof TermQuery);
     
     CommonQueryParserConfiguration cqpc = getParserConfig(qpAnalyzer);
     setDefaultOperatorAND(cqpc);
-// TODO: Re-enable once flexible standard parser gets multi-word synonym support
-//    assertQueryEquals(cqpc, "field", "term phrase term",
-//        "+term +phrase1 +phrase2 +term");
+    assertQueryEquals(cqpc, "field", "term phrase term",
+        "+term +(+phrase1 +phrase2) +term");
     assertQueryEquals(cqpc, "field", "phrase",
         "+phrase1 +phrase2");
   }
@@ -590,7 +585,7 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
     assertQueryEquals("[ a TO z ]", null, "[a TO z]");
     assertQueryEquals("{ a TO z}", null, "{a TO z}");
     assertQueryEquals("{ a TO z }", null, "{a TO z}");
-    assertQueryEquals("{ a TO z }^2.0", null, "({a TO z})^2.0");
+    assertQueryEquals("{ a TO z }^2.0", null, "{a TO z}^2.0");
     assertQueryEquals("[ a TO z] OR bar", null, "[a TO z] bar");
     assertQueryEquals("[ a TO z] AND bar", null, "+[a TO z] +bar");
     assertQueryEquals("( bar blar { a TO z}) ", null, "bar blar {a TO z}");
@@ -604,56 +599,6 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
   public void testRangeWithPhrase() throws Exception {
     assertQueryEquals("[\\* TO \"*\"]",null,"[\\* TO \\*]");
     assertQueryEquals("[\"*\" TO *]",null,"[\\* TO *]");
-  }
-
-  public void testRangeQueryEndpointTO() throws Exception {
-    Analyzer a = new MockAnalyzer(random());
-    assertQueryEquals("[to TO to]", a, "[to TO to]");
-    assertQueryEquals("[to TO TO]", a, "[to TO to]");
-    assertQueryEquals("[TO TO to]", a, "[to TO to]");
-    assertQueryEquals("[TO TO TO]", a, "[to TO to]");
-
-    assertQueryEquals("[\"TO\" TO \"TO\"]", a, "[to TO to]");
-    assertQueryEquals("[\"TO\" TO TO]", a, "[to TO to]");
-    assertQueryEquals("[TO TO \"TO\"]", a, "[to TO to]");
-
-    assertQueryEquals("[to TO xx]", a, "[to TO xx]");
-    assertQueryEquals("[\"TO\" TO xx]", a, "[to TO xx]");
-    assertQueryEquals("[TO TO xx]", a, "[to TO xx]");
-
-    assertQueryEquals("[xx TO to]", a, "[xx TO to]");
-    assertQueryEquals("[xx TO \"TO\"]", a, "[xx TO to]");
-    assertQueryEquals("[xx TO TO]", a, "[xx TO to]");
-  }
-
-  public void testRangeQueryRequiresTO() throws Exception {
-    Analyzer a = new MockAnalyzer(random());
-
-    assertQueryEquals("{A TO B}", a, "{a TO b}");
-    assertQueryEquals("[A TO B}", a, "[a TO b}");
-    assertQueryEquals("{A TO B]", a, "{a TO b]");
-    assertQueryEquals("[A TO B]", a, "[a TO b]");
-
-    // " TO " is required between range endpoints
-
-    Class<? extends Throwable> exceptionClass = this instanceof TestQueryParser 
-        ? org.apache.lucene.queryparser.classic.ParseException.class
-        : org.apache.lucene.queryparser.flexible.standard.parser.ParseException.class;
-    
-    expectThrows(exceptionClass, () -> getQuery("{A B}"));
-    expectThrows(exceptionClass, () -> getQuery("[A B}"));
-    expectThrows(exceptionClass, () -> getQuery("{A B]"));
-    expectThrows(exceptionClass, () -> getQuery("[A B]"));
-
-    expectThrows(exceptionClass, () -> getQuery("{TO B}"));
-    expectThrows(exceptionClass, () -> getQuery("[TO B}"));
-    expectThrows(exceptionClass, () -> getQuery("{TO B]"));
-    expectThrows(exceptionClass, () -> getQuery("[TO B]"));
-
-    expectThrows(exceptionClass, () -> getQuery("{A TO}"));
-    expectThrows(exceptionClass, () -> getQuery("[A TO}"));
-    expectThrows(exceptionClass, () -> getQuery("{A TO]"));
-    expectThrows(exceptionClass, () -> getQuery("[A TO]"));
   }
 
   private String escapeDateString(String s) {
@@ -935,7 +880,7 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
     q = getQuery("the^3", qp2);
     // "the" is a stop word so the result is an empty query:
     assertNotNull(q);
-    assertMatchNoDocsQuery(q);
+    assertEquals("", q.toString());
     assertFalse(q instanceof BoostQuery);
   }
 
@@ -1023,9 +968,10 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
   }
   
   public void testRegexps() throws Exception {
-    CommonQueryParserConfiguration qp = getParserConfig( new MockAnalyzer(random(), MockTokenizer.WHITESPACE, true));
+    CommonQueryParserConfiguration qp = getParserConfig( new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false));
     RegexpQuery q = new RegexpQuery(new Term("field", "[a-z][123]"));
     assertEquals(q, getQuery("/[a-z][123]/",qp));
+    qp.setLowercaseExpandedTerms(true);
     assertEquals(q, getQuery("/[A-Z][123]/",qp));
     assertEquals(new BoostQuery(q, 0.5f), getQuery("/[A-Z][123]/^0.5",qp));
     qp.setMultiTermRewriteMethod(MultiTermQuery.SCORING_BOOLEAN_REWRITE);
@@ -1146,18 +1092,49 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
     Document doc = new Document();
     doc.add(newTextField("field", "the wizard of ozzy", Field.Store.NO));
     w.addDocument(doc);
-    IndexReader r = DirectoryReader.open(w);
+    IndexReader r = DirectoryReader.open(w, true);
     w.close();
     IndexSearcher s = newSearcher(r);
     
     Query q = getQuery("\"wizard of ozzy\"",a);
-    assertEquals(1, s.search(q, 1).totalHits.value);
+    assertEquals(1, s.search(q, 1).totalHits);
     r.close();
     dir.close();
   }
 
+  /**
+   * adds synonym of "dog" for "dogs".
+   */
+  protected static class MockSynonymFilter extends TokenFilter {
+    CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);
+    PositionIncrementAttribute posIncAtt = addAttribute(PositionIncrementAttribute.class);
+    boolean addSynonym = false;
+    
+    public MockSynonymFilter(TokenStream input) {
+      super(input);
+    }
+
+    @Override
+    public final boolean incrementToken() throws IOException {
+      if (addSynonym) { // inject our synonym
+        clearAttributes();
+        termAtt.setEmpty().append("dog");
+        posIncAtt.setPositionIncrement(0);
+        addSynonym = false;
+        return true;
+      }
+      
+      if (input.incrementToken()) {
+        addSynonym = termAtt.toString().equals("dogs");
+        return true;
+      } else {
+        return false;
+      }
+    } 
+  }
+  
   /** whitespace+lowercase analyzer with synonyms */
-  protected static class Analyzer1 extends Analyzer {
+  protected class Analyzer1 extends Analyzer {
     public Analyzer1(){
       super();
     }
@@ -1169,7 +1146,7 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
   }
   
   /** whitespace+lowercase analyzer without synonyms */
-  protected static class Analyzer2 extends Analyzer {
+  protected class Analyzer2 extends Analyzer {
     public Analyzer2(){
       super();
     }
@@ -1184,7 +1161,7 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
   /**
    * Mock collation analyzer: indexes terms as "collated" + term
    */
-  private static class MockCollationFilter extends TokenFilter {
+  private class MockCollationFilter extends TokenFilter {
     private final CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);
 
     protected MockCollationFilter(TokenStream input) {
@@ -1203,20 +1180,17 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
     }
     
   }
-  private static class MockCollationAnalyzer extends Analyzer {
+  private class MockCollationAnalyzer extends Analyzer {
     @Override
     public TokenStreamComponents createComponents(String fieldName) {
       Tokenizer tokenizer = new MockTokenizer(MockTokenizer.WHITESPACE, true);
       return new TokenStreamComponents(tokenizer, new MockCollationFilter(tokenizer));
     }
-    @Override
-    protected TokenStream normalize(String fieldName, TokenStream in) {
-      return new MockCollationFilter(new LowerCaseFilter(in));
-    }
   }
   
   public void testCollatedRange() throws Exception {
     CommonQueryParserConfiguration qp = getParserConfig(new MockCollationAnalyzer());
+    setAnalyzeRangeTerms(qp, true);
     Query expected = TermRangeQuery.newStringRange(getDefaultField(), "collatedabc", "collateddef", true, true);
     Query actual = getQuery("[abc TO def]", qp);
     assertEquals(expected, actual);
@@ -1278,8 +1252,10 @@ public abstract class QueryParserTestBase extends LuceneTestCase {
     CharacterRunAutomaton stopStopList =
     new CharacterRunAutomaton(new RegExp("[sS][tT][oO][pP]").toAutomaton());
 
-    CommonQueryParserConfiguration qp
-        = getParserConfig(new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false, stopStopList));
+    CommonQueryParserConfiguration qp = getParserConfig(new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false, stopStopList));
+
+    qp = getParserConfig(
+                         new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false, stopStopList));
     qp.setEnablePositionIncrements(true);
 
     PhraseQuery.Builder phraseQuery = new PhraseQuery.Builder();

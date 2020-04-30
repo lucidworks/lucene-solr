@@ -1,3 +1,5 @@
+package org.apache.lucene.search.similarities;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.similarities;
 
-
-import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.lucene.search.Explanation;
+import org.apache.lucene.search.similarities.AfterEffect.NoAfterEffect;
 import org.apache.lucene.search.similarities.Normalization.NoNormalization;
 
 /**
@@ -40,7 +40,10 @@ import org.apache.lucene.search.similarities.Normalization.NoNormalization;
  * <ol>
  *    <li>{@link BasicModel}: Basic model of information content:
  *        <ul>
+ *           <li>{@link BasicModelBE}: Limiting form of Bose-Einstein
  *           <li>{@link BasicModelG}: Geometric approximation of Bose-Einstein
+ *           <li>{@link BasicModelP}: Poisson approximation of the Binomial
+ *           <li>{@link BasicModelD}: Divergence approximation of the Binomial 
  *           <li>{@link BasicModelIn}: Inverse document frequency
  *           <li>{@link BasicModelIne}: Inverse expected document
  *               frequency [mixture of Poisson and IDF]
@@ -52,6 +55,7 @@ import org.apache.lucene.search.similarities.Normalization.NoNormalization;
  *        <ul>
  *           <li>{@link AfterEffectL}: Laplace's law of succession
  *           <li>{@link AfterEffectB}: Ratio of two Bernoulli processes
+ *           <li>{@link NoAfterEffect}: no first normalization
  *        </ul>
  *    <li>{@link Normalization}: Second (length) normalization:
  *        <ul>
@@ -68,10 +72,6 @@ import org.apache.lucene.search.similarities.Normalization.NoNormalization;
  * </ol>
  * <p>Note that <em>qtf</em>, the multiplicity of term-occurrence in the query,
  * is not handled by this implementation.</p>
- * <p> Note that basic models BE (Limiting form of Bose-Einstein), P (Poisson
- * approximation of the Binomial) and D (Divergence approximation of the
- * Binomial) are not implemented because their formula couldn't be written in
- * a way that makes scores non-decreasing with the normalized term frequency.
  * @see BasicModel
  * @see AfterEffect
  * @see Normalization
@@ -89,8 +89,8 @@ public class DFRSimilarity extends SimilarityBase {
    * Creates DFRSimilarity from the three components.
    * <p>
    * Note that <code>null</code> values are not allowed:
-   * if you want no normalization, instead pass
-   * {@link NoNormalization}.
+   * if you want no normalization or after-effect, instead pass 
+   * {@link NoNormalization} or {@link NoAfterEffect} respectively.
    * @param basicModel Basic model of information content
    * @param afterEffect First normalization of information gain
    * @param normalization Second (length) normalization
@@ -107,39 +107,24 @@ public class DFRSimilarity extends SimilarityBase {
   }
 
   @Override
-  protected double score(BasicStats stats, double freq, double docLen) {
-    double tfn = normalization.tfn(stats, freq, docLen);
-    double aeTimes1pTfn = afterEffect.scoreTimes1pTfn(stats);
-    return stats.getBoost() * basicModel.score(stats, tfn, aeTimes1pTfn);
+  protected float score(BasicStats stats, float freq, float docLen) {
+    float tfn = normalization.tfn(stats, freq, docLen);
+    return stats.getBoost() *
+        basicModel.score(stats, tfn) * afterEffect.score(stats, tfn);
   }
-
+  
   @Override
   protected void explain(List<Explanation> subs,
-      BasicStats stats, double freq, double docLen) {
-    if (stats.getBoost() != 1.0d) {
-      subs.add(Explanation.match( (float)stats.getBoost(), "boost, query boost"));
+      BasicStats stats, int doc, float freq, float docLen) {
+    if (stats.getBoost() != 1.0f) {
+      subs.add(Explanation.match(stats.getBoost(), "boost"));
     }
     
     Explanation normExpl = normalization.explain(stats, freq, docLen);
-    double tfn = normalization.tfn(stats, freq, docLen);
-    double aeTimes1pTfn = afterEffect.scoreTimes1pTfn(stats);
+    float tfn = normExpl.getValue();
     subs.add(normExpl);
-    subs.add(basicModel.explain(stats, tfn, aeTimes1pTfn));
+    subs.add(basicModel.explain(stats, tfn));
     subs.add(afterEffect.explain(stats, tfn));
-  }
-
-  @Override
-  protected Explanation explain(
-      BasicStats stats, Explanation freq, double docLen) {
-    List<Explanation> subs = new ArrayList<>();
-    explain(subs, stats, freq.getValue().doubleValue(), docLen);
-
-    return Explanation.match(
-        (float) score(stats, freq.getValue().doubleValue(), docLen),
-        "score(" + getClass().getSimpleName() + ", freq=" +
-            freq.getValue() +"), computed as boost * " +
-            "basicModel.score(stats, tfn) * afterEffect.score(stats, tfn) from:",
-        subs);
   }
 
   @Override

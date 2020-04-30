@@ -44,12 +44,14 @@ public class ZKPropertiesWriter extends SimplePropertiesWriter {
   @Override
   public void init(DataImporter dataImporter, Map<String, String> params) {
     super.init(dataImporter, params);    
-    zkClient = dataImporter.getCore().getCoreContainer().getZkController().getZkClient();
+    zkClient = dataImporter.getCore().getCoreDescriptor().getCoreContainer()
+        .getZkController().getZkClient();
   }
   
   @Override
   protected void findDirectory(DataImporter dataImporter, Map<String, String> params) {
-    String collection = dataImporter.getCore().getCoreDescriptor().getCloudDescriptor().getCollectionName();
+    String collection = dataImporter.getCore().getCoreDescriptor()
+        .getCloudDescriptor().getCollectionName();
     path = "/configs/" + collection + "/" + filename;
   }
   
@@ -72,9 +74,13 @@ public class ZKPropertiesWriter extends SimplePropertiesWriter {
         } catch (NodeExistsException e) {}
       }
       zkClient.setData(path, bytes, false);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      log.warn(
+          "Could not persist properties to " + path + " :" + e.getClass(), e);
     } catch (Exception e) {
-      SolrZkClient.checkInterrupted(e);
-      log.warn("Could not persist properties to " + path + " :" + e.getClass(), e);
+      log.warn(
+          "Could not persist properties to " + path + " :" + e.getClass(), e);
     }
   }
   
@@ -82,13 +88,13 @@ public class ZKPropertiesWriter extends SimplePropertiesWriter {
   public Map<String, Object> readIndexerProperties() {
     Properties props = new Properties();
     try {
-      byte[] data = zkClient.getData(path, null, null, true);
+      byte[] data = zkClient.getData(path, null, null, false);
       if (data != null) {
         props.load(new StringReader(new String(data, StandardCharsets.UTF_8)));
       }
     } catch (Exception e) {
-      SolrZkClient.checkInterrupted(e);
-      log.warn("Could not read DIH properties from " + path + " :" + e.getClass(), e);
+      log.warn(
+          "Could not read DIH properties from " + path + " :" + e.getClass(), e);
     }
     return propertiesToMap(props);
   }

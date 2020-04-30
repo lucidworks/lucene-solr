@@ -1,3 +1,5 @@
+package org.apache.solr.cloud.hdfs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud.hdfs;
 
 import java.io.IOException;
 
@@ -33,7 +34,6 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakFilters;
 @ThreadLeakFilters(defaultFilters = true, filters = {
     BadHdfsThreadsFilter.class // hdfs currently leaks thread(s)
 })
-// commented out on: 24-Dec-2018 @LuceneTestCase.BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // 12-Jun-2018
 public class HdfsSyncSliceTest extends SyncSliceTest {
   private static MiniDFSCluster dfsCluster;
   
@@ -44,11 +44,8 @@ public class HdfsSyncSliceTest extends SyncSliceTest {
   
   @AfterClass
   public static void teardownClass() throws Exception {
-    try {
-      HdfsTestUtil.teardownClass(dfsCluster);
-    } finally {
-      dfsCluster = null;
-    }
+    HdfsTestUtil.teardownClass(dfsCluster);
+    dfsCluster = null;
   }
 
   @Override

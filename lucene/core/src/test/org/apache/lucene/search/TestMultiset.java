@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.util.HashMap;
 import java.util.Map;
@@ -56,7 +56,11 @@ public class TestMultiset extends LuceneTestCase {
   }
 
   private static <T> void add(Map<T, Integer> map, T element) {
-    map.put(element, map.getOrDefault(element, 0) + 1);
+    Integer currentFreq = map.get(element);
+    if (currentFreq == null) {
+      currentFreq = 0;
+    }
+    map.put(element, currentFreq + 1);
   }
 
   private static <T> void remove(Map<T, Integer> map, T element) {

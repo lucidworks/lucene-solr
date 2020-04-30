@@ -1,3 +1,4 @@
+package org.apache.solr.client.solrj.response;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,34 +15,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.response;
 
 import java.util.List;
+import junit.framework.Assert;
 
-import org.apache.solr.EmbeddedSolrServerTestBase;
+import org.apache.solr.SolrJettyTestBase;
 import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.response.TermsResponse.Term;
-import org.apache.solr.common.SolrInputDocument;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import junit.framework.Assert;
-
 /**
  * Test for TermComponent's response in Solrj
  */
-public class TermsResponseTest extends EmbeddedSolrServerTestBase {
-  
+public class TermsResponseTest extends SolrJettyTestBase {
+
   @BeforeClass
-  public static void beforeClass() throws Exception {
+  public static void beforeTest() throws Exception {
     initCore();
   }
-
+  
   @Before
   @Override
-  public void setUp() throws Exception {
+  public void setUp() throws Exception{
     super.setUp();
     clearIndex();
     assertU(commit());
@@ -64,7 +63,7 @@ public class TermsResponseTest extends EmbeddedSolrServerTestBase {
     query.setTermsPrefix("s");
     query.addTermsField("terms_s");
     query.setTermsMinCount(1);
-
+    
     QueryRequest request = new QueryRequest(query);
     List<Term> terms = request.process(getSolrClient()).getTermsResponse().getTerms("terms_s");
 

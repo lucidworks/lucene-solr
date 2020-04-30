@@ -1,3 +1,4 @@
+package org.apache.solr.core;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
+
+
 import java.io.File;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -35,7 +37,6 @@ import org.slf4j.LoggerFactory;
  * Can set the following parameters:
  * <ul>
  *  <li>unmap -- See {@link MMapDirectory#setUseUnmap(boolean)}</li>
- *  <li>preload -- See {@link MMapDirectory#setPreload(boolean)}</li>
  *  <li>maxChunkSize -- The Max chunk size.  See {@link MMapDirectory#MMapDirectory(Path, LockFactory, int)}</li>
  * </ul>
  *
@@ -43,19 +44,17 @@ import org.slf4j.LoggerFactory;
 public class MMapDirectoryFactory extends StandardDirectoryFactory {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   boolean unmapHack;
-  boolean preload;
   private int maxChunk;
 
   @Override
   public void init(NamedList args) {
     super.init(args);
-    SolrParams params = args.toSolrParams();
+    SolrParams params = SolrParams.toSolrParams( args );
     maxChunk = params.getInt("maxChunkSize", MMapDirectory.DEFAULT_MAX_CHUNK_SIZE);
     if (maxChunk <= 0){
       throw new IllegalArgumentException("maxChunk must be greater than 0");
     }
     unmapHack = params.getBool("unmap", true);
-    preload = params.getBool("preload", false); //default turn-off
   }
 
   @Override
@@ -67,7 +66,6 @@ public class MMapDirectoryFactory extends StandardDirectoryFactory {
     } catch (IllegalArgumentException e) {
       log.warn("Unmap not supported on this JVM, continuing on without setting unmap", e);
     }
-    mapDirectory.setPreload(preload);
     return mapDirectory;
   }
   

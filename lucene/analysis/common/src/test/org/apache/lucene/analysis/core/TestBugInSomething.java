@@ -1,3 +1,32 @@
+package org.apache.lucene.analysis.core;
+
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
+import java.nio.CharBuffer;
+import java.util.Arrays;
+import java.util.HashSet;
+
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.BaseTokenStreamTestCase;
+import org.apache.lucene.analysis.CharFilter;
+import org.apache.lucene.analysis.MockCharFilter;
+import org.apache.lucene.analysis.MockTokenFilter;
+import org.apache.lucene.analysis.MockTokenizer;
+import org.apache.lucene.analysis.TokenFilter;
+import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.Tokenizer;
+import org.apache.lucene.analysis.charfilter.MappingCharFilter;
+import org.apache.lucene.analysis.charfilter.NormalizeCharMap;
+import org.apache.lucene.analysis.commongrams.CommonGramsFilter;
+import org.apache.lucene.analysis.miscellaneous.WordDelimiterFilter;
+import org.apache.lucene.analysis.ngram.EdgeNGramTokenizer;
+import org.apache.lucene.analysis.ngram.NGramTokenFilter;
+import org.apache.lucene.analysis.shingle.ShingleFilter;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.analysis.wikipedia.WikipediaTokenizer;
+import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,35 +43,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.core;
-
-import java.io.IOException;
-import java.io.Reader;
-import java.io.StringReader;
-import java.nio.CharBuffer;
-import java.util.Arrays;
-import java.util.HashSet;
-
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.BaseTokenStreamTestCase;
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.CharFilter;
-import org.apache.lucene.analysis.MockCharFilter;
-import org.apache.lucene.analysis.MockTokenFilter;
-import org.apache.lucene.analysis.MockTokenizer;
-import org.apache.lucene.analysis.TokenFilter;
-import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.Tokenizer;
-import org.apache.lucene.analysis.charfilter.MappingCharFilter;
-import org.apache.lucene.analysis.charfilter.NormalizeCharMap;
-import org.apache.lucene.analysis.commongrams.CommonGramsFilter;
-import org.apache.lucene.analysis.miscellaneous.WordDelimiterFilter;
-import org.apache.lucene.analysis.ngram.EdgeNGramTokenizer;
-import org.apache.lucene.analysis.ngram.NGramTokenFilter;
-import org.apache.lucene.analysis.shingle.ShingleFilter;
-import org.apache.lucene.analysis.wikipedia.WikipediaTokenizer;
-import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
-
 
 @SuppressCodecs("Direct")
 public class TestBugInSomething extends BaseTokenStreamTestCase {
@@ -138,55 +138,75 @@ public class TestBugInSomething extends BaseTokenStreamTestCase {
   
   public void testWrapping() throws Exception {
     CharFilter cs = new TestRandomChains.CheckThatYouDidntReadAnythingReaderWrapper(wrappedStream);
-    Exception expected = expectThrows(Exception.class, () -> {
+    try {
       cs.mark(1);
-    });
-    assertEquals("mark(int)", expected.getMessage());
+      fail();
+    } catch (Exception e) {
+      assertEquals("mark(int)", e.getMessage());
+    }
     
-    expected = expectThrows(Exception.class, () -> {
+    try {
       cs.markSupported();
-    });
-    assertEquals("markSupported()", expected.getMessage());
+      fail();
+    } catch (Exception e) {
+      assertEquals("markSupported()", e.getMessage());
+    }
     
-    expected = expectThrows(Exception.class, () -> {
+    try {
       cs.read();
-    });
-    assertEquals("read()", expected.getMessage());
+      fail();
+    } catch (Exception e) {
+      assertEquals("read()", e.getMessage());
+    }
     
-    expected = expectThrows(Exception.class, () -> {
+    try {
       cs.read(new char[0]);
-    });
-    assertEquals("read(char[])", expected.getMessage());
+      fail();
+    } catch (Exception e) {
+      assertEquals("read(char[])", e.getMessage());
+    }
     
-    expected = expectThrows(Exception.class, () -> {
+    try {
       cs.read(CharBuffer.wrap(new char[0]));
-    });
-    assertEquals("read(CharBuffer)", expected.getMessage());
+      fail();
+    } catch (Exception e) {
+      assertEquals("read(CharBuffer)", e.getMessage());
+    }
     
-    expected = expectThrows(Exception.class, () -> {
+    try {
       cs.reset();
-    });
-    assertEquals("reset()", expected.getMessage());
+      fail();
+    } catch (Exception e) {
+      assertEquals("reset()", e.getMessage());
+    }
     
-    expected = expectThrows(Exception.class, () -> {
+    try {
       cs.skip(1);
-    });
-    assertEquals("skip(long)", expected.getMessage());
+      fail();
+    } catch (Exception e) {
+      assertEquals("skip(long)", e.getMessage());
+    }
     
-    expected = expectThrows(Exception.class, () -> {
+    try {
       cs.correctOffset(1);
-    });
-    assertEquals("correct(int)", expected.getMessage());
+      fail();
+    } catch (Exception e) {
+      assertEquals("correct(int)", e.getMessage());
+    }
     
-    expected = expectThrows(Exception.class, () -> {
+    try {
       cs.close();
-    });
-    assertEquals("close()", expected.getMessage());
+      fail();
+    } catch (Exception e) {
+      assertEquals("close()", e.getMessage());
+    }
     
-    expected = expectThrows(Exception.class, () -> {
+    try {
       cs.read(new char[0], 0, 0);
-    });
-    assertEquals("read(char[], int, int)", expected.getMessage());
+      fail();
+    } catch (Exception e) {
+      assertEquals("read(char[], int, int)", e.getMessage());
+    }
   }
   
   // todo: test framework?
@@ -236,7 +256,7 @@ public class TestBugInSomething extends BaseTokenStreamTestCase {
         //TokenStream stream = new SopTokenFilter(tokenizer);
         TokenStream stream = new ShingleFilter(tokenizer, 5);
         //stream = new SopTokenFilter(stream);
-        stream = new NGramTokenFilter(stream, 55, 83, false);
+        stream = new NGramTokenFilter(stream, 55, 83);
         //stream = new SopTokenFilter(stream);
         return new TokenStreamComponents(tokenizer, stream);
       }  

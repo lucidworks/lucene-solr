@@ -1,3 +1,5 @@
+package org.apache.lucene.facet.taxonomy;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy;
 
 import java.io.IOException;
 
 import org.apache.lucene.facet.FacetsConfig;
+import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.BinaryDocValues;
 import org.apache.lucene.index.DocValues;
-import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IntsRef;
 
 /** Decodes ordinals previously indexed into a BinaryDocValues field */
+
 public class DocValuesOrdinalsReader extends OrdinalsReader {
   private final String field;
 
@@ -50,24 +52,9 @@ public class DocValuesOrdinalsReader extends OrdinalsReader {
     final BinaryDocValues values = values0;
 
     return new OrdinalsSegmentReader() {
-
-      private int lastDocID;
-      
       @Override
       public void get(int docID, IntsRef ordinals) throws IOException {
-        if (docID < lastDocID) {
-          throw new AssertionError("docs out of order: lastDocID=" + lastDocID + " vs docID=" + docID);
-        }
-        lastDocID = docID;
-        if (docID > values.docID()) {
-          values.advance(docID);
-        }
-        final BytesRef bytes;
-        if (values.docID() == docID) {
-          bytes = values.binaryValue();
-        } else {
-          bytes = new BytesRef(BytesRef.EMPTY_BYTES);
-        }
+        final BytesRef bytes = values.get(docID);
         decode(bytes, ordinals);
       }
     };

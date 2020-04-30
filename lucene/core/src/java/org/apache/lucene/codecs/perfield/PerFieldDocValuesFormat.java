@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.perfield;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.perfield;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -33,7 +33,6 @@ import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.index.BinaryDocValues;
 import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.FieldInfo;
-import org.apache.lucene.index.MergeState;
 import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.SegmentWriteState;
@@ -42,7 +41,10 @@ import org.apache.lucene.index.SortedNumericDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Accountables;
+import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.RamUsageEstimator;
 
 /**
  * Enables per field docvalues support.
@@ -105,75 +107,34 @@ public abstract class PerFieldDocValuesFormat extends DocValuesFormat {
     }
     
     @Override
-    public void addNumericField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException {
-      getInstance(field).addNumericField(field, valuesProducer);
+    public void addNumericField(FieldInfo field, Iterable<Number> values) throws IOException {
+      getInstance(field).addNumericField(field, values);
     }
 
     @Override
-    public void addBinaryField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException {
-      getInstance(field).addBinaryField(field, valuesProducer);
+    public void addBinaryField(FieldInfo field, Iterable<BytesRef> values) throws IOException {
+      getInstance(field).addBinaryField(field, values);
     }
 
     @Override
-    public void addSortedField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException {
-      getInstance(field).addSortedField(field, valuesProducer);
+    public void addSortedField(FieldInfo field, Iterable<BytesRef> values, Iterable<Number> docToOrd) throws IOException {
+      getInstance(field).addSortedField(field, values, docToOrd);
     }
 
     @Override
-    public void addSortedNumericField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException {
-      getInstance(field).addSortedNumericField(field, valuesProducer);
+    public void addSortedNumericField(FieldInfo field, Iterable<Number> docToValueCount, Iterable<Number> values) throws IOException {
+      getInstance(field).addSortedNumericField(field, docToValueCount, values);
     }
 
     @Override
-    public void addSortedSetField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException {
-      getInstance(field).addSortedSetField(field, valuesProducer);
-    }
-
-    @Override
-    public void merge(MergeState mergeState) throws IOException {
-      Map<DocValuesConsumer, Collection<String>> consumersToField = new IdentityHashMap<>();
-
-      // Group each consumer by the fields it handles
-      for (FieldInfo fi : mergeState.mergeFieldInfos) {
-        // merge should ignore current format for the fields being merged
-        DocValuesConsumer consumer = getInstance(fi, true);
-        Collection<String> fieldsForConsumer = consumersToField.get(consumer);
-        if (fieldsForConsumer == null) {
-          fieldsForConsumer = new ArrayList<>();
-          consumersToField.put(consumer, fieldsForConsumer);
-        }
-        fieldsForConsumer.add(fi.name);
-      }
-
-      // Delegate the merge to the appropriate consumer
-      PerFieldMergeState pfMergeState = new PerFieldMergeState(mergeState);
-      try {
-        for (Map.Entry<DocValuesConsumer, Collection<String>> e : consumersToField.entrySet()) {
-          e.getKey().merge(pfMergeState.apply(e.getValue()));
-        }
-      } finally {
-        pfMergeState.reset();
-      }
+    public void addSortedSetField(FieldInfo field, Iterable<BytesRef> values, Iterable<Number> docToOrdCount, Iterable<Number> ords) throws IOException {
+      getInstance(field).addSortedSetField(field, values, docToOrdCount, ords);
     }
 
     private DocValuesConsumer getInstance(FieldInfo field) throws IOException {
-      return getInstance(field, false);
-    }
-
-    /**
-     * DocValuesConsumer for the given field.
-     * @param field - FieldInfo object.
-     * @param ignoreCurrentFormat - ignore the existing format attributes.
-     * @return DocValuesConsumer for the field.
-     * @throws IOException if there is a low-level IO error
-     */
-    private DocValuesConsumer getInstance(FieldInfo field, boolean ignoreCurrentFormat) throws IOException {
       DocValuesFormat format = null;
       if (field.getDocValuesGen() != -1) {
-        String formatName = null;
-        if (ignoreCurrentFormat == false) {
-          formatName = field.getAttribute(PER_FIELD_FORMAT_KEY);
-        }
+        final String formatName = field.getAttribute(PER_FIELD_FORMAT_KEY);
         // this means the field never existed in that segment, yet is applied updates
         if (formatName != null) {
           format = DocValuesFormat.forName(formatName);
@@ -186,19 +147,21 @@ public abstract class PerFieldDocValuesFormat extends DocValuesFormat {
         throw new IllegalStateException("invalid null DocValuesFormat for field=\"" + field.name + "\"");
       }
       final String formatName = format.getName();
-
-      field.putAttribute(PER_FIELD_FORMAT_KEY, formatName);
+      
+      String previousValue = field.putAttribute(PER_FIELD_FORMAT_KEY, formatName);
+      if (field.getDocValuesGen() == -1 && previousValue != null) {
+        throw new IllegalStateException("found existing value for " + PER_FIELD_FORMAT_KEY + 
+                                        ", field=" + field.name + ", old=" + previousValue + ", new=" + formatName);
+      }
+      
       Integer suffix = null;
-
+      
       ConsumerAndSuffix consumer = formats.get(format);
       if (consumer == null) {
         // First time we are seeing this format; create a new instance
 
         if (field.getDocValuesGen() != -1) {
-          String suffixAtt = null;
-          if (!ignoreCurrentFormat) {
-            suffixAtt = field.getAttribute(PER_FIELD_SUFFIX_KEY);
-          }
+          final String suffixAtt = field.getAttribute(PER_FIELD_SUFFIX_KEY);
           // even when dvGen is != -1, it can still be a new field, that never
           // existed in the segment, and therefore doesn't have the recorded
           // attributes yet.
@@ -206,7 +169,7 @@ public abstract class PerFieldDocValuesFormat extends DocValuesFormat {
             suffix = Integer.valueOf(suffixAtt);
           }
         }
-
+        
         if (suffix == null) {
           // bump the suffix
           suffix = suffixes.get(formatName);
@@ -217,7 +180,7 @@ public abstract class PerFieldDocValuesFormat extends DocValuesFormat {
           }
         }
         suffixes.put(formatName, suffix);
-
+        
         final String segmentSuffix = getFullSegmentSuffix(segmentWriteState.segmentSuffix,
                                                           getSuffix(formatName, Integer.toString(suffix)));
         consumer = new ConsumerAndSuffix();
@@ -229,8 +192,13 @@ public abstract class PerFieldDocValuesFormat extends DocValuesFormat {
         assert suffixes.containsKey(formatName);
         suffix = consumer.suffix;
       }
+      
+      previousValue = field.putAttribute(PER_FIELD_SUFFIX_KEY, Integer.toString(suffix));
+      if (field.getDocValuesGen() == -1 && previousValue != null) {
+        throw new IllegalStateException("found existing value for " + PER_FIELD_SUFFIX_KEY + 
+                                        ", field=" + field.name + ", old=" + previousValue + ", new=" + suffix);
+      }
 
-      field.putAttribute(PER_FIELD_SUFFIX_KEY, Integer.toString(suffix));
       // TODO: we should only provide the "slice" of FIS
       // that this DVF actually sees ...
       return consumer.consumer;
@@ -261,7 +229,7 @@ public abstract class PerFieldDocValuesFormat extends DocValuesFormat {
     private final Map<String,DocValuesProducer> formats = new HashMap<>();
     
     // clone for merge
-    FieldsReader(FieldsReader other) {
+    FieldsReader(FieldsReader other) throws IOException {
       Map<DocValuesProducer,DocValuesProducer> oldToNew = new IdentityHashMap<>();
       // First clone all formats
       for(Map.Entry<String,DocValuesProducer> ent : other.formats.entrySet()) {
@@ -342,6 +310,12 @@ public abstract class PerFieldDocValuesFormat extends DocValuesFormat {
     }
     
     @Override
+    public Bits getDocsWithField(FieldInfo field) throws IOException {
+      DocValuesProducer producer = fields.get(field.name);
+      return producer == null ? null : producer.getDocsWithField(field);
+    }
+
+    @Override
     public void close() throws IOException {
       IOUtils.close(formats.values());
     }
@@ -350,7 +324,8 @@ public abstract class PerFieldDocValuesFormat extends DocValuesFormat {
     public long ramBytesUsed() {
       long size = 0;
       for (Map.Entry<String,DocValuesProducer> entry : formats.entrySet()) {
-        size += (entry.getKey().length() * Character.BYTES) + entry.getValue().ramBytesUsed();
+        size += (entry.getKey().length() * RamUsageEstimator.NUM_BYTES_CHAR) + 
+            entry.getValue().ramBytesUsed();
       }
       return size;
     }
@@ -368,7 +343,7 @@ public abstract class PerFieldDocValuesFormat extends DocValuesFormat {
     }
     
     @Override
-    public DocValuesProducer getMergeInstance() {
+    public DocValuesProducer getMergeInstance() throws IOException {
       return new FieldsReader(this);
     }
 

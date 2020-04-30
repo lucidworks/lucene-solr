@@ -1,3 +1,5 @@
+package org.apache.solr.schema;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -36,15 +37,16 @@ import org.apache.lucene.collation.CollationKeyAnalyzer;
 import org.apache.lucene.document.SortedDocValuesField;
 import org.apache.lucene.document.SortedSetDocValuesField;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.search.DocValuesRangeQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.TermRangeQuery;
+import org.apache.lucene.uninverting.UninvertingReader.Type;
 import org.apache.lucene.util.BytesRef;
-import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.SolrException;
+import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.response.TextResponseWriter;
 import org.apache.solr.search.QParser;
-import org.apache.solr.uninverting.UninvertingReader.Type;
 
 /**
  * Field for collated sort keys. 
@@ -241,22 +243,23 @@ public class CollationField extends FieldType {
     BytesRef low = part1 == null ? null : getCollationKey(f, part1);
     BytesRef high = part2 == null ? null : getCollationKey(f, part2);
     if (!field.indexed() && field.hasDocValues()) {
-      return SortedSetDocValuesField.newSlowRangeQuery(
+      return DocValuesRangeQuery.newBytesRefRange(
           field.getName(), low, high, minInclusive, maxInclusive);
     } else {
       return new TermRangeQuery(field.getName(), low, high, minInclusive, maxInclusive);
     }
   }
-
+  
   @Override
-  protected void checkSupportsDocValues() { // we support DocValues
+  public void checkSchemaField(SchemaField field) {
+    // no-op
   }
 
   @Override
-  public List<IndexableField> createFields(SchemaField field, Object value) {
+  public List<IndexableField> createFields(SchemaField field, Object value, float boost) {
     if (field.hasDocValues()) {
       List<IndexableField> fields = new ArrayList<>();
-      fields.add(createField(field, value));
+      fields.add(createField(field, value, boost));
       final BytesRef bytes = getCollationKey(field.getName(), value.toString());
       if (field.multiValued()) {
         fields.add(new SortedSetDocValuesField(field.getName(), bytes));
@@ -265,7 +268,7 @@ public class CollationField extends FieldType {
       }
       return fields;
     } else {
-      return Collections.singletonList(createField(field, value));
+      return Collections.singletonList(createField(field, value, boost));
     }
   }
 

@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.charfilter;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.charfilter;
-
 
 import java.io.IOException;
 import java.io.Reader;
@@ -25,7 +25,9 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
 import org.apache.lucene.analysis.util.CharFilterFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.lucene.analysis.util.ResourceLoader;
 import org.apache.lucene.analysis.util.ResourceLoaderAware;
 
@@ -40,13 +42,9 @@ import org.apache.lucene.analysis.util.ResourceLoaderAware;
  * &lt;/fieldType&gt;</pre>
  *
  * @since Solr 1.4
- * @lucene.spi {@value #NAME}
  */
 public class MappingCharFilterFactory extends CharFilterFactory implements
-    ResourceLoaderAware {
-
-  /** SPI name */
-  public static final String NAME = "mapping";
+    ResourceLoaderAware, MultiTermAwareComponent {
 
   protected NormalizeCharMap normMap;
   private final String mapping;
@@ -86,11 +84,6 @@ public class MappingCharFilterFactory extends CharFilterFactory implements
     // if the map is null, it means there's actually no mappings... just return the original stream
     // as there is nothing to do here.
     return normMap == null ? input : new MappingCharFilter(normMap,input);
-  }
-
-  @Override
-  public Reader normalize(Reader input) {
-    return create(input);
   }
 
   // "source" => "target"
@@ -138,4 +131,8 @@ public class MappingCharFilterFactory extends CharFilterFactory implements
     return new String( out, 0, writePos );
   }
 
+  @Override
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
+  }
 }

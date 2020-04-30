@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,28 +16,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
 
 import java.io.File;
 import java.io.StringReader;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.impl.XMLResponseParser;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.Utils;
 import org.apache.solr.util.RestTestBase;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.noggit.JSONParser;
+import org.noggit.ObjectBuilder;
 
 /**
  * Test that a ConfigSet marked as immutable cannot be modified via
  * the known APIs, i.e. SolrConfigHandler and SchemaHandler.
  */
-// See: https://issues.apache.org/jira/browse/SOLR-12028 Tests cannot remove files on Windows machines occasionally
 public class TestConfigSetImmutable extends RestTestBase {
 
   private static final String collection = "collection1";
@@ -47,7 +47,7 @@ public class TestConfigSetImmutable extends RestTestBase {
     File tmpConfDir = new File(tmpSolrHome, confDir);
     FileUtils.copyDirectory(new File(TEST_HOME()), tmpSolrHome.getAbsoluteFile());
     // make the ConfigSet immutable
-    FileUtils.write(new File(tmpConfDir, "configsetprops.json"), new StringBuilder("{\"immutable\":\"true\"}"), StandardCharsets.UTF_8);
+    FileUtils.write(new File(tmpConfDir, "configsetprops.json"), new StringBuilder("{\"immutable\":\"true\"}"));
 
     System.setProperty("managed.schema.mutable", "true");
 
@@ -73,9 +73,9 @@ public class TestConfigSetImmutable extends RestTestBase {
     String payload = "{\n" +
         "'create-requesthandler' : { 'name' : '/x', 'class': 'org.apache.solr.handler.DumpRequestHandler' , 'startup' : 'lazy'}\n" +
         "}";
-    String uri = "/config";
+    String uri = "/config?wt=json";
     String response = restTestHarness.post(uri, SolrTestCaseJ4.json(payload));
-    Map map = (Map) Utils.fromJSONString(response);
+    Map map = (Map) ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
     assertNotNull(map.get("error"));
     assertTrue(map.get("error").toString().contains("immutable"));
   }
@@ -91,12 +91,10 @@ public class TestConfigSetImmutable extends RestTestBase {
         "                 },\n" +
         "    }";
 
-    String response = restTestHarness.post("/schema", json(payload));
-    Map map = (Map) Utils.fromJSONString(response);
-    Map error = (Map)map.get("error");
-    assertNotNull("No errors", error);
-    String msg = (String)error.get("msg");
-    assertTrue(msg.contains("immutable"));
+    String response = restTestHarness.post("/schema?wt=json", json(payload));
+    Map map = (Map) ObjectBuilder.getVal(new JSONParser(new StringReader(response)));
+    assertNotNull(map.get("errors"));
+    assertTrue(map.get("errors").toString().contains("immutable"));
   }
 
   @Test

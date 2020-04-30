@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.document;
 
 import java.io.IOException;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.search.suggest.BitsProducer;
 
@@ -68,30 +67,8 @@ public class PrefixCompletionQuery extends CompletionQuery {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    try (CompletionTokenStream stream = (CompletionTokenStream) analyzer.tokenStream(getField(), getTerm().text())) {
-      return new CompletionWeight(this, stream.toAutomaton());
-    }
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    visitor.visitLeaf(this);
-  }
-  /**
-   * Gets the analyzer used to analyze the prefix.
-   */
-  public Analyzer getAnalyzer() {
-    return analyzer;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int hashCode() {
-    throw new UnsupportedOperationException();
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    CompletionTokenStream stream = (CompletionTokenStream) analyzer.tokenStream(getField(), getTerm().text());
+    return new CompletionWeight(this, stream.toAutomaton());
   }
 }

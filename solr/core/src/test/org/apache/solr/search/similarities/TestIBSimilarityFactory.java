@@ -1,3 +1,5 @@
+package org.apache.solr.search.similarities;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.similarities;
 
 import org.apache.lucene.search.similarities.DistributionLL;
 import org.apache.lucene.search.similarities.DistributionSPL;
@@ -45,7 +46,7 @@ public class TestIBSimilarityFactory extends BaseSimilarityTestCase {
     assertEquals(NormalizationH2.class, ib.getNormalization().getClass());
   }
   
-  /** ll/ttf/h3 with parametrized normalization */
+  /** ll/ttf/h3 with parameterized normalization */
   public void testParameters() throws Exception {
     Similarity sim = getSimilarity("text_params");
     assertEquals(IBSimilarity.class, sim.getClass());

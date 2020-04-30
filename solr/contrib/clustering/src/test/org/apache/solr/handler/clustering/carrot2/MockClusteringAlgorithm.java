@@ -1,3 +1,4 @@
+package org.apache.solr.handler.clustering.carrot2;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +15,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.clustering.carrot2;
+import com.google.common.collect.Lists;
 import org.carrot2.core.*;
 import org.carrot2.core.attribute.AttributeNames;
 import org.carrot2.core.attribute.Processing;
 import org.carrot2.util.attribute.*;
 import org.carrot2.util.attribute.constraint.IntRange;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @Bindable(prefix = "MockClusteringAlgorithm")
@@ -30,39 +30,39 @@ public class MockClusteringAlgorithm extends ProcessingComponentBase implements
   @Input
   @Processing
   @Attribute(key = AttributeNames.DOCUMENTS)
-  public List<Document> documents;
+  private List<Document> documents;
 
   @Output
   @Processing
   @Attribute(key = AttributeNames.CLUSTERS)
-  public List<Cluster> clusters;
+  private List<Cluster> clusters;
 
   @Input
   @Processing
   @Attribute
   @IntRange(min = 1, max = 5)
-  public int depth = 2;
+  private int depth = 2;
 
   @Input
   @Processing
   @Attribute
   @IntRange(min = 1, max = 5)
-  public int labels = 1;
+  private int labels = 1;
 
   @Input
   @Processing
   @Attribute
   @IntRange(min = 0)
-  public int maxClusters = 0;
+  private int maxClusters = 0;
 
   @Input
   @Processing
   @Attribute
-  public int otherTopicsModulo = 0;
+  private int otherTopicsModulo = 0;
 
   @Override
   public void process() throws ProcessingException {
-    clusters = new ArrayList<>();
+    clusters = Lists.newArrayList();
     if (documents == null) {
       return;
     }

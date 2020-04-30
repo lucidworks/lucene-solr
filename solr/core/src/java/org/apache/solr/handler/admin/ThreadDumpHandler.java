@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.admin;
 
 import java.io.IOException;
@@ -28,7 +29,6 @@ import org.apache.solr.handler.RequestHandlerBase;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 
-import static org.apache.solr.common.params.CommonParams.ID;
 import static org.apache.solr.common.params.CommonParams.NAME;
 
 /**
@@ -86,7 +86,7 @@ public class ThreadDumpHandler extends RequestHandlerBase
     SimpleOrderedMap<Object> info = new SimpleOrderedMap<>();
     long tid = ti.getThreadId();
 
-    info.add( ID, tid );
+    info.add( "id", tid );
     info.add(NAME, ti.getThreadName());
     info.add( "state", ti.getThreadState().toString() );
     
@@ -108,7 +108,7 @@ public class ThreadDumpHandler extends RequestHandlerBase
     if (ti.getLockOwnerName() != null) {
       SimpleOrderedMap<Object> owner = new SimpleOrderedMap<>();
       owner.add(NAME, ti.getLockOwnerName());
-      owner.add( ID, ti.getLockOwnerId() );
+      owner.add( "id", ti.getLockOwnerId() );
     }
     
     // Add the stack trace
@@ -130,10 +130,5 @@ public class ThreadDumpHandler extends RequestHandlerBase
   @Override
   public String getDescription() {
     return "Thread Dump";
-  }
-
-  @Override
-  public Category getCategory() {
-    return Category.ADMIN;
   }
 }

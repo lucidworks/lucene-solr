@@ -1,3 +1,26 @@
+package org.apache.lucene.facet.taxonomy.directory;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import org.apache.lucene.document.Document;
+import org.apache.lucene.facet.FacetsConfig;
+import org.apache.lucene.facet.taxonomy.FacetLabel;
+import org.apache.lucene.facet.taxonomy.LRUHashMap;
+import org.apache.lucene.facet.taxonomy.ParallelTaxonomyArrays;
+import org.apache.lucene.facet.taxonomy.TaxonomyReader;
+import org.apache.lucene.index.CorruptIndexException; // javadocs
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.MultiFields;
+import org.apache.lucene.search.DocIdSetIterator;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.IOUtils;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,37 +37,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy.directory;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import org.apache.lucene.document.Document;
-import org.apache.lucene.facet.FacetsConfig;
-import org.apache.lucene.facet.taxonomy.FacetLabel;
-import org.apache.lucene.facet.taxonomy.LRUHashMap;
-import org.apache.lucene.facet.taxonomy.ParallelTaxonomyArrays;
-import org.apache.lucene.facet.taxonomy.TaxonomyReader;
-import org.apache.lucene.index.CorruptIndexException; // javadocs
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.MultiTerms;
-import org.apache.lucene.index.PostingsEnum;
-import org.apache.lucene.index.SegmentReader;
-import org.apache.lucene.search.DocIdSetIterator;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.Accountable;
-import org.apache.lucene.util.Accountables;
-import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.IOUtils;
-import org.apache.lucene.util.RamUsageEstimator;
 
 /**
  * A {@link TaxonomyReader} which retrieves stored taxonomy information from a
@@ -58,14 +50,11 @@ import org.apache.lucene.util.RamUsageEstimator;
  * 
  * @lucene.experimental
  */
-public class DirectoryTaxonomyReader extends TaxonomyReader implements Accountable {
+public class DirectoryTaxonomyReader extends TaxonomyReader {
 
-  private static final Logger log = Logger.getLogger(DirectoryTaxonomyReader.class.getName());
+  private static final Logger logger = Logger.getLogger(DirectoryTaxonomyReader.class.getName());
 
   private static final int DEFAULT_CACHE_VALUE = 4000;
-
-  // NOTE: very coarse estimate!
-  private static final int BYTES_PER_CACHE_ENTRY = 4 * RamUsageEstimator.NUM_BYTES_OBJECT_REF + 4 * RamUsageEstimator.NUM_BYTES_OBJECT_HEADER + 8 * Character.BYTES;
   
   private final DirectoryTaxonomyWriter taxoWriter;
   private final long taxoEpoch; // used in doOpenIfChanged 
@@ -190,7 +179,7 @@ public class DirectoryTaxonomyReader extends TaxonomyReader implements Accountab
             recreated = true;
           }
         } else if (!t1.equals(t2)) {
-          // t1 != null and t2 must not be null b/c DirTaxoWriter always puts the commit data.
+          // t1 != null and t2 cannot be null b/c DirTaxoWriter always puts the commit data.
           // it's ok to use String.equals because we require the two epoch values to be the same.
           recreated = true;
         }
@@ -228,7 +217,7 @@ public class DirectoryTaxonomyReader extends TaxonomyReader implements Accountab
   /** Open the {@link DirectoryReader} from this {@link
    *  IndexWriter}. */
   protected DirectoryReader openIndexReader(IndexWriter writer) throws IOException {
-    return DirectoryReader.open(writer);
+    return DirectoryReader.open(writer, false);
   }
 
   /**
@@ -284,7 +273,7 @@ public class DirectoryTaxonomyReader extends TaxonomyReader implements Accountab
     // If we're still here, we have a cache miss. We need to fetch the
     // value from disk, and then also put it in the cache:
     int ret = TaxonomyReader.INVALID_ORDINAL;
-    PostingsEnum docs = MultiTerms.getTermPostingsEnum(indexReader, Consts.FULL, new BytesRef(FacetsConfig.pathToString(cp.components, cp.length)), 0);
+    PostingsEnum docs = MultiFields.getTermDocsEnum(indexReader, Consts.FULL, new BytesRef(FacetsConfig.pathToString(cp.components, cp.length)), 0);
     if (docs != null && docs.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
       ret = docs.docID();
       
@@ -337,51 +326,7 @@ public class DirectoryTaxonomyReader extends TaxonomyReader implements Accountab
     ensureOpen();
     return indexReader.numDocs();
   }
-
-  @Override
-  public synchronized long ramBytesUsed() {
-    ensureOpen();
-    long ramBytesUsed = 0;
-    for (LeafReaderContext ctx : indexReader.leaves()) {
-      ramBytesUsed += ((SegmentReader) ctx.reader()).ramBytesUsed();
-    }
-    if (taxoArrays != null) {
-      ramBytesUsed += taxoArrays.ramBytesUsed();
-    }
-    synchronized (categoryCache) {
-      ramBytesUsed += BYTES_PER_CACHE_ENTRY * categoryCache.size();
-    }    
-
-    synchronized (ordinalCache) {
-      ramBytesUsed += BYTES_PER_CACHE_ENTRY * ordinalCache.size();
-    }    
-
-    return ramBytesUsed;
-  }
   
-  @Override
-  public synchronized Collection<Accountable> getChildResources() {
-    final List<Accountable> resources = new ArrayList<>();
-    long ramBytesUsed = 0;
-    for (LeafReaderContext ctx : indexReader.leaves()) {
-      ramBytesUsed += ((SegmentReader) ctx.reader()).ramBytesUsed();
-    }
-    resources.add(Accountables.namedAccountable("indexReader", ramBytesUsed));
-    if (taxoArrays != null) {
-      resources.add(Accountables.namedAccountable("taxoArrays", taxoArrays));
-    }
-
-    synchronized (categoryCache) {
-      resources.add(Accountables.namedAccountable("categoryCache", BYTES_PER_CACHE_ENTRY * categoryCache.size()));
-    }    
-
-    synchronized (ordinalCache) {
-      resources.add(Accountables.namedAccountable("ordinalCache", BYTES_PER_CACHE_ENTRY * ordinalCache.size()));
-    }    
-    
-    return Collections.unmodifiableList(resources);
-  }
-
   /**
    * setCacheSize controls the maximum allowed size of each of the caches
    * used by {@link #getPath(int)} and {@link #getOrdinal(FacetLabel)}.
@@ -412,17 +357,17 @@ public class DirectoryTaxonomyReader extends TaxonomyReader implements Accountab
       try {
         FacetLabel category = this.getPath(i);
         if (category == null) {
-          sb.append(i).append(": NULL!! \n");
+          sb.append(i + ": NULL!! \n");
           continue;
         } 
         if (category.length == 0) {
-          sb.append(i).append(": EMPTY STRING!! \n");
+          sb.append(i + ": EMPTY STRING!! \n");
           continue;
         }
-        sb.append(i).append(": ").append(category.toString()).append("\n");
+        sb.append(i +": "+category.toString()+"\n");
       } catch (IOException e) {
-        if (log.isLoggable(Level.FINEST)) {
-          log.log(Level.FINEST, e.getMessage(), e);
+        if (logger.isLoggable(Level.FINEST)) {
+          logger.log(Level.FINEST, e.getMessage(), e);
         }
       }
     }

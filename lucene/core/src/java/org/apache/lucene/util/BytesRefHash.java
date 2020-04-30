@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.lucene.util.ByteBlockPool.DirectAllocator;
@@ -42,12 +43,7 @@ import static org.apache.lucene.util.ByteBlockPool.BYTE_BLOCK_SIZE;
  * 
  * @lucene.internal
  */
-public final class BytesRefHash implements Accountable {
-  private static final long BASE_RAM_BYTES = RamUsageEstimator.shallowSizeOfInstance(BytesRefHash.class) +
-      // size of scratch1
-      RamUsageEstimator.shallowSizeOfInstance(BytesRef.class) +
-      // size of Counter
-      RamUsageEstimator.primitiveSizes.get(long.class);
+public final class BytesRefHash {
 
   public static final int DEFAULT_CAPACITY = 16;
 
@@ -94,7 +90,7 @@ public final class BytesRefHash implements Accountable {
     this.bytesStartArray = bytesStartArray;
     bytesStart = bytesStartArray.init();
     bytesUsed = bytesStartArray.bytesUsed() == null? Counter.newCounter() : bytesStartArray.bytesUsed();
-    bytesUsed.addAndGet(hashSize * Integer.BYTES);
+    bytesUsed.addAndGet(hashSize * RamUsageEstimator.NUM_BYTES_INT);
   }
 
   /**
@@ -135,10 +131,8 @@ public final class BytesRefHash implements Accountable {
    * Note: This is a destructive operation. {@link #clear()} must be called in
    * order to reuse this {@link BytesRefHash} instance.
    * </p>
-   *
-   * @lucene.internal
    */
-  public int[] compact() {
+  int[] compact() {
     assert bytesStart != null : "bytesStart is null - not initialized";
     int upto = 0;
     for (int i = 0; i < hashSize; i++) {
@@ -162,26 +156,46 @@ public final class BytesRefHash implements Accountable {
    * Note: This is a destructive operation. {@link #clear()} must be called in
    * order to reuse this {@link BytesRefHash} instance.
    * </p>
+   * 
+   * @param comp
+   *          the {@link Comparator} used for sorting
    */
-  public int[] sort() {
+  public int[] sort(final Comparator<BytesRef> comp) {
     final int[] compact = compact();
-    new StringMSBRadixSorter() {
-
-      BytesRef scratch = new BytesRef();
-
+    new IntroSorter() {
       @Override
       protected void swap(int i, int j) {
-        int tmp = compact[i];
+        final int o = compact[i];
         compact[i] = compact[j];
-        compact[j] = tmp;
+        compact[j] = o;
+      }
+      
+      @Override
+      protected int compare(int i, int j) {
+        final int id1 = compact[i], id2 = compact[j];
+        assert bytesStart.length > id1 && bytesStart.length > id2;
+        pool.setBytesRef(scratch1, bytesStart[id1]);
+        pool.setBytesRef(scratch2, bytesStart[id2]);
+        return comp.compare(scratch1, scratch2);
       }
 
       @Override
-      protected BytesRef get(int i) {
-        pool.setBytesRef(scratch, bytesStart[compact[i]]);
-        return scratch;
+      protected void setPivot(int i) {
+        final int id = compact[i];
+        assert bytesStart.length > id;
+        pool.setBytesRef(pivot, bytesStart[id]);
       }
-
+  
+      @Override
+      protected int comparePivot(int j) {
+        final int id = compact[j];
+        assert bytesStart.length > id;
+        pool.setBytesRef(scratch2, bytesStart[id]);
+        return comp.compare(pivot, scratch2);
+      }
+      
+      private final BytesRef pivot = new BytesRef(),
+        scratch1 = new BytesRef(), scratch2 = new BytesRef();
     }.sort(0, count);
     return compact;
   }
@@ -199,7 +213,7 @@ public final class BytesRefHash implements Accountable {
       newSize /= 2;
     }
     if (newSize != hashSize) {
-      bytesUsed.addAndGet(Integer.BYTES * -(hashSize - newSize));
+      bytesUsed.addAndGet(RamUsageEstimator.NUM_BYTES_INT * -(hashSize - newSize));
       hashSize = newSize;
       ids = new int[hashSize];
       Arrays.fill(ids, -1);
@@ -238,7 +252,7 @@ public final class BytesRefHash implements Accountable {
   public void close() {
     clear(true);
     ids = null;
-    bytesUsed.addAndGet(Integer.BYTES * -hashSize);
+    bytesUsed.addAndGet(RamUsageEstimator.NUM_BYTES_INT * -hashSize);
   }
 
   /**
@@ -394,7 +408,7 @@ public final class BytesRefHash implements Accountable {
    */
   private void rehash(final int newSize, boolean hashOnData) {
     final int newMask = newSize - 1;
-    bytesUsed.addAndGet(Integer.BYTES * (newSize));
+    bytesUsed.addAndGet(RamUsageEstimator.NUM_BYTES_INT * (newSize));
     final int[] newHash = new int[newSize];
     Arrays.fill(newHash, -1);
     for (int i = 0; i < hashSize; i++) {
@@ -435,7 +449,7 @@ public final class BytesRefHash implements Accountable {
     }
 
     hashMask = newMask;
-    bytesUsed.addAndGet(Integer.BYTES * (-ids.length));
+    bytesUsed.addAndGet(RamUsageEstimator.NUM_BYTES_INT * (-ids.length));
     ids = newHash;
     hashSize = newSize;
     hashHalfSize = newSize / 2;
@@ -458,7 +472,7 @@ public final class BytesRefHash implements Accountable {
     
     if (ids == null) {
       ids = new int[hashSize];
-      bytesUsed.addAndGet(Integer.BYTES * hashSize);
+      bytesUsed.addAndGet(RamUsageEstimator.NUM_BYTES_INT * hashSize);
     }
   }
 
@@ -475,15 +489,6 @@ public final class BytesRefHash implements Accountable {
     assert bytesStart != null : "bytesStart is null - not initialized";
     assert bytesID >= 0 && bytesID < count : bytesID;
     return bytesStart[bytesID];
-  }
-
-  @Override
-  public long ramBytesUsed() {
-    long size = BASE_RAM_BYTES +
-        RamUsageEstimator.sizeOfObject(bytesStart) +
-        RamUsageEstimator.sizeOfObject(ids) +
-        RamUsageEstimator.sizeOfObject(pool);
-    return size;
   }
 
   /**
@@ -565,7 +570,8 @@ public final class BytesRefHash implements Accountable {
 
     @Override
     public int[] init() {
-      return bytesStart = new int[ArrayUtil.oversize(initSize, Integer.BYTES)];
+      return bytesStart = new int[ArrayUtil.oversize(initSize,
+          RamUsageEstimator.NUM_BYTES_INT)];
     }
 
     @Override

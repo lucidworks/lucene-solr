@@ -1,3 +1,5 @@
+package org.apache.lucene.benchmark.byTask.feeds;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.feeds;
-
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -101,7 +101,7 @@ public class EnwikiContentSource extends ContentSource {
 
       buffer.append(original.substring(8, 10));
       buffer.append('-');
-      buffer.append(months[Integer.parseInt(original.substring(5, 7)) - 1]);
+      buffer.append(months[Integer.valueOf(original.substring(5, 7)).intValue() - 1]);
       buffer.append('-');
       buffer.append(original.substring(0, 4));
       buffer.append(' ');

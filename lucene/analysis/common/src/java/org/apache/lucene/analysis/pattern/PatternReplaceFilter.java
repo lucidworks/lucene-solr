@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.analysis.pattern;
 
 import org.apache.lucene.analysis.TokenFilter;
@@ -26,7 +27,7 @@ import java.io.IOException;
 
 /**
  * A TokenFilter which applies a Pattern to each token in the stream,
- * replacing match occurrences with the specified replacement string.
+ * replacing match occurances with the specified replacement string.
  *
  * <p>
  * <b>Note:</b> Depending on the input and the pattern used and the input
@@ -43,7 +44,7 @@ public final class PatternReplaceFilter extends TokenFilter {
   private final Matcher m;
 
   /**
-   * Constructs an instance to replace either the first, or all occurrences
+   * Constructs an instance to replace either the first, or all occurances
    *
    * @param in the TokenStream to process
    * @param p the patterm to apply to each Token

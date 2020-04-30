@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ngram;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ngram;
-
 
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.util.AttributeFactory;
+import org.apache.lucene.util.Version;
 
 /**
  * Tokenizes the input from an edge into n-grams of given size(s).

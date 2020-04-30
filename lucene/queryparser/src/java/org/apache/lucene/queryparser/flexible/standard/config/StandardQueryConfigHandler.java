@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.standard.config;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.standard.config;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -55,6 +56,14 @@ public class StandardQueryConfigHandler extends QueryConfigHandler {
      * @see StandardQueryParser#getEnablePositionIncrements()
      */
     final public static ConfigurationKey<Boolean> ENABLE_POSITION_INCREMENTS = ConfigurationKey.newInstance();
+    
+    /**
+     * Key used to set whether expanded terms should be lower-cased
+     * 
+     * @see StandardQueryParser#setLowercaseExpandedTerms(boolean)
+     * @see StandardQueryParser#getLowercaseExpandedTerms()
+     */
+    final public static ConfigurationKey<Boolean> LOWERCASE_EXPANDED_TERMS = ConfigurationKey.newInstance();
 
     /**
      * Key used to set whether leading wildcards are supported
@@ -159,21 +168,21 @@ public class StandardQueryConfigHandler extends QueryConfigHandler {
     final public static ConfigurationKey<Float> BOOST = ConfigurationKey.newInstance();
     
     /**
-     * Key used to set a field to its {@link PointsConfig}.
+     * Key used to set a field to its {@link NumericConfig}.
      * 
-     * @see StandardQueryParser#setPointsConfigMap(Map)
-     * @see StandardQueryParser#getPointsConfigMap()
+     * @see StandardQueryParser#setNumericConfigMap(Map)
+     * @see StandardQueryParser#getNumericConfigMap()
      */
-    final public static ConfigurationKey<PointsConfig> POINTS_CONFIG = ConfigurationKey.newInstance();
-
+    final public static ConfigurationKey<NumericConfig> NUMERIC_CONFIG = ConfigurationKey.newInstance();
+    
     /**
-     * Key used to set the {@link PointsConfig} in {@link FieldConfig} for point fields.
+     * Key used to set the {@link NumericConfig} in {@link FieldConfig} for numeric fields.
      * 
-     * @see StandardQueryParser#setPointsConfigMap(Map)
-     * @see StandardQueryParser#getPointsConfigMap()
+     * @see StandardQueryParser#setNumericConfigMap(Map)
+     * @see StandardQueryParser#getNumericConfigMap()
      */
-    final public static ConfigurationKey<Map<String,PointsConfig>> POINTS_CONFIG_MAP = ConfigurationKey.newInstance();
-
+    final public static ConfigurationKey<Map<String,NumericConfig>> NUMERIC_CONFIG_MAP = ConfigurationKey.newInstance();
+    
   }
   
   /**
@@ -187,13 +196,14 @@ public class StandardQueryConfigHandler extends QueryConfigHandler {
     // Add listener that will build the FieldConfig.
     addFieldConfigListener(new FieldBoostMapFCListener(this));
     addFieldConfigListener(new FieldDateResolutionFCListener(this));
-    addFieldConfigListener(new PointsConfigListener(this));
+    addFieldConfigListener(new NumericFieldConfigListener(this));
     
     // Default Values
     set(ConfigurationKeys.ALLOW_LEADING_WILDCARD, false); // default in 2.9
     set(ConfigurationKeys.ANALYZER, null); //default value 2.4
     set(ConfigurationKeys.DEFAULT_OPERATOR, Operator.OR);
     set(ConfigurationKeys.PHRASE_SLOP, 0); //default value 2.4
+    set(ConfigurationKeys.LOWERCASE_EXPANDED_TERMS, true); //default value 2.4
     set(ConfigurationKeys.ENABLE_POSITION_INCREMENTS, false); //default value 2.4
     set(ConfigurationKeys.FIELD_BOOST_MAP, new LinkedHashMap<String, Float>());
     set(ConfigurationKeys.FUZZY_CONFIG, new FuzzyConfig());

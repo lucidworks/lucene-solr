@@ -1,3 +1,5 @@
+package org.apache.solr.cloud.hdfs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud.hdfs;
 
-import com.carrotsearch.randomizedtesting.annotations.ThreadLeakFilters;
+import java.io.IOException;
+
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.lucene.util.LuceneTestCase.Nightly;
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.solr.cloud.RecoveryZkTest;
-import org.apache.solr.common.cloud.ZkConfigManager;
 import org.apache.solr.util.BadHdfsThreadsFilter;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+
+import com.carrotsearch.randomizedtesting.annotations.Nightly;
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeakFilters;
 
 @Slow
 @Nightly
@@ -37,21 +40,19 @@ public class HdfsRecoveryZkTest extends RecoveryZkTest {
   @BeforeClass
   public static void setupClass() throws Exception {
     dfsCluster = HdfsTestUtil.setupClass(createTempDir().toFile().getAbsolutePath());
-
-    ZkConfigManager configManager = new ZkConfigManager(zkClient());
-    configManager.uploadConfigDir(configset("cloud-hdfs"), "conf");
+    System.setProperty("solr.hdfs.blockcache.blocksperbank", "2048");
   }
   
   @AfterClass
   public static void teardownClass() throws Exception {
-    try {
-      shutdownCluster(); // need to close before the MiniDFSCluster
-    } finally {
-      try {
-        HdfsTestUtil.teardownClass(dfsCluster);
-      } finally {
-        dfsCluster = null;
-      }
-    }
+    HdfsTestUtil.teardownClass(dfsCluster);
+    dfsCluster = null;
   }
+
+  
+  @Override
+  protected String getDataDir(String dataDir) throws IOException {
+    return HdfsTestUtil.getDataDir(dfsCluster, dataDir);
+  }
+
 }

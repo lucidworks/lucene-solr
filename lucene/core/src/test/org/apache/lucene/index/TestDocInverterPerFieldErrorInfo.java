@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockTokenizer;
@@ -76,12 +76,14 @@ public class TestDocInverterPerFieldErrorInfo extends LuceneTestCase {
     writer = new IndexWriter(dir, c);
     Document doc = new Document();
     doc.add(newField("distinctiveFieldName", "aaa ", storedTextType));
-    expectThrows(BadNews.class, () -> {
+    try {
       writer.addDocument(doc);
-    });
-    infoPrintStream.flush();
-    String infoStream = new String(infoBytes.toByteArray(), IOUtils.UTF_8);
-    assertTrue(infoStream.contains("distinctiveFieldName"));
+      fail("Failed to fail.");
+    } catch(BadNews badNews) {
+      infoPrintStream.flush();
+      String infoStream = new String(infoBytes.toByteArray(), IOUtils.UTF_8);
+      assertTrue(infoStream.contains("distinctiveFieldName"));
+    }
 
     writer.close();
     dir.close();

@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
 import static org.apache.solr.common.SolrException.ErrorCode;
@@ -37,7 +38,6 @@ import org.slf4j.LoggerFactory;
  * The factory can be configured to return a specific HTTP response code, default is 403, and
  * optional response message, such as to warn the client application that its request was ignored.
  * </p>
- * @since 5.0.0
  */
 public class IgnoreCommitOptimizeUpdateProcessorFactory extends UpdateRequestProcessorFactory {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -50,7 +50,7 @@ public class IgnoreCommitOptimizeUpdateProcessorFactory extends UpdateRequestPro
 
   @Override
   public void init(final NamedList args) {
-    SolrParams params = (args != null) ? args.toSolrParams() : null;
+    SolrParams params = (args != null) ? SolrParams.toSolrParams(args) : null;
     if (params == null) {
       errorCode = ErrorCode.FORBIDDEN; // default is 403 error
       responseMsg = DEFAULT_RESPONSE_MSG;
@@ -139,7 +139,7 @@ public class IgnoreCommitOptimizeUpdateProcessorFactory extends UpdateRequestPro
           } else {
             responseHeader = new SimpleOrderedMap<Object>();
             responseHeader.add("msg", responseMsg);
-            rsp.addResponseHeader(responseHeader);
+            rsp.add("responseHeader", responseHeader);
           }
         }
       }

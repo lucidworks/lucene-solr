@@ -14,41 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
-import org.apache.solr.core.SolrInfoBean;
-import org.apache.solr.metrics.SolrMetricProducer;
+import org.apache.solr.core.SolrInfoMBean;
 
 import java.util.Map;
-import java.util.function.Function;
 
 
 /**
  * Primary API for dealing with Solr's internal caches.
+ * 
+ *
  */
-public interface SolrCache<K,V> extends SolrInfoBean, SolrMetricProducer {
-
-  String HIT_RATIO_PARAM = "hitratio";
-  String HITS_PARAM = "hits";
-  String INSERTS_PARAM = "inserts";
-  String EVICTIONS_PARAM = "evictions";
-  String LOOKUPS_PARAM = "lookups";
-  String SIZE_PARAM = "size";
-  String MAX_SIZE_PARAM = "maxSize";
-  String RAM_BYTES_USED_PARAM = "ramBytesUsed";
-  String MAX_RAM_MB_PARAM = "maxRamMB";
-  String MAX_IDLE_TIME_PARAM = "maxIdleTime";
-  String INITIAL_SIZE_PARAM = "initialSize";
-  String CLEANUP_THREAD_PARAM = "cleanupThread";
-  String SHOW_ITEMS_PARAM = "showItems";
+public interface SolrCache<K,V> extends SolrInfoMBean {
 
   /**
-   * The initialization routine. Instance specific arguments are passed in
+   * The initialization routine.  Instance specific arguments are passed in
    * the <code>args</code> map.
    * <p>
    * The persistence object will exist across different lifetimes of similar caches.
    * For example, all filter caches will share the same persistence object, sometimes
-   * at the same time (it must be thread-safe).  If null is passed, then the cache
+   * at the same time (it must be threadsafe).  If null is passed, then the cache
    * implementation should create and return a new persistence object.  If not null,
    * the passed in object should be returned again.
    * <p>
@@ -61,7 +48,7 @@ public interface SolrCache<K,V> extends SolrInfoBean, SolrMetricProducer {
    * object may be of any type desired by the cache implementation.
    * <p>
    * The {@link CacheRegenerator} is what the cache uses during auto-warming to
-   * regenerate an item in the new cache from an entry in the old cache.
+   * renenerate an item in the new cache from an entry in the old cache.
    *
    */
   public Object init(Map args, Object persistence, CacheRegenerator regenerator);
@@ -94,19 +81,6 @@ public interface SolrCache<K,V> extends SolrInfoBean, SolrMetricProducer {
 
   /** :TODO: copy from Map */
   public V get(K key);
-
-  public V remove(K key);
-
-  /**
-   * Get an existing element or atomically compute it if missing.
-   * @param key key
-   * @param mappingFunction function to compute the element. If the function returns a null
-   *                        result the cache mapping will not be created. NOTE: this function
-   *                        must NOT attempt to modify any mappings in the cache.
-   * @return existing or newly computed value, null if there was no existing value and
-   * it was not possible to compute a new value (in which case the new mapping won't be created).
-   */
-  public V computeIfAbsent(K key, Function<? super K, ? extends V> mappingFunction);
 
   /** :TODO: copy from Map */
   public void clear();
@@ -141,6 +115,7 @@ public interface SolrCache<K,V> extends SolrInfoBean, SolrMetricProducer {
    */
   public State getState();
 
+
   /**
    * Warm this cache associated with <code>searcher</code> using the <code>old</code>
    * cache object.  <code>this</code> and <code>old</code> will have the same concrete type.
@@ -151,23 +126,6 @@ public interface SolrCache<K,V> extends SolrInfoBean, SolrMetricProducer {
 
 
   /** Frees any non-memory resources */
-  default void close() throws Exception {
-    SolrMetricProducer.super.close();
-  }
+  public void close();
 
-  /** Returns maximum size limit (number of items) if set and supported, -1 otherwise. */
-  int getMaxSize();
-
-  /** Set maximum size limit (number of items), or -1 for unlimited. Note: this has effect
-   * only on implementations that support it, it's a no-op otherwise
-   */
-  void setMaxSize(int maxSize);
-
-  /** Returns maximum size limit (in MB) if set and supported, -1 otherwise. */
-  int getMaxRamMB();
-
-  /** Set maximum size limit (in MB), or -1 for unlimited. Note: this has effect
-   * only on implementations that support it, it's a no-op otherwise.
-   */
-  void setMaxRamMB(int maxRamMB);
 }

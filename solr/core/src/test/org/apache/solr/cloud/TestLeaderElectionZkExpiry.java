@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
 import java.lang.invoke.MethodHandles;
 import java.nio.file.Path;
@@ -42,7 +43,7 @@ public class TestLeaderElectionZkExpiry extends SolrTestCaseJ4 {
 
   @Test
   public void testLeaderElectionWithZkExpiry() throws Exception {
-    Path zkDir = createTempDir("zkData");
+    String zkDir = createTempDir("zkData").toFile().getAbsolutePath();
     Path ccDir = createTempDir("testLeaderElectionWithZkExpiry-solr");
     CoreContainer cc = createCoreContainer(ccDir, SOLRXML);
     final ZkTestServer server = new ZkTestServer(zkDir);
@@ -50,6 +51,8 @@ public class TestLeaderElectionZkExpiry extends SolrTestCaseJ4 {
     SolrZkClient zc = null;
     try {
       server.run();
+      AbstractZkTestCase.tryCleanSolrZkNode(server.getZkHost());
+      AbstractZkTestCase.makeSolrZkNode(server.getZkHost());
 
       CloudConfig cloudConfig = new CloudConfig.CloudConfigBuilder("dummy.host.com", 8984, "solr")
           .setLeaderConflictResolveWait(180000)

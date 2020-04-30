@@ -79,9 +79,7 @@ public class StatePair {
    */
   @Override
   public int hashCode() {
-    // Don't use s1 ^ s2 since it's vulnerable to the case where s1 == s2 always --> hashCode = 0, e.g. if you call Operations.sameLanguage, 
-    // passing the same automaton against itself:
-    return s1 * 31 + s2;
+    return s1 ^ s2;
   }
 
   @Override

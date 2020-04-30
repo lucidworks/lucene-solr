@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.core;
 
 import java.lang.invoke.MethodHandles;
@@ -115,7 +116,7 @@ public final class RequestHandlers {
    */
 
   void initHandlersFromConfig(SolrConfig config) {
-    List<PluginInfo> implicits = core.getImplicitHandlers();
+    List<PluginInfo> implicits = ImplicitPlugins.getHandlers(core);
     // use link map so we iterate in the same order
     Map<String, PluginInfo> infoMap= new LinkedHashMap<>();
     //deduping implicit and explicit requesthandlers
@@ -127,9 +128,9 @@ public final class RequestHandlers {
     for (PluginInfo info : infos) {
       modifiedInfos.add(applyInitParams(config, info));
     }
-    handlers.init(Collections.emptyMap(),core, modifiedInfos);
+    handlers.init(Collections.EMPTY_MAP,core, modifiedInfos);
     handlers.alias(handlers.getDefault(), "");
-    log.debug("Registered paths: {}" , StrUtils.join(new ArrayList<>(handlers.keySet()) , ',' ));
+    log.info("Registered paths: {}" , StrUtils.join(new ArrayList<>(handlers.keySet()) , ',' ));
     if (handlers.get("") == null && !handlers.alias("/select", "")) {
       if (handlers.get("") == null && !handlers.alias("standard", "")) {
         log.warn("no default request handler is registered (either '/select' or 'standard')");

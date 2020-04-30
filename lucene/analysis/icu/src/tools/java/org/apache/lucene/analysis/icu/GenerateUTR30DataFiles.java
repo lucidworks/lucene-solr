@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.icu;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.icu;
-
 
 import com.ibm.icu.lang.UCharacter;
 import com.ibm.icu.lang.UProperty;
@@ -62,9 +62,9 @@ import java.util.regex.Pattern;
  */
 public class GenerateUTR30DataFiles {
   private static final String ICU_SVN_TAG_URL
-      = "http://source.icu-project.org/repos/icu/tags";
-  private static final String ICU_RELEASE_TAG = "release-62-1";
-  private static final String ICU_DATA_NORM2_PATH = "icu4c/source/data/unidata/norm2";
+      = "http://source.icu-project.org/repos/icu/icu/tags";
+  private static final String ICU_RELEASE_TAG = "release-54-1";
+  private static final String ICU_DATA_NORM2_PATH = "source/data/unidata/norm2";
   private static final String NFC_TXT = "nfc.txt";
   private static final String NFKC_TXT = "nfkc.txt";
   private static final String NFKC_CF_TXT = "nfkc_cf.txt";

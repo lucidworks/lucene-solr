@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.util;
-
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -24,23 +24,24 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.WordlistLoader;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase;
 
 public class TestFilesystemResourceLoader extends LuceneTestCase {
   
   private void assertNotFound(ResourceLoader rl) throws Exception {
-    // the resource does not exist, should fail!
-    expectThrows(IOException.class, () -> {
+    try {
       IOUtils.closeWhileHandlingException(rl.openResource("this-directory-really-really-really-should-not-exist/foo/bar.txt"));
-    });
-
-    // the class does not exist, should fail!
-    expectThrows(RuntimeException.class, () -> {
+      fail("The resource does not exist, should fail!");
+    } catch (IOException ioe) {
+      // pass
+    }
+    try {
       rl.newInstance("org.apache.lucene.analysis.FooBarFilterFactory", TokenFilterFactory.class);
-    });
+      fail("The class does not exist, should fail!");
+    } catch (RuntimeException iae) {
+      // pass
+    }
   }
   
   private void assertClasspathDelegation(ResourceLoader rl) throws Exception {
@@ -56,21 +57,25 @@ public class TestFilesystemResourceLoader extends LuceneTestCase {
   
   public void testBaseDir() throws Exception {
     final Path base = createTempDir("fsResourceLoaderBase");
-    Writer os = Files.newBufferedWriter(base.resolve("template.txt"), StandardCharsets.UTF_8);
     try {
-      os.write("foobar\n");
-    } finally {
-      IOUtils.closeWhileHandlingException(os);
-    }
+      Writer os = Files.newBufferedWriter(base.resolve("template.txt"), StandardCharsets.UTF_8);
+      try {
+        os.write("foobar\n");
+      } finally {
+        IOUtils.closeWhileHandlingException(os);
+      }
       
-    ResourceLoader rl = new FilesystemResourceLoader(base);
-    assertEquals("foobar", WordlistLoader.getLines(rl.openResource("template.txt"), StandardCharsets.UTF_8).get(0));
-    // Same with full path name:
-    String fullPath = base.resolve("template.txt").toAbsolutePath().toString();
-    assertEquals("foobar",
-                 WordlistLoader.getLines(rl.openResource(fullPath), StandardCharsets.UTF_8).get(0));
-    assertClasspathDelegation(rl);
-    assertNotFound(rl);
+      ResourceLoader rl = new FilesystemResourceLoader(base);
+      assertEquals("foobar", WordlistLoader.getLines(rl.openResource("template.txt"), StandardCharsets.UTF_8).get(0));
+      // Same with full path name:
+      String fullPath = base.resolve("template.txt").toAbsolutePath().toString();
+      assertEquals("foobar",
+          WordlistLoader.getLines(rl.openResource(fullPath), StandardCharsets.UTF_8).get(0));
+      assertClasspathDelegation(rl);
+      assertNotFound(rl);
+    } finally {
+      IOUtils.rm(base);
+    }
   }
   
   public void testDelegation() throws Exception {

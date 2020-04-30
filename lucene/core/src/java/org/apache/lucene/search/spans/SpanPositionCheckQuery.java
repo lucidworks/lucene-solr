@@ -1,3 +1,4 @@
+package org.apache.lucene.search.spans;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
 
 
 import java.io.IOException;
@@ -25,12 +25,9 @@ import java.util.Set;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
-import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.spans.FilterSpans.AcceptStatus;
 
 
@@ -70,17 +67,18 @@ public abstract class SpanPositionCheckQuery extends SpanQuery implements Clonea
   protected abstract AcceptStatus acceptPosition(Spans spans) throws IOException;
 
   @Override
-  public SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    SpanWeight matchWeight = match.createWeight(searcher, scoreMode, boost);
-    return new SpanPositionCheckWeight(matchWeight, searcher, scoreMode.needsScores() ? getTermStates(matchWeight) : null, boost);
+  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    SpanWeight matchWeight = match.createWeight(searcher, false);
+    return new SpanPositionCheckWeight(matchWeight, searcher, needsScores ? getTermContexts(matchWeight) : null);
   }
 
   public class SpanPositionCheckWeight extends SpanWeight {
 
     final SpanWeight matchWeight;
 
-    public SpanPositionCheckWeight(SpanWeight matchWeight, IndexSearcher searcher, Map<Term, TermStates> terms, float boost) throws IOException {
-      super(SpanPositionCheckQuery.this, searcher, terms, boost);
+    public SpanPositionCheckWeight(SpanWeight matchWeight, IndexSearcher searcher, Map<Term, TermContext> terms)
+        throws IOException {
+      super(SpanPositionCheckQuery.this, searcher, terms);
       this.matchWeight = matchWeight;
     }
 
@@ -90,19 +88,14 @@ public abstract class SpanPositionCheckQuery extends SpanQuery implements Clonea
     }
 
     @Override
-    public boolean isCacheable(LeafReaderContext ctx) {
-      return matchWeight.isCacheable(ctx);
-    }
-
-    @Override
-    public void extractTermStates(Map<Term, TermStates> contexts) {
-      matchWeight.extractTermStates(contexts);
+    public void extractTermContexts(Map<Term, TermContext> contexts) {
+      matchWeight.extractTermContexts(contexts);
     }
 
     @Override
     public Spans getSpans(final LeafReaderContext context, Postings requiredPostings) throws IOException {
       Spans matchSpans = matchWeight.getSpans(context, requiredPostings);
-      return (matchSpans == null) ? null : new FilterSpans(matchSpans) {
+      return (matchSpans == null) ? null : new FilterSpans(matchSpans, getSimScorer(context)) {
         @Override
         protected AcceptStatus accept(Spans candidate) throws IOException {
           return acceptPosition(candidate);
@@ -114,36 +107,31 @@ public abstract class SpanPositionCheckQuery extends SpanQuery implements Clonea
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
     SpanQuery rewritten = (SpanQuery) match.rewrite(reader);
     if (rewritten != match) {
-      try {
-        SpanPositionCheckQuery clone = (SpanPositionCheckQuery) this.clone();
-        clone.match = rewritten;
-        return clone;
-      } catch (CloneNotSupportedException e) {
-        throw new AssertionError(e);
-      }
+      SpanPositionCheckQuery clone = (SpanPositionCheckQuery) this.clone();
+      clone.match = rewritten;
+      return clone;
     }
 
     return super.rewrite(reader);
   }
 
+  /** Returns true iff <code>o</code> is equal to this. */
   @Override
-  public void visit(QueryVisitor visitor) {
-    if (visitor.acceptField(getField())) {
-      match.visit(visitor.getSubVisitor(BooleanClause.Occur.MUST, this));
+  public boolean equals(Object o) {
+    if (! super.equals(o)) {
+      return false;
     }
-  }
-
-  /** Returns true iff <code>other</code> is equal to this. */
-  @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           match.equals(((SpanPositionCheckQuery) other).match);
+    SpanPositionCheckQuery spcq = (SpanPositionCheckQuery) o;
+    return match.equals(spcq.match);
   }
 
   @Override
   public int hashCode() {
-    return classHash() ^ match.hashCode();
+    return match.hashCode() ^ super.hashCode();
   }
 }

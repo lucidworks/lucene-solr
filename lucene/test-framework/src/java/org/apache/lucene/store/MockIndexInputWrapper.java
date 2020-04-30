@@ -1,3 +1,10 @@
+package org.apache.lucene.store;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.Map;
+import java.util.Set;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +21,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * Used by MockDirectoryWrapper to create an input stream that
@@ -30,19 +31,12 @@ public class MockIndexInputWrapper extends IndexInput {
   private MockDirectoryWrapper dir;
   final String name;
   private IndexInput delegate;
-  private volatile boolean closed;
+  private boolean isClone;
+  private boolean closed;
 
-  // Which MockIndexInputWrapper we were cloned from, or null if we are not a clone:
-  private final MockIndexInputWrapper parent;
-  
-  /** Sole constructor */
-  public MockIndexInputWrapper(MockDirectoryWrapper dir, String name, IndexInput delegate, MockIndexInputWrapper parent) {
+  /** Construct an empty output buffer. */
+  public MockIndexInputWrapper(MockDirectoryWrapper dir, String name, IndexInput delegate) {
     super("MockIndexInputWrapper(name=" + name + " delegate=" + delegate + ")");
-
-    // If we are a clone then our parent better not be a clone!
-    assert parent == null || parent.parent == null;
-    
-    this.parent = parent;
     this.name = name;
     this.dir = dir;
     this.delegate = delegate;
@@ -61,7 +55,7 @@ public class MockIndexInputWrapper extends IndexInput {
       // remove the conditional check so we also track that
       // all clones get closed:
       assert delegate != null;
-      if (parent == null) {
+      if (!isClone) {
         dir.removeIndexInput(this, name);
       }
       dir.maybeThrowDeterministicException();
@@ -69,12 +63,8 @@ public class MockIndexInputWrapper extends IndexInput {
   }
   
   private void ensureOpen() {
-    // TODO: not great this is a volatile read (closed) ... we should deploy heavy JVM voodoo like SwitchPoint to avoid this
     if (closed) {
       throw new RuntimeException("Abusing closed IndexInput!");
-    }
-    if (parent != null && parent.closed) {
-      throw new RuntimeException("Abusing clone of a closed IndexInput!");
     }
   }
 
@@ -86,7 +76,8 @@ public class MockIndexInputWrapper extends IndexInput {
     }
     dir.inputCloneCount.incrementAndGet();
     IndexInput iiclone = delegate.clone();
-    MockIndexInputWrapper clone = new MockIndexInputWrapper(dir, name, iiclone, parent != null ? parent : this);
+    MockIndexInputWrapper clone = new MockIndexInputWrapper(dir, name, iiclone);
+    clone.isClone = true;
     // Pending resolution on LUCENE-686 we may want to
     // uncomment this code so that we also track that all
     // clones get closed:
@@ -112,7 +103,8 @@ public class MockIndexInputWrapper extends IndexInput {
     }
     dir.inputCloneCount.incrementAndGet();
     IndexInput slice = delegate.slice(sliceDescription, offset, length);
-    MockIndexInputWrapper clone = new MockIndexInputWrapper(dir, sliceDescription, slice, parent != null ? parent : this);
+    MockIndexInputWrapper clone = new MockIndexInputWrapper(dir, sliceDescription, slice);
+    clone.isClone = true;
     return clone;
   }
 
@@ -178,6 +170,12 @@ public class MockIndexInputWrapper extends IndexInput {
   }
 
   @Override
+  public Map<String,String> readStringStringMap() throws IOException {
+    ensureOpen();
+    return delegate.readStringStringMap();
+  }
+
+  @Override
   public int readVInt() throws IOException {
     ensureOpen();
     return delegate.readVInt();
@@ -202,21 +200,15 @@ public class MockIndexInputWrapper extends IndexInput {
   }
 
   @Override
+  public Set<String> readStringSet() throws IOException {
+    ensureOpen();
+    return delegate.readStringSet();
+  }
+
+  @Override
   public void skipBytes(long numBytes) throws IOException {
     ensureOpen();
     super.skipBytes(numBytes);
-  }
-
-  @Override
-  public Map<String,String> readMapOfStrings() throws IOException {
-    ensureOpen();
-    return delegate.readMapOfStrings();
-  }
-
-  @Override
-  public Set<String> readSetOfStrings() throws IOException {
-    ensureOpen();
-    return delegate.readSetOfStrings();
   }
 
   @Override

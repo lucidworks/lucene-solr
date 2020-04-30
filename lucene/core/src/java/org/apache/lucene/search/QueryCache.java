@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 /**
  * A cache for queries.
@@ -29,7 +29,7 @@ public interface QueryCache {
    * Return a wrapper around the provided <code>weight</code> that will cache
    * matching docs per-segment accordingly to the given <code>policy</code>.
    * NOTE: The returned weight will only be equivalent if scores are not needed.
-   * @see Collector#scoreMode()
+   * @see Collector#needsScores()
    */
   Weight doCache(Weight weight, QueryCachingPolicy policy);
 

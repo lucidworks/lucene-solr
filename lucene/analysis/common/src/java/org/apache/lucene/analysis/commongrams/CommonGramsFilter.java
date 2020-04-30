@@ -14,18 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.analysis.commongrams;
 
 import java.io.IOException;
 
-import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
+import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionLengthAttribute;
 import org.apache.lucene.analysis.tokenattributes.TypeAttribute;
+import org.apache.lucene.analysis.util.CharArraySet;
 
 /*
  * TODO: Consider implementing https://issues.apache.org/jira/browse/LUCENE-1688 changes to stop list and associated constructors 
@@ -106,7 +107,7 @@ public final class CommonGramsFilter extends TokenFilter {
       saveTermBuffer();
       return true;
     } else if (!input.incrementToken()) {
-      return false;
+        return false;
     }
     
     /* We build n-grams before and after stopwords. 
@@ -123,6 +124,9 @@ public final class CommonGramsFilter extends TokenFilter {
     return true;
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void reset() throws IOException {
     super.reset();

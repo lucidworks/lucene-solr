@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -32,7 +32,6 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.IOSupplier;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 import org.apache.lucene.util.UnicodeUtil;
@@ -50,13 +49,10 @@ public class TestMultiFields extends LuceneTestCase {
       Directory dir = newDirectory();
 
       IndexWriter w = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random()))
-                                             .setMergePolicy(new FilterMergePolicy(NoMergePolicy.INSTANCE) {
-                                               @Override
-                                               public boolean keepFullyDeletedSegment(IOSupplier<CodecReader> readerIOSupplier) {
-                                                 // we can do this because we use NoMergePolicy (and dont merge to "nothing")
-                                                 return true;
-                                               }
-                                             }));
+                                             .setMergePolicy(NoMergePolicy.INSTANCE));
+      // we can do this because we use NoMergePolicy (and dont merge to "nothing")
+      w.setKeepFullyDeletedSegments(true);
+
       Map<BytesRef,List<Integer>> docs = new HashMap<>();
       Set<Integer> deleted = new HashSet<>();
       List<BytesRef> terms = new ArrayList<>();
@@ -108,8 +104,8 @@ public class TestMultiFields extends LuceneTestCase {
 
       if (VERBOSE) {
         List<BytesRef> termsList = new ArrayList<>(uniqueTerms);
-        Collections.sort(termsList);
-        System.out.println("TEST: terms in UTF-8 order:");
+        Collections.sort(termsList, BytesRef.getUTF8SortedAsUTF16Comparator());
+        System.out.println("TEST: terms in UTF16 order:");
         for(BytesRef b : termsList) {
           System.out.println("  " + UnicodeUtil.toHexString(b.utf8ToString()) + " " + b);
           for(int docID : docs.get(b)) {
@@ -128,7 +124,7 @@ public class TestMultiFields extends LuceneTestCase {
         System.out.println("TEST: reader=" + reader);
       }
 
-      Bits liveDocs = MultiBits.getLiveDocs(reader);
+      Bits liveDocs = MultiFields.getLiveDocs(reader);
       for(int delDoc : deleted) {
         assertFalse(liveDocs.get(delDoc));
       }
@@ -158,7 +154,7 @@ public class TestMultiFields extends LuceneTestCase {
     DocsEnum docs = _TestUtil.docs(random, r,
                                    "field",
                                    new BytesRef(term),
-                                   MultiLeafReader.getLiveDocs(r),
+                                   MultiFields.getLiveDocs(r),
                                    null,
                                    false);
     for(int docID : expected) {
@@ -196,7 +192,7 @@ public class TestMultiFields extends LuceneTestCase {
     w.addDocument(d);
     IndexReader r = w.getReader();
     w.close();
-    PostingsEnum de = MultiTerms.getTermPostingsEnum(r, "f", new BytesRef("j"), (int) PostingsEnum.FREQS);
+    PostingsEnum de = MultiFields.getTermDocsEnum(r, "f", new BytesRef("j"));
     assertEquals(0, de.nextDoc());
     assertEquals(1, de.nextDoc());
     assertEquals(DocIdSetIterator.NO_MORE_DOCS, de.nextDoc());

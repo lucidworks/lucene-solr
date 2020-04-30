@@ -1,3 +1,4 @@
+package org.apache.solr.highlight;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.highlight;
+
 import org.apache.lucene.search.Query;
-import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.HighlightParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
@@ -25,14 +25,13 @@ import org.apache.solr.search.DocList;
 import org.apache.solr.util.SolrPluginUtils;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.List;
 
 public abstract class SolrHighlighter
 {
 
-  public static int DEFAULT_MAX_CHARS = 51200;
   public static int DEFAULT_PHRASE_LIMIT = 5000;
 
   /**
@@ -46,7 +45,7 @@ public abstract class SolrHighlighter
 
   /**
    * Return a String array of the fields to be highlighted.
-   * Falls back to the programmatic defaults, or the default search field if the list of fields
+   * Falls back to the programatic defaults, or the default search field if the list of fields
    * is not specified in either the handler configuration or the request.
    * @param query The current Query
    * @param request The current SolrQueryRequest
@@ -57,23 +56,31 @@ public abstract class SolrHighlighter
 
     // if no fields specified in the request, or the handler, fall back to programmatic default, or default search field.
     if(emptyArray(fields)) {
-      // use default search field from request if highlight fieldlist not specified.
+      // use default search field if highlight fieldlist not specified.
       if (emptyArray(defaultFields)) {
-        String defaultSearchField = request.getParams().get(CommonParams.DF);
+        String defaultSearchField = request.getSchema().getDefaultSearchFieldName();
         fields = null == defaultSearchField ? new String[]{} : new String[]{defaultSearchField};
-      } else {
+      }
+      else {
         fields = defaultFields;
       }
-    } else {
-      Set<String> expandedFields = new LinkedHashSet<String>();
-      Collection<String> storedHighlightFieldNames = request.getSearcher().getDocFetcher().getStoredHighlightFieldNames();
-      for (String field : fields) {
-        expandWildcardsInHighlightFields(
-            expandedFields,
-            storedHighlightFieldNames,
-            SolrPluginUtils.split(field));
+    }
+    else if (fields.length == 1) {
+      if (fields[0].contains("*")) {
+        // create a Java regular expression from the wildcard string
+        String fieldRegex = fields[0].replaceAll("\\*", ".*");
+        Collection<String> storedHighlightFieldNames = request.getSearcher().getStoredHighlightFieldNames();
+        List<String> storedFieldsToHighlight = new ArrayList<>();
+        for (String storedFieldName: storedHighlightFieldNames) {
+          if (storedFieldName.matches(fieldRegex)) {
+            storedFieldsToHighlight.add(storedFieldName);
+          }
+        }
+        fields = storedFieldsToHighlight.toArray(new String[storedFieldsToHighlight.size()]);
+      } else {
+        // if there's a single request/handler value, it may be a space/comma separated list
+        fields = SolrPluginUtils.split(fields[0]);
       }
-      fields = expandedFields.toArray(new String[]{});
     }
 
     // Trim them now in case they haven't been yet.  Not needed for all code-paths above but do it here.
@@ -85,25 +92,6 @@ public abstract class SolrHighlighter
 
   protected boolean emptyArray(String[] arr) {
     return (arr == null || arr.length == 0 || arr[0] == null || arr[0].trim().length() == 0);
-  }
-
-  static private void expandWildcardsInHighlightFields (
-      Set<String> expandedFields,
-      Collection<String> storedHighlightFieldNames,
-      String... fields) {
-    for (String field : fields) {
-      if (field.contains("*")) {
-        // create a Java regular expression from the wildcard string
-        String fieldRegex = field.replaceAll("\\*", ".*");
-        for (String storedFieldName : storedHighlightFieldNames) {
-          if (storedFieldName.matches(fieldRegex)) {
-            expandedFields.add(storedFieldName);
-          }
-        }
-      } else {
-        expandedFields.add(field);
-      }
-    }
   }
 
   /**

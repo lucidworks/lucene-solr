@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -42,6 +42,7 @@ import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
@@ -84,7 +85,7 @@ public class TestPayloads extends LuceneTestCase {
     // flush
     writer.close();
 
-    LeafReader reader = getOnlyLeafReader(DirectoryReader.open(ram));
+    SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(ram));
     FieldInfos fi = reader.getFieldInfos();
     assertFalse("Payload field bit should not be set.", fi.fieldInfo("f1").hasPayloads());
     assertTrue("Payload field bit should be set.", fi.fieldInfo("f2").hasPayloads());
@@ -111,7 +112,7 @@ public class TestPayloads extends LuceneTestCase {
     // flush
     writer.close();
 
-    reader = getOnlyLeafReader(DirectoryReader.open(ram));
+    reader = getOnlySegmentReader(DirectoryReader.open(ram));
     fi = reader.getFieldInfos();
     assertFalse("Payload field bit should not be set.", fi.fieldInfo("f1").hasPayloads());
     assertTrue("Payload field bit should be set.", fi.fieldInfo("f2").hasPayloads());
@@ -191,7 +192,7 @@ public class TestPayloads extends LuceneTestCase {
     offset = 0;
     PostingsEnum[] tps = new PostingsEnum[numTerms];
     for (int i = 0; i < numTerms; i++) {
-      tps[i] = MultiTerms.getTermPostingsEnum(reader,
+      tps[i] = MultiFields.getTermPositionsEnum(reader,
                                                 terms[i].field(),
                                                 new BytesRef(terms[i].text()));
     }
@@ -219,7 +220,7 @@ public class TestPayloads extends LuceneTestCase {
     /*
      *  test lazy skipping
      */        
-    PostingsEnum tp = MultiTerms.getTermPostingsEnum(reader,
+    PostingsEnum tp = MultiFields.getTermPositionsEnum(reader,
                                                                terms[0].field(),
                                                                new BytesRef(terms[0].text()));
     tp.nextDoc();
@@ -245,7 +246,7 @@ public class TestPayloads extends LuceneTestCase {
     /*
      * Test different lengths at skip points
      */
-    tp = MultiTerms.getTermPostingsEnum(reader,
+    tp = MultiFields.getTermPositionsEnum(reader,
                                           terms[1].field(),
                                           new BytesRef(terms[1].text()));
     tp.nextDoc();
@@ -282,7 +283,7 @@ public class TestPayloads extends LuceneTestCase {
     writer.close();
         
     reader = DirectoryReader.open(dir);
-    tp = MultiTerms.getTermPostingsEnum(reader,
+    tp = MultiFields.getTermPositionsEnum(reader,
                                           fieldName,
                                           new BytesRef(singleTerm));
     tp.nextDoc();
@@ -479,7 +480,7 @@ public class TestPayloads extends LuceneTestCase {
     }
     writer.close();
     IndexReader reader = DirectoryReader.open(dir);
-    TermsEnum terms = MultiTerms.getTerms(reader, field).iterator();
+    TermsEnum terms = MultiFields.getFields(reader).terms(field).iterator();
     PostingsEnum tp = null;
     while (terms.next() != null) {
       String termText = terms.term().utf8ToString();
@@ -602,9 +603,8 @@ public class TestPayloads extends LuceneTestCase {
     field.setTokenStream(ts);
     writer.addDocument(doc);
     DirectoryReader reader = writer.getReader();
-    TermsEnum te = MultiTerms.getTerms(reader, "field").iterator();
-    assertTrue(te.seekExact(new BytesRef("withPayload")));
-    PostingsEnum de = te.postings(null, PostingsEnum.PAYLOADS);
+    LeafReader sr = SlowCompositeReaderWrapper.wrap(reader);
+    PostingsEnum de = sr.postings(new Term("field", "withPayload"), PostingsEnum.PAYLOADS);
     de.nextDoc();
     de.nextPosition();
     assertEquals(new BytesRef("test"), de.getPayload());
@@ -637,7 +637,7 @@ public class TestPayloads extends LuceneTestCase {
     doc.add(field3);
     writer.addDocument(doc);
     DirectoryReader reader = writer.getReader();
-    LeafReader sr = getOnlyLeafReader(reader);
+    SegmentReader sr = getOnlySegmentReader(reader);
     PostingsEnum de = sr.postings(new Term("field", "withPayload"), PostingsEnum.PAYLOADS);
     de.nextDoc();
     de.nextPosition();

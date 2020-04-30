@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Objects;
 
 import org.apache.lucene.store.IndexInput;
@@ -26,12 +29,10 @@ import org.apache.lucene.store.RAMOutputStream;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
-import org.apache.lucene.util.StringHelper;
+import org.apache.lucene.util.RamUsageEstimator;
 
 /**
- * Prefix codes term instances (prefixes are shared). This is expected to be
- * faster to build than a FST and might also be more compact if there are no
- * common suffixes.
+ * Prefix codes term instances (prefixes are shared)
  * @lucene.internal
  */
 public class PrefixCodedTerms implements Accountable {
@@ -46,7 +47,12 @@ public class PrefixCodedTerms implements Accountable {
 
   @Override
   public long ramBytesUsed() {
-    return buffer.ramBytesUsed() + 2 * Long.BYTES;
+    return buffer.ramBytesUsed() + 2 * RamUsageEstimator.NUM_BYTES_LONG;
+  }
+  
+  @Override
+  public Collection<Accountable> getChildResources() {
+    return Collections.emptyList();
   }
 
   /** Records del gen for this packet. */
@@ -67,32 +73,22 @@ public class PrefixCodedTerms implements Accountable {
 
     /** add a term */
     public void add(Term term) {
-      add(term.field(), term.bytes());
-    }
-
-    /** add a term.  This fully consumes in the incoming {@link BytesRef}. */
-    public void add(String field, BytesRef bytes) {
-      assert lastTerm.equals(new Term("")) || new Term(field, bytes).compareTo(lastTerm) > 0;
+      assert lastTerm.equals(new Term("")) || term.compareTo(lastTerm) > 0;
 
       try {
-        final int prefix;
-        if (size > 0 && field.equals(lastTerm.field)) {
-          // same field as the last term
-          prefix = StringHelper.bytesDifference(lastTerm.bytes, bytes);
+        int prefix = sharedPrefix(lastTerm.bytes, term.bytes);
+        int suffix = term.bytes.length - prefix;
+        if (term.field.equals(lastTerm.field)) {
           output.writeVInt(prefix << 1);
         } else {
-          // field change
-          prefix = 0;
-          output.writeVInt(1);
-          output.writeString(field);
+          output.writeVInt(prefix << 1 | 1);
+          output.writeString(term.field);
         }
-
-        int suffix = bytes.length - prefix;
         output.writeVInt(suffix);
-        output.writeBytes(bytes.bytes, bytes.offset + prefix, suffix);
-        lastTermBytes.copyBytes(bytes);
+        output.writeBytes(term.bytes.bytes, term.bytes.offset + prefix, suffix);
+        lastTermBytes.copyBytes(term.bytes);
         lastTerm.bytes = lastTermBytes.get();
-        lastTerm.field = field;
+        lastTerm.field = term.field;
         size += 1;
       } catch (IOException e) {
         throw new RuntimeException(e);
@@ -108,6 +104,20 @@ public class PrefixCodedTerms implements Accountable {
         throw new RuntimeException(e);
       }
     }
+    
+    private int sharedPrefix(BytesRef term1, BytesRef term2) {
+      int pos1 = 0;
+      int pos1End = pos1 + Math.min(term1.length, term2.length);
+      int pos2 = 0;
+      while(pos1 < pos1End) {
+        if (term1.bytes[term1.offset + pos1] != term2.bytes[term2.offset + pos2]) {
+          return pos1;
+        }
+        pos1++;
+        pos2++;
+      }
+      return pos1;
+    }
   }
 
   /** An iterator over the list of terms stored in a {@link PrefixCodedTerms}. */
@@ -121,7 +131,7 @@ public class PrefixCodedTerms implements Accountable {
 
     private TermIterator(long delGen, RAMFile buffer) {
       try {
-        input = new RAMInputStream("PrefixCodedTermsIterator", buffer);
+        input = new RAMInputStream("MergedPrefixCodedTermsIterator", buffer);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }

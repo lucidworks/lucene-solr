@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.schema;
 
 import java.io.IOException;
@@ -22,10 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.lucene.index.DocValuesType;
-import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexableField;
-import org.apache.lucene.index.IndexableFieldType;
 import org.apache.lucene.search.SortField;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.SimpleOrderedMap;
@@ -36,7 +34,7 @@ import org.apache.solr.response.TextResponseWriter;
  *
  *
  */
-public final class SchemaField extends FieldProperties implements IndexableFieldType {
+public final class SchemaField extends FieldProperties {
   private static final String FIELD_NAME = "name";
   private static final String TYPE_NAME = "type";
   private static final String DEFAULT_VALUE = "default";
@@ -48,7 +46,7 @@ public final class SchemaField extends FieldProperties implements IndexableField
   boolean required = false;  // this can't be final since it may be changed dynamically
   
   /** Declared field property overrides */
-  Map<String,Object> args = Collections.emptyMap();
+  Map<String,?> args = Collections.emptyMap();
 
 
   /** Create a new SchemaField with the given name and type,
@@ -66,7 +64,7 @@ public final class SchemaField extends FieldProperties implements IndexableField
     args = prototype.args;
   }
 
-  /** Create a new SchemaField with the given name and type,
+ /** Create a new SchemaField with the given name and type,
    * and with the specified properties.  Properties are *not*
    * inherited from the type in this case, so users of this
    * constructor should derive the properties from type.getSolrProperties()
@@ -88,7 +86,6 @@ public final class SchemaField extends FieldProperties implements IndexableField
   public FieldType getType() { return type; }
   public int getProperties() { return properties; }
 
-  public boolean isUninvertible() { return (properties & UNINVERTIBLE)!=0; }
   public boolean indexed() { return (properties & INDEXED)!=0; }
   public boolean stored() { return (properties & STORED)!=0; }
   public boolean hasDocValues() { return (properties & DOC_VALUES) != 0; }
@@ -102,29 +99,26 @@ public final class SchemaField extends FieldProperties implements IndexableField
   public boolean omitPositions() { return (properties & OMIT_POSITIONS)!=0; }
   public boolean storeOffsetsWithPositions() { return (properties & STORE_OFFSETS)!=0; }
 
-  public boolean useDocValuesAsStored() { return (properties & USE_DOCVALUES_AS_STORED)!=0; }
-
   public boolean multiValued() { return (properties & MULTIVALUED)!=0; }
   public boolean sortMissingFirst() { return (properties & SORT_MISSING_FIRST)!=0; }
   public boolean sortMissingLast() { return (properties & SORT_MISSING_LAST)!=0; }
-  public boolean isRequired() { return required; }
-  public boolean isLarge() { return (properties & LARGE_FIELD)!=0;}
+  public boolean isRequired() { return required; } 
   public Map<String,?> getArgs() { return Collections.unmodifiableMap(args); }
 
   // things that should be determined by field type, not set as options
   boolean isTokenized() { return (properties & TOKENIZED)!=0; }
   boolean isBinary() { return (properties & BINARY)!=0; }
 
-  public IndexableField createField(Object val) {
-    return type.createField(this,val);
+  public IndexableField createField(Object val, float boost) {
+    return type.createField(this,val,boost);
   }
 
-  public List<IndexableField> createFields(Object val) {
-    return type.createFields(this,val);
+  public List<IndexableField> createFields(Object val, float boost) {
+    return type.createFields(this,val,boost);
   }
 
   /**
-   * If true, then use {@link #createFields(Object)}, else use {@link #createField} to save an extra allocation
+   * If true, then use {@link #createFields(Object, float)}, else use {@link #createField} to save an extra allocation
    * @return true if this field is a poly field
    */
   public boolean isPolyField(){
@@ -154,23 +148,7 @@ public final class SchemaField extends FieldProperties implements IndexableField
     return type.getSortField(this, top);
   }
 
-  /**
-   * Expert/advanced method to get the field {@link org.apache.lucene.codecs.PostingsFormat}.
-   * @return The {@code postingsFormat} declared; or null if unspecified.
-   */
-  public String getPostingsFormat() {
-    return (String) args.getOrDefault(POSTINGS_FORMAT, type.getPostingsFormat());
-  }
-
-  /**
-   * Expert/advanced method to get the field {@link org.apache.lucene.codecs.DocValuesFormat}.
-   * @return The {@code docValuesFormat} declared; or null if unspecified.
-   */
-  public String getDocValuesFormat() {
-    return (String) args.getOrDefault(DOC_VALUES_FORMAT, type.getDocValuesFormat());
-  }
-
-  /**
+  /** 
    * Sanity checks that the properties of this field type are plausible 
    * for a field that may be used in sorting, throwing an appropriate 
    * exception (including the field name) if it is not.  FieldType subclasses 
@@ -178,45 +156,38 @@ public final class SchemaField extends FieldProperties implements IndexableField
    * @see FieldType#getSortField
    */
   public void checkSortability() throws SolrException {
-    if ( multiValued()
-         // if either of these are non-null, then we should not error
-         && null == this.type.getDefaultMultiValueSelectorForSort(this,true)
-         && null == this.type.getDefaultMultiValueSelectorForSort(this,false) ) {
-      
+    if (! (indexed() || hasDocValues()) ) {
+      throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, 
+                              "can not sort on a field which is neither indexed nor has doc values: " 
+                              + getName());
+    }
+    if ( multiValued() ) {
       throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, 
                               "can not sort on multivalued field: " 
-                              + getName() + " of type: " + this.type.getTypeName());
-    }
-    if (! hasDocValues() ) {
-      if ( ! ( indexed() && isUninvertible() && null != this.type.getUninversionType(this) ) ) {
-        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, 
-                                "can not sort on a field w/o docValues unless it is indexed=true uninvertible=true and the type supports Uninversion: " 
-                                + getName());
-      }
+                              + getName());
     }
   }
 
   /** 
-   * Sanity checks that the properties of this field type are plausible for a field
-   * that may be used to get a {@link org.apache.lucene.queries.function.valuesource.FieldCacheSource},
-   * throwing an appropriate exception (including the field name) if it is not.  
+   * Sanity checks that the properties of this field type are plausible 
+   * for a field that may be used to get a FieldCacheSource, throwing
+   * an appropriate exception (including the field name) if it is not.  
    * FieldType subclasses can choose to call this method in their 
    * getValueSource implementation 
    * @see FieldType#getValueSource
    */
   public void checkFieldCacheSource() throws SolrException {
+    if (! (indexed() || hasDocValues()) ) {
+      throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, 
+                              "can not use FieldCache on a field which is neither indexed nor has doc values: " 
+                              + getName());
+    }
     if ( multiValued() ) {
       throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, 
                               "can not use FieldCache on multivalued field: " 
                               + getName());
     }
-    if (! hasDocValues() ) {
-      if ( ! ( indexed() && isUninvertible() && null != this.type.getUninversionType(this) ) ) {
-        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, 
-                                "can not use FieldCache on a field w/o docValues unless it is indexed uninvertible=true and the type supports Uninversion: " 
-                                + getName());
-      }
-    }
+    
   }
 
   static SchemaField create(String name, FieldType ft, Map<String,?> props) {
@@ -255,7 +226,7 @@ public final class SchemaField extends FieldProperties implements IndexableField
     // that depend on that.
     //
     if (on(falseProps,STORED)) {
-      int pp = STORED | BINARY | LARGE_FIELD;
+      int pp = STORED | BINARY;
       if (on(pp,trueProps)) {
         throw new RuntimeException("SchemaField: " + name + " conflicting stored field options:" + props);
       }
@@ -264,17 +235,17 @@ public final class SchemaField extends FieldProperties implements IndexableField
 
     if (on(falseProps,INDEXED)) {
       int pp = (INDEXED 
-              | STORE_TERMVECTORS | STORE_TERMPOSITIONS | STORE_TERMOFFSETS | STORE_TERMPAYLOADS | UNINVERTIBLE);
+              | STORE_TERMVECTORS | STORE_TERMPOSITIONS | STORE_TERMOFFSETS | STORE_TERMPAYLOADS);
       if (on(pp,trueProps)) {
         throw new RuntimeException("SchemaField: " + name + " conflicting 'true' field options for non-indexed field:" + props);
       }
       p &= ~pp;
     }
     
-    if (on(falseProps,UNINVERTIBLE) && on(falseProps,DOC_VALUES)) {
+    if (on(falseProps,INDEXED) && on(falseProps,DOC_VALUES)) {
       int pp = (SORT_MISSING_FIRST | SORT_MISSING_LAST);
       if (on(pp,trueProps)) {
-        throw new RuntimeException("SchemaField: " + name + " conflicting 'true' field options for non-docValues/non-uninvertible field:" + props);
+        throw new RuntimeException("SchemaField: " + name + " conflicting 'true' field options for non-indexed/non-docValues field:" + props);
       }
       p &= ~pp;
     }
@@ -357,8 +328,6 @@ public final class SchemaField extends FieldProperties implements IndexableField
       properties.add(getPropertyName(OMIT_POSITIONS), omitPositions());
       properties.add(getPropertyName(STORE_OFFSETS), storeOffsetsWithPositions());
       properties.add(getPropertyName(MULTIVALUED), multiValued());
-      properties.add(getPropertyName(LARGE_FIELD), isLarge());
-      properties.add(getPropertyName(UNINVERTIBLE), isUninvertible());
       if (sortMissingFirst()) {
         properties.add(getPropertyName(SORT_MISSING_FIRST), sortMissingFirst());
       } else if (sortMissingLast()) {
@@ -366,7 +335,6 @@ public final class SchemaField extends FieldProperties implements IndexableField
       }
       properties.add(getPropertyName(REQUIRED), isRequired());
       properties.add(getPropertyName(TOKENIZED), isTokenized());
-      properties.add(getPropertyName(USE_DOCVALUES_AS_STORED), useDocValuesAsStored());
       // The BINARY property is always false
       // properties.add(getPropertyName(BINARY), isBinary());
     } else {
@@ -382,73 +350,5 @@ public final class SchemaField extends FieldProperties implements IndexableField
       }
     }
     return properties;
-  }
-
-  @Override
-  public boolean tokenized() {
-    return isTokenized();
-  }
-
-  @Override
-  public boolean storeTermVectors() {
-    return storeTermVector();
-  }
-
-  @Override
-  public boolean storeTermVectorOffsets() {
-    return storeTermOffsets();
-  }
-
-  @Override
-  public boolean storeTermVectorPositions() {
-    return storeTermPositions();
-  }
-
-  @Override
-  public boolean storeTermVectorPayloads() {
-    return storeTermPayloads();
-  }
-
-  @Override
-  public IndexOptions indexOptions() {
-    if (!indexed()) {
-      return IndexOptions.NONE;
-    }
-    
-    IndexOptions options = IndexOptions.DOCS_AND_FREQS_AND_POSITIONS;
-    if (omitTermFreqAndPositions()) {
-      options = IndexOptions.DOCS;
-    } else if (omitPositions()) {
-      options = IndexOptions.DOCS_AND_FREQS;
-    } else if (storeOffsetsWithPositions()) {
-      options = IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS;
-    }
-
-    return options;
-  }
-
-  @Override
-  public DocValuesType docValuesType() {
-    return DocValuesType.NONE;
-  }
-
-  @Override
-  public int pointDataDimensionCount() {
-    return 0;
-  }
-
-  @Override
-  public int pointIndexDimensionCount() {
-    return 0;
-  }
-
-  @Override
-  public int pointNumBytes() {
-    return 0;
-  }
-
-  @Override
-  public Map<String, String> getAttributes() {
-    return null;
   }
 }

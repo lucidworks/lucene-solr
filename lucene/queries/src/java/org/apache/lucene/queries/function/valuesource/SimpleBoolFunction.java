@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.queries.function.valuesource;
 
 import org.apache.lucene.index.LeafReaderContext;
@@ -41,18 +42,18 @@ public abstract class SimpleBoolFunction extends BoolFunction {
 
   protected abstract String name();
 
-  protected abstract boolean func(int doc, FunctionValues vals) throws IOException;
+  protected abstract boolean func(int doc, FunctionValues vals);
 
   @Override
   public BoolDocValues getValues(Map context, LeafReaderContext readerContext) throws IOException {
     final FunctionValues vals =  source.getValues(context, readerContext);
     return new BoolDocValues(this) {
       @Override
-      public boolean boolVal(int doc) throws IOException {
+      public boolean boolVal(int doc) {
         return func(doc, vals);
       }
       @Override
-      public String toString(int doc) throws IOException {
+      public String toString(int doc) {
         return name() + '(' + vals.toString(doc) + ')';
       }
     };

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,20 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Random;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.NumericDocValuesField;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
@@ -45,14 +42,13 @@ import org.apache.lucene.util.TestUtil;
 
 public class RandomIndexWriter implements Closeable {
 
-  public final IndexWriter w;
+  public IndexWriter w;
   private final Random r;
   int docCount;
   int flushAt;
   private double flushAtFactor = 1.0;
   private boolean getReaderCalled;
   private final Analyzer analyzer; // only if WE created it (then we close it)
-  private final double softDeletesRatio;
 
   /** Returns an indexwriter that randomly mixes up thread scheduling (by yielding at test points) */
   public static IndexWriter mockIndexWriter(Directory dir, IndexWriterConfig conf, Random r) throws IOException {
@@ -82,12 +78,7 @@ public class RandomIndexWriter implements Closeable {
     IndexWriter iw;
     boolean success = false;
     try {
-      iw = new IndexWriter(dir, conf) {
-        @Override
-        protected boolean isEnableTestPoints() {
-          return true;
-        }
-      };
+      iw = new IndexWriter(dir, conf);
       success = true;
     } finally {
       if (reader != null) {
@@ -98,12 +89,13 @@ public class RandomIndexWriter implements Closeable {
         }
       }
     }
+    iw.enableTestPoints = true;
     return iw;
   }
 
   /** create a RandomIndexWriter with a random config: Uses MockAnalyzer */
   public RandomIndexWriter(Random r, Directory dir) throws IOException {
-    this(r, dir, LuceneTestCase.newIndexWriterConfig(r, new MockAnalyzer(r)), true, r.nextBoolean());
+    this(r, dir, LuceneTestCase.newIndexWriterConfig(r, new MockAnalyzer(r)), true);
   }
   
   /** create a RandomIndexWriter with a random config */
@@ -113,23 +105,12 @@ public class RandomIndexWriter implements Closeable {
   
   /** create a RandomIndexWriter with the provided config */
   public RandomIndexWriter(Random r, Directory dir, IndexWriterConfig c) throws IOException {
-    this(r, dir, c, false, r.nextBoolean());
-  }
-
-  /** create a RandomIndexWriter with the provided config */
-  public RandomIndexWriter(Random r, Directory dir, IndexWriterConfig c, boolean useSoftDeletes) throws IOException {
-    this(r, dir, c, false, useSoftDeletes);
+    this(r, dir, c, false);
   }
       
-  private RandomIndexWriter(Random r, Directory dir, IndexWriterConfig c, boolean closeAnalyzer, boolean useSoftDeletes) throws IOException {
+  private RandomIndexWriter(Random r, Directory dir, IndexWriterConfig c, boolean closeAnalyzer) throws IOException {
     // TODO: this should be solved in a different way; Random should not be shared (!).
     this.r = new Random(r.nextLong());
-    if (useSoftDeletes) {
-      c.setSoftDeletesField("___soft_deletes");
-      softDeletesRatio = 1.d / (double)1 + r.nextInt(10);
-    } else {
-      softDeletesRatio = 0d;
-    }
     w = mockIndexWriter(dir, c, r);
     flushAt = TestUtil.nextInt(r, 10, 1000);
     if (closeAnalyzer) {
@@ -150,20 +131,18 @@ public class RandomIndexWriter implements Closeable {
    * Adds a Document.
    * @see IndexWriter#addDocument(Iterable)
    */
-  public <T extends IndexableField> long addDocument(final Iterable<T> doc) throws IOException {
+  public <T extends IndexableField> void addDocument(final Iterable<T> doc) throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
-    long seqNo;
     if (r.nextInt(5) == 3) {
       // TODO: maybe, we should simply buffer up added docs
       // (but we need to clone them), and only when
       // getReader, commit, etc. are called, we do an
       // addDocuments?  Would be better testing.
-      seqNo = w.addDocuments(new Iterable<Iterable<T>>() {
+      w.addDocuments(new Iterable<Iterable<T>>() {
 
         @Override
         public Iterator<Iterable<T>> iterator() {
           return new Iterator<Iterable<T>>() {
-
             boolean done;
             
             @Override
@@ -188,20 +167,16 @@ public class RandomIndexWriter implements Closeable {
         }
         });
     } else {
-      seqNo = w.addDocument(doc);
+      w.addDocument(doc);
     }
     
     maybeFlushOrCommit();
-
-    return seqNo;
   }
 
   private void maybeFlushOrCommit() throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
     if (docCount++ == flushAt) {
       if (r.nextBoolean()) {
-        flushAllBuffersSequentially();
-      } else if (r.nextBoolean()) {
         if (LuceneTestCase.VERBOSE) {
           System.out.println("RIW.add/updateDocument: now doing a flush at docCount=" + docCount);
         }
@@ -219,165 +194,119 @@ public class RandomIndexWriter implements Closeable {
       }
     }
   }
-
-  private void flushAllBuffersSequentially() throws IOException {
-    if (LuceneTestCase.VERBOSE) {
-      System.out.println("RIW.add/updateDocument: now flushing the largest writer at docCount=" + docCount);
-    }
-    int activeThreadStateCount = w.docWriter.perThreadPool.getActiveThreadStateCount();
-    int numFlushes = Math.min(1, r.nextInt(activeThreadStateCount+1));
-    for (int i = 0; i < numFlushes; i++) {
-      if (w.flushNextBuffer() == false) {
-        break; // stop once we didn't flush anything
-      }
-    }
-  }
   
-  public long addDocuments(Iterable<? extends Iterable<? extends IndexableField>> docs) throws IOException {
+  public void addDocuments(Iterable<? extends Iterable<? extends IndexableField>> docs) throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
-    long seqNo = w.addDocuments(docs);
+    w.addDocuments(docs);
     maybeFlushOrCommit();
-    return seqNo;
   }
 
-  public long updateDocuments(Term delTerm, Iterable<? extends Iterable<? extends IndexableField>> docs) throws IOException {
+  public void updateDocuments(Term delTerm, Iterable<? extends Iterable<? extends IndexableField>> docs) throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
-    long seqNo;
-    if (useSoftDeletes()) {
-      seqNo = w.softUpdateDocuments(delTerm, docs, new NumericDocValuesField(w.getConfig().getSoftDeletesField(), 1));
-    } else {
-      seqNo = w.updateDocuments(delTerm, docs);
-    }
+    w.updateDocuments(delTerm, docs);
     maybeFlushOrCommit();
-    return seqNo;
-  }
-
-  private boolean useSoftDeletes() {
-    return r.nextDouble() < softDeletesRatio;
   }
 
   /**
    * Updates a document.
    * @see IndexWriter#updateDocument(Term, Iterable)
    */
-  public <T extends IndexableField> long updateDocument(Term t, final Iterable<T> doc) throws IOException {
+  public <T extends IndexableField> void updateDocument(Term t, final Iterable<T> doc) throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
-    final long seqNo;
-    if (useSoftDeletes()) {
-      if (r.nextInt(5) == 3) {
-        seqNo = w.softUpdateDocuments(t, Arrays.asList(doc), new NumericDocValuesField(w.getConfig().getSoftDeletesField(), 1));
-      } else {
-        seqNo = w.softUpdateDocument(t, doc, new NumericDocValuesField(w.getConfig().getSoftDeletesField(), 1));
-      }
+    if (r.nextInt(5) == 3) {
+      w.updateDocuments(t, new Iterable<Iterable<T>>() {
+
+        @Override
+        public Iterator<Iterable<T>> iterator() {
+          return new Iterator<Iterable<T>>() {
+            boolean done;
+            
+            @Override
+            public boolean hasNext() {
+              return !done;
+            }
+
+            @Override
+            public void remove() {
+              throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Iterable<T> next() {
+              if (done) {
+                throw new IllegalStateException();
+              }
+              done = true;
+              return doc;
+            }
+          };
+        }
+        });
     } else {
-      if (r.nextInt(5) == 3) {
-        seqNo = w.updateDocuments(t, Arrays.asList(doc));
-      } else {
-        seqNo = w.updateDocument(t, doc);
-      }
+      w.updateDocument(t, doc);
     }
     maybeFlushOrCommit();
-
-    return seqNo;
   }
   
-  public long addIndexes(Directory... dirs) throws IOException {
+  public void addIndexes(Directory... dirs) throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
-    return w.addIndexes(dirs);
+    w.addIndexes(dirs);
   }
 
-  public long addIndexes(CodecReader... readers) throws IOException {
+  public void addIndexes(CodecReader... readers) throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
-    return w.addIndexes(readers);
+    w.addIndexes(readers);
   }
   
-  public long updateNumericDocValue(Term term, String field, Long value) throws IOException {
+  public void updateNumericDocValue(Term term, String field, Long value) throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
-    return w.updateNumericDocValue(term, field, value);
+    w.updateNumericDocValue(term, field, value);
   }
   
-  public long updateBinaryDocValue(Term term, String field, BytesRef value) throws IOException {
+  public void updateBinaryDocValue(Term term, String field, BytesRef value) throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
-    return w.updateBinaryDocValue(term, field, value);
+    w.updateBinaryDocValue(term, field, value);
   }
   
-  public long updateDocValues(Term term, Field... updates) throws IOException {
+  public void updateDocValues(Term term, Field... updates) throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
-    return w.updateDocValues(term, updates);
+    w.updateDocValues(term, updates);
   }
   
-  public long deleteDocuments(Term term) throws IOException {
+  public void deleteDocuments(Term term) throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
-    return w.deleteDocuments(term);
+    w.deleteDocuments(term);
   }
 
-  public long deleteDocuments(Query q) throws IOException {
+  public void deleteDocuments(Query q) throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
-    return w.deleteDocuments(q);
-  }
-
-  public long commit() throws IOException {
-    return commit(r.nextInt(10) == 0);
+    w.deleteDocuments(q);
   }
   
-  public long commit(boolean flushConcurrently) throws IOException {
+  public void commit() throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
-    if (flushConcurrently) {
-      List<Throwable> throwableList = new CopyOnWriteArrayList<>();
-      Thread thread = new Thread(() -> {
-        try {
-          flushAllBuffersSequentially();
-        } catch (Throwable e) {
-          throwableList.add(e);
-        }
-      });
-      thread.start();
-      try {
-        return w.commit();
-      } catch (Throwable t) {
-        throwableList.add(t);
-      } finally {
-        try {
-          // make sure we wait for the thread to join otherwise it might still be processing events
-          // and the IW won't be fully closed in the case of a fatal exception
-          thread.join();
-        } catch (InterruptedException e) {
-          throwableList.add(e);
-        }
-      }
-      if (throwableList.size() != 0) {
-        Throwable primary = throwableList.get(0);
-        for (int i = 1; i < throwableList.size(); i++) {
-          primary.addSuppressed(throwableList.get(i));
-        }
-        if (primary instanceof IOException) {
-          throw (IOException)primary;
-        } else if (primary instanceof RuntimeException) {
-          throw (RuntimeException)primary;
-        } else {
-          throw new AssertionError(primary);
-        }
-      }
-
-    }
-    return w.commit();
+    w.commit();
+  }
+  
+  public int numDocs() {
+    return w.numDocs();
   }
 
-  public IndexWriter.DocStats getDocStats() {
-    return w.getDocStats();
+  public int maxDoc() {
+    return w.maxDoc();
   }
 
-  public long deleteAll() throws IOException {
-    return w.deleteAll();
+  public void deleteAll() throws IOException {
+    w.deleteAll();
   }
 
   public DirectoryReader getReader() throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
-    return getReader(true, false);
+    return getReader(true);
   }
 
-  private boolean doRandomForceMerge;
-  private boolean doRandomForceMergeAssert;
+  private boolean doRandomForceMerge = true;
+  private boolean doRandomForceMergeAssert = true;
 
   public void forceMergeDeletes(boolean doWait) throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
@@ -413,9 +342,7 @@ public class RandomIndexWriter implements Closeable {
           System.out.println("RIW: doRandomForceMerge(" + limit + ")");
         }
         w.forceMerge(limit);
-        if (limit == 1 || (w.getConfig().getMergePolicy() instanceof TieredMergePolicy) == false) {
-          assert !doRandomForceMergeAssert || w.getSegmentCount() <= limit : "limit=" + limit + " actual=" + w.getSegmentCount();
-        }
+        assert !doRandomForceMergeAssert || w.getSegmentCount() <= limit: "limit=" + limit + " actual=" + w.getSegmentCount();
       } else {
         if (LuceneTestCase.VERBOSE) {
           System.out.println("RIW: do random forceMergeDeletes()");
@@ -425,35 +352,29 @@ public class RandomIndexWriter implements Closeable {
     }
   }
 
-  public DirectoryReader getReader(boolean applyDeletions, boolean writeAllDeletes) throws IOException {
+  public DirectoryReader getReader(boolean applyDeletions) throws IOException {
     LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
     getReaderCalled = true;
     if (r.nextInt(20) == 2) {
       doRandomForceMerge();
     }
     if (!applyDeletions || r.nextBoolean()) {
-      // if we have soft deletes we can't open from a directory
       if (LuceneTestCase.VERBOSE) {
         System.out.println("RIW.getReader: use NRT reader");
       }
       if (r.nextInt(5) == 1) {
         w.commit();
       }
-      return w.getReader(applyDeletions, writeAllDeletes);
+      return w.getReader(applyDeletions);
     } else {
       if (LuceneTestCase.VERBOSE) {
         System.out.println("RIW.getReader: open new reader");
       }
       w.commit();
       if (r.nextBoolean()) {
-        DirectoryReader reader = DirectoryReader.open(w.getDirectory());
-        if (w.getConfig().getSoftDeletesField() != null) {
-          return new SoftDeletesDirectoryReaderWrapper(reader, w.getConfig().getSoftDeletesField());
-        } else {
-          return reader;
-        }
+        return DirectoryReader.open(w.getDirectory());
       } else {
-        return w.getReader(applyDeletions, writeAllDeletes);
+        return w.getReader(applyDeletions);
       }
     }
   }
@@ -464,28 +385,19 @@ public class RandomIndexWriter implements Closeable {
    */
   @Override
   public void close() throws IOException {
-    boolean success = false;
-    try {
-      if (w.isClosed() == false) {
-        LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
-      }
-      // if someone isn't using getReader() API, we want to be sure to
-      // forceMerge since presumably they might open a reader on the dir.
-      if (getReaderCalled == false && r.nextInt(8) == 2 && w.isClosed() == false) {
-        doRandomForceMerge();
-        if (w.getConfig().getCommitOnClose() == false) {
-          // index may have changed, must commit the changes, or otherwise they are discarded by the call to close()
-          w.commit();
-        }
-      }
-      success = true;
-    } finally {
-      if (success) {
-        IOUtils.close(w, analyzer);
-      } else {
-        IOUtils.closeWhileHandlingException(w, analyzer);
+    if (w.isClosed() == false) {
+      LuceneTestCase.maybeChangeLiveIndexWriterConfig(r, w.getConfig());
+    }
+    // if someone isn't using getReader() API, we want to be sure to
+    // forceMerge since presumably they might open a reader on the dir.
+    if (getReaderCalled == false && r.nextInt(8) == 2 && w.isClosed() == false) {
+      doRandomForceMerge();
+      if (w.getConfig().getCommitOnClose() == false) {
+        // index may have changed, must commit the changes, or otherwise they are discarded by the call to close()
+        w.commit();
       }
     }
+    IOUtils.close(w, analyzer);
   }
 
   /**
@@ -539,7 +451,7 @@ public class RandomIndexWriter implements Closeable {
    * Simple interface that is executed for each <tt>TP</tt> {@link InfoStream} component
    * message. See also {@link RandomIndexWriter#mockIndexWriter(Random, Directory, IndexWriterConfig, TestPoint)}
    */
-  public interface TestPoint {
-    void apply(String message);
+  public static interface TestPoint {
+    public abstract void apply(String message);
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.no;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.no;
-
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -23,12 +23,12 @@ import java.util.Random;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
-import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.core.KeywordTokenizer;
 import org.apache.lucene.analysis.miscellaneous.SetKeywordMarkerFilter;
+import org.apache.lucene.analysis.util.CharArraySet;
 
 import static org.apache.lucene.analysis.VocabularyAssert.*;
 import static org.apache.lucene.analysis.no.NorwegianLightStemmer.BOKMAAL;

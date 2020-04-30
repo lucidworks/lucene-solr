@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.TokenStream;
@@ -35,7 +35,7 @@ import com.carrotsearch.randomizedtesting.annotations.TimeoutSuite;
  * Test indexes ~82M docs with 26 terms each, so you get &gt; Integer.MAX_VALUE terms/docs pairs
  * @lucene.experimental
  */
-@SuppressCodecs({ "SimpleText", "Direct", "Compressing" })
+@SuppressCodecs({ "SimpleText", "Memory", "Direct", "Compressing" })
 @TimeoutSuite(millis = 4 * TimeUnits.HOUR)
 public class Test2BPostings extends LuceneTestCase {
 

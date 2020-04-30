@@ -1,3 +1,5 @@
+package org.apache.lucene.benchmark.byTask.tasks;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.tasks;
-
 
 import java.util.ArrayList;
 import java.util.List;
@@ -436,14 +436,14 @@ public class TaskSequence extends PerfTask {
     sb.append(padd);
     sb.append(!letChildReport ? ">" : (parallel ? "]" : "}"));
     if (fixedTime) {
-      sb.append(' ').append(NumberFormat.getNumberInstance(Locale.ROOT).format(runTimeSec)).append('s');
+      sb.append(" " + NumberFormat.getNumberInstance(Locale.ROOT).format(runTimeSec) + "s");
     } else if (repetitions>1) {
-      sb.append(" * ").append(repetitions);
+      sb.append(" * " + repetitions);
     } else if (repetitions==REPEAT_EXHAUST) {
       sb.append(" * EXHAUST");
     }
     if (rate>0) {
-      sb.append(",  rate: ").append(rate).append('/').append(perMin ? "min" : "sec");
+      sb.append(",  rate: " + rate+"/"+(perMin?"min":"sec"));
     }
     if (getRunInBackground()) {
       sb.append(" &");

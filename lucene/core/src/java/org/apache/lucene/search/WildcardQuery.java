@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.lucene.index.Term;
+import org.apache.lucene.util.ToStringUtils;
 import org.apache.lucene.util.automaton.Automata;
 import org.apache.lucene.util.automaton.Automaton;
 import org.apache.lucene.util.automaton.Operations;
@@ -120,6 +121,7 @@ public class WildcardQuery extends AutomatonQuery {
       buffer.append(":");
     }
     buffer.append(term.text());
+    buffer.append(ToStringUtils.boost(getBoost()));
     return buffer.toString();
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
 import java.io.IOException;
 
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PayloadAttribute;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.RamUsageEstimator;
 
 // TODO: break into separate freq and prox writers as
 // codecs; make separate container (tii/tis/skip/*) that can
@@ -113,10 +115,9 @@ final class FreqProxTermsWriterPerField extends TermsHashPerField {
     if (!hasFreq) {
       assert postings.termFreqs == null;
       postings.lastDocCodes[termID] = docState.docID;
-      fieldState.maxTermFrequency = Math.max(1, fieldState.maxTermFrequency);
     } else {
       postings.lastDocCodes[termID] = docState.docID << 1;
-      postings.termFreqs[termID] = getTermFreq();
+      postings.termFreqs[termID] = 1;
       if (hasProx) {
         writeProx(termID, fieldState.position);
         if (hasOffsets) {
@@ -125,21 +126,19 @@ final class FreqProxTermsWriterPerField extends TermsHashPerField {
       } else {
         assert !hasOffsets;
       }
-      fieldState.maxTermFrequency = Math.max(postings.termFreqs[termID], fieldState.maxTermFrequency);
     }
+    fieldState.maxTermFrequency = Math.max(1, fieldState.maxTermFrequency);
     fieldState.uniqueTermCount++;
   }
 
   @Override
   void addTerm(final int termID) {
     final FreqProxPostingsArray postings = freqProxPostingsArray;
+
     assert !hasFreq || postings.termFreqs[termID] > 0;
 
     if (!hasFreq) {
       assert postings.termFreqs == null;
-      if (termFreqAtt.getTermFrequency() != 1) {
-        throw new IllegalStateException("field \"" + fieldInfo.name + "\": must index term freq while using custom TermFrequencyAttribute");
-      }
       if (docState.docID != postings.lastDocIDs[termID]) {
         // New document; now encode docCode for previous doc:
         assert docState.docID > postings.lastDocIDs[termID];
@@ -163,8 +162,8 @@ final class FreqProxTermsWriterPerField extends TermsHashPerField {
       }
 
       // Init freq for the current document
-      postings.termFreqs[termID] = getTermFreq();
-      fieldState.maxTermFrequency = Math.max(postings.termFreqs[termID], fieldState.maxTermFrequency);
+      postings.termFreqs[termID] = 1;
+      fieldState.maxTermFrequency = Math.max(1, fieldState.maxTermFrequency);
       postings.lastDocCodes[termID] = (docState.docID - postings.lastDocIDs[termID]) << 1;
       postings.lastDocIDs[termID] = docState.docID;
       if (hasProx) {
@@ -178,8 +177,7 @@ final class FreqProxTermsWriterPerField extends TermsHashPerField {
       }
       fieldState.uniqueTermCount++;
     } else {
-      postings.termFreqs[termID] = Math.addExact(postings.termFreqs[termID], getTermFreq());
-      fieldState.maxTermFrequency = Math.max(fieldState.maxTermFrequency, postings.termFreqs[termID]);
+      fieldState.maxTermFrequency = Math.max(fieldState.maxTermFrequency, ++postings.termFreqs[termID]);
       if (hasProx) {
         writeProx(termID, fieldState.position-postings.lastPositions[termID]);
         if (hasOffsets) {
@@ -187,17 +185,6 @@ final class FreqProxTermsWriterPerField extends TermsHashPerField {
         }
       }
     }
-  }
-
-  private int getTermFreq() {
-    int freq = termFreqAtt.getTermFrequency();
-    if (freq != 1) {
-      if (hasProx) {
-        throw new IllegalStateException("field \"" + fieldInfo.name + "\": cannot index positions while using custom TermFrequencyAttribute");
-      }
-    }
-
-    return freq;
   }
 
   @Override
@@ -270,15 +257,15 @@ final class FreqProxTermsWriterPerField extends TermsHashPerField {
 
     @Override
     int bytesPerPosting() {
-      int bytes = ParallelPostingsArray.BYTES_PER_POSTING + 2 * Integer.BYTES;
+      int bytes = ParallelPostingsArray.BYTES_PER_POSTING + 2 * RamUsageEstimator.NUM_BYTES_INT;
       if (lastPositions != null) {
-        bytes += Integer.BYTES;
+        bytes += RamUsageEstimator.NUM_BYTES_INT;
       }
       if (lastOffsets != null) {
-        bytes += Integer.BYTES;
+        bytes += RamUsageEstimator.NUM_BYTES_INT;
       }
       if (termFreqs != null) {
-        bytes += Integer.BYTES;
+        bytes += RamUsageEstimator.NUM_BYTES_INT;
       }
 
       return bytes;

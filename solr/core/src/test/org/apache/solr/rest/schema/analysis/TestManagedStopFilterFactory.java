@@ -1,3 +1,4 @@
+package org.apache.solr.rest.schema.analysis;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.rest.schema.analysis;
 
 import java.io.File;
 import java.util.Arrays;
@@ -22,12 +22,12 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.solr.common.util.Utils;
 import org.apache.solr.util.RestTestBase;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.noggit.JSONUtil;
 import org.restlet.ext.servlet.ServerServlet;
 
 /**
@@ -62,10 +62,8 @@ public class TestManagedStopFilterFactory extends RestTestBase {
 
   @After
   private void after() throws Exception {
-    if (null != jetty) {
-      jetty.stop();
-      jetty = null;
-    }
+    jetty.stop();
+    jetty = null;
     System.clearProperty("managed.schema.mutable");
     System.clearProperty("enable.update.log");
     
@@ -101,8 +99,8 @@ public class TestManagedStopFilterFactory extends RestTestBase {
              "/wordSet/managedList==[]");
           
     // add some stopwords and verify they were added
-    assertJPut(endpoint,
-        Utils.toJSONString(Arrays.asList("a", "an", "the")),
+    assertJPut(endpoint, 
+               JSONUtil.toJSON(Arrays.asList("a", "an", "the")),
                "/responseHeader/status==0");
           
     // test requesting a specific stop word that exists / does not exist
@@ -143,7 +141,7 @@ public class TestManagedStopFilterFactory extends RestTestBase {
             "/response/lst[@name='error']/int[@name='code'] = '404'");
 
     // add the new field
-    assertJPost("/schema/fields", "{add-field : { name :managed_en_field, type : managed_en}}",
+    assertJPut("/schema/fields/" + newFieldName, json("{'type':'managed_en'}"),
                "/responseHeader/status==0");
 
     // make sure the new field exists now
@@ -205,7 +203,7 @@ public class TestManagedStopFilterFactory extends RestTestBase {
 
     //now we put a stopword with an umlaut
     assertJPut(endpoint,
-        Utils.toJSONString(Arrays.asList("schön")),
+        JSONUtil.toJSON(Arrays.asList("schön")),
         "/responseHeader/status==0");
 
     //let's check if it exists

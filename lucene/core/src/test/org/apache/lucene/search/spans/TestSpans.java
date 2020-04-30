@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,27 +16,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
 
 import java.io.IOException;
+import java.util.List;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.RandomIndexWriter;
+import org.apache.lucene.index.ReaderUtil;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.CheckHits;
+import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.FuzzyQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.PrefixQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
+import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.similarities.DefaultSimilarity;
+import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
 
@@ -63,10 +70,9 @@ public class TestSpans extends LuceneTestCase {
       doc.add(newTextField(field, docFields[i], Field.Store.YES));
       writer.addDocument(doc);
     }
-    writer.forceMerge(1);
     reader = writer.getReader();
     writer.close();
-    searcher = newSearcher(getOnlyLeafReader(reader));
+    searcher = newSearcher(reader);
   }
   
   @Override
@@ -92,6 +98,7 @@ public class TestSpans extends LuceneTestCase {
     "s2 s1 s1 xx xx s2 xx s2 xx s1 xx xx xx xx xx s2 xx",
     "r1 s11",
     "r1 s21"
+
   };
   
   private void checkHits(Query query, int[] results) throws IOException {
@@ -194,7 +201,7 @@ public class TestSpans extends LuceneTestCase {
   public void testSpanNearOrderedOverlap() throws Exception {
     final SpanQuery query = spanNearOrderedQuery(field, 1, "t1", "t2", "t3");
     
-    Spans spans = query.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans spans = MultiSpansWrapper.wrap(searcher.getIndexReader(), query);
 
     assertEquals("first doc", 11, spans.nextDoc());
     assertEquals("first start", 0, spans.nextStartPosition());
@@ -209,7 +216,7 @@ public class TestSpans extends LuceneTestCase {
   public void testSpanNearUnOrdered() throws Exception {
     //See http://www.gossamer-threads.com/lists/lucene/java-dev/52270 for discussion about this test
     SpanQuery senq = spanNearUnorderedQuery(field, 0, "u1", "u2");
-    Spans spans = senq.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans spans = MultiSpansWrapper.wrap(reader, senq);
     assertNext(spans, 4, 1, 3);
     assertNext(spans, 5, 2, 4);
     assertNext(spans, 8, 2, 4);
@@ -218,7 +225,7 @@ public class TestSpans extends LuceneTestCase {
     assertFinished(spans);
 
     senq = spanNearUnorderedQuery(1, senq, spanTermQuery(field, "u2")); 
-    spans = senq.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    spans = MultiSpansWrapper.wrap(reader, senq);
     assertNext(spans, 4, 0, 3);
     assertNext(spans, 4, 1, 3); // unordered spans can be subsets
     assertNext(spans, 5, 0, 4);
@@ -232,7 +239,7 @@ public class TestSpans extends LuceneTestCase {
   }
 
   private Spans orSpans(String[] terms) throws Exception {
-    return spanOrQuery(field, terms).createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    return MultiSpansWrapper.wrap(searcher.getIndexReader(), spanOrQuery(field, terms));
   }
 
   public void testSpanOrEmpty() throws Exception {
@@ -283,6 +290,40 @@ public class TestSpans extends LuceneTestCase {
     assertFinished(spans);
   }
 
+  public void testSpanScorerZeroSloppyFreq() throws Exception {
+    IndexReaderContext topReaderContext = searcher.getTopReaderContext();
+    List<LeafReaderContext> leaves = topReaderContext.leaves();
+    int subIndex = ReaderUtil.subIndex(11, leaves);
+    for (int i = 0, c = leaves.size(); i < c; i++) {
+      final LeafReaderContext ctx = leaves.get(i);
+     
+      final Similarity sim = new DefaultSimilarity() {
+        @Override
+        public float sloppyFreq(int distance) {
+          return 0.0f;
+        }
+      };
+  
+      final Similarity oldSim = searcher.getSimilarity(true);
+      Scorer spanScorer;
+      try {
+        searcher.setSimilarity(sim);
+        SpanQuery snq = spanNearOrderedQuery(field, 1, "t1", "t2");
+        spanScorer = searcher.createNormalizedWeight(snq, true).scorer(ctx);
+      } finally {
+        searcher.setSimilarity(oldSim);
+      }
+      if (i == subIndex) {
+        assertTrue("first doc", spanScorer.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
+        assertEquals("first doc number", spanScorer.docID() + ctx.docBase, 11);
+        float score = spanScorer.score();
+        assertTrue("first doc score should be zero, " + score, score == 0.0f);
+      } else {
+        assertTrue("no second doc", spanScorer == null || spanScorer.nextDoc() == DocIdSetIterator.NO_MORE_DOCS);
+      }
+    }
+  }
+
   // LUCENE-1404
   private void addDoc(IndexWriter writer, String id, String text) throws IOException {
     final Document doc = new Document();
@@ -292,8 +333,8 @@ public class TestSpans extends LuceneTestCase {
   }
 
   // LUCENE-1404
-  private long hitCount(IndexSearcher searcher, String word) throws Throwable {
-    return searcher.count(new TermQuery(new Term("text", word)));
+  private int hitCount(IndexSearcher searcher, String word) throws Throwable {
+    return searcher.search(new TermQuery(new Term("text", word)), 10).totalHits;
   }
 
   // LUCENE-1404
@@ -341,7 +382,7 @@ public class TestSpans extends LuceneTestCase {
     assertEquals(1,
                  searcher.search(createSpan(0, true,                                 
                                             new SpanQuery[] {createSpan(4, false, "chased", "cat"),
-                                                             createSpan("ate")}), 10).totalHits.value);
+                                                             createSpan("ate")}), 10).totalHits);
     reader.close();
     dir.close();
   }
@@ -364,57 +405,45 @@ public class TestSpans extends LuceneTestCase {
 
 
   }
+  
+  public void testSpanNots() throws Throwable{
+     assertEquals("SpanNotIncludeExcludeSame1", 0, spanCount("s2", "s2", 0, 0), 0);
+     assertEquals("SpanNotIncludeExcludeSame2", 0, spanCount("s2", "s2", 10, 10), 0);
+     
+     //focus on behind
+     assertEquals("SpanNotS2NotS1_6_0", 1, spanCount("s2", "s1", 6, 0));
+     assertEquals("SpanNotS2NotS1_5_0", 2, spanCount("s2", "s1", 5, 0));
+     assertEquals("SpanNotS2NotS1_3_0", 3, spanCount("s2", "s1", 3, 0));
+     assertEquals("SpanNotS2NotS1_2_0", 4, spanCount("s2", "s1", 2, 0));
+     assertEquals("SpanNotS2NotS1_0_0", 4, spanCount("s2", "s1", 0, 0));
+     
+     //focus on both
+     assertEquals("SpanNotS2NotS1_3_1", 2, spanCount("s2", "s1", 3, 1));
+     assertEquals("SpanNotS2NotS1_2_1", 3, spanCount("s2", "s1", 2, 1));
+     assertEquals("SpanNotS2NotS1_1_1", 3, spanCount("s2", "s1", 1, 1));
+     assertEquals("SpanNotS2NotS1_10_10", 0, spanCount("s2", "s1", 10, 10));
+     
+     //focus on ahead
+     assertEquals("SpanNotS1NotS2_10_10", 0, spanCount("s1", "s2", 10, 10));  
+     assertEquals("SpanNotS1NotS2_0_1", 3, spanCount("s1", "s2", 0, 1));  
+     assertEquals("SpanNotS1NotS2_0_2", 3, spanCount("s1", "s2", 0, 2));  
+     assertEquals("SpanNotS1NotS2_0_3", 2, spanCount("s1", "s2", 0, 3));  
+     assertEquals("SpanNotS1NotS2_0_4", 1, spanCount("s1", "s2", 0, 4));
+     assertEquals("SpanNotS1NotS2_0_8", 0, spanCount("s1", "s2", 0, 8));
+     
+     //exclude doesn't exist
+     assertEquals("SpanNotS1NotS3_8_8", 3, spanCount("s1", "s3", 8, 8));
 
-  public void testSpanNots() throws Throwable {
+     //include doesn't exist
+     assertEquals("SpanNotS3NotS1_8_8", 0, spanCount("s3", "s1", 8, 8));
 
-    assertEquals("SpanNotIncludeExcludeSame1", 0, spanCount("s2", 0, "s2", 0, 0), 0);
-    assertEquals("SpanNotIncludeExcludeSame2", 0, spanCount("s2", 0, "s2", 10, 10), 0);
-
-    //focus on behind
-    assertEquals("SpanNotS2NotS1_6_0", 1, spanCount("s2", 0, "s1", 6, 0));
-    assertEquals("SpanNotS2NotS1_5_0", 2, spanCount("s2", 0, "s1", 5, 0));
-    assertEquals("SpanNotS2NotS1_3_0", 3, spanCount("s2", 0, "s1", 3, 0));
-    assertEquals("SpanNotS2NotS1_2_0", 4, spanCount("s2", 0, "s1", 2, 0));
-    assertEquals("SpanNotS2NotS1_0_0", 4, spanCount("s2", 0, "s1", 0, 0));
-
-    //focus on both
-    assertEquals("SpanNotS2NotS1_3_1", 2, spanCount("s2", 0, "s1", 3, 1));
-    assertEquals("SpanNotS2NotS1_2_1", 3, spanCount("s2", 0, "s1", 2, 1));
-    assertEquals("SpanNotS2NotS1_1_1", 3, spanCount("s2", 0, "s1", 1, 1));
-    assertEquals("SpanNotS2NotS1_10_10", 0, spanCount("s2", 0, "s1", 10, 10));
-
-    //focus on ahead
-    assertEquals("SpanNotS1NotS2_10_10", 0, spanCount("s1", 0, "s2", 10, 10));
-    assertEquals("SpanNotS1NotS2_0_1", 3, spanCount("s1", 0, "s2", 0, 1));
-    assertEquals("SpanNotS1NotS2_0_2", 3, spanCount("s1", 0, "s2", 0, 2));
-    assertEquals("SpanNotS1NotS2_0_3", 2, spanCount("s1", 0, "s2", 0, 3));
-    assertEquals("SpanNotS1NotS2_0_4", 1, spanCount("s1", 0, "s2", 0, 4));
-    assertEquals("SpanNotS1NotS2_0_8", 0, spanCount("s1", 0, "s2", 0, 8));
-
-    //exclude doesn't exist
-    assertEquals("SpanNotS1NotS3_8_8", 3, spanCount("s1", 0, "s3", 8, 8));
-
-    //include doesn't exist
-    assertEquals("SpanNotS3NotS1_8_8", 0, spanCount("s3", 0, "s1", 8, 8));
-
-    // Negative values
-    assertEquals("SpanNotS2S1NotXXNeg_0_0", 1, spanCount("s2 s1", 10, "xx", 0, 0));
-    assertEquals("SpanNotS2S1NotXXNeg_1_1", 1, spanCount("s2 s1", 10, "xx", -1, -1));
-    assertEquals("SpanNotS2S1NotXXNeg_0_2", 2, spanCount("s2 s1", 10, "xx",  0, -2));
-    assertEquals("SpanNotS2S1NotXXNeg_1_2", 2, spanCount("s2 s1", 10, "xx", -1, -2));
-    assertEquals("SpanNotS2S1NotXXNeg_2_1", 2, spanCount("s2 s1", 10, "xx", -2, -1));
-    assertEquals("SpanNotS2S1NotXXNeg_3_1", 2, spanCount("s2 s1", 10, "xx", -3, -1));
-    assertEquals("SpanNotS2S1NotXXNeg_1_3", 2, spanCount("s2 s1", 10, "xx", -1, -3));
-    assertEquals("SpanNotS2S1NotXXNeg_2_2", 3, spanCount("s2 s1", 10, "xx", -2, -2));
   }
-
-
-  private int spanCount(String include, int slop, String exclude, int pre, int post) throws IOException{
-     String[] includeTerms = include.split(" +");
-     SpanQuery iq = includeTerms.length == 1 ? spanTermQuery(field, include) : spanNearOrderedQuery(field, slop, includeTerms);
+  
+  private int spanCount(String include, String exclude, int pre, int post) throws IOException{
+     SpanQuery iq = spanTermQuery(field, include);
      SpanQuery eq = spanTermQuery(field, exclude);
      SpanQuery snq = spanNotQuery(iq, eq, pre, post);
-     Spans spans = snq.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+     Spans spans = MultiSpansWrapper.wrap(searcher.getIndexReader(), snq);
 
      int i = 0;
      if (spans != null) {

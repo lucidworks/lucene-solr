@@ -14,11 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.extraction;
 
 import java.lang.invoke.MethodHandles;
+import java.text.DateFormat;
 import java.util.ArrayDeque;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -28,8 +32,10 @@ import java.util.Set;
 
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.DateUtil;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.SchemaField;
+import org.apache.solr.schema.TrieDateField;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.metadata.TikaMetadataKeys;
 import org.slf4j.Logger;
@@ -58,6 +64,8 @@ public class SolrContentHandler extends DefaultHandler implements ExtractingPara
 
   protected final SolrInputDocument document;
 
+  protected final Collection<String> dateFormats;
+
   protected final Metadata metadata;
   protected final SolrParams params;
   protected final StringBuilder catchAllBuilder = new StringBuilder(2048);
@@ -74,13 +82,19 @@ public class SolrContentHandler extends DefaultHandler implements ExtractingPara
   private final boolean literalsOverride;
   
   private Set<String> literalFieldNames = null;
-
-
+  
   public SolrContentHandler(Metadata metadata, SolrParams params, IndexSchema schema) {
+    this(metadata, params, schema, DateUtil.DEFAULT_DATE_FORMATS);
+  }
+
+
+  public SolrContentHandler(Metadata metadata, SolrParams params,
+                            IndexSchema schema, Collection<String> dateFormats) {
     this.document = new SolrInputDocument();
     this.metadata = metadata;
     this.params = params;
     this.schema = schema;
+    this.dateFormats = dateFormats;
 
     this.lowerNames = params.getBool(LOWERNAMES, false);
     this.captureAttribs = params.getBool(CAPTURE_ATTRIBUTES, false);
@@ -241,13 +255,15 @@ public class SolrContentHandler extends DefaultHandler implements ExtractingPara
       vals=null;
     }
 
+    float boost = getBoost(name);
+
     if (fval != null) {
-      document.addField(name, fval);
+      document.addField(name, transformValue(fval, sf), boost);
     }
 
     if (vals != null) {
       for (String val : vals) {
-        document.addField(name, val);
+        document.addField(name, transformValue(val, sf), boost);
       }
     }
 
@@ -297,6 +313,43 @@ public class SolrContentHandler extends DefaultHandler implements ExtractingPara
   @Override
   public void ignorableWhitespace(char[] chars, int offset, int length) throws SAXException {
     characters(chars, offset, length);
+  }
+
+  /**
+   * Can be used to transform input values based on their {@link org.apache.solr.schema.SchemaField}
+   * <p>
+   * This implementation only formats dates using the {@link org.apache.solr.common.util.DateUtil}.
+   *
+   * @param val    The value to transform
+   * @param schFld The {@link org.apache.solr.schema.SchemaField}
+   * @return The potentially new value.
+   */
+  protected String transformValue(String val, SchemaField schFld) {
+    String result = val;
+    if (schFld != null && schFld.getType() instanceof TrieDateField) {
+      //try to transform the date
+      try {
+        Date date = DateUtil.parseDate(val, dateFormats);
+        DateFormat df = DateUtil.getThreadLocalDateFormat();
+        result = df.format(date);
+
+      } catch (Exception e) {
+        // Let the specific fieldType handle errors
+        // throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Invalid value: " + val + " for field: " + schFld, e);
+      }
+    }
+    return result;
+  }
+
+
+  /**
+   * Get the value of any boost factor for the mapped name.
+   *
+   * @param name The name of the field to see if there is a boost specified
+   * @return The boost value
+   */
+  protected float getBoost(String name) {
+    return params.getFloat(BOOST_PREFIX + name, 1.0f);
   }
 
   /**

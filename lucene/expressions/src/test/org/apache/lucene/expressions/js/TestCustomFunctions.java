@@ -1,3 +1,5 @@
+package org.apache.lucene.expressions.js;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.expressions.js;
-
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -39,18 +39,19 @@ public class TestCustomFunctions extends LuceneTestCase {
   /** empty list of methods */
   public void testEmpty() throws Exception {
     Map<String,Method> functions = Collections.emptyMap();
-    ParseException expected = expectThrows(ParseException.class, () -> {
+    try {
       JavascriptCompiler.compile("sqrt(20)", functions, getClass().getClassLoader());
-    });
-    assertEquals("Invalid expression 'sqrt(20)': Unrecognized function call (sqrt).", expected.getMessage());
-    assertEquals(expected.getErrorOffset(), 0);
+      fail();
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().contains("Unrecognized function"));
+    }
   }
   
   /** using the default map explicitly */
   public void testDefaultList() throws Exception {
     Map<String,Method> functions = JavascriptCompiler.DEFAULT_FUNCTIONS;
     Expression expr = JavascriptCompiler.compile("sqrt(20)", functions, getClass().getClassLoader());
-    assertEquals(Math.sqrt(20), expr.evaluate(null), DELTA);
+    assertEquals(Math.sqrt(20), expr.evaluate(0, null), DELTA);
   }
   
   public static double zeroArgMethod() { return 5; }
@@ -60,7 +61,7 @@ public class TestCustomFunctions extends LuceneTestCase {
     Map<String,Method> functions = new HashMap<>();
     functions.put("foo", getClass().getMethod("zeroArgMethod"));
     Expression expr = JavascriptCompiler.compile("foo()", functions, getClass().getClassLoader());
-    assertEquals(5, expr.evaluate(null), DELTA);
+    assertEquals(5, expr.evaluate(0, null), DELTA);
   }
 
   public static double oneArgMethod(double arg1) { return 3 + arg1; }
@@ -70,7 +71,7 @@ public class TestCustomFunctions extends LuceneTestCase {
     Map<String,Method> functions = new HashMap<>();
     functions.put("foo", getClass().getMethod("oneArgMethod", double.class));
     Expression expr = JavascriptCompiler.compile("foo(3)", functions, getClass().getClassLoader());
-    assertEquals(6, expr.evaluate(null), DELTA);
+    assertEquals(6, expr.evaluate(0, null), DELTA);
   }
   
   public static double threeArgMethod(double arg1, double arg2, double arg3) { return arg1 + arg2 + arg3; }
@@ -80,7 +81,7 @@ public class TestCustomFunctions extends LuceneTestCase {
     Map<String,Method> functions = new HashMap<>();
     functions.put("foo", getClass().getMethod("threeArgMethod", double.class, double.class, double.class));
     Expression expr = JavascriptCompiler.compile("foo(3, 4, 5)", functions, getClass().getClassLoader());
-    assertEquals(12, expr.evaluate(null), DELTA);
+    assertEquals(12, expr.evaluate(0, null), DELTA);
   }
   
   /** tests a map with 2 functions */
@@ -89,28 +90,28 @@ public class TestCustomFunctions extends LuceneTestCase {
     functions.put("foo", getClass().getMethod("zeroArgMethod"));
     functions.put("bar", getClass().getMethod("oneArgMethod", double.class));
     Expression expr = JavascriptCompiler.compile("foo() + bar(3)", functions, getClass().getClassLoader());
-    assertEquals(11, expr.evaluate(null), DELTA);
+    assertEquals(11, expr.evaluate(0, null), DELTA);
   }
 
   /** tests invalid methods that are not allowed to become variables to be mapped */
   public void testInvalidVariableMethods() {
-    ParseException expected = expectThrows(ParseException.class, () -> {
+    try {
       JavascriptCompiler.compile("method()");
-    });
-    assertEquals("Invalid expression 'method()': Unrecognized function call (method).", expected.getMessage());
-    assertEquals(0, expected.getErrorOffset());
+      fail();
+    } catch (ParseException exception) {
+      fail();
+    } catch (IllegalArgumentException exception) {
+      //expected
+    }
 
-    expected = expectThrows(ParseException.class, () -> {
+    try {
       JavascriptCompiler.compile("method.method(1)");
-    });
-    assertEquals("Invalid expression 'method.method(1)': Unrecognized function call (method.method).", expected.getMessage());
-    assertEquals(0, expected.getErrorOffset());
-    
-    expected = expectThrows(ParseException.class, () -> {
-      JavascriptCompiler.compile("1 + method()");
-    });
-    assertEquals("Invalid expression '1 + method()': Unrecognized function call (method).", expected.getMessage());
-    assertEquals(4, expected.getErrorOffset());
+      fail();
+    } catch (ParseException exception) {
+      fail();
+    } catch (IllegalArgumentException exception) {
+      //expected
+    }
   }
 
   public static String bogusReturnType() { return "bogus!"; }
@@ -119,10 +120,12 @@ public class TestCustomFunctions extends LuceneTestCase {
   public void testWrongReturnType() throws Exception {
     Map<String,Method> functions = new HashMap<>();
     functions.put("foo", getClass().getMethod("bogusReturnType"));
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       JavascriptCompiler.compile("foo()", functions, getClass().getClassLoader());
-    });
-    assertTrue(expected.getMessage().contains("does not return a double"));
+      fail();
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().contains("does not return a double"));
+    }
   }
   
   public static double bogusParameterType(String s) { return 0; }
@@ -131,10 +134,12 @@ public class TestCustomFunctions extends LuceneTestCase {
   public void testWrongParameterType() throws Exception {
     Map<String,Method> functions = new HashMap<>();
     functions.put("foo", getClass().getMethod("bogusParameterType", String.class));
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       JavascriptCompiler.compile("foo(2)", functions, getClass().getClassLoader());
-    });
-    assertTrue(expected.getMessage().contains("must take only double parameters"));
+      fail();
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().contains("must take only double parameters"));
+    }
   }
   
   public double nonStaticMethod() { return 0; }
@@ -143,10 +148,12 @@ public class TestCustomFunctions extends LuceneTestCase {
   public void testWrongNotStatic() throws Exception {
     Map<String,Method> functions = new HashMap<>();
     functions.put("foo", getClass().getMethod("nonStaticMethod"));
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       JavascriptCompiler.compile("foo()", functions, getClass().getClassLoader());
-    });
-    assertTrue(expected.getMessage().contains("is not static"));
+      fail();
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().contains("is not static"));
+    }
   }
   
   static double nonPublicMethod() { return 0; }
@@ -155,10 +162,12 @@ public class TestCustomFunctions extends LuceneTestCase {
   public void testWrongNotPublic() throws Exception {
     Map<String,Method> functions = new HashMap<>();
     functions.put("foo", getClass().getDeclaredMethod("nonPublicMethod"));
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       JavascriptCompiler.compile("foo()", functions, getClass().getClassLoader());
-    });
-    assertTrue(expected.getMessage().contains("not public"));
+      fail();
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().contains("is not public"));
+    }
   }
 
   static class NestedNotPublic {
@@ -169,10 +178,12 @@ public class TestCustomFunctions extends LuceneTestCase {
   public void testWrongNestedNotPublic() throws Exception {
     Map<String,Method> functions = new HashMap<>();
     functions.put("foo", NestedNotPublic.class.getMethod("method"));
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       JavascriptCompiler.compile("foo()", functions, getClass().getClassLoader());
-    });
-    assertTrue(expected.getMessage().contains("not public"));
+      fail();
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().contains("is not public"));
+    }
   }
   
   /** Classloader that can be used to create a fake static class that has one method returning a static var */
@@ -220,27 +231,31 @@ public class TestCustomFunctions extends LuceneTestCase {
     
     // this should pass:
     Expression expr = JavascriptCompiler.compile("bar()", functions, childLoader);
-    assertEquals(2.0, expr.evaluate(null), DELTA);
+    assertEquals(2.0, expr.evaluate(0, null), DELTA);
     
     // use our classloader, not the foreign one, which should fail!
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       JavascriptCompiler.compile("bar()", functions, thisLoader);
-    });
-    assertTrue(expected.getMessage().contains("is not declared by a class which is accessible by the given parent ClassLoader"));
+      fail();
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().contains("is not declared by a class which is accessible by the given parent ClassLoader"));
+    }
     
     // mix foreign and default functions
     Map<String,Method> mixedFunctions = new HashMap<>(JavascriptCompiler.DEFAULT_FUNCTIONS);
     mixedFunctions.putAll(functions);
     expr = JavascriptCompiler.compile("bar()", mixedFunctions, childLoader);
-    assertEquals(2.0, expr.evaluate(null), DELTA);
+    assertEquals(2.0, expr.evaluate(0, null), DELTA);
     expr = JavascriptCompiler.compile("sqrt(20)", mixedFunctions, childLoader);
-    assertEquals(Math.sqrt(20), expr.evaluate(null), DELTA);
+    assertEquals(Math.sqrt(20), expr.evaluate(0, null), DELTA);
     
     // use our classloader, not the foreign one, which should fail!
-    expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       JavascriptCompiler.compile("bar()", mixedFunctions, thisLoader);
-    });
-    assertTrue(expected.getMessage().contains("is not declared by a class which is accessible by the given parent ClassLoader"));
+      fail();
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().contains("is not declared by a class which is accessible by the given parent ClassLoader"));
+    }
   }
   
   static String MESSAGE = "This should not happen but it happens";
@@ -255,15 +270,17 @@ public class TestCustomFunctions extends LuceneTestCase {
     functions.put("foo", StaticThrowingException.class.getMethod("method"));
     String source = "3 * foo() / 5";
     Expression expr = JavascriptCompiler.compile(source, functions, getClass().getClassLoader());
-    ArithmeticException expected = expectThrows(ArithmeticException.class, () -> {
-      expr.evaluate(null);
-    });
-    assertEquals(MESSAGE, expected.getMessage());
-    StringWriter sw = new StringWriter();
-    PrintWriter pw = new PrintWriter(sw);
-    expected.printStackTrace(pw);
-    pw.flush();
-    assertTrue(sw.toString().contains("JavascriptCompiler$CompiledExpression.evaluate(" + source + ")"));
+    try {
+      expr.evaluate(0, null);
+      fail();
+    } catch (ArithmeticException e) {
+      assertEquals(MESSAGE, e.getMessage());
+      StringWriter sw = new StringWriter();
+      PrintWriter pw = new PrintWriter(sw);
+      e.printStackTrace(pw);
+      pw.flush();
+      assertTrue(sw.toString().contains("JavascriptCompiler$CompiledExpression.evaluate(" + source + ")"));
+    }
   }
 
   /** test that namespaces work with custom expressions. */
@@ -272,6 +289,6 @@ public class TestCustomFunctions extends LuceneTestCase {
     functions.put("foo.bar", getClass().getMethod("zeroArgMethod"));
     String source = "foo.bar()";
     Expression expr = JavascriptCompiler.compile(source, functions, getClass().getClassLoader());
-    assertEquals(5, expr.evaluate(null), DELTA);
+    assertEquals(5, expr.evaluate(0, null), DELTA);
   }
 }

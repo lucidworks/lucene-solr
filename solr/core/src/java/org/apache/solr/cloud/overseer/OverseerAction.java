@@ -1,3 +1,5 @@
+package org.apache.solr.cloud.overseer;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud.overseer;
 
 import java.util.Locale;
+
+import org.apache.solr.cloud.Overseer;
 
 /**
  * Enum of actions supported by the overseer only.
@@ -31,8 +34,7 @@ public enum OverseerAction {
   REMOVEROUTINGRULE,
   UPDATESHARDSTATE,
   STATE,
-  QUIT,
-  DOWNNODE;
+  QUIT;
 
   public static OverseerAction get(String p) {
     if (p != null) {

@@ -1,3 +1,5 @@
+package org.apache.lucene.replicator;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.replicator;
 
-import com.carrotsearch.randomizedtesting.annotations.ThreadLeakLingering;
 import java.util.Random;
+
 import org.apache.http.conn.HttpClientConnectionManager;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.lucene.util.LuceneTestCase;
@@ -29,12 +30,11 @@ import org.eclipse.jetty.server.SecureRequestCustomizer;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.SslConnectionFactory;
-import org.eclipse.jetty.server.session.DefaultSessionIdManager;
+import org.eclipse.jetty.server.session.HashSessionIdManager;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.junit.AfterClass;
 
-@ThreadLeakLingering(linger = 80000) // Jetty might ignore interrupt for a minute 
 public abstract class ReplicatorTestCase extends LuceneTestCase {
   
   private static HttpClientConnectionManager clientConnectionManager;
@@ -61,7 +61,7 @@ public abstract class ReplicatorTestCase extends LuceneTestCase {
     // talking to that server, but for the purposes of testing that should 
     // be good enough
     final boolean useSsl = Boolean.getBoolean("tests.jettySsl");
-    final SslContextFactory.Server sslcontext = new SslContextFactory.Server();
+    final SslContextFactory sslcontext = new SslContextFactory(false);
     
     if (useSsl) {
       if (null != System.getProperty("javax.net.ssl.keyStore")) {
@@ -111,7 +111,7 @@ public abstract class ReplicatorTestCase extends LuceneTestCase {
     connector.setHost("127.0.0.1");
 
     server.setConnectors(new Connector[] {connector});
-    server.setSessionIdManager(new DefaultSessionIdManager(server, new Random(random().nextLong())));
+    server.setSessionIdManager(new HashSessionIdManager(new Random(random().nextLong())));
     server.setHandler(handler);
     
     server.start();

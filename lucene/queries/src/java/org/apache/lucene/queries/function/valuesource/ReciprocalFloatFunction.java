@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.queries.function.valuesource;
 
 import org.apache.lucene.index.LeafReaderContext;
@@ -64,15 +65,15 @@ public class ReciprocalFloatFunction extends ValueSource {
     final FunctionValues vals = source.getValues(context, readerContext);
     return new FloatDocValues(this) {
       @Override
-      public float floatVal(int doc) throws IOException {
+      public float floatVal(int doc) {
         return a/(m*vals.floatVal(doc) + b);
       }
       @Override
-      public boolean exists(int doc) throws IOException {
+      public boolean exists(int doc) {
         return vals.exists(doc);
       }
       @Override
-      public String toString(int doc) throws IOException {
+      public String toString(int doc) {
         return Float.toString(a) + "/("
                 + m + "*float(" + vals.toString(doc) + ')'
                 + '+' + b + ')';

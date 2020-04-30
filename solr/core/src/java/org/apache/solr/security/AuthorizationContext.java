@@ -1,3 +1,5 @@
+package org.apache.solr.security;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.security;
 
 import java.security.Principal;
 import java.util.Enumeration;
@@ -32,11 +33,6 @@ public abstract class AuthorizationContext {
 
     public CollectionRequest(String collectionName) {
       this.collectionName = collectionName;
-    }
-
-    @Override
-    public String toString() {
-      return getClass().getSimpleName()+ "(" + collectionName + ")";
     }
   }
   
@@ -61,7 +57,5 @@ public abstract class AuthorizationContext {
   public abstract String getHttpMethod();
 
   public enum RequestType {READ, WRITE, ADMIN, UNKNOWN}
-
-  public abstract Object getHandler();
 
 }

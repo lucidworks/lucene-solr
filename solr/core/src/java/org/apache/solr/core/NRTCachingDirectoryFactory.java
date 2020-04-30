@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.core;
 
 import java.io.File;
@@ -38,7 +39,7 @@ public class NRTCachingDirectoryFactory extends StandardDirectoryFactory {
   @Override
   public void init(NamedList args) {
     super.init(args);
-    SolrParams params = args.toSolrParams();
+    SolrParams params = SolrParams.toSolrParams(args);
     maxMergeSizeMB = params.getDouble("maxMergeSizeMB", DEFAULT_MAX_MERGE_SIZE_MB);
     if (maxMergeSizeMB <= 0){
       throw new IllegalArgumentException("maxMergeSizeMB must be greater than 0");

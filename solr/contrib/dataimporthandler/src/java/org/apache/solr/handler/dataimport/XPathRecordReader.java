@@ -57,8 +57,8 @@ import org.slf4j.LoggerFactory;
  * @since solr 1.3
  */
 public class XPathRecordReader {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-  private static final XMLErrorLogger XMLLOG = new XMLErrorLogger(log);
+  private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private static final XMLErrorLogger XMLLOG = new XMLErrorLogger(LOG);
 
   private Node rootNode = new Node("/", null);
 
@@ -145,7 +145,7 @@ public class XPathRecordReader {
     if (!xpath.startsWith("/"))
       throw new RuntimeException("xpath must start with '/' : " + xpath);
     List<String> paths = splitEscapeQuote(xpath);
-    // deal with how split behaves when separator starts a string!
+    // deal with how split behaves when seperator starts a string!
     if ("".equals(paths.get(0).trim()))
       paths.remove(0);
     rootNode.build(paths, name, multiValued, isRecord, flags);
@@ -162,7 +162,12 @@ public class XPathRecordReader {
    */
   public List<Map<String, Object>> getAllRecords(Reader r) {
     final List<Map<String, Object>> results = new ArrayList<>();
-    streamRecords(r, (record, s) -> results.add(record));
+    streamRecords(r, new Handler() {
+      @Override
+      public void handle(Map<String, Object> record, String s) {
+        results.add(record);
+      }
+    });
     return results;
   }
 
@@ -177,8 +182,8 @@ public class XPathRecordReader {
   public void streamRecords(Reader r, Handler handler) {
     try {
       XMLStreamReader parser = factory.createXMLStreamReader(r);
-      rootNode.parse(parser, handler, new HashMap<>(),
-          new Stack<>(), false);
+      rootNode.parse(parser, handler, new HashMap<String, Object>(),
+              new Stack<Set<String>>(), false);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -600,19 +605,19 @@ public class XPathRecordReader {
 
 
   /**
-   * The Xpath is split into segments using the '/' as a separator. However
+   * The Xpath is split into segments using the '/' as a seperator. However
    * this method deals with special cases where there is a slash '/' character
    * inside the attribute value e.g. x/@html='text/html'. We split by '/' but 
    * then reassemble things were the '/' appears within a quoted sub-string.
    *
-   * We have already enforced that the string must begin with a separator. This
+   * We have already enforced that the string must begin with a seperator. This
    * method depends heavily on how split behaves if the string starts with the
-   * separator or if a sequence of multiple separator's appear. 
+   * seperator or if a sequence of multiple seperator's appear. 
    */
   private static List<String> splitEscapeQuote(String str) {
     List<String> result = new LinkedList<>();
     String[] ss = str.split("/");
-    for (int i=0; i<ss.length; i++) { // i=1: skip separator at start of string
+    for (int i=0; i<ss.length; i++) { // i=1: skip seperator at start of string
       StringBuilder sb = new StringBuilder();
       int quoteCount = 0;
       while (true) {
@@ -645,14 +650,14 @@ public class XPathRecordReader {
     } catch (IllegalArgumentException ex) {
       // Other implementations will likely throw this exception since "reuse-instance"
       // isimplementation specific.
-      log.debug("Unable to set the 'reuse-instance' property for the input chain: " + factory);
+      LOG.debug("Unable to set the 'reuse-instance' property for the input chain: " + factory);
     }
   }
 
   /**Implement this interface to stream records as and when one is found.
    *
    */
-  public interface Handler {
+  public static interface Handler {
     /**
      * @param record The record map. The key is the field name as provided in 
      * the addField() methods. The value can be a single String (for single 
@@ -661,7 +666,7 @@ public class XPathRecordReader {
      * If there is any change all parsing will be aborted and the Exception
      * is propagated up
      */
-    void handle(Map<String, Object> record, String xpath);
+    public void handle(Map<String, Object> record, String xpath);
   }
 
   private static final Pattern ATTRIB_PRESENT_WITHVAL = Pattern

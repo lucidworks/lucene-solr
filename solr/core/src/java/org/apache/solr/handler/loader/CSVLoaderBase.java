@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.loader;
 
 import org.apache.solr.request.SolrQueryRequest;
@@ -30,7 +31,6 @@ import org.apache.solr.internal.csv.CSVStrategy;
 import org.apache.solr.internal.csv.CSVParser;
 import org.apache.commons.io.IOUtils;
 
-import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.List;
 import java.util.HashMap;
@@ -84,7 +84,7 @@ abstract class CSVLoaderBase extends ContentStreamLoader {
   private class FieldAdder {
     void add(SolrInputDocument doc, int line, int column, String val) {
       if (val.length() > 0) {
-        doc.addField(fieldnames[column],val);
+        doc.addField(fieldnames[column],val,1.0f);
       }
     }
   }
@@ -93,7 +93,7 @@ abstract class CSVLoaderBase extends ContentStreamLoader {
   private class FieldAdderEmpty extends CSVLoaderBase.FieldAdder {
     @Override
     void add(SolrInputDocument doc, int line, int column, String val) {
-      doc.addField(fieldnames[column],val);
+      doc.addField(fieldnames[column],val,1.0f);
     }
   }
 
@@ -166,7 +166,7 @@ abstract class CSVLoaderBase extends ContentStreamLoader {
     templateAdd.overwrite=params.getBool(OVERWRITE,true);
     templateAdd.commitWithin = params.getInt(UpdateParams.COMMIT_WITHIN, -1);
     
-    strategy = new CSVStrategy(',', '"', CSVStrategy.COMMENTS_DISABLED, CSVStrategy.ESCAPE_DISABLED, false, false, false, true, "\n");
+    strategy = new CSVStrategy(',', '"', CSVStrategy.COMMENTS_DISABLED, CSVStrategy.ESCAPE_DISABLED, false, false, false, true);
     String sep = params.get(SEPARATOR);
     if (sep!=null) {
       if (sep.length()!=1) throw new SolrException( SolrException.ErrorCode.BAD_REQUEST,"Invalid separator:'"+sep+"'");
@@ -275,8 +275,7 @@ abstract class CSVLoaderBase extends ContentStreamLoader {
         String escStr = params.getFieldParam(fname,ESCAPE);
         char fesc = escStr==null || escStr.length()==0 ? CSVStrategy.ESCAPE_DISABLED : escStr.charAt(0);
 
-        CSVStrategy fstrat = new CSVStrategy
-            (fsep, fenc, CSVStrategy.COMMENTS_DISABLED, fesc, false, false, false, false, "\n");
+        CSVStrategy fstrat = new CSVStrategy(fsep,fenc,CSVStrategy.COMMENTS_DISABLED,fesc, false, false, false, false);
         adders[i] = new CSVLoaderBase.FieldSplitter(fstrat, adders[i]);
       }
     }
@@ -381,8 +380,9 @@ abstract class CSVLoaderBase extends ContentStreamLoader {
     }
 
     // add any literals
-    for (Map.Entry<String, String> entry : literals.entrySet()) {
-      doc.addField(entry.getKey(), entry.getValue());
+    for (String fname : literals.keySet()) {
+      String val = literals.get(fname);
+      doc.addField(fname, val);
     }
     if (rowId != null){
       doc.addField(rowId, line + rowIdOffset);

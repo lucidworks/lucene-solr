@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -181,12 +181,7 @@ public abstract class FilteredTermsEnum extends TermsEnum {
   public PostingsEnum postings(PostingsEnum reuse, int flags) throws IOException {
     return tenum.postings(reuse, flags);
   }
-
-  @Override
-  public ImpactsEnum impacts(int flags) throws IOException {
-    return tenum.impacts(flags);
-  }
-
+  
   /** This enum does not support seeking!
    * @throws UnsupportedOperationException In general, subclasses do not
    *         support seeking.
@@ -248,9 +243,7 @@ public abstract class FilteredTermsEnum extends TermsEnum {
         case END:
           // we are supposed to end the enum
           return null;
-        case NO:
-          // we just iterate again
-          break;
+        // NO: we just fall through and iterate again
       }
     }
   }

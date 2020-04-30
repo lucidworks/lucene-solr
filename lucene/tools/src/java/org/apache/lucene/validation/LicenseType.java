@@ -1,3 +1,6 @@
+package org.apache.lucene.validation;
+
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +17,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.validation;
-
 
 /**
  * A list of accepted licenses.  See also http://www.apache.org/legal/3party.html

@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
-
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.AnalyzerWrapper;
@@ -24,8 +24,6 @@ import org.apache.lucene.analysis.AnalyzerWrapper;
  * This Analyzer limits the number of tokens while indexing. It is
  * a replacement for the maximum field length setting inside {@link org.apache.lucene.index.IndexWriter}.
  * @see LimitTokenCountFilter
- *
- * @since 3.1
  */
 public final class LimitTokenCountAnalyzer extends AnalyzerWrapper {
   private final Analyzer delegate;
@@ -61,7 +59,7 @@ public final class LimitTokenCountAnalyzer extends AnalyzerWrapper {
 
   @Override
   protected TokenStreamComponents wrapComponents(String fieldName, TokenStreamComponents components) {
-    return new TokenStreamComponents(components.getSource(),
+    return new TokenStreamComponents(components.getTokenizer(),
       new LimitTokenCountFilter(components.getTokenStream(), maxTokenCount, consumeAllTokens));
   }
   

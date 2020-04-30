@@ -1,3 +1,30 @@
+package org.apache.solr.cloud;
+
+import java.io.File;
+import java.io.IOException;
+import java.lang.invoke.MethodHandles;
+import java.nio.charset.Charset;
+import java.util.Locale;
+
+import javax.security.auth.login.Configuration;
+
+import org.apache.hadoop.minikdc.MiniKdc;
+import org.apache.lucene.util.Constants;
+import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.common.cloud.DefaultZkACLProvider;
+import org.apache.solr.common.cloud.SaslZkACLProvider;
+import org.apache.solr.common.cloud.SolrZkClient;
+import org.apache.solr.common.cloud.ZkACLProvider;
+import org.apache.solr.util.BadZookeeperThreadsFilter;
+import org.apache.zookeeper.CreateMode;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeakFilters;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,33 +41,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
-
-import java.io.File;
-import java.io.IOException;
-import java.lang.invoke.MethodHandles;
-import java.nio.charset.Charset;
-import java.nio.file.Path;
-
-import org.apache.lucene.util.Constants;
-import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.common.cloud.DefaultZkACLProvider;
-import org.apache.solr.common.cloud.SaslZkACLProvider;
-import org.apache.solr.common.cloud.SecurityAwareZkACLProvider;
-import org.apache.solr.common.cloud.SolrZkClient;
-import org.apache.solr.common.cloud.ZkACLProvider;
-import org.apache.solr.util.BadZookeeperThreadsFilter;
-import org.apache.zookeeper.CreateMode;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.carrotsearch.randomizedtesting.annotations.ThreadLeakFilters;
 
 @ThreadLeakFilters(defaultFilters = true, filters = {
-    BadZookeeperThreadsFilter.class
+    BadZookeeperThreadsFilter.class // hdfs currently leaks thread(s)
 })
 public class SaslZkACLProviderTest extends SolrTestCaseJ4 {
 
@@ -48,39 +51,42 @@ public class SaslZkACLProviderTest extends SolrTestCaseJ4 {
 
   private static final Charset DATA_ENCODING = Charset.forName("UTF-8");
 
+  protected Locale savedLocale = null;
+
   protected ZkTestServer zkServer;
 
   @BeforeClass
   public static void beforeClass() {
-    assumeFalse("FIXME: This test fails on Java 9 (https://issues.apache.org/jira/browse/SOLR-8052)", Constants.JRE_IS_MINIMUM_JAVA9);
-    
     assumeFalse("FIXME: SOLR-7040: This test fails under IBM J9",
                 Constants.JAVA_VENDOR.startsWith("IBM"));
     System.setProperty("solrcloud.skip.autorecovery", "true");
-    System.setProperty("hostName", "localhost");
   }
   
   @AfterClass
-  public static void afterClass() {
+  public static void afterClass() throws InterruptedException {
     System.clearProperty("solrcloud.skip.autorecovery");
-    System.clearProperty("hostName");
   }
 
   @Override
   public void setUp() throws Exception {
     super.setUp();
+    savedLocale = KerberosTestUtil.overrideLocaleIfNotSpportedByMiniKdc();
     log.info("####SETUP_START " + getTestName());
     createTempDir();
 
-    Path zkDir = createTempDir().resolve("zookeeper/server1/data");
+    String zkDir = createTempDir() + File.separator
+        + "zookeeper/server1/data";
     log.info("ZooKeeper dataDir:" + zkDir);
-    zkServer = new SaslZkTestServer(zkDir, createTempDir().resolve("miniKdc"));
+    zkServer = new SaslZkTestServer(zkDir, createTempDir() + File.separator + "miniKdc");
     zkServer.run();
 
     System.setProperty("zkHost", zkServer.getZkAddress());
 
-    try (SolrZkClient zkClient = new SolrZkClientWithACLs(zkServer.getZkHost(), AbstractZkTestCase.TIMEOUT)) {
+    SolrZkClient zkClient = new SolrZkClientWithACLs(zkServer.getZkHost(), AbstractZkTestCase.TIMEOUT);
+    try {
       zkClient.makePath("/solr", false, true);
+    } finally {
+      zkClient.close();
     }
     setupZNodes();
 
@@ -92,7 +98,6 @@ public class SaslZkACLProviderTest extends SolrTestCaseJ4 {
     try {
       zkClient.create("/protectedCreateNode", "content".getBytes(DATA_ENCODING), CreateMode.PERSISTENT, false);
       zkClient.makePath("/protectedMakePathNode", "content".getBytes(DATA_ENCODING), CreateMode.PERSISTENT, false);
-      zkClient.create(SecurityAwareZkACLProvider.SECURITY_ZNODE_PATH, "content".getBytes(DATA_ENCODING), CreateMode.PERSISTENT, false);
     } finally {
       zkClient.close();
     }
@@ -108,20 +113,17 @@ public class SaslZkACLProviderTest extends SolrTestCaseJ4 {
 
   @Override
   public void tearDown() throws Exception {
-    System.clearProperty("zkHost");
     zkServer.shutdown();
+    Locale.setDefault(savedLocale);
     super.tearDown();
   }
 
   @Test
-  @AwaitsFix(bugUrl = "https://issues.apache.org/jira/browse/SOLR-13075")
   public void testSaslZkACLProvider() throws Exception {
     // Test with Sasl enabled
     SolrZkClient zkClient = new SolrZkClientWithACLs(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT);
     try {
-      VMParamsZkACLAndCredentialsProvidersTest.doTest(zkClient,
-          true, true, true, true, true,
-          true, true, true, true, true);
+      VMParamsZkACLAndCredentialsProvidersTest.doTest(zkClient, true, true, true, true, true);
      } finally {
       zkClient.close();
     }
@@ -131,9 +133,7 @@ public class SaslZkACLProviderTest extends SolrTestCaseJ4 {
     System.setProperty("zookeeper.sasl.client", "false");
     zkClient = new SolrZkClientNoACLs(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT);
     try {
-      VMParamsZkACLAndCredentialsProvidersTest.doTest(zkClient,
-          true, true, false, false, false,
-          false, false, false, false, false);
+      VMParamsZkACLAndCredentialsProvidersTest.doTest(zkClient, true, true, false, false, false);
     } finally {
       zkClient.close();
       System.clearProperty("zookeeper.sasl.client");
@@ -174,46 +174,53 @@ public class SaslZkACLProviderTest extends SolrTestCaseJ4 {
    * A ZkTestServer with Sasl support
    */
   public static class SaslZkTestServer extends ZkTestServer {
-    private Path kdcDir;
-    private KerberosTestServices kerberosTestServices;
+    private String kdcDir;
+    private MiniKdc kdc;
+    private Configuration conf;
 
-    public SaslZkTestServer(Path zkDir, Path kdcDir) throws Exception {
+    public SaslZkTestServer(String zkDir, String kdcDir) {
       super(zkDir);
       this.kdcDir = kdcDir;
     }
 
+    public SaslZkTestServer(String zkDir, int port, String kdcDir) {
+      super(zkDir, port);
+      this.kdcDir = kdcDir;
+      conf = Configuration.getConfiguration();
+    }
+
     @Override
-    public void run() throws InterruptedException, IOException {
+    public void run() throws InterruptedException {
       try {
+        kdc = KerberosTestUtil.getKdc(new File(kdcDir));
         // Don't require that credentials match the entire principal string, e.g.
         // can match "solr" rather than "solr/host@DOMAIN"
         System.setProperty("zookeeper.kerberos.removeRealmFromPrincipal", "true");
         System.setProperty("zookeeper.kerberos.removeHostFromPrincipal", "true");
-        File keytabFile = kdcDir.resolve("keytabs").toFile();
+        File keytabFile = new File(kdcDir, "keytabs");
         String zkClientPrincipal = "solr";
-        String zkServerPrincipal = "zookeeper/localhost";
+        String zkServerPrincipal = "zookeeper/127.0.0.1";
 
-        kerberosTestServices = KerberosTestServices.builder()
-            .withKdc(kdcDir.toFile())
-            .withJaasConfiguration(zkClientPrincipal, keytabFile, zkServerPrincipal, keytabFile)
-           
-            .build();
-        kerberosTestServices.start();
-
-        kerberosTestServices.getKdc().createPrincipal(keytabFile, zkClientPrincipal, zkServerPrincipal);
+        kdc.start();
+        // Create ZK client and server principals and load them into the Configuration
+        kdc.createPrincipal(keytabFile, zkClientPrincipal, zkServerPrincipal);
+        KerberosTestUtil.JaasConfiguration jaas = new KerberosTestUtil.JaasConfiguration(
+        zkClientPrincipal, keytabFile, zkServerPrincipal, keytabFile);
+        Configuration.setConfiguration(jaas);
       } catch (Exception ex) {
         throw new RuntimeException(ex);
       }
-      super.run(false);
+      super.run();
     }
 
     @Override
     public void shutdown() throws IOException, InterruptedException {
+      super.shutdown();
       System.clearProperty("zookeeper.authProvider.1");
       System.clearProperty("zookeeper.kerberos.removeRealmFromPrincipal");
       System.clearProperty("zookeeper.kerberos.removeHostFromPrincipal");
-      super.shutdown();
-      kerberosTestServices.stop();
+      Configuration.setConfiguration(conf);
+      kdc.stop();
     }
   }
 }

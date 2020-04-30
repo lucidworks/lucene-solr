@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
@@ -49,14 +51,14 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
     }
     //System.out.println("commit1");
     writer.commit();
-    assertEquals(1, writer.listOfSegmentCommitInfos().size());
+    assertEquals(1, writer.segmentInfos.size());
     for (int x = 5; x < 10; x++) {
       writer.addDocument(DocHelper.createDocument(x, "2", 2));
       //System.out.println("numRamDocs(" + x + ")" + writer.numRamDocs());
     }
     //System.out.println("commit2");
     writer.commit();
-    assertEquals(2, writer.listOfSegmentCommitInfos().size());
+    assertEquals(2, writer.segmentInfos.size());
 
     for (int x = 10; x < 15; x++) {
       writer.addDocument(DocHelper.createDocument(x, "3", 2));
@@ -67,11 +69,10 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
 
     writer.deleteDocuments(new Term("id", "11"));
 
+    // flushing without applying deletes means
+    // there will still be deletes in the segment infos
     writer.flush(false, false);
-
-    // deletes are now resolved on flush, so there shouldn't be
-    // any deletes after flush
-    assertFalse(writer.bufferedUpdatesStream.any());
+    assertTrue(writer.bufferedUpdatesStream.any());
 
     // get reader flushes pending deletes
     // so there should not be anymore
@@ -90,7 +91,7 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
     fsmp.length = 2;
     writer.maybeMerge();
 
-    assertEquals(2, writer.listOfSegmentCommitInfos().size());
+    assertEquals(2, writer.segmentInfos.size());
 
     // id:2 shouldn't exist anymore because
     // it's been applied in the merge and now it's gone
@@ -221,7 +222,9 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
 
   public int[] toDocsArray(Term term, Bits bits, IndexReader reader)
       throws IOException {
-    TermsEnum ctermsEnum = MultiTerms.getTerms(reader, term.field).iterator();
+    Fields fields = MultiFields.getFields(reader);
+    Terms cterms = fields.terms(term.field);
+    TermsEnum ctermsEnum = cterms.iterator();
     if (ctermsEnum.seekExact(new BytesRef(term.text()))) {
       PostingsEnum postingsEnum = TestUtil.docs(random(), ctermsEnum, null, PostingsEnum.NONE);
       return toArray(postingsEnum);
@@ -230,17 +233,15 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
   }
 
   public static int[] toArray(PostingsEnum postingsEnum) throws IOException {
-    int[] docs = new int[0];
-    int numDocs = 0;
+    List<Integer> docs = new ArrayList<>();
     while (postingsEnum.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
       int docID = postingsEnum.docID();
-      docs = ArrayUtil.grow(docs, numDocs + 1);
-      docs[numDocs + 1] = docID;
+      docs.add(docID);
     }
-    return ArrayUtil.copyOfSubArray(docs, 0, numDocs);
+    return ArrayUtil.toIntArray(docs);
   }
 
-  public static class RangeMergePolicy extends MergePolicy {
+  public class RangeMergePolicy extends MergePolicy {
     boolean doMerge = false;
     int start;
     int length;
@@ -252,7 +253,7 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
     }
 
     @Override
-    public MergeSpecification findMerges(MergeTrigger mergeTrigger, SegmentInfos segmentInfos, MergeContext mergeContext)
+    public MergeSpecification findMerges(MergeTrigger mergeTrigger, SegmentInfos segmentInfos, IndexWriter writer)
         throws IOException {
       MergeSpecification ms = new MergeSpecification();
       if (doMerge) {
@@ -266,19 +267,19 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
 
     @Override
     public MergeSpecification findForcedMerges(SegmentInfos segmentInfos,
-                                               int maxSegmentCount, Map<SegmentCommitInfo,Boolean> segmentsToMerge, MergeContext mergeContext)
+        int maxSegmentCount, Map<SegmentCommitInfo,Boolean> segmentsToMerge, IndexWriter writer)
         throws IOException {
       return null;
     }
 
     @Override
     public MergeSpecification findForcedDeletesMerges(
-        SegmentInfos segmentInfos, MergeContext mergeContext) throws IOException {
+        SegmentInfos segmentInfos, IndexWriter writer) throws IOException {
       return null;
     }
 
     @Override
-    public boolean useCompoundFile(SegmentInfos segments, SegmentCommitInfo newSegment, MergeContext mergeContext) {
+    public boolean useCompoundFile(SegmentInfos segments, SegmentCommitInfo newSegment, IndexWriter writer) {
       return useCompoundFile;
     }
   }

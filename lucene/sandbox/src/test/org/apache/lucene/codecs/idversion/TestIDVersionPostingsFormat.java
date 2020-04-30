@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.idversion;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.idversion;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -37,12 +38,12 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.index.ConcurrentMergeScheduler;
+import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.MergeScheduler;
 import org.apache.lucene.index.PerThreadPKLookup;
-import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.TieredMergePolicy;
@@ -67,7 +68,7 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     iwc.setCodec(TestUtil.alwaysPostingsFormat(new IDVersionPostingsFormat()));
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc, false);
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc);
     Document doc = new Document();
     doc.add(makeIDField("id0", 100));
     w.addDocument(doc);
@@ -75,7 +76,7 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     doc.add(makeIDField("id1", 110));
     w.addDocument(doc);
     IndexReader r = w.getReader();
-    IDVersionSegmentTermsEnum termsEnum = (IDVersionSegmentTermsEnum) r.leaves().get(0).reader().terms("id").iterator();
+    IDVersionSegmentTermsEnum termsEnum = (IDVersionSegmentTermsEnum) r.leaves().get(0).reader().fields().terms("id").iterator();
     assertTrue(termsEnum.seekExact(new BytesRef("id0"), 50));
     assertTrue(termsEnum.seekExact(new BytesRef("id0"), 100));
     assertFalse(termsEnum.seekExact(new BytesRef("id0"), 101));
@@ -192,7 +193,7 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     int minItemsInBlock = TestUtil.nextInt(random(), 2, 50);
     int maxItemsInBlock = 2*(minItemsInBlock-1) + random().nextInt(50);
     iwc.setCodec(TestUtil.alwaysPostingsFormat(new IDVersionPostingsFormat(minItemsInBlock, maxItemsInBlock)));
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc, false);
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc);
     //IndexWriter w = new IndexWriter(dir, iwc);
     int numDocs = atLeast(1000);
     Map<String,Long> idValues = new HashMap<String,Long>();
@@ -268,7 +269,7 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     }
 
     IndexReader r = w.getReader();
-    //IndexReader r = DirectoryReader.open(w);
+    //IndexReader r = DirectoryReader.open(w, true);
     PerThreadVersionPKLookup lookup = new PerThreadVersionPKLookup(r, "id");
 
     List<Map.Entry<String,Long>> idValuesList = new ArrayList<>(idValues.entrySet());
@@ -359,18 +360,19 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     iwc.setCodec(TestUtil.alwaysPostingsFormat(new IDVersionPostingsFormat()));
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc, false);
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc);
     Document doc = new Document();
     doc.add(makeIDField("id", 17));
     w.addDocument(doc);
-
-    Document duplicate = new Document();
-    duplicate.add(makeIDField("id", 17));
-    expectThrows(IllegalArgumentException.class, () -> {
-      w.addDocument(duplicate);
-      w.commit(false);
-    });
-
+    doc = new Document();
+    doc.add(makeIDField("id", 17));
+    try {
+      w.addDocument(doc);
+      w.commit();
+      fail("didn't hit expected exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
     w.close();
     dir.close();
   }
@@ -415,7 +417,7 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     iwc.setCodec(TestUtil.alwaysPostingsFormat(new IDVersionPostingsFormat()));
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc, false);
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc);
     Document doc = new Document();
     doc.add(makeIDField("id", 17));
     w.addDocument(doc);
@@ -432,7 +434,7 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     iwc.setCodec(TestUtil.alwaysPostingsFormat(new IDVersionPostingsFormat()));
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc, false);
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc);
     Document doc = new Document();
     doc.add(makeIDField("id", 17));
     w.addDocument(doc);
@@ -460,13 +462,16 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
       };
     IndexWriterConfig iwc = newIndexWriterConfig(a);
     iwc.setCodec(TestUtil.alwaysPostingsFormat(new IDVersionPostingsFormat()));
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc, false);
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc);
     Document doc = new Document();
     doc.add(newTextField("id", "id", Field.Store.NO));
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       w.addDocument(doc);
-      w.commit(false);
-    });
+      w.commit();
+      fail("didn't hit expected exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
              
     w.close();
     dir.close();
@@ -476,14 +481,16 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     iwc.setCodec(TestUtil.alwaysPostingsFormat(new IDVersionPostingsFormat()));
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc, false);
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc);
     Document doc = new Document();
     doc.add(newStringField("id", "id", Field.Store.NO));
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       w.addDocument(doc);
-      w.commit(false);
-    });
-
+      w.commit();
+      fail("didn't hit expected exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
              
     w.close();
     dir.close();
@@ -493,13 +500,16 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     iwc.setCodec(TestUtil.alwaysPostingsFormat(new IDVersionPostingsFormat()));
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc, false);
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc);
     Document doc = new Document();
     doc.add(new StringAndPayloadField("id", "id", new BytesRef("foo")));
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       w.addDocument(doc);
-      w.commit(false);
-    });
+      w.commit();
+      fail("didn't hit expected exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
              
     w.close();
     dir.close();
@@ -509,7 +519,7 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     iwc.setCodec(TestUtil.alwaysPostingsFormat(new IDVersionPostingsFormat()));
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc, false);
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc);
     Document doc = new Document();
     doc.add(makeIDField("id", 17));
     w.addDocument(doc);
@@ -529,7 +539,7 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     iwc.setCodec(TestUtil.alwaysPostingsFormat(new IDVersionPostingsFormat()));
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc, false);
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc);
     Document doc = new Document();
 
     FieldType ft = new FieldType(StringAndPayloadField.TYPE);
@@ -541,12 +551,14 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     ts.setValue("foo", payload);
     Field field = new Field("id", ts, ft);
     doc.add(new Field("id", ts, ft));
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       w.addDocument(doc);
-      w.commit(false);
+      w.commit();
       fail("didn't hit expected exception");
-    });
-
+    } catch (IllegalArgumentException iae) {
+      // expected
+      // iae.printStackTrace(System.out);
+    }
     w.close();
     dir.close();
   }
@@ -555,15 +567,17 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     iwc.setCodec(TestUtil.alwaysPostingsFormat(new IDVersionPostingsFormat()));
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc, false);
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc);
     Document doc = new Document();
     doc.add(makeIDField("id", 17));
     doc.add(makeIDField("id", 17));
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       w.addDocument(doc);
-      w.commit(false);
-    });
-
+      w.commit();
+      fail("didn't hit expected exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
     w.close();
     dir.close();
   }
@@ -572,17 +586,23 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     iwc.setCodec(TestUtil.alwaysPostingsFormat(new IDVersionPostingsFormat()));
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc, false);
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc);
     Document doc = new Document();
     // -1
     doc.add(new StringAndPayloadField("id", "id", new BytesRef(new byte[] {(byte)0xff, (byte)0xff, (byte)0xff, (byte)0xff, (byte)0xff, (byte)0xff, (byte)0xff, (byte)0xff})));
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       w.addDocument(doc);
-      w.commit(false);
-    });
-    expectThrows(AlreadyClosedException.class, () -> {
+      w.commit();
+      fail("didn't hit expected exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
+    try {
       w.addDocument(doc);
-    });
+      fail("should have hit exc");
+    } catch (AlreadyClosedException ace) {
+      // expected
+    }
     dir.close();
   }
 
@@ -590,18 +610,23 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     iwc.setCodec(TestUtil.alwaysPostingsFormat(new IDVersionPostingsFormat()));
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc, false);
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc);
     Document doc = new Document();
     // Long.MAX_VALUE:
     doc.add(new StringAndPayloadField("id", "id", new BytesRef(new byte[] {(byte)0x7f, (byte)0xff, (byte)0xff, (byte)0xff, (byte)0xff, (byte)0xff, (byte)0xff, (byte)0xff})));
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       w.addDocument(doc);
-      w.commit(false);
-    });
-    expectThrows(AlreadyClosedException.class, () -> {
+      w.commit();
+      fail("didn't hit expected exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+    }
+    try {
       w.addDocument(doc);
-    });
-
+      fail("should have hit exc");
+    } catch (AlreadyClosedException ace) {
+      // expected
+    }
     dir.close();
   }
 
@@ -610,7 +635,7 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     iwc.setCodec(TestUtil.alwaysPostingsFormat(new IDVersionPostingsFormat()));
-    final RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc, false);
+    final RandomIndexWriter w = new RandomIndexWriter(random(), dir, iwc);
 
     IDSource idsSource = getRandomIDs();
     int numIDs = atLeast(100);
@@ -630,7 +655,7 @@ public class TestIDVersionPostingsFormat extends LuceneTestCase {
 
     final AtomicLong nextVersion = new AtomicLong();
 
-    final SearcherManager mgr = new SearcherManager(w.w, new SearcherFactory());
+    final SearcherManager mgr = new SearcherManager(w.w, true, new SearcherFactory());
 
     final Long missingValue = -1L;
 

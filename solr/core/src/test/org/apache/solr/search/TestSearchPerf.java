@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.*;
 import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.util.AbstractSolrTestCase;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.update.processor.UpdateRequestProcessorChain;
@@ -34,7 +36,7 @@ import java.io.IOException;
 /**
  *
  */
-public class TestSearchPerf extends SolrTestCaseJ4 {
+public class TestSearchPerf extends AbstractSolrTestCase {
 
   
   @BeforeClass
@@ -123,7 +125,6 @@ public class TestSearchPerf extends SolrTestCaseJ4 {
       processor.processAdd(cmd);
     }
     processor.finish();
-    processor.close();
     req.close();
 
     assertU(commit());
@@ -162,9 +163,15 @@ public class TestSearchPerf extends SolrTestCaseJ4 {
 
     final RTimer timer = new RTimer();
 
+    // These aren't public in SolrIndexSearcher
+    int NO_CHECK_QCACHE       = 0x80000000;
+    int GET_DOCSET            = 0x40000000;
+    int NO_CHECK_FILTERCACHE  = 0x20000000;
+    int GET_SCORES            = 0x01;
+
     int ret = 0;
     for (int i=0; i<iter; i++) {
-      DocList l = searcher.getDocList(q, filt, (Sort)null, 0, 10, (cacheQuery?0:SolrIndexSearcher.NO_CHECK_QCACHE)|(cacheFilt?0:SolrIndexSearcher.NO_CHECK_FILTERCACHE) );
+      DocList l = searcher.getDocList(q, filt, (Sort)null, 0, 10, (cacheQuery?0:NO_CHECK_QCACHE)|(cacheFilt?0:NO_CHECK_FILTERCACHE) );
       ret += l.matches();
     }
 
@@ -199,10 +206,10 @@ public class TestSearchPerf extends SolrTestCaseJ4 {
     String u=t((int)(indexSize*10*fractionCovered));   
 
     SolrQueryRequest req = lrf.makeRequest();
-    QParser parser = QParser.getParser("foomany_s:[" + l + " TO " + u + "]", req);
+    QParser parser = QParser.getParser("foomany_s:[" + l + " TO " + u + "]", null, req);
     Query range = parser.getQuery();
                                      
-    QParser parser2 = QParser.getParser("{!frange l="+l+" u="+u+"}foomany_s", req);
+    QParser parser2 = QParser.getParser("{!frange l="+l+" u="+u+"}foomany_s", null, req);
     Query frange = parser2.getQuery();
     req.close();
 
@@ -225,13 +232,13 @@ public class TestSearchPerf extends SolrTestCaseJ4 {
 
     SolrQueryRequest req = lrf.makeRequest();
 
-    QParser parser = QParser.getParser("foomany_s:[" + l + " TO " + u + "]", req);
+    QParser parser = QParser.getParser("foomany_s:[" + l + " TO " + u + "]", null, req);
     Query rangeQ = parser.getQuery();
     List<Query> filters = new ArrayList<>();
     filters.add(rangeQ);
     req.close();
 
-    parser = QParser.getParser("{!dismax qf=t10_100_ws pf=t10_100_ws ps=20}"+ t(0) + ' ' + t(1) + ' ' + t(2), req);
+    parser = QParser.getParser("{!dismax qf=t10_100_ws pf=t10_100_ws ps=20}"+ t(0) + ' ' + t(1) + ' ' + t(2), null, req);
     Query q= parser.getQuery();
 
     // SolrIndexSearcher searcher = req.getSearcher();

@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.shingle;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.shingle;
-
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.AnalyzerWrapper;
@@ -26,8 +26,6 @@ import org.apache.lucene.analysis.standard.StandardAnalyzer;
  * <p>
  * A shingle is another name for a token based n-gram.
  * </p>
- *
- * @since 3.1
  */
 public final class ShingleAnalyzerWrapper extends AnalyzerWrapper {
 
@@ -161,6 +159,6 @@ public final class ShingleAnalyzerWrapper extends AnalyzerWrapper {
     filter.setOutputUnigrams(outputUnigrams);
     filter.setOutputUnigramsIfNoShingles(outputUnigramsIfNoShingles);
     filter.setFillerToken(fillerToken);
-    return new TokenStreamComponents(components.getSource(), filter);
+    return new TokenStreamComponents(components.getTokenizer(), filter);
   }
 }

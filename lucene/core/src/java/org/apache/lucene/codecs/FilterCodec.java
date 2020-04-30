@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs;
-
 
 /**
  * A codec that forwards all its method calls to another codec.
@@ -102,10 +102,5 @@ public abstract class FilterCodec extends Codec {
   @Override
   public CompoundFormat compoundFormat() {
     return delegate.compoundFormat();
-  }
-
-  @Override
-  public PointsFormat pointsFormat() {
-    return delegate.pointsFormat();
   }
 }

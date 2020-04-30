@@ -1,3 +1,5 @@
+package org.apache.lucene.facet.range;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,28 +16,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.range;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
 import org.apache.lucene.facet.Facets;
-import org.apache.lucene.facet.FacetsCollector;
 import org.apache.lucene.facet.FacetsCollector.MatchingDocs;
+import org.apache.lucene.facet.FacetsCollector;
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.ReaderUtil;
+import org.apache.lucene.queries.function.FunctionValues;
+import org.apache.lucene.queries.function.ValueSource;
+import org.apache.lucene.queries.function.valuesource.LongFieldSource;
 import org.apache.lucene.search.DocIdSet;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.LongValues;
-import org.apache.lucene.search.LongValuesSource;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreMode;
-import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 
 /** {@link Facets} implementation that computes counts for
- *  dynamic long ranges from a provided {@link LongValuesSource}.  Use
+ *  dynamic long ranges from a provided {@link ValueSource},
+ *  using {@link FunctionValues#longVal}.  Use
  *  this for dimensions that change in real-time (e.g. a
  *  relative time based dimension like "Past day", "Past 2
  *  days", etc.) or that change for each request (e.g. 
@@ -46,30 +48,28 @@ import org.apache.lucene.search.Weight;
 public class LongRangeFacetCounts extends RangeFacetCounts {
 
   /** Create {@code LongRangeFacetCounts}, using {@link
-   *  LongValuesSource} from the specified field. */
+   *  LongFieldSource} from the specified field. */
   public LongRangeFacetCounts(String field, FacetsCollector hits, LongRange... ranges) throws IOException {
-    this(field, LongValuesSource.fromLongField(field), hits, ranges);
+    this(field, new LongFieldSource(field), hits, ranges);
   }
 
-  /** Create {@code LongRangeFacetCounts}, using the provided
-   *  {@link LongValuesSource}. */
-  public LongRangeFacetCounts(String field, LongValuesSource valueSource, FacetsCollector hits, LongRange... ranges) throws IOException {
+  /** Create {@code RangeFacetCounts}, using the provided
+   *  {@link ValueSource}. */
+  public LongRangeFacetCounts(String field, ValueSource valueSource, FacetsCollector hits, LongRange... ranges) throws IOException {
     this(field, valueSource, hits, null, ranges);
   }
 
-  /** Create {@code LongRangeFacetCounts}, using the provided
-   *  {@link LongValuesSource}, and using the provided Filter as
+  /** Create {@code RangeFacetCounts}, using the provided
+   *  {@link ValueSource}, and using the provided Filter as
    *  a fastmatch: only documents passing the filter are
-   *  checked for the matching ranges, which is helpful when
-   *  the provided {@link LongValuesSource} is costly per-document,
-   *  such as a geo distance.  The filter must be
+   *  checked for the matching ranges.  The filter must be
    *  random access (implement {@link DocIdSet#bits}). */
-  public LongRangeFacetCounts(String field, LongValuesSource valueSource, FacetsCollector hits, Query fastMatchQuery, LongRange... ranges) throws IOException {
+  public LongRangeFacetCounts(String field, ValueSource valueSource, FacetsCollector hits, Query fastMatchQuery, LongRange... ranges) throws IOException {
     super(field, ranges, fastMatchQuery);
     count(valueSource, hits.getMatchingDocs());
   }
 
-  private void count(LongValuesSource valueSource, List<MatchingDocs> matchingDocs) throws IOException {
+  private void count(ValueSource valueSource, List<MatchingDocs> matchingDocs) throws IOException {
 
     LongRange[] ranges = (LongRange[]) this.ranges;
 
@@ -77,7 +77,7 @@ public class LongRangeFacetCounts extends RangeFacetCounts {
 
     int missingCount = 0;
     for (MatchingDocs hits : matchingDocs) {
-      LongValues fv = valueSource.getValues(hits.context, null);
+      FunctionValues fv = valueSource.getValues(Collections.emptyMap(), hits.context);
       
       totCount += hits.totalHits;
       final DocIdSetIterator fastMatchDocs;
@@ -85,12 +85,11 @@ public class LongRangeFacetCounts extends RangeFacetCounts {
         final IndexReaderContext topLevelContext = ReaderUtil.getTopLevelContext(hits.context);
         final IndexSearcher searcher = new IndexSearcher(topLevelContext);
         searcher.setQueryCache(null);
-        final Weight fastMatchWeight = searcher.createWeight(searcher.rewrite(fastMatchQuery), ScoreMode.COMPLETE_NO_SCORES, 1);
-        Scorer s = fastMatchWeight.scorer(hits.context);
-        if (s == null) {
+        final Weight fastMatchWeight = searcher.createNormalizedWeight(fastMatchQuery, false);
+        fastMatchDocs = fastMatchWeight.scorer(hits.context);
+        if (fastMatchDocs == null) {
           continue;
         }
-        fastMatchDocs = s.iterator();
       } else {
         fastMatchDocs = null;
       }
@@ -109,8 +108,8 @@ public class LongRangeFacetCounts extends RangeFacetCounts {
           }
         }
         // Skip missing docs:
-        if (fv.advanceExact(doc)) {
-          counter.add(fv.longValue());
+        if (fv.exists(doc)) {
+          counter.add(fv.longVal(doc));
         } else {
           missingCount++;
         }
@@ -123,7 +122,7 @@ public class LongRangeFacetCounts extends RangeFacetCounts {
 
     missingCount += x;
 
-    //System.out.println("totCount " + totCount + " x " + x + " missingCount " + missingCount);
+    //System.out.println("totCount " + totCount + " missingCount " + counter.missingCount);
     totCount -= missingCount;
   }
 }

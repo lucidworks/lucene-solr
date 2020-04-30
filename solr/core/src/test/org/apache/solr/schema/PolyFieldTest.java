@@ -1,3 +1,4 @@
+package org.apache.solr.schema;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +15,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
-import java.util.Arrays;
+
 import java.util.List;
 
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.queries.function.ValueSource;
+import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.common.SolrException;
 import org.apache.solr.core.SolrCore;
+import org.apache.solr.common.SolrException;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -46,12 +47,11 @@ public class PolyFieldTest extends SolrTestCaseJ4 {
     SchemaField home = schema.getField("home");
     assertNotNull(home);
     assertTrue(home.isPolyField());
-    
-    String subFieldType = "double";
+
     SchemaField[] dynFields = schema.getDynamicFieldPrototypes();
     boolean seen = false;
     for (SchemaField dynField : dynFields) {
-      if (dynField.getName().equals("*" + FieldType.POLY_FIELD_SEPARATOR + subFieldType)) {
+      if (dynField.getName().equals("*" + FieldType.POLY_FIELD_SEPARATOR + "double")) {
         seen = true;
       }
     }
@@ -62,7 +62,7 @@ public class PolyFieldTest extends SolrTestCaseJ4 {
     assertNotNull(xy);
     assertTrue(xy instanceof PointType);
     assertTrue(xy.isPolyField());
-    home = schema.getFieldOrNull("home_0" + FieldType.POLY_FIELD_SEPARATOR + subFieldType);
+    home = schema.getFieldOrNull("home_0" + FieldType.POLY_FIELD_SEPARATOR + "double");
     assertNotNull(home);
     home = schema.getField("home");
     assertNotNull(home);
@@ -85,15 +85,10 @@ public class PolyFieldTest extends SolrTestCaseJ4 {
     assertEquals(pt.getDimension(), 2);
     double[] xy = new double[]{35.0, -79.34};
     String point = xy[0] + "," + xy[1];
-    List<IndexableField> fields = home.createFields(point);
-    assertNotNull(pt.getSubType());
-    int expectdNumFields = 3;//If DV=false, we expect one field per dimension plus a stored field
-    if (pt.subField(home, 0, schema).hasDocValues()) {
-      expectdNumFields+=2; // If docValues=true, then we expect two more fields
-    }
-    assertEquals("Unexpected fields created: " + Arrays.toString(fields.toArray()), expectdNumFields, fields.size());
-    //first two/four fields contain the values, last one is just stored and contains the original
-    for (int i = 0; i < expectdNumFields; i++) {
+    List<IndexableField> fields = home.createFields(point, 2);
+    assertEquals(fields.size(), 3);//should be 3, we have a stored field
+    //first two fields contain the values, third is just stored and contains the original
+    for (int i = 0; i < 3; i++) {
       boolean hasValue = fields.get(i).binaryValue() != null
           || fields.get(i).stringValue() != null
           || fields.get(i).numericValue() != null;
@@ -106,18 +101,19 @@ public class PolyFieldTest extends SolrTestCaseJ4 {
 
     home = schema.getField("home_ns");
     assertNotNull(home);
-    fields = home.createFields(point);
-    assertEquals(expectdNumFields - 1, fields.size(), 2);//one less field than with "home", since we aren't storing
+    fields = home.createFields(point, 2);
+    assertEquals(fields.size(), 2);//should be 2, since we aren't storing
 
     home = schema.getField("home_ns");
     assertNotNull(home);
     try {
-      fields = home.createFields("35.0,foo");
+      fields = home.createFields("35.0,foo", 2);
       assertTrue(false);
     } catch (Exception e) {
       //
     }
 
+    //
     SchemaField s1 = schema.getField("test_p");
     SchemaField s2 = schema.getField("test_p");
     ValueSource v1 = s1.getType().getValueSource(s1, null);

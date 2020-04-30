@@ -1,3 +1,5 @@
+package org.apache.solr.servlet;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.servlet;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.http.Header;
@@ -27,6 +28,7 @@ import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.handler.component.ResponseBuilder;
 import org.apache.solr.handler.component.SearchComponent;
+import org.apache.solr.response.SolrQueryResponse;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -34,6 +36,9 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.Map.Entry;
 
 
 public class ResponseHeaderTest extends SolrJettyTestBase {
@@ -46,14 +51,12 @@ public class ResponseHeaderTest extends SolrJettyTestBase {
     setupJettyTestHome(solrHomeDirectory, "collection1");
     String top = SolrTestCaseJ4.TEST_HOME() + "/collection1/conf";
     FileUtils.copyFile(new File(top, "solrconfig-headers.xml"), new File(solrHomeDirectory + "/collection1/conf", "solrconfig.xml"));
-    createAndStartJetty(solrHomeDirectory.getAbsolutePath());
+    createJetty(solrHomeDirectory.getAbsolutePath());
   }
   
   @AfterClass
   public static void afterTest() throws Exception {
-    if (null != solrHomeDirectory) {
-      cleanUpJettyHome(solrHomeDirectory);
-    }
+    cleanUpJettyHome(solrHomeDirectory);
   }
   
   @Test
@@ -73,6 +76,134 @@ public class ResponseHeaderTest extends SolrJettyTestBase {
       }
     }
     assertTrue("Expected header not found", containsWarningHeader);
+  }
+  
+  @Test
+  public void testAddHttpHeader() {
+    SolrQueryResponse response = new SolrQueryResponse();
+    Iterator<Entry<String, String>> it = response.httpHeaders();
+    assertFalse(it.hasNext());
+    
+    response.addHttpHeader("key1", "value1");
+    it = response.httpHeaders();
+    assertTrue(it.hasNext());
+    Entry<String, String> entry = it.next();
+    assertEquals("key1", entry.getKey());
+    assertEquals("value1", entry.getValue());
+    assertFalse(it.hasNext());
+    
+    response.addHttpHeader("key1", "value2");
+    it = response.httpHeaders();
+    assertTrue(it.hasNext());
+    entry = it.next();
+    assertEquals("key1", entry.getKey());
+    assertEquals("value1", entry.getValue());
+    assertTrue(it.hasNext());
+    entry = it.next();
+    assertEquals("key1", entry.getKey());
+    assertEquals("value2", entry.getValue());
+    assertFalse(it.hasNext());
+    
+    response.addHttpHeader("key2", "value2");
+    it = response.httpHeaders();
+    assertTrue(it.hasNext());
+    entry = it.next();
+    assertEquals("key1", entry.getKey());
+    assertEquals("value1", entry.getValue());
+    assertTrue(it.hasNext());
+    entry = it.next();
+    assertEquals("key1", entry.getKey());
+    assertEquals("value2", entry.getValue());
+    assertTrue(it.hasNext());
+    entry = it.next();
+    assertEquals("key2", entry.getKey());
+    assertEquals("value2", entry.getValue());
+    assertFalse(it.hasNext());
+  }
+  
+  @Test
+  public void testSetHttpHeader() {
+    SolrQueryResponse response = new SolrQueryResponse();
+    Iterator<Entry<String, String>> it = response.httpHeaders();
+    assertFalse(it.hasNext());
+    
+    response.setHttpHeader("key1", "value1");
+    it = response.httpHeaders();
+    assertTrue(it.hasNext());
+    Entry<String, String> entry = it.next();
+    assertEquals("key1", entry.getKey());
+    assertEquals("value1", entry.getValue());
+    assertFalse(it.hasNext());
+    
+    response.setHttpHeader("key1", "value2");
+    it = response.httpHeaders();
+    assertTrue(it.hasNext());
+    entry = it.next();
+    assertEquals("key1", entry.getKey());
+    assertEquals("value2", entry.getValue());
+    assertFalse(it.hasNext());
+    
+    response.addHttpHeader("key1", "value3");
+    response.setHttpHeader("key1", "value4");
+    it = response.httpHeaders();
+    assertTrue(it.hasNext());
+    entry = it.next();
+    assertEquals("key1", entry.getKey());
+    assertEquals("value4", entry.getValue());
+    assertFalse(it.hasNext());
+    
+    response.setHttpHeader("key2", "value5");
+    it = response.httpHeaders();
+    assertTrue(it.hasNext());
+    entry = it.next();
+    assertEquals("key1", entry.getKey());
+    assertEquals("value4", entry.getValue());
+    assertTrue(it.hasNext());
+    entry = it.next();
+    assertEquals("key2", entry.getKey());
+    assertEquals("value5", entry.getValue());
+    assertFalse(it.hasNext());
+  }
+  
+  @Test
+  public void testRemoveHttpHeader() {
+    SolrQueryResponse response = new SolrQueryResponse();
+    Iterator<Entry<String, String>> it = response.httpHeaders();
+    assertFalse(it.hasNext());
+    response.addHttpHeader("key1", "value1");
+    assertTrue(response.httpHeaders().hasNext());
+    assertEquals("value1", response.removeHttpHeader("key1"));
+    assertFalse(response.httpHeaders().hasNext());
+    
+    response.addHttpHeader("key1", "value2");
+    response.addHttpHeader("key1", "value3");
+    response.addHttpHeader("key2", "value4");
+    assertTrue(response.httpHeaders().hasNext());
+    assertEquals("value2", response.removeHttpHeader("key1"));
+    assertEquals("value3", response.httpHeaders().next().getValue());
+    assertEquals("value3", response.removeHttpHeader("key1"));
+    assertNull(response.removeHttpHeader("key1"));
+    assertEquals("key2", response.httpHeaders().next().getKey());
+    
+  }
+  
+  @Test
+  public void testRemoveHttpHeaders() {
+    SolrQueryResponse response = new SolrQueryResponse();
+    Iterator<Entry<String, String>> it = response.httpHeaders();
+    assertFalse(it.hasNext());
+    response.addHttpHeader("key1", "value1");
+    assertTrue(response.httpHeaders().hasNext());
+    assertEquals(Arrays.asList("value1"), response.removeHttpHeaders("key1"));
+    assertFalse(response.httpHeaders().hasNext());
+    
+    response.addHttpHeader("key1", "value2");
+    response.addHttpHeader("key1", "value3");
+    response.addHttpHeader("key2", "value4");
+    assertTrue(response.httpHeaders().hasNext());
+    assertEquals(Arrays.asList(new String[]{"value2", "value3"}), response.removeHttpHeaders("key1"));
+    assertNull(response.removeHttpHeaders("key1"));
+    assertEquals("key2", response.httpHeaders().next().getKey());
   }
   
   public static class ComponentThatAddsHeader extends SearchComponent {

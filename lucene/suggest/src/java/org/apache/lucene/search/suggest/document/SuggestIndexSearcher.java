@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.document;
 
 import java.io.IOException;
 
@@ -38,9 +39,6 @@ import org.apache.lucene.search.Weight;
  */
 public class SuggestIndexSearcher extends IndexSearcher {
 
-  // NOTE: we do not accept an ExecutorService here, because at least the dedup
-  // logic in TopSuggestDocsCollector/NRTSuggester would not be thread safe (and maybe other things)
-
   /**
    * Creates a searcher with document suggest capabilities
    * for <code>reader</code>.
@@ -53,8 +51,8 @@ public class SuggestIndexSearcher extends IndexSearcher {
    * Returns top <code>n</code> completion hits for
    * <code>query</code>
    */
-  public TopSuggestDocs suggest(CompletionQuery query, int n, boolean skipDuplicates) throws IOException {
-    TopSuggestDocsCollector collector = new TopSuggestDocsCollector(n, skipDuplicates);
+  public TopSuggestDocs suggest(CompletionQuery query, int n) throws IOException {
+    TopSuggestDocsCollector collector = new TopSuggestDocsCollector(n);
     suggest(query, collector);
     return collector.get();
   }
@@ -70,7 +68,7 @@ public class SuggestIndexSearcher extends IndexSearcher {
     // TODO use IndexSearcher.rewrite instead
     // have to implement equals() and hashCode() in CompletionQuerys and co
     query = (CompletionQuery) query.rewrite(getIndexReader());
-    Weight weight = query.createWeight(this, collector.scoreMode(), 1f);
+    Weight weight = query.createWeight(this, collector.needsScores());
     for (LeafReaderContext context : getIndexReader().leaves()) {
       BulkScorer scorer = weight.bulkScorer(context);
       if (scorer != null) {

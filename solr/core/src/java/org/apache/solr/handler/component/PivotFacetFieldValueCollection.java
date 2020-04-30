@@ -1,3 +1,5 @@
+package org.apache.solr.handler.component;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -118,36 +119,14 @@ public class PivotFacetFieldValueCollection implements Iterable<PivotFacetValue>
    */
   public List<PivotFacetValue> getNextLevelValuesToRefine() {
     final int numRefinableValues = getExplicitValuesListSize();
-    if (numRefinableValues < facetFieldOffset) {
+    if (facetFieldOffset < numRefinableValues) {
+      final int offsetPlusCount = (facetFieldLimit >= 0) 
+        ? Math.min(facetFieldLimit + facetFieldOffset, numRefinableValues) 
+        : numRefinableValues;
+      return getExplicitValuesList().subList(facetFieldOffset,  offsetPlusCount);
+    } else {
       return Collections.<PivotFacetValue>emptyList();
     }
-    
-    final int offsetPlusCount = (facetFieldLimit >= 0) 
-      ? Math.min(facetFieldLimit + facetFieldOffset, numRefinableValues) 
-      : numRefinableValues;
-    
-    if (1 < facetFieldMinimumCount && facetFieldSort.equals(FacetParams.FACET_SORT_INDEX)) {
-      // we have to skip any values that (still) don't meet the mincount
-      //
-      // TODO: in theory we could avoid this extra check by trimming sooner (SOLR-6331)
-      // but since that's a destructive op that blows away the `valuesMap` which we (might?) still need
-      // (and pre-emptively skips the offsets) we're avoiding re-working that optimization
-      // for now until/unless someone gives it more careful thought...
-      final List<PivotFacetValue> results = new ArrayList<>(numRefinableValues);
-      for (PivotFacetValue pivotValue : explicitValues) {
-        if (pivotValue.getCount() >= facetFieldMinimumCount) {
-          results.add(pivotValue);
-          if (numRefinableValues <= results.size()) {
-            break;
-          }
-        }
-      }
-      return results;
-    }
-    
-    // in the non "sort==count OR mincount==1" situation, we can just return the first N values
-    // because any viable candidate is already in the top N
-    return getExplicitValuesList().subList(facetFieldOffset,  offsetPlusCount);
   }
   
   /**
@@ -323,7 +302,7 @@ public class PivotFacetFieldValueCollection implements Iterable<PivotFacetValue>
   }
     
   /** Sorts {@link PivotFacetValue} instances by their count */
-  public static class PivotFacetCountComparator implements Comparator<PivotFacetValue> {
+  public class PivotFacetCountComparator implements Comparator<PivotFacetValue> {    
     public int compare(PivotFacetValue left, PivotFacetValue right) {
       int countCmp = right.getCount() - left.getCount();
       return (0 != countCmp) ? countCmp : 
@@ -332,7 +311,7 @@ public class PivotFacetFieldValueCollection implements Iterable<PivotFacetValue>
   }
   
   /** Sorts {@link PivotFacetValue} instances by their value */
-  public static class PivotFacetValueComparator implements Comparator<PivotFacetValue> {
+  public class PivotFacetValueComparator implements Comparator<PivotFacetValue> {
     public int compare(PivotFacetValue left, PivotFacetValue right) {
       return compareWithNullLast(left.getValue(), right.getValue());
     }

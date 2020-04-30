@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.lucene50;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.lucene50;
-
-
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
 
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.index.CorruptIndexException;
@@ -36,6 +28,13 @@ import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.Lock;
 import org.apache.lucene.util.IOUtils;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 
 /**
  * Class for accessing a compound stream.
@@ -69,13 +68,6 @@ final class Lucene50CompoundReader extends Directory {
     String entriesFileName = IndexFileNames.segmentFileName(segmentName, "", Lucene50CompoundFormat.ENTRIES_EXTENSION);
     this.entries = readEntries(si.getId(), directory, entriesFileName);
     boolean success = false;
-
-    long expectedLength = CodecUtil.indexHeaderLength(Lucene50CompoundFormat.DATA_CODEC, "");
-    for(Map.Entry<String,FileEntry> ent : entries.entrySet()) {
-      expectedLength += ent.getValue().length;
-    }
-    expectedLength += CodecUtil.footerLength(); 
-
     handle = directory.openInput(dataFileName, context);
     try {
       CodecUtil.checkIndexHeader(handle, Lucene50CompoundFormat.DATA_CODEC, version, version, si.getId(), "");
@@ -85,13 +77,6 @@ final class Lucene50CompoundReader extends Directory {
       // for FOOTER_MAGIC + algorithmID. This is cheap and can detect some forms of corruption
       // such as file truncation.
       CodecUtil.retrieveChecksum(handle);
-
-      // We also validate length, because e.g. if you strip 16 bytes off the .cfs we otherwise
-      // would not detect it:
-      if (handle.length() != expectedLength) {
-        throw new CorruptIndexException("length should be " + expectedLength + " bytes, but is " + handle.length() + " instead", handle);
-      }
-
       success = true;
     } finally {
       if (!success) {
@@ -101,7 +86,7 @@ final class Lucene50CompoundReader extends Directory {
   }
 
   /** Helper method that reads CFS entries from an input stream */
-  private Map<String, FileEntry> readEntries(byte[] segmentID, Directory dir, String entriesFileName) throws IOException {
+  private final Map<String, FileEntry> readEntries(byte[] segmentID, Directory dir, String entriesFileName) throws IOException {
     Map<String,FileEntry> mapping = null;
     try (ChecksumIndexInput entriesStream = dir.openChecksumInput(entriesFileName, IOContext.READONCE)) {
       Throwable priorE = null;
@@ -141,8 +126,7 @@ final class Lucene50CompoundReader extends Directory {
     final String id = IndexFileNames.stripSegmentName(name);
     final FileEntry entry = entries.get(id);
     if (entry == null) {
-      String datFileName = IndexFileNames.segmentFileName(segmentName, "", Lucene50CompoundFormat.DATA_EXTENSION);
-      throw new FileNotFoundException("No sub-file with id " + id + " found in compound file \"" + datFileName + "\" (fileName=" + name + " files: " + entries.keySet() + ")");
+      throw new FileNotFoundException("No sub-file with id " + id + " found (fileName=" + name + " files: " + entries.keySet() + ")");
     }
     return handle.slice(name, entry.offset, entry.length);
   }
@@ -169,13 +153,8 @@ final class Lucene50CompoundReader extends Directory {
   
   /** Not implemented
    * @throws UnsupportedOperationException always: not supported by CFS */
-  @Override
-  public void rename(String from, String to) {
+  public void renameFile(String from, String to) {
     throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void syncMetaData() {
   }
   
   /** Returns the length of a file in the directory.
@@ -193,11 +172,6 @@ final class Lucene50CompoundReader extends Directory {
   public IndexOutput createOutput(String name, IOContext context) throws IOException {
     throw new UnsupportedOperationException();
   }
-
-  @Override
-  public IndexOutput createTempOutput(String prefix, String suffix, IOContext context) throws IOException {
-    throw new UnsupportedOperationException();
-  }
   
   @Override
   public void sync(Collection<String> names) {
@@ -212,10 +186,5 @@ final class Lucene50CompoundReader extends Directory {
   @Override
   public String toString() {
     return "CompoundFileDirectory(segment=\"" + segmentName + "\" in dir=" + directory + ")";
-  }
-
-  @Override
-  public Set<String> getPendingDeletions() {
-    return Collections.emptySet();
   }
 }

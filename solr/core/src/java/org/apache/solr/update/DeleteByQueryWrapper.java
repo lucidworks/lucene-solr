@@ -1,3 +1,5 @@
+package org.apache.solr.update;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update;
 
 import java.io.IOException;
-import java.util.Objects;
 import java.util.Set;
 
 import org.apache.lucene.index.IndexReader;
@@ -27,12 +27,11 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
+import org.apache.lucene.uninverting.UninvertingReader;
+import org.apache.lucene.util.Bits;
 import org.apache.solr.schema.IndexSchema;
-import org.apache.solr.uninverting.UninvertingReader;
 
 /** 
  * Allows access to uninverted docvalues by delete-by-queries.
@@ -51,13 +50,16 @@ final class DeleteByQueryWrapper extends Query {
   }
   
   LeafReader wrap(LeafReader reader) {
-    return UninvertingReader.wrap(reader, schema.getUninversionMapper());
+    return new UninvertingReader(reader, schema.getUninversionMap(reader));
   }
   
   // we try to be well-behaved, but we are not (and IW's applyQueryDeletes isn't much better...)
   
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
     Query rewritten = in.rewrite(reader);
     if (rewritten != in) {
       return new DeleteByQueryWrapper(rewritten, schema);
@@ -67,11 +69,10 @@ final class DeleteByQueryWrapper extends Query {
   }
   
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
     final LeafReader wrapped = wrap((LeafReader) searcher.getIndexReader());
     final IndexSearcher privateContext = new IndexSearcher(wrapped);
-    privateContext.setQueryCache(searcher.getQueryCache());
-    final Weight inner = in.createWeight(privateContext, scoreMode, boost);
+    final Weight inner = in.createWeight(privateContext, needsScores);
     return new Weight(DeleteByQueryWrapper.this) {
       @Override
       public void extractTerms(Set<Term> terms) {
@@ -82,13 +83,14 @@ final class DeleteByQueryWrapper extends Query {
       public Explanation explain(LeafReaderContext context, int doc) throws IOException { throw new UnsupportedOperationException(); }
 
       @Override
-      public Scorer scorer(LeafReaderContext context) throws IOException {
-        return inner.scorer(privateContext.getIndexReader().leaves().get(0));
-      }
+      public float getValueForNormalization() throws IOException { return inner.getValueForNormalization(); }
 
       @Override
-      public boolean isCacheable(LeafReaderContext ctx) {
-        return inner.isCacheable(ctx);
+      public void normalize(float norm, float topLevelBoost) { inner.normalize(norm, topLevelBoost); }
+
+      @Override
+      public Scorer scorer(LeafReaderContext context) throws IOException {
+        return inner.scorer(privateContext.getIndexReader().leaves().get(0));
       }
     };
   }
@@ -101,25 +103,24 @@ final class DeleteByQueryWrapper extends Query {
   @Override
   public int hashCode() {
     final int prime = 31;
-    int result = classHash();
-    result = prime * result + Objects.hashCode(in);
-    result = prime * result + Objects.hashCode(schema);
+    int result = super.hashCode();
+    result = prime * result + ((in == null) ? 0 : in.hashCode());
+    result = prime * result + ((schema == null) ? 0 : schema.hashCode());
     return result;
   }
 
   @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           equalsTo(getClass().cast(other));
-  }
-
-  private boolean equalsTo(DeleteByQueryWrapper other) {
-    return Objects.equals(in, other.in) &&
-           Objects.equals(schema, other.schema);
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    visitor.visitLeaf(this);
+  public boolean equals(Object obj) {
+    if (this == obj) return true;
+    if (!super.equals(obj)) return false;
+    if (getClass() != obj.getClass()) return false;
+    DeleteByQueryWrapper other = (DeleteByQueryWrapper) obj;
+    if (in == null) {
+      if (other.in != null) return false;
+    } else if (!in.equals(other.in)) return false;
+    if (schema == null) {
+      if (other.schema != null) return false;
+    } else if (!schema.equals(other.schema)) return false;
+    return true;
   }
 }

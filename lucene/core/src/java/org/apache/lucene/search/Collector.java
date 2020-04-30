@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -74,7 +74,9 @@ public interface Collector {
   LeafCollector getLeafCollector(LeafReaderContext context) throws IOException;
   
   /**
-   * Indicates what features are required from the scorer.
+   * Indicates if document scores are needed by this collector.
+   * 
+   * @return {@code true} if scores are needed.
    */
-  ScoreMode scoreMode();
+  boolean needsScores();
 }

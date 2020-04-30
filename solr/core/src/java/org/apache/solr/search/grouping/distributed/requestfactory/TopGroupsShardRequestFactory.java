@@ -1,3 +1,5 @@
+package org.apache.solr.search.grouping.distributed.requestfactory;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.grouping.distributed.requestfactory;
 
 import org.apache.lucene.analysis.reverse.ReverseStringFilter;
 import org.apache.lucene.search.grouping.SearchGroup;
 import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.CharsRefBuilder;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.GroupParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
@@ -48,6 +48,9 @@ public class TopGroupsShardRequestFactory implements ShardRequestFactory {
    */
   public static final String GROUP_NULL_VALUE = "" + ReverseStringFilter.START_OF_HEADING_MARKER;
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public ShardRequest[] constructRequest(ResponseBuilder rb) {
     // If we have a group.query we need to query all shards... Or we move this to the group first phase queries
@@ -65,7 +68,8 @@ public class TopGroupsShardRequestFactory implements ShardRequestFactory {
   private ShardRequest[] createRequestForSpecificShards(ResponseBuilder rb) {
     // Determine all unique shards to query for TopGroups
     Set<String> uniqueShards = new HashSet<>();
-    for (Map<SearchGroup<BytesRef>, Set<String>> groupsToShard : rb.searchGroupToShards.values()) {
+    for (String command : rb.searchGroupToShards.keySet()) {
+      Map<SearchGroup<BytesRef>, Set<String>> groupsToShard = rb.searchGroupToShards.get(command);
       for (Set<String> shards : groupsToShard.values()) {
         uniqueShards.addAll(shards);
       }
@@ -102,7 +106,7 @@ public class TopGroupsShardRequestFactory implements ShardRequestFactory {
       sreq.params.set(CommonParams.START, "0");
     }
     if (rb.shards_rows > -1) {
-      // if the client set shards.rows set this explicitly
+      // if the client set shards.rows set this explicity
       sreq.params.set(CommonParams.ROWS, rb.shards_rows);
     } else {
       sreq.params.set(CommonParams.ROWS, rb.getSortSpec().getOffset() + rb.getSortSpec().getCount());
@@ -114,8 +118,9 @@ public class TopGroupsShardRequestFactory implements ShardRequestFactory {
       for (SearchGroup<BytesRef> searchGroup : entry.getValue()) {
         String groupValue;
         if (searchGroup.groupValue != null) {
+          String rawGroupValue = searchGroup.groupValue.utf8ToString();
           FieldType fieldType = schema.getField(entry.getKey()).getType();
-          groupValue = fieldType.indexedToReadable(searchGroup.groupValue, new CharsRefBuilder()).toString();
+          groupValue = fieldType.indexedToReadable(rawGroupValue);
         } else {
           groupValue = GROUP_NULL_VALUE;
         }

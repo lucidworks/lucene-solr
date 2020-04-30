@@ -1,3 +1,4 @@
+package org.apache.solr.rest.schema.analysis;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +15,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.rest.schema.analysis;
+
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.core.StopFilter;
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.core.StopFilter;
+import org.apache.lucene.analysis.util.CharArraySet;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.rest.ManagedResource;
@@ -28,13 +29,8 @@ import org.apache.solr.rest.ManagedResource;
 /**
  * TokenFilterFactory that uses the ManagedWordSetResource implementation
  * for managing stop words using the REST API.
- * @since 4.8.0
- * @lucene.spi {@value #NAME}
  */
 public class ManagedStopFilterFactory extends BaseManagedTokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "managedStop";
 
   // this only gets changed once during core initialization and not every
   // time an update is made to the underlying managed word set.

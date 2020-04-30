@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
@@ -100,7 +100,7 @@ public final class IndexUpgrader {
         dirImpl = args[i];
       } else if (path == null) {
         path = arg;
-      } else {
+      }else {
         printUsage();
       }
       i++;
@@ -174,7 +174,7 @@ public final class IndexUpgrader {
         infoStream.message(LOG_PREFIX, "All segments upgraded to version " + Version.LATEST);
         infoStream.message(LOG_PREFIX, "Enforcing commit to rewrite all index metadata...");
       }
-      w.setLiveCommitData(w.getLiveCommitData()); // fake change to enforce a commit (e.g. if index has no segments)
+      w.setCommitData(w.getCommitData()); // fake change to enforce a commit (e.g. if index has no segments)
       assert w.hasUncommittedChanges();
       w.commit();
       if (infoStream.isEnabled(LOG_PREFIX)) {

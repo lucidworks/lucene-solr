@@ -24,27 +24,6 @@ class JavascriptBaseVisitor<T> extends AbstractParseTreeVisitor<T> implements Ja
    * <p>The default implementation returns the result of calling
    * {@link #visitChildren} on {@code ctx}.</p>
    */
-  @Override public T visitConditional(JavascriptParser.ConditionalContext ctx) { return visitChildren(ctx); }
-  /**
-   * {@inheritDoc}
-   *
-   * <p>The default implementation returns the result of calling
-   * {@link #visitChildren} on {@code ctx}.</p>
-   */
-  @Override public T visitBoolor(JavascriptParser.BoolorContext ctx) { return visitChildren(ctx); }
-  /**
-   * {@inheritDoc}
-   *
-   * <p>The default implementation returns the result of calling
-   * {@link #visitChildren} on {@code ctx}.</p>
-   */
-  @Override public T visitBoolcomp(JavascriptParser.BoolcompContext ctx) { return visitChildren(ctx); }
-  /**
-   * {@inheritDoc}
-   *
-   * <p>The default implementation returns the result of calling
-   * {@link #visitChildren} on {@code ctx}.</p>
-   */
   @Override public T visitNumeric(JavascriptParser.NumericContext ctx) { return visitChildren(ctx); }
   /**
    * {@inheritDoc}
@@ -52,28 +31,7 @@ class JavascriptBaseVisitor<T> extends AbstractParseTreeVisitor<T> implements Ja
    * <p>The default implementation returns the result of calling
    * {@link #visitChildren} on {@code ctx}.</p>
    */
-  @Override public T visitAddsub(JavascriptParser.AddsubContext ctx) { return visitChildren(ctx); }
-  /**
-   * {@inheritDoc}
-   *
-   * <p>The default implementation returns the result of calling
-   * {@link #visitChildren} on {@code ctx}.</p>
-   */
-  @Override public T visitUnary(JavascriptParser.UnaryContext ctx) { return visitChildren(ctx); }
-  /**
-   * {@inheritDoc}
-   *
-   * <p>The default implementation returns the result of calling
-   * {@link #visitChildren} on {@code ctx}.</p>
-   */
   @Override public T visitPrecedence(JavascriptParser.PrecedenceContext ctx) { return visitChildren(ctx); }
-  /**
-   * {@inheritDoc}
-   *
-   * <p>The default implementation returns the result of calling
-   * {@link #visitChildren} on {@code ctx}.</p>
-   */
-  @Override public T visitMuldiv(JavascriptParser.MuldivContext ctx) { return visitChildren(ctx); }
   /**
    * {@inheritDoc}
    *
@@ -94,14 +52,7 @@ class JavascriptBaseVisitor<T> extends AbstractParseTreeVisitor<T> implements Ja
    * <p>The default implementation returns the result of calling
    * {@link #visitChildren} on {@code ctx}.</p>
    */
-  @Override public T visitBwor(JavascriptParser.BworContext ctx) { return visitChildren(ctx); }
-  /**
-   * {@inheritDoc}
-   *
-   * <p>The default implementation returns the result of calling
-   * {@link #visitChildren} on {@code ctx}.</p>
-   */
-  @Override public T visitBooland(JavascriptParser.BoolandContext ctx) { return visitChildren(ctx); }
+  @Override public T visitBoolcomp(JavascriptParser.BoolcompContext ctx) { return visitChildren(ctx); }
   /**
    * {@inheritDoc}
    *
@@ -115,6 +66,20 @@ class JavascriptBaseVisitor<T> extends AbstractParseTreeVisitor<T> implements Ja
    * <p>The default implementation returns the result of calling
    * {@link #visitChildren} on {@code ctx}.</p>
    */
+  @Override public T visitBwor(JavascriptParser.BworContext ctx) { return visitChildren(ctx); }
+  /**
+   * {@inheritDoc}
+   *
+   * <p>The default implementation returns the result of calling
+   * {@link #visitChildren} on {@code ctx}.</p>
+   */
+  @Override public T visitBoolor(JavascriptParser.BoolorContext ctx) { return visitChildren(ctx); }
+  /**
+   * {@inheritDoc}
+   *
+   * <p>The default implementation returns the result of calling
+   * {@link #visitChildren} on {@code ctx}.</p>
+   */
   @Override public T visitBwand(JavascriptParser.BwandContext ctx) { return visitChildren(ctx); }
   /**
    * {@inheritDoc}
@@ -122,5 +87,40 @@ class JavascriptBaseVisitor<T> extends AbstractParseTreeVisitor<T> implements Ja
    * <p>The default implementation returns the result of calling
    * {@link #visitChildren} on {@code ctx}.</p>
    */
+  @Override public T visitUnary(JavascriptParser.UnaryContext ctx) { return visitChildren(ctx); }
+  /**
+   * {@inheritDoc}
+   *
+   * <p>The default implementation returns the result of calling
+   * {@link #visitChildren} on {@code ctx}.</p>
+   */
+  @Override public T visitBooland(JavascriptParser.BoolandContext ctx) { return visitChildren(ctx); }
+  /**
+   * {@inheritDoc}
+   *
+   * <p>The default implementation returns the result of calling
+   * {@link #visitChildren} on {@code ctx}.</p>
+   */
+  @Override public T visitAddsub(JavascriptParser.AddsubContext ctx) { return visitChildren(ctx); }
+  /**
+   * {@inheritDoc}
+   *
+   * <p>The default implementation returns the result of calling
+   * {@link #visitChildren} on {@code ctx}.</p>
+   */
   @Override public T visitBooleqne(JavascriptParser.BooleqneContext ctx) { return visitChildren(ctx); }
+  /**
+   * {@inheritDoc}
+   *
+   * <p>The default implementation returns the result of calling
+   * {@link #visitChildren} on {@code ctx}.</p>
+   */
+  @Override public T visitConditional(JavascriptParser.ConditionalContext ctx) { return visitChildren(ctx); }
+  /**
+   * {@inheritDoc}
+   *
+   * <p>The default implementation returns the result of calling
+   * {@link #visitChildren} on {@code ctx}.</p>
+   */
+  @Override public T visitMuldiv(JavascriptParser.MuldivContext ctx) { return visitChildren(ctx); }
 }

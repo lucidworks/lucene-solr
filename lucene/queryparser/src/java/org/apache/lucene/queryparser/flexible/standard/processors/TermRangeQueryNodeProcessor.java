@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.standard.processors;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.standard.processors;
 
 import java.text.DateFormat;
 import java.util.Calendar;
@@ -23,7 +24,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 
-import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.DateTools;
 import org.apache.lucene.document.DateTools.Resolution;
 import org.apache.lucene.queryparser.flexible.core.QueryNodeException;
@@ -135,15 +135,7 @@ public class TermRangeQueryNodeProcessor extends QueryNodeProcessorImpl {
         }
         
       } catch (Exception e) {
-        // not a date
-        Analyzer analyzer = getQueryConfigHandler().get(ConfigurationKeys.ANALYZER);
-        if (analyzer != null) {
-          // because we call utf8ToString, this will only work with the default TermToBytesRefAttribute
-          part1 = analyzer.normalize(lower.getFieldAsString(), part1).utf8ToString();
-          part2 = analyzer.normalize(lower.getFieldAsString(), part2).utf8ToString();
-          lower.setText(part1);
-          upper.setText(part2);
-        }
+        // do nothing
       }
       
     }

@@ -1,3 +1,5 @@
+package org.apache.lucene.util.packed;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.packed;
-
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 
 import org.apache.lucene.codecs.CodecUtil;
+import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.store.IndexInput;
@@ -64,8 +67,9 @@ public class PackedInts {
   public static final int DEFAULT_BUFFER_SIZE = 1024; // 1K
 
   public final static String CODEC_NAME = "PackedInts";
+  public final static int VERSION_START = 0; // PackedInts were long-aligned
+  public final static int VERSION_BYTE_ALIGNED = 1;
   public static final int VERSION_MONOTONIC_WITHOUT_ZIGZAG = 2;
-  public final static int VERSION_START = VERSION_MONOTONIC_WITHOUT_ZIGZAG;
   public final static int VERSION_CURRENT = VERSION_MONOTONIC_WITHOUT_ZIGZAG;
 
   /**
@@ -92,7 +96,11 @@ public class PackedInts {
 
       @Override
       public long byteCount(int packedIntsVersion, int valueCount, int bitsPerValue) {
-        return (long) Math.ceil((double) valueCount * bitsPerValue / 8);      
+        if (packedIntsVersion < VERSION_BYTE_ALIGNED) {
+          return 8L *  (long) Math.ceil((double) valueCount * bitsPerValue / 64);
+        } else {
+          return (long) Math.ceil((double) valueCount * bitsPerValue / 8);
+        }
       }
 
     },
@@ -448,10 +456,7 @@ public class PackedInts {
    * A read-only random access array of positive integers.
    * @lucene.internal
    */
-  public static abstract class Reader implements Accountable {
-
-    /** Get the long at the given index. Behavior is undefined for out-of-range indices. */
-    public abstract long get(int index);
+  public static abstract class Reader extends NumericDocValues implements Accountable {
 
     /**
      * Bulk get: read at least one and at most <code>len</code> longs starting
@@ -474,6 +479,11 @@ public class PackedInts {
      * @return the number of values.
      */
     public abstract int size();
+
+    @Override
+    public Collection<Accountable> getChildResources() {
+      return Collections.emptyList();
+    }
   }
 
   /**
@@ -683,7 +693,7 @@ public class PackedInts {
 
     @Override
     public long ramBytesUsed() {
-      return RamUsageEstimator.alignObjectSize(RamUsageEstimator.NUM_BYTES_OBJECT_HEADER + Integer.BYTES);
+      return RamUsageEstimator.alignObjectSize(RamUsageEstimator.NUM_BYTES_OBJECT_HEADER + RamUsageEstimator.NUM_BYTES_INT);
     }
   }
 
@@ -886,11 +896,36 @@ public class PackedInts {
     checkVersion(version);
     switch (format) {
       case PACKED:
-        return new DirectPackedReader(bitsPerValue, valueCount, in);
+        final long byteCount = format.byteCount(version, valueCount, bitsPerValue);
+        if (byteCount != format.byteCount(VERSION_CURRENT, valueCount, bitsPerValue)) {
+          assert version == VERSION_START;
+          final long endPointer = in.getFilePointer() + byteCount;
+          // Some consumers of direct readers assume that reading the last value
+          // will make the underlying IndexInput go to the end of the packed
+          // stream, but this is not true because packed ints storage used to be
+          // long-aligned and is now byte-aligned, hence this additional
+          // condition when reading the last value
+          return new DirectPackedReader(bitsPerValue, valueCount, in) {
+            @Override
+            public long get(int index) {
+              final long result = super.get(index);
+              if (index == valueCount - 1) {
+                try {
+                  in.seek(endPointer);
+                } catch (IOException e) {
+                  throw new IllegalStateException("failed", e);
+                }
+              }
+              return result;
+            }
+          };
+        } else {
+          return new DirectPackedReader(bitsPerValue, valueCount, in);
+        }
       case PACKED_SINGLE_BLOCK:
         return new DirectPacked64SingleBlockReader(bitsPerValue, valueCount, in);
       default:
-        throw new AssertionError("Unknown format: " + format);
+        throw new AssertionError("Unknwown format: " + format);
     }
   }
 

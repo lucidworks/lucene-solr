@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -24,8 +25,8 @@ import java.util.Set;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexableField;
-import org.apache.lucene.index.MultiBits;
 import org.apache.lucene.index.MultiDocValues;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.search.spell.Dictionary;
 import org.apache.lucene.util.Bits;
@@ -128,7 +129,7 @@ public class DocumentDictionary implements Dictionary {
       this.hasContexts = hasContexts;
       docCount = reader.maxDoc() - 1;
       weightValues = (weightField != null) ? MultiDocValues.getNumericValues(reader, weightField) : null;
-      liveDocs = (reader.leaves().size() > 0) ? MultiBits.getLiveDocs(reader) : null;
+      liveDocs = (reader.leaves().size() > 0) ? MultiFields.getLiveDocs(reader) : null;
       relevantFields = getRelevantFields(new String [] {field, weightField, payloadField, contextsField});
     }
 
@@ -239,20 +240,12 @@ public class DocumentDictionary implements Dictionary {
      * or if it's indexed as {@link NumericDocValues} (using <code>docId</code>) for the document.
      * If no value is found, then the weight is 0.
      */
-    protected long getWeight(Document doc, int docId) throws IOException {
+    protected long getWeight(Document doc, int docId) {
       IndexableField weight = doc.getField(weightField);
       if (weight != null) { // found weight as stored
         return (weight.numericValue() != null) ? weight.numericValue().longValue() : 0;
       } else if (weightValues != null) {  // found weight as NumericDocValue
-        if (weightValues.docID() < docId) {
-          weightValues.advance(docId);
-        }
-        if (weightValues.docID() == docId) {
-          return weightValues.longValue();
-        } else {
-          // missing
-          return 0;
-        }
+        return weightValues.get(docId);
       } else { // fall back
         return 0;
       }

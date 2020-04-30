@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function.valuesource;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function.valuesource;
 
 import java.io.IOException;
 import java.util.Map;
 
-import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.queries.function.FunctionValues;
@@ -58,14 +59,14 @@ public class SortedSetFieldSource extends FieldCacheSource {
   public FunctionValues getValues(Map context, LeafReaderContext readerContext) throws IOException {
     SortedSetDocValues sortedSet = DocValues.getSortedSet(readerContext.reader(), field);
     SortedDocValues view = SortedSetSelector.wrap(sortedSet, selector);
-    return new DocTermsIndexDocValues(this.field, this, view) {
+    return new DocTermsIndexDocValues(this, view) {
       @Override
       protected String toTerm(String readableValue) {
         return readableValue;
       }
 
       @Override
-      public Object objectVal(int doc) throws IOException {
+      public Object objectVal(int doc) {
         return strVal(doc);
       }
     };

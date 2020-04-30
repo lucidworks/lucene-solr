@@ -1,3 +1,5 @@
+package org.apache.lucene.demo;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.demo;
 
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.LongField;
+import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.TextField;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig.OpenMode;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -29,20 +43,6 @@ import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Date;
-
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.standard.StandardAnalyzer;
-import org.apache.lucene.document.LongPoint;
-import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig.OpenMode;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.FSDirectory;
 
 /** Index all text files under a directory.
  * <p>
@@ -178,13 +178,13 @@ public class IndexFiles {
       doc.add(pathField);
       
       // Add the last modified date of the file a field named "modified".
-      // Use a LongPoint that is indexed (i.e. efficiently filterable with
-      // PointRangeQuery).  This indexes to milli-second resolution, which
+      // Use a LongField that is indexed (i.e. efficiently filterable with
+      // NumericRangeFilter).  This indexes to milli-second resolution, which
       // is often too fine.  You could instead create a number based on
       // year/month/day/hour/minutes/seconds, down the resolution you require.
       // For example the long value 2011021714 would mean
       // February 17, 2011, 2-3 PM.
-      doc.add(new LongPoint("modified", lastModified));
+      doc.add(new LongField("modified", lastModified, Field.Store.NO));
       
       // Add the contents of the file to a field named "contents".  Specify a Reader,
       // so that the text of the file is tokenized and indexed, but not stored.

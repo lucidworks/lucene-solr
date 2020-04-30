@@ -1,3 +1,5 @@
+package org.apache.solr.client.solrj.request;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.request;
 
-import java.io.File;
+import junit.framework.Assert;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.solr.EmbeddedSolrServerTestBase;
+import org.apache.solr.SolrJettyTestBase;
 import org.apache.solr.client.solrj.response.SolrPingResponse;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
@@ -27,12 +28,12 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import junit.framework.Assert;
+import java.io.File;
 
 /**
  * Test SolrPing in Solrj
  */
-public class SolrPingTest extends EmbeddedSolrServerTestBase {
+public class SolrPingTest extends SolrJettyTestBase {
   
   @BeforeClass
   public static void beforeClass() throws Exception {

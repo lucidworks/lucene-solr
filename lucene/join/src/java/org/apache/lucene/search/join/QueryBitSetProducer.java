@@ -1,3 +1,5 @@
+package org.apache.lucene.search.join;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +16,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.join;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
 import java.util.WeakHashMap;
 
-import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.ReaderUtil;
 import org.apache.lucene.search.DocIdSet;
+import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.BitDocIdSet;
 import org.apache.lucene.util.BitSet;
@@ -40,7 +40,7 @@ import org.apache.lucene.util.BitSet;
  */
 public class QueryBitSetProducer implements BitSetProducer {
   private final Query query;
-  final Map<IndexReader.CacheKey,DocIdSet> cache = Collections.synchronizedMap(new WeakHashMap<>());
+  private final Map<Object,DocIdSet> cache = Collections.synchronizedMap(new WeakHashMap<Object,DocIdSet>());
 
   /** Wraps another query's result and caches it into bitsets.
    * @param query Query to cache results of
@@ -60,28 +60,22 @@ public class QueryBitSetProducer implements BitSetProducer {
   @Override
   public BitSet getBitSet(LeafReaderContext context) throws IOException {
     final LeafReader reader = context.reader();
-    final IndexReader.CacheHelper cacheHelper = reader.getCoreCacheHelper();
+    final Object key = reader.getCoreCacheKey();
 
-    DocIdSet docIdSet = null;
-    if (cacheHelper != null) {
-      docIdSet = cache.get(cacheHelper.getKey());
-    }
+    DocIdSet docIdSet = cache.get(key);
     if (docIdSet == null) {
       final IndexReaderContext topLevelContext = ReaderUtil.getTopLevelContext(context);
       final IndexSearcher searcher = new IndexSearcher(topLevelContext);
       searcher.setQueryCache(null);
-      final Query rewritten = searcher.rewrite(query);
-      final Weight weight = searcher.createWeight(rewritten, org.apache.lucene.search.ScoreMode.COMPLETE_NO_SCORES, 1);
-      final Scorer s = weight.scorer(context);
+      final Weight weight = searcher.createNormalizedWeight(query, false);
+      final DocIdSetIterator it = weight.scorer(context);
 
-      if (s == null) {
+      if (it == null) {
         docIdSet = DocIdSet.EMPTY;
       } else {
-        docIdSet = new BitDocIdSet(BitSet.of(s.iterator(), context.reader().maxDoc()));
+        docIdSet = new BitDocIdSet(BitSet.of(it, context.reader().maxDoc()));
       }
-      if (cacheHelper != null) {
-        cache.put(cacheHelper.getKey(), docIdSet);
-      }
+      cache.put(key, docIdSet);
     }
     return docIdSet == DocIdSet.EMPTY ? null : ((BitDocIdSet) docIdSet).bits();
   }

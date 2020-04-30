@@ -1,3 +1,6 @@
+// FastCharStream.java
+package org.apache.lucene.queryparser.classic;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -13,15 +16,15 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *  
  */
-package org.apache.lucene.queryparser.classic;
 
 import java.io.*;
 
 /** An efficient implementation of JavaCC's CharStream interface.  <p>Note that
  * this does not do line-number counting, but instead keeps track of the
  * character position of the token in the input, as required by Lucene's {@link
- * org.apache.lucene.analysis.tokenattributes.OffsetAttribute} API.
+ * org.apache.lucene.analysis.Token} API. 
  * */
 public final class FastCharStream implements CharStream {
   char[] buffer = null;

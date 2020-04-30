@@ -1,3 +1,7 @@
+package org.apache.solr.cloud.rule;
+
+import java.lang.invoke.MethodHandles;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +18,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud.rule;
 
-import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -30,27 +33,24 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.apache.solr.client.solrj.cloud.SolrCloudManager;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.Replica;
-import org.apache.solr.common.cloud.ReplicaPosition;
 import org.apache.solr.common.cloud.Slice;
-import org.apache.solr.common.cloud.rule.ImplicitSnitch;
-import org.apache.solr.common.cloud.rule.Snitch;
-import org.apache.solr.common.cloud.rule.SnitchContext;
+import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.common.util.Utils;
+import org.apache.solr.core.CoreContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static java.util.Collections.singletonList;
 import static org.apache.solr.cloud.rule.Rule.MatchStatus.NODE_CAN_BE_ASSIGNED;
-import static org.apache.solr.cloud.rule.Rule.MatchStatus.NOT_APPLICABLE;
 import static org.apache.solr.cloud.rule.Rule.Phase.ASSIGN;
 import static org.apache.solr.cloud.rule.Rule.Phase.FUZZY_ASSIGN;
 import static org.apache.solr.cloud.rule.Rule.Phase.FUZZY_VERIFY;
 import static org.apache.solr.cloud.rule.Rule.Phase.VERIFY;
+import static org.apache.solr.common.util.StrUtils.formatString;
 import static org.apache.solr.common.util.Utils.getDeepCopy;
 
 public class ReplicaAssigner {
@@ -59,9 +59,32 @@ public class ReplicaAssigner {
   Map<String, Integer> shardVsReplicaCount;
   Map<String, Map<String, Object>> nodeVsTags;
   Map<String, HashMap<String, Integer>> shardVsNodes;
-  List<String> participatingLiveNodes;
+  List<String> liveNodes;
   Set<String> tagNames = new HashSet<>();
   private Map<String, AtomicInteger> nodeVsCores = new HashMap<>();
+
+
+  public static class Position implements Comparable<Position> {
+    public final String shard;
+    public final int index;
+
+    public Position(String shard, int replicaIdx) {
+      this.shard = shard;
+      this.index = replicaIdx;
+    }
+
+    @Override
+    public int compareTo(Position that) {
+      //this is to ensure that we try one replica from each shard first instead of
+      // all replicas from same shard
+      return that.index > index ? -1 : that.index == index ? 0 : 1;
+    }
+
+    @Override
+    public String toString() {
+      return shard + ":" + index;
+    }
+  }
 
 
   /**
@@ -74,19 +97,19 @@ public class ReplicaAssigner {
                          Map<String, Integer> shardVsReplicaCount,
                          List snitches,
                          Map<String, Map<String, Integer>> shardVsNodes,
-                         List<String> participatingLiveNodes,
-                         SolrCloudManager cloudManager, ClusterState clusterState) {
+                         List<String> liveNodes,
+                         CoreContainer cc, ClusterState clusterState) {
     this.rules = rules;
     for (Rule rule : rules) tagNames.add(rule.tag.name);
     this.shardVsReplicaCount = shardVsReplicaCount;
-    this.participatingLiveNodes = new ArrayList<>(participatingLiveNodes);
-    this.nodeVsTags = getTagsForNodes(cloudManager, snitches);
+    this.liveNodes = new ArrayList<>(liveNodes);
+    this.nodeVsTags = getTagsForNodes(cc, snitches);
     this.shardVsNodes = getDeepCopy(shardVsNodes, 2);
+    validateTags(nodeVsTags);
 
     if (clusterState != null) {
-      Map<String, DocCollection> collections = clusterState.getCollectionsMap();
-      for (Map.Entry<String, DocCollection> entry : collections.entrySet()) {
-        DocCollection coll = entry.getValue();
+      for (String s : clusterState.getCollections()) {
+        DocCollection coll = clusterState.getCollection(s);
         for (Slice slice : coll.getSlices()) {
           for (Replica replica : slice.getReplicas()) {
             AtomicInteger count = nodeVsCores.get(replica.getNodeName());
@@ -108,8 +131,8 @@ public class ReplicaAssigner {
    * For each shard return a new set of nodes where the replicas need to be created satisfying
    * the specified rule
    */
-  public Map<ReplicaPosition, String> getNodeMappings() {
-    Map<ReplicaPosition, String> result = getNodeMappings0();
+  public Map<Position, String> getNodeMappings() {
+    Map<Position, String> result = getNodeMappings0();
     if (result == null) {
       String msg = "Could not identify nodes matching the rules " + rules;
       if (!failedNodes.isEmpty()) {
@@ -129,7 +152,7 @@ public class ReplicaAssigner {
 
   }
 
-  Map<ReplicaPosition, String> getNodeMappings0() {
+  Map<Position, String> getNodeMappings0() {
     List<String> shardNames = new ArrayList<>(shardVsReplicaCount.keySet());
     int[] shardOrder = new int[shardNames.size()];
     for (int i = 0; i < shardNames.size(); i++) shardOrder[i] = i;
@@ -148,17 +171,17 @@ public class ReplicaAssigner {
       }
     }
 
-    Map<ReplicaPosition, String> result = tryAllPermutations(shardNames, shardOrder, nonWildCardShardRules, false);
+    Map<Position, String> result = tryAllPermutations(shardNames, shardOrder, nonWildCardShardRules, false);
     if (result == null && hasFuzzyRules) {
       result = tryAllPermutations(shardNames, shardOrder, nonWildCardShardRules, true);
     }
     return result;
   }
 
-  private Map<ReplicaPosition, String> tryAllPermutations(List<String> shardNames,
-                                                          int[] shardOrder,
-                                                          int nonWildCardShardRules,
-                                                          boolean fuzzyPhase) {
+  private Map<Position, String> tryAllPermutations(List<String> shardNames,
+                                                   int[] shardOrder,
+                                                   int nonWildCardShardRules,
+                                                   boolean fuzzyPhase) {
 
 
     Iterator<int[]> shardPermutations = nonWildCardShardRules > 0 ?
@@ -167,17 +190,19 @@ public class ReplicaAssigner {
 
     for (; shardPermutations.hasNext(); ) {
       int[] p = shardPermutations.next();
-      List<ReplicaPosition> replicaPositions = new ArrayList<>();
-      for (int pos : p) {
-        for (int j = 0; j < shardVsReplicaCount.get(shardNames.get(pos)); j++) {
-          replicaPositions.add(new ReplicaPosition(shardNames.get(pos), j, Replica.Type.NRT));
+      for (int i = 0; i < p.length; i++) {
+        List<Position> positions = new ArrayList<>();
+        for (int pos : p) {
+          for (int j = 0; j < shardVsReplicaCount.get(shardNames.get(pos)); j++) {
+            positions.add(new Position(shardNames.get(pos), j));
+          }
         }
-      }
-      Collections.sort(replicaPositions);
-      for (Iterator<int[]> it = permutations(rules.size()); it.hasNext(); ) {
-        int[] permutation = it.next();
-        Map<ReplicaPosition, String> result = tryAPermutationOfRules(permutation, replicaPositions, fuzzyPhase);
-        if (result != null) return result;
+        Collections.sort(positions);
+        for (Iterator<int[]> it = permutations(rules.size()); it.hasNext(); ) {
+          int[] permutation = it.next();
+          Map<Position, String> result = tryAPermutationOfRules(permutation, positions, fuzzyPhase);
+          if (result != null) return result;
+        }
       }
     }
 
@@ -185,34 +210,37 @@ public class ReplicaAssigner {
   }
 
 
-  private Map<ReplicaPosition, String> tryAPermutationOfRules(int[] rulePermutation, List<ReplicaPosition> replicaPositions, boolean fuzzyPhase) {
-    Map<String, Map<String, Object>> nodeVsTagsCopy = getDeepCopy(nodeVsTags, 2);
-    Map<ReplicaPosition, String> result = new LinkedHashMap<>();
+  private Map<Position, String> tryAPermutationOfRules(final int[] rulePermutation, List<Position> positions, boolean fuzzyPhase) {
+    final Map<String, Map<String, Object>> nodeVsTagsCopy = getDeepCopy(nodeVsTags, 2);
+    Map<Position, String> result = new LinkedHashMap<>();
     int startPosition = 0;
-    Map<String, Map<String, Integer>> copyOfCurrentState = getDeepCopy(shardVsNodes, 2);
-    List<String> sortedLiveNodes = new ArrayList<>(this.participatingLiveNodes);
-    Collections.sort(sortedLiveNodes, (String n1, String n2) -> {
-      int result1 = 0;
-      for (int i = 0; i < rulePermutation.length; i++) {
-        Rule rule = rules.get(rulePermutation[i]);
-        int val = rule.compare(n1, n2, nodeVsTagsCopy, copyOfCurrentState);
-        if (val != 0) {//atleast one non-zero compare break now
-          result1 = val;
-          break;
-        }
-        if (result1 == 0) {//if all else is equal, prefer nodes with fewer cores
-          AtomicInteger n1Count = nodeVsCores.get(n1);
-          AtomicInteger n2Count = nodeVsCores.get(n2);
-          int a = n1Count == null ? 0 : n1Count.get();
-          int b = n2Count == null ? 0 : n2Count.get();
-          result1 = a > b ? 1 : a == b ? 0 : -1;
-        }
+    final Map<String, Map<String, Integer>> copyOfCurrentState = getDeepCopy(shardVsNodes, 2);
+    List<String> sortedLiveNodes = new ArrayList<>(this.liveNodes);
+    Collections.sort(sortedLiveNodes, new Comparator<String>() {
+      @Override
+      public int compare(String n1, String n2) {
+        int result = 0;
+        for (int i = 0; i < rulePermutation.length; i++) {
+          Rule rule = rules.get(rulePermutation[i]);
+          int val = rule.compare(n1, n2, nodeVsTagsCopy, copyOfCurrentState);
+          if (val != 0) {//atleast one non-zero compare break now
+            result = val;
+            break;
+          }
+          if (result == 0) {//if all else is equal, prefer nodes with fewer cores
+            AtomicInteger n1Count = nodeVsCores.get(n1);
+            AtomicInteger n2Count = nodeVsCores.get(n2);
+            int a = n1Count == null ? 0 : n1Count.get();
+            int b = n2Count == null ? 0 : n2Count.get();
+            result = a > b ? 1 : a == b ? 0 : -1;
+          }
 
+        }
+        return result;
       }
-      return result1;
     });
     forEachPosition:
-    for (ReplicaPosition replicaPosition : replicaPositions) {
+    for (Position position : positions) {
       //trying to assign a node by verifying each rule in this rulePermutation
       forEachNode:
       for (int j = 0; j < sortedLiveNodes.size(); j++) {
@@ -222,21 +250,20 @@ public class ReplicaAssigner {
           Rule rule = rules.get(rulePermutation[i]);
           //trying to assign a replica into this node in this shard
           Rule.MatchStatus status = rule.tryAssignNodeToShard(liveNode,
-              copyOfCurrentState, nodeVsTagsCopy, replicaPosition.shard, fuzzyPhase ? FUZZY_ASSIGN : ASSIGN);
+              copyOfCurrentState, nodeVsTagsCopy, position.shard, fuzzyPhase ? FUZZY_ASSIGN : ASSIGN);
           if (status == Rule.MatchStatus.CANNOT_ASSIGN_FAIL) {
             continue forEachNode;//try another node for this position
           }
         }
         //We have reached this far means this node can be applied to this position
         //and all rules are fine. So let us change the currentState
-        result.put(replicaPosition, liveNode);
-        Map<String, Integer> nodeNames = copyOfCurrentState.get(replicaPosition.shard);
-        if (nodeNames == null) copyOfCurrentState.put(replicaPosition.shard, nodeNames = new HashMap<>());
+        result.put(position, liveNode);
+        Map<String, Integer> nodeNames = copyOfCurrentState.get(position.shard);
+        if (nodeNames == null) copyOfCurrentState.put(position.shard, nodeNames = new HashMap<>());
         Integer n = nodeNames.get(liveNode);
         n = n == null ? 1 : n + 1;
         nodeNames.put(liveNode, n);
-        Map<String, Object> tagsMap = nodeVsTagsCopy.get(liveNode);
-        Number coreCount = tagsMap == null ? null: (Number) tagsMap.get(ImplicitSnitch.CORES);
+        Number coreCount = (Number) nodeVsTagsCopy.get(liveNode).get(ImplicitSnitch.CORES);
         if (coreCount != null) {
           nodeVsTagsCopy.get(liveNode).put(ImplicitSnitch.CORES, coreCount.intValue() + 1);
         }
@@ -247,20 +274,35 @@ public class ReplicaAssigner {
       return null;
     }
 
-    if (replicaPositions.size() > result.size()) {
+    if (positions.size() > result.size()) {
       return null;
     }
 
-    for (Map.Entry<ReplicaPosition, String> e : result.entrySet()) {
+    for (Map.Entry<Position, String> e : result.entrySet()) {
       for (int i = 0; i < rulePermutation.length; i++) {
         Rule rule = rules.get(rulePermutation[i]);
         Rule.MatchStatus matchStatus = rule.tryAssignNodeToShard(e.getValue(),
             copyOfCurrentState, nodeVsTagsCopy, e.getKey().shard, fuzzyPhase ? FUZZY_VERIFY : VERIFY);
-        if (matchStatus != NODE_CAN_BE_ASSIGNED && matchStatus != NOT_APPLICABLE) return null;
+        if (matchStatus != NODE_CAN_BE_ASSIGNED) return null;
       }
     }
     return result;
   }
+
+  private void validateTags(Map<String, Map<String, Object>> nodeVsTags) {
+    List<String> errors = new ArrayList<>();
+    for (Rule rule : rules) {
+      for (Map.Entry<String, Map<String, Object>> e : nodeVsTags.entrySet()) {
+        if (e.getValue().get(rule.tag.name) == null) {
+          errors.add(formatString("The value for tag {0} is not available for node {1}", rule.tag.name, e.getKey()));
+        }
+      }
+    }
+    if (!errors.isEmpty()) {
+      throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, StrUtils.join(errors, ','));
+    }
+  }
+
 
   /**
    * get all permutations for the int[] whose items are 0..level
@@ -283,6 +325,9 @@ public class ReplicaAssigner {
       public int[] next() {
         return next;
       }
+
+      @Override
+      public void remove() { }
     };
 
   }
@@ -313,12 +358,12 @@ public class ReplicaAssigner {
     final Snitch snitch;
     final Set<String> myTags = new HashSet<>();
     final Map<String, SnitchContext> nodeVsContext = new HashMap<>();
-    private final SolrCloudManager cloudManager;
+    private final CoreContainer cc;
 
-    SnitchInfoImpl(Map<String, Object> conf, Snitch snitch, SolrCloudManager cloudManager) {
+    SnitchInfoImpl(Map<String, Object> conf, Snitch snitch, CoreContainer cc) {
       super(conf);
       this.snitch = snitch;
-      this.cloudManager = cloudManager;
+      this.cc = cc;
     }
 
     @Override
@@ -326,19 +371,22 @@ public class ReplicaAssigner {
       return myTags;
     }
 
-
+    @Override
+    public CoreContainer getCoreContainer() {
+      return cc;
+    }
   }
 
   /**
    * This method uses the snitches and get the tags for all the nodes
    */
-  private Map<String, Map<String, Object>> getTagsForNodes(final SolrCloudManager cloudManager, List snitchConf) {
+  private Map<String, Map<String, Object>> getTagsForNodes(final CoreContainer cc, List snitchConf) {
 
-    Map<Class, SnitchInfoImpl> snitches = getSnitchInfos(cloudManager, snitchConf);
+    Map<Class, SnitchInfoImpl> snitches = getSnitchInfos(cc, snitchConf);
     for (Class c : Snitch.WELL_KNOWN_SNITCHES) {
       if (snitches.containsKey(c)) continue;// it is already specified explicitly , ignore
       try {
-        snitches.put(c, new SnitchInfoImpl(Collections.EMPTY_MAP, (Snitch) c.newInstance(), cloudManager));
+        snitches.put(c, new SnitchInfoImpl(Collections.EMPTY_MAP, (Snitch) c.newInstance(), cc));
       } catch (Exception e) {
         throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Error instantiating Snitch " + c.getName());
       }
@@ -358,11 +406,11 @@ public class ReplicaAssigner {
     }
 
 
-    for (String node : participatingLiveNodes) {
+    for (String node : liveNodes) {
       //now use the Snitch to get the tags
       for (SnitchInfoImpl info : snitches.values()) {
         if (!info.myTags.isEmpty()) {
-          SnitchContext context = getSnitchCtx(node, info, cloudManager);
+          SnitchContext context = new SnitchContext(info, node);
           info.nodeVsContext.put(node, context);
           try {
             info.snitch.getTags(node, info.myTags, context);
@@ -380,22 +428,24 @@ public class ReplicaAssigner {
         String node = e.getKey();
         if (context.exception != null) {
           failedNodes.put(node, context);
-          participatingLiveNodes.remove(node);
-          log.warn("Not all tags were obtained from node " + node, context.exception);
+          liveNodes.remove(node);
+          log.warn("Not all tags were obtained from node " + node);
           context.exception = new SolrException(SolrException.ErrorCode.SERVER_ERROR,
               "Not all tags were obtained from node " + node);
         } else {
-          Map<String, Object> tags = result.get(node);
-          if (tags == null) {
-            tags = new HashMap<>();
-            result.put(node, tags);
+          if (context.getTags().keySet().containsAll(context.snitchInfo.getTagNames())) {
+            Map<String, Object> tags = result.get(node);
+            if (tags == null) {
+              tags = new HashMap<>();
+              result.put(node, tags);
+            }
+            tags.putAll(context.getTags());
           }
-          tags.putAll(context.getTags());
         }
       }
     }
 
-    if (participatingLiveNodes.isEmpty()) {
+    if (liveNodes.isEmpty()) {
       throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Could not get all tags for any nodes");
 
     }
@@ -403,18 +453,12 @@ public class ReplicaAssigner {
 
   }
 
-  private Map<String, Object> snitchSession = new HashMap<>();
-
-  protected SnitchContext getSnitchCtx(String node, SnitchInfoImpl info, SolrCloudManager cloudManager) {
-    return new ServerSnitchContext(info, node, snitchSession, cloudManager);
-  }
-
-  public static void verifySnitchConf(SolrCloudManager cloudManager, List snitchConf) {
-    getSnitchInfos(cloudManager, snitchConf);
+  public static void verifySnitchConf(CoreContainer cc, List snitchConf) {
+    getSnitchInfos(cc, snitchConf);
   }
 
 
-  static Map<Class, SnitchInfoImpl> getSnitchInfos(SolrCloudManager cloudManager, List snitchConf) {
+  static Map<Class, SnitchInfoImpl> getSnitchInfos(CoreContainer cc, List snitchConf) {
     if (snitchConf == null) snitchConf = Collections.emptyList();
     Map<Class, SnitchInfoImpl> snitches = new LinkedHashMap<>();
     for (Object o : snitchConf) {
@@ -432,9 +476,10 @@ public class ReplicaAssigner {
       }
       try {
         if (klas.indexOf('.') == -1) klas = Snitch.class.getPackage().getName() + "." + klas;
-        Snitch inst =
-            (Snitch) Snitch.class.getClassLoader().loadClass(klas).newInstance() ;
-        snitches.put(inst.getClass(), new SnitchInfoImpl(map, inst, cloudManager));
+        Snitch inst = cc == null ?
+            (Snitch) Snitch.class.getClassLoader().loadClass(klas).newInstance() :
+            cc.getResourceLoader().newInstance(klas, Snitch.class);
+        snitches.put(inst.getClass(), new SnitchInfoImpl(map, inst, cc));
       } catch (Exception e) {
         throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
 

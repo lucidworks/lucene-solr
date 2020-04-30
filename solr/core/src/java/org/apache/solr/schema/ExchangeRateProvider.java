@@ -1,3 +1,4 @@
+package org.apache.solr.schema;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
+
 import java.util.Map;
 import java.util.Set;
 
@@ -26,7 +27,7 @@ import org.apache.solr.common.SolrException;
  */
 public interface ExchangeRateProvider {
   /**
-   * Get the exchange rate between the two given currencies
+   * Get the exchange rate betwen the two given currencies
    * @return the exchange rate as a double
    * @throws SolrException if the rate is not defined in the provider
    */

@@ -1,3 +1,5 @@
+package org.apache.solr.handler.admin;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.admin;
 
 import java.io.File;
 import java.io.IOException;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.LockFactory;
+import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.util.TestUtil;
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.CoreAdminParams;
 import org.apache.solr.core.CoreContainer;
-import org.apache.solr.core.DirectoryFactory;
 import org.apache.solr.core.MockFSDirectoryFactory;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.response.SolrQueryResponse;
@@ -49,12 +51,11 @@ public class CoreMergeIndexesAdminHandlerTest extends SolrTestCaseJ4 {
   public TestRule solrTestRules = RuleChain.outerRule(new SystemPropertiesRestoreRule());
 
 
-  private static String WRAPPED_FAILING_MSG = "Error handling 'mergeindexes' action";
-  private static String FAILING_CAUSE_MSG = "Creating a directory using FailingDirectoryFactoryException always fails";
+  private static String FAILING_MSG = "Creating a directory using FailingDirectoryFactoryException always fails";
   public static class FailingDirectoryFactory extends MockFSDirectoryFactory {
-    public static class FailingDirectoryFactoryException extends RuntimeException {
+    public class FailingDirectoryFactoryException extends RuntimeException {
       public FailingDirectoryFactoryException() {
-        super(FAILING_CAUSE_MSG);
+        super(FAILING_MSG);
       }
     }
 
@@ -78,23 +79,24 @@ public class CoreMergeIndexesAdminHandlerTest extends SolrTestCaseJ4 {
     final CoreAdminHandler admin = new CoreAdminHandler(cores);
 
     try (SolrCore core = cores.getCore("collection1")) {
-      DirectoryFactory df = core.getDirectoryFactory();
-      FailingDirectoryFactory dirFactory = (FailingDirectoryFactory) df;
+      FailingDirectoryFactory dirFactory = (FailingDirectoryFactory)core.getDirectoryFactory();
 
       try {
         dirFactory.fail = true;
-        ignoreException(WRAPPED_FAILING_MSG);
-        SolrException e = expectThrows(SolrException.class, () -> {
-          admin.handleRequestBody
-              (req(CoreAdminParams.ACTION,
-                  CoreAdminParams.CoreAdminAction.MERGEINDEXES.toString(),
-                  CoreAdminParams.CORE, "collection1",
-                  CoreAdminParams.INDEX_DIR, workDir.getAbsolutePath()),
-                  new SolrQueryResponse());
-        });
-        assertEquals(FailingDirectoryFactory.FailingDirectoryFactoryException.class, e.getCause().getClass());
+        ignoreException(FAILING_MSG);
+
+        SolrQueryResponse resp = new SolrQueryResponse();
+        admin.handleRequestBody
+            (req(CoreAdminParams.ACTION,
+                CoreAdminParams.CoreAdminAction.MERGEINDEXES.toString(),
+                CoreAdminParams.CORE, "collection1",
+                CoreAdminParams.INDEX_DIR, workDir.getAbsolutePath()),
+                resp);
+        fail("exception expected");
+      } catch (FailingDirectoryFactory.FailingDirectoryFactoryException e) {
+        // expected if error handling properly
       } finally {
-        unIgnoreException(WRAPPED_FAILING_MSG);
+        unIgnoreException(FAILING_MSG);
       }
       dirFactory.fail = false;
     }

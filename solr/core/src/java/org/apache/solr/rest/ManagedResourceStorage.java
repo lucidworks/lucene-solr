@@ -1,3 +1,4 @@
+package org.apache.solr.rest;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.rest;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -42,14 +42,14 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.Utils;
 import org.apache.solr.core.SolrResourceLoader;
+import org.noggit.JSONParser;
+import org.noggit.JSONUtil;
+import org.noggit.ObjectBuilder;
 import org.restlet.data.Status;
 import org.restlet.resource.ResourceException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static org.apache.solr.common.util.Utils.toJSONString;
 
 /**
  * Abstract base class that provides most of the functionality needed
@@ -85,7 +85,7 @@ public abstract class ManagedResourceStorage {
    * whether the core is running in cloud mode as well as initArgs. 
    */
   public static StorageIO newStorageIO(String collection, SolrResourceLoader resourceLoader, NamedList<String> initArgs) {
-    StorageIO storageIO;
+    StorageIO storageIO = null;
 
     SolrZkClient zkClient = null;
     String zkConfigName = null;
@@ -95,10 +95,9 @@ public abstract class ManagedResourceStorage {
         zkConfigName = ((ZkSolrResourceLoader)resourceLoader).getZkController().
             getZkStateReader().readConfigName(collection);
       } catch (Exception e) {
-        log.error("Failed to get config name due to", e);
-        throw new SolrException(ErrorCode.SERVER_ERROR,
-            "Failed to load config name for collection:" + collection  + " due to: ", e);
-      }
+        log.error("Failed to get config name for collection {} due to: {}", 
+            collection, e.toString());
+      } 
       if (zkConfigName == null) {
         throw new SolrException(ErrorCode.SERVER_ERROR, 
             "Could not find config name for collection:" + collection);
@@ -110,7 +109,7 @@ public abstract class ManagedResourceStorage {
     } else {
       if (zkClient != null) {
         String znodeBase = "/configs/"+zkConfigName;
-        log.debug("Setting up ZooKeeper-based storage for the RestManager with znodeBase: "+znodeBase);
+        log.info("Setting up ZooKeeper-based storage for the RestManager with znodeBase: "+znodeBase);      
         storageIO = new ManagedResourceStorage.ZooKeeperStorageIO(zkClient, znodeBase);
       } else {
         storageIO = new FileStorageIO();        
@@ -272,10 +271,10 @@ public abstract class ManagedResourceStorage {
       }
       
       if (znodeData != null) {
-        log.debug("Read {} bytes from znode {}", znodeData.length, znodePath);
+        log.info("Read {} bytes from znode {}", znodeData.length, znodePath);
       } else {
         znodeData = new byte[0];
-        log.debug("No data found for znode {}", znodePath);
+        log.info("No data found for znode {}", znodePath);
       }
       
       return new ByteArrayInputStream(znodeData);
@@ -328,7 +327,7 @@ public abstract class ManagedResourceStorage {
       // this might be overkill for a delete operation
       try {
         if (zkClient.exists(znodePath, retryOnConnLoss)) {
-          log.debug("Attempting to delete znode {}", znodePath);
+          log.info("Attempting to delete znode {}", znodePath);
           zkClient.delete(znodePath, -1, retryOnConnLoss);
           wasDeleted = zkClient.exists(znodePath, retryOnConnLoss);
           
@@ -428,12 +427,12 @@ public abstract class ManagedResourceStorage {
       
     @Override
     protected Object parseText(Reader reader, String resourceId) throws IOException {
-      return Utils.fromJSON(reader);
+      return ObjectBuilder.getVal(new JSONParser(reader));    
     }
 
     @Override
     public void store(String resourceId, Object toStore) throws IOException {
-      String json = toJSONString(toStore);
+      String json = JSONUtil.toJSON(toStore);
       String storedResourceId = getStoredResourceId(resourceId);
       OutputStreamWriter writer = null;
       try {
@@ -490,15 +489,23 @@ public abstract class ManagedResourceStorage {
   public Object load(String resourceId) throws IOException {
     String storedResourceId = getStoredResourceId(resourceId);
     
-    log.debug("Reading {} using {}", storedResourceId, storageIO.getInfo());
+    log.info("Reading {} using {}", storedResourceId, storageIO.getInfo());
     
     InputStream inputStream = storageIO.openInputStream(storedResourceId);
     if (inputStream == null) {
       return null;
     }
-    Object parsed;
-    try (InputStreamReader reader = new InputStreamReader(inputStream, UTF_8)) {
+    Object parsed = null;
+    InputStreamReader reader = null;
+    try {
+      reader = new InputStreamReader(inputStream, UTF_8);
       parsed = parseText(reader, resourceId);
+    } finally {
+      if (reader != null) {
+        try {
+          reader.close();
+        } catch (Exception ignore){}
+      }
     }
     
     String objectType = (parsed != null) ? parsed.getClass().getSimpleName() : "null"; 

@@ -1,3 +1,5 @@
+package org.apache.solr.common.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.cloud;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,22 +31,19 @@ import org.apache.zookeeper.data.Id;
  * configurations have already been set up and will not be modified, or
  * where configuration changes are controlled via Solr APIs.
  */
-public class SaslZkACLProvider extends SecurityAwareZkACLProvider {
+public class SaslZkACLProvider extends DefaultZkACLProvider {
 
   private static String superUser = System.getProperty("solr.authorization.superuser", "solr");
 
   @Override
-  protected List<ACL> createNonSecurityACLsToAdd() {
-    List<ACL> ret = new ArrayList<ACL>();
-    ret.add(new ACL(ZooDefs.Perms.ALL, new Id("sasl", superUser)));
-    ret.add(new ACL(ZooDefs.Perms.READ, ZooDefs.Ids.ANYONE_ID_UNSAFE));
-    return ret;
-  }
+  protected List<ACL> createGlobalACLsToAdd() {
+    List<ACL> result = new ArrayList<ACL>();
+    result.add(new ACL(ZooDefs.Perms.ALL, new Id("sasl", superUser)));
+    result.add(new ACL(ZooDefs.Perms.READ, ZooDefs.Ids.ANYONE_ID_UNSAFE));
 
-  @Override
-  protected List<ACL> createSecurityACLsToAdd() {
-    List<ACL> ret = new ArrayList<ACL>();
-    ret.add(new ACL(ZooDefs.Perms.ALL, new Id("sasl", superUser)));
-    return ret;
+    if (result.isEmpty()) {
+      result = super.createGlobalACLsToAdd();
+    }
+    return result;
   }
 }

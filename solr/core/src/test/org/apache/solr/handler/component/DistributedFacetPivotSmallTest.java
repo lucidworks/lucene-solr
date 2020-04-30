@@ -1,3 +1,5 @@
+package org.apache.solr.handler.component;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -37,11 +38,6 @@ import org.junit.Test;
 
 public class DistributedFacetPivotSmallTest extends BaseDistributedSearchTestCase {
 
-  public DistributedFacetPivotSmallTest() {
-    // we need DVs on point fields to compute stats & facets
-    if (Boolean.getBoolean(NUMERIC_POINTS_SYSPROP)) System.setProperty(NUMERIC_DOCVALUES_SYSPROP,"true");
-  }
-  
   @Test
   @ShardsFixed(num = 4)
   public void test() throws Exception {
@@ -1641,7 +1637,8 @@ public class DistributedFacetPivotSmallTest extends BaseDistributedSearchTestCas
     
     @Override
     public int compare(PivotField o1, PivotField o2) {
-      int compare = Integer.compare(o2.getCount(), o1.getCount());
+      Integer compare = (Integer.valueOf(o2.getCount())).compareTo(Integer
+          .valueOf(o1.getCount()));
       if (compare == 0) {
         compare = ((String) o2.getValue()).compareTo((String) o1.getValue());
       }
@@ -1654,7 +1651,7 @@ public class DistributedFacetPivotSmallTest extends BaseDistributedSearchTestCas
           }
         }
         if (compare == 0) {
-          compare = Integer.compare(o1.getFacetQuery().size(),
+          compare = Integer.valueOf(o1.getFacetQuery().size()).compareTo(
               o2.getFacetQuery().size());
         }
       }

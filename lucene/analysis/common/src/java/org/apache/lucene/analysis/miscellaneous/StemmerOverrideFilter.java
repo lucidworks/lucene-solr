@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -132,11 +132,11 @@ public final class StemmerOverrideFilter extends TokenFilter {
         if (fst.findTargetArc(ignoreCase ? Character.toLowerCase(codePoint) : codePoint, scratchArc, scratchArc, fstReader) == null) {
           return null;
         }
-        pendingOutput = fst.outputs.add(pendingOutput, scratchArc.output());
+        pendingOutput = fst.outputs.add(pendingOutput, scratchArc.output);
         bufUpto += Character.charCount(codePoint);
       }
       if (scratchArc.isFinal()) {
-        matchOutput = fst.outputs.add(pendingOutput, scratchArc.nextFinalOutput());
+        matchOutput = fst.outputs.add(pendingOutput, scratchArc.nextFinalOutput);
       }
       return matchOutput;
     }
@@ -205,7 +205,7 @@ public final class StemmerOverrideFilter extends TokenFilter {
       ByteSequenceOutputs outputs = ByteSequenceOutputs.getSingleton();
       org.apache.lucene.util.fst.Builder<BytesRef> builder = new org.apache.lucene.util.fst.Builder<>(
           FST.INPUT_TYPE.BYTE4, outputs);
-      final int[] sort = hash.sort();
+      final int[] sort = hash.sort(BytesRef.getUTF8SortedAsUnicodeComparator());
       IntsRefBuilder intsSpare = new IntsRefBuilder();
       final int size = hash.size();
       BytesRef spare = new BytesRef();

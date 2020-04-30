@@ -14,25 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.admin;
 
-import java.util.Arrays;
-import java.util.EnumSet;
+package org.apache.solr.handler.admin;
 
 import org.apache.solr.common.luke.FieldFlag;
 import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.schema.CustomAnalyzerStrField; // jdoc
 import org.apache.solr.schema.IndexSchema;
-import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.schema.CustomAnalyzerStrField; // jdoc
+import org.apache.solr.util.AbstractSolrTestCase;
 import org.apache.solr.util.TestHarness;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.util.Arrays;
+import java.util.EnumSet;
+
 /**
  * :TODO: currently only tests some of the utilities in the LukeRequestHandler
  */
-public class LukeRequestHandlerTest extends SolrTestCaseJ4 {
+public class LukeRequestHandlerTest extends AbstractSolrTestCase {
 
   @BeforeClass
   public static void beforeClass() throws Exception {
@@ -117,7 +118,7 @@ public class LukeRequestHandlerTest extends SolrTestCaseJ4 {
     // only valid for fields that are indexed & stored
     for (String f : Arrays.asList("solr_t","solr_s","solr_ti",
         "solr_td","solr_dt","solr_b")) {
-      if (h.getCore().getLatestSchema().getField(f).getType().isPointField()) continue;
+
       final String xp = getFieldXPathPrefix(f);
       assertQ("Not as many index flags as expected ("+numFlags+") for " + f,
           req("qt","/admin/luke", "fl", f),
@@ -166,7 +167,7 @@ public class LukeRequestHandlerTest extends SolrTestCaseJ4 {
       response = h.query(req);
       for (String f : Arrays.asList("solr_t", "solr_s", "solr_ti",
           "solr_td", "solr_dt", "solr_b")) {
-        if (h.getCore().getLatestSchema().getField(f).getType().isPointField()) continue;
+
         assertNull(TestHarness.validateXPath(response,
             getFieldXPathPrefix(f) + "[@name='index']"));
       }

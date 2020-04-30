@@ -1,3 +1,11 @@
+package org.apache.lucene.facet.taxonomy;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.Map;
+
+import org.apache.lucene.index.TwoPhaseCommit;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +22,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy;
-
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.Map;
-
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.TwoPhaseCommit;
 
 /**
  * TaxonomyWriter is the interface which the faceted-search library uses
@@ -79,7 +79,7 @@ public interface TaxonomyWriter extends Closeable, TwoPhaseCommit {
    * If the given ordinal is the ROOT_ORDINAL, an INVALID_ORDINAL is returned.
    * If the given ordinal is a top-level category, the ROOT_ORDINAL is returned.
    * If an invalid ordinal is given (negative or beyond the last available
-   * ordinal), an IndexOutOfBoundsException is thrown. However, it is
+   * ordinal), an ArrayIndexOutOfBoundsException is thrown. However, it is
    * expected that getParent will only be called for ordinals which are
    * already known to be in the taxonomy.
    * TODO (Facet): instead of a getParent(ordinal) method, consider having a
@@ -106,14 +106,19 @@ public interface TaxonomyWriter extends Closeable, TwoPhaseCommit {
   public int getSize();
 
   /**
-   * Sets the commit user data iterable.  See {@link IndexWriter#setLiveCommitData}.
+   * Sets the commit user data map. That method is considered a transaction and
+   * will be {@link #commit() committed} even if no other changes were made to
+   * the writer instance.
+   * <p>
+   * <b>NOTE:</b> the map is cloned internally, therefore altering the map's
+   * contents after calling this method has no effect.
    */
-  public void setLiveCommitData(Iterable<Map.Entry<String,String>> commitUserData);
+  public void setCommitData(Map<String,String> commitUserData);
 
   /**
-   * Returns the commit user data iterable that was set on
-   * {@link #setLiveCommitData(Iterable)}.
+   * Returns the commit user data map that was set on
+   * {@link #setCommitData(Map)}.
    */
-  public Iterable<Map.Entry<String,String>> getLiveCommitData();
+  public Map<String,String> getCommitData();
   
 }

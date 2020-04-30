@@ -1,3 +1,5 @@
+package org.apache.lucene.mockfile;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.mockfile;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -54,9 +55,12 @@ public class TestHandleLimitFS extends MockFileSystemTestCase {
     }
     
     // now exceed
-    IOException e = expectThrows(IOException.class, () ->
-        Files.newOutputStream(Files.createTempFile(dir, null, null)));
-    assertTrue(e.getMessage().contains("Too many open files"));
+    try {
+      Files.newOutputStream(Files.createTempFile(dir, null, null));
+      fail("didn't hit exception");
+    } catch (IOException e) {
+      assertTrue(e.getMessage().contains("Too many open files"));
+    }
     
     IOUtils.close(toClose);
   }

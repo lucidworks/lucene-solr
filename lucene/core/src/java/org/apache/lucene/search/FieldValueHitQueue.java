@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -38,8 +38,8 @@ public abstract class FieldValueHitQueue<T extends FieldValueHitQueue.Entry> ext
   public static class Entry extends ScoreDoc {
     public int slot;
 
-    public Entry(int slot, int doc) {
-      super(doc, Float.NaN);
+    public Entry(int slot, int doc, float score) {
+      super(doc, score);
       this.slot = slot;
     }
     
@@ -58,7 +58,8 @@ public abstract class FieldValueHitQueue<T extends FieldValueHitQueue.Entry> ext
     private final int oneReverseMul;
     private final FieldComparator<?> oneComparator;
     
-    public OneComparatorFieldValueHitQueue(SortField[] fields, int size) {
+    public OneComparatorFieldValueHitQueue(SortField[] fields, int size)
+        throws IOException {
       super(fields, size);
 
       assert fields.length == 1;
@@ -95,7 +96,8 @@ public abstract class FieldValueHitQueue<T extends FieldValueHitQueue.Entry> ext
    */
   private static final class MultiComparatorsFieldValueHitQueue<T extends FieldValueHitQueue.Entry> extends FieldValueHitQueue<T> {
 
-    public MultiComparatorsFieldValueHitQueue(SortField[] fields, int size) {
+    public MultiComparatorsFieldValueHitQueue(SortField[] fields, int size)
+        throws IOException {
       super(fields, size);
     }
   
@@ -121,7 +123,7 @@ public abstract class FieldValueHitQueue<T extends FieldValueHitQueue.Entry> ext
   }
   
   // prevent instantiation and extension.
-  private FieldValueHitQueue(SortField[] fields, int size) {
+  private FieldValueHitQueue(SortField[] fields, int size) throws IOException {
     super(size);
     // When we get here, fields.length is guaranteed to be > 0, therefore no
     // need to check it again.
@@ -152,8 +154,9 @@ public abstract class FieldValueHitQueue<T extends FieldValueHitQueue.Entry> ext
    *          priority first); cannot be <code>null</code> or empty
    * @param size
    *          The number of hits to retain. Must be greater than zero.
+   * @throws IOException if there is a low-level IO error
    */
-  public static <T extends FieldValueHitQueue.Entry> FieldValueHitQueue<T> create(SortField[] fields, int size) {
+  public static <T extends FieldValueHitQueue.Entry> FieldValueHitQueue<T> create(SortField[] fields, int size) throws IOException {
 
     if (fields.length == 0) {
       throw new IllegalArgumentException("Sort must contain at least one field");

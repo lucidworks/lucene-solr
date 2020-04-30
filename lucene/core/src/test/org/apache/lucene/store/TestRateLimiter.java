@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.lucene.store.RateLimiter.SimpleRateLimiter;
@@ -35,9 +36,12 @@ public final class TestRateLimiter extends LuceneTestCase {
     Thread t = new Thread() {
         @Override
         public void run() {
-          expectThrows(ThreadInterruptedException.class, () -> {
+          try {
             new SimpleRateLimiter(1).pause((long) (1.5*Integer.MAX_VALUE*1024*1024/1000));
-          });
+            fail("should have been interrupted");
+          } catch (ThreadInterruptedException tie) {
+            // expected
+          }
         }
       };
     t.start();
@@ -90,7 +94,7 @@ public final class TestRateLimiter extends LuceneTestCase {
     double ratio = actualMBPerSec/targetMBPerSec;
 
     // Only enforce that it wasn't too fast; if machine is bogged down (can't schedule threads / sleep properly) then it may falsely be too slow:
-    assumeTrue("actualMBPerSec=" + actualMBPerSec + " targetMBPerSec=" + targetMBPerSec, 0.9 <= ratio);
+    //assertTrue("targetMBPerSec=" + targetMBPerSec + " actualMBPerSec=" + actualMBPerSec, ratio >= 0.9 && ratio <= 1.1);
     assertTrue("targetMBPerSec=" + targetMBPerSec + " actualMBPerSec=" + actualMBPerSec, ratio <= 1.1);
   }
 }

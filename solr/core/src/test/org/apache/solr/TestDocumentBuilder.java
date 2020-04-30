@@ -1,3 +1,5 @@
+package org.apache.solr;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr;
+
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -22,11 +24,12 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.common.SolrInputDocument;
 import org.junit.Test;
 
 
-public class TestDocumentBuilder extends SolrTestCase {
+public class TestDocumentBuilder extends LuceneTestCase {
 
   @Test
   public void testDeepCopy() throws IOException {
@@ -40,6 +43,7 @@ public class TestDocumentBuilder extends SolrTestCase {
     list.add(33);
     list.add(20);
     doc.addField("field5", list);
+    doc.setDocumentBoost(5f);
     
     SolrInputDocument clone = doc.deepCopy();
     

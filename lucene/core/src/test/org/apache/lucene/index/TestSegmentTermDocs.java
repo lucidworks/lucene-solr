@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
-import java.util.Collections;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
@@ -28,7 +27,6 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
-import org.apache.lucene.util.Version;
 
 public class TestSegmentTermDocs extends LuceneTestCase {
   private Document testDoc = new Document();
@@ -55,10 +53,10 @@ public class TestSegmentTermDocs extends LuceneTestCase {
 
   public void testTermDocs() throws IOException {
     //After adding the document, we should be able to read it back in
-    SegmentReader reader = new SegmentReader(info, Version.LATEST.major, false, newIOContext(random()), Collections.emptyMap());
+    SegmentReader reader = new SegmentReader(info, newIOContext(random()));
     assertTrue(reader != null);
 
-    TermsEnum terms = reader.terms(DocHelper.TEXT_FIELD_2_KEY).iterator();
+    TermsEnum terms = reader.fields().terms(DocHelper.TEXT_FIELD_2_KEY).iterator();
     terms.seekCeil(new BytesRef("field"));
     PostingsEnum termDocs = TestUtil.docs(random(), terms, null, PostingsEnum.FREQS);
     if (termDocs.nextDoc() != DocIdSetIterator.NO_MORE_DOCS)    {
@@ -73,7 +71,7 @@ public class TestSegmentTermDocs extends LuceneTestCase {
   public void testBadSeek() throws IOException {
     {
       //After adding the document, we should be able to read it back in
-      SegmentReader reader = new SegmentReader(info, Version.LATEST.major, false, newIOContext(random()), Collections.emptyMap());
+      SegmentReader reader = new SegmentReader(info, newIOContext(random()));
       assertTrue(reader != null);
       PostingsEnum termDocs = TestUtil.docs(random(), reader,
           "textField2",
@@ -86,7 +84,7 @@ public class TestSegmentTermDocs extends LuceneTestCase {
     }
     {
       //After adding the document, we should be able to read it back in
-      SegmentReader reader = new SegmentReader(info, Version.LATEST.major, false, newIOContext(random()), Collections.emptyMap());
+      SegmentReader reader = new SegmentReader(info, newIOContext(random()));
       assertTrue(reader != null);
       PostingsEnum termDocs = TestUtil.docs(random(), reader,
           "junk",

@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.lang.reflect.Method;
 import java.util.Collections;
@@ -143,7 +143,7 @@ public final class VirtualMethod<C> {
   public static <C> int compareImplementationDistance(final Class<? extends C> clazz,
     final VirtualMethod<C> m1, final VirtualMethod<C> m2)
   {
-    return Integer.compare(m1.getImplementationDistance(clazz), m2.getImplementationDistance(clazz));
+    return Integer.valueOf(m1.getImplementationDistance(clazz)).compareTo(m2.getImplementationDistance(clazz));
   }
   
 }

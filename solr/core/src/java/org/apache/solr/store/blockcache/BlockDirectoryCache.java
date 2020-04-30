@@ -1,3 +1,5 @@
+package org.apache.solr.store.blockcache;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.store.blockcache;
 
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import org.apache.solr.store.blockcache.BlockCache.OnRelease;
-
-import com.github.benmanes.caffeine.cache.Caffeine;
-
 
 /**
  * @lucene.experimental
@@ -32,7 +30,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 public class BlockDirectoryCache implements Cache {
   private final BlockCache blockCache;
   private final AtomicInteger counter = new AtomicInteger();
-  private final com.github.benmanes.caffeine.cache.Cache<String,Integer> names;
+  private final Map<String,Integer> names = new ConcurrentHashMap<>();
   private Set<BlockCacheKey> keysToRelease;
   private final String path;
   private final Metrics metrics;
@@ -45,21 +43,11 @@ public class BlockDirectoryCache implements Cache {
     this.blockCache = blockCache;
     this.path = path;
     this.metrics = metrics;
-        
-    names = Caffeine.newBuilder().maximumSize(50000).build();
-    
     if (releaseBlocks) {
-      keysToRelease = Collections.newSetFromMap(new ConcurrentHashMap<BlockCacheKey,Boolean>(1024, 0.75f, 512));
-      blockCache.setOnRelease(new OnRelease() {
-        
-        @Override
-        public void release(BlockCacheKey key) {
-          keysToRelease.remove(key);
-        }
-      });
+      keysToRelease = Collections.synchronizedSet(new HashSet<BlockCacheKey>());
     }
   }
-
+  
   /**
    * Expert: mostly for tests
    * 
@@ -71,13 +59,13 @@ public class BlockDirectoryCache implements Cache {
   
   @Override
   public void delete(String name) {
-    names.invalidate(name);
+    names.remove(name);
   }
   
   @Override
   public void update(String name, long blockId, int blockOffset, byte[] buffer,
       int offset, int length) {
-    Integer file = names.getIfPresent(name);
+    Integer file = names.get(name);
     if (file == null) {
       file = counter.incrementAndGet();
       names.put(name, file);
@@ -94,7 +82,7 @@ public class BlockDirectoryCache implements Cache {
   @Override
   public boolean fetch(String name, long blockId, int blockOffset, byte[] b,
       int off, int lengthToReadInBlock) {
-    Integer file = names.getIfPresent(name);
+    Integer file = names.get(name);
     if (file == null) {
       return false;
     }
@@ -104,6 +92,11 @@ public class BlockDirectoryCache implements Cache {
     blockCacheKey.setFile(file);
     boolean fetch = blockCache.fetch(blockCacheKey, b, blockOffset, off,
         lengthToReadInBlock);
+    if (fetch) {
+      metrics.blockCacheHit.incrementAndGet();
+    } else {
+      metrics.blockCacheMiss.incrementAndGet();
+    }
     return fetch;
   }
   
@@ -114,8 +107,7 @@ public class BlockDirectoryCache implements Cache {
   
   @Override
   public void renameCacheFile(String source, String dest) {
-    Integer file = names.getIfPresent(source);
-    names.invalidate(source);
+    Integer file = names.remove(source);
     // possible if the file is empty
     if (file != null) {
       names.put(dest, file);

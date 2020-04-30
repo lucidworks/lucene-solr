@@ -1,3 +1,5 @@
+package org.apache.lucene.mockfile;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.mockfile;
 
 import java.io.IOException;
 import java.nio.file.FileSystem;
@@ -29,15 +30,11 @@ import java.nio.file.attribute.FileAttribute;
  * create special files themselves (.DS_Store, thumbs.db, .nfsXXX, ...),
  * so we add them and see what breaks. 
  * <p>
- * When a directory is created, sometimes an "extra" file or directory
- * will be included with it (use {@link #isExtra(String)} to check if it's one
- * of those files).
- *
- * All other filesystem operations are delegated as normal.
+ * When a directory is created, sometimes a file or directory named 
+ * "extra0" will be included with it.
+ * All other filesystem operations are passed thru as normal.
  */
 public class ExtrasFS extends FilterFileSystemProvider {
-  private final static String EXTRA_FILE_NAME = "extra0";
-
   final boolean active;
   final boolean createDirectory;
   
@@ -61,7 +58,7 @@ public class ExtrasFS extends FilterFileSystemProvider {
     if (active) {
       // lets add a bogus file... if this fails, we don't care, its best effort.
       try {
-        Path target = dir.resolve(EXTRA_FILE_NAME);
+        Path target = dir.resolve("extra0");
         if (createDirectory) {
           super.createDirectory(target);
         } else {
@@ -77,10 +74,4 @@ public class ExtrasFS extends FilterFileSystemProvider {
   // our fake files. But this is tricky because its hooked into several places. 
   // Currently MDW has a hack so we don't break disk full tests.
 
-  /**
-   * @return Return true if {@code fileName} is one of the extra files added by this class.
-   */
-  public static boolean isExtra(String fileName) {
-    return fileName.equals(EXTRA_FILE_NAME);
-  }
 }

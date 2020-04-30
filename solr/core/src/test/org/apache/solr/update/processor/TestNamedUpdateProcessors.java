@@ -1,3 +1,5 @@
+package org.apache.solr.update.processor;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update.processor;
+
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.function.UnaryOperator;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.request.UpdateRequest;
@@ -37,25 +41,46 @@ import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.core.TestDynamicLoading;
 import org.apache.solr.core.TestSolrConfigHandler;
 import org.apache.solr.handler.TestBlobHandler;
+import org.apache.solr.util.RESTfulServerProvider;
 import org.apache.solr.util.RestTestHarness;
 import org.apache.solr.util.SimplePostTool;
 import org.junit.Test;
 
 public class TestNamedUpdateProcessors extends AbstractFullDistribZkTestBase {
+  private List<RestTestHarness> restTestHarnesses = new ArrayList<>();
+
+  private void setupHarnesses() {
+    for (final SolrClient client : clients) {
+      RestTestHarness harness = new RestTestHarness(new RESTfulServerProvider() {
+        @Override
+        public String getBaseURL() {
+          return ((HttpSolrClient) client).getBaseURL();
+        }
+      });
+      restTestHarnesses.add(harness);
+    }
+  }
+
+
+  @Override
+  public void distribTearDown() throws Exception {
+    super.distribTearDown();
+    for (RestTestHarness r : restTestHarnesses) {
+      r.close();
+    }
+  }
 
   @Test
-  //17-Aug-2018 commented @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 20-Jul-2018
   public void test() throws Exception {
     System.setProperty("enable.runtime.lib", "true");
-    setupRestTestHarnesses();
+    setupHarnesses();
 
     String blobName = "colltest";
 
     HttpSolrClient randomClient = (HttpSolrClient) clients.get(random().nextInt(clients.size()));
     String baseURL = randomClient.getBaseURL();
 
-    final String solrClientUrl = baseURL.substring(0, baseURL.lastIndexOf('/'));
-    TestBlobHandler.createSystemCollection(getHttpSolrClient(solrClientUrl, randomClient.getHttpClient()));
+    TestBlobHandler.createSystemCollection(new HttpSolrClient(baseURL.substring(0, baseURL.lastIndexOf('/')), randomClient.getHttpClient()));
     waitForRecoveriesToFinish(".system", true);
 
     TestBlobHandler.postAndCheck(cloudClient, baseURL.substring(0, baseURL.lastIndexOf('/')), blobName, TestDynamicLoading.generateZip(RuntimeUrp.class), 1);
@@ -63,11 +88,11 @@ public class TestNamedUpdateProcessors extends AbstractFullDistribZkTestBase {
     String payload = "{\n" +
         "'add-runtimelib' : { 'name' : 'colltest' ,'version':1}\n" +
         "}";
-    RestTestHarness client = randomRestTestHarness();
-    TestSolrConfigHandler.runConfigCommand(client, "/config", payload);
+    RestTestHarness client = restTestHarnesses.get(random().nextInt(restTestHarnesses.size()));
+    TestSolrConfigHandler.runConfigCommand(client, "/config?wt=json", payload);
     TestSolrConfigHandler.testForResponseElement(client,
         null,
-        "/config/overlay",
+        "/config/overlay?wt=json",
         null,
         Arrays.asList("overlay", "runtimeLib", blobName, "version"),
         1l, 10);
@@ -78,24 +103,16 @@ public class TestNamedUpdateProcessors extends AbstractFullDistribZkTestBase {
         "'create-updateprocessor' : { 'name' : 'maxFld', 'class': 'solr.MaxFieldValueUpdateProcessorFactory', 'fieldName':'mul_s'} \n" +
         "}";
 
-    client = randomRestTestHarness();
-    TestSolrConfigHandler.runConfigCommand(client, "/config", payload);
-    forAllRestTestHarnesses( new UnaryOperator<RestTestHarness>() {
-      @Override
-      public RestTestHarness apply(RestTestHarness restTestHarness) {
-        try {
-          TestSolrConfigHandler.testForResponseElement(restTestHarness,
-              null,
-              "/config/overlay",
-              null,
-              Arrays.asList("overlay", "updateProcessor", "firstFld", "fieldName"),
-              "test_s", 10);
-        } catch (Exception ex) {
-          fail("Caught exception: "+ex);
-        }
-        return restTestHarness;
-      }
-    });
+    client = restTestHarnesses.get(random().nextInt(restTestHarnesses.size()));
+    TestSolrConfigHandler.runConfigCommand(client, "/config?wt=json", payload);
+    for (RestTestHarness restTestHarness : restTestHarnesses) {
+      TestSolrConfigHandler.testForResponseElement(restTestHarness,
+          null,
+          "/config/overlay?wt=json",
+          null,
+          Arrays.asList("overlay", "updateProcessor", "firstFld", "fieldName"),
+          "test_s", 10);
+    }
 
     SolrInputDocument doc = new SolrInputDocument();
     doc.addField("id", "123");
@@ -149,18 +166,19 @@ public class TestNamedUpdateProcessors extends AbstractFullDistribZkTestBase {
 
 
   public static ByteBuffer generateZip(Class... classes) throws IOException {
+    ZipOutputStream zipOut = null;
     SimplePostTool.BAOS bos = new SimplePostTool.BAOS();
-    try (ZipOutputStream zipOut = new ZipOutputStream(bos)) {
-      zipOut.setLevel(ZipOutputStream.DEFLATED);
-      for (Class c : classes) {
-        String path = c.getName().replace('.', '/').concat(".class");
-        ZipEntry entry = new ZipEntry(path);
-        ByteBuffer b = SimplePostTool.inputStreamToByteArray(c.getClassLoader().getResourceAsStream(path));
-        zipOut.putNextEntry(entry);
-        zipOut.write(b.array(), 0, b.limit());
-        zipOut.closeEntry();
-      }
+    zipOut = new ZipOutputStream(bos);
+    zipOut.setLevel(ZipOutputStream.DEFLATED);
+    for (Class c : classes) {
+      String path = c.getName().replace('.', '/').concat(".class");
+      ZipEntry entry = new ZipEntry(path);
+      ByteBuffer b = SimplePostTool.inputStreamToByteArray(c.getClassLoader().getResourceAsStream(path));
+      zipOut.putNextEntry(entry);
+      zipOut.write(b.array(), 0, b.limit());
+      zipOut.closeEntry();
     }
+    zipOut.close();
     return bos.getByteBuffer();
   }
 

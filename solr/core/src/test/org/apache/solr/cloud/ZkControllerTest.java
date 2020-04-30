@@ -1,51 +1,52 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.apache.solr.cloud;
 
-import java.nio.file.Path;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.TimeUnit;
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with this
+ * work for additional information regarding copyright ownership. The ASF
+ * licenses this file to You under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.common.cloud.*;
-import org.apache.solr.common.params.CollectionParams;
+import org.apache.solr.common.cloud.ClusterState;
+import org.apache.solr.common.cloud.DocCollection;
+import org.apache.solr.common.cloud.DocRouter;
+import org.apache.solr.common.cloud.Replica;
+import org.apache.solr.common.cloud.Slice;
+import org.apache.solr.common.cloud.SolrZkClient;
+import org.apache.solr.common.cloud.ZkConfigManager;
+import org.apache.solr.common.cloud.ZkCoreNodeProps;
+import org.apache.solr.common.cloud.ZkNodeProps;
+import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.util.Utils;
 import org.apache.solr.core.CloudConfig;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.CoreDescriptor;
-import org.apache.solr.core.SolrXmlConfig;
 import org.apache.solr.handler.admin.CoreAdminHandler;
 import org.apache.solr.handler.component.HttpShardHandlerFactory;
 import org.apache.solr.update.UpdateShardHandler;
 import org.apache.solr.update.UpdateShardHandlerConfig;
-import org.apache.solr.util.LogLevel;
 import org.apache.zookeeper.CreateMode;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import static org.apache.solr.common.cloud.ZkStateReader.COLLECTION_PROP;
-import static org.apache.solr.common.cloud.ZkStateReader.SHARD_ID_PROP;
-import static org.apache.solr.common.params.CollectionParams.CollectionAction.ADDREPLICA;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Slow
 @SolrTestCaseJ4.SuppressSSL
@@ -54,6 +55,8 @@ public class ZkControllerTest extends SolrTestCaseJ4 {
   private static final String COLLECTION_NAME = "collection1";
 
   static final int TIMEOUT = 10000;
+
+  private static final boolean DEBUG = false;
 
   @BeforeClass
   public static void beforeClass() throws Exception {
@@ -88,77 +91,68 @@ public class ZkControllerTest extends SolrTestCaseJ4 {
                  ZkController.generateNodeName("foo-bar", "77", "/solr/sub_dir/"));
 
     // setup a SolrZkClient to do some getBaseUrlForNodeName testing
-    Path zkDir = createTempDir("zkData");
+    String zkDir = createTempDir("zkData").toFile().getAbsolutePath();
 
     ZkTestServer server = new ZkTestServer(zkDir);
     try {
       server.run();
 
-      try (SolrZkClient client = new SolrZkClient(server.getZkAddress(), TIMEOUT)) {
+      AbstractZkTestCase.tryCleanSolrZkNode(server.getZkHost());
+      AbstractZkTestCase.makeSolrZkNode(server.getZkHost());
 
-        ZkController.createClusterZkNodes(client);
-
-        try (ZkStateReader zkStateReader = new ZkStateReader(client)) {
-          zkStateReader.createClusterStateWatchersAndUpdate();
-
-          // getBaseUrlForNodeName
-          assertEquals("http://zzz.xxx:1234/solr",
-              zkStateReader.getBaseUrlForNodeName("zzz.xxx:1234_solr"));
-          assertEquals("http://xxx:99",
-              zkStateReader.getBaseUrlForNodeName("xxx:99_"));
-          assertEquals("http://foo-bar.baz.org:9999/some_dir",
-              zkStateReader.getBaseUrlForNodeName("foo-bar.baz.org:9999_some_dir"));
-          assertEquals("http://foo-bar.baz.org:9999/solr/sub_dir",
-              zkStateReader.getBaseUrlForNodeName("foo-bar.baz.org:9999_solr%2Fsub_dir"));
-
-          // generateNodeName + getBaseUrlForNodeName
-          assertEquals("http://foo:9876/solr",
-              zkStateReader.getBaseUrlForNodeName
-                  (ZkController.generateNodeName("foo", "9876", "solr")));
-          assertEquals("http://foo:9876/solr",
-              zkStateReader.getBaseUrlForNodeName
-                  (ZkController.generateNodeName("foo", "9876", "/solr")));
-          assertEquals("http://foo:9876/solr",
-              zkStateReader.getBaseUrlForNodeName
-                  (ZkController.generateNodeName("foo", "9876", "/solr/")));
-          assertEquals("http://foo.bar.com:9876/solr/sub_dir",
-              zkStateReader.getBaseUrlForNodeName
-                  (ZkController.generateNodeName("foo.bar.com", "9876", "solr/sub_dir")));
-          assertEquals("http://foo.bar.com:9876/solr/sub_dir",
-              zkStateReader.getBaseUrlForNodeName
-                  (ZkController.generateNodeName("foo.bar.com", "9876", "/solr/sub_dir/")));
-          assertEquals("http://foo-bar:9876",
-              zkStateReader.getBaseUrlForNodeName
-                  (ZkController.generateNodeName("foo-bar", "9876", "")));
-          assertEquals("http://foo-bar:9876",
-              zkStateReader.getBaseUrlForNodeName
-                  (ZkController.generateNodeName("foo-bar", "9876", "/")));
-          assertEquals("http://foo-bar.com:80/some_dir",
-              zkStateReader.getBaseUrlForNodeName
-                  (ZkController.generateNodeName("foo-bar.com", "80", "some_dir")));
-          assertEquals("http://foo-bar.com:80/some_dir",
-              zkStateReader.getBaseUrlForNodeName
-                  (ZkController.generateNodeName("foo-bar.com", "80", "/some_dir")));
-
-        }
-
-        ClusterProperties cp = new ClusterProperties(client);
-        cp.setClusterProperty("urlScheme", "https");
+      ZkStateReader zkStateReader = new ZkStateReader(server.getZkAddress(), TIMEOUT, TIMEOUT);
+      try {
+        // getBaseUrlForNodeName
+        assertEquals("http://zzz.xxx:1234/solr",
+                     zkStateReader.getBaseUrlForNodeName("zzz.xxx:1234_solr"));
+        assertEquals("http://xxx:99",
+                     zkStateReader.getBaseUrlForNodeName("xxx:99_"));
+        assertEquals("http://foo-bar.baz.org:9999/some_dir",
+                     zkStateReader.getBaseUrlForNodeName("foo-bar.baz.org:9999_some_dir"));
+        assertEquals("http://foo-bar.baz.org:9999/solr/sub_dir",
+                     zkStateReader.getBaseUrlForNodeName("foo-bar.baz.org:9999_solr%2Fsub_dir"));
+        
+        // generateNodeName + getBaseUrlForNodeName
+        assertEquals("http://foo:9876/solr",
+                     zkStateReader.getBaseUrlForNodeName
+                     (ZkController.generateNodeName("foo","9876","solr")));
+        assertEquals("http://foo:9876/solr",
+                     zkStateReader.getBaseUrlForNodeName
+                     (ZkController.generateNodeName("foo","9876","/solr")));
+        assertEquals("http://foo:9876/solr",
+                     zkStateReader.getBaseUrlForNodeName
+                     (ZkController.generateNodeName("foo","9876","/solr/")));
+        assertEquals("http://foo.bar.com:9876/solr/sub_dir",
+                     zkStateReader.getBaseUrlForNodeName
+                     (ZkController.generateNodeName("foo.bar.com","9876","solr/sub_dir")));
+        assertEquals("http://foo.bar.com:9876/solr/sub_dir",
+                     zkStateReader.getBaseUrlForNodeName
+                     (ZkController.generateNodeName("foo.bar.com","9876","/solr/sub_dir/")));
+        assertEquals("http://foo-bar:9876",
+                     zkStateReader.getBaseUrlForNodeName
+                     (ZkController.generateNodeName("foo-bar","9876","")));
+        assertEquals("http://foo-bar:9876",
+                     zkStateReader.getBaseUrlForNodeName
+                     (ZkController.generateNodeName("foo-bar","9876","/")));
+        assertEquals("http://foo-bar.com:80/some_dir",
+                     zkStateReader.getBaseUrlForNodeName
+                     (ZkController.generateNodeName("foo-bar.com","80","some_dir")));
+        assertEquals("http://foo-bar.com:80/some_dir",
+                     zkStateReader.getBaseUrlForNodeName
+                     (ZkController.generateNodeName("foo-bar.com","80","/some_dir")));
         
         //Verify the URL Scheme is taken into account
-
-        try (ZkStateReader zkStateReader = new ZkStateReader(client)) {
-
-          zkStateReader.createClusterStateWatchersAndUpdate();
-
-          assertEquals("https://zzz.xxx:1234/solr",
-              zkStateReader.getBaseUrlForNodeName("zzz.xxx:1234_solr"));
-
-          assertEquals("https://foo-bar.com:80/some_dir",
-              zkStateReader.getBaseUrlForNodeName
-                  (ZkController.generateNodeName("foo-bar.com", "80", "/some_dir")));
-
-        }
+        zkStateReader.getZkClient().create(ZkStateReader.CLUSTER_PROPS,
+            Utils.toJSON(Collections.singletonMap("urlScheme", "https")), CreateMode.PERSISTENT, true);
+        
+        assertEquals("https://zzz.xxx:1234/solr",
+            zkStateReader.getBaseUrlForNodeName("zzz.xxx:1234_solr"));
+        
+        assertEquals("https://foo-bar.com:80/some_dir",
+            zkStateReader.getBaseUrlForNodeName
+            (ZkController.generateNodeName("foo-bar.com","80","/some_dir")));
+      } finally {
+        zkStateReader.close();
       }
     } finally {
       server.shutdown();
@@ -167,12 +161,15 @@ public class ZkControllerTest extends SolrTestCaseJ4 {
 
   @Test
   public void testReadConfigName() throws Exception {
-    Path zkDir = createTempDir("zkData");
+    String zkDir = createTempDir("zkData").toFile().getAbsolutePath();
     CoreContainer cc = null;
 
     ZkTestServer server = new ZkTestServer(zkDir);
     try {
       server.run();
+
+      AbstractZkTestCase.tryCleanSolrZkNode(server.getZkHost());
+      AbstractZkTestCase.makeSolrZkNode(server.getZkHost());
 
       SolrZkClient zkClient = new SolrZkClient(server.getZkAddress(), TIMEOUT);
       String actualConfigName = "firstConfig";
@@ -186,6 +183,9 @@ public class ZkControllerTest extends SolrTestCaseJ4 {
               + COLLECTION_NAME, Utils.toJSON(zkProps),
           CreateMode.PERSISTENT, true);
 
+      if (DEBUG) {
+        zkClient.printLayoutToStdOut();
+      }
       zkClient.close();
       
       cc = getCoreContainer();
@@ -216,12 +216,15 @@ public class ZkControllerTest extends SolrTestCaseJ4 {
   }
 
   public void testGetHostName() throws Exception {
-    Path zkDir = createTempDir("zkData");
+    String zkDir = createTempDir("zkData").toFile().getAbsolutePath();
     CoreContainer cc = null;
 
     ZkTestServer server = new ZkTestServer(zkDir);
     try {
       server.run();
+
+      AbstractZkTestCase.tryCleanSolrZkNode(server.getZkHost());
+      AbstractZkTestCase.makeSolrZkNode(server.getZkHost());
 
       cc = getCoreContainer();
       ZkController zkController = null;
@@ -250,40 +253,19 @@ public class ZkControllerTest extends SolrTestCaseJ4 {
     }
   }
 
-  @Slow
-  @LogLevel(value = "org.apache.solr.cloud=DEBUG;org.apache.solr.cloud.overseer=DEBUG")
+  @AwaitsFix(bugUrl = "https://issues.apache.org/jira/browse/SOLR-7736")
   public void testPublishAndWaitForDownStates() throws Exception  {
-
-    /*
-    This test asserts that if zkController.publishAndWaitForDownStates uses only core name to check if all local
-    cores are down then the method will return immediately but if it uses coreNodeName (as it does after SOLR-6665 then
-    the method will timeout).
-    We setup the cluster state in such a way that two replicas with same core name exist on non-existent nodes
-    and core container also has a dummy core that has the same core name. The publishAndWaitForDownStates before SOLR-6665
-    would only check the core names and therefore return immediately but after SOLR-6665 it should time out.
-     */
-
-    assumeWorkingMockito();
-    final String collectionName = "testPublishAndWaitForDownStates";
-    Path zkDir = createTempDir(collectionName);
+    String zkDir = createTempDir("testPublishAndWaitForDownStates").toFile().getAbsolutePath();
     CoreContainer cc = null;
-
-    String nodeName = "127.0.0.1:8983_solr";
 
     ZkTestServer server = new ZkTestServer(zkDir);
     try {
       server.run();
 
-      cc = new MockCoreContainer()  {
-        @Override
-        public List<CoreDescriptor> getCoreDescriptors() {
-          CoreDescriptor descriptor = new CoreDescriptor(collectionName, TEST_PATH(), Collections.emptyMap(), new Properties(), true);
-          // non-existent coreNodeName, this will cause zkController.publishAndWaitForDownStates to wait indefinitely
-          // when using coreNodeName but usage of core name alone will return immediately
-          descriptor.getCloudDescriptor().setCoreNodeName("core_node0");
-          return Collections.singletonList(descriptor);
-        }
-      };
+      AbstractZkTestCase.tryCleanSolrZkNode(server.getZkHost());
+      AbstractZkTestCase.makeSolrZkNode(server.getZkHost());
+
+      cc = getCoreContainer();
       ZkController zkController = null;
 
       try {
@@ -297,36 +279,32 @@ public class ZkControllerTest extends SolrTestCaseJ4 {
           }
         });
 
-        zkController.getZkClient().makePath(ZkStateReader.getCollectionPathRoot(collectionName), new byte[0], CreateMode.PERSISTENT, true);
+        HashMap<String, DocCollection> collectionStates = new HashMap<>();
+        HashMap<String, Replica> replicas = new HashMap<>();
+        // add two replicas with the same core name but one of them should be on a different node
+        // than this ZkController instance
+        for (int i=1; i<=2; i++)  {
+          Replica r = new Replica("core_node" + i,
+              map(ZkStateReader.STATE_PROP, i == 1 ? "active" : "down",
+              ZkStateReader.NODE_NAME_PROP, i == 1 ? "127.0.0.1:8983_solr" : "non_existent_host",
+              ZkStateReader.CORE_NAME_PROP, "collection1"));
+          replicas.put("core_node" + i, r);
+        }
+        HashMap<String, Object> sliceProps = new HashMap<>();
+        sliceProps.put("state", Slice.State.ACTIVE.toString());
+        Slice slice = new Slice("shard1", replicas, sliceProps);
+        DocCollection c = new DocCollection("testPublishAndWaitForDownStates", map("shard1", slice), Collections.<String, Object>emptyMap(), DocRouter.DEFAULT);
+        ClusterState state = new ClusterState(0, Collections.<String>emptySet(), map("testPublishAndWaitForDownStates", c));
+        byte[] bytes = Utils.toJSON(state);
+        zkController.getZkClient().makePath(ZkStateReader.getCollectionPath("testPublishAndWaitForDownStates"), bytes, CreateMode.PERSISTENT, true);
 
-        ZkNodeProps m = new ZkNodeProps(Overseer.QUEUE_OPERATION,
-            CollectionParams.CollectionAction.CREATE.toLower(), ZkStateReader.NODE_NAME_PROP, nodeName, ZkStateReader.NUM_SHARDS_PROP, "1",
-            "name", collectionName, DocCollection.STATE_FORMAT, "2");
-        zkController.getOverseerJobQueue().offer(Utils.toJSON(m));
-
-        HashMap<String, Object> propMap = new HashMap<>();
-        propMap.put(Overseer.QUEUE_OPERATION, ADDREPLICA.toLower());
-        propMap.put(COLLECTION_PROP, collectionName);
-        propMap.put(SHARD_ID_PROP, "shard1");
-        propMap.put(ZkStateReader.NODE_NAME_PROP, "non_existent_host1");
-        propMap.put(ZkStateReader.CORE_NAME_PROP, collectionName);
-        propMap.put(ZkStateReader.STATE_PROP, "active");
-        zkController.getOverseerJobQueue().offer(Utils.toJSON(propMap));
-
-        propMap = new HashMap<>();
-        propMap.put(Overseer.QUEUE_OPERATION, ADDREPLICA.toLower());
-        propMap.put(COLLECTION_PROP, collectionName);
-        propMap.put(SHARD_ID_PROP, "shard1");
-        propMap.put(ZkStateReader.NODE_NAME_PROP, "non_existent_host2");
-        propMap.put(ZkStateReader.CORE_NAME_PROP, collectionName);
-        propMap.put(ZkStateReader.STATE_PROP, "down");
-        zkController.getOverseerJobQueue().offer(Utils.toJSON(propMap));
-
-        zkController.getZkStateReader().forciblyRefreshAllClusterStateSlow();
+        zkController.getZkStateReader().updateClusterState();
+        assertTrue(zkController.getZkStateReader().getClusterState().hasCollection("testPublishAndWaitForDownStates"));
+        assertNotNull(zkController.getZkStateReader().getClusterState().getCollection("testPublishAndWaitForDownStates"));
 
         long now = System.nanoTime();
-        long timeout = now + TimeUnit.NANOSECONDS.convert(5, TimeUnit.SECONDS);
-        zkController.publishAndWaitForDownStates(5);
+        long timeout = now + TimeUnit.NANOSECONDS.convert(ZkController.WAIT_DOWN_STATES_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        zkController.publishAndWaitForDownStates();
         assertTrue("The ZkController.publishAndWaitForDownStates should have timed out but it didn't", System.nanoTime() >= timeout);
       } finally {
         if (zkController != null)
@@ -350,27 +328,20 @@ public class ZkControllerTest extends SolrTestCaseJ4 {
   }
 
   private static class MockCoreContainer extends CoreContainer {
-    UpdateShardHandler updateShardHandler = new UpdateShardHandler(UpdateShardHandlerConfig.DEFAULT);
 
     public MockCoreContainer() {
-      super(SolrXmlConfig.fromString(null, "<solr/>"));
+      super((Object)null);
       this.shardHandlerFactory = new HttpShardHandlerFactory();
       this.coreAdminHandler = new CoreAdminHandler();
     }
-
+    
     @Override
-    public void load() {
-    }
-
+    public void load() {}
+    
     @Override
     public UpdateShardHandler getUpdateShardHandler() {
-      return updateShardHandler;
+      return new UpdateShardHandler(UpdateShardHandlerConfig.DEFAULT);
     }
 
-    @Override
-    public void shutdown() {
-      updateShardHandler.close();
-      super.shutdown();
-    }
-  }    
+  }
 }

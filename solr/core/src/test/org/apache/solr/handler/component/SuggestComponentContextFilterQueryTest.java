@@ -1,3 +1,5 @@
+package org.apache.solr.handler.component;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
 
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.spelling.suggest.SuggesterParams;
@@ -78,12 +79,21 @@ public class SuggestComponentContextFilterQueryTest extends SolrTestCaseJ4 {
 
   @Test
   public void testBuildThrowsIllegalArgumentExceptionWhenContextIsConfiguredButNotImplemented() throws Exception {
-    IllegalArgumentException ex = expectThrows(IllegalArgumentException.class, () -> {
-      h.query(req("qt", rh, SuggesterParams.SUGGEST_BUILD, "true",
-          SuggesterParams.SUGGEST_DICT, "suggest_context_filtering_not_implemented",
-          SuggesterParams.SUGGEST_Q, "examp"));
-    });
-    assertThat(ex.getMessage(), is("this suggester doesn't support contexts"));
+    try {
+      assertQ(
+          req("qt", rh,
+              SuggesterParams.SUGGEST_BUILD, "true",
+              SuggesterParams.SUGGEST_DICT, "suggest_context_filtering_not_implemented",
+              SuggesterParams.SUGGEST_Q, "examp")
+          ,
+          ""
+      );
+      fail("Expecting exception because ");
+    } catch (RuntimeException e) {
+      Throwable cause = e.getCause();
+      assertTrue(cause instanceof IllegalArgumentException);
+      assertThat(cause.getMessage(), is("this suggester doesn't support contexts"));
+    }
 
     // When not building, no exception is thrown
     assertQ(req("qt", rh,
@@ -201,7 +211,7 @@ public class SuggestComponentContextFilterQueryTest extends SolrTestCaseJ4 {
             SuggesterParams.SUGGEST_Q, "examp"),
         "//lst[@name='suggest']/lst[@name='suggest_blended_infix_suggester_string']/lst[@name='examp']/int[@name='numFound'][.='0']");
 
-    assertQ(req("qt", rh,
+   assertQ(req("qt", rh,
             SuggesterParams.SUGGEST_BUILD, "true",
             SuggesterParams.SUGGEST_DICT, "suggest_blended_infix_suggester_string",
             SuggesterParams.SUGGEST_CONTEXT_FILTER_QUERY, "ctx4",

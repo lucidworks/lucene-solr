@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -45,16 +46,6 @@ public class MismatchedLeafReader extends FilterLeafReader {
     in.document(docID, new MismatchedVisitor(visitor));
   }
 
-  @Override
-  public CacheHelper getCoreCacheHelper() {
-    return in.getCoreCacheHelper();
-  }
-
-  @Override
-  public CacheHelper getReaderCacheHelper() {
-    return in.getReaderCacheHelper();
-  }
-
   static FieldInfos shuffleInfos(FieldInfos infos, Random random) {
     // first, shuffle the order
     List<FieldInfo> shuffled = new ArrayList<>();
@@ -75,11 +66,7 @@ public class MismatchedLeafReader extends FilterLeafReader {
                                         oldInfo.getIndexOptions(),   // indexOptions
                                         oldInfo.getDocValuesType(),  // docValuesType
                                         oldInfo.getDocValuesGen(),   // dvGen
-                                        oldInfo.attributes(),        // attributes
-                                        oldInfo.getPointDataDimensionCount(),      // data dimension count
-                                        oldInfo.getPointIndexDimensionCount(),      // index dimension count
-                                        oldInfo.getPointNumBytes(),  // dimension numBytes
-                                        oldInfo.isSoftDeletesField()); // used as soft-deletes field
+                                        oldInfo.attributes());       // attributes
       shuffled.set(i, newInfo);
     }
     

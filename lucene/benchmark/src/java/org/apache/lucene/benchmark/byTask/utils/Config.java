@@ -1,3 +1,5 @@
+package org.apache.lucene.benchmark.byTask.utils;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.utils;
-
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.StringTokenizer;
 
@@ -277,9 +276,8 @@ public class Config {
     // log changes in values
     if (valByRound.size() > 0) {
       sb.append(": ");
-      for (final Map.Entry<String, Object> entry : valByRound.entrySet()) {
-        final String name = entry.getKey();
-        Object a = entry.getValue();
+      for (final String name : valByRound.keySet()) {
+        Object a = valByRound.get(name);
         if (a instanceof int[]) {
           int ai[] = (int[]) a;
           int n1 = (roundNumber - 1) % ai.length;
@@ -373,7 +371,7 @@ public class Config {
     StringTokenizer st = new StringTokenizer(s, ":");
     while (st.hasMoreTokens()) {
       String t = st.nextToken();
-      a.add(Boolean.valueOf(t));
+      a.add(new Boolean(t));
     }
     boolean res[] = new boolean[a.size()];
     for (int i = 0; i < a.size(); i++) {
@@ -390,8 +388,9 @@ public class Config {
       return "";
     }
     StringBuilder sb = new StringBuilder();
-    for (final String colName : colForValByRound.values()) {
-      sb.append(' ').append(colName);
+    for (final String name : colForValByRound.keySet()) {
+      String colName = colForValByRound.get(name);
+      sb.append(" ").append(colName);
     }
     return sb.toString();
   }
@@ -404,17 +403,15 @@ public class Config {
       return "";
     }
     StringBuilder sb = new StringBuilder();
-    for (final Map.Entry<String, String> entry : colForValByRound.entrySet()) {
-      String colName = entry.getValue();
+    for (final String name : colForValByRound.keySet()) {
+      String colName = colForValByRound.get(name);
       String template = " " + colName;
       if (roundNum < 0) {
         // just append blanks
         sb.append(Format.formatPaddLeft("-", template));
       } else {
-        String valByRoundName = entry.getKey();
-
         // append actual values, for that round
-        Object a = valByRound.get(valByRoundName);
+        Object a = valByRound.get(name);
         if (a instanceof int[]) {
           int ai[] = (int[]) a;
           int n = roundNum % ai.length;

@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -238,7 +238,7 @@ public class SearcherLifetimeManager implements Closeable {
    *  entries are passed to the Pruner in sorted (newest to
    *  oldest IndexSearcher) order.
    * 
-   *  <p><b>NOTE</b>: you must periodically call this, ideally
+   *  <p><b>NOTE</b>: you must peridiocally call this, ideally
    *  from the same background thread that opens new
    *  searchers. */
   public synchronized void prune(Pruner pruner) throws IOException {

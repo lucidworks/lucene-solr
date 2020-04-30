@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.simpletext;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.simpletext;
-
 
 import java.io.IOException;
 import java.util.BitSet;
@@ -32,9 +32,12 @@ import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
+import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.CharsRefBuilder;
 import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.MutableBits;
 import org.apache.lucene.util.StringHelper;
+import org.apache.lucene.util.UnicodeUtil;
 
 /**
  * reads/writes plaintext live docs
@@ -49,6 +52,17 @@ public class SimpleTextLiveDocsFormat extends LiveDocsFormat {
   final static BytesRef SIZE             = new BytesRef("size ");
   final static BytesRef DOC              = new BytesRef("  doc ");
   final static BytesRef END              = new BytesRef("END");
+  
+  @Override
+  public MutableBits newLiveDocs(int size) throws IOException {
+    return new SimpleTextMutableBits(size);
+  }
+
+  @Override
+  public MutableBits newLiveDocs(Bits existing) throws IOException {
+    final SimpleTextBits bits = (SimpleTextBits) existing;
+    return new SimpleTextMutableBits((BitSet)bits.bits.clone(), bits.size);
+  }
 
   @Override
   public Bits readLiveDocs(Directory dir, SegmentCommitInfo info, IOContext context) throws IOException {
@@ -95,7 +109,8 @@ public class SimpleTextLiveDocsFormat extends LiveDocsFormat {
   }
 
   @Override
-  public void writeLiveDocs(Bits bits, Directory dir, SegmentCommitInfo info, int newDelCount, IOContext context) throws IOException {
+  public void writeLiveDocs(MutableBits bits, Directory dir, SegmentCommitInfo info, int newDelCount, IOContext context) throws IOException {
+    BitSet set = ((SimpleTextBits) bits).bits;
     int size = bits.length();
     BytesRefBuilder scratch = new BytesRefBuilder();
     
@@ -108,12 +123,10 @@ public class SimpleTextLiveDocsFormat extends LiveDocsFormat {
       SimpleTextUtil.write(out, Integer.toString(size), scratch);
       SimpleTextUtil.writeNewline(out);
       
-      for (int i = 0; i < size; ++i) {
-        if (bits.get(i)) {
-          SimpleTextUtil.write(out, DOC);
-          SimpleTextUtil.write(out, Integer.toString(i), scratch);
-          SimpleTextUtil.writeNewline(out);
-        }
+      for (int i = set.nextSetBit(0); i >= 0; i=set.nextSetBit(i + 1)) { 
+        SimpleTextUtil.write(out, DOC);
+        SimpleTextUtil.write(out, Integer.toString(i), scratch);
+        SimpleTextUtil.writeNewline(out);
       }
       
       SimpleTextUtil.write(out, END);
@@ -154,6 +167,24 @@ public class SimpleTextLiveDocsFormat extends LiveDocsFormat {
     @Override
     public int length() {
       return size;
+    }
+  }
+  
+  // read-write
+  static class SimpleTextMutableBits extends SimpleTextBits implements MutableBits {
+
+    SimpleTextMutableBits(int size) {
+      this(new BitSet(size), size);
+      bits.set(0, size);
+    }
+    
+    SimpleTextMutableBits(BitSet bits, int size) {
+      super(bits, size);
+    }
+    
+    @Override
+    public void clear(int bit) {
+      bits.clear(bit);
     }
   }
 }

@@ -14,13 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.analysis.miscellaneous;
 
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
-import org.apache.lucene.analysis.CharArraySet;
+import org.apache.lucene.analysis.util.CharArraySet;
 
 import java.io.IOException;
 
@@ -43,6 +44,9 @@ public final class RemoveDuplicatesTokenFilter extends TokenFilter {
     super(in);
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public boolean incrementToken() throws IOException {
     while (input.incrementToken()) {
@@ -68,6 +72,9 @@ public final class RemoveDuplicatesTokenFilter extends TokenFilter {
     return false;
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void reset() throws IOException {
     super.reset();

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -53,16 +53,16 @@ public class TestNRTReaderWithThreads extends LuceneTestCase {
     while ((System.currentTimeMillis() - startTime) < duration) {
       Thread.sleep(100);
     }
-    for (int x=0; x < indexThreads.length; x++) {
-      indexThreads[x].run = false;
-      assertNull("Exception thrown: "+indexThreads[x].ex, indexThreads[x].ex);
-    }
     int delCount = 0;
     int addCount = 0;
     for (int x=0; x < indexThreads.length; x++) {
-      indexThreads[x].join();
+      indexThreads[x].run = false;
+      assertNull("Exception thrown: "+indexThreads[x].ex, indexThreads[x].ex);
       addCount += indexThreads[x].addCount;
       delCount += indexThreads[x].delCount;
+    }
+    for (int x=0; x < indexThreads.length; x++) {
+      indexThreads[x].join();
     }
     for (int x=0; x < indexThreads.length; x++) {
       assertNull("Exception thrown: "+indexThreads[x].ex, indexThreads[x].ex);

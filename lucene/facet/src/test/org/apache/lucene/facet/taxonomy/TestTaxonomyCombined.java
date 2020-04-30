@@ -1,19 +1,3 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.apache.lucene.facet.taxonomy;
 
 import java.io.IOException;
@@ -30,6 +14,23 @@ import org.apache.lucene.facet.taxonomy.directory.DirectoryTaxonomyWriter;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
 import org.junit.Test;
+
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 @SuppressCodecs("SimpleText")
 public class TestTaxonomyCombined extends FacetTestCase {
@@ -490,15 +491,25 @@ public class TestTaxonomyCombined extends FacetTestCase {
     }
 
     // check parent of of invalid ordinals:
-    expectThrows(IndexOutOfBoundsException.class, () -> {
+    try {
       tw.getParent(-1);
-    });
-    expectThrows(IndexOutOfBoundsException.class, () -> {
+      fail("getParent for -1 should throw exception");
+    } catch (ArrayIndexOutOfBoundsException e) {
+      // ok
+    }
+    try {
       tw.getParent(TaxonomyReader.INVALID_ORDINAL);
-    });
-    expectThrows(IndexOutOfBoundsException.class, () -> {
-      tw.getParent(tr.getSize());
-    });
+      fail("getParent for INVALID_ORDINAL should throw exception");
+    } catch (ArrayIndexOutOfBoundsException e) {
+      // ok
+    }
+    try {
+      int parent = tw.getParent(tr.getSize());
+      fail("getParent for getSize() should throw exception, but returned "
+          + parent);
+    } catch (ArrayIndexOutOfBoundsException e) {
+      // ok
+    }
   }
 
   /**

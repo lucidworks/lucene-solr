@@ -1,3 +1,5 @@
+package org.apache.solr.store.blockcache;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.store.blockcache;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -29,7 +30,6 @@ import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
-import org.apache.solr.core.ShutdownAwareDirectory;
 import org.apache.solr.store.hdfs.HdfsDirectory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,13 +37,12 @@ import org.slf4j.LoggerFactory;
 /**
  * @lucene.experimental
  */
-public class BlockDirectory extends FilterDirectory implements ShutdownAwareDirectory {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+public class BlockDirectory extends FilterDirectory {
+  private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   
-  public static final long BLOCK_SHIFT = Integer.getInteger("solr.hdfs.blockcache.blockshift", 13);
-
+  public static final long BLOCK_SHIFT = 13; // 2^13 = 8,192 bytes per block
+  public static final long BLOCK_MOD = 0x1FFF;
   public static final int BLOCK_SIZE = 1 << BLOCK_SHIFT;
-  public static final long BLOCK_MOD = BLOCK_SIZE - 1;
   
   public static long getBlock(long pos) {
     return pos >>> BLOCK_SHIFT;
@@ -93,21 +92,10 @@ public class BlockDirectory extends FilterDirectory implements ShutdownAwareDire
   private final boolean blockCacheReadEnabled;
   private final boolean blockCacheWriteEnabled;
 
-  private boolean cacheMerges;
-  private boolean cacheReadOnce;
-
   public BlockDirectory(String dirName, Directory directory, Cache cache,
       Set<String> blockCacheFileTypes, boolean blockCacheReadEnabled,
       boolean blockCacheWriteEnabled) throws IOException {
-    this(dirName, directory, cache, blockCacheFileTypes, blockCacheReadEnabled, blockCacheWriteEnabled, true, true);
-  }
-  
-  public BlockDirectory(String dirName, Directory directory, Cache cache,
-      Set<String> blockCacheFileTypes, boolean blockCacheReadEnabled,
-      boolean blockCacheWriteEnabled, boolean cacheMerges, boolean cacheReadOnce) throws IOException {
     super(directory);
-    this.cacheMerges = cacheMerges;
-    this.cacheReadOnce = cacheReadOnce;
     this.dirName = dirName;
     blockSize = BLOCK_SIZE;
     this.cache = cache;
@@ -118,11 +106,11 @@ public class BlockDirectory extends FilterDirectory implements ShutdownAwareDire
     }
     this.blockCacheReadEnabled = blockCacheReadEnabled;
     if (!blockCacheReadEnabled) {
-      log.info("Block cache on read is disabled");
+      LOG.info("Block cache on read is disabled");
     }
     this.blockCacheWriteEnabled = blockCacheWriteEnabled;
     if (!blockCacheWriteEnabled) {
-      log.info("Block cache on write is disabled");
+      LOG.info("Block cache on write is disabled");
     }
   }
   
@@ -237,13 +225,6 @@ public class BlockDirectory extends FilterDirectory implements ShutdownAwareDire
   }
   
   @Override
-  public void closeOnShutdown() throws IOException {
-    log.info("BlockDirectory closing on shutdown");
-    // we are shutting down, no need to clean up cache
-    super.close();
-  }
-  
-  @Override
   public void close() throws IOException {
     try {
       String[] files = listAll();
@@ -304,17 +285,6 @@ public class BlockDirectory extends FilterDirectory implements ShutdownAwareDire
       return false;
     }
     switch (context.context) {
-      // depending on params, we don't cache on merges or when only reading once
-      case MERGE: {
-        return cacheMerges;
-      }
-      case READ: {
-        if (context.readOnce) {
-          return cacheReadOnce;
-        } else {
-          return true;
-        }
-      }
       default: {
         return true;
       }
@@ -354,7 +324,7 @@ public class BlockDirectory extends FilterDirectory implements ShutdownAwareDire
     }
     return dest;
   }
-
+  
   public void deleteFile(String name) throws IOException {
     cache.delete(getFileCacheName(name));
     super.deleteFile(name);

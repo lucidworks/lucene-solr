@@ -1,3 +1,26 @@
+package org.apache.solr.handler.dataimport;
+
+import java.io.File;
+import java.lang.invoke.MethodHandles;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+
+import org.apache.solr.common.util.SuppressForbidden;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,24 +37,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.dataimport;
-
-import java.lang.invoke.MethodHandles;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.Statement;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-
-import org.apache.solr.common.util.SuppressForbidden;
-import org.junit.Before;
-import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 
 public class TestSimplePropertiesWriter extends AbstractDIHJdbcTestCase {
 
@@ -89,22 +94,36 @@ public class TestSimplePropertiesWriter extends AbstractDIHJdbcTestCase {
       Date docDate= df.parse((String) props.get("last_index_time"));
       int year = currentYearFromDatabase();
       
-      assertTrue("This date: " + errMsgFormat.format(oneSecondAgo) + " should be prior to the document date: " + errMsgFormat.format(docDate), docDate.getTime() - oneSecondAgo.getTime() > 0);
-      assertTrue("This date: " + errMsgFormat.format(oneSecondAgo) + " should be prior to the entity date: " + errMsgFormat.format(entityDate), entityDate.getTime() - oneSecondAgo.getTime() > 0);
+      Assert.assertTrue("This date: " + errMsgFormat.format(oneSecondAgo) + " should be prior to the document date: " + errMsgFormat.format(docDate), docDate.getTime() - oneSecondAgo.getTime() > 0);
+      Assert.assertTrue("This date: " + errMsgFormat.format(oneSecondAgo) + " should be prior to the entity date: " + errMsgFormat.format(entityDate), entityDate.getTime() - oneSecondAgo.getTime() > 0);   
       assertQ(req("*:*"), "//*[@numFound='1']", "//doc/str[@name=\"ayear_s\"]=\"" + year + "\"");    
     }
   }
   
   private int currentYearFromDatabase() throws Exception {
-    try (
-        Connection conn = newConnection();
-        Statement s = conn.createStatement();
-        ResultSet rs = s.executeQuery("select year(current_timestamp) from sysibm.sysdummy1");
-    ){
+    Connection conn = null;
+    Statement s = null;
+    ResultSet rs = null;
+    try {
+      conn = newConnection();
+      s = conn.createStatement();
+      rs = s.executeQuery("select year(current_timestamp) from sysibm.sysdummy1");
       if (rs.next()) {
         return rs.getInt(1);
       }
-      fail("We should have gotten a row from the db.");
+      Assert.fail("We should have gotten a row from the db.");
+    } catch (SQLException e) {
+      throw e;
+    } finally {
+      try {
+        rs.close();
+      } catch (Exception ex) {}
+      try {
+        s.close();
+      } catch (Exception ex) {}
+      try {
+        conn.close();
+      } catch (Exception ex) {}
     }
     return 0;
   }

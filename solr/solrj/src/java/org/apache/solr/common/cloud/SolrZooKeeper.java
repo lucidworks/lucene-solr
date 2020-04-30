@@ -1,3 +1,5 @@
+package org.apache.solr.common.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.cloud;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -57,14 +58,19 @@ public class SolrZooKeeper extends ZooKeeper {
       @Override
       public void run() {
         try {
-          AccessController.doPrivileged((PrivilegedAction<Void>) this::closeZookeeperChannel);
+          AccessController.doPrivileged(new PrivilegedAction<Void>() {
+            @Override
+            public Void run() {
+              return closeZookeeperChannel();
+            }
+          });
         } finally {
           spawnedThreads.remove(this);
         }
       }
       
       @SuppressForbidden(reason = "Hack for Zookeper needs access to private methods.")
-      private Void closeZookeeperChannel() {
+      Void closeZookeeperChannel() {
         final ClientCnxn cnxn = getConnection();
         synchronized (cnxn) {
           try {
@@ -93,6 +99,9 @@ public class SolrZooKeeper extends ZooKeeper {
   
   @Override
   public synchronized void close() throws InterruptedException {
+    for (Thread t : spawnedThreads) {
+      if (t.isAlive()) t.interrupt();
+    }
     super.close();
   }
   

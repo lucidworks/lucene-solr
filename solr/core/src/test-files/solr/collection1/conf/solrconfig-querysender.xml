@@ -24,7 +24,6 @@
         solr.StandardDirectoryFactory, the default, is filesystem based.
         solr.RAMDirectoryFactory is memory based and not persistent. -->
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
   
   <updateHandler class="solr.DirectUpdateHandler2">
     <listener event="postCommit" 
@@ -42,8 +41,8 @@
          local query request for each NamedList in sequence. -->
     <listener event="newSearcher" class="solr.QuerySenderListener">
       <arr name="queries">
-        <lst> <str name="q">solr</str> <str name="start">0</str> <str name="rows">10</str> <str name="qt">/mock</str></lst>
-        <lst> <str name="q">rocks</str> <str name="start">0</str> <str name="rows">10</str> <str name="qt">/mock</str></lst>
+        <lst> <str name="q">solr</str> <str name="start">0</str> <str name="rows">10</str> <str name="qt">mock</str></lst>
+        <lst> <str name="q">rocks</str> <str name="start">0</str> <str name="rows">10</str> <str name="qt">mock</str></lst>
       </arr>
     </listener>
     <listener event="newSearcher"
@@ -55,7 +54,7 @@
     <listener event="firstSearcher" class="solr.QuerySenderListener">
       <arr name="queries">
         <lst> <str name="q">fast_warm</str> <str name="start">0</str> <str name="rows">10</str>
-          <str name="qt">/mock</str>
+          <str name="qt">mock</str>
         </lst>
       </arr>
     </listener>
@@ -64,7 +63,7 @@
 
   
   </query>
-  <requestHandler name="/mock" class="org.apache.solr.core.MockQuerySenderListenerReqHandler" default="true">
+  <requestHandler name="mock" class="org.apache.solr.core.MockQuerySenderListenerReqHandler" default="true">
     <!-- default values for query parameters -->
 
   </requestHandler>

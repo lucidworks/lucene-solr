@@ -1,3 +1,5 @@
+package org.apache.solr.security;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,57 +16,53 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.security;
 
+
+import javax.servlet.ServletRequest;
 import javax.servlet.http.HttpServletRequest;
+
 import java.lang.invoke.MethodHandles;
 import java.security.Principal;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.http.client.HttpClient;
+import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.embedded.JettySolrRunner;
-import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.QueryRequest;
-import org.apache.solr.cloud.SolrCloudAuthTestCase;
+import org.apache.solr.cloud.AbstractFullDistribZkTestBase;
+import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.Utils;
-import org.junit.After;
-import org.junit.BeforeClass;
+import org.apache.solr.request.LocalSolrQueryRequest;
+import org.apache.zookeeper.CreateMode;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static java.util.Collections.singletonMap;
 import static org.apache.solr.common.util.Utils.makeMap;
+import static org.apache.solr.security.TestAuthorizationFramework.verifySecurityStatus;
 
-public class PKIAuthenticationIntegrationTest extends SolrCloudAuthTestCase {
-
+@SolrTestCaseJ4.SuppressSSL
+public class PKIAuthenticationIntegrationTest extends AbstractFullDistribZkTestBase {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-  private static final String COLLECTION = "pkiCollection";
-  
-  @BeforeClass
-  public static void setupCluster() throws Exception {
-    final String SECURITY_CONF = Utils.toJSONString
-      (makeMap("authorization", singletonMap("class", MockAuthorizationPlugin.class.getName()),
-               "authentication", singletonMap("class", MockAuthenticationPlugin.class.getName())));
-    
-    configureCluster(2)
-      .addConfig("conf", configset("cloud-minimal"))
-      .withSecurityJson(SECURITY_CONF)
-      .configure();
 
-    CollectionAdminRequest.createCollection(COLLECTION, "conf", 2, 1).process(cluster.getSolrClient());
-
-    cluster.waitForActiveCollection(COLLECTION, 2, 2);
-  }
+  static final int TIMEOUT = 10000;
 
   @Test
   public void testPkiAuth() throws Exception {
-    HttpClient httpClient = cluster.getSolrClient().getHttpClient();
-    for (JettySolrRunner jetty : cluster.getJettySolrRunners()) {
+    waitForThingsToLevelOut(10);
+
+    byte[] bytes = Utils.toJSON(makeMap("authorization", singletonMap("class", MockAuthorizationPlugin.class.getName()),
+        "authentication", singletonMap("class", MockAuthenticationPlugin.class.getName())));
+
+    try (ZkStateReader zkStateReader = new ZkStateReader(zkServer.getZkAddress(),
+        TIMEOUT, TIMEOUT)) {
+      zkStateReader.getZkClient().setData(ZkStateReader.SOLR_SECURITY_CONF_PATH, bytes, true);
+    }
+    for (JettySolrRunner jetty : jettys) {
       String baseUrl = jetty.getBaseUrl().toString();
-      verifySecurityStatus(httpClient, baseUrl + "/admin/authorization", "authorization/class", MockAuthorizationPlugin.class.getName(), 20);
-      verifySecurityStatus(httpClient, baseUrl + "/admin/authentication", "authentication.enabled", "true", 20);
+      verifySecurityStatus(cloudClient.getLbClient().getHttpClient(), baseUrl + "/admin/authorization", "authorization/class", MockAuthorizationPlugin.class.getName(), 20);
+      verifySecurityStatus(cloudClient.getLbClient().getHttpClient(), baseUrl + "/admin/authentication", "authentication.enabled", "true", 20);
     }
     log.info("Starting test");
     ModifiableSolrParams params = new ModifiableSolrParams();
@@ -75,7 +73,9 @@ public class PKIAuthenticationIntegrationTest extends SolrCloudAuthTestCase {
     final AtomicInteger count = new AtomicInteger();
 
 
-    MockAuthorizationPlugin.predicate = context -> {
+    MockAuthorizationPlugin.predicate = new Predicate<AuthorizationContext>() {
+      @Override
+      public boolean test(AuthorizationContext context) {
         if ("/select".equals(context.getResource())) {
           Principal principal = context.getUserPrincipal();
           log.info("principalIs : {}", principal);
@@ -84,23 +84,27 @@ public class PKIAuthenticationIntegrationTest extends SolrCloudAuthTestCase {
           }
         }
         return true;
+      }
     };
 
-    MockAuthenticationPlugin.predicate = servletRequest -> {
+    MockAuthenticationPlugin.predicate = new Predicate<ServletRequest>() {
+      @Override
+      public boolean test(ServletRequest servletRequest) {
         String s = ((HttpServletRequest) servletRequest).getQueryString();
         if (s != null && s.contains("__user=solr") && s.contains("__pwd=SolrRocks")) {
           servletRequest.setAttribute(Principal.class.getName(), "solr");
         }
         return true;
+      }
     };
     QueryRequest query = new QueryRequest(params);
-    query.process(cluster.getSolrClient(), COLLECTION);
-    assertTrue("all nodes must get the user solr , no:of nodes got solr : " + count.get(), count.get() > 2);
-    assertPkiAuthMetricsMinimums(2, 2, 0, 0, 0, 0);
+    query.process(cloudClient);
+    assertTrue("all nodes must get the user solr , no:of nodes got solr : " + count.get(),count.get() > 2);
   }
 
-  @After
+  @Override
   public void distribTearDown() throws Exception {
+    super.distribTearDown();
     MockAuthenticationPlugin.predicate = null;
     MockAuthorizationPlugin.predicate = null;
   }

@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.document;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -22,24 +23,19 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.TreeSet;
 
-import org.apache.lucene.analysis.miscellaneous.ConcatenateGraphFilter;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Weight;
-import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.IntsRefBuilder;
-import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.automaton.Automata;
 import org.apache.lucene.util.automaton.Automaton;
 import org.apache.lucene.util.automaton.Operations;
 import org.apache.lucene.util.fst.Util;
 
 /**
- * A {@link CompletionQuery} that matches documents specified by
+ * A {@link CompletionQuery} that match documents specified by
  * a wrapped {@link CompletionQuery} supporting boosting and/or filtering
  * by specified contexts.
  * <p>
@@ -78,16 +74,12 @@ import org.apache.lucene.util.fst.Util;
  *
  * @lucene.experimental
  */
-public class ContextQuery extends CompletionQuery implements Accountable {
-  private static final long BASE_RAM_BYTES = RamUsageEstimator.shallowSizeOfInstance(ContextQuery.class);
-
+public class ContextQuery extends CompletionQuery {
   private IntsRefBuilder scratch = new IntsRefBuilder();
   private Map<IntsRef, ContextMetaData> contexts;
   private boolean matchAllContexts = false;
   /** Inner completion query */
   protected CompletionQuery innerQuery;
-
-  private long ramBytesUsed;
 
   /**
    * Constructs a context completion query that matches
@@ -104,13 +96,6 @@ public class ContextQuery extends CompletionQuery implements Accountable {
     }
     this.innerQuery = query;
     contexts = new HashMap<>();
-    updateRamBytesUsed();
-  }
-
-  private void updateRamBytesUsed() {
-    ramBytesUsed = BASE_RAM_BYTES +
-        RamUsageEstimator.sizeOfObject(contexts) +
-        RamUsageEstimator.sizeOfObject(innerQuery, RamUsageEstimator.QUERY_DEFAULT_RAM_BYTES_USED);
   }
 
   /**
@@ -142,7 +127,6 @@ public class ContextQuery extends CompletionQuery implements Accountable {
       }
     }
     contexts.put(IntsRef.deepCopyOf(Util.toIntsRef(new BytesRef(context), scratch)), new ContextMetaData(boost, exact));
-    updateRamBytesUsed();
   }
 
   /**
@@ -156,15 +140,15 @@ public class ContextQuery extends CompletionQuery implements Accountable {
   public String toString(String field) {
     StringBuilder buffer = new StringBuilder();
     BytesRefBuilder scratch = new BytesRefBuilder();
-    for (Map.Entry<IntsRef, ContextMetaData> entry : contexts.entrySet()) {
+    for (IntsRef context : contexts.keySet()) {
       if (buffer.length() != 0) {
         buffer.append(",");
       } else {
         buffer.append("contexts");
         buffer.append(":[");
       }
-      buffer.append(Util.toBytesRef(entry.getKey(), scratch).utf8ToString());
-      ContextMetaData metaData = entry.getValue();
+      buffer.append(Util.toBytesRef(context, scratch).utf8ToString());
+      ContextMetaData metaData = contexts.get(context);
       if (metaData.exact == false) {
         buffer.append("*");
       }
@@ -181,21 +165,13 @@ public class ContextQuery extends CompletionQuery implements Accountable {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    final CompletionWeight innerWeight = ((CompletionWeight) innerQuery.createWeight(searcher, scoreMode, boost));
-    final Automaton innerAutomaton = innerWeight.getAutomaton();
-
-    // If the inner automaton matches nothing, then we return an empty weight to avoid
-    // traversing all contexts during scoring.
-    if (innerAutomaton.getNumStates() == 0) {
-      return new CompletionWeight(this, innerAutomaton);
-    }
-
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    final CompletionWeight innerWeight = ((CompletionWeight) innerQuery.createWeight(searcher, needsScores));
     // if separators are preserved the fst contains a SEP_LABEL
     // behind each gap. To have a matching automaton, we need to
     // include the SEP_LABEL in the query as well
-    Automaton optionalSepLabel = Operations.optional(Automata.makeChar(ConcatenateGraphFilter.SEP_LABEL));
-    Automaton prefixAutomaton = Operations.concatenate(optionalSepLabel, innerAutomaton);
+    Automaton optionalSepLabel = Operations.optional(Automata.makeChar(CompletionAnalyzer.SEP_LABEL));
+    Automaton prefixAutomaton = Operations.concatenate(optionalSepLabel, innerWeight.getAutomaton());
     Automaton contextsAutomaton = Operations.concatenate(toContextAutomaton(contexts, matchAllContexts), prefixAutomaton);
     contextsAutomaton = Operations.determinize(contextsAutomaton, Operations.DEFAULT_MAX_DETERMINIZED_STATES);
 
@@ -263,7 +239,7 @@ public class ContextQuery extends CompletionQuery implements Accountable {
     }
   }
 
-  private static class ContextCompletionWeight extends CompletionWeight {
+  private class ContextCompletionWeight extends CompletionWeight {
 
     private final Map<IntsRef, Float> contextMap;
     private final int[] contextLengths;
@@ -318,7 +294,7 @@ public class ContextQuery extends CompletionQuery implements Accountable {
           }
           ref.offset = ++i;
           assert ref.offset < ref.length : "input should not end with the context separator";
-          if (ref.ints[i] == ConcatenateGraphFilter.SEP_LABEL) {
+          if (ref.ints[i] == CompletionAnalyzer.SEP_LABEL) {
             ref.offset++;
             assert ref.offset < ref.length : "input should not end with a context separator followed by SEP_LABEL";
           }
@@ -339,25 +315,5 @@ public class ContextQuery extends CompletionQuery implements Accountable {
     protected float boost() {
       return currentBoost + innerWeight.boost();
     }
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int hashCode() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    visitor.visitLeaf(this);
-  }
-
-  @Override
-  public long ramBytesUsed() {
-    return ramBytesUsed;
   }
 }

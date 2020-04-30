@@ -76,17 +76,9 @@ solrAdminApp.controller('AnalysisController',
 
           for (key in tokenhash) {
             if (key == "match" || key=="positionHistory") {
-              //skip, to not display these keys in the UI
+              //@ todo do something
             } else {
-              var tokenInfo = new Object();
-              tokenInfo.name = key;
-              tokenInfo.value = tokenhash[key];
-              if ('text' === key || 'raw_bytes' === key ) {
-                if (tokenhash.match) {
-                  tokenInfo.extraclass = 'match'; //to highlight matching text strings
-                }
-              }
-              token.keys.push(tokenInfo);
+              token.keys.push({name:key, value:tokenhash[key]});
             }
           }
           tokens.push(token);
@@ -199,3 +191,13 @@ solrAdminApp.controller('AnalysisController',
       $scope.refresh();
     }
 );
+
+/***************
+
+function(error) {
+  if (error.status == 404) {
+    $scope.isHandlerMissing = true;
+  } else {
+    $scope.analysisError = error.error.msg;
+  }
+****/

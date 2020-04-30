@@ -1,3 +1,5 @@
+package org.apache.solr.client.solrj.response;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.response;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
-import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.io.input.ReaderInputStream;
 import org.apache.solr.SolrJettyTestBase;
 import org.apache.solr.client.solrj.ResponseParser;
 import org.apache.solr.client.solrj.SolrClient;
@@ -38,6 +37,7 @@ import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.util.NamedList;
+import org.apache.solr.core.SolrResourceLoader;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -50,12 +50,12 @@ import org.junit.Test;
 public class NoOpResponseParserTest extends SolrJettyTestBase {
 
   private static InputStream getResponse() throws IOException {
-    return new ReaderInputStream(new StringReader("NO-OP test response"), StandardCharsets.UTF_8);
+    return new SolrResourceLoader().openResource("solrj/sampleDateFacetResponse.xml");
   }
 
   @BeforeClass
   public static void beforeTest() throws Exception {
-    createAndStartJetty(legacyExampleCollection1SolrHome());
+    createJetty(legacyExampleCollection1SolrHome());
   }
 
   @Before

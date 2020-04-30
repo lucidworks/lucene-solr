@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -23,11 +23,10 @@ import java.util.Map;
 
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.ScoreMode;
 
-/** Keep matches that contain another SpanScorer. */
+/** Keep matches that contain another Spans. */
 public final class SpanContainingQuery extends SpanContainQuery {
   /** Construct a SpanContainingQuery matching spans from <code>big</code>
    * that contain at least one spans from <code>little</code>.
@@ -44,18 +43,18 @@ public final class SpanContainingQuery extends SpanContainQuery {
   }
 
   @Override
-  public SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    SpanWeight bigWeight = big.createWeight(searcher, scoreMode, boost);
-    SpanWeight littleWeight = little.createWeight(searcher, scoreMode, boost);
-    return new SpanContainingWeight(searcher, scoreMode.needsScores() ? getTermStates(bigWeight, littleWeight) : null,
-                                      bigWeight, littleWeight, boost);
+  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    SpanWeight bigWeight = big.createWeight(searcher, false);
+    SpanWeight littleWeight = little.createWeight(searcher, false);
+    return new SpanContainingWeight(searcher, needsScores ? getTermContexts(bigWeight, littleWeight) : null,
+                                      bigWeight, littleWeight);
   }
 
   public class SpanContainingWeight extends SpanContainWeight {
 
-    public SpanContainingWeight(IndexSearcher searcher, Map<Term, TermStates> terms,
-                                SpanWeight bigWeight, SpanWeight littleWeight, float boost) throws IOException {
-      super(searcher, terms, bigWeight, littleWeight, boost);
+    public SpanContainingWeight(IndexSearcher searcher, Map<Term, TermContext> terms,
+                                SpanWeight bigWeight, SpanWeight littleWeight) throws IOException {
+      super(searcher, terms, bigWeight, littleWeight);
     }
 
     /**
@@ -72,7 +71,7 @@ public final class SpanContainingQuery extends SpanContainQuery {
       Spans big = containerContained.get(0);
       Spans little = containerContained.get(1);
 
-      return new ContainSpans(big, little, big) {
+      return new ContainSpans(this, getSimScorer(context), big, little, big) {
 
         @Override
         boolean twoPhaseCurrentDocMatches() throws IOException {
@@ -116,11 +115,5 @@ public final class SpanContainingQuery extends SpanContainQuery {
         }
       };
     }
-
-    @Override
-    public boolean isCacheable(LeafReaderContext ctx) {
-      return bigWeight.isCacheable(ctx) && littleWeight.isCacheable(ctx);
-    }
-
   }
 }

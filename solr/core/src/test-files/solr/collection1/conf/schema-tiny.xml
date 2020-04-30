@@ -26,12 +26,12 @@
 
   <uniqueKey>id</uniqueKey>
 
-  <fieldType name="text" class="solr.TextField">
-    <analyzer>
-      <tokenizer class="solr.WhitespaceTokenizerFactory"/>
-      <filter class="solr.LowerCaseFilterFactory"/>
-    </analyzer>
-  </fieldType>
-
-  <similarity class="${solr.similarity:solr.SchemaSimilarityFactory}"/>
+  <types>
+    <fieldType name="text" class="solr.TextField">
+      <analyzer>
+        <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+        <filter class="solr.LowerCaseFilterFactory"/>
+      </analyzer>
+    </fieldType>
+  </types>
 </schema>

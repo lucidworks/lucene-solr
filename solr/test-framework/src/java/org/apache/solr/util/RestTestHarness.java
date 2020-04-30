@@ -1,3 +1,4 @@
+package org.apache.solr.util;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util;
-import javax.xml.xpath.XPathConstants;
-import javax.xml.xpath.XPathExpressionException;
-import java.io.Closeable;
-import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.HttpDelete;
@@ -34,6 +28,13 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
 import org.apache.solr.client.solrj.impl.HttpClientUtil;
 import org.apache.solr.common.params.ModifiableSolrParams;
+
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathExpressionException;
+import java.io.Closeable;
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Facilitates testing Solr's REST API via a provided embedded Jetty
@@ -49,14 +50,6 @@ public class RestTestHarness extends BaseTestHarness implements Closeable {
   
   public String getBaseURL() {
     return serverProvider.getBaseURL();
-  }
-
-  public void setServerProvider(RESTfulServerProvider serverProvider) {
-    this.serverProvider = serverProvider;
-  }
-
-  public RESTfulServerProvider getServerProvider() {
-    return this.serverProvider;
   }
 
   public String getAdminURL() {
@@ -97,7 +90,7 @@ public class RestTestHarness extends BaseTestHarness implements Closeable {
 
   /**
    * Processes a "query" using a URL path (with no context path) + optional query params,
-   * e.g. "/schema/fields?indent=off"
+   * e.g. "/schema/fields?indent=on"
    *
    * @param request the URL path and optional query params
    * @return The response to the query
@@ -181,10 +174,10 @@ public class RestTestHarness extends BaseTestHarness implements Closeable {
   @Override
   public void reload() throws Exception {
     String coreName = (String)evaluateXPath
-        (adminQuery("/admin/cores?wt=xml&action=STATUS"),
+        (adminQuery("/admin/cores?action=STATUS"),
          "//lst[@name='status']/lst[1]/str[@name='name']",
          XPathConstants.STRING);
-    String xml = checkAdminResponseStatus("/admin/cores?wt=xml&action=RELOAD&core=" + coreName, "0");
+    String xml = checkAdminResponseStatus("/admin/cores?action=RELOAD&core=" + coreName, "0");
     if (null != xml) {
       throw new RuntimeException("RELOAD failed:\n" + xml);
     }
@@ -212,7 +205,7 @@ public class RestTestHarness extends BaseTestHarness implements Closeable {
   private String getResponse(HttpUriRequest request) throws IOException {
     HttpEntity entity = null;
     try {
-      entity = httpClient.execute(request, HttpClientUtil.createNewHttpClientRequestContext()).getEntity();
+      entity = httpClient.execute(request).getEntity();
       return EntityUtils.toString(entity, StandardCharsets.UTF_8);
     } finally {
       EntityUtils.consumeQuietly(entity);
@@ -221,6 +214,6 @@ public class RestTestHarness extends BaseTestHarness implements Closeable {
 
   @Override
   public void close() throws IOException {
-    HttpClientUtil.close(httpClient);
+    httpClient.close();
   }
 }

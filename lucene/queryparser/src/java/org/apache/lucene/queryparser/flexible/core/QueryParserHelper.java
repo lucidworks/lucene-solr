@@ -1,3 +1,11 @@
+package org.apache.lucene.queryparser.flexible.core;
+
+import org.apache.lucene.queryparser.flexible.core.builders.QueryBuilder;
+import org.apache.lucene.queryparser.flexible.core.config.QueryConfigHandler;
+import org.apache.lucene.queryparser.flexible.core.nodes.QueryNode;
+import org.apache.lucene.queryparser.flexible.core.parser.SyntaxParser;
+import org.apache.lucene.queryparser.flexible.core.processors.QueryNodeProcessor;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +22,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.core;
 
-import org.apache.lucene.queryparser.flexible.core.builders.QueryBuilder;
-import org.apache.lucene.queryparser.flexible.core.config.QueryConfigHandler;
-import org.apache.lucene.queryparser.flexible.core.nodes.QueryNode;
-import org.apache.lucene.queryparser.flexible.core.parser.SyntaxParser;
-import org.apache.lucene.queryparser.flexible.core.processors.QueryNodeProcessor;
-
+  
 /**
  * This class is a helper for the query parser framework, it does all the three
  * query parser phrases at once: text parsing, query processing and query

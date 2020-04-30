@@ -14,18 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.io.stream;
 
 import java.io.Serializable;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.solr.client.solrj.io.ModelCache;
 import org.apache.solr.client.solrj.io.SolrClientCache;
 import org.apache.solr.client.solrj.io.stream.expr.StreamFactory;
-import org.apache.solr.client.solrj.routing.RequestReplicaListTransformerGenerator;
-import org.apache.solr.common.params.SolrParams;
 
 /**
  *  The StreamContext is passed to TupleStreams using the TupleStream.setStreamContext() method.
@@ -39,28 +37,10 @@ import org.apache.solr.common.params.SolrParams;
 public class StreamContext implements Serializable{
 
   private Map entries = new HashMap();
-  private Map tupleContext = new HashMap();
-  private Map<String, Object> lets = new HashMap();
-  private ConcurrentMap objectCache;
   public int workerID;
   public int numWorkers;
   private SolrClientCache clientCache;
-  private ModelCache modelCache;
   private StreamFactory streamFactory;
-  private SolrParams requestParams;
-  private RequestReplicaListTransformerGenerator requestReplicaListTransformerGenerator;
-
-  public ConcurrentMap getObjectCache() {
-    return this.objectCache;
-  }
-
-  public void setObjectCache(ConcurrentMap objectCache) {
-    this.objectCache = objectCache;
-  }
-
-  public Map<String, Object> getLets(){
-    return lets;
-  }
 
   public Object get(Object key) {
     return entries.get(key);
@@ -70,55 +50,19 @@ public class StreamContext implements Serializable{
     this.entries.put(key, value);
   }
 
-  public boolean containsKey(Object key) {
-    return entries.containsKey(key);
-  }
-
-  public Map getEntries() {
-    return this.entries;
-  }
-
   public void setSolrClientCache(SolrClientCache clientCache) {
     this.clientCache = clientCache;
-  }
-
-  public void setModelCache(ModelCache modelCache) {
-    this.modelCache = modelCache;
   }
 
   public SolrClientCache getSolrClientCache() {
     return this.clientCache;
   }
 
-  public ModelCache getModelCache() {
-    return this.modelCache;
-  }
-
   public void setStreamFactory(StreamFactory streamFactory) {
     this.streamFactory = streamFactory;
   }
 
-  public Map getTupleContext() {
-    return tupleContext;
-  }
-
   public StreamFactory getStreamFactory() {
     return this.streamFactory;
-  }
-
-  public void setRequestParams(SolrParams requestParams) {
-    this.requestParams = requestParams;
-  }
-
-  public SolrParams getRequestParams() {
-    return requestParams;
-  }
-
-  public void setRequestReplicaListTransformerGenerator(RequestReplicaListTransformerGenerator requestReplicaListTransformerGenerator) {
-    this.requestReplicaListTransformerGenerator = requestReplicaListTransformerGenerator;
-  }
-
-  public RequestReplicaListTransformerGenerator getRequestReplicaListTransformerGenerator() {
-    return requestReplicaListTransformerGenerator;
   }
 }

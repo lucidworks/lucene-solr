@@ -88,7 +88,6 @@ var getPluginTypes = function(data, selected) {
         var key = mbeans[i];
         var lower = key.toLowerCase();
         var plugins = getPlugins(mbeans[i+1]);
-        if (plugins.length == 0) continue;
         keys.push({name: key,
                    selected: lower == selected,
                    changes: 0,

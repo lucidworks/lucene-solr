@@ -6,6 +6,8 @@ import java.util.List;
 import java.io.StringReader;
 
 
+import org.apache.lucene.analysis.TokenStream;
+
 import org.apache.lucene.queryparser.surround.query.SrndQuery;
 import org.apache.lucene.queryparser.surround.query.FieldsQuery;
 import org.apache.lucene.queryparser.surround.query.OrQuery;
@@ -42,15 +44,18 @@ import org.apache.lucene.queryparser.surround.query.SrndTruncQuery;
  */
 
 public class QueryParser implements QueryParserConstants {
-  static final int MINIMUM_PREFIX_LENGTH = 3;
-  static final int MINIMUM_CHARS_IN_TRUNC = 3;
-  static final String TRUNCATION_ERROR_MESSAGE = "Too unrestrictive truncation: ";
-  static final String BOOST_ERROR_MESSAGE = "Cannot handle boost value: ";
+  final int minimumPrefixLength = 3;
+  final int minimumCharsInTrunc = 3;
+  final String truncationErrorMessage = "Too unrestrictive truncation: ";
+  final String boostErrorMessage = "Cannot handle boost value: ";
 
   /* CHECKME: These should be the same as for the tokenizer. How? */
-  static final char TRUNCATOR = '*';
-  static final char ANY_CHAR = '?';
-  static final char FIELD_OPERATOR = ':';
+  final char truncator = '*';
+  final char anyChar = '?';
+  final char quote = '"';
+  final char fieldOperator = ':';
+  final char comma = ','; /* prefix list separator */
+  final char carat = '^'; /* weight operator */
 
   static public SrndQuery parse(String query) throws ParseException {
     QueryParser parser = new QueryParser();
@@ -75,7 +80,7 @@ public class QueryParser implements QueryParserConstants {
     /* FIXME: check acceptable subquery: at least one subquery should not be
      * a fields query.
      */
-    return new FieldsQuery(q, fieldNames, FIELD_OPERATOR);
+    return new FieldsQuery(q, fieldNames, fieldOperator);
   }
 
   protected SrndQuery getOrQuery(List<SrndQuery> queries, boolean infix, Token orToken) {
@@ -125,12 +130,12 @@ public class QueryParser implements QueryParserConstants {
   }
 
   protected boolean allowedSuffix(String suffixed) {
-    return (suffixed.length() - 1) >= MINIMUM_PREFIX_LENGTH;
+    return (suffixed.length() - 1) >= minimumPrefixLength;
   }
 
   protected SrndQuery getPrefixQuery(
       String prefix, boolean quoted) {
-    return new SrndPrefixQuery(prefix, quoted, TRUNCATOR);
+    return new SrndPrefixQuery(prefix, quoted, truncator);
   }
 
   protected boolean allowedTruncation(String truncated) {
@@ -138,15 +143,15 @@ public class QueryParser implements QueryParserConstants {
     int nrNormalChars = 0;
     for (int i = 0; i < truncated.length(); i++) {
       char c = truncated.charAt(i);
-      if ((c != TRUNCATOR) && (c != ANY_CHAR)) {
+      if ((c != truncator) && (c != anyChar)) {
         nrNormalChars++;
       }
     }
-    return nrNormalChars >= MINIMUM_CHARS_IN_TRUNC;
+    return nrNormalChars >= minimumCharsInTrunc;
   }
 
   protected SrndQuery getTruncQuery(String truncated) {
-    return new SrndTruncQuery(truncated, TRUNCATOR, ANY_CHAR);
+    return new SrndTruncQuery(truncated, truncator, anyChar);
   }
 
   final public SrndQuery TopSrndQuery() throws ParseException {
@@ -434,7 +439,7 @@ public class QueryParser implements QueryParserConstants {
       term = jj_consume_token(SUFFIXTERM);
                         /* ending in * */
       if (! allowedSuffix(term.image)) {
-        {if (true) throw new ParseException(TRUNCATION_ERROR_MESSAGE + term.image);}
+        {if (true) throw new ParseException(truncationErrorMessage + term.image);}
       }
       {if (true) return getPrefixQuery(term.image.substring(0, term.image.length()-1), false /* not quoted */);}
       break;
@@ -442,15 +447,15 @@ public class QueryParser implements QueryParserConstants {
       term = jj_consume_token(TRUNCTERM);
                        /* with at least one * or ? */
       if (! allowedTruncation(term.image)) {
-        {if (true) throw new ParseException(TRUNCATION_ERROR_MESSAGE + term.image);}
+        {if (true) throw new ParseException(truncationErrorMessage + term.image);}
       }
       {if (true) return getTruncQuery(term.image);}
       break;
     case TRUNCQUOTED:
       term = jj_consume_token(TRUNCQUOTED);
                          /* eg. "9b-b,m"* */
-      if ((term.image.length() - 3) < MINIMUM_PREFIX_LENGTH) {
-        {if (true) throw new ParseException(TRUNCATION_ERROR_MESSAGE + term.image);}
+      if ((term.image.length() - 3) < minimumPrefixLength) {
+        {if (true) throw new ParseException(truncationErrorMessage + term.image);}
       }
       {if (true) return getPrefixQuery(term.image.substring(1, term.image.length()-2), true /* quoted */);}
       break;
@@ -478,12 +483,12 @@ public class QueryParser implements QueryParserConstants {
       weight = jj_consume_token(NUMBER);
       float f;
       try {
-        f = Float.parseFloat(weight.image);
+        f = Float.valueOf(weight.image).floatValue();
       } catch (Exception floatExc) {
-        {if (true) throw new ParseException(BOOST_ERROR_MESSAGE + weight.image + " (" + floatExc + ")");}
+        {if (true) throw new ParseException(boostErrorMessage + weight.image + " (" + floatExc + ")");}
       }
       if (f <= 0.0) {
-        {if (true) throw new ParseException(BOOST_ERROR_MESSAGE + weight.image);}
+        {if (true) throw new ParseException(boostErrorMessage + weight.image);}
       }
       q.setWeight(f * q.getWeight()); /* left associative, fwiw */
 

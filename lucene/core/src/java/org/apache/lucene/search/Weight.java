@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.Set;
@@ -24,6 +24,7 @@ import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.util.Bits;
 
 /**
@@ -43,14 +44,20 @@ import org.apache.lucene.util.Bits;
  * A <code>Weight</code> is used in the following way:
  * <ol>
  * <li>A <code>Weight</code> is constructed by a top-level query, given a
- * <code>IndexSearcher</code> ({@link Query#createWeight(IndexSearcher, ScoreMode, float)}).
+ * <code>IndexSearcher</code> ({@link Query#createWeight(IndexSearcher, boolean)}).
+ * <li>The {@link #getValueForNormalization()} method is called on the
+ * <code>Weight</code> to compute the query normalization factor
+ * {@link Similarity#queryNorm(float)} of the query clauses contained in the
+ * query.
+ * <li>The query normalization factor is passed to {@link #normalize(float, float)}. At
+ * this point the weighting is complete.
  * <li>A <code>Scorer</code> is constructed by
  * {@link #scorer(org.apache.lucene.index.LeafReaderContext)}.
  * </ol>
  * 
  * @since 2.9
  */
-public abstract class Weight implements SegmentCacheable {
+public abstract class Weight {
 
   protected final Query parentQuery;
 
@@ -66,42 +73,8 @@ public abstract class Weight implements SegmentCacheable {
    * {@link Weight} was created with {@code needsScores == true} then this
    * method will only extract terms which are used for scoring, otherwise it
    * will extract all terms which are used for matching.
-   *
-   * @deprecated Use {@link Query#visit(QueryVisitor)} with {@link QueryVisitor#termCollector(Set)}
    */
-  @Deprecated
   public abstract void extractTerms(Set<Term> terms);
-
-  /**
-   * Returns {@link Matches} for a specific document, or {@code null} if the document
-   * does not match the parent query
-   *
-   * A query match that contains no position information (for example, a Point or
-   * DocValues query) will return {@link MatchesUtils#MATCH_WITH_NO_TERMS}
-   *
-   * @param context the reader's context to create the {@link Matches} for
-   * @param doc     the document's id relative to the given context's reader
-   * @lucene.experimental
-   */
-  public Matches matches(LeafReaderContext context, int doc) throws IOException {
-    ScorerSupplier scorerSupplier = scorerSupplier(context);
-    if (scorerSupplier == null) {
-      return null;
-    }
-    Scorer scorer = scorerSupplier.get(1);
-    final TwoPhaseIterator twoPhase = scorer.twoPhaseIterator();
-    if (twoPhase == null) {
-      if (scorer.iterator().advance(doc) != doc) {
-        return null;
-      }
-    }
-    else {
-      if (twoPhase.approximation().advance(doc) != doc || twoPhase.matches() == false) {
-        return null;
-      }
-    }
-    return MatchesUtils.MATCH_WITH_NO_TERMS;
-  }
 
   /**
    * An explanation of the score computation for the named document.
@@ -117,6 +90,12 @@ public abstract class Weight implements SegmentCacheable {
   public final Query getQuery() {
     return parentQuery;
   }
+  
+  /** The value for normalization of contained query clauses (e.g. sum of squared weights). */
+  public abstract float getValueForNormalization() throws IOException;
+
+  /** Assigns the query normalization factor and boost to this. */
+  public abstract void normalize(float norm, float boost);
 
   /**
    * Returns a {@link Scorer} which can iterate in order over all matching
@@ -135,31 +114,6 @@ public abstract class Weight implements SegmentCacheable {
    * @throws IOException if there is a low-level I/O error
    */
   public abstract Scorer scorer(LeafReaderContext context) throws IOException;
-
-  /**
-   * Optional method.
-   * Get a {@link ScorerSupplier}, which allows to know the cost of the {@link Scorer}
-   * before building it. The default implementation calls {@link #scorer} and
-   * builds a {@link ScorerSupplier} wrapper around it.
-   * @see #scorer
-   */
-  public ScorerSupplier scorerSupplier(LeafReaderContext context) throws IOException {
-    final Scorer scorer = scorer(context);
-    if (scorer == null) {
-      return null;
-    }
-    return new ScorerSupplier() {
-      @Override
-      public Scorer get(long leadCost) {
-        return scorer;
-      }
-
-      @Override
-      public long cost() {
-        return scorer.iterator().cost();
-      }
-    };
-  }
 
   /**
    * Optional method, to return a {@link BulkScorer} to
@@ -193,8 +147,6 @@ public abstract class Weight implements SegmentCacheable {
    *  @lucene.internal */
   protected static class DefaultBulkScorer extends BulkScorer {
     private final Scorer scorer;
-    private final DocIdSetIterator iterator;
-    private final TwoPhaseIterator twoPhase;
 
     /** Sole constructor. */
     public DefaultBulkScorer(Scorer scorer) {
@@ -202,31 +154,30 @@ public abstract class Weight implements SegmentCacheable {
         throw new NullPointerException();
       }
       this.scorer = scorer;
-      this.iterator = scorer.iterator();
-      this.twoPhase = scorer.twoPhaseIterator();
     }
 
     @Override
     public long cost() {
-      return iterator.cost();
+      return scorer.cost();
     }
 
     @Override
     public int score(LeafCollector collector, Bits acceptDocs, int min, int max) throws IOException {
       collector.setScorer(scorer);
+      final TwoPhaseIterator twoPhase = scorer.asTwoPhaseIterator();
       if (scorer.docID() == -1 && min == 0 && max == DocIdSetIterator.NO_MORE_DOCS) {
-        scoreAll(collector, iterator, twoPhase, acceptDocs);
+        scoreAll(collector, scorer, twoPhase, acceptDocs);
         return DocIdSetIterator.NO_MORE_DOCS;
       } else {
         int doc = scorer.docID();
         if (doc < min) {
           if (twoPhase == null) {
-            doc = iterator.advance(min);
+            doc = scorer.advance(min);
           } else {
             doc = twoPhase.approximation().advance(min);
           }
         }
-        return scoreRange(collector, iterator, twoPhase, acceptDocs, doc, max);
+        return scoreRange(collector, scorer, twoPhase, acceptDocs, doc, max);
       }
     }
 
@@ -234,14 +185,14 @@ public abstract class Weight implements SegmentCacheable {
      *  separate this from {@link #scoreAll} to help out
      *  hotspot.
      *  See <a href="https://issues.apache.org/jira/browse/LUCENE-5487">LUCENE-5487</a> */
-    static int scoreRange(LeafCollector collector, DocIdSetIterator iterator, TwoPhaseIterator twoPhase,
+    static int scoreRange(LeafCollector collector, Scorer scorer, TwoPhaseIterator twoPhase,
         Bits acceptDocs, int currentDoc, int end) throws IOException {
       if (twoPhase == null) {
         while (currentDoc < end) {
           if (acceptDocs == null || acceptDocs.get(currentDoc)) {
             collector.collect(currentDoc);
           }
-          currentDoc = iterator.nextDoc();
+          currentDoc = scorer.nextDoc();
         }
         return currentDoc;
       } else {
@@ -260,9 +211,9 @@ public abstract class Weight implements SegmentCacheable {
      *  separate this from {@link #scoreRange} to help out
      *  hotspot.
      *  See <a href="https://issues.apache.org/jira/browse/LUCENE-5487">LUCENE-5487</a> */
-    static void scoreAll(LeafCollector collector, DocIdSetIterator iterator, TwoPhaseIterator twoPhase, Bits acceptDocs) throws IOException {
+    static void scoreAll(LeafCollector collector, Scorer scorer, TwoPhaseIterator twoPhase, Bits acceptDocs) throws IOException {
       if (twoPhase == null) {
-        for (int doc = iterator.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = iterator.nextDoc()) {
+        for (int doc = scorer.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = scorer.nextDoc()) {
           if (acceptDocs == null || acceptDocs.get(doc)) {
             collector.collect(doc);
           }

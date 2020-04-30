@@ -1,3 +1,5 @@
+package org.apache.solr.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -77,11 +78,6 @@ public class DOMUtil {
 
   public static String getAttr(Node nd, String name) {
     return getAttr(nd.getAttributes(), name);
-  }
-
-  public static String getAttrOrDefault(Node nd, String name, String def) {
-    String attr = getAttr(nd.getAttributes(), name);
-    return attr == null ? def : attr;
   }
 
   public static String getAttr(NamedNodeMap attrs, String name, String missing_err) {

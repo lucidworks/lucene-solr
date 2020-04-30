@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -30,15 +30,13 @@ import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.FieldInvertState;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.similarities.ClassicSimilarity;
-import org.apache.lucene.search.similarities.Similarity;
+import org.apache.lucene.search.Scorer.ChildScorer;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
 
@@ -70,11 +68,8 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
     writer.close();
     // we do not use newSearcher because the assertingXXX layers break
     // the toString representations we are relying on
-    // TODO: clean that up
     searcher = new IndexSearcher(reader);
-    searcher.setSimilarity(new ClassicSimilarity());
     scorerSearcher = new ScorerIndexSearcher(reader);
-    scorerSearcher.setSimilarity(new CountingSimilarity());
   }
   
   @Override
@@ -114,7 +109,7 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
     BooleanQuery.Builder bq = new BooleanQuery.Builder();
     bq.add(new TermQuery(new Term(F2, "lucene")), BooleanClause.Occur.MUST);
     bq.add(new TermQuery(new Term(F2, "is")), BooleanClause.Occur.MUST);
-    Map<Integer,Integer> tfs = getDocCounts(scorerSearcher, bq.build());
+    Map<Integer,Integer> tfs = getDocCounts(searcher, bq.build());
     assertEquals(3, tfs.size()); // 3 documents
     assertEquals(2, tfs.get(0).intValue()); // f2:lucene + f2:is
     assertEquals(3, tfs.get(1).intValue()); // f2:is + f2:is + f2:lucene
@@ -140,7 +135,7 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
     private final Set<Scorer> tqsSet = new HashSet<>();
     
     MyCollector() {
-      super(TopScoreDocCollector.create(10, Integer.MAX_VALUE));
+      super(TopScoreDocCollector.create(10));
     }
 
     public LeafCollector getLeafCollector(LeafReaderContext context)
@@ -149,7 +144,7 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
       return new FilterLeafCollector(super.getLeafCollector(context)) {
         
         @Override
-        public void setScorer(Scorable scorer) throws IOException {
+        public void setScorer(Scorer scorer) throws IOException {
           super.setScorer(scorer);
           tqsSet.clear();
           fillLeaves(scorer, tqsSet);
@@ -160,7 +155,7 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
           int freq = 0;
           for(Scorer scorer : tqsSet) {
             if (doc == scorer.docID()) {
-              freq += scorer.score();
+              freq += scorer.freq();
             }
           }
           docCounts.put(doc + docBase, freq);
@@ -170,11 +165,11 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
       };
     }
     
-    private void fillLeaves(Scorable scorer, Set<Scorer> set) throws IOException {
-      if (scorer instanceof TermScorer) {
-        set.add((Scorer)scorer);
+    private void fillLeaves(Scorer scorer, Set<Scorer> set) {
+      if (scorer.getWeight().getQuery() instanceof TermQuery) {
+        set.add(scorer);
       } else {
-        for (Scorable.ChildScorable child : scorer.getChildren()) {
+        for (ChildScorer child : scorer.getChildren()) {
           fillLeaves(child.child, set);
         }
       }
@@ -187,40 +182,7 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
     public int freq(int doc) throws IOException {
       return docCounts.get(doc);
     }
-
-  }
-
-  public void testDisjunctionMatches() throws IOException {
-    BooleanQuery.Builder bq1 = new BooleanQuery.Builder();
-    bq1.add(new TermQuery(new Term(F1, "lucene")), Occur.SHOULD);
-    bq1.add(new PhraseQuery(F2, "search", "engine"), Occur.SHOULD);
-
-    Weight w1 = scorerSearcher.createWeight(scorerSearcher.rewrite(bq1.build()), ScoreMode.COMPLETE, 1);
-    Scorer s1 = w1.scorer(reader.leaves().get(0));
-    assertEquals(0, s1.iterator().nextDoc());
-    assertEquals(2, s1.getChildren().size());
-
-    BooleanQuery.Builder bq2 = new BooleanQuery.Builder();
-    bq2.add(new TermQuery(new Term(F1, "lucene")), Occur.SHOULD);
-    bq2.add(new PhraseQuery(F2, "search", "library"), Occur.SHOULD);
-
-    Weight w2 = scorerSearcher.createWeight(scorerSearcher.rewrite(bq2.build()), ScoreMode.COMPLETE, 1);
-    Scorer s2 = w2.scorer(reader.leaves().get(0));
-    assertEquals(0, s2.iterator().nextDoc());
-    assertEquals(1, s2.getChildren().size());
-  }
-
-  public void testMinShouldMatchMatches() throws IOException {
-    BooleanQuery.Builder bq = new BooleanQuery.Builder();
-    bq.add(new TermQuery(new Term(F1, "lucene")), Occur.SHOULD);
-    bq.add(new TermQuery(new Term(F2, "lucene")), Occur.SHOULD);
-    bq.add(new PhraseQuery(F2, "search", "library"), Occur.SHOULD);
-    bq.setMinimumNumberShouldMatch(2);
-
-    Weight w = scorerSearcher.createWeight(scorerSearcher.rewrite(bq.build()), ScoreMode.COMPLETE, 1);
-    Scorer s = w.scorer(reader.leaves().get(0));
-    assertEquals(0, s.iterator().nextDoc());
-    assertEquals(2, s.getChildren().size());
+    
   }
 
   public void testGetChildrenMinShouldMatchSumScorer() throws IOException {
@@ -236,13 +198,13 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
     assertFalse(collector.getSummaries().isEmpty());
     for (String summary : collector.getSummaries()) {
       assertEquals(
-          "ConjunctionScorer\n" +
+          "CoordinatingConjunctionScorer\n" +
           "    MUST ConstantScoreScorer\n" +
           "    MUST MinShouldMatchSumScorer\n" +
-          "            SHOULD TermScorer body:crawler\n" +
+          "            SHOULD TermScorer body:nutch\n" +
           "            SHOULD TermScorer body:web\n" +
-          "            SHOULD TermScorer body:nutch",
-              summary);
+          "            SHOULD TermScorer body:crawler",
+          summary);
     }
   }
 
@@ -256,7 +218,8 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
     assertFalse(collector.getSummaries().isEmpty());
     for (String summary : collector.getSummaries()) {
       assertEquals(
-          "TermScorer body:nutch", summary);
+          "BoostedScorer\n" +
+          "    BOOSTED TermScorer body:nutch", summary);
     }
   }
 
@@ -273,8 +236,8 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
     }
     
     @Override
-    public ScoreMode scoreMode() {
-      return ScoreMode.COMPLETE;
+    public boolean needsScores() {
+      return true;
     }
 
     @Override
@@ -282,7 +245,7 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
       return new LeafCollector() {
 
         @Override
-        public void setScorer(Scorable scorer) throws IOException {
+        public void setScorer(Scorer scorer) throws IOException {
           final StringBuilder builder = new StringBuilder();
           summarizeScorer(builder, scorer, 0);
           summaries.add(builder.toString());
@@ -295,13 +258,13 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
       };
     }
 
-    private static void summarizeScorer(final StringBuilder builder, final Scorable scorer, final int indent) throws IOException {
+    private static void summarizeScorer(final StringBuilder builder, final Scorer scorer, final int indent) {
       builder.append(scorer.getClass().getSimpleName());
       if (scorer instanceof TermScorer) {
-        TermQuery termQuery = (TermQuery) ((Scorer)scorer).getWeight().getQuery();
+        TermQuery termQuery = (TermQuery) scorer.getWeight().getQuery();
         builder.append(" ").append(termQuery.getTerm().field()).append(":").append(termQuery.getTerm().text());
       }
-      for (final Scorable.ChildScorable childScorer : scorer.getChildren()) {
+      for (final ChildScorer childScorer : scorer.getChildren()) {
         indent(builder, indent + 1).append(childScorer.relationship).append(" ");
         summarizeScorer(builder, childScorer.child, indent + 2);
       }
@@ -315,25 +278,6 @@ public class TestBooleanQueryVisitSubscorers extends LuceneTestCase {
         builder.append("    ");
       }
       return builder;
-    }
-  }
-
-  // Similarity that just returns the frequency as the score
-  private static class CountingSimilarity extends Similarity {
-
-    @Override
-    public long computeNorm(FieldInvertState state) {
-      return 1;
-    }
-
-    @Override
-    public SimScorer scorer(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
-      return new SimScorer() {
-        @Override
-        public float score(float freq, long norm) {
-          return freq;
-        }
-      };
     }
   }
 

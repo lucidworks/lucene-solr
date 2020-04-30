@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.ext;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.ext;
 
 import org.apache.lucene.util.LuceneTestCase;
 
@@ -68,9 +69,11 @@ public class TestExtensions extends LuceneTestCase {
   public void testEscapeExtension() {
     assertEquals("abc\\:\\?\\{\\}\\[\\]\\\\\\(\\)\\+\\-\\!\\~", ext
         .escapeExtensionField("abc:?{}[]\\()+-!~"));
-    // should throw NPE - escape string is null
-    expectThrows(NullPointerException.class, () -> {
+    try {
       ext.escapeExtensionField(null);
-    });
+      fail("should throw NPE - escape string is null");
+    } catch (NullPointerException e) {
+      // 
+    }
   }
 }

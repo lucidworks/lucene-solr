@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ngram;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ngram;
-
 
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.util.TokenizerFactory;
 import org.apache.lucene.util.AttributeFactory;
+import org.apache.lucene.util.Version;
 
 import java.util.Map;
 
@@ -31,15 +32,8 @@ import java.util.Map;
  *     &lt;tokenizer class="solr.EdgeNGramTokenizerFactory" minGramSize="1" maxGramSize="1"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
 public class EdgeNGramTokenizerFactory extends TokenizerFactory {
-
-  /** SPI name */
-  public static final String NAME = "edgeNGram";
-
   private final int maxGramSize;
   private final int minGramSize;
 
@@ -55,6 +49,9 @@ public class EdgeNGramTokenizerFactory extends TokenizerFactory {
   
   @Override
   public Tokenizer create(AttributeFactory factory) {
-    return new EdgeNGramTokenizer(factory, minGramSize, maxGramSize);
+    if (luceneMatchVersion.onOrAfter(Version.LUCENE_4_4_0)) {
+      return new EdgeNGramTokenizer(factory, minGramSize, maxGramSize);
+    }
+    return new Lucene43NGramTokenizer(factory, minGramSize, maxGramSize);
   }
 }

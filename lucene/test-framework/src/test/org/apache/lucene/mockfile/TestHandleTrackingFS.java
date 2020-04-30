@@ -1,3 +1,5 @@
+package org.apache.lucene.mockfile;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +16,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.mockfile;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.Object;
+import java.lang.Override;
+import java.lang.RuntimeException;
 import java.net.URI;
+import java.nio.channels.AsynchronousFileChannel;
+import java.nio.channels.ByteChannel;
+import java.nio.channels.FileChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import org.apache.lucene.mockfile.HandleTrackingFS;
+import org.apache.lucene.mockfile.LeakFS;
 
 /** Basic tests for HandleTrackingFS */
 public class TestHandleTrackingFS extends MockFileSystemTestCase {
@@ -53,17 +63,37 @@ public class TestHandleTrackingFS extends MockFileSystemTestCase {
 
     OutputStream file = Files.newOutputStream(dir.resolve("somefile"));
     file.write(5);
-    expectThrows(IOException.class, file::close);
+    try {
+      file.close();
+      fail("expected IOException");
+    } catch (IOException ex) {
+      // expected
+    }
 
     SeekableByteChannel channel = Files.newByteChannel(dir.resolve("somefile"));
-    expectThrows(IOException.class, channel::close);
+    try {
+      channel.close();
+      fail("expected IOException");
+    } catch (IOException ex) {
+      // expected
+    }
 
     InputStream stream = Files.newInputStream(dir.resolve("somefile"));
-    expectThrows(IOException.class, stream::close);
+    try {
+      stream.close();
+      fail("expected IOException");
+    } catch (IOException ex) {
+      // expected
+    }
     fs.close();
 
     DirectoryStream<Path> dirStream = Files.newDirectoryStream(dir);
-    expectThrows(IOException.class, dirStream::close);
+    try {
+      dirStream.close();
+      fail("expected IOException");
+    } catch (IOException ex) {
+      // expected
+    }
   }
 
 
@@ -82,14 +112,34 @@ public class TestHandleTrackingFS extends MockFileSystemTestCase {
     }.getFileSystem(URI.create("file:///"));
     Path dir = new FilterPath(path, fs);
 
-    expectThrows(IOException.class, () -> Files.newOutputStream(dir.resolve("somefile")));
+    try {
+      OutputStream file = Files.newOutputStream(dir.resolve("somefile"));
+      fail("expected IOException");
+    } catch (IOException ex) {
+      // expected
+    }
 
-    expectThrows(IOException.class, () -> Files.newByteChannel(dir.resolve("somefile")));
+    try {
+      SeekableByteChannel channel = Files.newByteChannel(dir.resolve("somefile"));
+      fail("expected IOException");
+    } catch (IOException ex) {
+      // expected
+    }
 
-    expectThrows(IOException.class, () -> Files.newInputStream(dir.resolve("somefile")));
+    try {
+      InputStream stream = Files.newInputStream(dir.resolve("somefile"));
+      fail("expected IOException");
+    } catch (IOException ex) {
+      // expected
+    }
     fs.close();
 
-    expectThrows(IOException.class, () -> Files.newDirectoryStream(dir));
+    try {
+      DirectoryStream<Path> dirStream = Files.newDirectoryStream(dir);
+      fail("expected IOException");
+    } catch (IOException ex) {
+      // expected
+    }
     fs.close();
   }
 }

@@ -14,7 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj;
+
+import org.apache.lucene.util.LuceneTestCase;
+import org.apache.solr.client.solrj.SolrQuery.SortClause;
+import org.apache.solr.common.params.CommonParams;
+import org.apache.solr.common.params.FacetParams;
+
+import junit.framework.Assert;
+import org.apache.solr.common.util.DateUtil;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -25,18 +34,12 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
 
-import junit.framework.Assert;
-import org.apache.solr.SolrTestCase;
-import org.apache.solr.client.solrj.SolrQuery.SortClause;
-import org.apache.solr.common.params.CommonParams;
-import org.apache.solr.common.params.FacetParams;
-
 /**
  * 
  *
  * @since solr 1.3
  */
-public class SolrQueryTest extends SolrTestCase {
+public class SolrQueryTest extends LuceneTestCase {
   
   public void testSolrQueryMethods() {
     SolrQuery q = new SolrQuery("dog");
@@ -299,8 +302,8 @@ public class SolrQueryTest extends SolrTestCase {
     q.addDateRangeFacet("field", start, end, "+1MONTH");
     assertEquals("true", q.get(FacetParams.FACET));
     assertEquals("field", q.get(FacetParams.FACET_RANGE));
-    assertEquals(start.toInstant().toString(), q.get("f.field." + FacetParams.FACET_RANGE_START));
-    assertEquals(end.toInstant().toString(), q.get("f.field." + FacetParams.FACET_RANGE_END));
+    assertEquals(DateUtil.getThreadLocalDateFormat().format(start), q.get("f.field." + FacetParams.FACET_RANGE_START));
+    assertEquals(DateUtil.getThreadLocalDateFormat().format(end), q.get("f.field." + FacetParams.FACET_RANGE_END));
     assertEquals("+1MONTH", q.get("f.field." + FacetParams.FACET_RANGE_GAP));
   }
 
@@ -430,30 +433,5 @@ public class SolrQueryTest extends SolrTestCase {
     assertNull(solrQuery.getParams(FacetParams.FACET_INTERVAL));
     assertNull(solrQuery.getParams("f.field3.facet.interval.set"));
     
-  }
-
-  public void testMoreLikeThis() {
-    SolrQuery solrQuery = new SolrQuery();
-    solrQuery.addMoreLikeThisField("mlt1");
-    assertTrue(solrQuery.getMoreLikeThis());
-
-    solrQuery.addMoreLikeThisField("mlt2");
-    solrQuery.addMoreLikeThisField("mlt3");
-    solrQuery.addMoreLikeThisField("mlt4");
-    assertEquals(4, solrQuery.getMoreLikeThisFields().length);
-    solrQuery.setMoreLikeThisFields((String[])null);
-    assertTrue(null == solrQuery.getMoreLikeThisFields());
-    assertFalse(solrQuery.getMoreLikeThis());
-
-    assertEquals(true, solrQuery.setMoreLikeThisBoost(true).getMoreLikeThisBoost());
-    assertEquals("qf", solrQuery.setMoreLikeThisQF("qf").getMoreLikeThisQF());
-    assertEquals(10, solrQuery.setMoreLikeThisMaxTokensParsed(10).getMoreLikeThisMaxTokensParsed());
-    assertEquals(11, solrQuery.setMoreLikeThisMinTermFreq(11).getMoreLikeThisMinTermFreq());
-    assertEquals(12, solrQuery.setMoreLikeThisMinDocFreq(12).getMoreLikeThisMinDocFreq());
-    assertEquals(13, solrQuery.setMoreLikeThisMaxWordLen(13).getMoreLikeThisMaxWordLen());
-    assertEquals(14, solrQuery.setMoreLikeThisMinWordLen(14).getMoreLikeThisMinWordLen());
-    assertEquals(15, solrQuery.setMoreLikeThisMaxQueryTerms(15).getMoreLikeThisMaxQueryTerms());
-    assertEquals(16, solrQuery.setMoreLikeThisCount(16).getMoreLikeThisCount());
-
   }
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -28,8 +28,6 @@ import org.apache.lucene.document.TextField;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
-
-import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
 
 public class TestOmitNorms extends LuceneTestCase {
   // Tests whether the DocumentWriter correctly enable the
@@ -68,7 +66,7 @@ public class TestOmitNorms extends LuceneTestCase {
     // flush
     writer.close();
 
-    LeafReader reader = getOnlyLeafReader(DirectoryReader.open(ram));
+    SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(ram));
     FieldInfos fi = reader.getFieldInfos();
     assertTrue("OmitNorms field bit should be set.", fi.fieldInfo("f1").omitsNorms());
     assertTrue("OmitNorms field bit should be set.", fi.fieldInfo("f2").omitsNorms());
@@ -122,7 +120,7 @@ public class TestOmitNorms extends LuceneTestCase {
     // flush
     writer.close();
 
-    LeafReader reader = getOnlyLeafReader(DirectoryReader.open(ram));
+    SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(ram));
     FieldInfos fi = reader.getFieldInfos();
     assertTrue("OmitNorms field bit should be set.", fi.fieldInfo("f1").omitsNorms());
     assertTrue("OmitNorms field bit should be set.", fi.fieldInfo("f2").omitsNorms());
@@ -170,7 +168,7 @@ public class TestOmitNorms extends LuceneTestCase {
     // flush
     writer.close();
 
-    LeafReader reader = getOnlyLeafReader(DirectoryReader.open(ram));
+    SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(ram));
     FieldInfos fi = reader.getFieldInfos();
     assertTrue("OmitNorms field bit should not be set.", !fi.fieldInfo("f1").omitsNorms());
     assertTrue("OmitNorms field bit should be set.", fi.fieldInfo("f2").omitsNorms());
@@ -299,26 +297,13 @@ public class TestOmitNorms extends LuceneTestCase {
     // fully merge and validate MultiNorms against single segment.
     riw.forceMerge(1);
     DirectoryReader ir2 = riw.getReader();
-    NumericDocValues norms2 = getOnlyLeafReader(ir2).getNormValues(field);
+    NumericDocValues norms2 = getOnlySegmentReader(ir2).getNormValues(field);
 
     if (norms1 == null) {
       assertNull(norms2);
     } else {
-      while (true) {
-        int norms1DocID = norms1.nextDoc();
-        int norms2DocID = norms2.nextDoc();
-        while (norms1DocID < norms2DocID) {
-          assertEquals(0, norms1.longValue());
-          norms1DocID = norms1.nextDoc();
-        }
-        while (norms2DocID < norms1DocID) {
-          assertEquals(0, norms2.longValue());
-          norms2DocID = norms2.nextDoc();
-        }
-        if (norms1.docID() == NO_MORE_DOCS) {
-          break;
-        }
-        assertEquals(norms1.longValue(), norms2.longValue());
+      for(int docID=0;docID<ir1.maxDoc();docID++) {
+        assertEquals(norms1.get(docID), norms2.get(docID));
       }
     }
     ir1.close();

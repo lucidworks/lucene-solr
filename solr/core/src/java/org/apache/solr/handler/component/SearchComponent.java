@@ -14,18 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.component;
 
 import java.io.IOException;
+import java.net.URL;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
-import com.codahale.metrics.MetricRegistry;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.core.SolrInfoBean;
+import org.apache.solr.core.SolrInfoMBean;
 import org.apache.solr.search.facet.FacetModule;
 import org.apache.solr.util.plugin.NamedListInitializedPlugin;
 
@@ -35,16 +34,12 @@ import org.apache.solr.util.plugin.NamedListInitializedPlugin;
  *
  * @since solr 1.3
  */
-public abstract class SearchComponent implements SolrInfoBean, NamedListInitializedPlugin
+public abstract class SearchComponent implements SolrInfoMBean, NamedListInitializedPlugin
 {
   /**
    * The name given to this component in solrconfig.xml file
    */
   private String name = this.getClass().getName();
-
-  protected Set<String> metricNames = ConcurrentHashMap.newKeySet();
-  protected MetricRegistry registry;
-
   /**
    * Prepare the response.  Guaranteed to be called before any SearchComponent {@link #process(org.apache.solr.handler.component.ResponseBuilder)} method.
    * Called for every incoming request.
@@ -99,7 +94,7 @@ public abstract class SearchComponent implements SolrInfoBean, NamedListInitiali
   {
     // By default do nothing
   }
-
+  
   //////////////////////// SolrInfoMBeans methods //////////////////////
 
   @Override
@@ -109,24 +104,31 @@ public abstract class SearchComponent implements SolrInfoBean, NamedListInitiali
 
   @Override
   public abstract String getDescription();
-
+  @Override
+  public String getSource() { return null; }
+  
+  @Override
+  public String getVersion() {
+    return getClass().getPackage().getSpecificationVersion();
+  }
+  
   @Override
   public Category getCategory() {
     return Category.OTHER;
   }
 
   @Override
-  public Set<String> getMetricNames() {
-    return metricNames;
+  public URL[] getDocs() {
+    return null;  // this can be overridden, but not required
   }
 
   @Override
-  public MetricRegistry getMetricRegistry() {
-    return registry;
+  public NamedList getStatistics() {
+    return null;
   }
 
   public static final Map<String, Class<? extends SearchComponent>> standard_components;
-
+  ;
 
   static {
     HashMap<String, Class<? extends SearchComponent>> map = new HashMap<>();
@@ -139,8 +141,6 @@ public abstract class SearchComponent implements SolrInfoBean, NamedListInitiali
     map.put(DebugComponent.COMPONENT_NAME, DebugComponent.class);
     map.put(RealTimeGetComponent.COMPONENT_NAME, RealTimeGetComponent.class);
     map.put(ExpandComponent.COMPONENT_NAME, ExpandComponent.class);
-    map.put(TermsComponent.COMPONENT_NAME, TermsComponent.class);
-
     standard_components = Collections.unmodifiableMap(map);
   }
 

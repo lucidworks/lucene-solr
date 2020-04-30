@@ -1,3 +1,5 @@
+package org.apache.lucene.benchmark.byTask.feeds;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.feeds;
-
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -159,19 +159,19 @@ public abstract class ContentItemsSource implements Closeable {
     int nut = getTotalItemsCount();
     if (nut > lastPrintedNumUniqueTexts) {
       print = true;
-      sb.append("total count of ").append(itemsName).append(": ").append(Format.format(0,nut,col)).append(newline);
+      sb.append("total count of "+itemsName+": ").append(Format.format(0,nut,col)).append(newline);
       lastPrintedNumUniqueTexts = nut;
     }
     long nub = getTotalBytesCount();
     if (nub > lastPrintedNumUniqueBytes) {
       print = true;
-      sb.append("total bytes of ").append(itemsName).append(": ").append(Format.format(0,nub,col)).append(newline);
+      sb.append("total bytes of "+itemsName+": ").append(Format.format(0,nub,col)).append(newline);
       lastPrintedNumUniqueBytes = nub;
     }
     if (getItemsCount() > 0) {
       print = true;
-      sb.append("num ").append(itemsName).append(" added since last inputs reset:   ").append(Format.format(0,getItemsCount(),col)).append(newline);
-      sb.append("total bytes added for ").append(itemsName).append(" since last inputs reset: ").append(Format.format(0,getBytesCount(),col)).append(newline);
+      sb.append("num "+itemsName+" added since last inputs reset:   ").append(Format.format(0,getItemsCount(),col)).append(newline);
+      sb.append("total bytes added for "+itemsName+" since last inputs reset: ").append(Format.format(0,getBytesCount(),col)).append(newline);
     }
     if (print) {
       System.out.println(sb.append(newline).toString());

@@ -1,3 +1,5 @@
+package org.apache.lucene.benchmark.byTask.tasks;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.tasks;
-
 
 import java.io.IOException;
 
@@ -34,12 +34,12 @@ public class CloseTaxonomyReaderTask extends PerfTask {
 
   @Override
   public int doLogic() throws IOException {
-    try (TaxonomyReader taxoReader = getRunData().getTaxonomyReader()) {
-      getRunData().setTaxonomyReader(null);
-      if (taxoReader.getRefCount() != 1) {
-        System.out.println("WARNING: CloseTaxonomyReader: reference count is currently " + taxoReader.getRefCount());
-      }
+    TaxonomyReader taxoReader = getRunData().getTaxonomyReader();
+    getRunData().setTaxonomyReader(null);
+    if (taxoReader.getRefCount() != 1) {
+      System.out.println("WARNING: CloseTaxonomyReader: reference count is currently " + taxoReader.getRefCount());
     }
+    taxoReader.close();
     return 1;
   }
 

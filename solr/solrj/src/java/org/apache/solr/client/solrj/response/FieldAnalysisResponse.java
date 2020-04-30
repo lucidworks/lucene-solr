@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.response;
 
 import org.apache.solr.common.util.NamedList;
@@ -34,35 +35,38 @@ public class FieldAnalysisResponse extends AnalysisResponseBase {
   private Map<String, Analysis> analysisByFieldTypeName = new HashMap<>();
   private Map<String, Analysis> analysisByFieldName = new HashMap<>();
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void setResponse(NamedList<Object> response) {
     super.setResponse(response);
 
     @SuppressWarnings("unchecked")
-    NamedList<NamedList<NamedList<NamedList<Object>>>> analysisNL
-      = (NamedList<NamedList<NamedList<NamedList<Object>>>>) response.get("analysis");
+    NamedList<NamedList<NamedList<NamedList<List<NamedList<Object>>>>>> analysisNL 
+      = (NamedList<NamedList<NamedList<NamedList<List<NamedList<Object>>>>>>) response.get("analysis");
 
-    for (Map.Entry<String, NamedList<NamedList<Object>>> entry
+    for (Map.Entry<String, NamedList<NamedList<List<NamedList<Object>>>>> entry 
            : analysisNL.get("field_types")) {
 
       analysisByFieldTypeName.put(entry.getKey(), buildAnalysis(entry.getValue()));
     }
 
-    for (Map.Entry<String, NamedList<NamedList<Object>>> entry
+    for (Map.Entry<String, NamedList<NamedList<List<NamedList<Object>>>>> entry 
            : analysisNL.get("field_names")) {
 
       analysisByFieldName.put(entry.getKey(), buildAnalysis(entry.getValue()));
     }
   }
 
-  private Analysis buildAnalysis(NamedList<NamedList<Object>> value) {
+  private Analysis buildAnalysis(NamedList<NamedList<List<NamedList<Object>>>> value) {
       Analysis analysis = new Analysis();
       
-      NamedList<Object> queryNL = value.get("query");
+      NamedList<List<NamedList<Object>>> queryNL = value.get("query");
       List<AnalysisPhase> phases = (queryNL == null) ? null : buildPhases(queryNL);
       analysis.setQueryPhases(phases);
 
-      NamedList<Object> indexNL = value.get("index");
+      NamedList<List<NamedList<Object>>> indexNL = value.get("index");
       phases = buildPhases(indexNL);
       analysis.setIndexPhases(phases);
       

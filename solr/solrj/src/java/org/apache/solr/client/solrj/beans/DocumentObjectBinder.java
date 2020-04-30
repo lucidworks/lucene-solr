@@ -86,13 +86,13 @@ public class DocumentObjectBinder {
         Map<String, Object> mapValue = (Map<String, Object>) field.get(obj);
 
         for (Map.Entry<String, Object> e : mapValue.entrySet()) {
-          doc.setField(e.getKey(), e.getValue());
+          doc.setField(e.getKey(), e.getValue(), 1.0f);
         }
       } else {
         if (field.child != null) {
           addChild(obj, field, doc);
         } else {
-          doc.setField(field.name, field.get(obj));
+          doc.setField(field.name, field.get(obj), 1.0f);
         }
       }
     }
@@ -126,7 +126,6 @@ public class DocumentObjectBinder {
     return fields;
   }
 
-  @SuppressForbidden(reason = "Needs access to possibly private @Field annotated fields/methods")
   private List<DocField> collectInfo(Class clazz) {
     List<DocField> fields = new ArrayList<>();
     Class superClazz = clazz;
@@ -138,9 +137,16 @@ public class DocumentObjectBinder {
       superClazz = superClazz.getSuperclass();
     }
     boolean childFieldFound = false;
-    for (AccessibleObject member : members) {
+    for (final AccessibleObject member : members) {
       if (member.isAnnotationPresent(Field.class)) {
-        AccessController.doPrivileged((PrivilegedAction<Void>) () -> { member.setAccessible(true); return null; });
+        AccessController.doPrivileged(new PrivilegedAction<Void>() {
+          @Override
+          @SuppressForbidden(reason = "Needs access to possibly private @Field annotated fields/methods")
+          public Void run() {
+            member.setAccessible(true);
+            return null;
+          }
+        });
         DocField df = new DocField(member);
         if (df.child != null) {
           if (childFieldFound)
@@ -232,8 +238,7 @@ public class DocumentObjectBinder {
       } else {
         Class[] params = setter.getParameterTypes();
         if (params.length != 1) {
-          throw new BindingException("Invalid setter method (" + setter +
-              "). A setter must have one and only one parameter but we found " + params.length + " parameters.");
+          throw new BindingException("Invalid setter method. Must have one and only one parameter");
         }
         type = params[0];
       }
@@ -306,11 +311,7 @@ public class DocumentObjectBinder {
       if (typ.getClass() == Class.class) {//of type class
         type = (Class) typ;
       } else if (typ instanceof ParameterizedType) {
-        try {
-          type = Class.forName(((ParameterizedType) typ).getActualTypeArguments()[0].getTypeName());
-        } catch (ClassNotFoundException e) {
-          throw new BindingException("Invalid type information available for" + (field == null ? setter : field));
-        }
+        type = (Class) ((ParameterizedType) typ).getActualTypeArguments()[0];
       } else {
         throw new BindingException("Invalid type information available for" + (field == null ? setter : field));
 

@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -33,10 +33,12 @@ import org.apache.lucene.document.Field;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReader;
-import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.RandomIndexWriter;
+import org.apache.lucene.index.SlowCompositeReaderWrapper;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.search.spans.MultiSpansWrapper;
 import org.apache.lucene.search.spans.SpanCollector;
 import org.apache.lucene.search.spans.SpanNearQuery;
 import org.apache.lucene.search.spans.SpanQuery;
@@ -101,14 +103,14 @@ public class TestPositionIncrement extends LuceneTestCase {
 
     IndexSearcher searcher = newSearcher(reader);
     
-    PostingsEnum pos = MultiTerms.getTermPostingsEnum(searcher.getIndexReader(),
+    PostingsEnum pos = MultiFields.getTermPositionsEnum(searcher.getIndexReader(),
                                                                 "field",
                                                                 new BytesRef("1"));
     pos.nextDoc();
     // first token should be at position 0
     assertEquals(0, pos.nextPosition());
     
-    pos = MultiTerms.getTermPostingsEnum(searcher.getIndexReader(),
+    pos = MultiFields.getTermPositionsEnum(searcher.getIndexReader(),
                                            "field",
                                            new BytesRef("2"));
     pos.nextDoc();
@@ -173,9 +175,9 @@ public class TestPositionIncrement extends LuceneTestCase {
 
     // multi-phrase query should succed for non existing searched term
     // because there exist another searched terms in the same searched position. 
-    MultiPhraseQuery.Builder mqb = new MultiPhraseQuery.Builder();
-    mqb.add(new Term[]{new Term("field", "3"),new Term("field", "9")},0);
-    hits = searcher.search(mqb.build(), 1000).scoreDocs;
+    MultiPhraseQuery mq = new MultiPhraseQuery();
+    mq.add(new Term[]{new Term("field", "3"),new Term("field", "9")},0);
+    hits = searcher.search(mq, 1000).scoreDocs;
     assertEquals(1, hits.length);
 
     q = new PhraseQuery("field", "2", "4");
@@ -223,7 +225,7 @@ public class TestPositionIncrement extends LuceneTestCase {
     writer.addDocument(doc);
 
     final IndexReader readerFromWriter = writer.getReader();
-    LeafReader r = getOnlyLeafReader(readerFromWriter);
+    LeafReader r = SlowCompositeReaderWrapper.wrap(readerFromWriter);
 
     PostingsEnum tp = r.postings(new Term("content", "a"), PostingsEnum.ALL);
     
@@ -239,7 +241,7 @@ public class TestPositionIncrement extends LuceneTestCase {
     // only one doc has "a"
     assertEquals(DocIdSetIterator.NO_MORE_DOCS, tp.nextDoc());
 
-    IndexSearcher is = newSearcher(getOnlyLeafReader(readerFromWriter));
+    IndexSearcher is = newSearcher(readerFromWriter);
   
     SpanTermQuery stq1 = new SpanTermQuery(new Term("content", "a"));
     SpanTermQuery stq2 = new SpanTermQuery(new Term("content", "k"));
@@ -252,7 +254,7 @@ public class TestPositionIncrement extends LuceneTestCase {
       System.out.println("\ngetPayloadSpans test");
     }
     PayloadSpanCollector collector = new PayloadSpanCollector();
-    Spans pspans = snq.createWeight(is, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(is.getIndexReader().leaves().get(0), SpanWeight.Postings.PAYLOADS);
+    Spans pspans = MultiSpansWrapper.wrap(is.getIndexReader(), snq, SpanWeight.Postings.PAYLOADS);
     while (pspans.nextDoc() != Spans.NO_MORE_DOCS) {
       while (pspans.nextStartPosition() != Spans.NO_MORE_POSITIONS) {
         if (VERBOSE) {
@@ -274,7 +276,7 @@ public class TestPositionIncrement extends LuceneTestCase {
     assertEquals(8, count);
 
     // System.out.println("\ngetSpans test");
-    Spans spans = snq.createWeight(is, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(is.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans spans = MultiSpansWrapper.wrap(is.getIndexReader(), snq);
     count = 0;
     sawZero = false;
     while (spans.nextDoc() != Spans.NO_MORE_DOCS) {

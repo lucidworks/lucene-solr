@@ -14,37 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.embedded;
 
-import static org.apache.solr.common.params.CommonParams.PATH;
-
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.function.Supplier;
 
-import org.apache.commons.io.output.ByteArrayOutputStream;
+import com.google.common.base.Strings;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.StreamingResponseCallback;
-import org.apache.solr.client.solrj.impl.BinaryRequestWriter;
-import org.apache.solr.client.solrj.impl.BinaryRequestWriter.BAOS;
-import org.apache.solr.client.solrj.request.ContentStreamUpdateRequest;
-import org.apache.solr.client.solrj.request.RequestWriter;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.SolrParams;
-import org.apache.solr.common.util.ContentStream;
-import org.apache.solr.common.util.ContentStreamBase;
 import org.apache.solr.common.util.JavaBinCodec;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.CoreContainer;
@@ -59,6 +48,8 @@ import org.apache.solr.response.ResultContext;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.servlet.SolrRequestParsers;
 
+import static org.apache.solr.common.params.CommonParams.PATH;
+
 /**
  * SolrClient that connects directly to a CoreContainer.
  *
@@ -69,27 +60,12 @@ public class EmbeddedSolrServer extends SolrClient {
   protected final CoreContainer coreContainer;
   protected final String coreName;
   private final SolrRequestParsers _parser;
-  private final RequestWriterSupplier supplier;
-
-  public enum RequestWriterSupplier {
-    JavaBin(() -> new BinaryRequestWriter()), XML(() -> new RequestWriter());
-
-    private Supplier<RequestWriter> supplier;
-
-    private RequestWriterSupplier(final Supplier<RequestWriter> supplier) {
-      this.supplier = supplier;
-    }
-
-    public RequestWriter newRequestWriter() {
-      return supplier.get();
-    }
-  }
 
   /**
    * Create an EmbeddedSolrServer using a given solr home directory
    *
    * @param solrHome        the solr home directory
-   * @param defaultCoreName the core to route requests to by default (optional)
+   * @param defaultCoreName the core to route requests to by default
    */
   public EmbeddedSolrServer(Path solrHome, String defaultCoreName) {
     this(load(new CoreContainer(SolrXmlConfig.fromSolrHome(solrHome))), defaultCoreName);
@@ -99,7 +75,7 @@ public class EmbeddedSolrServer extends SolrClient {
    * Create an EmbeddedSolrServer using a NodeConfig
    *
    * @param nodeConfig      the configuration
-   * @param defaultCoreName the core to route requests to by default (optional)
+   * @param defaultCoreName the core to route requests to be default
    */
   public EmbeddedSolrServer(NodeConfig nodeConfig, String defaultCoreName) {
     this(load(new CoreContainer(nodeConfig)), defaultCoreName);
@@ -114,7 +90,7 @@ public class EmbeddedSolrServer extends SolrClient {
    * Create an EmbeddedSolrServer wrapping a particular SolrCore
    */
   public EmbeddedSolrServer(SolrCore core) {
-    this(core.getCoreContainer(), core.getName());
+    this(core.getCoreDescriptor().getCoreContainer(), core.getName());
   }
 
   /**
@@ -124,33 +100,17 @@ public class EmbeddedSolrServer extends SolrClient {
    * {@link #close()} is called.
    *
    * @param coreContainer the core container
-   * @param coreName      the core to route requests to by default (optional)
+   * @param coreName      the core to route requests to be default
    */
   public EmbeddedSolrServer(CoreContainer coreContainer, String coreName) {
-    this(coreContainer, coreName, RequestWriterSupplier.JavaBin);
-  }
-
-  /**
-   * Create an EmbeddedSolrServer wrapping a CoreContainer.
-   * <p>
-   * Note that EmbeddedSolrServer will shutdown the wrapped CoreContainer when {@link #close()} is called.
-   *
-   * @param coreContainer
-   *          the core container
-   * @param coreName
-   *          the core to route requests to by default
-   * @param supplier
-   *          the supplier used to create a {@link RequestWriter}
-   */
-  public EmbeddedSolrServer(CoreContainer coreContainer, String coreName,
-      RequestWriterSupplier supplier) {
     if (coreContainer == null) {
       throw new NullPointerException("CoreContainer instance required");
     }
+    if (Strings.isNullOrEmpty(coreName))
+      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Core name cannot be empty");
     this.coreContainer = coreContainer;
     this.coreName = coreName;
     _parser = new SolrRequestParsers(null);
-    this.supplier = supplier;
   }
 
   // TODO-- this implementation sends the response to XML and then parses it.
@@ -167,9 +127,7 @@ public class EmbeddedSolrServer extends SolrClient {
     SolrRequestHandler handler = coreContainer.getRequestHandler(path);
     if (handler != null) {
       try {
-        SolrQueryRequest req = _parser.buildRequestFrom(null, request.getParams(), getContentStreams(request));
-        req.getContext().put("httpMethod", request.getMethod().name());
-        req.getContext().put(PATH, path);
+        SolrQueryRequest req = _parser.buildRequestFrom(null, request.getParams(), request.getContentStreams());
         SolrQueryResponse resp = new SolrQueryResponse();
         handler.handleRequest(req, resp);
         checkForExceptions(resp);
@@ -181,13 +139,8 @@ public class EmbeddedSolrServer extends SolrClient {
       }
     }
 
-    if (coreName == null) {
+    if (coreName == null)
       coreName = this.coreName;
-      if (coreName == null) {
-        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
-            "No core specified on request and no default core has been set.");
-      }
-    }
 
     // Check for cores action
     SolrQueryRequest req = null;
@@ -218,9 +171,8 @@ public class EmbeddedSolrServer extends SolrClient {
         throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "unknown handler: " + path);
       }
 
-      req = _parser.buildRequestFrom(core, params, getContentStreams(request));
+      req = _parser.buildRequestFrom(core, params, request.getContentStreams());
       req.getContext().put(PATH, path);
-      req.getContext().put("httpMethod", request.getMethod().name());
       SolrQueryResponse rsp = new SolrQueryResponse();
       SolrRequestInfo.setRequestInfo(new SolrRequestInfo(req, rsp));
 
@@ -237,9 +189,9 @@ public class EmbeddedSolrServer extends SolrClient {
                 public void writeResults(ResultContext ctx, JavaBinCodec codec) throws IOException {
                   // write an empty list...
                   SolrDocumentList docs = new SolrDocumentList();
-                  docs.setNumFound(ctx.getDocList().matches());
-                  docs.setStart(ctx.getDocList().offset());
-                  docs.setMaxScore(ctx.getDocList().maxScore());
+                  docs.setNumFound(ctx.docs.matches());
+                  docs.setStart(ctx.docs.offset());
+                  docs.setMaxScore(ctx.docs.maxScore());
                   codec.writeSolrDocumentList(docs);
 
                   // This will transform
@@ -248,13 +200,32 @@ public class EmbeddedSolrServer extends SolrClient {
               };
 
 
-          try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            createJavaBinCodec(callback, resolver).setWritableDocFields(resolver).marshal(rsp.getValues(), out);
+          ByteArrayOutputStream out = new ByteArrayOutputStream();
+          new JavaBinCodec(resolver) {
 
-            try (InputStream in = out.toInputStream()) {
-              return (NamedList<Object>) new JavaBinCodec(resolver).unmarshal(in);
+            @Override
+            public void writeSolrDocument(SolrDocument doc) {
+              callback.streamSolrDocument(doc);
+              //super.writeSolrDocument( doc, fields );
             }
-          }
+
+            @Override
+            public void writeSolrDocumentList(SolrDocumentList docs) throws IOException {
+              if (docs.size() > 0) {
+                SolrDocumentList tmp = new SolrDocumentList();
+                tmp.setMaxScore(docs.getMaxScore());
+                tmp.setNumFound(docs.getNumFound());
+                tmp.setStart(docs.getStart());
+                docs = tmp;
+              }
+              callback.streamDocListInfo(docs.getNumFound(), docs.getStart(), docs.getMaxScore());
+              super.writeSolrDocumentList(docs);
+            }
+
+          }.setWritableDocFields(resolver). marshal(rsp.getValues(), out);
+
+          InputStream in = new ByteArrayInputStream(out.toByteArray());
+          return (NamedList<Object>) new JavaBinCodec(resolver).unmarshal(in);
         } catch (Exception ex) {
           throw new RuntimeException(ex);
         }
@@ -273,71 +244,6 @@ public class EmbeddedSolrServer extends SolrClient {
     }
   }
 
-  private Set<ContentStream> getContentStreams(SolrRequest request) throws IOException {
-    if (request.getMethod() == SolrRequest.METHOD.GET) return null;
-    if (request instanceof ContentStreamUpdateRequest) {
-      final ContentStreamUpdateRequest csur = (ContentStreamUpdateRequest) request;
-      final Collection<ContentStream> cs = csur.getContentStreams();
-      if (cs != null) return new HashSet<>(cs);
-    }
-
-    final RequestWriter.ContentWriter contentWriter = request.getContentWriter(null);
-
-    String cType;
-    final BAOS baos = new BAOS();
-    if (contentWriter != null) {
-      contentWriter.write(baos);
-      cType = contentWriter.getContentType();
-    } else {
-      final RequestWriter rw = supplier.newRequestWriter();
-      cType = rw.getUpdateContentType();
-      rw.write(request, baos);
-    }
-
-    final byte[] buf = baos.toByteArray();
-    if (buf.length > 0) {
-      return Collections.singleton(new ContentStreamBase() {
-
-        @Override
-        public InputStream getStream() throws IOException {
-          return new ByteArrayInputStream(buf);
-        }
-
-        @Override
-        public String getContentType() {
-          return cType;
-        }
-      });
-    }
-
-    return null;
-  }
-
-  private JavaBinCodec createJavaBinCodec(final StreamingResponseCallback callback, final BinaryResponseWriter.Resolver resolver) {
-    return new JavaBinCodec(resolver) {
-
-      @Override
-      public void writeSolrDocument(SolrDocument doc) {
-        callback.streamSolrDocument(doc);
-        //super.writeSolrDocument( doc, fields );
-      }
-
-      @Override
-      public void writeSolrDocumentList(SolrDocumentList docs) throws IOException {
-        if (docs.size() > 0) {
-          SolrDocumentList tmp = new SolrDocumentList();
-          tmp.setMaxScore(docs.getMaxScore());
-          tmp.setNumFound(docs.getNumFound());
-          tmp.setStart(docs.getStart());
-          docs = tmp;
-        }
-        callback.streamDocListInfo(docs.getNumFound(), docs.getStart(), docs.getMaxScore());
-        super.writeSolrDocumentList(docs);
-      }
-
-    };
-  }
-
   private static void checkForExceptions(SolrQueryResponse rsp) throws Exception {
     if (rsp.getException() != null) {
       if (rsp.getException() instanceof SolrException) {
@@ -352,10 +258,16 @@ public class EmbeddedSolrServer extends SolrClient {
    * Shutdown all cores within the EmbeddedSolrServer instance
    */
   @Override
-  public void close() throws IOException {
+  @Deprecated
+  public void shutdown() {
     coreContainer.shutdown();
   }
 
+  @Override
+  public void close() throws IOException {
+    shutdown();
+  }
+  
   /**
    * Getter method for the CoreContainer
    *

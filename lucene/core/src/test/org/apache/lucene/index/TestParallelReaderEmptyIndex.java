@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -50,7 +50,15 @@ public class TestParallelReaderEmptyIndex extends LuceneTestCase {
 
     IndexWriter iwOut = new IndexWriter(rdOut, newIndexWriterConfig(new MockAnalyzer(random())));
     
-    // add a readerless parallel reader
+    ParallelLeafReader apr = new ParallelLeafReader(
+        SlowCompositeReaderWrapper.wrap(DirectoryReader.open(rd1)),
+        SlowCompositeReaderWrapper.wrap(DirectoryReader.open(rd2)));
+    
+    // When unpatched, Lucene crashes here with a NoSuchElementException (caused by ParallelTermEnum)
+    iwOut.addIndexes(SlowCodecReaderWrapper.wrap(apr));
+    iwOut.forceMerge(1);
+    
+    // 2nd try with a readerless parallel reader
     iwOut.addIndexes(SlowCodecReaderWrapper.wrap(new ParallelLeafReader()));
     iwOut.forceMerge(1);
 
@@ -128,18 +136,16 @@ public class TestParallelReaderEmptyIndex extends LuceneTestCase {
     Directory rdOut = newDirectory();
 
     IndexWriter iwOut = new IndexWriter(rdOut, newIndexWriterConfig(new MockAnalyzer(random())));
-    DirectoryReader reader1 = DirectoryReader.open(rd1);
-    DirectoryReader reader2 = DirectoryReader.open(rd2);
-    ParallelLeafReader pr = new ParallelLeafReader(false,
-                                                   getOnlyLeafReader(reader1),
-                                                   getOnlyLeafReader(reader2));
+    final DirectoryReader reader1, reader2;
+    ParallelLeafReader pr = new ParallelLeafReader(
+        SlowCompositeReaderWrapper.wrap(reader1 = DirectoryReader.open(rd1)),
+        SlowCompositeReaderWrapper.wrap(reader2 = DirectoryReader.open(rd2)));
 
     // When unpatched, Lucene crashes here with an ArrayIndexOutOfBoundsException (caused by TermVectorsWriter)
     iwOut.addIndexes(SlowCodecReaderWrapper.wrap(pr));
 
+    // ParallelReader closes any IndexReader you added to it:
     pr.close();
-    reader1.close();
-    reader2.close();
     
     // assert subreaders were closed
     assertEquals(0, reader1.getRefCount());

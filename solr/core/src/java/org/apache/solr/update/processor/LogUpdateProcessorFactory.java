@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
 import java.io.IOException;
@@ -54,7 +55,7 @@ public class LogUpdateProcessorFactory extends UpdateRequestProcessorFactory imp
   @Override
   public void init( final NamedList args ) {
     if( args != null ) {
-      SolrParams params = args.toSolrParams();
+      SolrParams params = SolrParams.toSolrParams( args );
       maxNumToLog = params.getInt( "maxNumToLog", maxNumToLog );
       slowUpdateThresholdMillis = params.getInt("slowUpdateThresholdMillis", slowUpdateThresholdMillis);
     }
@@ -62,7 +63,7 @@ public class LogUpdateProcessorFactory extends UpdateRequestProcessorFactory imp
 
   @Override
   public UpdateRequestProcessor getInstance(SolrQueryRequest req, SolrQueryResponse rsp, UpdateRequestProcessor next) {
-    return log.isInfoEnabled() ? new LogUpdateProcessor(req, rsp, this, next) : next;
+    return log.isInfoEnabled() ? new LogUpdateProcessor(req, rsp, this, next) : null;
   }
   
   static class LogUpdateProcessor extends UpdateRequestProcessor {

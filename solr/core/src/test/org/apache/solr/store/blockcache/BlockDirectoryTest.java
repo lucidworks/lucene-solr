@@ -1,3 +1,5 @@
+package org.apache.solr.store.blockcache;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.store.blockcache;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Random;
-
-import com.github.benmanes.caffeine.cache.Caffeine;
 
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
@@ -35,14 +34,12 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-// commented out on: 24-Dec-2018 @LuceneTestCase.BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // 12-Jun-2018
+import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap;
+
 public class BlockDirectoryTest extends SolrTestCaseJ4 {
 
-  private static class MapperCache implements Cache {
-    public Map<String, byte[]> map = Caffeine.newBuilder()
-        .maximumSize(8)
-        .<String, byte[]>build()
-        .asMap();
+  private class MapperCache implements Cache {
+    public Map<String, byte[]> map = new ConcurrentLinkedHashMap.Builder<String, byte[]>().maximumWeightedCapacity(8).build();
 
     @Override
     public void update(String name, long blockId, int blockOffset, byte[] buffer, int offset, int length) {
@@ -111,28 +108,14 @@ public class BlockDirectoryTest extends SolrTestCaseJ4 {
     file = createTempDir().toFile();
     FSDirectory dir = FSDirectory.open(new File(file, "base").toPath());
     mapperCache = new MapperCache();
-
-    if (random().nextBoolean()) {
-      Metrics metrics = new Metrics();
-      int blockSize = 8192;
-      int slabSize = blockSize * 16384;
-      long totalMemory = 1 * slabSize;
-      BlockCache blockCache = new BlockCache(metrics, true, totalMemory, slabSize, blockSize);
-      BlockDirectoryCache cache = new BlockDirectoryCache(blockCache, "/collection1", metrics, true);
-      directory = new BlockDirectory("test", dir, cache, null, true, false);
-    } else {
-      directory = new BlockDirectory("test", dir, mapperCache, null, true, true);
-    }
+    directory = new BlockDirectory("test", dir, mapperCache, null, true, true);
     random = random();
   }
   
   @After
   public void tearDown() throws Exception {
     super.tearDown();
-    if (null != directory) {
-      directory.close();
-      directory = null;
-    }
+    directory.close();
   }
 
   @Test
@@ -184,10 +167,7 @@ public class BlockDirectoryTest extends SolrTestCaseJ4 {
 
   @Test
   public void testRandomAccessWritesLargeCache() throws IOException {
-    mapperCache.map = Caffeine.newBuilder()
-        .maximumSize(10_000)
-        .<String, byte[]>build()
-        .asMap();
+    mapperCache.map = new ConcurrentLinkedHashMap.Builder<String, byte[]>().maximumWeightedCapacity(10000).build();
     testRandomAccessWrites();
   }
 
@@ -271,11 +251,7 @@ public class BlockDirectoryTest extends SolrTestCaseJ4 {
 
     BlockDirectory d = directory;
     assertTrue(d.useReadCache("", IOContext.DEFAULT));
-    if (d.getCache() instanceof MapperCache) {
-      assertTrue(d.useWriteCache("", IOContext.DEFAULT));
-    } else {
-      assertFalse(d.useWriteCache("", IOContext.DEFAULT));
-    }
+    assertTrue(d.useWriteCache("", IOContext.DEFAULT));
     assertFalse(d.useWriteCache("", mergeContext));
 
     d = new BlockDirectory("test", directory, mapperCache, null, true, false);
@@ -285,11 +261,7 @@ public class BlockDirectoryTest extends SolrTestCaseJ4 {
 
     d = new BlockDirectory("test", directory, mapperCache, null, false, true);
     assertFalse(d.useReadCache("", IOContext.DEFAULT));
-    if (d.getCache() instanceof MapperCache) {
-      assertTrue(d.useWriteCache("", IOContext.DEFAULT));
-    } else {
-      assertFalse(d.useWriteCache("", IOContext.DEFAULT));
-    }
+    assertTrue(d.useWriteCache("", IOContext.DEFAULT));
     assertFalse(d.useWriteCache("", mergeContext));
   }
 }

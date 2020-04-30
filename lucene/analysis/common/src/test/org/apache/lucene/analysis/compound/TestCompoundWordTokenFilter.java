@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.compound;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.compound;
-
 
 import java.io.IOException;
 import java.io.Reader;
@@ -24,7 +24,6 @@ import java.util.Arrays;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
-import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
@@ -33,6 +32,7 @@ import org.apache.lucene.analysis.charfilter.MappingCharFilter;
 import org.apache.lucene.analysis.charfilter.NormalizeCharMap;
 import org.apache.lucene.analysis.compound.hyphenation.HyphenationTree;
 import org.apache.lucene.analysis.core.KeywordTokenizer;
+import org.apache.lucene.analysis.util.CharArraySet;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.util.Attribute;
 import org.apache.lucene.util.AttributeImpl;
@@ -262,21 +262,6 @@ public class TestCompoundWordTokenFilter extends BaseTokenStreamTestCase {
     }
 
   }
-  
-  public void testLucene8124() throws Exception {
-    InputSource is = new InputSource(getClass().getResource("hyphenation-LUCENE-8124.xml").toExternalForm());
-    HyphenationTree hyphenator = HyphenationCompoundWordTokenFilter
-        .getHyphenationTree(is);
-
-    HyphenationCompoundWordTokenFilter tf = new HyphenationCompoundWordTokenFilter(
-        whitespaceMockTokenizer(
-                "Rindfleisch"),
-        hyphenator);
-
-    // TODO Rindfleisch returned twice is another issue of the HyphenationCompoundTokenFilter 
-    assertTokenStreamContents(tf, new String[] { "Rindfleisch", "Rind", "Rindfleisch", "fleisch"});
-  }
-
 
   public static interface MockRetainAttribute extends Attribute {
     void setRetain(boolean attr);

@@ -1,3 +1,12 @@
+package org.apache.lucene.codecs;
+
+import java.io.Closeable;
+import java.io.IOException;
+
+import org.apache.lucene.index.FieldInfo;
+import org.apache.lucene.index.NumericDocValues;
+import org.apache.lucene.util.Accountable;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +23,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs;
-
-import java.io.Closeable;
-import java.io.IOException;
-
-import org.apache.lucene.index.FieldInfo;
-import org.apache.lucene.index.NumericDocValues;
-import org.apache.lucene.util.Accountable;
-
 
 /** Abstract API that produces field normalization values
  *
@@ -49,11 +49,10 @@ public abstract class NormsProducer implements Closeable, Accountable {
   public abstract void checkIntegrity() throws IOException;
   
   /** 
-   * Returns an instance optimized for merging. This instance may only be used
-   * from the thread that acquires it.
+   * Returns an instance optimized for merging.
    * <p>
    * The default implementation returns {@code this} */
-  public NormsProducer getMergeInstance() {
+  public NormsProducer getMergeInstance() throws IOException {
     return this;
   }
 }

@@ -1,3 +1,4 @@
+package org.apache.lucene.queries.function.valuesource;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function.valuesource;
+
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -61,42 +62,43 @@ public class VectorValueSource extends MultiValueSource {
       final FunctionValues y = sources.get(1).getValues(context, readerContext);
       return new FunctionValues() {
         @Override
-        public void byteVal(int doc, byte[] vals) throws IOException {
+        public void byteVal(int doc, byte[] vals) {
           vals[0] = x.byteVal(doc);
           vals[1] = y.byteVal(doc);
         }
+
         @Override
-        public void shortVal(int doc, short[] vals) throws IOException {
+        public void shortVal(int doc, short[] vals) {
           vals[0] = x.shortVal(doc);
           vals[1] = y.shortVal(doc);
         }
         @Override
-        public void intVal(int doc, int[] vals) throws IOException {
+        public void intVal(int doc, int[] vals) {
           vals[0] = x.intVal(doc);
           vals[1] = y.intVal(doc);
         }
         @Override
-        public void longVal(int doc, long[] vals) throws IOException {
+        public void longVal(int doc, long[] vals) {
           vals[0] = x.longVal(doc);
           vals[1] = y.longVal(doc);
         }
         @Override
-        public void floatVal(int doc, float[] vals) throws IOException {
+        public void floatVal(int doc, float[] vals) {
           vals[0] = x.floatVal(doc);
           vals[1] = y.floatVal(doc);
         }
         @Override
-        public void doubleVal(int doc, double[] vals) throws IOException {
+        public void doubleVal(int doc, double[] vals) {
           vals[0] = x.doubleVal(doc);
           vals[1] = y.doubleVal(doc);
         }
         @Override
-        public void strVal(int doc, String[] vals) throws IOException {
+        public void strVal(int doc, String[] vals) {
           vals[0] = x.strVal(doc);
           vals[1] = y.strVal(doc);
         }
         @Override
-        public String toString(int doc) throws IOException {
+        public String toString(int doc) {
           return name() + "(" + x.toString(doc) + "," + y.toString(doc) + ")";
         }
       };
@@ -110,56 +112,56 @@ public class VectorValueSource extends MultiValueSource {
 
     return new FunctionValues() {
       @Override
-      public void byteVal(int doc, byte[] vals) throws IOException {
+      public void byteVal(int doc, byte[] vals) {
         for (int i = 0; i < valsArr.length; i++) {
           vals[i] = valsArr[i].byteVal(doc);
         }
       }
 
       @Override
-      public void shortVal(int doc, short[] vals) throws IOException {
+      public void shortVal(int doc, short[] vals) {
         for (int i = 0; i < valsArr.length; i++) {
           vals[i] = valsArr[i].shortVal(doc);
         }
       }
 
       @Override
-      public void floatVal(int doc, float[] vals) throws IOException {
+      public void floatVal(int doc, float[] vals) {
         for (int i = 0; i < valsArr.length; i++) {
           vals[i] = valsArr[i].floatVal(doc);
         }
       }
 
       @Override
-      public void intVal(int doc, int[] vals) throws IOException {
+      public void intVal(int doc, int[] vals) {
         for (int i = 0; i < valsArr.length; i++) {
           vals[i] = valsArr[i].intVal(doc);
         }
       }
 
       @Override
-      public void longVal(int doc, long[] vals) throws IOException {
+      public void longVal(int doc, long[] vals) {
         for (int i = 0; i < valsArr.length; i++) {
           vals[i] = valsArr[i].longVal(doc);
         }
       }
 
       @Override
-      public void doubleVal(int doc, double[] vals) throws IOException {
+      public void doubleVal(int doc, double[] vals) {
         for (int i = 0; i < valsArr.length; i++) {
           vals[i] = valsArr[i].doubleVal(doc);
         }
       }
 
       @Override
-      public void strVal(int doc, String[] vals) throws IOException {
+      public void strVal(int doc, String[] vals) {
         for (int i = 0; i < valsArr.length; i++) {
           vals[i] = valsArr[i].strVal(doc);
         }
       }
 
       @Override
-      public String toString(int doc) throws IOException {
+      public String toString(int doc) {
         StringBuilder sb = new StringBuilder();
         sb.append(name()).append('(');
         boolean firstTime = true;

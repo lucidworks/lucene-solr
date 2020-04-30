@@ -1,3 +1,4 @@
+package org.apache.solr.search.function;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.function;
-import org.apache.solr.SolrTestCaseJ4;
+
+import org.apache.solr.util.AbstractSolrTestCase;
 import org.junit.BeforeClass;
 
 
@@ -23,7 +24,7 @@ import org.junit.BeforeClass;
  *
  * @see TestSortByMinMaxFunction
  **/
-public class SortByFunctionTest extends SolrTestCaseJ4 {
+public class SortByFunctionTest extends AbstractSolrTestCase {
 
   
   @BeforeClass
@@ -49,51 +50,51 @@ public class SortByFunctionTest extends SolrTestCaseJ4 {
     assertQ(req("fl", "*,score", "q", "*:*"),
             "//*[@numFound='4']",
             "//float[@name='score']='1.0'",
-            "//result/doc[1]/str[@name='id'][.='1']",
-            "//result/doc[2]/str[@name='id'][.='2']",
-            "//result/doc[3]/str[@name='id'][.='3']",
-            "//result/doc[4]/str[@name='id'][.='4']"
+            "//result/doc[1]/int[@name='id'][.='1']",
+            "//result/doc[2]/int[@name='id'][.='2']",
+            "//result/doc[3]/int[@name='id'][.='3']",
+            "//result/doc[4]/int[@name='id'][.='4']"
     );
     assertQ(req("fl", "*,score", "q", "*:*", "sort", "score desc"),
             "//*[@numFound='4']",
             "//float[@name='score']='1.0'",
-            "//result/doc[1]/str[@name='id'][.='1']",
-            "//result/doc[2]/str[@name='id'][.='2']",
-            "//result/doc[3]/str[@name='id'][.='3']",
-            "//result/doc[4]/str[@name='id'][.='4']"
+            "//result/doc[1]/int[@name='id'][.='1']",
+            "//result/doc[2]/int[@name='id'][.='2']",
+            "//result/doc[3]/int[@name='id'][.='3']",
+            "//result/doc[4]/int[@name='id'][.='4']"
     );
     assertQ(req("fl", "id,score", "q", "f_t:ipod", "sort", "score desc"),
             "//*[@numFound='4']",
-            "//result/doc[1]/str[@name='id'][.='1']",
-            "//result/doc[2]/str[@name='id'][.='2']",
-            "//result/doc[3]/str[@name='id'][.='3']",
-            "//result/doc[4]/str[@name='id'][.='4']"
+            "//result/doc[1]/int[@name='id'][.='1']",
+            "//result/doc[2]/int[@name='id'][.='4']",
+            "//result/doc[3]/int[@name='id'][.='2']",
+            "//result/doc[4]/int[@name='id'][.='3']"
     );
 
 
     assertQ(req("fl", "*,score", "q", "*:*", "sort", "sum(x_td1, y_td1) desc"),
             "//*[@numFound='4']",
             "//float[@name='score']='1.0'",
-            "//result/doc[1]/str[@name='id'][.='4']",
-            "//result/doc[2]/str[@name='id'][.='3']",
-            "//result/doc[3]/str[@name='id'][.='2']",
-            "//result/doc[4]/str[@name='id'][.='1']"
+            "//result/doc[1]/int[@name='id'][.='4']",
+            "//result/doc[2]/int[@name='id'][.='3']",
+            "//result/doc[3]/int[@name='id'][.='2']",
+            "//result/doc[4]/int[@name='id'][.='1']"
     );
     assertQ(req("fl", "*,score", "q", "*:*", "sort", "sum(x_td1, y_td1) asc"),
             "//*[@numFound='4']",
             "//float[@name='score']='1.0'",
-            "//result/doc[1]/str[@name='id'][.='1']",
-            "//result/doc[2]/str[@name='id'][.='2']",
-            "//result/doc[3]/str[@name='id'][.='3']",
-            "//result/doc[4]/str[@name='id'][.='4']"
+            "//result/doc[1]/int[@name='id'][.='1']",
+            "//result/doc[2]/int[@name='id'][.='2']",
+            "//result/doc[3]/int[@name='id'][.='3']",
+            "//result/doc[4]/int[@name='id'][.='4']"
     );
     //the function is equal, w_td1 separates
     assertQ(req("q", "*:*", "fl", "id", "sort", "sum(z_td1, y_td1) asc, w_td1 asc"),
             "//*[@numFound='4']",
-            "//result/doc[1]/str[@name='id'][.='2']",
-            "//result/doc[2]/str[@name='id'][.='1']",
-            "//result/doc[3]/str[@name='id'][.='4']",
-            "//result/doc[4]/str[@name='id'][.='3']"
+            "//result/doc[1]/int[@name='id'][.='2']",
+            "//result/doc[2]/int[@name='id'][.='1']",
+            "//result/doc[3]/int[@name='id'][.='4']",
+            "//result/doc[4]/int[@name='id'][.='3']"
     );
   }
   
@@ -108,24 +109,24 @@ public class SortByFunctionTest extends SolrTestCaseJ4 {
 
     assertQ(req("q", "links_mfacet:B", "fl", "id", "sort", "id asc"),
             "//*[@numFound='2']",
-            "//result/doc[1]/str[@name='id'][.='3']",
-            "//result/doc[2]/str[@name='id'][.='4']"
+            "//result/doc[1]/int[@name='id'][.='3']",
+            "//result/doc[2]/int[@name='id'][.='4']"
     );
     
     assertQ(req("q", "*:*", "fl", "id", "sort", "joindf(id_s1, links_mfacet) desc"),
             "//*[@numFound='4']",
-            "//result/doc[1]/str[@name='id'][.='1']",
-            "//result/doc[2]/str[@name='id'][.='2']",
-            "//result/doc[3]/str[@name='id'][.='3']",
-            "//result/doc[4]/str[@name='id'][.='4']"
+            "//result/doc[1]/int[@name='id'][.='1']",
+            "//result/doc[2]/int[@name='id'][.='2']",
+            "//result/doc[3]/int[@name='id'][.='3']",
+            "//result/doc[4]/int[@name='id'][.='4']"
     );
 
     assertQ(req("q", "*:*", "fl", "id", "sort", "joindf(id_s1, links_mfacet) asc"),
             "//*[@numFound='4']",
-            "//result/doc[1]/str[@name='id'][.='4']",
-            "//result/doc[2]/str[@name='id'][.='3']",
-            "//result/doc[3]/str[@name='id'][.='2']",
-            "//result/doc[4]/str[@name='id'][.='1']"
+            "//result/doc[1]/int[@name='id'][.='4']",
+            "//result/doc[2]/int[@name='id'][.='3']",
+            "//result/doc[3]/int[@name='id'][.='2']",
+            "//result/doc[4]/int[@name='id'][.='1']"
     );
   }
   
@@ -159,14 +160,14 @@ public class SortByFunctionTest extends SolrTestCaseJ4 {
     // then we lose precision in sorting; so lets sanity check that our JVM isn't doing something wacky
     // in converstion that violates the principle of the test
     
-    assertEquals("WTF? small longs cast to double aren't equivalent?",
+    assertEquals("WTF? small longs cast to double aren't equivilent?",
                  (double)A, (double)B, 0.0D);
-    assertEquals("WTF? small longs cast to double aren't equivalent?",
+    assertEquals("WTF? small longs cast to double aren't equivilent?",
                  (double)A, (double)C, 0.0D);
     
-    assertEquals("WTF? big longs cast to double aren't equivalent?",
+    assertEquals("WTF? big longs cast to double aren't equivilent?",
                  (double)Z, (double)Y, 0.0D);
-    assertEquals("WTF? big longs cast to double aren't equivalent?",
+    assertEquals("WTF? big longs cast to double aren't equivilent?",
                  (double)Z, (double)X, 0.0D);
     
     int docId = 0;

@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.compressing;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.compressing;
-
 
 import static org.apache.lucene.util.BitUtil.zigZagEncode;
 
@@ -64,7 +64,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * <li>For any block, the start pointer of the n-th chunk can be restored with
  * <code>StartPointerBase + AvgChunkSize * n + StartPointerDeltas[n]</code>.</li>
  * <li>Once data is loaded into memory, you can lookup the start pointer of any
- * document chunk by performing two binary searches: a first one based on the values
+ * document by performing two binary searches: a first one based on the values
  * of DocBase in order to find the right block, and then inside the block based
  * on DocBaseDeltas (by reconstructing the doc bases for every chunk).</li>
  * </ul>

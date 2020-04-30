@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.simpletext;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.simpletext;
-
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
@@ -25,13 +26,12 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 import org.apache.lucene.codecs.TermVectorsReader;
-import org.apache.lucene.index.BaseTermsEnum;
-import org.apache.lucene.index.Fields;
-import org.apache.lucene.index.ImpactsEnum;
-import org.apache.lucene.index.IndexFileNames;
+import org.apache.lucene.index.DocsAndPositionsEnum;
+import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.Fields;
+import org.apache.lucene.index.IndexFileNames;
 import org.apache.lucene.index.SegmentInfo;
-import org.apache.lucene.index.SlowImpactsEnum;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.AlreadyClosedException;
@@ -40,7 +40,9 @@ import org.apache.lucene.store.ChecksumIndexInput;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
+import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.ArrayUtil;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.CharsRef;
@@ -242,7 +244,7 @@ public class SimpleTextTermVectorsReader extends TermVectorsReader {
     return scratchUTF16.toString();
   }
 
-  private static class SimpleTVFields extends Fields {
+  private class SimpleTVFields extends Fields {
     private final SortedMap<String,SimpleTVTerms> fields;
 
     SimpleTVFields(SortedMap<String,SimpleTVTerms> fields) {
@@ -291,13 +293,7 @@ public class SimpleTextTermVectorsReader extends TermVectorsReader {
 
     @Override
     public long getSumTotalTermFreq() throws IOException {
-      // TODO: make it constant-time
-      long ttf = 0;
-      TermsEnum iterator = iterator();
-      for (BytesRef b = iterator.next(); b != null; b = iterator.next()) {
-        ttf += iterator.totalTermFreq();
-      }
-      return ttf;
+      return -1;
     }
 
     @Override
@@ -339,7 +335,7 @@ public class SimpleTextTermVectorsReader extends TermVectorsReader {
     private BytesRef payloads[];
   }
 
-  private static class SimpleTVTermsEnum extends BaseTermsEnum {
+  private static class SimpleTVTermsEnum extends TermsEnum {
     SortedMap<BytesRef,SimpleTVPostings> terms;
     Iterator<Map.Entry<BytesRef,SimpleTextTermVectorsReader.SimpleTVPostings>> iterator;
     Map.Entry<BytesRef,SimpleTextTermVectorsReader.SimpleTVPostings> current;
@@ -404,6 +400,8 @@ public class SimpleTextTermVectorsReader extends TermVectorsReader {
           SimpleTVPostingsEnum e = new SimpleTVPostingsEnum();
           e.reset(postings.positions, postings.startOffsets, postings.endOffsets, postings.payloads);
           return e;
+        } else if (PostingsEnum.featureRequested(flags, DocsAndPositionsEnum.OLD_NULL_SEMANTICS)) {
+          return null;
         }
       }
 
@@ -413,10 +411,6 @@ public class SimpleTextTermVectorsReader extends TermVectorsReader {
       return e;
     }
 
-    @Override
-    public ImpactsEnum impacts(int flags) throws IOException {
-      return new SlowImpactsEnum(postings(null, PostingsEnum.FREQS));
-    }
   }
 
   // note: these two enum classes are exactly like the Default impl...
@@ -578,6 +572,11 @@ public class SimpleTextTermVectorsReader extends TermVectorsReader {
     return BASE_RAM_BYTES_USED + RamUsageEstimator.sizeOf(offsets);
   }
 
+  @Override
+  public Collection<Accountable> getChildResources() {
+    return Collections.emptyList();
+  }
+  
   @Override
   public String toString() {
     return getClass().getSimpleName();

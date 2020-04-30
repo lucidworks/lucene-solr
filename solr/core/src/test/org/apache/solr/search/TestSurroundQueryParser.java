@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
-import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.util.AbstractSolrTestCase;
 import org.junit.BeforeClass;
 
-public class TestSurroundQueryParser extends SolrTestCaseJ4 {
+public class TestSurroundQueryParser extends AbstractSolrTestCase {
 
   @BeforeClass
   public static void beforeClass() throws Exception {

@@ -17,7 +17,6 @@
 package org.apache.solr.search;
 
 import java.io.IOException;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -26,12 +25,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.codahale.metrics.Gauge;
-import com.codahale.metrics.Metric;
-import com.google.common.collect.ImmutableMap;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.LogDocMergePolicy;
 import org.apache.lucene.index.ReaderUtil;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -44,13 +41,11 @@ import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SolrEventListener;
 import org.apache.solr.handler.component.ResponseBuilder;
 import org.apache.solr.handler.component.SearchComponent;
-import org.apache.solr.index.LogDocMergePolicyFactory;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestHandler;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.servlet.DirectSolrConnection;
 import org.apache.solr.util.plugin.SolrCoreAware;
-import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
 public class TestIndexSearcher extends SolrTestCaseJ4 {
@@ -60,16 +55,11 @@ public class TestIndexSearcher extends SolrTestCaseJ4 {
 
     // we need a consistent segmentation because reopen test validation
     // dependso n merges not happening when it doesn't expect
-    systemSetPropertySolrTestsMergePolicyFactory(LogDocMergePolicyFactory.class.getName());
+    System.setProperty("solr.tests.mergePolicy", LogDocMergePolicy.class.getName());
 
     initCore("solrconfig.xml","schema.xml");
   }
   
-  @AfterClass
-  public static void afterClass() {
-    systemClearPropertySolrTestsMergePolicyFactory();
-  }
-
   @Override
   public void setUp() throws Exception {
     System.getProperties().remove("tests.solr.useColdSearcher");
@@ -137,15 +127,13 @@ public class TestIndexSearcher extends SolrTestCaseJ4 {
     int baseRefCount = r3.getRefCount();
     assertEquals(1, baseRefCount);
 
-    Map<String, Metric> metrics = h.getCore().getCoreMetricManager().getRegistry().getMetrics();
-    Gauge<Date> g = (Gauge<Date>)metrics.get("SEARCHER.searcher.registeredAt");
-    Date sr3SearcherRegAt = g.getValue();
+    Object sr3SearcherRegAt = sr3.getSearcher().getStatistics().get("registeredAt");
     assertU(commit()); // nothing has changed
     SolrQueryRequest sr4 = req("q","foo");
     assertSame("nothing changed, searcher should be the same",
                sr3.getSearcher(), sr4.getSearcher());
     assertEquals("nothing changed, searcher should not have been re-registered",
-                 sr3SearcherRegAt, g.getValue());
+                 sr3SearcherRegAt, sr4.getSearcher().getStatistics().get("registeredAt"));
     IndexReader r4 = sr4.getSearcher().getRawReader();
 
     // force an index change so the registered searcher won't be the one we are testing (and
@@ -231,8 +219,9 @@ public class TestIndexSearcher extends SolrTestCaseJ4 {
     MockSearcherListener.numberOfTimesCalledFirstSearcher = new AtomicInteger();
     
     try {
+      CoreDescriptor newCd = new CoreDescriptor(cores, "core1", cd.getInstanceDir(), "config", "solrconfig-searcher-listeners1.xml");
       // Create a new core, this should call all the firstSearcherListeners
-      newCore = cores.create("core1", cd.getInstanceDir(), ImmutableMap.of("config", "solrconfig-searcher-listeners1.xml"), false);
+      newCore = cores.create(newCd);
       
       //validate that the new core was created with the correct solrconfig
       assertNotNull(newCore.getSearchComponent("mock"));
@@ -281,8 +270,9 @@ public class TestIndexSearcher extends SolrTestCaseJ4 {
     final SolrCore newCore;
     boolean coreCreated = false;
     try {
+      CoreDescriptor newCd = new CoreDescriptor(cores, "core1", cd.getInstanceDir(), "config", "solrconfig-searcher-listeners1.xml");
       // Create a new core, this should call all the firstSearcherListeners
-      newCore = cores.create("core1", cd.getInstanceDir(), ImmutableMap.of("config", "solrconfig-searcher-listeners1.xml"), false);
+      newCore = cores.create(newCd);
       coreCreated = true;
       
       //validate that the new core was created with the correct solrconfig
@@ -347,8 +337,9 @@ public class TestIndexSearcher extends SolrTestCaseJ4 {
     boolean coreCreated = false;
     try {
       System.setProperty("tests.solr.useColdSearcher", "true");
+      CoreDescriptor newCd = new CoreDescriptor(cores, "core1", cd.getInstanceDir(), "config", "solrconfig-searcher-listeners1.xml");
       // Create a new core, this should call all the firstSearcherListeners
-      newCore = cores.create("core1", cd.getInstanceDir(), ImmutableMap.of("config", "solrconfig-searcher-listeners1.xml"), false);
+      newCore = cores.create(newCd);
       coreCreated = true;
       
       //validate that the new core was created with the correct solrconfig

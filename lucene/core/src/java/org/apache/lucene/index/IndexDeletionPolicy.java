@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,23 +16,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.util.List;
 import java.io.IOException;
 
+import org.apache.lucene.store.Directory;
+
 /**
  * <p>Expert: policy for deletion of stale {@link IndexCommit index commits}. 
  * 
- * <p>Implement this interface, and set it on
- * {@link IndexWriterConfig#setIndexDeletionPolicy(IndexDeletionPolicy)}
- * to customize when older
+ * <p>Implement this interface, and pass it to one
+ * of the {@link IndexWriter} or {@link IndexReader}
+ * constructors, to customize when older
  * {@link IndexCommit point-in-time commits}
- * are deleted from the index directory.</p>
- *
- * <p>The default deletion policy
- * is {@link KeepOnlyLastCommitDeletionPolicy}, always
+ * are deleted from the index directory.  The default deletion policy
+ * is {@link KeepOnlyLastCommitDeletionPolicy}, which always
  * removes old commits as soon as a new commit is done (this
  * matches the behavior before 2.2).</p>
  *
@@ -48,6 +48,10 @@ import java.io.IOException;
  * target="top"
  * href="http://issues.apache.org/jira/browse/LUCENE-710">LUCENE-710</a>
  * for details.</p>
+ *
+ * <p>Implementers of sub-classes should make sure that {@link #clone()}
+ * returns an independent instance able to work with any other {@link IndexWriter}
+ * or {@link Directory} instance.</p>
  */
 
 public abstract class IndexDeletionPolicy {

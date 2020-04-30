@@ -1,19 +1,3 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.apache.lucene.util;
 
 import java.io.IOException;
@@ -45,6 +29,23 @@ import org.apache.lucene.util.LuceneTestCase.SuppressTempFileChecks;
 
 import com.carrotsearch.randomizedtesting.RandomizedContext;
 import com.carrotsearch.randomizedtesting.rules.TestRuleAdapter;
+
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 /**
  * Checks and cleans up temporary files.
@@ -112,6 +113,9 @@ final class TestRuleTemporaryFilesCleanup extends TestRuleAdapter {
     assert tempDirBase == null;
     fileSystem = initializeFileSystem();
     javaTempDir = initializeJavaTempDir();
+
+    // So all code using OfflineSorter (suggesters, BKD tree, NumericRangeTree) see MockFS goodness, e.g. catching leaked file handles:
+    OfflineSorter.setDefaultTempDir(javaTempDir);
   }
   
   // os/config-independent limit for too many open files
@@ -177,7 +181,6 @@ final class TestRuleTemporaryFilesCleanup extends TestRuleAdapter {
     if (LuceneTestCase.VERBOSE) {
       System.out.println("filesystem: " + fs.provider());
     }
-
     return fs.provider().getFileSystem(URI.create("file:///"));
   }
 
@@ -211,7 +214,6 @@ final class TestRuleTemporaryFilesCleanup extends TestRuleAdapter {
     // was successful. Otherwise just report the path of temporary files
     // and leave them there.
     if (failureMarker.wasSuccessful()) {
-
       try {
         IOUtils.rm(everything);
       } catch (IOException e) {
@@ -234,7 +236,7 @@ final class TestRuleTemporaryFilesCleanup extends TestRuleAdapter {
     }
   }
   
-  Path getPerTestClassTempDir() {
+  final Path getPerTestClassTempDir() {
     if (tempDirBase == null) {
       RandomizedContext ctx = RandomizedContext.current();
       Class<?> clazz = ctx.getTargetClass();

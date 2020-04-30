@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update;
 
 import java.io.FileNotFoundException;
@@ -37,7 +38,6 @@ import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.util.IOUtils;
 import org.apache.solr.core.PluginInfo;
 import org.apache.solr.core.SolrCore;
-import org.apache.solr.core.SolrInfoBean;
 import org.apache.solr.util.HdfsUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,39 +52,72 @@ public class HdfsUpdateLog extends UpdateLog {
   private Integer tlogDfsReplication;
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-  private boolean debug = log.isDebugEnabled();
   
   // used internally by tests to track total count of failed tran log loads in init
   public static AtomicLong INIT_FAILED_LOGS_COUNT = new AtomicLong();
 
   public HdfsUpdateLog() {
-    this(null);
+    this.confDir = null;
   }
   
   public HdfsUpdateLog(String confDir) {
     this.confDir = confDir;
   }
   
+  // HACK
+  // while waiting for HDFS-3107, instead of quickly
+  // dropping, we slowly apply
+  // This is somewhat brittle, but current usage
+  // allows for it
+  @Override
+  public boolean dropBufferedUpdates() {
+    versionInfo.blockUpdates();
+    try {
+      if (state != State.BUFFERING) return false;
+      
+      if (log.isInfoEnabled()) {
+        log.info("Dropping buffered updates " + this);
+      }
+      
+      // since we blocked updates, this synchronization shouldn't strictly be
+      // necessary.
+      synchronized (this) {
+        if (tlog != null) {
+          // tlog.rollback(recoveryInfo.positionOfStart);
+        }
+      }
+      
+      state = State.ACTIVE;
+      operationFlags &= ~FLAG_GAP;
+    } finally {
+      versionInfo.unblockUpdates();
+    }
+    return true;
+  }
+  
   @Override
   public void init(PluginInfo info) {
-    super.init(info);
+    dataDir = (String) info.initArgs.get("dir");
+    
+    defaultSyncLevel = SyncLevel.getSyncLevel((String) info.initArgs
+        .get("syncLevel"));
+
+    numRecordsToKeep = objToInt(info.initArgs.get("numRecordsToKeep"), 100);
+    maxNumLogsToKeep = objToInt(info.initArgs.get("maxNumLogsToKeep"), 10);
     
     tlogDfsReplication = (Integer) info.initArgs.get( "tlogDfsReplication");
-    if (tlogDfsReplication == null) tlogDfsReplication = 3;
+    if (tlogDfsReplication == null) tlogDfsReplication = 1;
 
-    log.info("Initializing HdfsUpdateLog: tlogDfsReplication={}", tlogDfsReplication);
+    log.info("Initializing HdfsUpdateLog: dataDir={} defaultSyncLevel={} numRecordsToKeep={} maxNumLogsToKeep={} tlogDfsReplication={}",
+        dataDir, defaultSyncLevel, numRecordsToKeep, maxNumLogsToKeep, tlogDfsReplication);
   }
 
-  private Configuration getConf(Path path) {
+  private Configuration getConf() {
     Configuration conf = new Configuration();
     if (confDir != null) {
       HdfsUtil.addHdfsResources(conf, confDir);
     }
-
-    String fsScheme = path.toUri().getScheme();
-    if(fsScheme != null) {
-      conf.setBoolean("fs." + fsScheme + ".impl.disable.cache", true);
-    }
+    conf.setBoolean("fs.hdfs.impl.disable.cache", true);
     return conf;
   }
   
@@ -95,7 +128,7 @@ public class HdfsUpdateLog extends UpdateLog {
     String ulogDir = core.getCoreDescriptor().getUlogDir();
 
     this.uhandler = uhandler;
-
+    
     synchronized (fsLock) {
       // just like dataDir, we do not allow
       // moving the tlog dir on reload
@@ -116,8 +149,7 @@ public class HdfsUpdateLog extends UpdateLog {
         }
         
         try {
-          Path dataDirPath = new Path(dataDir);
-          fs = FileSystem.get(dataDirPath.toUri(), getConf(dataDirPath));
+          fs = FileSystem.get(new Path(dataDir).toUri(), getConf());
         } catch (IOException e) {
           throw new SolrException(ErrorCode.SERVER_ERROR, e);
         }
@@ -160,11 +192,6 @@ public class HdfsUpdateLog extends UpdateLog {
         throw new RuntimeException("Problem creating directory: " + tlogDir, e);
       }
     }
-
-    String[] oldBufferTlog = getBufferLogList(fs, tlogDir);
-    if (oldBufferTlog != null && oldBufferTlog.length != 0) {
-      existOldBufferLog = true;
-    }
     
     tlogFiles = getLogList(fs, tlogDir);
     id = getLastLogId() + 1; // add 1 since we will create a new log for the
@@ -199,17 +226,12 @@ public class HdfsUpdateLog extends UpdateLog {
     // It's possible that at abnormal close both "tlog" and "prevTlog" were
     // uncapped.
     for (TransactionLog ll : logs) {
-      if (newestLogsOnStartup.size() < 2) {
-        newestLogsOnStartup.addFirst(ll);
-      } else {
-        // We're never going to modify old non-recovery logs - no need to hold their output open
-        log.info("Closing output for old non-recovery log " + ll);
-        ll.closeOutput();
-      }
+      newestLogsOnStartup.addFirst(ll);
+      if (newestLogsOnStartup.size() >= 2) break;
     }
     
     try {
-      versionInfo = new VersionInfo(this, numVersionBuckets);
+      versionInfo = new VersionInfo(this, 256);
     } catch (SolrException e) {
       log.error("Unable to use updateLog: " + e.getMessage(), e);
       throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
@@ -218,16 +240,18 @@ public class HdfsUpdateLog extends UpdateLog {
     
     // TODO: these startingVersions assume that we successfully recover from all
     // non-complete tlogs.
-    try (RecentUpdates startingUpdates = getRecentUpdates()) {
+    HdfsUpdateLog.RecentUpdates startingUpdates = getRecentUpdates();
+    try {
       startingVersions = startingUpdates.getVersions(getNumRecordsToKeep());
-
+      startingOperation = startingUpdates.getLatestOperation();
+      
       // populate recent deletes list (since we can't get that info from the
       // index)
       for (int i = startingUpdates.deleteList.size() - 1; i >= 0; i--) {
         DeleteUpdate du = startingUpdates.deleteList.get(i);
         oldDeletes.put(new BytesRef(du.id), new LogPtr(-1, du.version));
       }
-
+      
       // populate recent deleteByQuery commands
       for (int i = startingUpdates.deleteByQueryList.size() - 1; i >= 0; i--) {
         Update update = startingUpdates.deleteByQueryList.get(i);
@@ -236,33 +260,16 @@ public class HdfsUpdateLog extends UpdateLog {
         String q = (String) dbq.get(2);
         trackDeleteByQuery(q, version);
       }
-
+      
+    } finally {
+      startingUpdates.close();
     }
-
-    // initialize metrics
-    core.getCoreMetricManager().registerMetricProducer(SolrInfoBean.Category.TLOG.toString(), this);
+    
   }
   
   @Override
   public String getLogDir() {
     return tlogDir.toUri().toString();
-  }
-
-  public static String[] getBufferLogList(FileSystem fs, Path tlogDir) {
-    final String prefix = BUFFER_TLOG_NAME+'.';
-    assert fs != null;
-    FileStatus[] fileStatuses;
-    try {
-      fileStatuses = fs.listStatus(tlogDir, path -> path.getName().startsWith(prefix));
-    } catch (IOException e) {
-      throw new SolrException(ErrorCode.SERVER_ERROR, "Failed on listing old buffer tlog", e);
-    }
-
-    String[] names = new String[fileStatuses.length];
-    for (int i = 0; i < fileStatuses.length; i++) {
-      names[i] = fileStatuses[i].getPath().getName();
-    }
-    return names;
   }
   
   public static String[] getLogList(FileSystem fs, Path tlogDir) {
@@ -302,36 +309,7 @@ public class HdfsUpdateLog extends UpdateLog {
       IOUtils.closeQuietly(fs);
     }
   }
-
-  @Override
-  protected void ensureBufferTlog() {
-    if (bufferTlog != null) return;
-    String newLogName = String.format(Locale.ROOT, LOG_FILENAME_PATTERN, BUFFER_TLOG_NAME, System.nanoTime());
-    bufferTlog = new HdfsTransactionLog(fs, new Path(tlogDir, newLogName),
-        globalStrings, tlogDfsReplication);
-    bufferTlog.isBuffer = true;
-  }
-
-  @Override
-  protected void deleteBufferLogs() {
-    // Delete old buffer logs
-    String[] oldBufferTlog = getBufferLogList(fs, tlogDir);
-    if (oldBufferTlog != null && oldBufferTlog.length != 0) {
-      for (String oldBufferLogName : oldBufferTlog) {
-        Path f = new Path(tlogDir, oldBufferLogName);
-        try {
-          boolean s = fs.delete(f, false);
-          if (!s) {
-            log.error("Could not remove old buffer tlog file:" + f);
-          }
-        } catch (IOException e) {
-          // No need to bubble up this exception, because it won't cause any problems on recovering
-          log.error("Could not remove old buffer tlog file:" + f, e);
-        }
-      }
-    }
-  }
-
+  
   @Override
   protected void ensureLog() {
     if (tlog == null) {
@@ -340,6 +318,12 @@ public class HdfsUpdateLog extends UpdateLog {
       HdfsTransactionLog ntlog = new HdfsTransactionLog(fs, new Path(tlogDir, newLogName),
           globalStrings, tlogDfsReplication);
       tlog = ntlog;
+      
+      if (tlog != ntlog) {
+        ntlog.deleteOnClose = false;
+        ntlog.decref();
+        ntlog.forceClose();
+      }
     }
   }
   
@@ -367,12 +351,6 @@ public class HdfsUpdateLog extends UpdateLog {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
-  }
-  
-  @Override
-  public void preSoftCommit(CommitUpdateCommand cmd) {
-    debug = log.isDebugEnabled();
-    super.preSoftCommit(cmd);
   }
   
   public String[] getLogList(Path tlogDir) throws FileNotFoundException, IOException {

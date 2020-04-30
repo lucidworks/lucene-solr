@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,196 +16,213 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
-import java.lang.invoke.MethodHandles;
-import java.net.URL;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Predicate;
 
+import org.apache.lucene.util.LuceneTestCase;
+import org.apache.solr.SolrTestCaseJ4.SuppressSSL;
+import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.embedded.JettySolrRunner;
-import org.apache.solr.client.solrj.request.CollectionAdminRequest;
+import org.apache.solr.client.solrj.impl.CloudSolrClient;
+import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.cloud.overseer.OverseerAction;
+import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.common.cloud.ZkNodeProps;
-import org.apache.solr.common.util.TimeSource;
+import org.apache.solr.common.params.CollectionParams.CollectionAction;
+import org.apache.solr.common.params.MapSolrParams;
+import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.Utils;
 import org.apache.solr.util.TimeOut;
-import org.apache.zookeeper.KeeperException;
-import org.junit.After;
-import org.junit.Before;
+import org.apache.zookeeper.data.Stat;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.solr.cloud.OverseerCollectionConfigSetProcessor.getLeaderNode;
-import static org.apache.solr.cloud.OverseerTaskProcessor.getSortedElectionNodes;
+import java.io.IOException;
+import java.lang.invoke.MethodHandles;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
-public class OverseerRolesTest extends SolrCloudTestCase {
+import static org.apache.solr.cloud.OverseerCollectionConfigSetProcessor.getLeaderNode;
+import static org.apache.solr.cloud.OverseerCollectionConfigSetProcessor.getSortedOverseerNodeNames;
+import static org.apache.solr.cloud.OverseerCollectionMessageHandler.NUM_SLICES;
+import static org.apache.solr.common.util.Utils.makeMap;
+import static org.apache.solr.common.cloud.ZkStateReader.MAX_SHARDS_PER_NODE;
+import static org.apache.solr.common.cloud.ZkStateReader.REPLICATION_FACTOR;
+
+@LuceneTestCase.Slow
+@SuppressSSL(bugUrl = "SOLR-5776")
+public class OverseerRolesTest  extends AbstractFullDistribZkTestBase{
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  @Before
-  public void setupCluster() throws Exception {
-    configureCluster(4)
-        .addConfig("conf", configset("cloud-minimal"))
-        .configure();
+  protected String getSolrXml() {
+    return "solr-no-core.xml";
   }
 
-  @After
-  public void tearDownCluster() throws Exception {
-    shutdownCluster();
+  public OverseerRolesTest() {
+    sliceCount = 2;
+    fixShardCount(TEST_NIGHTLY ? 6 : 2);
   }
-  
-  private void waitForNewOverseer(int seconds, Predicate<String> state, boolean failOnIntermediateTransition) throws Exception {
-    TimeOut timeout = new TimeOut(seconds, TimeUnit.SECONDS, TimeSource.NANO_TIME);
-    String current = null;
-    while (timeout.hasTimedOut() == false) {
-      String prev = current;
-      current = OverseerCollectionConfigSetProcessor.getLeaderNode(zkClient());
-      if (state.test(current))
-        return;
-      else if (failOnIntermediateTransition) {
-        if (prev != null && current != null && !current.equals(prev)) {
-          fail ("There was an intermediate transition, previous: "+prev+", intermediate transition: "+current);
-        }
+
+  @Test
+  public void test() throws Exception {
+    try (CloudSolrClient client = createCloudClient(null))  {
+      testQuitCommand(client);
+      testOverseerRole(client);
+    }
+  }
+
+  private void testQuitCommand(CloudSolrClient client) throws Exception{
+    String collectionName = "testOverseerQuit";
+
+    createCollection(collectionName, client);
+
+    waitForRecoveriesToFinish(collectionName, false);
+
+    SolrZkClient zk = client.getZkStateReader().getZkClient();
+    byte[] data = new byte[0];
+    data = zk.getData("/overseer_elect/leader", null, new Stat(), true);
+    Map m = (Map) Utils.fromJSON(data);
+    String s = (String) m.get("id");
+    String leader = LeaderElector.getNodeName(s);
+    Overseer.getInQueue(zk).offer(Utils.toJSON(new ZkNodeProps(Overseer.QUEUE_OPERATION, OverseerAction.QUIT.toLower())));
+    final TimeOut timeout = new TimeOut(10, TimeUnit.SECONDS);
+    String newLeader=null;
+    for(;! timeout.hasTimedOut();){
+      newLeader = OverseerCollectionConfigSetProcessor.getLeaderNode(zk);
+      if(newLeader!=null && !newLeader.equals(leader)) break;
+      Thread.sleep(100);
+    }
+    assertNotSame( "Leader not changed yet",newLeader,leader);
+
+
+
+    assertTrue("The old leader should have rejoined election ", OverseerCollectionConfigSetProcessor.getSortedOverseerNodeNames(zk).contains(leader));
+  }
+
+
+
+
+  private void testOverseerRole(CloudSolrClient client) throws Exception {
+    String collectionName = "testOverseerCol";
+
+    createCollection(collectionName, client);
+
+    waitForRecoveriesToFinish(collectionName, false);
+    List<String> l = OverseerCollectionConfigSetProcessor.getSortedOverseerNodeNames(client.getZkStateReader().getZkClient()) ;
+
+    log.info("All nodes {}", l);
+    String currentLeader = OverseerCollectionConfigSetProcessor.getLeaderNode(client.getZkStateReader().getZkClient());
+    log.info("Current leader {} ", currentLeader);
+    l.remove(currentLeader);
+
+    Collections.shuffle(l, random());
+    String overseerDesignate = l.get(0);
+    log.info("overseerDesignate {}",overseerDesignate);
+    setOverseerRole(client, CollectionAction.ADDROLE,overseerDesignate);
+
+    TimeOut timeout = new TimeOut(15, TimeUnit.SECONDS);
+
+    boolean leaderchanged = false;
+    for(;!timeout.hasTimedOut();){
+      if(overseerDesignate.equals(OverseerCollectionConfigSetProcessor.getLeaderNode(client.getZkStateReader().getZkClient()))){
+        log.info("overseer designate is the new overseer");
+        leaderchanged =true;
+        break;
       }
       Thread.sleep(100);
     }
-    fail("Timed out waiting for overseer state change. The current overseer is: "+current);
-  }
+    assertTrue("could not set the new overseer . expected "+
+        overseerDesignate + " current order : " +
+        getSortedOverseerNodeNames(client.getZkStateReader().getZkClient()) +
+        " ldr :"+ OverseerCollectionConfigSetProcessor.getLeaderNode(client.getZkStateReader().getZkClient()) ,leaderchanged);
 
-  private void waitForNewOverseer(int seconds, String expected, boolean failOnIntermediateTransition) throws Exception {
-    log.info("Expecting node: "+expected);
-    waitForNewOverseer(seconds, s -> Objects.equals(s, expected), failOnIntermediateTransition);
-  }
 
-  private JettySolrRunner getOverseerJetty() throws Exception {
-    String overseer = getLeaderNode(zkClient());
-    URL overseerUrl = new URL("http://" + overseer.substring(0, overseer.indexOf('_')));
-    int hostPort = overseerUrl.getPort();
-    for (JettySolrRunner jetty : cluster.getJettySolrRunners()) {
-      try {
-      if (jetty.getBaseUrl().getPort() == hostPort)
-        return jetty;
-      } catch (IllegalStateException e) {
-        
-      }
-    }
-    fail("Couldn't find overseer node " + overseer);
-    return null; // to keep the compiler happy
-  }
-
-  private void logOverseerState() throws KeeperException, InterruptedException {
-    log.info("Overseer: {}", getLeaderNode(zkClient()));
-    log.info("Election queue: {}", getSortedElectionNodes(zkClient(), "/overseer_elect/election"));
-  }
-
-  @Test
-  public void testOverseerRole() throws Exception {
-
-    logOverseerState();
-    List<String> nodes = OverseerCollectionConfigSetProcessor.getSortedOverseerNodeNames(zkClient());
-    // Remove the OVERSEER role, in case it was already assigned by another test in this suite
-    for (String node: nodes) {
-      CollectionAdminRequest.removeRole(node, "overseer").process(cluster.getSolrClient());
-    }
-    String overseer1 = OverseerCollectionConfigSetProcessor.getLeaderNode(zkClient());
-    nodes.remove(overseer1);
-
-    Collections.shuffle(nodes, random());
-    String overseer2 = nodes.get(0);
-    log.info("### Setting overseer designate {}", overseer2);
-
-    CollectionAdminRequest.addRole(overseer2, "overseer").process(cluster.getSolrClient());
-
-    waitForNewOverseer(15, overseer2, false);
 
     //add another node as overseer
-    nodes.remove(overseer2);
-    Collections.shuffle(nodes, random());
 
-    String overseer3 = nodes.get(0);
-    log.info("### Adding another overseer designate {}", overseer3);
-    CollectionAdminRequest.addRole(overseer3, "overseer").process(cluster.getSolrClient());
 
-    // kill the current overseer, and check that the new designate becomes the new overseer
-    JettySolrRunner leaderJetty = getOverseerJetty();
-    logOverseerState();
+    l.remove(overseerDesignate);
 
-    leaderJetty.stop();
-    waitForNewOverseer(10, overseer3, false);
+    Collections.shuffle(l, random());
 
-    // add another node as overseer
-    nodes.remove(overseer3);
-    Collections.shuffle(nodes, random());
-    String overseer4 = nodes.get(0);
-    log.info("### Adding last overseer designate {}", overseer4);
-    CollectionAdminRequest.addRole(overseer4, "overseer").process(cluster.getSolrClient());
-    logOverseerState();
+    String anotherOverseer = l.get(0);
+    log.info("Adding another overseer designate {}", anotherOverseer);
+    setOverseerRole(client, CollectionAction.ADDROLE, anotherOverseer);
 
-    // remove the overseer role from the current overseer
-    CollectionAdminRequest.removeRole(overseer3, "overseer").process(cluster.getSolrClient());
-    waitForNewOverseer(15, overseer4, false);
+    String currentOverseer = getLeaderNode(client.getZkStateReader().getZkClient());
 
-    // Add it back again - we now have two delegates, 4 and 3
-    CollectionAdminRequest.addRole(overseer3, "overseer").process(cluster.getSolrClient());
+    log.info("Current Overseer {}", currentOverseer);
 
-    // explicitly tell the overseer to quit
-    String leaderId = OverseerCollectionConfigSetProcessor.getLeaderId(zkClient());
-    String leader = OverseerCollectionConfigSetProcessor.getLeaderNode(zkClient());
-    log.info("### Sending QUIT to overseer {}", leader);
-    getOverseerJetty().getCoreContainer().getZkController().getOverseer().getStateUpdateQueue()
-        .offer(Utils.toJSON(new ZkNodeProps(Overseer.QUEUE_OPERATION, OverseerAction.QUIT.toLower(),
-            "id", leaderId)));
+    String hostPort = currentOverseer.substring(0,currentOverseer.indexOf('_'));
 
-    waitForNewOverseer(15, s -> Objects.equals(leader, s) == false, false);
+    StringBuilder sb = new StringBuilder();
+//
+//
+    log.info("hostPort : {}", hostPort);
 
-    Thread.sleep(1000);
-    
-    logOverseerState();
-    assertTrue("The old leader should have rejoined election",
-        OverseerCollectionConfigSetProcessor.getSortedOverseerNodeNames(zkClient()).contains(leader));
+    JettySolrRunner leaderJetty = null;
 
-    leaderJetty.start(); // starting this back, just for good measure
-  }
-
-  @Test
-  public void testDesignatedOverseerRestarts() throws Exception {
-    logOverseerState();
-    // Remove the OVERSEER role, in case it was already assigned by another test in this suite
-    for (String node: OverseerCollectionConfigSetProcessor.getSortedOverseerNodeNames(zkClient())) {
-      CollectionAdminRequest.removeRole(node, "overseer").process(cluster.getSolrClient());
-    }
-    String overseer1 = OverseerCollectionConfigSetProcessor.getLeaderNode(zkClient());
-    int counter = 0;
-    while (overseer1 == null && counter < 10) {
-      overseer1 = OverseerCollectionConfigSetProcessor.getLeaderNode(zkClient());
-      Thread.sleep(1000);
+    for (JettySolrRunner jetty : jettys) {
+      String s = jetty.getBaseUrl().toString();
+      log.info("jetTy {}",s);
+      sb.append(s).append(" , ");
+      if (s.contains(hostPort)) {
+        leaderJetty = jetty;
+        break;
+      }
     }
 
-    // Setting overseer role to the current overseer
-    CollectionAdminRequest.addRole(overseer1, "overseer").process(cluster.getSolrClient());
-    waitForNewOverseer(15, overseer1, false);
-    JettySolrRunner leaderJetty = getOverseerJetty();
+    assertNotNull("Could not find a jetty2 kill",  leaderJetty);
 
-    List<String> nodes = OverseerCollectionConfigSetProcessor.getSortedOverseerNodeNames(zkClient());
-    nodes.remove(overseer1); // remove the designated overseer
-
-    logOverseerState();
-    // kill the current overseer, and check that the next node in the election queue assumes leadership
-    leaderJetty.stop();
-    log.info("Killing designated overseer: "+overseer1);
-
-    // after 5 seconds, bring back dead designated overseer and assert that it assumes leadership "right away",
-    // i.e. without any other node assuming leadership before this node becomes leader.
-    Thread.sleep(5);
-    logOverseerState();
-    log.info("Starting back the prioritized overseer..");
-    leaderJetty.start();
-    waitForNewOverseer(15, overseer1, true); // assert that there is just a single leadership transition
+    log.info("leader node {}", leaderJetty.getBaseUrl());
+    log.info ("current election Queue",
+        OverseerCollectionConfigSetProcessor.getSortedElectionNodes(client.getZkStateReader().getZkClient(),
+            "/overseer_elect/election"));
+    ChaosMonkey.stop(leaderJetty);
+    timeout = new TimeOut(10, TimeUnit.SECONDS);
+    leaderchanged = false;
+    for (; !timeout.hasTimedOut(); ) {
+      currentOverseer = getLeaderNode(client.getZkStateReader().getZkClient());
+      if (anotherOverseer.equals(currentOverseer)) {
+        leaderchanged = true;
+        break;
+      }
+      Thread.sleep(100);
+    }
+    assertTrue("New overseer designate has not become the overseer, expected : " + anotherOverseer + "actual : " + getLeaderNode(client.getZkStateReader().getZkClient()), leaderchanged);
   }
+
+  private void setOverseerRole(CloudSolrClient client, CollectionAction action, String overseerDesignate) throws Exception, IOException {
+    log.info("Adding overseer designate {} ", overseerDesignate);
+    Map m = makeMap(
+        "action", action.toString().toLowerCase(Locale.ROOT),
+        "role", "overseer",
+        "node", overseerDesignate);
+    SolrParams params = new MapSolrParams(m);
+    SolrRequest request = new QueryRequest(params);
+    request.setPath("/admin/collections");
+    client.request(request);
+  }
+
+
+  protected void createCollection(String COLL_NAME, CloudSolrClient client) throws Exception {
+    int replicationFactor = 2;
+    int numShards = 4;
+    int maxShardsPerNode = ((((numShards+1) * replicationFactor) / getCommonCloudSolrClient()
+        .getZkStateReader().getClusterState().getLiveNodes().size())) + 1;
+
+    Map<String, Object> props = makeMap(
+        REPLICATION_FACTOR, replicationFactor,
+        MAX_SHARDS_PER_NODE, maxShardsPerNode,
+        NUM_SLICES, numShards);
+    Map<String,List<Integer>> collectionInfos = new HashMap<>();
+    createCollection(collectionInfos, COLL_NAME, props, client);
+  }
+
+
 }
-

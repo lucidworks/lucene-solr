@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.document;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -24,12 +25,9 @@ import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.MockTokenFilter;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
 import org.apache.lucene.document.NumericDocValuesField;
-import org.apache.lucene.document.StringField;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.DocValues;
-import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.SortedNumericDocValues;
@@ -37,13 +35,11 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.search.suggest.BitsProducer;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.Bits;
-import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.LuceneTestCase;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
 import static org.apache.lucene.search.suggest.document.TestSuggestField.Entry;
 import static org.apache.lucene.search.suggest.document.TestSuggestField.assertSuggestions;
 import static org.apache.lucene.search.suggest.document.TestSuggestField.iwcWithSuggestField;
@@ -86,21 +82,30 @@ public class TestPrefixCompletionQuery extends LuceneTestCase {
     @Override
     public Bits getBits(final LeafReaderContext context) throws IOException {
       final int maxDoc = context.reader().maxDoc();
-      FixedBitSet bits = new FixedBitSet(maxDoc);
       final SortedNumericDocValues values = DocValues.getSortedNumeric(context.reader(), field);
-      int docID;
-      while ((docID = values.nextDoc()) != NO_MORE_DOCS) {
-        final int count = values.docValueCount();
-        for (int i = 0; i < count; ++i) {
-          final long v = values.nextValue();
-          if (v >= min && v <= max) {
-            bits.set(docID);
-            break;
+      return new Bits() {
+
+        @Override
+        public boolean get(int doc) {
+          values.setDocument(doc);
+          final int count = values.count();
+          for (int i = 0; i < count; ++i) {
+            final long v = values.valueAt(i);
+            if (v >= min && v <= max) {
+              return true;
+            }
           }
+          return false;
         }
-      }
-      return bits;
+
+        @Override
+        public int length() {
+          return maxDoc;
+        }
+        
+      };
     }
+
   }
 
   public Directory dir;
@@ -115,6 +120,7 @@ public class TestPrefixCompletionQuery extends LuceneTestCase {
     dir.close();
   }
 
+  @Test
   public void testSimple() throws Exception {
     Analyzer analyzer = new MockAnalyzer(random());
     RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwcWithSuggestField(analyzer, "suggest_field"));
@@ -124,7 +130,6 @@ public class TestPrefixCompletionQuery extends LuceneTestCase {
     document.add(new SuggestField("suggest_field", "abd", 4));
     document.add(new SuggestField("suggest_field", "The Foo Fighters", 2));
     iw.addDocument(document);
-
     document = new Document();
     document.add(new SuggestField("suggest_field", "abcdd", 5));
     iw.addDocument(document);
@@ -136,7 +141,7 @@ public class TestPrefixCompletionQuery extends LuceneTestCase {
     DirectoryReader reader = iw.getReader();
     SuggestIndexSearcher suggestIndexSearcher = new SuggestIndexSearcher(reader);
     PrefixCompletionQuery query = new PrefixCompletionQuery(analyzer, new Term("suggest_field", "ab"));
-    TopSuggestDocs lookupDocs = suggestIndexSearcher.suggest(query, 3, false);
+    TopSuggestDocs lookupDocs = suggestIndexSearcher.suggest(query, 3);
     assertSuggestions(lookupDocs, new Entry("abcdd", 5), new Entry("abd", 4), new Entry("abc", 3));
 
     reader.close();
@@ -144,28 +149,6 @@ public class TestPrefixCompletionQuery extends LuceneTestCase {
   }
 
   @Test
-  public void testEmptyPrefixQuery() throws Exception {
-    Analyzer analyzer = new MockAnalyzer(random());
-    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwcWithSuggestField(analyzer, "suggest_field"));
-    Document document = new Document();
-    document.add(new SuggestField("suggest_field", "suggestion1", 1));
-    iw.addDocument(document);
-
-    if (rarely()) {
-      iw.commit();
-    }
-
-    DirectoryReader reader = iw.getReader();
-    SuggestIndexSearcher suggestIndexSearcher = new SuggestIndexSearcher(reader);
-    PrefixCompletionQuery query = new PrefixCompletionQuery(analyzer, new Term("suggest_field", ""));
-
-    TopSuggestDocs suggest = suggestIndexSearcher.suggest(query, 5, false);
-    assertEquals(0, suggest.scoreDocs.length);
-
-    reader.close();
-    iw.close();
-  }
-
   public void testMostlyFilteredOutDocuments() throws Exception {
     Analyzer analyzer = new MockAnalyzer(random());
     RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwcWithSuggestField(analyzer, "suggest_field"));
@@ -189,8 +172,8 @@ public class TestPrefixCompletionQuery extends LuceneTestCase {
     PrefixCompletionQuery query = new PrefixCompletionQuery(analyzer, new Term("suggest_field", "abc_"), filter);
     // if at most half of the top scoring documents have been filtered out
     // the search should be admissible for a single segment
-    TopSuggestDocs suggest = indexSearcher.suggest(query, num, false);
-    assertTrue(suggest.totalHits.value >= 1);
+    TopSuggestDocs suggest = indexSearcher.suggest(query, num);
+    assertTrue(suggest.totalHits >= 1);
     assertThat(suggest.scoreLookupDocs()[0].key.toString(), equalTo("abc_" + topScore));
     assertThat(suggest.scoreLookupDocs()[0].score, equalTo((float) topScore));
 
@@ -198,20 +181,21 @@ public class TestPrefixCompletionQuery extends LuceneTestCase {
     query = new PrefixCompletionQuery(analyzer, new Term("suggest_field", "abc_"), filter);
     // if more than half of the top scoring documents have been filtered out
     // search is not admissible, so # of suggestions requested is num instead of 1
-    suggest = indexSearcher.suggest(query, num, false);
+    suggest = indexSearcher.suggest(query, num);
     assertSuggestions(suggest, new Entry("abc_0", 0));
 
     filter = new NumericRangeBitsProducer("filter_int_fld", num - 1, num - 1);
     query = new PrefixCompletionQuery(analyzer, new Term("suggest_field", "abc_"), filter);
     // if only lower scoring documents are filtered out
     // search is admissible
-    suggest = indexSearcher.suggest(query, 1, false);
+    suggest = indexSearcher.suggest(query, 1);
     assertSuggestions(suggest, new Entry("abc_" + (num - 1), num - 1));
 
     reader.close();
     iw.close();
   }
 
+  @Test
   public void testDocFiltering() throws Exception {
     Analyzer analyzer = new MockAnalyzer(random());
     RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwcWithSuggestField(analyzer, "suggest_field"));
@@ -240,202 +224,89 @@ public class TestPrefixCompletionQuery extends LuceneTestCase {
 
     // suggest without filter
     PrefixCompletionQuery query = new PrefixCompletionQuery(analyzer, new Term("suggest_field", "app"));
-    TopSuggestDocs suggest = indexSearcher.suggest(query, 3, false);
+    TopSuggestDocs suggest = indexSearcher.suggest(query, 3);
     assertSuggestions(suggest, new Entry("apple", 5), new Entry("applle", 4), new Entry("apples", 3));
 
     // suggest with filter
     BitsProducer filter = new NumericRangeBitsProducer("filter_int_fld", 5, 12);
     query = new PrefixCompletionQuery(analyzer, new Term("suggest_field", "app"), filter);
-    suggest = indexSearcher.suggest(query, 3, false);
+    suggest = indexSearcher.suggest(query, 3);
     assertSuggestions(suggest, new Entry("applle", 4), new Entry("apples", 3));
 
     reader.close();
     iw.close();
   }
 
-  public void testAnalyzerDefaults() throws Exception {
+  @Test
+  public void testAnalyzerWithoutPreservePosAndSep() throws Exception {
     Analyzer analyzer = new MockAnalyzer(random(), MockTokenizer.WHITESPACE, true, MockTokenFilter.ENGLISH_STOPSET);
-    CompletionAnalyzer completionAnalyzer = new CompletionAnalyzer(analyzer);
-    final String field = getTestName();
-    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwcWithSuggestField(completionAnalyzer, field));
+    CompletionAnalyzer completionAnalyzer = new CompletionAnalyzer(analyzer, false, false);
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwcWithSuggestField(completionAnalyzer, "suggest_field_no_p_sep_or_pos_inc"));
     Document document = new Document();
-    document.add(new SuggestField(field, "foobar", 7));
-    document.add(new SuggestField(field, "foo bar", 8));
-    document.add(new SuggestField(field, "the fo", 9));
-    document.add(new SuggestField(field, "the foo bar", 10));
-    document.add(new SuggestField(field, "foo the bar", 11)); // middle stopword
-    document.add(new SuggestField(field, "baz the", 12)); // trailing stopword
-
+    document.add(new SuggestField("suggest_field_no_p_sep_or_pos_inc", "foobar", 7));
+    document.add(new SuggestField("suggest_field_no_p_sep_or_pos_inc", "foo bar", 8));
+    document.add(new SuggestField("suggest_field_no_p_sep_or_pos_inc", "the fo", 9));
+    document.add(new SuggestField("suggest_field_no_p_sep_or_pos_inc", "the foo bar", 10));
     iw.addDocument(document);
 
     DirectoryReader reader = iw.getReader();
     SuggestIndexSearcher indexSearcher = new SuggestIndexSearcher(reader);
-    CompletionQuery query = new PrefixCompletionQuery(completionAnalyzer, new Term(field, "fo"));
-    TopSuggestDocs suggest = indexSearcher.suggest(query, 9, false); //matches all with "fo*"
-    assertSuggestions(suggest, new Entry("foo the bar", 11), new Entry("foo bar", 8), new Entry("foobar", 7));
-    // with leading stopword
-    query = new PrefixCompletionQuery(completionAnalyzer, new Term(field, "the fo")); // becomes "_ fo*"
-    suggest = indexSearcher.suggest(query, 9, false);
-    assertSuggestions(suggest, new Entry("the foo bar", 10), new Entry("the fo", 9));
-    // with middle stopword
-    query = new PrefixCompletionQuery(completionAnalyzer, new Term(field, "foo the bar")); // becomes "foo _ bar*"
-    suggest = indexSearcher.suggest(query, 9, false);
-    assertSuggestions(suggest, new Entry("foo the bar", 11));
-    // no space
-    query = new PrefixCompletionQuery(completionAnalyzer, new Term(field, "foob"));
-    suggest = indexSearcher.suggest(query, 9, false);
-    assertSuggestions(suggest, new Entry("foobar", 7));
-    // surrounding stopwords
-    query = new PrefixCompletionQuery(completionAnalyzer, new Term(field, "the baz the")); // becomes "_ baz _"
-    suggest = indexSearcher.suggest(query, 4, false);
-    assertSuggestions(suggest);
+    CompletionQuery query = new PrefixCompletionQuery(analyzer, new Term("suggest_field_no_p_sep_or_pos_inc", "fo"));
+    TopSuggestDocs suggest = indexSearcher.suggest(query, 4); // all 4
+    assertSuggestions(suggest, new Entry("the foo bar", 10), new Entry("the fo", 9), new Entry("foo bar", 8), new Entry("foobar", 7));
+    query = new PrefixCompletionQuery(analyzer, new Term("suggest_field_no_p_sep_or_pos_inc", "foob"));
+    suggest = indexSearcher.suggest(query, 4); // not the fo
+    assertSuggestions(suggest, new Entry("the foo bar", 10), new Entry("foo bar", 8), new Entry("foobar", 7));
     reader.close();
     iw.close();
   }
 
-  public void testAnalyzerWithoutSeparator() throws Exception {
-    Analyzer analyzer = new MockAnalyzer(random(), MockTokenizer.WHITESPACE, true, MockTokenFilter.ENGLISH_STOPSET);
-    //note: when we don't preserve separators, the choice of preservePosInc is irrelevant
-    CompletionAnalyzer completionAnalyzer = new CompletionAnalyzer(analyzer, false, random().nextBoolean());
-    final String field = getTestName();
-    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwcWithSuggestField(completionAnalyzer, field));
-    Document document = new Document();
-    document.add(new SuggestField(field, "foobar", 7));
-    document.add(new SuggestField(field, "foo bar", 8));
-    document.add(new SuggestField(field, "the fo", 9));
-    document.add(new SuggestField(field, "the foo bar", 10));
-    document.add(new SuggestField(field, "foo the bar", 11)); // middle stopword
-    document.add(new SuggestField(field, "baz the", 12)); // trailing stopword
-
-    iw.addDocument(document);
-
-    // note we use the completionAnalyzer with the queries (instead of input analyzer) because of non-default settings
-    DirectoryReader reader = iw.getReader();
-    SuggestIndexSearcher indexSearcher = new SuggestIndexSearcher(reader);
-    CompletionQuery query = new PrefixCompletionQuery(completionAnalyzer, new Term(field, "fo"));
-    TopSuggestDocs suggest = indexSearcher.suggest(query, 9, false); //matches all with fo
-    assertSuggestions(suggest, new Entry("foo the bar", 11), new Entry("the foo bar", 10), new Entry("the fo", 9), new Entry("foo bar", 8), new Entry("foobar", 7));
-    // with leading stopword
-    query = new PrefixCompletionQuery(completionAnalyzer, new Term(field, "the fo")); // becomes "fo*"
-    suggest = indexSearcher.suggest(query, 9, false);
-    assertSuggestions(suggest, new Entry("foo the bar", 11), new Entry("the foo bar", 10), new Entry("the fo", 9), new Entry("foo bar", 8), new Entry("foobar", 7));
-    // with middle stopword
-    query = new PrefixCompletionQuery(completionAnalyzer, new Term(field, "foo the bar")); // becomes "foobar*"
-    suggest = indexSearcher.suggest(query, 9, false);
-    assertSuggestions(suggest, new Entry("foo the bar", 11), new Entry("the foo bar", 10), new Entry("foo bar", 8), new Entry("foobar", 7));
-    // no space
-    query = new PrefixCompletionQuery(completionAnalyzer, new Term(field, "foob"));
-    suggest = indexSearcher.suggest(query, 9, false); // no separators, thus match several
-    assertSuggestions(suggest, new Entry("foo the bar", 11), new Entry("the foo bar", 10), new Entry("foo bar", 8), new Entry("foobar", 7));
-    // surrounding stopwords
-    query = new PrefixCompletionQuery(completionAnalyzer, new Term(field, "the baz the")); // becomes "baz*"
-    suggest = indexSearcher.suggest(query, 4, false);// stopwords in query get removed so we match
-    assertSuggestions(suggest, new Entry("baz the", 12));
-    reader.close();
-    iw.close();
-  }
-
-  public void testAnalyzerNoPreservePosInc() throws Exception {
+  @Test
+  public void testAnalyzerWithSepAndNoPreservePos() throws Exception {
     Analyzer analyzer = new MockAnalyzer(random(), MockTokenizer.WHITESPACE, true, MockTokenFilter.ENGLISH_STOPSET);
     CompletionAnalyzer completionAnalyzer = new CompletionAnalyzer(analyzer, true, false);
-    final String field = getTestName();
-    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwcWithSuggestField(completionAnalyzer, field));
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwcWithSuggestField(completionAnalyzer, "suggest_field_no_p_pos_inc"));
     Document document = new Document();
-    document.add(new SuggestField(field, "foobar", 7));
-    document.add(new SuggestField(field, "foo bar", 8));
-    document.add(new SuggestField(field, "the fo", 9));
-    document.add(new SuggestField(field, "the foo bar", 10));
-    document.add(new SuggestField(field, "foo the bar", 11)); // middle stopword
-    document.add(new SuggestField(field, "baz the", 12)); // trailing stopword
-
+    document.add(new SuggestField("suggest_field_no_p_pos_inc", "foobar", 7));
+    document.add(new SuggestField("suggest_field_no_p_pos_inc", "foo bar", 8));
+    document.add(new SuggestField("suggest_field_no_p_pos_inc", "the fo", 9));
+    document.add(new SuggestField("suggest_field_no_p_pos_inc", "the foo bar", 10));
     iw.addDocument(document);
 
-    // note we use the completionAnalyzer with the queries (instead of input analyzer) because of non-default settings
     DirectoryReader reader = iw.getReader();
     SuggestIndexSearcher indexSearcher = new SuggestIndexSearcher(reader);
-    CompletionQuery query = new PrefixCompletionQuery(completionAnalyzer, new Term(field, "fo"));
-    TopSuggestDocs suggest = indexSearcher.suggest(query, 9, false); //matches all with fo
-    assertSuggestions(suggest, new Entry("foo the bar", 11), new Entry("the foo bar", 10), new Entry("the fo", 9), new Entry("foo bar", 8), new Entry("foobar", 7));
-    // with leading stopword
-    query = new PrefixCompletionQuery(completionAnalyzer, new Term(field, "the fo")); // becomes "fo*"
-    suggest = indexSearcher.suggest(query, 9, false);
-    assertSuggestions(suggest, new Entry("foo the bar", 11), new Entry("the foo bar", 10), new Entry("the fo", 9), new Entry("foo bar", 8), new Entry("foobar", 7));
-    // with middle stopword
-    query = new PrefixCompletionQuery(completionAnalyzer, new Term(field, "foo the bar")); // becomes "foo bar*"
-    suggest = indexSearcher.suggest(query, 9, false);
-    assertSuggestions(suggest, new Entry("foo the bar", 11), new Entry("the foo bar", 10), new Entry("foo bar", 8)); // no foobar
-    // no space
-    query = new PrefixCompletionQuery(completionAnalyzer, new Term(field, "foob"));
-    suggest = indexSearcher.suggest(query, 4, false); // separators, thus only match "foobar"
+    CompletionQuery query = new PrefixCompletionQuery(analyzer, new Term("suggest_field_no_p_pos_inc", "fo"));
+    TopSuggestDocs suggest = indexSearcher.suggest(query, 4); //matches all 4
+    assertSuggestions(suggest, new Entry("the foo bar", 10), new Entry("the fo", 9), new Entry("foo bar", 8), new Entry("foobar", 7));
+    query = new PrefixCompletionQuery(analyzer, new Term("suggest_field_no_p_pos_inc", "foob"));
+    suggest = indexSearcher.suggest(query, 4); // only foobar
     assertSuggestions(suggest, new Entry("foobar", 7));
-    // surrounding stopwords
-    query = new PrefixCompletionQuery(completionAnalyzer, new Term(field, "the baz the")); // becomes "baz*"
-    suggest = indexSearcher.suggest(query, 4, false);// stopwords in query get removed so we match
-    assertSuggestions(suggest, new Entry("baz the", 12));
     reader.close();
     iw.close();
   }
 
-  public void testGhostField() throws Exception {
-    Analyzer analyzer = new MockAnalyzer(random());
-    IndexWriter iw = new IndexWriter(dir, iwcWithSuggestField(analyzer, "suggest_field", "suggest_field2", "suggest_field3"));
-
+  @Test
+  public void testAnalyzerWithPreservePosAndNoSep() throws Exception {
+    Analyzer analyzer = new MockAnalyzer(random(), MockTokenizer.WHITESPACE, true, MockTokenFilter.ENGLISH_STOPSET);
+    CompletionAnalyzer completionAnalyzer = new CompletionAnalyzer(analyzer, false, true);
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwcWithSuggestField(completionAnalyzer, "suggest_field_no_p_sep"));
     Document document = new Document();
-    document.add(new StringField("id", "0", Field.Store.NO));
-    document.add(new SuggestField("suggest_field", "apples", 3));
+    document.add(new SuggestField("suggest_field_no_p_sep", "foobar", 7));
+    document.add(new SuggestField("suggest_field_no_p_sep", "foo bar", 8));
+    document.add(new SuggestField("suggest_field_no_p_sep", "the fo", 9));
+    document.add(new SuggestField("suggest_field_no_p_sep", "the foo bar", 10));
     iw.addDocument(document);
-    // need another document so whole segment isn't deleted
-    iw.addDocument(new Document());
-    iw.commit();
-
-    document = new Document();
-    document.add(new StringField("id", "1", Field.Store.NO));
-    document.add(new SuggestField("suggest_field2", "apples", 3));
-    iw.addDocument(document);
-    iw.commit();
-
-    iw.deleteDocuments(new Term("id", "0"));
-    // first force merge is OK
-    iw.forceMerge(1);
-    
-    // second force merge causes MultiFields to include "suggest_field" in its iteration, yet a null Terms is returned (no documents have
-    // this field anymore)
-    iw.addDocument(new Document());
-    iw.forceMerge(1);
-
-    DirectoryReader reader = DirectoryReader.open(iw);
-    SuggestIndexSearcher indexSearcher = new SuggestIndexSearcher(reader);
-
-    PrefixCompletionQuery query = new PrefixCompletionQuery(analyzer, new Term("suggest_field", "app"));
-    assertEquals(0, indexSearcher.suggest(query, 3, false).totalHits.value);
-
-    query = new PrefixCompletionQuery(analyzer, new Term("suggest_field2", "app"));
-    assertSuggestions(indexSearcher.suggest(query, 3, false), new Entry("apples", 3));
-
-    reader.close();
-    iw.close();
-  }
-
-  public void testEmptyPrefixContextQuery() throws Exception {
-    Analyzer analyzer = new MockAnalyzer(random());
-    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwcWithSuggestField(analyzer, "suggest_field"));
-    Document document = new Document();
-    document.add(new ContextSuggestField("suggest_field", "suggestion", 1, "type"));
-    iw.addDocument(document);
-
-    if (rarely()) {
-      iw.commit();
-    }
 
     DirectoryReader reader = iw.getReader();
-    SuggestIndexSearcher suggestIndexSearcher = new SuggestIndexSearcher(reader);
-    ContextQuery query = new ContextQuery(new PrefixCompletionQuery(analyzer, new Term("suggest_field", "")));
-    query.addContext("type", 1);
-
-    TopSuggestDocs suggest = suggestIndexSearcher.suggest(query, 5, false);
-    assertEquals(0, suggest.scoreDocs.length);
-
+    SuggestIndexSearcher indexSearcher = new SuggestIndexSearcher(reader);
+    CompletionQuery query = new PrefixCompletionQuery(analyzer, new Term("suggest_field_no_p_sep", "fo"));
+    TopSuggestDocs suggest = indexSearcher.suggest(query, 4); // matches all 4
+    assertSuggestions(suggest, new Entry("the foo bar", 10), new Entry("the fo", 9), new Entry("foo bar", 8), new Entry("foobar", 7));
+    query = new PrefixCompletionQuery(analyzer, new Term("suggest_field_no_p_sep", "foob"));
+    suggest = indexSearcher.suggest(query, 4); // except the fo
+    assertSuggestions(suggest, new Entry("the foo bar", 10), new Entry("foo bar", 8), new Entry("foobar", 7));
     reader.close();
     iw.close();
   }
+
 }

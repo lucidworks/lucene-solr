@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -29,12 +29,15 @@ import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.FieldsProducer;
-import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.search.DocIdSetIterator;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.InfoStream;
@@ -77,7 +80,7 @@ public class TestCodecs extends LuceneTestCase {
     NUM_TEST_ITER = atLeast(20);
   }
 
-  static class FieldData implements Comparable<FieldData> {
+  class FieldData implements Comparable<FieldData> {
     final FieldInfo fieldInfo;
     final TermData[] terms;
     final boolean omitTF;
@@ -109,7 +112,7 @@ public class TestCodecs extends LuceneTestCase {
     }
   }
 
-  static class PositionData {
+  class PositionData {
     int pos;
     BytesRef payload;
 
@@ -119,7 +122,7 @@ public class TestCodecs extends LuceneTestCase {
     }
   }
 
-  static class TermData implements Comparable<TermData> {
+  class TermData implements Comparable<TermData> {
     String text2;
     final BytesRef text;
     int[] docs;
@@ -212,17 +215,17 @@ public class TestCodecs extends LuceneTestCase {
       terms[i] = new TermData(text, docs, null);
     }
 
-    final FieldInfos.Builder builder = new FieldInfos.Builder(new FieldInfos.FieldNumbers(null));
+    final FieldInfos.Builder builder = new FieldInfos.Builder();
 
     final FieldData field = new FieldData("field", builder, terms, true, false);
     final FieldData[] fields = new FieldData[] {field};
     final FieldInfos fieldInfos = builder.finish();
     final Directory dir = newDirectory();
     Codec codec = Codec.getDefault();
-    final SegmentInfo si = new SegmentInfo(dir, Version.LATEST, Version.LATEST, SEGMENT, 10000, false, codec, Collections.emptyMap(), StringHelper.randomId(), new HashMap<>(), null);
+    final SegmentInfo si = new SegmentInfo(dir, Version.LATEST, SEGMENT, 10000, false, codec, Collections.<String,String>emptyMap(), StringHelper.randomId(), new HashMap<String,String>());
     
     this.write(si, fieldInfos, dir, fields);
-    final FieldsProducer reader = codec.postingsFormat().fieldsProducer(new SegmentReadState(dir, si, fieldInfos, false, newIOContext(random()), Collections.emptyMap()));
+    final FieldsProducer reader = codec.postingsFormat().fieldsProducer(new SegmentReadState(dir, si, fieldInfos, newIOContext(random())));
 
     final Iterator<String> fieldsEnum = reader.iterator();
     String fieldName = fieldsEnum.next();
@@ -259,7 +262,7 @@ public class TestCodecs extends LuceneTestCase {
   }
 
   public void testRandomPostings() throws Throwable {
-    final FieldInfos.Builder builder = new FieldInfos.Builder(new FieldInfos.FieldNumbers(null));
+    final FieldInfos.Builder builder = new FieldInfos.Builder();
 
     final FieldData[] fields = new FieldData[NUM_FIELDS];
     for(int i=0;i<NUM_FIELDS;i++) {
@@ -276,13 +279,13 @@ public class TestCodecs extends LuceneTestCase {
     }
 
     Codec codec = Codec.getDefault();
-    final SegmentInfo si = new SegmentInfo(dir, Version.LATEST, Version.LATEST, SEGMENT, 10000, false, codec, Collections.emptyMap(), StringHelper.randomId(), new HashMap<>(), null);
+    final SegmentInfo si = new SegmentInfo(dir, Version.LATEST, SEGMENT, 10000, false, codec, Collections.<String,String>emptyMap(), StringHelper.randomId(), new HashMap<String,String>());
     this.write(si, fieldInfos, dir, fields);
 
     if (VERBOSE) {
       System.out.println("TEST: now read postings");
     }
-    final FieldsProducer terms = codec.postingsFormat().fieldsProducer(new SegmentReadState(dir, si, fieldInfos, false, newIOContext(random()), Collections.emptyMap()));
+    final FieldsProducer terms = codec.postingsFormat().fieldsProducer(new SegmentReadState(dir, si, fieldInfos, newIOContext(random())));
 
     final Verify[] threads = new Verify[NUM_TEST_THREADS-1];
     for(int i=0;i<NUM_TEST_THREADS-1;i++) {
@@ -302,7 +305,7 @@ public class TestCodecs extends LuceneTestCase {
     dir.close();
   }
 
-  private static class Verify extends Thread {
+  private class Verify extends Thread {
     final Fields termsDict;
     final FieldData[] fields;
     final SegmentInfo si;
@@ -613,7 +616,7 @@ public class TestCodecs extends LuceneTestCase {
     }
   }
 
-  private static class DataTermsEnum extends BaseTermsEnum {
+  private static class DataTermsEnum extends TermsEnum {
     final FieldData fieldData;
     private int upto = -1;
 
@@ -678,10 +681,6 @@ public class TestCodecs extends LuceneTestCase {
       return new DataPostingsEnum(fieldData.terms[upto]);
     }
 
-    @Override
-    public ImpactsEnum impacts(int flags) throws IOException {
-      throw new UnsupportedOperationException();
-    }
   }
 
   private static class DataPostingsEnum extends PostingsEnum {
@@ -758,65 +757,9 @@ public class TestCodecs extends LuceneTestCase {
 
     Arrays.sort(fields);
     FieldsConsumer consumer = codec.postingsFormat().fieldsConsumer(state);
-    NormsProducer fakeNorms = new NormsProducer() {
-      
-      @Override
-      public long ramBytesUsed() {
-        return 0;
-      }
-      
-      @Override
-      public void close() throws IOException {}
-      
-      @Override
-      public NumericDocValues getNorms(FieldInfo field) throws IOException {
-        return new NumericDocValues() {
-          
-          int doc = -1;
-          
-          @Override
-          public int nextDoc() throws IOException {
-            return advance(doc + 1);
-          }
-          
-          @Override
-          public int docID() {
-            return doc;
-          }
-          
-          @Override
-          public long cost() {
-            return si.maxDoc();
-          }
-          
-          @Override
-          public int advance(int target) throws IOException {
-            if (target >= si.maxDoc()) {
-              return doc = NO_MORE_DOCS;
-            } else {
-              return doc = target;
-            }
-          }
-          
-          @Override
-          public boolean advanceExact(int target) throws IOException {
-            doc = target;
-            return true;
-          }
-          
-          @Override
-          public long longValue() throws IOException {
-            return 1;
-          }
-        };
-      }
-      
-      @Override
-      public void checkIntegrity() throws IOException {}
-    };
     boolean success = false;
     try {
-      consumer.write(new DataFields(fields), fakeNorms);
+      consumer.write(new DataFields(fields));
       success = true;
     } finally {
       if (success) {

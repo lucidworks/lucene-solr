@@ -1,19 +1,3 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.apache.solr.handler.dataimport.config;
 
 import java.lang.invoke.MethodHandles;
@@ -32,6 +16,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Element;
 
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 /**
  * <p>
  * Mapping for data-config.xml
@@ -47,7 +48,7 @@ import org.w3c.dom.Element;
  * @since solr 1.3
  */
 public class DIHConfiguration {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   // TODO - remove from here and add it to entity
   private final String deleteQuery;
@@ -106,7 +107,7 @@ public class DIHConfiguration {
       SchemaField sf = entry.getValue();
       if (!fields.containsKey(sf.getName())) {
         if (sf.isRequired()) {
-          log.info(sf.getName() + " is a required field in SolrSchema . But not found in DataConfig");
+          LOG.info(sf.getName() + " is a required field in SolrSchema . But not found in DataConfig");
         }
       }
     }
@@ -114,7 +115,7 @@ public class DIHConfiguration {
       EntityField fld = entry.getValue();
       SchemaField field = getSchemaField(fld.getName());
       if (field == null && !isSpecialCommand(fld.getName())) {
-        log.info("The field :" + fld.getName() + " present in DataConfig does not have a counterpart in Solr Schema");
+        LOG.info("The field :" + fld.getName() + " present in DataConfig does not have a counterpart in Solr Schema");
       }
     }
   }

@@ -1,3 +1,4 @@
+package org.apache.solr.client.solrj.response;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.response;
-import java.util.ArrayList;
-import java.util.Collections;
+
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 
 import org.apache.solr.common.util.NamedList;
 
@@ -26,47 +25,21 @@ import org.apache.solr.common.util.NamedList;
  * Encapsulates responses from ClusteringComponent
  */
 public class ClusteringResponse {
-  private static final String CLUSTERS_NODE = "clusters";
+
   private static final String LABELS_NODE = "labels";
   private static final String DOCS_NODE = "docs";
   private static final String SCORE_NODE = "score";
-  private static final String IS_OTHER_TOPICS = "other-topics";
-  private List<Cluster> clusters;
+  private List<Cluster> clusters = new LinkedList<Cluster>();
 
-  @SuppressWarnings("unchecked")
   public ClusteringResponse(List<NamedList<Object>> clusterInfo) {
-    clusters = new ArrayList<Cluster>();
     for (NamedList<Object> clusterNode : clusterInfo) {
-      List<String> labelList, docIdList;
-      List<Cluster> subclusters = Collections.emptyList();
-      labelList = docIdList = Collections.emptyList();
-      Double score = 0d;
-      boolean otherTopics = false;
-      for (Map.Entry<String, ?> e : clusterNode) {
-        switch (e.getKey()) {
-          case LABELS_NODE:
-            labelList = (List<String>) e.getValue(); 
-            break;
-
-          case DOCS_NODE:
-            docIdList = (List<String>) e.getValue(); 
-            break;
-            
-          case SCORE_NODE:
-            score = (Double) e.getValue();
-            break;
-
-          case CLUSTERS_NODE:
-            subclusters = new ClusteringResponse((List<NamedList<Object>>) e.getValue()).getClusters();
-            break;
-            
-          case IS_OTHER_TOPICS:
-            otherTopics = (Boolean) e.getValue();
-            break;
-        }
-      }
-
-      clusters.add(new Cluster(labelList, score, docIdList, subclusters, otherTopics));
+      List<String> labelList;
+      List<String> docIdList;
+      labelList = (List<String>) clusterNode.get(LABELS_NODE);
+      double score = (double) clusterNode.get(SCORE_NODE);
+      docIdList = (List<String>) clusterNode.get(DOCS_NODE);
+      Cluster currentCluster = new Cluster(labelList, score, docIdList);
+      clusters.add(currentCluster);
     }
   }
 

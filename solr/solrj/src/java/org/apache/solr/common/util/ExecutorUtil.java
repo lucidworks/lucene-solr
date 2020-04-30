@@ -1,3 +1,9 @@
+package org.apache.solr.common.util;
+
+import java.lang.invoke.MethodHandles;
+import java.util.ArrayList;
+import java.util.Collection;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +20,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.util;
 
-import java.lang.invoke.MethodHandles;
-import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionHandler;
@@ -71,13 +79,49 @@ public class ExecutorUtil {
     public void clean(AtomicReference<?> ctx);
   }
 
-  public static void shutdownAndAwaitTermination(ExecutorService pool) {
-    if(pool == null) return;
+  // ** This will interrupt the threads! ** Lucene and Solr do not like this because it can close channels, so only use
+  // this if you know what you are doing - you probably want shutdownAndAwaitTermination.
+  // Marked as Deprecated to discourage use.
+  @Deprecated
+  public static void shutdownWithInterruptAndAwaitTermination(ExecutorService pool) {
+    pool.shutdownNow(); // Cancel currently executing tasks - NOTE: this interrupts!
+    boolean shutdown = false;
+    while (!shutdown) {
+      try {
+        // Wait a while for existing tasks to terminate
+        shutdown = pool.awaitTermination(60, TimeUnit.SECONDS);
+      } catch (InterruptedException ie) {
+        // Preserve interrupt status
+        Thread.currentThread().interrupt();
+      }
+    }
+  }
+  
+  // ** This will interrupt the threads! ** Lucene and Solr do not like this because it can close channels, so only use
+  // this if you know what you are doing - you probably want shutdownAndAwaitTermination.
+  // Marked as Deprecated to discourage use.
+  @Deprecated
+  public static void shutdownAndAwaitTerminationWithInterrupt(ExecutorService pool) {
     pool.shutdown(); // Disable new tasks from being submitted
-    awaitTermination(pool);
+    boolean shutdown = false;
+    boolean interrupted = false;
+    while (!shutdown) {
+      try {
+        // Wait a while for existing tasks to terminate
+        shutdown = pool.awaitTermination(60, TimeUnit.SECONDS);
+      } catch (InterruptedException ie) {
+        // Preserve interrupt status
+        Thread.currentThread().interrupt();
+      }
+      if (!shutdown && !interrupted) {
+        pool.shutdownNow(); // Cancel currently executing tasks - NOTE: this interrupts!
+        interrupted = true;
+      }
+    }
   }
 
-  public static void awaitTermination(ExecutorService pool) {
+  public static void shutdownAndAwaitTermination(ExecutorService pool) {
+    pool.shutdown(); // Disable new tasks from being submitted
     boolean shutdown = false;
     while (!shutdown) {
       try {
@@ -106,15 +150,8 @@ public class ExecutorUtil {
   public static ExecutorService newMDCAwareSingleThreadExecutor(ThreadFactory threadFactory) {
     return new MDCAwareThreadPoolExecutor(1, 1,
             0L, TimeUnit.MILLISECONDS,
-            new LinkedBlockingQueue<>(),
+            new LinkedBlockingQueue<Runnable>(),
             threadFactory);
-  }
-
-  /**
-   * Create a cached thread pool using a named thread factory
-   */
-  public static ExecutorService newMDCAwareCachedThreadPool(String name) {
-    return newMDCAwareCachedThreadPool(new SolrjNamedThreadFactory(name));
   }
 
   /**
@@ -123,14 +160,7 @@ public class ExecutorUtil {
   public static ExecutorService newMDCAwareCachedThreadPool(ThreadFactory threadFactory) {
     return new MDCAwareThreadPoolExecutor(0, Integer.MAX_VALUE,
         60L, TimeUnit.SECONDS,
-        new SynchronousQueue<>(),
-        threadFactory);
-  }
-
-  public static ExecutorService newMDCAwareCachedThreadPool(int maxThreads, ThreadFactory threadFactory) {
-    return new MDCAwareThreadPoolExecutor(0, maxThreads,
-        60L, TimeUnit.SECONDS,
-        new LinkedBlockingQueue<>(maxThreads),
+        new SynchronousQueue<Runnable>(),
         threadFactory);
   }
 
@@ -139,30 +169,20 @@ public class ExecutorUtil {
 
     private static final int MAX_THREAD_NAME_LEN = 512;
 
-    private final boolean enableSubmitterStackTrace;
-
     public MDCAwareThreadPoolExecutor(int corePoolSize, int maximumPoolSize, long keepAliveTime, TimeUnit unit, BlockingQueue<Runnable> workQueue, ThreadFactory threadFactory, RejectedExecutionHandler handler) {
       super(corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue, threadFactory, handler);
-      this.enableSubmitterStackTrace = true;
     }
 
     public MDCAwareThreadPoolExecutor(int corePoolSize, int maximumPoolSize, long keepAliveTime, TimeUnit unit, BlockingQueue<Runnable> workQueue) {
       super(corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue);
-      this.enableSubmitterStackTrace = true;
     }
 
     public MDCAwareThreadPoolExecutor(int corePoolSize, int maximumPoolSize, long keepAliveTime, TimeUnit unit, BlockingQueue<Runnable> workQueue, ThreadFactory threadFactory) {
-      this(corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue, threadFactory, true);
-    }
-
-    public MDCAwareThreadPoolExecutor(int corePoolSize, int maximumPoolSize, long keepAliveTime, TimeUnit unit, BlockingQueue<Runnable> workQueue, ThreadFactory threadFactory, boolean enableSubmitterStackTrace) {
       super(corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue, threadFactory);
-      this.enableSubmitterStackTrace = enableSubmitterStackTrace;
     }
 
     public MDCAwareThreadPoolExecutor(int corePoolSize, int maximumPoolSize, long keepAliveTime, TimeUnit unit, BlockingQueue<Runnable> workQueue, RejectedExecutionHandler handler) {
       super(corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue, handler);
-      this.enableSubmitterStackTrace = true;
     }
 
     @Override
@@ -173,7 +193,7 @@ public class ExecutorUtil {
         Collection<String> values = submitterContext.values();
 
         for (String value : values) {
-          contextString.append(value).append(' ');
+          contextString.append(value + " ");
         }
         if (contextString.length() > 1) {
           contextString.setLength(contextString.length() - 1);
@@ -182,9 +202,9 @@ public class ExecutorUtil {
 
       String ctxStr = contextString.toString().replace("/", "//");
       final String submitterContextStr = ctxStr.length() <= MAX_THREAD_NAME_LEN ? ctxStr : ctxStr.substring(0, MAX_THREAD_NAME_LEN);
-      final Exception submitterStackTrace = enableSubmitterStackTrace ? new Exception("Submitter stack trace") : null;
+      final Exception submitterStackTrace = new Exception("Submitter stack trace");
       final List<InheritableThreadLocalProvider> providersCopy = providers;
-      final ArrayList<AtomicReference> ctx = providersCopy.isEmpty() ? null : new ArrayList<>(providersCopy.size());
+      final ArrayList<AtomicReference> ctx = providersCopy.isEmpty() ? null : new ArrayList<AtomicReference>(providersCopy.size());
       if (ctx != null) {
         for (int i = 0; i < providers.size(); i++) {
           AtomicReference reference = new AtomicReference();
@@ -192,43 +212,42 @@ public class ExecutorUtil {
           providersCopy.get(i).store(reference);
         }
       }
-      super.execute(() -> {
-        isServerPool.set(Boolean.TRUE);
-        if (ctx != null) {
-          for (int i = 0; i < providersCopy.size(); i++) providersCopy.get(i).set(ctx.get(i));
-        }
-        Map<String, String> threadContext = MDC.getCopyOfContextMap();
-        final Thread currentThread = Thread.currentThread();
-        final String oldName = currentThread.getName();
-        if (submitterContext != null && !submitterContext.isEmpty()) {
-          MDC.setContextMap(submitterContext);
-          currentThread.setName(oldName + "-processing-" + submitterContextStr);
-        } else {
-          MDC.clear();
-        }
-        try {
-          command.run();
-        } catch (Throwable t) {
-          if (t instanceof OutOfMemoryError) {
-            throw t;
+      super.execute(new Runnable() {
+        @Override
+        public void run() {
+          isServerPool.set(Boolean.TRUE);
+          if (ctx != null) {
+            for (int i = 0; i < providersCopy.size(); i++) providersCopy.get(i).set(ctx.get(i));
           }
-          if (enableSubmitterStackTrace)  {
-            log.error("Uncaught exception {} thrown by thread: {}", t, currentThread.getName(), submitterStackTrace);
-          } else  {
-            log.error("Uncaught exception {} thrown by thread: {}", t, currentThread.getName());
-          }
-          throw t;
-        } finally {
-          isServerPool.remove();
-          if (threadContext != null && !threadContext.isEmpty()) {
-            MDC.setContextMap(threadContext);
+          Map<String, String> threadContext = MDC.getCopyOfContextMap();
+          final Thread currentThread = Thread.currentThread();
+          final String oldName = currentThread.getName();
+          if (submitterContext != null && !submitterContext.isEmpty()) {
+            MDC.setContextMap(submitterContext);
+            currentThread.setName(oldName + "-processing-" + submitterContextStr);
           } else {
             MDC.clear();
           }
-          if (ctx != null) {
-            for (int i = 0; i < providersCopy.size(); i++) providersCopy.get(i).clean(ctx.get(i));
+          try {
+            command.run();
+          } catch (Throwable t) {
+            if (t instanceof OutOfMemoryError) {
+              throw t;
+            }
+            log.error("Uncaught exception {} thrown by thread: {}", t, currentThread.getName(), submitterStackTrace);
+            throw t;
+          } finally {
+            isServerPool.remove();
+            if (threadContext != null && !threadContext.isEmpty()) {
+              MDC.setContextMap(threadContext);
+            } else {
+              MDC.clear();
+            }
+            if (ctx != null) {
+              for (int i = 0; i < providersCopy.size(); i++) providersCopy.get(i).clean(ctx.get(i));
+            }
+            currentThread.setName(oldName);
           }
-          currentThread.setName(oldName);
         }
       });
     }

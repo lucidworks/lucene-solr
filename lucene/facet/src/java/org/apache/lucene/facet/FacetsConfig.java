@@ -1,3 +1,5 @@
+package org.apache.lucene.facet;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -29,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.apache.lucene.document.BinaryDocValuesField;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.SortedSetDocValuesField;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.facet.sortedset.SortedSetDocValuesFacetField;
@@ -82,11 +84,6 @@ public class FacetsConfig {
      *  is required, which is unusual (default is false). */
     public boolean requireDimCount;
 
-    /** True if drilling down by a whole dimension, to match all
-     *  documents that had any value for this dimension, is necessary
-     *  (default is true)*/
-    public boolean requireDimensionDrillDown = true;
-
     /** Actual field where this dimension's facet labels
      *  should be indexed */
     public String indexFieldName = DEFAULT_INDEX_FIELD_NAME;
@@ -110,12 +107,12 @@ public class FacetsConfig {
    *
    *  @return The default configuration to be used for dimensions that 
    *  are not yet set in the {@link FacetsConfig} */
-  protected DimConfig getDefaultDimConfig() {
+  protected DimConfig getDefaultDimConfig(){
     return DEFAULT_DIM_CONFIG;
   }
   
   /** Get the current configuration for a dimension. */
-  public DimConfig getDimConfig(String dimName) {
+  public synchronized DimConfig getDimConfig(String dimName) {
     DimConfig ft = fieldTypes.get(dimName);
     if (ft == null) {
       ft = getDefaultDimConfig();
@@ -169,16 +166,6 @@ public class FacetsConfig {
     ft.indexFieldName = indexFieldName;
   }
 
-  /** Specify whether drill down on just the dimension is necessary. */
-  public synchronized void setRequireDimensionDrillDown(String dimName, boolean v) {
-    DimConfig ft = fieldTypes.get(dimName);
-    if (ft == null) {
-      ft = new DimConfig();
-      fieldTypes.put(dimName, ft);
-    }
-    ft.requireDimensionDrillDown = v;
-  }
-
   /** Returns map of field name to {@link DimConfig}. */
   public Map<String,DimConfig> getDimConfigs() {
     return fieldTypes;
@@ -223,7 +210,7 @@ public class FacetsConfig {
 
     Set<String> seenDims = new HashSet<>();
 
-    for (IndexableField field : doc) {
+    for (IndexableField field : doc.getFields()) {
       if (field.fieldType() == FacetField.TYPE) {
         FacetField facetField = (FacetField) field;
         FacetsConfig.DimConfig dimConfig = getDimConfig(facetField.dim);
@@ -355,13 +342,7 @@ public class FacetsConfig {
         }
 
         // Drill down:
-        int start;
-        if (ft.requireDimensionDrillDown) {
-          start = 1;
-        } else {
-          start = 2;
-        }
-        for (int i=start;i<=cp.length;i++) {
+        for (int i=1;i<=cp.length;i++) {
           doc.add(new StringField(indexFieldName, pathToString(cp.components, i), Field.Store.NO));
         }
       }
@@ -389,11 +370,7 @@ public class FacetsConfig {
 
         // For drill-down:
         doc.add(new StringField(indexFieldName, fullPath, Field.Store.NO));
-
-        FacetsConfig.DimConfig ft = getDimConfig(facetField.dim);        
-        if (ft.requireDimensionDrillDown) {
-          doc.add(new StringField(indexFieldName, facetField.dim, Field.Store.NO));
-        }
+        doc.add(new StringField(indexFieldName, facetField.dim, Field.Store.NO));
       }
     }
   }
@@ -423,16 +400,8 @@ public class FacetsConfig {
         }
         System.arraycopy(field.assoc.bytes, field.assoc.offset, bytes, upto, field.assoc.length);
         upto += field.assoc.length;
-
-        FacetsConfig.DimConfig ft = getDimConfig(field.dim);        
         
         // Drill down:
-        int start;
-        if (ft.requireDimensionDrillDown) {
-          start = 1;
-        } else {
-          start = 2;
-        }
         for (int i = 1; i <= label.length; i++) {
           doc.add(new StringField(indexFieldName, pathToString(label.components, i), Field.Store.NO));
         }

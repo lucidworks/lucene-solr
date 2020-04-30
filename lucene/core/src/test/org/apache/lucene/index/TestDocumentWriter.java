@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
-import java.util.Collections;
 
 import org.apache.lucene.analysis.*;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
@@ -34,7 +33,6 @@ import org.apache.lucene.util.AttributeSource;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
-import org.apache.lucene.util.Version;
 
 public class TestDocumentWriter extends LuceneTestCase {
   private Directory dir;
@@ -64,7 +62,7 @@ public class TestDocumentWriter extends LuceneTestCase {
     SegmentCommitInfo info = writer.newestSegment();
     writer.close();
     //After adding the document, we should be able to read it back in
-    SegmentReader reader = new SegmentReader(info, Version.LATEST.major, false, newIOContext(random()), Collections.emptyMap());
+    SegmentReader reader = new SegmentReader(info, newIOContext(random()));
     assertTrue(reader != null);
     Document doc = reader.document(0);
     assertTrue(doc != null);
@@ -125,9 +123,9 @@ public class TestDocumentWriter extends LuceneTestCase {
     writer.commit();
     SegmentCommitInfo info = writer.newestSegment();
     writer.close();
-    SegmentReader reader = new SegmentReader(info, Version.LATEST.major, false, newIOContext(random()), Collections.emptyMap());
+    SegmentReader reader = new SegmentReader(info, newIOContext(random()));
 
-    PostingsEnum termPositions = MultiTerms.getTermPostingsEnum(reader, "repeated", new BytesRef("repeated"));
+    PostingsEnum termPositions = MultiFields.getTermPositionsEnum(reader, "repeated", new BytesRef("repeated"));
     assertTrue(termPositions.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
     int freq = termPositions.freq();
     assertEquals(2, freq);
@@ -196,9 +194,9 @@ public class TestDocumentWriter extends LuceneTestCase {
     writer.commit();
     SegmentCommitInfo info = writer.newestSegment();
     writer.close();
-    SegmentReader reader = new SegmentReader(info, Version.LATEST.major, false, newIOContext(random()), Collections.emptyMap());
+    SegmentReader reader = new SegmentReader(info, newIOContext(random()));
 
-    PostingsEnum termPositions = MultiTerms.getTermPostingsEnum(reader, "f1", new BytesRef("a"));
+    PostingsEnum termPositions = MultiFields.getTermPositionsEnum(reader, "f1", new BytesRef("a"));
     assertTrue(termPositions.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
     int freq = termPositions.freq();
     assertEquals(3, freq);
@@ -238,7 +236,7 @@ public class TestDocumentWriter extends LuceneTestCase {
     writer.commit();
     SegmentCommitInfo info = writer.newestSegment();
     writer.close();
-    SegmentReader reader = new SegmentReader(info, Version.LATEST.major, false, newIOContext(random()), Collections.emptyMap());
+    SegmentReader reader = new SegmentReader(info, newIOContext(random()));
 
     PostingsEnum termPositions = reader.postings(new Term("preanalyzed", "term1"), PostingsEnum.ALL);
     assertTrue(termPositions.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
@@ -286,7 +284,7 @@ public class TestDocumentWriter extends LuceneTestCase {
 
     TestUtil.checkIndex(dir);
 
-    LeafReader reader = getOnlyLeafReader(DirectoryReader.open(dir));
+    SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(dir));
     FieldInfos fi = reader.getFieldInfos();
     // f1
     assertFalse("f1 should have no norms", fi.fieldInfo("f1").hasNorms());

@@ -1,3 +1,18 @@
+package org.apache.solr.search;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import org.apache.lucene.queries.function.FunctionQuery;
+import org.apache.lucene.queries.function.valuesource.QueryValueSource;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.Sort;
+import org.apache.lucene.search.SortField;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.schema.SchemaField;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,21 +29,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
-import org.apache.lucene.queries.function.FunctionQuery;
-import org.apache.lucene.queries.function.valuesource.QueryValueSource;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.Sort;
-import org.apache.lucene.search.SortField;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.schema.IndexSchema;
-import org.apache.solr.schema.SchemaField;
 
 public class SortSpecParsing {
   
@@ -52,41 +52,11 @@ public class SortSpecParsing {
    *   height desc,weight desc  #sort by height descending, and use weight descending to break any ties
    *   height desc,weight asc   #sort by height descending, using weight ascending as a tiebreaker
    * </pre>
-   * @return a SortSpec object populated with the appropriate Sort (which may be null if
-   *         default score sort is used) and SchemaFields (where applicable) using
-   *         hardcoded default count &amp; offset values.
-   */
-  public static SortSpec parseSortSpec(String sortSpec, SolrQueryRequest req) {
-    return parseSortSpecImpl(sortSpec, req.getSchema(), req);
-  }
-
-  /**
-   * <p>
-   * The form of the (function free) sort specification string currently parsed is:
-   * </p>
-   * <pre>
-   * SortSpec ::= SingleSort [, SingleSort]*
-   * SingleSort ::= &lt;fieldname&gt; SortDirection
-   * SortDirection ::= top | desc | bottom | asc
-   * </pre>
-   * Examples:
-   * <pre>
-   *   score desc               #normal sort by score (will return null)
-   *   weight bottom            #sort by weight ascending
-   *   weight desc              #sort by weight descending
-   *   height desc,weight desc  #sort by height descending, and use weight descending to break any ties
-   *   height desc,weight asc   #sort by height descending, using weight ascending as a tiebreaker
-   * </pre>
    * @return a SortSpec object populated with the appropriate Sort (which may be null if 
    *         default score sort is used) and SchemaFields (where applicable) using 
    *         hardcoded default count &amp; offset values.
    */
-  public static SortSpec parseSortSpec(String sortSpec, IndexSchema schema) {
-    return parseSortSpecImpl(sortSpec, schema, null);
-  }
-
-  private static SortSpec parseSortSpecImpl(String sortSpec, IndexSchema schema,
-      SolrQueryRequest optionalReq) {
+  public static SortSpec parseSortSpec(String sortSpec, SolrQueryRequest req) {
     if (sortSpec == null || sortSpec.length() == 0) return newEmptySortSpec();
 
     List<SortField> sorts = new ArrayList<>(4);
@@ -104,12 +74,12 @@ public class SortSpecParsing {
         String field = sp.getId(null);
         Exception qParserException = null;
 
-        if ((field == null || !Character.isWhitespace(sp.peekChar())) && (optionalReq != null)) {
+        if (field == null || !Character.isWhitespace(sp.peekChar())) {
           // let's try it as a function instead
           field = null;
           String funcStr = sp.val.substring(start);
 
-          QParser parser = QParser.getParser(funcStr, FunctionQParserPlugin.NAME, optionalReq);
+          QParser parser = QParser.getParser(funcStr, FunctionQParserPlugin.NAME, req);
           Query q = null;
           try {
             if (parser instanceof FunctionQParser) {
@@ -186,7 +156,7 @@ public class SortSpecParsing {
           fields.add(null);
         } else {
           // try to find the field
-          SchemaField sf = schema.getFieldOrNull(field);
+          SchemaField sf = req.getSchema().getFieldOrNull(field);
           if (null == sf) {
             if (null != qParserException) {
               throw new SolrException

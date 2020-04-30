@@ -1,3 +1,6 @@
+package org.apache.lucene.codecs.memory;
+
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +17,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.memory;
-
-
 
 import java.io.IOException;
 
@@ -25,8 +25,8 @@ import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.PostingsReaderBase;
 import org.apache.lucene.codecs.PostingsWriterBase;
-import org.apache.lucene.codecs.lucene84.Lucene84PostingsReader;
-import org.apache.lucene.codecs.lucene84.Lucene84PostingsWriter;
+import org.apache.lucene.codecs.lucene50.Lucene50PostingsReader;
+import org.apache.lucene.codecs.lucene50.Lucene50PostingsWriter;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.util.IOUtils;
@@ -47,7 +47,7 @@ public final class FSTOrdPostingsFormat extends PostingsFormat {
 
   @Override
   public FieldsConsumer fieldsConsumer(SegmentWriteState state) throws IOException {
-    PostingsWriterBase postingsWriter = new Lucene84PostingsWriter(state);
+    PostingsWriterBase postingsWriter = new Lucene50PostingsWriter(state);
 
     boolean success = false;
     try {
@@ -63,7 +63,7 @@ public final class FSTOrdPostingsFormat extends PostingsFormat {
 
   @Override
   public FieldsProducer fieldsProducer(SegmentReadState state) throws IOException {
-    PostingsReaderBase postingsReader = new Lucene84PostingsReader(state);
+    PostingsReaderBase postingsReader = new Lucene50PostingsReader(state);
     boolean success = false;
     try {
       FieldsProducer ret = new FSTOrdTermsReader(state, postingsReader);

@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.Collections;
@@ -51,7 +51,6 @@ public class ParallelCompositeReader extends BaseCompositeReader<LeafReader> {
   private final boolean closeSubReaders;
   private final Set<IndexReader> completeReaderSet =
     Collections.newSetFromMap(new IdentityHashMap<IndexReader,Boolean>());
-  private final CacheHelper cacheHelper;
 
   /** Create a ParallelCompositeReader based on the provided
    *  readers; auto-closes the given readers on {@link #close()}. */
@@ -81,14 +80,6 @@ public class ParallelCompositeReader extends BaseCompositeReader<LeafReader> {
     }
     // finally add our own synthetic readers, so we close or decRef them, too (it does not matter what we do)
     completeReaderSet.addAll(getSequentialSubReaders());
-    // ParallelReader instances can be short-lived, which would make caching trappy
-    // so we do not cache on them, unless they wrap a single reader in which
-    // case we delegate
-    if (readers.length == 1 && storedFieldReaders.length == 1 && readers[0] == storedFieldReaders[0]) {
-      cacheHelper = readers[0].getReaderCacheHelper();
-    } else {
-      cacheHelper = null;
-    }
   }
 
   private static LeafReader[] prepareLeafReaders(CompositeReader[] readers, CompositeReader[] storedFieldsReaders) throws IOException {
@@ -151,12 +142,7 @@ public class ParallelCompositeReader extends BaseCompositeReader<LeafReader> {
       }
     }    
   }
-
-  @Override
-  public CacheHelper getReaderCacheHelper() {
-    return cacheHelper;
-  }
-
+  
   @Override
   protected synchronized void doClose() throws IOException {
     IOException ioe = null;

@@ -14,39 +14,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr;
 
+import org.apache.lucene.util.TestUtil;
+import org.apache.lucene.util.SentinelIntSet;
+import org.apache.lucene.util.mutable.MutableValueInt;
+import org.apache.solr.core.SolrInfoMBean;
+import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.params.CursorMarkParams;
+import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.params.CommonParams;
+import org.apache.solr.common.params.GroupParams;
+
+import static org.apache.solr.common.params.CursorMarkParams.CURSOR_MARK_PARAM;
+import static org.apache.solr.common.params.CursorMarkParams.CURSOR_MARK_NEXT;
+import static org.apache.solr.common.params.CursorMarkParams.CURSOR_MARK_START;
+
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.SolrException.ErrorCode;
+import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.search.CursorMark; //jdoc
+import org.noggit.ObjectBuilder;
+
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
 
-import org.apache.lucene.util.SentinelIntSet;
-import org.apache.lucene.util.TestUtil;
-import org.apache.lucene.util.mutable.MutableValueInt;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.SolrException.ErrorCode;
-import org.apache.solr.common.SolrInputDocument;
-import org.apache.solr.common.params.CommonParams;
-import org.apache.solr.common.params.CursorMarkParams;
-import org.apache.solr.common.params.GroupParams;
-import org.apache.solr.common.params.SolrParams;
-import org.apache.solr.metrics.MetricsMap;
-import org.apache.solr.metrics.SolrMetricManager;
-import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.search.CursorMark;
-import org.junit.After;
 import org.junit.BeforeClass;
-
-import static org.apache.solr.common.params.CursorMarkParams.CURSOR_MARK_NEXT;
-import static org.apache.solr.common.params.CursorMarkParams.CURSOR_MARK_PARAM;
-import static org.apache.solr.common.params.CursorMarkParams.CURSOR_MARK_START;
-import static org.apache.solr.common.util.Utils.fromJSONString;
+import org.junit.After;
 
 /**
  * Tests of deep paging using {@link CursorMark} and {@link CursorMarkParams#CURSOR_MARK_PARAM}.
@@ -63,8 +65,6 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
 
   @BeforeClass
   public static void beforeTests() throws Exception {
-    // we need DVs on point fields to compute stats & facets
-    if (Boolean.getBoolean(NUMERIC_POINTS_SYSPROP)) System.setProperty(NUMERIC_DOCVALUES_SYSPROP,"true");
     System.setProperty("solr.test.useFilterForSortedQuery", Boolean.toString(random().nextBoolean()));
     initCore(TEST_SOLRCONFIG_NAME, TEST_SCHEMAXML_NAME);
   }
@@ -192,17 +192,17 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==9"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'9'},{'id':'8'},{'id':'7'},{'id':'6'}]"
+                              ,"/response/docs==[{'id':9},{'id':8},{'id':7},{'id':6}]"
                               );
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==9" 
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'5'},{'id':'3'},{'id':'2'},{'id':'1'}]"
+                              ,"/response/docs==[{'id':5},{'id':3},{'id':2},{'id':1}]"
                               );
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==9" 
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'0'}]"
+                              ,"/response/docs==[{'id':0}]"
                               );
     // no more, so no change to cursorMark, and no new docs
     assertEquals(cursorMark, 
@@ -224,13 +224,13 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==7"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'6'},{'id':'1'},{'id':'8'},{'id':'5'}]"
+                              ,"/response/docs==[{'id':6},{'id':1},{'id':8},{'id':5}]"
                               ,"/facet_counts/facet_fields/str=={'a':4,'b':3,'c':0}"
                               );
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==7"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'4'},{'id':'3'},{'id':'0'}]"
+                              ,"/response/docs==[{'id':4},{'id':3},{'id':0}]"
                               ,"/facet_counts/facet_fields/str=={'a':4,'b':3,'c':0}"
                               );
     // no more, so no change to cursorMark, and no new docs
@@ -254,19 +254,19 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==8"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'7'},{'id':'0'},{'id':'3'}]"
+                              ,"/response/docs==[{'id':7},{'id':0},{'id':3}]"
                               ,"/facet_counts/facet_fields/str=={'a':4,'b':1,'c':3}"
                               );
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==8"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'4'},{'id':'1'},{'id':'6'}]"
+                              ,"/response/docs==[{'id':4},{'id':1},{'id':6}]"
                               ,"/facet_counts/facet_fields/str=={'a':4,'b':1,'c':3}"
                               );
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==8"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'9'},{'id':'2'}]"
+                              ,"/response/docs==[{'id':9},{'id':2}]"
                               ,"/facet_counts/facet_fields/str=={'a':4,'b':1,'c':3}"
                               );
     // no more, so no change to cursorMark, and no new docs
@@ -288,17 +288,17 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==8"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'3'},{'id':'7'},{'id':'0'}]"
+                              ,"/response/docs==[{'id':3},{'id':7},{'id':0}]"
                               );
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==8"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'4'},{'id':'1'},{'id':'6'}]"
+                              ,"/response/docs==[{'id':4},{'id':1},{'id':6}]"
                               );
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==8"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'9'},{'id':'2'}]"
+                              ,"/response/docs==[{'id':9},{'id':2}]"
                               );
     // no more, so no change to cursorMark, and no new docs
     assertEquals(cursorMark,
@@ -318,17 +318,17 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==8"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'7'},{'id':'0'},{'id':'4'}]"
+                              ,"/response/docs==[{'id':7},{'id':0},{'id':4}]"
                               );
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==8"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'1'},{'id':'6'},{'id':'9'}]"
+                              ,"/response/docs==[{'id':1},{'id':6},{'id':9}]"
                               );
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==8"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'2'},{'id':'3'}]"
+                              ,"/response/docs==[{'id':2},{'id':3}]"
                               );
     // no more, so no change to cursorMark, and no new docs
     assertEquals(cursorMark,
@@ -347,12 +347,12 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==10"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'6'},{'id':'4'},{'id':'3'},{'id':'1'},{'id':'8'},{'id':'5'}]"
+                              ,"/response/docs==[{'id':6},{'id':4},{'id':3},{'id':1},{'id':8},{'id':5}]"
                               );
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==10"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'0'},{'id':'9'},{'id':'7'},{'id':'2'}]"
+                              ,"/response/docs==[{'id':0},{'id':9},{'id':7},{'id':2}]"
                               );
     // no more, so no change to cursorMark, and no new docs
     assertEquals(cursorMark,
@@ -371,27 +371,27 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==10"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'2'},{'id':'9'}]"
+                              ,"/response/docs==[{'id':2},{'id':9}]"
                               );
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==10"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'7'},{'id':'4'}]"
+                              ,"/response/docs==[{'id':7},{'id':4}]"
                               );
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==10" 
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'3'},{'id':'8'}]"
+                              ,"/response/docs==[{'id':3},{'id':8}]"
                               );
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==10"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'5'},{'id':'6'}]"
+                              ,"/response/docs==[{'id':5},{'id':6}]"
                               );
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==10"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'1'},{'id':'0'}]"
+                              ,"/response/docs==[{'id':1},{'id':0}]"
                               );
     // we've exactly exhausted all the results, but solr had no way of know that
     // no more, so no change to cursorMark, and no new docs
@@ -411,7 +411,7 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==2"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'7'},{'id':'3'}]"
+                              ,"/response/docs==[{'id':7},{'id':3}]"
                               );
     // no more, so no change to cursorMark, and no new docs
     assertEquals(cursorMark,
@@ -456,7 +456,7 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==10"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'1'},{'id':'3'}]"
+                              ,"/response/docs==[{'id':1},{'id':3}]"
                               );
     // delete the last guy we got
     assertU(delI("3")); 
@@ -464,7 +464,7 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==9"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'4'},{'id':'6'}]"
+                              ,"/response/docs==[{'id':4},{'id':6}]"
                               );
     // delete the next guy we expect
     assertU(delI("0")); 
@@ -472,7 +472,7 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==8"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'5'},{'id':'8'}]"
+                              ,"/response/docs==[{'id':5},{'id':8}]"
                               );
     // update a doc we've already seen so it repeats
     assertU(adoc("id", "5", "str", "c"));
@@ -480,7 +480,7 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==8"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'2'},{'id':'5'}]"
+                              ,"/response/docs==[{'id':2},{'id':5}]"
                               );
     // update the next doc we expect so it's now in the past
     assertU(adoc("id", "7", "str", "a"));
@@ -488,7 +488,7 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     cursorMark = assertCursor(req(params, CURSOR_MARK_PARAM, cursorMark)
                               ,"/response/numFound==8"
                               ,"/response/start==0"
-                              ,"/response/docs==[{'id':'9'}]"
+                              ,"/response/docs==[{'id':9}]"
                               );
     // no more, so no change to cursorMark, and no new docs
     assertEquals(cursorMark,
@@ -522,16 +522,16 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
 
     final Collection<String> allFieldNames = getAllSortFieldNames();
 
-    final MetricsMap filterCacheStats =
-        (MetricsMap)((SolrMetricManager.GaugeWrapper)h.getCore().getCoreMetricManager().getRegistry().getMetrics().get("CACHE.searcher.filterCache")).getGauge();
+    final SolrInfoMBean filterCacheStats 
+      = h.getCore().getInfoRegistry().get("filterCache");
     assertNotNull(filterCacheStats);
-    final MetricsMap queryCacheStats =
-        (MetricsMap)((SolrMetricManager.GaugeWrapper)h.getCore().getCoreMetricManager().getRegistry().getMetrics().get("CACHE.searcher.queryResultCache")).getGauge();
+    final SolrInfoMBean queryCacheStats 
+      = h.getCore().getInfoRegistry().get("queryResultCache");
     assertNotNull(queryCacheStats);
 
-    final long preQcIn = (Long) queryCacheStats.getValue().get("inserts");
-    final long preFcIn = (Long) filterCacheStats.getValue().get("inserts");
-    final long preFcHits = (Long) filterCacheStats.getValue().get("hits");
+    final long preQcIn = (Long) queryCacheStats.getStatistics().get("inserts");
+    final long preFcIn = (Long) filterCacheStats.getStatistics().get("inserts");
+    final long preFcHits = (Long) filterCacheStats.getStatistics().get("hits");
 
     SentinelIntSet ids = assertFullWalkNoDups
       (10, params("q", "*:*",
@@ -543,9 +543,9 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     
     assertEquals(6, ids.size());
 
-    final long postQcIn = (Long) queryCacheStats.getValue().get("inserts");
-    final long postFcIn = (Long) filterCacheStats.getValue().get("inserts");
-    final long postFcHits = (Long) filterCacheStats.getValue().get("hits");
+    final long postQcIn = (Long) queryCacheStats.getStatistics().get("inserts");
+    final long postFcIn = (Long) filterCacheStats.getStatistics().get("inserts");
+    final long postFcHits = (Long) filterCacheStats.getStatistics().get("hits");
     
     assertEquals("query cache inserts changed", preQcIn, postQcIn);
     // NOTE: use of pure negative filters causees "*:* to be tracked in filterCache
@@ -668,7 +668,7 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     while (0 < docsOnThisPage) {
       String json = assertJQ(req(params,
                                  CURSOR_MARK_PARAM, cursorMark));
-      Map rsp = (Map) fromJSONString(json);
+      Map rsp = (Map) ObjectBuilder.fromJSON(json);
       assertTrue("response doesn't contain " + CURSOR_MARK_NEXT + ": " + json,
                  rsp.containsKey(CURSOR_MARK_NEXT));
       String nextCursorMark = (String)rsp.get(CURSOR_MARK_NEXT);
@@ -685,7 +685,7 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
                      cursorMark, nextCursorMark);
       }
       for (Map<Object,Object> doc : docs) {
-        int id = Integer.parseInt(doc.get("id").toString());
+        int id = ((Long)doc.get("id")).intValue();
         assertFalse("walk already seen: " + id, ids.exists(id));
         ids.put(id);
         assertFalse("id set bigger then max allowed ("+maxSize+"): " + ids.size(),
@@ -757,7 +757,7 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     List previousFacets = null;
     while (0 < docsOnThisPage) {
       String json = assertJQ(req(params, CURSOR_MARK_PARAM, cursorMark));
-      Map rsp = (Map) fromJSONString(json);
+      Map rsp = (Map) ObjectBuilder.fromJSON(json);
       assertTrue("response doesn't contain " + CURSOR_MARK_NEXT + ": " + json,
                  rsp.containsKey(CURSOR_MARK_NEXT));
       String nextCursorMark = (String)rsp.get(CURSOR_MARK_NEXT);
@@ -774,7 +774,7 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
                      cursorMark, nextCursorMark);
       }
       for (Map<Object,Object> doc : docs) {
-        int id = Integer.parseInt(doc.get("id").toString());
+        int id = ((Long)doc.get("id")).intValue();
         assertFalse("walk already seen: " + id, ids.exists(id));
         ids.put(id);
         assertFalse("id set bigger then max allowed ("+maxSize+"): " + ids.size(),
@@ -825,7 +825,7 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
    */
   public String assertCursor(SolrQueryRequest req, String... tests) throws Exception {
     String json = assertJQ(req, tests);
-    Map rsp = (Map) fromJSONString(json);
+    Map rsp = (Map) ObjectBuilder.fromJSON(json);
     assertTrue("response doesn't contain "+CURSOR_MARK_NEXT + ": " + json,
                rsp.containsKey(CURSOR_MARK_NEXT));
     String next = (String)rsp.get(CURSOR_MARK_NEXT);
@@ -840,13 +840,13 @@ public class CursorPagingTest extends SolrTestCaseJ4 {
     throws Exception {
 
     try {
-      SolrException e = expectThrows(SolrException.class, () -> {
-        ignoreException(expSubstr);
-        assertJQ(req(p));
-      });
+      ignoreException(expSubstr);
+      assertJQ(req(p));
+      fail("no exception matching expected: " + expCode.code + ": " + expSubstr);
+    } catch (SolrException e) {
       assertEquals(expCode.code, e.code());
       assertTrue("Expected substr not found: " + expSubstr + " <!< " + e.getMessage(),
-          e.getMessage().contains(expSubstr));
+                 e.getMessage().contains(expSubstr));
     } finally {
       unIgnoreException(expSubstr);
     }

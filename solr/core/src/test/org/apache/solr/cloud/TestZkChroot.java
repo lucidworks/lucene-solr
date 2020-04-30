@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -34,14 +35,14 @@ public class TestZkChroot extends SolrTestCaseJ4 {
   private Path home;
   
   protected ZkTestServer zkServer;
-  protected Path zkDir;
+  protected String zkDir;
   
   @Override
   @Before
   public void setUp() throws Exception {
     super.setUp();
 
-    zkDir = createTempDir("zkData");
+    zkDir = createTempDir("zkData").toFile().getAbsolutePath();
     zkServer = new ZkTestServer(zkDir);
     zkServer.run();
     home = Paths.get(SolrJettyTestBase.legacyExampleCollection1SolrHome());
@@ -58,10 +59,9 @@ public class TestZkChroot extends SolrTestCaseJ4 {
       cores = null;
     }
     
-    if (null != zkServer) {
-      zkServer.shutdown();
-      zkServer = null;
-    }
+    zkServer.shutdown();
+    
+    zkServer = null;
     zkDir = null;
     
     super.tearDown();
@@ -100,20 +100,23 @@ public class TestZkChroot extends SolrTestCaseJ4 {
     
     System.setProperty("bootstrap_conf", "false");
     System.setProperty("zkHost", zkServer.getZkHost() + chroot);
-
-    try(SolrZkClient zkClient = new SolrZkClient(zkServer.getZkHost(),
-        AbstractZkTestCase.TIMEOUT)) {
-      expectThrows(ZooKeeperException.class,
-          "did not get a top level exception when more then 4 updates failed",
-          () -> {
-        assertFalse("Path '" + chroot + "' should not exist before the test",
-            zkClient.exists(chroot, true));
-        cores = CoreContainer.createAndLoad(home);
-      });
+    
+    SolrZkClient zkClient = null;
+    
+    try {
+      zkClient = new SolrZkClient(zkServer.getZkHost(),
+          AbstractZkTestCase.TIMEOUT);
+      assertFalse("Path '" + chroot + "' should not exist before the test",
+          zkClient.exists(chroot, true));
+      cores = CoreContainer.createAndLoad(home);
+      fail("There should be a zk exception, as the initial path doesn't exist");
+    } catch (ZooKeeperException e) {
+      // expected
       assertFalse("Path shouldn't have been created",
           zkClient.exists(chroot, true));// check the path was not created
     } finally {
       if (cores != null) cores.shutdown();
+      if (zkClient != null) zkClient.close();
     }
   }
   

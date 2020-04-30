@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function.docvalues;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function.docvalues;
 
-import java.io.IOException;
-
-import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.ValueSourceScorer;
-import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.mutable.MutableValue;
 import org.apache.lucene.util.mutable.MutableValueInt;
 
@@ -38,50 +36,50 @@ public abstract class IntDocValues extends FunctionValues {
   }
 
   @Override
-  public byte byteVal(int doc) throws IOException {
+  public byte byteVal(int doc) {
     return (byte)intVal(doc);
   }
 
   @Override
-  public short shortVal(int doc) throws IOException {
+  public short shortVal(int doc) {
     return (short)intVal(doc);
   }
 
   @Override
-  public float floatVal(int doc) throws IOException {
+  public float floatVal(int doc) {
     return (float)intVal(doc);
   }
 
   @Override
-  public abstract int intVal(int doc) throws IOException;
+  public abstract int intVal(int doc);
 
   @Override
-  public long longVal(int doc) throws IOException {
+  public long longVal(int doc) {
     return (long)intVal(doc);
   }
 
   @Override
-  public double doubleVal(int doc) throws IOException {
+  public double doubleVal(int doc) {
     return (double)intVal(doc);
   }
 
   @Override
-  public String strVal(int doc) throws IOException {
+  public String strVal(int doc) {
     return Integer.toString(intVal(doc));
   }
 
   @Override
-  public Object objectVal(int doc) throws IOException {
+  public Object objectVal(int doc) {
     return exists(doc) ? intVal(doc) : null;
   }
 
   @Override
-  public String toString(int doc) throws IOException {
+  public String toString(int doc) {
     return vs.description() + '=' + strVal(doc);
   }
   
   @Override
-  public ValueSourceScorer getRangeScorer(Weight weight,  LeafReaderContext readerContext, String lowerVal, String upperVal, boolean includeLower, boolean includeUpper) {
+  public ValueSourceScorer getRangeScorer(IndexReader reader, String lowerVal, String upperVal, boolean includeLower, boolean includeUpper) {
     int lower,upper;
 
     // instead of using separate comparison functions, adjust the endpoints.
@@ -103,11 +101,12 @@ public abstract class IntDocValues extends FunctionValues {
     final int ll = lower;
     final int uu = upper;
 
-    return new ValueSourceScorer(weight, readerContext, this) {
+    return new ValueSourceScorer(reader, this) {
       @Override
-      public boolean matches(int doc) throws IOException {
-        if (!exists(doc)) return false;
+      public boolean matches(int doc) {
         int val = intVal(doc);
+        // only check for deleted if it's the default value
+        // if (val==0 && reader.isDeleted(doc)) return false;
         return val >= ll && val <= uu;
       }
     };
@@ -124,7 +123,7 @@ public abstract class IntDocValues extends FunctionValues {
       }
 
       @Override
-      public void fillValue(int doc) throws IOException {
+      public void fillValue(int doc) {
         mval.value = intVal(doc);
         mval.exists = exists(doc);
       }

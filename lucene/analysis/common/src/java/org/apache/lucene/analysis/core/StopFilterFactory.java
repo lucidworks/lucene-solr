@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.core;
 
-
-import java.io.IOException;
-import java.util.Map;
-
-import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.WordlistLoader;
-import org.apache.lucene.analysis.en.EnglishAnalyzer;
+import org.apache.lucene.analysis.util.CharArraySet;
 import org.apache.lucene.analysis.util.ResourceLoader;
 import org.apache.lucene.analysis.util.ResourceLoaderAware;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
+import org.apache.lucene.analysis.util.WordlistLoader; // jdocs
+import org.apache.lucene.util.Version;
+
+import java.util.Map;
+import java.io.IOException;
 
 /**
  * Factory for {@link StopFilter}.
@@ -46,7 +46,7 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * <ul>
  *  <li><code>ignoreCase</code> defaults to <code>false</code></li>
  *  <li><code>words</code> should be the name of a stopwords file to parse, if not 
- *      specified the factory will use {@link EnglishAnalyzer#ENGLISH_STOP_WORDS_SET}
+ *      specified the factory will use {@link StopAnalyzer#ENGLISH_STOP_WORDS_SET}
  *  </li>
  *  <li><code>format</code> defines how the <code>words</code> file will be parsed, 
  *      and defaults to <code>wordset</code>.  If <code>words</code> is not specified, 
@@ -59,7 +59,7 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  * <ul>
  *  <li><code>wordset</code> - This is the default format, which supports one word per 
  *      line (including any intra-word whitespace) and allows whole line comments 
- *      beginning with the "#" character.  Blank lines are ignored.  See 
+ *      begining with the "#" character.  Blank lines are ignored.  See 
  *      {@link WordlistLoader#getLines WordlistLoader.getLines} for details.
  *  </li>
  *  <li><code>snowball</code> - This format allows for multiple words specified on each 
@@ -69,15 +69,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  *      for details.
  *  </li>
  * </ul>
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
 public class StopFilterFactory extends TokenFilterFactory implements ResourceLoaderAware {
-
-  /** SPI name */
-  public static final String NAME = "stop";
-
   public static final String FORMAT_WORDSET = "wordset";
   public static final String FORMAT_SNOWBALL = "snowball";
   
@@ -85,6 +78,7 @@ public class StopFilterFactory extends TokenFilterFactory implements ResourceLoa
   private final String stopWordFiles;
   private final String format;
   private final boolean ignoreCase;
+  private boolean enablePositionIncrements;
   
   /** Creates a new StopFilterFactory */
   public StopFilterFactory(Map<String,String> args) {
@@ -92,6 +86,17 @@ public class StopFilterFactory extends TokenFilterFactory implements ResourceLoa
     stopWordFiles = get(args, "words");
     format = get(args, "format", (null == stopWordFiles ? null : FORMAT_WORDSET));
     ignoreCase = getBoolean(args, "ignoreCase", false);
+
+    if (luceneMatchVersion.onOrAfter(Version.LUCENE_5_0_0) == false) {
+      boolean defaultValue = luceneMatchVersion.onOrAfter(Version.LUCENE_4_4_0);
+      enablePositionIncrements = getBoolean(args, "enablePositionIncrements", defaultValue);
+      if (enablePositionIncrements == false && luceneMatchVersion.onOrAfter(Version.LUCENE_4_4_0)) {
+        throw new IllegalArgumentException("enablePositionIncrements=false is not supported anymore as of Lucene 4.4");
+      }
+    } else if (args.containsKey("enablePositionIncrements")) {
+      throw new IllegalArgumentException("enablePositionIncrements is not a valid option as of Lucene 5.0");
+    }
+    
     if (!args.isEmpty()) {
       throw new IllegalArgumentException("Unknown parameters: " + args);
     }
@@ -111,7 +116,7 @@ public class StopFilterFactory extends TokenFilterFactory implements ResourceLoa
       if (null != format) {
         throw new IllegalArgumentException("'format' can not be specified w/o an explicit 'words' file: " + format);
       }
-      stopWords = new CharArraySet(EnglishAnalyzer.ENGLISH_STOP_WORDS_SET, ignoreCase);
+      stopWords = new CharArraySet(StopAnalyzer.ENGLISH_STOP_WORDS_SET, ignoreCase);
     }
   }
 
@@ -125,7 +130,12 @@ public class StopFilterFactory extends TokenFilterFactory implements ResourceLoa
 
   @Override
   public TokenStream create(TokenStream input) {
-    StopFilter stopFilter = new StopFilter(input,stopWords);
-    return stopFilter;
+    if (luceneMatchVersion.onOrAfter(Version.LUCENE_4_4_0)) {
+      return new StopFilter(input, stopWords);
+    } else {
+      @SuppressWarnings("deprecation")
+      final TokenStream filter = new Lucene43StopFilter(enablePositionIncrements, input, stopWords);
+      return filter;
+    }
   }
 }

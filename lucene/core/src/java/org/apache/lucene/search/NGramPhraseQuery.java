@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.Objects;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.util.ToStringUtils;
 
 /**
  * This is a {@link PhraseQuery} which is optimized for n-gram phrase query.
@@ -48,6 +49,9 @@ public class NGramPhraseQuery extends Query {
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
     final Term[] terms = phraseQuery.getTerms();
     final int[] positions = phraseQuery.getPositions();
 
@@ -78,32 +82,20 @@ public class NGramPhraseQuery extends Query {
   }
 
   @Override
-  public void visit(QueryVisitor visitor) {
-    phraseQuery.visit(visitor.getSubVisitor(BooleanClause.Occur.MUST, this));
-  }
-
-  @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           equalsTo(getClass().cast(other));
-  }
-
-  private boolean equalsTo(NGramPhraseQuery other) {
-    return n == other.n && 
-           phraseQuery.equals(other.phraseQuery);
+  public boolean equals(Object o) {
+    if (super.equals(o) == false) {
+      return false;
+    }
+    NGramPhraseQuery other = (NGramPhraseQuery) o;
+    return n == other.n && phraseQuery.equals(other.phraseQuery);
   }
 
   @Override
   public int hashCode() {
-    int h = classHash();
+    int h = super.hashCode();
     h = 31 * h + phraseQuery.hashCode();
     h = 31 * h + n;
     return h;
-  }
-
-  /** Return the n in n-gram */
-  public int getN() {
-    return n;
   }
 
   /** Return the list of terms. */
@@ -118,6 +110,6 @@ public class NGramPhraseQuery extends Query {
 
   @Override
   public String toString(String field) {
-    return phraseQuery.toString(field);
+    return phraseQuery.toString(field) + ToStringUtils.boost(getBoost());
   }
 }

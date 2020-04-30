@@ -1,3 +1,5 @@
+package org.apache.lucene.replicator;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.replicator;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -144,7 +145,8 @@ public class IndexReplicationHandler implements ReplicationHandler {
       // if there were any IO errors reading the expected commit point (i.e.
       // segments files mismatch), then ignore that commit either.
       if (commit != null && commit.getSegmentsFileName().equals(segmentsFile)) {
-        Set<String> commitFiles = new HashSet<>(commit.getFileNames());
+        Set<String> commitFiles = new HashSet<>();
+        commitFiles.addAll(commit.getFileNames());
         Matcher matcher = IndexFileNames.CODEC_FILE_PATTERN.matcher("");
         for (String file : dir.listAll()) {
           if (!commitFiles.contains(file)
@@ -232,8 +234,7 @@ public class IndexReplicationHandler implements ReplicationHandler {
       // now copy and fsync segmentsFile as pending, then rename (simulating lucene commit)
       indexDir.copyFrom(clientDir, segmentsFile, pendingSegmentsFile, IOContext.READONCE);
       indexDir.sync(Collections.singletonList(pendingSegmentsFile));
-      indexDir.rename(pendingSegmentsFile, segmentsFile);
-      indexDir.syncMetaData();
+      indexDir.renameFile(pendingSegmentsFile, segmentsFile);
       
       success = true;
     } finally {

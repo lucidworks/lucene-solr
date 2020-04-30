@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.hunspell;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,20 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.hunspell;
-
 
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import org.apache.lucene.store.Directory;
+import org.apache.lucene.analysis.hunspell.Dictionary;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util.LuceneTestCase.SuppressSysoutChecks;
 import org.apache.lucene.util.RamUsageTester;
 import org.apache.lucene.util.TestUtil;
+import org.apache.lucene.util.LuceneTestCase.SuppressSysoutChecks;
 import org.junit.Ignore;
 
 /**
@@ -186,9 +186,8 @@ public class TestAllDictionaries2 extends LuceneTestCase {
         Path affEntry = tmp.resolve(tests[i+2]);
       
         try (InputStream dictionary = Files.newInputStream(dicEntry);
-             InputStream affix = Files.newInputStream(affEntry);
-             Directory tempDir = newDirectory()) {
-          Dictionary dic = new Dictionary(tempDir, "dictionary", affix, dictionary);
+             InputStream affix = Files.newInputStream(affEntry)) {
+          Dictionary dic = new Dictionary(affix, dictionary);
           System.out.println(tests[i] + "\t" + RamUsageTester.humanSizeOf(dic) + "\t(" +
                              "words=" + RamUsageTester.humanSizeOf(dic.words) + ", " +
                              "flags=" + RamUsageTester.humanSizeOf(dic.flagLookup) + ", " +
@@ -220,9 +219,8 @@ public class TestAllDictionaries2 extends LuceneTestCase {
           Path affEntry = tmp.resolve(tests[i+2]);
         
           try (InputStream dictionary = Files.newInputStream(dicEntry);
-               InputStream affix = Files.newInputStream(affEntry);
-               Directory tempDir = newDirectory()) {
-            new Dictionary(tempDir, "dictionary", affix, dictionary);
+              InputStream affix = Files.newInputStream(affEntry)) {
+            new Dictionary(affix, dictionary);
           } 
         }
       }

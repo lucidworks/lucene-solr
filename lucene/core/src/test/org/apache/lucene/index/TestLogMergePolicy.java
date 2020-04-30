@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
-import java.io.IOException;
-
-import org.apache.lucene.index.MergePolicy.MergeSpecification;
-import org.apache.lucene.index.MergePolicy.OneMerge;
 
 public class TestLogMergePolicy extends BaseMergePolicyTestCase {
 
@@ -30,18 +26,5 @@ public class TestLogMergePolicy extends BaseMergePolicyTestCase {
   public void testDefaultForcedMergeMB() {
     LogByteSizeMergePolicy mp = new LogByteSizeMergePolicy();
     assertTrue(mp.getMaxMergeMBForForcedMerge() > 0.0);
-  }
-
-  @Override
-  protected void assertSegmentInfos(MergePolicy policy, SegmentInfos infos) throws IOException {
-    // TODO
-  }
-
-  @Override
-  protected void assertMerge(MergePolicy policy, MergeSpecification merge) throws IOException {
-    LogMergePolicy lmp = (LogMergePolicy) policy;
-    for (OneMerge oneMerge : merge.merges) {
-      assertEquals(lmp.getMergeFactor(), oneMerge.segments.size());
-    }
   }
 }

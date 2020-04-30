@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.classic;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.classic;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.Tokenizer;
@@ -26,6 +27,7 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.util.LuceneTestCase;
 
 import java.io.IOException;
+import java.io.Reader;
 
 public class TestMultiPhraseQueryParsing extends LuceneTestCase {
 
@@ -99,12 +101,12 @@ public class TestMultiPhraseQueryParsing extends LuceneTestCase {
     Query q = qp.parse("\"this text is acually ignored\"");
     assertTrue("wrong query type!", q instanceof MultiPhraseQuery);
 
-    MultiPhraseQuery.Builder multiPhraseQueryBuilder = new MultiPhraseQuery.Builder();
-    multiPhraseQueryBuilder.add(new Term[]{ new Term("field", "a"), new Term("field", "1") }, -1);
-    multiPhraseQueryBuilder.add(new Term[]{ new Term("field", "b"), new Term("field", "1") }, 0);
-    multiPhraseQueryBuilder.add(new Term[]{ new Term("field", "c") }, 1);
+    MultiPhraseQuery multiPhraseQuery = new MultiPhraseQuery();
+    multiPhraseQuery.add(new Term[]{ new Term("field", "a"), new Term("field", "1") }, -1);
+    multiPhraseQuery.add(new Term[]{ new Term("field", "b"), new Term("field", "1") }, 0);
+    multiPhraseQuery.add(new Term[]{ new Term("field", "c") }, 1);
 
-    assertEquals(multiPhraseQueryBuilder.build(), q);
+    assertEquals(multiPhraseQuery, q);
   }
 
 }

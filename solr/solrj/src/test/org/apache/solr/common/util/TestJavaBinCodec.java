@@ -1,3 +1,5 @@
+package org.apache.solr.common.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.util;
 
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
@@ -47,39 +48,24 @@ import org.noggit.CharArr;
 public class TestJavaBinCodec extends SolrTestCaseJ4 {
 
   private static final String SOLRJ_JAVABIN_BACKCOMPAT_BIN = "/solrj/javabin_backcompat.bin";
-  private static final String BIN_FILE_LOCATION = "./solr/solrj/src/test-files/solrj/javabin_backcompat.bin";
+  private final String BIN_FILE_LOCATION = "./solr/solrj/src/test-files/solrj/javabin_backcompat.bin";
 
   private static final String SOLRJ_JAVABIN_BACKCOMPAT_BIN_CHILD_DOCS = "/solrj/javabin_backcompat_child_docs.bin";
-  private static final String BIN_FILE_LOCATION_CHILD_DOCS = "./solr/solrj/src/test-files/solrj/javabin_backcompat_child_docs.bin";
+  private final String BIN_FILE_LOCATION_CHILD_DOCS = "./solr/solrj/src/test-files/solrj/javabin_backcompat_child_docs.bin";
 
   public void testStrings() throws Exception {
+    JavaBinCodec javabin = new JavaBinCodec();
     for (int i = 0; i < 10000 * RANDOM_MULTIPLIER; i++) {
       String s = TestUtil.randomUnicodeString(random());
-      try (JavaBinCodec jbcO = new JavaBinCodec(); ByteArrayOutputStream os = new ByteArrayOutputStream()) {
-        jbcO.marshal(s, os);
-        try (JavaBinCodec jbcI = new JavaBinCodec(); ByteArrayInputStream is = new ByteArrayInputStream(os.toByteArray())) {
-          Object o = jbcI.unmarshal(is);
-          assertEquals(s, o);
-        }
-      }
+      ByteArrayOutputStream os = new ByteArrayOutputStream();
+      javabin.marshal(s, os);
+      ByteArrayInputStream is = new ByteArrayInputStream(os.toByteArray());
+      Object o = javabin.unmarshal(is);
+      assertEquals(s, o);
     }
   }
 
-  public void testReadAsCharSeq() throws Exception {
-    List<Object> types = new ArrayList<>();
-    SolrInputDocument idoc = new SolrInputDocument();
-    idoc.addField("foo", "bar");
-    idoc.addField("foos", Arrays.asList("bar1","bar2"));
-    idoc.addField("enumf", new EnumFieldValue(1, "foo"));
-    types.add(idoc);
-    compareObjects(
-        (List) getObject(getBytes(types, true)),
-        (List) types
-    );
-
-  }
-
-  public static SolrDocument generateSolrDocumentWithChildDocs() {
+  private SolrDocument generateSolrDocumentWithChildDocs() {
     SolrDocument parentDocument = new SolrDocument();
     parentDocument.addField("id", "1");
     parentDocument.addField("subject", "parentDocument");
@@ -181,54 +167,52 @@ public class TestJavaBinCodec extends SolrTestCaseJ4 {
 
   @Test
   public void testBackCompat() throws IOException {
-    try (InputStream is = getClass().getResourceAsStream(SOLRJ_JAVABIN_BACKCOMPAT_BIN); JavaBinCodec javabin = new JavaBinCodec(){
+    JavaBinCodec javabin = new JavaBinCodec(){
       @Override
       public List<Object> readIterator(DataInputInputStream fis) throws IOException {
         return super.readIterator(fis);
       }
-    };)
-    {
+    };
+    try {
+      InputStream is = getClass().getResourceAsStream(SOLRJ_JAVABIN_BACKCOMPAT_BIN);
       List<Object> unmarshaledObj = (List<Object>) javabin.unmarshal(is);
       List<Object> matchObj = generateAllDataTypes();
-      compareObjects(unmarshaledObj, matchObj);
+
+      assertEquals(unmarshaledObj.size(), matchObj.size());
+      for(int i=0; i < unmarshaledObj.size(); i++) {
+
+        if(unmarshaledObj.get(i) instanceof byte[] && matchObj.get(i) instanceof byte[]) {
+          byte[] b1 = (byte[]) unmarshaledObj.get(i);
+          byte[] b2 = (byte[]) matchObj.get(i);
+          assertTrue(Arrays.equals(b1, b2));
+        } else if(unmarshaledObj.get(i) instanceof SolrDocument && matchObj.get(i) instanceof SolrDocument ) {
+          assertTrue(compareSolrDocument(unmarshaledObj.get(i), matchObj.get(i)));
+        } else if(unmarshaledObj.get(i) instanceof SolrDocumentList && matchObj.get(i) instanceof SolrDocumentList ) {
+          assertTrue(compareSolrDocumentList(unmarshaledObj.get(i), matchObj.get(i)));
+        } else if(unmarshaledObj.get(i) instanceof SolrInputDocument && matchObj.get(i) instanceof SolrInputDocument) {
+          assertTrue(compareSolrInputDocument(unmarshaledObj.get(i), matchObj.get(i)));
+        } else if(unmarshaledObj.get(i) instanceof SolrInputField && matchObj.get(i) instanceof SolrInputField) {
+          assertTrue(assertSolrInputFieldEquals(unmarshaledObj.get(i), matchObj.get(i)));
+        } else {
+          assertEquals(unmarshaledObj.get(i), matchObj.get(i));
+        }
+
+      }
     } catch (IOException e) {
       throw e;
     }
 
   }
 
-  private void compareObjects(List unmarshaledObj, List matchObj) {
-    assertEquals(unmarshaledObj.size(), matchObj.size());
-    for (int i = 0; i < unmarshaledObj.size(); i++) {
-
-      if (unmarshaledObj.get(i) instanceof byte[] && matchObj.get(i) instanceof byte[]) {
-        byte[] b1 = (byte[]) unmarshaledObj.get(i);
-        byte[] b2 = (byte[]) matchObj.get(i);
-        assertTrue(Arrays.equals(b1, b2));
-      } else if (unmarshaledObj.get(i) instanceof SolrDocument && matchObj.get(i) instanceof SolrDocument) {
-        assertTrue(compareSolrDocument(unmarshaledObj.get(i), matchObj.get(i)));
-      } else if (unmarshaledObj.get(i) instanceof SolrDocumentList && matchObj.get(i) instanceof SolrDocumentList) {
-        assertTrue(compareSolrDocumentList(unmarshaledObj.get(i), matchObj.get(i)));
-      } else if (unmarshaledObj.get(i) instanceof SolrInputDocument && matchObj.get(i) instanceof SolrInputDocument) {
-        assertTrue(compareSolrInputDocument(unmarshaledObj.get(i), matchObj.get(i)));
-      } else if (unmarshaledObj.get(i) instanceof SolrInputField && matchObj.get(i) instanceof SolrInputField) {
-        assertTrue(assertSolrInputFieldEquals(unmarshaledObj.get(i), matchObj.get(i)));
-      } else {
-        assertEquals(unmarshaledObj.get(i), matchObj.get(i));
-      }
-
-    }
-  }
-
   @Test
   public void testBackCompatForSolrDocumentWithChildDocs() throws IOException {
-    try (JavaBinCodec javabin = new JavaBinCodec(){
+    JavaBinCodec javabin = new JavaBinCodec(){
       @Override
       public List<Object> readIterator(DataInputInputStream fis) throws IOException {
         return super.readIterator(fis);
       }
-    };)
-    {
+    };
+    try {
       InputStream is = getClass().getResourceAsStream(SOLRJ_JAVABIN_BACKCOMPAT_BIN_CHILD_DOCS);
       SolrDocument sdoc = (SolrDocument) javabin.unmarshal(is);
       SolrDocument matchSolrDoc = generateSolrDocumentWithChildDocs();
@@ -240,30 +224,34 @@ public class TestJavaBinCodec extends SolrTestCaseJ4 {
 
   @Test
   public void testForwardCompat() throws IOException {
-    try (JavaBinCodec javabin = new JavaBinCodec(); ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+    JavaBinCodec javabin = new JavaBinCodec();
+    ByteArrayOutputStream os = new ByteArrayOutputStream();
 
-      Object data = generateAllDataTypes();
-      try {
-        javabin.marshal(data, os);
-        byte[] newFormatBytes = os.toByteArray();
+    Object data = generateAllDataTypes();
+    try {
+      javabin.marshal(data, os);
+      byte[] newFormatBytes = os.toByteArray();
 
-        InputStream is = getClass().getResourceAsStream(SOLRJ_JAVABIN_BACKCOMPAT_BIN);
-        byte[] currentFormatBytes = IOUtils.toByteArray(is);
+      InputStream is = getClass().getResourceAsStream(SOLRJ_JAVABIN_BACKCOMPAT_BIN);
+      byte[] currentFormatBytes = IOUtils.toByteArray(is);
 
-        for (int i = 1; i < currentFormatBytes.length; i++) {//ignore the first byte. It is version information
-          assertEquals(newFormatBytes[i], currentFormatBytes[i]);
-        }
-
-      } catch (IOException e) {
-        throw e;
+      for (int i = 1; i < currentFormatBytes.length; i++) {//ignore the first byte. It is version information
+        assertEquals(newFormatBytes[i], currentFormatBytes[i]);
       }
+
+    } catch (IOException e) {
+      throw e;
     }
+
   }
 
   @Test
   public void testForwardCompatForSolrDocumentWithChildDocs() throws IOException {
+    JavaBinCodec javabin = new JavaBinCodec();
+    ByteArrayOutputStream os = new ByteArrayOutputStream();
+
     SolrDocument sdoc = generateSolrDocumentWithChildDocs();
-    try (JavaBinCodec javabin = new JavaBinCodec(); ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+    try {
       javabin.marshal(sdoc, os);
       byte[] newFormatBytes = os.toByteArray();
 
@@ -273,49 +261,22 @@ public class TestJavaBinCodec extends SolrTestCaseJ4 {
       for (int i = 1; i < currentFormatBytes.length; i++) {//ignore the first byte. It is version information
         assertEquals(newFormatBytes[i], currentFormatBytes[i]);
       }
+
     } catch (IOException e) {
       throw e;
     }
-  }
 
-  @Test
-  public void testAllTypes() throws IOException {
-    List<Object> obj = generateAllDataTypes();
-    compareObjects(
-        (List) getObject(getBytes(obj)),
-        (List) obj
-    );
   }
-
-
-  private static Object serializeAndDeserialize(Object o) throws IOException {
-    return getObject(getBytes(o));
-  }
-  private static byte[] getBytes(Object o) throws IOException {
-    try (JavaBinCodec javabin = new JavaBinCodec(); ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-      javabin.marshal(o, baos);
-      return baos.toByteArray();
-    }
-  }
-
-  private static byte[] getBytes(Object o, boolean readAsCharSeq) throws IOException {
-    try (JavaBinCodec javabin = new JavaBinCodec(); ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-      javabin.readStringAsCharSeq = readAsCharSeq;
-      javabin.marshal(o, baos);
-      return baos.toByteArray();
-    }
-  }
-
-  private static Object getObject(byte[] bytes) throws IOException {
-    try (JavaBinCodec jbc = new JavaBinCodec()) {
-      return jbc.unmarshal(new ByteArrayInputStream(bytes));
-    }
-  }
-
 
   @Test
   public void testResponseChildDocuments() throws IOException {
-    SolrDocument result = (SolrDocument) serializeAndDeserialize(generateSolrDocumentWithChildDocs());
+
+
+    JavaBinCodec javabin = new JavaBinCodec();
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    javabin.marshal(generateSolrDocumentWithChildDocs(), baos);
+
+    SolrDocument result = (SolrDocument) javabin.unmarshal(new ByteArrayInputStream(baos.toByteArray()));
     assertEquals(2, result.size());
     assertEquals("1", result.getFieldValue("id"));
     assertEquals("parentDocument", result.getFieldValue("subject"));
@@ -346,11 +307,13 @@ public class TestJavaBinCodec extends SolrTestCaseJ4 {
   @Test
   public void testStringCaching() throws Exception {
     Map<String, Object> m = Utils.makeMap("key1", "val1", "key2", "val2");
-    byte[] b1 = getBytes(m);//copy 1
-    byte[] b2 = getBytes(m);//copy 2
-    Map m1 = (Map) getObject(b1);
-    Map m2 = (Map) getObject(b1);
 
+    ByteArrayOutputStream os1 = new ByteArrayOutputStream();
+    new JavaBinCodec().marshal(m, os1);
+    Map m1 = (Map) new JavaBinCodec().unmarshal(new ByteArrayInputStream(os1.toByteArray()));
+    ByteArrayOutputStream os2 = new ByteArrayOutputStream();
+    new JavaBinCodec().marshal(m, os2);
+    Map m2 = (Map) new JavaBinCodec().unmarshal(new ByteArrayInputStream(os2.toByteArray()));
     List l1 = new ArrayList<>(m1.keySet());
     List l2 = new ArrayList<>(m2.keySet());
 
@@ -359,18 +322,36 @@ public class TestJavaBinCodec extends SolrTestCaseJ4 {
     assertTrue(l1.get(1).equals(l2.get(1)));
     assertFalse(l1.get(1) == l2.get(1));
 
-    JavaBinCodec.StringCache stringCache = new JavaBinCodec.StringCache(new MapBackedCache<>(new HashMap<>()));
+    JavaBinCodec.StringCache stringCache = new JavaBinCodec.StringCache(new Cache<JavaBinCodec.StringBytes, String>() {
+      private HashMap<JavaBinCodec.StringBytes, String> cache = new HashMap<>();
+
+      @Override
+      public String put(JavaBinCodec.StringBytes key, String val) {
+        return cache.put(key, val);
+      }
+
+      @Override
+      public String get(JavaBinCodec.StringBytes key) {
+        return cache.get(key);
+      }
+
+      @Override
+      public String remove(JavaBinCodec.StringBytes key) {
+        return cache.remove(key);
+      }
+
+      @Override
+      public void clear() {
+        cache.clear();
+
+      }
+    });
 
 
-    try (JavaBinCodec c1 = new JavaBinCodec(null, stringCache);
-         JavaBinCodec c2 = new JavaBinCodec(null, stringCache)) {
-
-      m1 = (Map) c1.unmarshal(new ByteArrayInputStream(b1));
-      m2 = (Map) c2.unmarshal(new ByteArrayInputStream(b2));
-
-      l1 = new ArrayList<>(m1.keySet());
-      l2 = new ArrayList<>(m2.keySet());
-    }
+    m1 = (Map) new JavaBinCodec(null, stringCache).unmarshal(new ByteArrayInputStream(os1.toByteArray()));
+    m2 = (Map) new JavaBinCodec(null, stringCache).unmarshal(new ByteArrayInputStream(os2.toByteArray()));
+    l1 = new ArrayList<>(m1.keySet());
+    l2 = new ArrayList<>(m2.keySet());
     assertTrue(l1.get(0).equals(l2.get(0)));
     assertTrue(l1.get(0) == l2.get(0));
     assertTrue(l1.get(1).equals(l2.get(1)));
@@ -380,26 +361,33 @@ public class TestJavaBinCodec extends SolrTestCaseJ4 {
   }
 
   public void genBinaryFiles() throws IOException {
-
+    JavaBinCodec javabin = new JavaBinCodec();
+    ByteArrayOutputStream os = new ByteArrayOutputStream();
+    
     Object data = generateAllDataTypes();
-    byte[] out = getBytes(data);
+    
+    javabin.marshal(data, os);
+    byte[] out = os.toByteArray();
     FileOutputStream fs = new FileOutputStream(new File(BIN_FILE_LOCATION));
     BufferedOutputStream bos = new BufferedOutputStream(fs);
     bos.write(out);
     bos.close();
 
     //Binary file with child documents
+    javabin = new JavaBinCodec();
     SolrDocument sdoc = generateSolrDocumentWithChildDocs();
+    os = new ByteArrayOutputStream();
+    javabin.marshal(sdoc, os);
     fs = new FileOutputStream(new File(BIN_FILE_LOCATION_CHILD_DOCS));
     bos = new BufferedOutputStream(fs);
-    bos.write(getBytes(sdoc));
+    bos.write(os.toByteArray());
     bos.close();
 
   }
 
   private void testPerf() throws InterruptedException {
-    final ArrayList<StringBytes> l = new ArrayList<>();
-    Cache<StringBytes, String> cache = null;
+    final ArrayList<JavaBinCodec.StringBytes> l = new ArrayList<>();
+    Cache<JavaBinCodec.StringBytes, String> cache = null;
    /* cache = new ConcurrentLRUCache<JavaBinCodec.StringBytes,String>(10000, 9000, 10000, 1000, false, true, null){
       @Override
       public String put(JavaBinCodec.StringBytes key, String val) {
@@ -410,12 +398,37 @@ public class TestJavaBinCodec extends SolrTestCaseJ4 {
     Runtime.getRuntime().gc();
     printMem("before cache init");
 
-    Cache<StringBytes, String> cache1 = new MapBackedCache<>(new HashMap<>()) ;
+    Cache<JavaBinCodec.StringBytes, String> cache1 = new Cache<JavaBinCodec.StringBytes, String>() {
+      private HashMap<JavaBinCodec.StringBytes, String> cache = new HashMap<>();
+
+      @Override
+      public String put(JavaBinCodec.StringBytes key, String val) {
+        l.add(key);
+        return cache.put(key, val);
+
+      }
+
+      @Override
+      public String get(JavaBinCodec.StringBytes key) {
+        return cache.get(key);
+      }
+
+      @Override
+      public String remove(JavaBinCodec.StringBytes key) {
+        return cache.remove(key);
+      }
+
+      @Override
+      public void clear() {
+        cache.clear();
+
+      }
+    };
     final JavaBinCodec.StringCache STRING_CACHE = new JavaBinCodec.StringCache(cache1);
 
 //    STRING_CACHE = new JavaBinCodec.StringCache(cache);
     byte[] bytes = new byte[0];
-    StringBytes stringBytes = new StringBytes(null,0,0);
+    JavaBinCodec.StringBytes stringBytes = new JavaBinCodec.StringBytes(null,0,0);
 
     for(int i=0;i<10000;i++) {
       String s = String.valueOf(random().nextLong());
@@ -431,14 +444,17 @@ public class TestJavaBinCodec extends SolrTestCaseJ4 {
     final int ITERS = 1000000;
     int THREADS = 10;
 
-    runInThreads(THREADS, () -> {
-      StringBytes stringBytes1 = new StringBytes(new byte[0], 0, 0);
-      for (int i = 0; i < ITERS; i++) {
-        StringBytes b = l.get(i % l.size());
-        stringBytes1.reset(b.bytes, 0, b.bytes.length);
-        if (STRING_CACHE.get(stringBytes1) == null) throw new RuntimeException("error");
-      }
+    runInThreads(THREADS, new Runnable() {
+      @Override
+      public void run() {
+        JavaBinCodec.StringBytes stringBytes1 = new JavaBinCodec.StringBytes(new byte[0], 0, 0);
+        for (int i = 0; i < ITERS; i++) {
+          JavaBinCodec.StringBytes b = l.get(i % l.size());
+          stringBytes1.reset(b.bytes, 0, b.bytes.length);
+          if (STRING_CACHE.get(stringBytes1) == null) throw new RuntimeException("error");
+        }
 
+      }
     });
 
 
@@ -447,14 +463,17 @@ public class TestJavaBinCodec extends SolrTestCaseJ4 {
     System.out.println("time taken by LRUCACHE " + timer.getTime());
     timer = new RTimer();
 
-    runInThreads(THREADS, () -> {
-      String a = null;
-      CharArr arr = new CharArr();
-      for (int i = 0; i < ITERS; i++) {
-        StringBytes sb = l.get(i % l.size());
-        arr.reset();
-        ByteUtils.UTF8toUTF16(sb.bytes, 0, sb.bytes.length, arr);
-        a = arr.toString();
+    runInThreads(THREADS, new Runnable() {
+      @Override
+      public void run() {
+        String a = null;
+        CharArr arr = new CharArr();
+        for (int i = 0; i < ITERS; i++) {
+          JavaBinCodec.StringBytes sb = l.get(i % l.size());
+          arr.reset();
+          ByteUtils.UTF8toUTF16(sb.bytes, 0, sb.bytes.length, arr);
+          a = arr.toString();
+        }
       }
     });
 
@@ -542,7 +561,12 @@ public class TestJavaBinCodec extends SolrTestCaseJ4 {
       sdoc.put("some_boolean", ""+r.nextBoolean());
       sdoc.put("another_boolean", ""+r.nextBoolean());
 
-      buffers[bufnum] = getBytes(sdoc);
+
+      JavaBinCodec javabin = new JavaBinCodec();
+      ByteArrayOutputStream os = new ByteArrayOutputStream();
+      javabin.marshal(sdoc, os);
+      os.toByteArray();
+      buffers[bufnum] = os.toByteArray();
     }
 
     int ret = 0;
@@ -552,11 +576,14 @@ public class TestJavaBinCodec extends SolrTestCaseJ4 {
     if (nThreads <= 0) {
       ret += doDecode(buffers, iter, stringCache);
     } else {
-      runInThreads(nThreads, () -> {
-        try {
-          doDecode(buffers, iter, stringCache);
-        } catch (IOException e) {
-          e.printStackTrace();
+      runInThreads(nThreads, new Runnable() {
+        @Override
+        public void run() {
+          try {
+            doDecode(buffers, iter, stringCache);
+          } catch (IOException e) {
+            e.printStackTrace();
+          }
         }
       });
     }
@@ -580,12 +607,11 @@ public class TestJavaBinCodec extends SolrTestCaseJ4 {
     while (--iter >= 0) {
       if (++bufnum >= buffers.length) bufnum = 0;
       byte[] buf = buffers[bufnum];
-      try (JavaBinCodec javabin = new JavaBinCodec(null, stringCache)) {
-        FastInputStream in = new FastInputStream(empty, buf, 0, buf.length);
-        Object o = javabin.unmarshal(in);
-        if (o instanceof SolrDocument) {
-          ret += ((SolrDocument) o).size();
-        }
+      JavaBinCodec javabin = new JavaBinCodec(null, stringCache);
+      FastInputStream in = new FastInputStream(empty, buf, 0, buf.length);
+      Object o = javabin.unmarshal( in );
+      if (o instanceof SolrDocument) {
+        ret += ((SolrDocument) o).size();
       }
     }
     return ret;

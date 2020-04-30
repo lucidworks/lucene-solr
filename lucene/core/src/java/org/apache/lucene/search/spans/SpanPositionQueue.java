@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
 
 import org.apache.lucene.util.PriorityQueue;
 
 class SpanPositionQueue extends PriorityQueue<Spans> {
   SpanPositionQueue(int maxSize) {
-    super(maxSize); // do not prepopulate
+    super(maxSize, false); // do not prepopulate
   }
 
   protected boolean lessThan(Spans s1, Spans s2) {

@@ -14,17 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
 import org.apache.solr.core.SolrCore;
-import org.apache.solr.update.processor.FieldMutatingUpdateProcessor.FieldNameSelector;
 
 import java.util.Collections;
 import java.util.Collection;
 import java.util.List;
 import java.util.SortedSet;
-
-import static org.apache.solr.update.processor.FieldMutatingUpdateProcessor.SELECT_NO_FIELDS;
+import java.util.Iterator;
 
 /**
  * Keeps only the last value of fields matching the specified 
@@ -48,7 +47,6 @@ import static org.apache.solr.update.processor.FieldMutatingUpdateProcessor.SELE
  * </pre>
  *
  * @see FirstFieldValueUpdateProcessorFactory
- * @since 4.0.0
  */
 public final class LastFieldValueUpdateProcessorFactory extends FieldValueSubsetUpdateProcessorFactory {
 
@@ -73,8 +71,10 @@ public final class LastFieldValueUpdateProcessorFactory extends FieldValueSubset
   }
 
   @Override
-  public FieldNameSelector getDefaultSelector(final SolrCore core) {
-    return SELECT_NO_FIELDS;
+  public FieldMutatingUpdateProcessor.FieldNameSelector 
+    getDefaultSelector(final SolrCore core) {
+    
+    return FieldMutatingUpdateProcessor.SELECT_NO_FIELDS;
   }
   
 }

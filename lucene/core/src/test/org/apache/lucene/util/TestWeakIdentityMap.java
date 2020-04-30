@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.util;
 
 import java.util.Iterator;
@@ -141,9 +142,11 @@ public class TestWeakIdentityMap extends LuceneTestCase {
     
     Iterator<String> it = map.keyIterator();
     assertFalse(it.hasNext());
-    expectThrows(NoSuchElementException.class, () -> {
+    try {
       it.next();
-    });
+      fail("Should throw NoSuchElementException");
+    } catch (NoSuchElementException nse) {
+    }
     
     key1 = new String("foo");
     key2 = new String("foo");

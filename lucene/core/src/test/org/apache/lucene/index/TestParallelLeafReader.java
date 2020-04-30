@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.Random;
@@ -23,12 +23,10 @@ import java.util.Random;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.NumericDocValuesField;
-import org.apache.lucene.search.*;
 import org.apache.lucene.search.BooleanClause.Occur;
+import org.apache.lucene.search.*;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 
@@ -65,8 +63,8 @@ public class TestParallelLeafReader extends LuceneTestCase {
   public void testFieldNames() throws Exception {
     Directory dir1 = getDir1(random());
     Directory dir2 = getDir2(random());
-    ParallelLeafReader pr = new ParallelLeafReader(getOnlyLeafReader(DirectoryReader.open(dir1)),
-                                                   getOnlyLeafReader(DirectoryReader.open(dir2)));
+    ParallelLeafReader pr = new ParallelLeafReader(SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir1)),
+                                                       SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir2)));
     FieldInfos fieldInfos = pr.getFieldInfos();
     assertEquals(4, fieldInfos.size());
     assertNotNull(fieldInfos.fieldInfo("f1"));
@@ -83,8 +81,8 @@ public class TestParallelLeafReader extends LuceneTestCase {
     Directory dir2 = getDir2(random());
     LeafReader ir1, ir2;
     // close subreaders, ParallelReader will not change refCounts, but close on its own close
-    ParallelLeafReader pr = new ParallelLeafReader(ir1 = getOnlyLeafReader(DirectoryReader.open(dir1)),
-                                                   ir2 = getOnlyLeafReader(DirectoryReader.open(dir2)));
+    ParallelLeafReader pr = new ParallelLeafReader(ir1 = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir1)),
+                                                       ir2 = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir2)));
                                                        
     // check RefCounts
     assertEquals(1, ir1.getRefCount());
@@ -99,8 +97,8 @@ public class TestParallelLeafReader extends LuceneTestCase {
   public void testRefCounts2() throws IOException {
     Directory dir1 = getDir1(random());
     Directory dir2 = getDir2(random());
-    LeafReader ir1 = getOnlyLeafReader(DirectoryReader.open(dir1));
-    LeafReader ir2 = getOnlyLeafReader(DirectoryReader.open(dir2));
+    LeafReader ir1 = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir1));
+    LeafReader ir2 = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir2));
     // don't close subreaders, so ParallelReader will increment refcounts
     ParallelLeafReader pr = new ParallelLeafReader(false, ir1, ir2);
     // check RefCounts
@@ -119,7 +117,7 @@ public class TestParallelLeafReader extends LuceneTestCase {
   
   public void testCloseInnerReader() throws Exception {
     Directory dir1 = getDir1(random());
-    LeafReader ir1 = getOnlyLeafReader(DirectoryReader.open(dir1));
+    LeafReader ir1 = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir1));
     
     // with overlapping
     ParallelLeafReader pr = new ParallelLeafReader(true,
@@ -128,10 +126,12 @@ public class TestParallelLeafReader extends LuceneTestCase {
 
     ir1.close();
     
-    // should already be closed because inner reader is closed!
-    expectThrows(AlreadyClosedException.class, () -> {
+    try {
       pr.document(0);
-    });
+      fail("ParallelLeafReader should be already closed because inner reader was closed!");
+    } catch (AlreadyClosedException e) {
+      // pass
+    }
     
     // noop:
     pr.close();
@@ -151,20 +151,24 @@ public class TestParallelLeafReader extends LuceneTestCase {
     w2.addDocument(d3);
     w2.close();
     
-    LeafReader ir1 = getOnlyLeafReader(DirectoryReader.open(dir1));
-    LeafReader ir2 = getOnlyLeafReader(DirectoryReader.open(dir2));
+    LeafReader ir1 = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir1));
+    LeafReader ir2 = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir2));
 
-    // indexes don't have the same number of documents
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new ParallelLeafReader(ir1, ir2);
-    });
+      fail("didn't get exptected exception: indexes don't have same number of documents");
+    } catch (IllegalArgumentException e) {
+      // expected exception
+    }
 
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new ParallelLeafReader(random().nextBoolean(),
                                new LeafReader[] {ir1, ir2},
                                new LeafReader[] {ir1, ir2});
-    });
-
+      fail("didn't get expected exception: indexes don't have same number of documents");
+    } catch (IllegalArgumentException e) {
+      // expected exception
+    }
     // check RefCounts
     assertEquals(1, ir1.getRefCount());
     assertEquals(1, ir2.getRefCount());
@@ -177,8 +181,8 @@ public class TestParallelLeafReader extends LuceneTestCase {
   public void testIgnoreStoredFields() throws IOException {
     Directory dir1 = getDir1(random());
     Directory dir2 = getDir2(random());
-    LeafReader ir1 = getOnlyLeafReader(DirectoryReader.open(dir1));
-    LeafReader ir2 = getOnlyLeafReader(DirectoryReader.open(dir2));
+    LeafReader ir1 = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir1));
+    LeafReader ir2 = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir2));
     
     // with overlapping
     ParallelLeafReader pr = new ParallelLeafReader(false,
@@ -226,11 +230,14 @@ public class TestParallelLeafReader extends LuceneTestCase {
     pr.close();
     
     // no main readers
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new ParallelLeafReader(true,
         new LeafReader[0],
         new LeafReader[] {ir1});
-    });
+      fail("didn't get expected exception: need a non-empty main-reader array");
+    } catch (IllegalArgumentException iae) {
+      // pass
+    }
     
     dir1.close();
     dir2.close();
@@ -278,8 +285,8 @@ public class TestParallelLeafReader extends LuceneTestCase {
     dir1 = getDir1(random);
     dir2 = getDir2(random);
     ParallelLeafReader pr = new ParallelLeafReader(
-        getOnlyLeafReader(DirectoryReader.open(dir1)),
-        getOnlyLeafReader(DirectoryReader.open(dir2)));
+        SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir1)),
+        SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir2)));
     TestUtil.checkReader(pr);
     return newSearcher(pr);
   }
@@ -295,7 +302,6 @@ public class TestParallelLeafReader extends LuceneTestCase {
     d2.add(newTextField("f1", "v2", Field.Store.YES));
     d2.add(newTextField("f2", "v2", Field.Store.YES));
     w1.addDocument(d2);
-    w1.forceMerge(1);
     w1.close();
     return dir1;
   }
@@ -311,90 +317,8 @@ public class TestParallelLeafReader extends LuceneTestCase {
     d4.add(newTextField("f3", "v2", Field.Store.YES));
     d4.add(newTextField("f4", "v2", Field.Store.YES));
     w2.addDocument(d4);
-    w2.forceMerge(1);
     w2.close();
     return dir2;
   }
 
-  // not ok to have one leaf w/ index sort and another with a different index sort
-  public void testWithIndexSort1() throws Exception {
-    Directory dir1 = newDirectory();
-    IndexWriterConfig iwc1 = newIndexWriterConfig(new MockAnalyzer(random()));
-    iwc1.setIndexSort(new Sort(new SortField("foo", SortField.Type.INT)));
-    IndexWriter w1 = new IndexWriter(dir1, iwc1);
-    w1.addDocument(new Document());
-    w1.commit();
-    w1.addDocument(new Document());
-    w1.forceMerge(1);
-    w1.close();
-    IndexReader r1 = DirectoryReader.open(dir1);
-
-    Directory dir2 = newDirectory();
-    IndexWriterConfig iwc2 = newIndexWriterConfig(new MockAnalyzer(random()));
-    iwc2.setIndexSort(new Sort(new SortField("bar", SortField.Type.INT)));
-    IndexWriter w2 = new IndexWriter(dir2, iwc2);
-    w2.addDocument(new Document());
-    w2.commit();
-    w2.addDocument(new Document());
-    w2.forceMerge(1);
-    w2.close();
-    IndexReader r2 = DirectoryReader.open(dir2);
-
-    String message = expectThrows(IllegalArgumentException.class, () -> {
-        new ParallelLeafReader(getOnlyLeafReader(r1), getOnlyLeafReader(r2));
-      }).getMessage();
-    assertEquals("cannot combine LeafReaders that have different index sorts: saw both sort=<int: \"foo\"> and <int: \"bar\">", message);
-    IOUtils.close(r1, dir1, r2, dir2);
-  }
-
-  // ok to have one leaf w/ index sort and the other with no sort
-  public void testWithIndexSort2() throws Exception {
-    Directory dir1 = newDirectory();
-    IndexWriterConfig iwc1 = newIndexWriterConfig(new MockAnalyzer(random()));
-    iwc1.setIndexSort(new Sort(new SortField("foo", SortField.Type.INT)));
-    IndexWriter w1 = new IndexWriter(dir1, iwc1);
-    w1.addDocument(new Document());
-    w1.commit();
-    w1.addDocument(new Document());
-    w1.forceMerge(1);
-    w1.close();
-    IndexReader r1 = DirectoryReader.open(dir1);
-
-    Directory dir2 = newDirectory();
-    IndexWriterConfig iwc2 = newIndexWriterConfig(new MockAnalyzer(random()));
-    IndexWriter w2 = new IndexWriter(dir2, iwc2);
-    w2.addDocument(new Document());
-    w2.addDocument(new Document());
-    w2.close();
-
-    IndexReader r2 = DirectoryReader.open(dir2);
-    new ParallelLeafReader(false, getOnlyLeafReader(r1), getOnlyLeafReader(r2)).close();
-    new ParallelLeafReader(false, getOnlyLeafReader(r2), getOnlyLeafReader(r1)).close();
-    IOUtils.close(r1, dir1, r2, dir2);
-  }
-
-  public void testWithDocValuesUpdates() throws Exception {
-    Directory dir1 = newDirectory();
-    IndexWriterConfig iwc1 = newIndexWriterConfig(new MockAnalyzer(random()));
-    IndexWriter w1 = new IndexWriter(dir1, iwc1);
-    Document d = new Document();
-    d.add(newTextField("name", "billy", Field.Store.NO));
-    d.add(new NumericDocValuesField("age", 21));
-    w1.addDocument(d);
-    w1.commit();
-    w1.updateNumericDocValue(new Term("name", "billy"), "age", 22);
-    w1.close();
-
-    IndexReader r1 = DirectoryReader.open(dir1);
-    LeafReader lr = new ParallelLeafReader(false, getOnlyLeafReader(r1));
-
-    NumericDocValues dv = lr.getNumericDocValues("age");
-    assertEquals(0, dv.nextDoc());
-    assertEquals(22, dv.longValue());
-
-    assertEquals(1, lr.getFieldInfos().fieldInfo("age").getDocValuesGen());
-
-    IOUtils.close(lr, r1, dir1);
-
-  }
 }

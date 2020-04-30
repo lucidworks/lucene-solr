@@ -1,3 +1,5 @@
+package org.apache.lucene.search.join;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,20 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.join;
 
-import java.io.IOException;
-import java.util.Objects;
-
+import org.apache.lucene.index.FilteredTermsEnum;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.MultiTermQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.AttributeSource;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefHash;
-import org.apache.lucene.util.RamUsageEstimator;
+import org.apache.lucene.util.ToStringUtils;
+
+import java.io.IOException;
+import java.util.Comparator;
 
 /**
  * A query that has an array of terms from a specific field. This query will match documents have one or more terms in
@@ -35,44 +36,21 @@ import org.apache.lucene.util.RamUsageEstimator;
  *
  * @lucene.experimental
  */
-class TermsQuery extends MultiTermQuery implements Accountable {
-  private static final long BASE_RAM_BYTES = RamUsageEstimator.shallowSizeOfInstance(TermsQuery.class);
+class TermsQuery extends MultiTermQuery {
 
   private final BytesRefHash terms;
   private final int[] ords;
-
-  // These fields are used for equals() and hashcode() only
-  private final String fromField;
-  private final Query fromQuery;
-  // id of the context rather than the context itself in order not to hold references to index readers
-  private final Object indexReaderContextId;
-
-  private final long ramBytesUsed; // cache
+  private final Query fromQuery; // Used for equals() only
 
   /**
-   * @param toField               The field that should contain terms that are specified in the next parameter.
-   * @param terms                 The terms that matching documents should have. The terms must be sorted by natural order.
-   * @param indexReaderContextId  Refers to the top level index reader used to create the set of terms in the previous parameter.
+   * @param field The field that should contain terms that are specified in the previous parameter
+   * @param terms The terms that matching documents should have. The terms must be sorted by natural order.
    */
-  TermsQuery(String toField, BytesRefHash terms, String fromField, Query fromQuery, Object indexReaderContextId) {
-    super(toField);
-    this.terms = terms;
-    ords = terms.sort();
-    this.fromField = fromField;
+  TermsQuery(String field, Query fromQuery, BytesRefHash terms) {
+    super(field);
     this.fromQuery = fromQuery;
-    this.indexReaderContextId = indexReaderContextId;
-
-    this.ramBytesUsed = BASE_RAM_BYTES +
-        RamUsageEstimator.sizeOfObject(field) +
-        RamUsageEstimator.sizeOfObject(fromField) +
-        RamUsageEstimator.sizeOfObject(fromQuery, RamUsageEstimator.QUERY_DEFAULT_RAM_BYTES_USED) +
-        RamUsageEstimator.sizeOfObject(ords) +
-        RamUsageEstimator.sizeOfObject(terms);
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    visitor.visitLeaf(this);
+    this.terms = terms;
+    ords = terms.sort(BytesRef.getUTF8SortedAsUnicodeComparator());
   }
 
   @Override
@@ -88,8 +66,7 @@ class TermsQuery extends MultiTermQuery implements Accountable {
   public String toString(String string) {
     return "TermsQuery{" +
         "field=" + field +
-        "fromQuery=" + fromQuery.toString(field) +
-        '}';
+        '}' + ToStringUtils.boost(getBoost());
   }
 
   @Override
@@ -103,19 +80,90 @@ class TermsQuery extends MultiTermQuery implements Accountable {
     }
 
     TermsQuery other = (TermsQuery) obj;
-    return Objects.equals(field, other.field) &&
-        Objects.equals(fromField, other.fromField) &&
-        Objects.equals(fromQuery, other.fromQuery) &&
-        Objects.equals(indexReaderContextId, other.indexReaderContextId);
+    if (!fromQuery.equals(other.fromQuery)) {
+      return false;
+    }
+    return true;
   }
 
   @Override
   public int hashCode() {
-    return classHash() + Objects.hash(field, fromField, fromQuery, indexReaderContextId);
+    final int prime = 31;
+    int result = super.hashCode();
+    result += prime * fromQuery.hashCode();
+    return result;
   }
 
-  @Override
-  public long ramBytesUsed() {
-    return ramBytesUsed;
+  static class SeekingTermSetTermsEnum extends FilteredTermsEnum {
+
+    private final BytesRefHash terms;
+    private final int[] ords;
+    private final int lastElement;
+
+    private final BytesRef lastTerm;
+    private final BytesRef spare = new BytesRef();
+    private final Comparator<BytesRef> comparator;
+
+    private BytesRef seekTerm;
+    private int upto = 0;
+
+    SeekingTermSetTermsEnum(TermsEnum tenum, BytesRefHash terms, int[] ords) {
+      super(tenum);
+      this.terms = terms;
+      this.ords = ords;
+      comparator = BytesRef.getUTF8SortedAsUnicodeComparator();
+      lastElement = terms.size() - 1;
+      lastTerm = terms.get(ords[lastElement], new BytesRef());
+      seekTerm = terms.get(ords[upto], spare);
+    }
+
+    @Override
+    protected BytesRef nextSeekTerm(BytesRef currentTerm) throws IOException {
+      BytesRef temp = seekTerm;
+      seekTerm = null;
+      return temp;
+    }
+
+    @Override
+    protected AcceptStatus accept(BytesRef term) throws IOException {
+      if (comparator.compare(term, lastTerm) > 0) {
+        return AcceptStatus.END;
+      }
+
+      BytesRef currentTerm = terms.get(ords[upto], spare);
+      if (comparator.compare(term, currentTerm) == 0) {
+        if (upto == lastElement) {
+          return AcceptStatus.YES;
+        } else {
+          seekTerm = terms.get(ords[++upto], spare);
+          return AcceptStatus.YES_AND_SEEK;
+        }
+      } else {
+        if (upto == lastElement) {
+          return AcceptStatus.NO;
+        } else { // Our current term doesn't match the the given term.
+          int cmp;
+          do { // We maybe are behind the given term by more than one step. Keep incrementing till we're the same or higher.
+            if (upto == lastElement) {
+              return AcceptStatus.NO;
+            }
+            // typically the terms dict is a superset of query's terms so it's unusual that we have to skip many of
+            // our terms so we don't do a binary search here
+            seekTerm = terms.get(ords[++upto], spare);
+          } while ((cmp = comparator.compare(seekTerm, term)) < 0);
+          if (cmp == 0) {
+            if (upto == lastElement) {
+              return AcceptStatus.YES;
+            }
+            seekTerm = terms.get(ords[++upto], spare);
+            return AcceptStatus.YES_AND_SEEK;
+          } else {
+            return AcceptStatus.NO_AND_SEEK;
+          }
+        }
+      }
+    }
+
   }
+
 }

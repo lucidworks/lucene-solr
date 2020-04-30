@@ -14,19 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.admin;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
 import java.util.Arrays;
 
-import com.codahale.metrics.Gauge;
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.common.util.SimpleOrderedMap;
-import org.apache.solr.util.stats.MetricUtils;
 
 
-public class SystemInfoHandlerTest extends SolrTestCase {
+public class SystemInfoHandlerTest extends LuceneTestCase {
 
   public void testMagickGetter() throws Exception {
 
@@ -38,11 +37,9 @@ public class SystemInfoHandlerTest extends SolrTestCase {
     info.add( "version", os.getVersion() );
     info.add( "arch", os.getArch() );
 
-    // make another using MetricUtils.addMXBeanMetrics()
+    // make another using addMXBeanProperties() 
     SimpleOrderedMap<Object> info2 = new SimpleOrderedMap<>();
-    MetricUtils.addMXBeanMetrics( os, OperatingSystemMXBean.class, null, (k, v) -> {
-      info2.add(k, ((Gauge)v).getValue());
-    } );
+    SystemInfoHandler.addMXBeanProperties( os, OperatingSystemMXBean.class, info2 );
 
     // make sure they got the same thing
     for (String p : Arrays.asList("name", "version", "arch")) {

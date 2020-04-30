@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -27,11 +28,11 @@ import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.Utils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
 import org.junit.rules.TestRule;
+import org.noggit.JSONUtil;
 
 public class TestConfigSetProperties extends SolrTestCaseJ4 {
 
@@ -46,30 +47,34 @@ public class TestConfigSetProperties extends SolrTestCaseJ4 {
 
   @Test
   public void testEmptyConfigSetProperties() throws Exception {
-    SolrException thrown = expectThrows(SolrException.class, () -> {
+    try {
       createConfigSetProps("");
-    });
-    assertEquals(ErrorCode.SERVER_ERROR.code, thrown.code());
+      fail("Excepted SolrException");
+    } catch (SolrException ex) {
+      assertEquals(ErrorCode.SERVER_ERROR.code, ex.code());
+    }
   }
 
   @Test
   public void testConfigSetPropertiesNotMap() throws Exception {
-    SolrException thrown = expectThrows(SolrException.class, () -> {
-      createConfigSetProps(Utils.toJSONString(new String[] {"test"}));
-    });
-    assertEquals(ErrorCode.SERVER_ERROR.code, thrown.code());
+    try {
+      createConfigSetProps(JSONUtil.toJSON(new String[] {"test"}));
+      fail("Expected SolrException");
+    } catch (SolrException ex) {
+      assertEquals(ErrorCode.SERVER_ERROR.code, ex.code());
+    }
   }
 
   @Test
   public void testEmptyMap() throws Exception {
-    NamedList list = createConfigSetProps(Utils.toJSONString(ImmutableMap.of()));
+    NamedList list = createConfigSetProps(JSONUtil.toJSON(ImmutableMap.of()));
     assertEquals(0, list.size());
   }
 
   @Test
   public void testMultipleProps() throws Exception {
     Map map = ImmutableMap.of("immutable", "true", "someOtherProp", "true");
-    NamedList list = createConfigSetProps(Utils.toJSONString(map));
+    NamedList list = createConfigSetProps(JSONUtil.toJSON(map));
     assertEquals(2, list.size());
     assertEquals("true", list.get("immutable"));
     assertEquals("true", list.get("someOtherProp"));

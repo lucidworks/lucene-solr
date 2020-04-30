@@ -129,10 +129,10 @@ import org.slf4j.LoggerFactory;
  * <code>fieldRegex</code> selector and a destination <code>pattern</code>, a "short hand" syntax 
  * is support for convinience: The <code>pattern</code> and <code>replacement</code> may be specified 
  * at the top level, omitting <code>source</code> and <code>dest</code> declarations completely, and 
- * the <code>pattern</code> will be used to construct an equivalent <code>source</code> selector internally.
+ * the <code>pattern</code> will be used to construct an equivilent <code>source</code> selector internally.
  * </p>
  * <p>
- * For example, both of the following configurations are equivalent:
+ * For example, both of the following configurations are equivilent:
  * </p>
  * <pre class="prettyprint">
  * &lt;!-- full syntax --&gt;
@@ -161,7 +161,6 @@ import org.slf4j.LoggerFactory;
  * </p>
  * 
  * @see FieldValueSubsetUpdateProcessorFactory
- * @since 4.0.0
  */
 public class CloneFieldUpdateProcessorFactory 
   extends UpdateRequestProcessorFactory implements SolrCoreAware {
@@ -188,7 +187,6 @@ public class CloneFieldUpdateProcessorFactory
   /** @see #dest */
   private Pattern pattern = null;
 
-  @SuppressWarnings("WeakerAccess")
   protected final FieldNameSelector getSourceSelector() {
     if (null != srcSelector) return srcSelector;
 
@@ -452,14 +450,15 @@ public class CloneFieldUpdateProcessorFactory
           }
 
           for (Object val : srcFieldValues) {
-            destField.addValue(val);
+            // preserve existing dest boost (multiplicitive), ignore src boost
+            destField.addValue(val, 1.0f);
           }
           // put it in map to avoid concurrent modification...
           destMap.put(resolvedDest, destField);
         }
 
-        for (Map.Entry<String, SolrInputField> entry : destMap.entrySet()) {
-          doc.put(entry.getKey(), entry.getValue());
+        for (String dest : destMap.keySet()) {
+          doc.put(dest, destMap.get(dest));
         }
         super.processAdd(cmd);
       }

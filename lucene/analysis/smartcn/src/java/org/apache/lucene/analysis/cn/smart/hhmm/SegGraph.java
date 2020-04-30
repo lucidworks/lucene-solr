@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.analysis.cn.smart.hhmm;
 
 import java.util.ArrayList;
@@ -136,7 +137,7 @@ class SegGraph {
     List<SegToken> tokenList = this.toTokenList();
     StringBuilder sb = new StringBuilder();
     for (SegToken t : tokenList) {
-      sb.append(t).append("\n");
+      sb.append(t + "\n");
     }
     return sb.toString();
   }

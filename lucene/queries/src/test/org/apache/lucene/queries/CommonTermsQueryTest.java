@@ -1,3 +1,5 @@
+package org.apache.lucene.queries;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -32,8 +33,9 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.RandomIndexWriter;
+import org.apache.lucene.index.SlowCompositeReaderWrapper;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.BooleanClause.Occur;
@@ -46,7 +48,6 @@ import org.apache.lucene.search.QueryUtils;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.search.similarities.BM25Similarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
@@ -85,7 +86,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       query.add(new Term("field", "universe"));
       query.add(new Term("field", "right"));
       TopDocs search = s.search(query, 10);
-      assertEquals(search.totalHits.value, 3);
+      assertEquals(search.totalHits, 3);
       assertEquals("0", r.document(search.scoreDocs[0].doc).get("id"));
       assertEquals("2", r.document(search.scoreDocs[1].doc).get("id"));
       assertEquals("3", r.document(search.scoreDocs[2].doc).get("id"));
@@ -98,7 +99,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       query.add(new Term("field", "this"));
       query.add(new Term("field", "end"));
       TopDocs search = s.search(query, 10);
-      assertEquals(search.totalHits.value, 2);
+      assertEquals(search.totalHits, 2);
       assertEquals("0", r.document(search.scoreDocs[0].doc).get("id"));
       assertEquals("2", r.document(search.scoreDocs[1].doc).get("id"));
     }
@@ -112,7 +113,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       query.add(new Term("field", "world"));
       
       TopDocs search = s.search(query, 10);
-      assertEquals(search.totalHits.value, 1);
+      assertEquals(search.totalHits, 1);
       assertEquals("0", r.document(search.scoreDocs[0].doc).get("id"));
     }
     
@@ -123,7 +124,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       query.add(new Term("field", "universe"));
       
       TopDocs search = s.search(query, 10);
-      assertEquals(search.totalHits.value, 1);
+      assertEquals(search.totalHits, 1);
       assertEquals("3", r.document(search.scoreDocs[0].doc).get("id"));
       
     }
@@ -132,7 +133,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
   
   public void testEqualsHashCode() {
     CommonTermsQuery query = new CommonTermsQuery(randomOccur(random()),
-        randomOccur(random()), random().nextFloat());
+        randomOccur(random()), random().nextFloat(), random().nextBoolean());
     int terms = atLeast(2);
     for (int i = 0; i < terms; i++) {
       query.add(new Term(TestUtil.randomRealisticUnicodeString(random()),
@@ -140,14 +141,14 @@ public class CommonTermsQueryTest extends LuceneTestCase {
     }
     QueryUtils.checkHashEquals(query);
     QueryUtils.checkUnequal(new CommonTermsQuery(randomOccur(random()),
-        randomOccur(random()), random().nextFloat()),
+        randomOccur(random()), random().nextFloat(), random().nextBoolean()),
         query);
     
     {
       final long seed = random().nextLong();
       Random r = new Random(seed);
       CommonTermsQuery left = new CommonTermsQuery(randomOccur(r),
-          randomOccur(r), r.nextFloat());
+          randomOccur(r), r.nextFloat(), r.nextBoolean());
       int leftTerms = atLeast(r, 2);
       for (int i = 0; i < leftTerms; i++) {
         left.add(new Term(TestUtil.randomRealisticUnicodeString(r), TestUtil
@@ -158,7 +159,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       
       r = new Random(seed);
       CommonTermsQuery right = new CommonTermsQuery(randomOccur(r),
-          randomOccur(r), r.nextFloat());
+          randomOccur(r), r.nextFloat(), r.nextBoolean());
       int rightTerms = atLeast(r, 2);
       for (int i = 0; i < rightTerms; i++) {
         right.add(new Term(TestUtil.randomRealisticUnicodeString(r), TestUtil
@@ -178,10 +179,12 @@ public class CommonTermsQueryTest extends LuceneTestCase {
     Random random = random();
     CommonTermsQuery query = new CommonTermsQuery(randomOccur(random),
         randomOccur(random), random().nextFloat());
-    // null values are not supported
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       query.add(null);
-    });
+      fail("null values are not supported");
+    } catch (IllegalArgumentException ex) {
+      
+    }
   }
   
   public void testMinShouldMatch() throws IOException {
@@ -212,7 +215,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       query.add(new Term("field", "right"));
       query.setLowFreqMinimumNumberShouldMatch(0.5f);
       TopDocs search = s.search(query, 10);
-      assertEquals(search.totalHits.value, 1);
+      assertEquals(search.totalHits, 1);
       assertEquals("0", r.document(search.scoreDocs[0].doc).get("id"));
     }
     {
@@ -226,7 +229,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       query.add(new Term("field", "right"));
       query.setLowFreqMinimumNumberShouldMatch(2.0f);
       TopDocs search = s.search(query, 10);
-      assertEquals(search.totalHits.value, 1);
+      assertEquals(search.totalHits, 1);
       assertEquals("0", r.document(search.scoreDocs[0].doc).get("id"));
     }
     
@@ -241,7 +244,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       query.add(new Term("field", "right"));
       query.setLowFreqMinimumNumberShouldMatch(0.49f);
       TopDocs search = s.search(query, 10);
-      assertEquals(search.totalHits.value, 3);
+      assertEquals(search.totalHits, 3);
       assertEquals("0", r.document(search.scoreDocs[0].doc).get("id"));
       assertEquals("2", r.document(search.scoreDocs[1].doc).get("id"));
       assertEquals("3", r.document(search.scoreDocs[2].doc).get("id"));
@@ -258,11 +261,11 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       query.add(new Term("field", "right"));
       query.setLowFreqMinimumNumberShouldMatch(1.0f);
       TopDocs search = s.search(query, 10);
-      assertEquals(search.totalHits.value, 3);
+      assertEquals(search.totalHits, 3);
       assertEquals("0", r.document(search.scoreDocs[0].doc).get("id"));
       assertEquals("2", r.document(search.scoreDocs[1].doc).get("id"));
       assertEquals("3", r.document(search.scoreDocs[2].doc).get("id"));
-      assertTrue(search.scoreDocs[1].score >= search.scoreDocs[2].score);
+      assertTrue(search.scoreDocs[1].score > search.scoreDocs[2].score);
     }
     
     {
@@ -277,7 +280,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       query.setLowFreqMinimumNumberShouldMatch(1.0f);
       query.setHighFreqMinimumNumberShouldMatch(4.0f);
       TopDocs search = s.search(query, 10);
-      assertEquals(search.totalHits.value, 3);
+      assertEquals(search.totalHits, 3);
       assertEquals(search.scoreDocs[1].score, search.scoreDocs[2].score, 0.0f);
       assertEquals("0", r.document(search.scoreDocs[0].doc).get("id"));
       // doc 2 and 3 only get a score from low freq terms
@@ -298,7 +301,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       query.setLowFreqMinimumNumberShouldMatch(1.0f);
       query.setHighFreqMinimumNumberShouldMatch(2.0f);
       TopDocs search = s.search(query, 10);
-      assertEquals(search.totalHits.value, 4);
+      assertEquals(search.totalHits, 4);
     }
     
     {
@@ -311,7 +314,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       query.setLowFreqMinimumNumberShouldMatch(1.0f);
       query.setHighFreqMinimumNumberShouldMatch(2.0f);
       TopDocs search = s.search(query, 10);
-      assertEquals(search.totalHits.value, 2);
+      assertEquals(search.totalHits, 2);
       assertEquals(
           new HashSet<>(Arrays.asList("0", "2")),
           new HashSet<>(Arrays.asList(
@@ -321,19 +324,23 @@ public class CommonTermsQueryTest extends LuceneTestCase {
     IOUtils.close(r, w, dir, analyzer);
   }
   
-  /** MUST_NOT is not supported */
   public void testIllegalOccur() {
     Random random = random();
     
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new CommonTermsQuery(Occur.MUST_NOT, randomOccur(random), random()
           .nextFloat());
-    });
+      fail("MUST_NOT is not supproted");
+    } catch (IllegalArgumentException ex) {
       
-    expectThrows(IllegalArgumentException.class, () -> {
+    }
+    try {
       new CommonTermsQuery(randomOccur(random), Occur.MUST_NOT, random()
           .nextFloat());
-    });
+      fail("MUST_NOT is not supproted");
+    } catch (IllegalArgumentException ex) {
+      
+    }
   }
 
   @Test
@@ -354,9 +361,6 @@ public class CommonTermsQueryTest extends LuceneTestCase {
 
     IndexReader r = w.getReader();
     IndexSearcher s = newSearcher(r);
-    // don't use a randomized similarity, e.g. stopwords for DFI can get scored as 0,
-    // so boosting them is kind of crazy
-    s.setSimilarity(new BM25Similarity());
     {
       CommonTermsQuery query = new CommonTermsQuery(Occur.SHOULD, Occur.SHOULD,
           random().nextBoolean() ? 2.0f : 0.5f);
@@ -367,7 +371,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       query.add(new Term("field", "universe"));
       query.add(new Term("field", "right"));
       TopDocs search = s.search(query, 10);
-      assertEquals(search.totalHits.value, 3);
+      assertEquals(search.totalHits, 3);
       assertEquals("0", r.document(search.scoreDocs[0].doc).get("id"));
       assertEquals("2", r.document(search.scoreDocs[1].doc).get("id"));
       assertEquals("3", r.document(search.scoreDocs[2].doc).get("id"));
@@ -384,7 +388,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       query.add(new Term("field", "universe"));
       query.add(new Term("field", "right"));
       TopDocs search = s.search(query, 10);
-      assertEquals(search.totalHits.value, 3);
+      assertEquals(search.totalHits, 3);
       assertEquals("2", r.document(search.scoreDocs[0].doc).get("id"));
       assertEquals("3", r.document(search.scoreDocs[1].doc).get("id"));
       assertEquals("0", r.document(search.scoreDocs[2].doc).get("id"));
@@ -398,9 +402,8 @@ public class CommonTermsQueryTest extends LuceneTestCase {
     analyzer.setMaxTokenLength(TestUtil.nextInt(random(), 1, IndexWriter.MAX_TERM_LENGTH));
     RandomIndexWriter w = new RandomIndexWriter(random(), dir, analyzer);
     createRandomIndex(atLeast(50), w, random().nextLong());
-    w.forceMerge(1);
     DirectoryReader reader = w.getReader();
-    LeafReader wrapper = getOnlyLeafReader(reader);
+    LeafReader wrapper = SlowCompositeReaderWrapper.wrap(reader);
     String field = "body";
     Terms terms = wrapper.terms(field);
     PriorityQueue<TermAndFreq> lowFreqQueue = new PriorityQueue<CommonTermsQueryTest.TermAndFreq>(
@@ -453,7 +456,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       Occur lowFreqOccur = randomOccur(random());
       BooleanQuery.Builder verifyQuery = new BooleanQuery.Builder();
       CommonTermsQuery cq = new CommonTermsQuery(randomOccur(random()),
-          lowFreqOccur, highFreq - 1);
+          lowFreqOccur, highFreq - 1, random().nextBoolean());
       for (TermAndFreq termAndFreq : lowTerms) {
         cq.add(new Term(field, termAndFreq.term));
         verifyQuery.add(new BooleanClause(new TermQuery(new Term(field,
@@ -466,7 +469,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       TopDocs cqSearch = searcher.search(cq, reader.maxDoc());
       
       TopDocs verifySearch = searcher.search(verifyQuery.build(), reader.maxDoc());
-      assertEquals(verifySearch.totalHits.value, cqSearch.totalHits.value);
+      assertEquals(verifySearch.totalHits, cqSearch.totalHits);
       Set<Integer> hits = new HashSet<>();
       for (ScoreDoc doc : verifySearch.scoreDocs) {
         hits.add(doc.doc);
@@ -489,7 +492,7 @@ public class CommonTermsQueryTest extends LuceneTestCase {
       QueryUtils.check(random(), cq, newSearcher(reader2));
       reader2.close();
     } finally {
-      IOUtils.close(reader, w, dir, analyzer);
+      IOUtils.close(reader, wrapper, w, dir, analyzer);
     }
     
   }
@@ -541,8 +544,8 @@ public class CommonTermsQueryTest extends LuceneTestCase {
     }
 
     @Override
-    protected Query newTermQuery(Term term, TermStates termStates) {
-      Query query = super.newTermQuery(term, termStates);
+    protected Query newTermQuery(Term term, TermContext context) {
+      Query query = super.newTermQuery(term, context);
       if (term.text().equals("universe")) {
         query = new BoostQuery(query, 100f);
       }

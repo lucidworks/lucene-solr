@@ -1,3 +1,6 @@
+package org.apache.solr.spelling;
+
+import org.apache.lucene.search.spell.StringDistance;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +17,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling;
 
 import java.io.File;
 import java.io.IOException;
@@ -23,21 +25,27 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.search.spell.Dictionary;
-import org.apache.lucene.search.spell.LevenshteinDistance;
-import org.apache.lucene.search.spell.SpellChecker;
-import org.apache.lucene.search.spell.StringDistance;
+import org.apache.lucene.search.spell.SuggestMode;
 import org.apache.lucene.search.spell.SuggestWord;
 import org.apache.lucene.search.spell.SuggestWordFrequencyComparator;
 import org.apache.lucene.search.spell.SuggestWordQueue;
+
+import org.apache.lucene.analysis.Token;
+import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.search.spell.Dictionary;
+import org.apache.lucene.search.spell.LevensteinDistance;
+import org.apache.lucene.search.spell.SpellChecker;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
-import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.store.RAMDirectory;
+import org.apache.solr.common.params.ShardParams;
+import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.params.SpellingParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.SolrCore;
+import org.apache.solr.schema.FieldType;
 import org.apache.solr.search.SolrIndexSearcher;
 
 
@@ -109,7 +117,7 @@ public abstract class AbstractLuceneSpellChecker extends SolrSpellChecker {
       sd = core.getResourceLoader().newInstance(strDistanceName, StringDistance.class);
       //TODO: Figure out how to configure options.  Where's Spring when you need it?  Or at least BeanUtils...
     } else {
-      sd = new LevenshteinDistance();
+      sd = new LevensteinDistance();
     }
     try {
       initIndex();
@@ -217,12 +225,7 @@ public abstract class AbstractLuceneSpellChecker extends SolrSpellChecker {
    */
   protected void initIndex() throws IOException {
     if (indexDir != null) {
-      // TODO: this is a workaround for SpellChecker repeatedly closing and opening a new IndexWriter while leaving readers open, which on
-      // Windows causes problems because deleted files can't be opened.  It would be better for SpellChecker to hold a single IW instance,
-      // and close it on close, but Solr never seems to close its spell checkers.  Wrapping as FilterDirectory prevents IndexWriter from
-      // catching the pending deletions:
-      index = new FilterDirectory(FSDirectory.open(new File(indexDir).toPath())) {
-      };
+      index = FSDirectory.open(new File(indexDir).toPath());
     } else {
       index = new RAMDirectory();
     }

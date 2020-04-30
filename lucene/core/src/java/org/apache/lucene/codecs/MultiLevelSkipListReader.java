@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs;
-
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -40,8 +40,8 @@ public abstract class MultiLevelSkipListReader implements Closeable {
   /** the maximum number of skip levels possible for this index */
   protected int maxNumberOfSkipLevels; 
   
-  /** number of levels in this skip list */
-  protected int numberOfSkipLevels;
+  // number of levels in this skip list
+  private int numberOfSkipLevels;
   
   // Expert: defines the number of top skip levels to buffer in memory.
   // Reducing this number results in less memory usage, but possibly
@@ -63,9 +63,7 @@ public abstract class MultiLevelSkipListReader implements Closeable {
   /**  skipInterval of each level. */
   private int skipInterval[];
 
-  /** Number of docs skipped per level.
-   * It's possible for some values to overflow a signed int, but this has been accounted for.
-   */
+  /** Number of docs skipped per level. */
   private int[] numSkipped;
 
   /** Doc id of current skip entry per level. */
@@ -152,9 +150,8 @@ public abstract class MultiLevelSkipListReader implements Closeable {
     setLastSkipData(level);
       
     numSkipped[level] += skipInterval[level];
-
-    // numSkipped may overflow a signed int, so compare as unsigned.
-    if (Integer.compareUnsigned(numSkipped[level], docCount) > 0) {
+      
+    if (numSkipped[level] > docCount) {
       // this skip list is exhausted
       skipDoc[level] = Integer.MAX_VALUE;
       if (numberOfSkipLevels > level) numberOfSkipLevels = level; 

@@ -1,3 +1,5 @@
+package org.apache.solr.common;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common;
 
 public class StringUtils {
   
   public static boolean isEmpty(String s) {
     return (s == null) || s.isEmpty();
-  }
-
-  /**
-   * A "null-safe" equals method.  Returns true if the two provided references are both null, or if they are string-equal.
-   */
-  public static boolean equals(String first, String second) {
-    if (first == null) {
-      return second == null;
-    }
-    return first.equals(second);
   }
 
 }

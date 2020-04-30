@@ -28,8 +28,6 @@
   <directoryFactory name="DirectoryFactory"
                     class="${solr.directoryFactory:solr.NRTCachingDirectoryFactory}"/>
 
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
-
   <luceneMatchVersion>${tests.luceneMatchVersion:LATEST}</luceneMatchVersion>
 
   <updateHandler class="solr.DirectUpdateHandler2">

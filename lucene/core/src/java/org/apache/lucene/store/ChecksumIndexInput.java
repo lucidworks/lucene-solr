@@ -1,3 +1,7 @@
+package org.apache.lucene.store;
+
+import java.io.IOException;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +18,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
-import java.io.IOException;
-
 
 /** 
  * Extension of IndexInput, computing checksum as it goes. 

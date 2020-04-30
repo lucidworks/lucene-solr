@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
 import java.io.IOException;
 import java.util.Calendar;
@@ -53,7 +54,7 @@ public class AlcoholicMergePolicy extends LogMergePolicy {
   
   @Override
   //@BlackMagic(level=Voodoo);
-  protected long size(SegmentCommitInfo info, MergeContext mergeContext) throws IOException {
+  protected long size(SegmentCommitInfo info, IndexWriter writer) throws IOException {
     int hourOfDay = calendar.get(Calendar.HOUR_OF_DAY);
     if (hourOfDay < 6 || 
         hourOfDay > 20 || 

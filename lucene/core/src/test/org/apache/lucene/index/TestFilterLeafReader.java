@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 
 import java.io.IOException;
@@ -29,12 +29,23 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.BaseDirectoryWrapper;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.LuceneTestCase;
 
 public class TestFilterLeafReader extends LuceneTestCase {
 
   private static class TestReader extends FilterLeafReader {
+
+    /** Filter that only permits terms containing 'e'.*/
+    private static class TestFields extends FilterFields {
+      TestFields(Fields in) {
+        super(in);
+      }
+
+      @Override
+      public Terms terms(String field) throws IOException {
+        return new TestTerms(super.terms(field));
+      }
+    }
 
     private static class TestTerms extends FilterTerms {
       TestTerms(Terms in) {
@@ -87,45 +98,13 @@ public class TestFilterLeafReader extends LuceneTestCase {
       }
     }
     
-    public TestReader(LeafReader reader) throws IOException {
-      super(reader);
+    public TestReader(IndexReader reader) throws IOException {
+      super(SlowCompositeReaderWrapper.wrap(reader));
     }
 
     @Override
-    public Terms terms(String field) throws IOException {
-      Terms terms = super.terms(field);
-      return terms==null ? null : new TestTerms(terms);
-    }
-
-    @Override
-    public NumericDocValues getNormValues(String field) throws IOException {
-      NumericDocValues ndv = super.getNormValues(field);
-      if (ndv == null) {
-        return null;
-      }
-      FixedBitSet docsWithTerms = new FixedBitSet(maxDoc());
-      TermsEnum termsEnum = terms(field).iterator();
-      PostingsEnum postings = null;
-      while (termsEnum.next() != null) {
-        postings = termsEnum.postings(postings, PostingsEnum.NONE);
-        docsWithTerms.or(postings);
-      }
-      return new FilterNumericDocValues(ndv) {
-        @Override
-        public long longValue() throws IOException {
-          return docsWithTerms.get(docID()) ? super.longValue() : 0L;
-        }
-      };
-    }
-
-    @Override
-    public CacheHelper getCoreCacheHelper() {
-      return null;
-    }
-
-    @Override
-    public CacheHelper getReaderCacheHelper() {
-      return null;
+    public Fields fields() throws IOException {
+      return new TestFields(super.fields());
     }
   }
     
@@ -149,7 +128,7 @@ public class TestFilterLeafReader extends LuceneTestCase {
     Document d3 = new Document();
     d3.add(newTextField("default", "two four", Field.Store.YES));
     writer.addDocument(d3);
-    writer.forceMerge(1);
+
     writer.close();
 
     Directory target = newDirectory();
@@ -158,13 +137,13 @@ public class TestFilterLeafReader extends LuceneTestCase {
     ((BaseDirectoryWrapper) target).setCrossCheckTermVectorsOnClose(false);
 
     writer = new IndexWriter(target, newIndexWriterConfig(new MockAnalyzer(random())));
-    try (LeafReader reader = new TestReader(getOnlyLeafReader(DirectoryReader.open(directory)))) {
+    try (LeafReader reader = new TestReader(DirectoryReader.open(directory))) {
       writer.addIndexes(SlowCodecReaderWrapper.wrap(reader));
     }
     writer.close();
     IndexReader reader = DirectoryReader.open(target);
     
-    TermsEnum terms = MultiTerms.getTerms(reader, "default").iterator();
+    TermsEnum terms = MultiFields.getTerms(reader, "default").iterator();
     while (terms.next() != null) {
       assertTrue(terms.term().utf8ToString().indexOf('e') != -1);
     }
@@ -217,16 +196,7 @@ public class TestFilterLeafReader extends LuceneTestCase {
     w.addDocument(new Document());
     DirectoryReader dr = w.getReader();
     LeafReader r = dr.leaves().get(0).reader();
-    FilterLeafReader r2 = new FilterLeafReader(r) {
-      @Override
-      public CacheHelper getCoreCacheHelper() {
-        return in.getCoreCacheHelper();
-      }
-      @Override
-      public CacheHelper getReaderCacheHelper() {
-        return in.getReaderCacheHelper();
-      }
-    };
+    FilterLeafReader r2 = new FilterLeafReader(r);
     assertEquals(r, r2.getDelegate());
     assertEquals(r, FilterLeafReader.unwrap(r2));
     w.close();

@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -45,8 +46,9 @@ import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.AttributeSource;
+import org.apache.lucene.util.BitDocIdSet;
 import org.apache.lucene.util.BitSetIterator;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.IOUtils;
@@ -84,7 +86,7 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
     q.addTransition(s2, s3, "sun");
     q.finish();
 
-    assertEquals(1, s.search(q, 1).totalHits.value);
+    assertEquals(1, s.search(q, 1).totalHits);
 
     w.close();
     r.close();
@@ -117,7 +119,7 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
     q.addTransition(s2, s3, "moon");
     q.finish();
 
-    assertEquals(2, s.search(q, 1).totalHits.value);
+    assertEquals(2, s.search(q, 1).totalHits);
 
     w.close();
     r.close();
@@ -154,7 +156,7 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
     q.addTransition(s2, s3, "sun");
     q.finish();
 
-    assertEquals(2, s.search(q, 1).totalHits.value);
+    assertEquals(2, s.search(q, 1).totalHits);
 
     w.close();
     r.close();
@@ -210,7 +212,7 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
 
     // System.out.println("DOT:\n" + q.toDot());
     
-    assertEquals(4, s.search(q, 1).totalHits.value);
+    assertEquals(4, s.search(q, 1).totalHits);
 
     w.close();
     r.close();
@@ -255,7 +257,61 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
 
     TermAutomatonQuery q = new TokenStreamToTermAutomatonQuery().toQuery("field", ts);
     // System.out.println("DOT: " + q.toDot());
-    assertEquals(4, s.search(q, 1).totalHits.value);
+    assertEquals(4, s.search(q, 1).totalHits);
+
+    w.close();
+    r.close();
+    dir.close();
+  }
+
+  public void testFreq() throws Exception {
+    Directory dir = newDirectory();
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
+    Document doc = new Document();
+    // matches freq == 3
+    doc.add(newTextField("field", "here comes the sun foo bar here comes another sun here comes shiny sun", Field.Store.NO));
+    w.addDocument(doc);
+
+    doc = new Document();
+    // doesn't match
+    doc.add(newTextField("field", "here comes the other sun", Field.Store.NO));
+    w.addDocument(doc);
+    IndexReader r = w.getReader();
+    IndexSearcher s = newSearcher(r);
+
+    TermAutomatonQuery q = new TermAutomatonQuery("field");
+    int init = q.createState();
+    int s1 = q.createState();
+    q.addTransition(init, s1, "comes");
+    int s2 = q.createState();
+    q.addAnyTransition(s1, s2);
+    int s3 = q.createState();
+    q.setAccept(s3, true);
+    q.addTransition(s2, s3, "sun");
+    q.finish();
+
+    s.search(q, new SimpleCollector() {
+        private Scorer scorer;
+
+        @Override
+        public void setScorer(Scorer scorer) {
+          this.scorer = scorer;
+          while (scorer instanceof AssertingScorer) {
+            scorer = ((AssertingScorer) scorer).getIn();
+          }
+          assert scorer instanceof TermAutomatonScorer;
+        }
+
+        @Override
+        public void collect(int docID) throws IOException {
+          assertEquals(3, scorer.freq());
+        }
+        
+        @Override
+        public boolean needsScores() {
+          return true;
+        }
+      });
 
     w.close();
     r.close();
@@ -288,7 +344,7 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
     q.addTransition(s2, s3, "moon");
     q.finish();
 
-    assertEquals(2, s.search(q, 1).totalHits.value);
+    assertEquals(2, s.search(q, 1).totalHits);
     w.close();
     r.close();
     dir.close();
@@ -302,9 +358,12 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
     q.setAccept(s2, true);
     q.addAnyTransition(s0, s1);
     q.addTransition(s1, s2, "b");
-    expectThrows(IllegalStateException.class, () -> {
+    try {
       q.finish();
-    });
+      fail("did not hit expected exception");
+    } catch (IllegalStateException ise) {
+      // expected
+    }
   }
 
   public void testInvalidTrailWithAny() throws Exception {
@@ -315,9 +374,12 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
     q.setAccept(s2, true);
     q.addTransition(s0, s1, "b");
     q.addAnyTransition(s1, s2);
-    expectThrows(IllegalStateException.class, () -> {
+    try {
       q.finish();
-    });
+      fail("did not hit expected exception");
+    } catch (IllegalStateException ise) {
+      // expected
+    }
   }
   
   public void testAnyFromTokenStream() throws Exception {
@@ -353,7 +415,7 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
 
     TermAutomatonQuery q = new TokenStreamToTermAutomatonQuery().toQuery("field", ts);
     // System.out.println("DOT: " + q.toDot());
-    assertEquals(3, s.search(q, 1).totalHits.value);
+    assertEquals(3, s.search(q, 1).totalHits);
 
     w.close();
     r.close();
@@ -379,9 +441,7 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
     @Override
     public boolean incrementToken() throws IOException {
       if (synNext) {
-        AttributeSource.State state = captureState();
         clearAttributes();
-        restoreState(state);
         posIncAtt.setPositionIncrement(0);
         termAtt.append(""+((char) 97 + random().nextInt(3)));
         synNext = false;
@@ -469,15 +529,15 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
           }
         }
         String string = sb.toString();
-        MultiPhraseQuery.Builder mpqb = new MultiPhraseQuery.Builder();
+        MultiPhraseQuery mpq = new MultiPhraseQuery();
         for(int j=0;j<string.length();j++) {
           if (string.charAt(j) == '*') {
-            mpqb.add(allTerms);
+            mpq.add(allTerms);
           } else {
-            mpqb.add(new Term("field", ""+string.charAt(j)));
+            mpq.add(new Term("field", ""+string.charAt(j)));
           }
         }
-        bq.add(mpqb.build(), BooleanClause.Occur.SHOULD);
+        bq.add(mpq, BooleanClause.Occur.SHOULD);
         strings.add(new BytesRef(string));
       }
 
@@ -542,7 +602,7 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
       Set<String> hits2Docs = toDocIDs(s, hits2);
 
       try {
-        assertEquals(hits2.totalHits.value, hits1.totalHits.value);
+        assertEquals(hits2.totalHits, hits1.totalHits);
         assertEquals(hits2Docs, hits1Docs);
       } catch (AssertionError ae) {
         System.out.println("FAILED:");
@@ -582,8 +642,8 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
     }
 
     @Override
-    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-      return new ConstantScoreWeight(this, boost) {
+    public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+      return new ConstantScoreWeight(this) {
         @Override
         public Scorer scorer(LeafReaderContext context) throws IOException {
           int maxDoc = context.reader().maxDoc();
@@ -595,19 +655,9 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
               //System.out.println("  acc id=" + idSource.getInt(docID) + " docID=" + docID);
             }
           }
-          return new ConstantScoreScorer(this, score(), scoreMode, new BitSetIterator(bits, bits.approximateCardinality()));
-        }
-
-        @Override
-        public boolean isCacheable(LeafReaderContext ctx) {
-          return false;
+          return new ConstantScoreScorer(this, score(), new BitSetIterator(bits, bits.approximateCardinality()));
         }
       };
-    }
-
-    @Override
-    public void visit(QueryVisitor visitor) {
-
     }
 
     @Override
@@ -616,19 +666,17 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
     }
 
     @Override
-    public boolean equals(Object other) {
-      return sameClassAs(other) &&
-             equalsTo(getClass().cast(other));
-    }
-
-    private boolean equalsTo(RandomQuery other) {
-      return seed == other.seed &&  
-             density == other.density;
+    public boolean equals(Object obj) {
+      if (super.equals(obj) == false) {
+        return false;
+      }
+      RandomQuery other = (RandomQuery) obj;
+      return seed == other.seed && density == other.density;
     }
 
     @Override
     public int hashCode() {
-      return classHash() ^ Objects.hash(seed, density);
+      return Objects.hash(super.hashCode(), seed, density);
     }
   }
 
@@ -642,7 +690,7 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
     w.addDocument(doc);
 
     doc = new Document();
-    doc.add(newTextField("field", "comes foo", Field.Store.NO));
+    doc.add(newTextField("field", "comes here", Field.Store.NO));
     w.addDocument(doc);
     IndexReader r = w.getReader();
     IndexSearcher s = newSearcher(r);
@@ -650,14 +698,12 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
     TermAutomatonQuery q = new TermAutomatonQuery("field");
     int init = q.createState();
     int s1 = q.createState();
-    int s2 = q.createState();
     q.addTransition(init, s1, "here");
-    q.addTransition(s1, s2, "comes");
-    q.addTransition(s2, s1, "here");
-    q.setAccept(s1, true);
+    q.addTransition(s1, init, "comes");
+    q.setAccept(init, true);
     q.finish();
 
-    assertEquals(1, s.search(q, 1).totalHits.value);
+    assertEquals(1, s.search(q, 1).totalHits);
     w.close();
     r.close();
     dir.close();
@@ -692,7 +738,7 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
     q.setAccept(s4, true);
     q.finish();
 
-    assertEquals(1, s.search(q, 1).totalHits.value);
+    assertEquals(1, s.search(q, 1).totalHits);
     w.close();
     r.close();
     dir.close();
@@ -714,7 +760,7 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
 
     TermAutomatonQuery q = new TokenStreamToTermAutomatonQuery().toQuery("field", ts);
     // System.out.println("DOT: " + q.toDot());
-    assertEquals(0, s.search(q, 1).totalHits.value);
+    assertEquals(0, s.search(q, 1).totalHits);
 
     w.close();
     r.close();
@@ -738,240 +784,7 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
 
     TermAutomatonQuery q = new TokenStreamToTermAutomatonQuery().toQuery("field", ts);
     // System.out.println("DOT: " + q.toDot());
-    assertEquals(0, s.search(q, 1).totalHits.value);
-
-    IOUtils.close(w, r, dir);
-  }
-
-  public void testEmptyString() throws Exception {
-    TermAutomatonQuery q = new TermAutomatonQuery("field");
-    int initState = q.createState();
-    q.setAccept(initState, true);
-    expectThrows(IllegalStateException.class, q::finish);
-  }
-
-  public void testRewriteNoMatch() throws Exception {
-    TermAutomatonQuery q = new TermAutomatonQuery("field");
-    int initState = q.createState();
-    q.finish();
-    
-    Directory dir = newDirectory();
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
-    Document doc = new Document();
-    doc.add(newTextField("field", "x y z", Field.Store.NO));
-    w.addDocument(doc);
-
-    IndexReader r = w.getReader();
-    assertTrue(q.rewrite(r) instanceof MatchNoDocsQuery);
-    IOUtils.close(w, r, dir);
-  }
-
-  public void testRewriteTerm() throws Exception {
-    TermAutomatonQuery q = new TermAutomatonQuery("field");
-    int initState = q.createState();
-    int s1 = q.createState();
-    q.addTransition(initState, s1, "foo");
-    q.setAccept(s1, true);
-    q.finish();
-    
-    Directory dir = newDirectory();
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
-    Document doc = new Document();
-    doc.add(newTextField("field", "x y z", Field.Store.NO));
-    w.addDocument(doc);
-
-    IndexReader r = w.getReader();
-    Query rewrite = q.rewrite(r);
-    assertTrue(rewrite instanceof TermQuery);
-    assertEquals(new Term("field", "foo"), ((TermQuery) rewrite).getTerm());
-    IOUtils.close(w, r, dir);
-  }
-
-  public void testRewriteSimplePhrase() throws Exception {
-    TermAutomatonQuery q = new TermAutomatonQuery("field");
-    int initState = q.createState();
-    int s1 = q.createState();
-    int s2 = q.createState();
-    q.addTransition(initState, s1, "foo");
-    q.addTransition(s1, s2, "bar");
-    q.setAccept(s2, true);
-    q.finish();
-    
-    Directory dir = newDirectory();
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
-    Document doc = new Document();
-    doc.add(newTextField("field", "x y z", Field.Store.NO));
-    w.addDocument(doc);
-
-    IndexReader r = w.getReader();
-    Query rewrite = q.rewrite(r);
-    assertTrue(rewrite instanceof PhraseQuery);
-    Term[] terms = ((PhraseQuery) rewrite).getTerms();
-    assertEquals(new Term("field", "foo"), terms[0]);
-    assertEquals(new Term("field", "bar"), terms[1]);
-
-    int[] positions = ((PhraseQuery) rewrite).getPositions();
-    assertEquals(0, positions[0]);
-    assertEquals(1, positions[1]);
-    
-    IOUtils.close(w, r, dir);
-  }
-
-  public void testRewritePhraseWithAny() throws Exception {
-    TermAutomatonQuery q = new TermAutomatonQuery("field");
-    int initState = q.createState();
-    int s1 = q.createState();
-    int s2 = q.createState();
-    int s3 = q.createState();
-    q.addTransition(initState, s1, "foo");
-    q.addAnyTransition(s1, s2);
-    q.addTransition(s2, s3, "bar");
-    q.setAccept(s3, true);
-    q.finish();
-    
-    Directory dir = newDirectory();
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
-    Document doc = new Document();
-    doc.add(newTextField("field", "x y z", Field.Store.NO));
-    w.addDocument(doc);
-
-    IndexReader r = w.getReader();
-    Query rewrite = q.rewrite(r);
-    assertTrue(rewrite instanceof PhraseQuery);
-    Term[] terms = ((PhraseQuery) rewrite).getTerms();
-    assertEquals(new Term("field", "foo"), terms[0]);
-    assertEquals(new Term("field", "bar"), terms[1]);
-
-    int[] positions = ((PhraseQuery) rewrite).getPositions();
-    assertEquals(0, positions[0]);
-    assertEquals(2, positions[1]);
-    
-    IOUtils.close(w, r, dir);
-  }
-
-  public void testRewriteSimpleMultiPhrase() throws Exception {
-    TermAutomatonQuery q = new TermAutomatonQuery("field");
-    int initState = q.createState();
-    int s1 = q.createState();
-    q.addTransition(initState, s1, "foo");
-    q.addTransition(initState, s1, "bar");
-    q.setAccept(s1, true);
-    q.finish();
-    
-    Directory dir = newDirectory();
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
-    Document doc = new Document();
-    doc.add(newTextField("field", "x y z", Field.Store.NO));
-    w.addDocument(doc);
-
-    IndexReader r = w.getReader();
-    Query rewrite = q.rewrite(r);
-    assertTrue(rewrite instanceof MultiPhraseQuery);
-    Term[][] terms = ((MultiPhraseQuery) rewrite).getTermArrays();
-    assertEquals(1, terms.length);
-    assertEquals(2, terms[0].length);
-    assertEquals(new Term("field", "foo"), terms[0][0]);
-    assertEquals(new Term("field", "bar"), terms[0][1]);
-
-    int[] positions = ((MultiPhraseQuery) rewrite).getPositions();
-    assertEquals(1, positions.length);
-    assertEquals(0, positions[0]);
-    
-    IOUtils.close(w, r, dir);
-  }
-
-  public void testRewriteMultiPhraseWithAny() throws Exception {
-    TermAutomatonQuery q = new TermAutomatonQuery("field");
-    int initState = q.createState();
-    int s1 = q.createState();
-    int s2 = q.createState();
-    int s3 = q.createState();
-    q.addTransition(initState, s1, "foo");
-    q.addTransition(initState, s1, "bar");
-    q.addAnyTransition(s1, s2);
-    q.addTransition(s2, s3, "baz");
-    q.setAccept(s3, true);
-    q.finish();
-    
-    Directory dir = newDirectory();
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
-    Document doc = new Document();
-    doc.add(newTextField("field", "x y z", Field.Store.NO));
-    w.addDocument(doc);
-
-    IndexReader r = w.getReader();
-    Query rewrite = q.rewrite(r);
-    assertTrue(rewrite instanceof MultiPhraseQuery);
-    Term[][] terms = ((MultiPhraseQuery) rewrite).getTermArrays();
-    assertEquals(2, terms.length);
-    assertEquals(2, terms[0].length);
-    assertEquals(new Term("field", "foo"), terms[0][0]);
-    assertEquals(new Term("field", "bar"), terms[0][1]);
-    assertEquals(1, terms[1].length);
-    assertEquals(new Term("field", "baz"), terms[1][0]);
-
-    int[] positions = ((MultiPhraseQuery) rewrite).getPositions();
-    assertEquals(2, positions.length);
-    assertEquals(0, positions[0]);
-    assertEquals(2, positions[1]);
-    
-    IOUtils.close(w, r, dir);
-  }
-  
-  // we query with sun|moon but moon doesn't exist
-  public void testOneTermMissing() throws Exception {
-    Directory dir = newDirectory();
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
-    Document doc = new Document();
-    doc.add(newTextField("field", "here comes the sun", Field.Store.NO));
-    w.addDocument(doc);
-
-    IndexReader r = w.getReader();
-    IndexSearcher s = newSearcher(r);
-
-    TermAutomatonQuery q = new TermAutomatonQuery("field");
-    int init = q.createState();
-    int s1 = q.createState();
-    q.addTransition(init, s1, "comes");
-    int s2 = q.createState();
-    q.addAnyTransition(s1, s2);
-    int s3 = q.createState();
-    q.setAccept(s3, true);
-    q.addTransition(s2, s3, "sun");
-    q.addTransition(s2, s3, "moon");
-    q.finish();
-
-    assertEquals(1, s.search(q, 1).totalHits.value);
-
-    w.close();
-    r.close();
-    dir.close();
-  }
-  
-  // we query with sun|moon but no terms exist for the field
-  public void testFieldMissing() throws Exception {
-    Directory dir = newDirectory();
-    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
-    Document doc = new Document();
-    doc.add(newTextField("field", "here comes the sun", Field.Store.NO));
-    w.addDocument(doc);
-
-    IndexReader r = w.getReader();
-    IndexSearcher s = newSearcher(r);
-
-    TermAutomatonQuery q = new TermAutomatonQuery("bogusfield");
-    int init = q.createState();
-    int s1 = q.createState();
-    q.addTransition(init, s1, "comes");
-    int s2 = q.createState();
-    q.addAnyTransition(s1, s2);
-    int s3 = q.createState();
-    q.setAccept(s3, true);
-    q.addTransition(s2, s3, "sun");
-    q.addTransition(s2, s3, "moon");
-    q.finish();
-
-    assertEquals(0, s.search(q, 1).totalHits.value);
+    assertEquals(0, s.search(q, 1).totalHits);
 
     w.close();
     r.close();

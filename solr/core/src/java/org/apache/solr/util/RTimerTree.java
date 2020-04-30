@@ -1,3 +1,5 @@
+package org.apache.solr.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.util;
 
 import java.util.Map;
 
@@ -51,10 +52,9 @@ public class RTimerTree extends RTimer {
     return new RTimerTree();
   }
 
-  /**
-   * Returns a subtimer given its name.
-   * If the subtimer did not exist a new subtimer will be started and returned,
-   * otherwise an existing subtimer will be returned as-is.
+  /** Create new subtimer with given name
+   *
+   * Subtimer will be started.
    */
   public RTimerTree sub(String desc) {
     RTimerTree child = children.get( desc );

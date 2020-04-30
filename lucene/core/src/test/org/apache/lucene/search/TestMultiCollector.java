@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.lucene.document.Document;
-import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.store.Directory;
@@ -39,15 +34,15 @@ import org.apache.lucene.util.TestUtil;
 public class TestMultiCollector extends LuceneTestCase {
 
   private static class TerminateAfterCollector extends FilterCollector {
-
+    
     private int count = 0;
     private final int terminateAfter;
-
+    
     public TerminateAfterCollector(Collector in, int terminateAfter) {
       super(in);
       this.terminateAfter = terminateAfter;
     }
-
+    
     @Override
     public LeafCollector getLeafCollector(LeafReaderContext context) throws IOException {
       if (count >= terminateAfter) {
@@ -65,28 +60,7 @@ public class TestMultiCollector extends LuceneTestCase {
         }
       };
     }
-
-  }
-
-  private static class SetScorerCollector extends FilterCollector {
-
-    private final AtomicBoolean setScorerCalled;
-
-    public SetScorerCollector(Collector in, AtomicBoolean setScorerCalled) {
-      super(in);
-      this.setScorerCalled = setScorerCalled;
-    }
-
-    @Override
-    public LeafCollector getLeafCollector(LeafReaderContext context) throws IOException {
-      return new FilterLeafCollector(super.getLeafCollector(context)) {
-        @Override
-        public void setScorer(Scorable scorer) throws IOException {
-          super.setScorer(scorer);
-          setScorerCalled.set(true);
-        }
-      };
-    }
+    
   }
 
   public void testCollectionTerminatedExceptionHandling() throws IOException {
@@ -121,100 +95,4 @@ public class TestMultiCollector extends LuceneTestCase {
     }
   }
 
-  public void testSetScorerAfterCollectionTerminated() throws IOException {
-    Collector collector1 = new TotalHitCountCollector();
-    Collector collector2 = new TotalHitCountCollector();
-
-    AtomicBoolean setScorerCalled1 = new AtomicBoolean();
-    collector1 = new SetScorerCollector(collector1, setScorerCalled1);
-
-    AtomicBoolean setScorerCalled2 = new AtomicBoolean();
-    collector2 = new SetScorerCollector(collector2, setScorerCalled2);
-
-    collector1 = new TerminateAfterCollector(collector1, 1);
-    collector2 = new TerminateAfterCollector(collector2, 2);
-
-    Scorable scorer = new ScoreAndDoc();
-
-    List<Collector> collectors = Arrays.asList(collector1, collector2);
-    Collections.shuffle(collectors, random());
-    Collector collector = MultiCollector.wrap(collectors);
-
-    LeafCollector leafCollector = collector.getLeafCollector(null);
-    leafCollector.setScorer(scorer);
-    assertTrue(setScorerCalled1.get());
-    assertTrue(setScorerCalled2.get());
-
-    leafCollector.collect(0);
-    leafCollector.collect(1);
-
-    setScorerCalled1.set(false);
-    setScorerCalled2.set(false);
-    leafCollector.setScorer(scorer);
-    assertFalse(setScorerCalled1.get());
-    assertTrue(setScorerCalled2.get());
-
-    expectThrows(CollectionTerminatedException.class, () -> {
-      leafCollector.collect(1);
-    });
-
-    setScorerCalled1.set(false);
-    setScorerCalled2.set(false);
-    leafCollector.setScorer(scorer);
-    assertFalse(setScorerCalled1.get());
-    assertFalse(setScorerCalled2.get());
-  }
-
-  public void testDisablesSetMinScore() throws IOException {
-    Directory dir = newDirectory();
-    IndexWriter w = new IndexWriter(dir, newIndexWriterConfig());
-    w.addDocument(new Document());
-    IndexReader reader = DirectoryReader.open(w);
-    w.close();
-
-    Scorable scorer = new Scorable() {
-      @Override
-      public int docID() {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public float score() {
-        return 0;
-      }
-
-      @Override
-      public void setMinCompetitiveScore(float minScore) {
-        throw new AssertionError();
-      }
-    };
-
-    Collector collector = new SimpleCollector() {
-      private Scorable scorer;
-      float minScore = 0;
-
-      @Override
-      public ScoreMode scoreMode() {
-        return ScoreMode.TOP_SCORES;
-      }
-
-      @Override
-      public void setScorer(Scorable scorer) throws IOException {
-        this.scorer = scorer;
-      }
-
-      @Override
-      public void collect(int doc) throws IOException {
-        minScore = Math.nextUp(minScore);
-        scorer.setMinCompetitiveScore(minScore);
-      }
-    };
-    Collector multiCollector = MultiCollector.wrap(collector, new TotalHitCountCollector());
-    LeafCollector leafCollector = multiCollector.getLeafCollector(reader.leaves().get(0));
-    leafCollector.setScorer(scorer);
-    leafCollector.collect(0); // no exception
-
-    reader.close();
-    dir.close();
-  }
 }

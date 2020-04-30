@@ -1,3 +1,5 @@
+package org.apache.lucene.index.memory;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index.memory;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.function.Supplier;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
@@ -38,26 +28,29 @@ import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
-import org.apache.lucene.document.BinaryDocValuesField;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.DoublePoint;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
-import org.apache.lucene.document.FloatPoint;
-import org.apache.lucene.document.IntPoint;
-import org.apache.lucene.document.LongPoint;
-import org.apache.lucene.document.NumericDocValuesField;
-import org.apache.lucene.document.SortedDocValuesField;
-import org.apache.lucene.document.SortedNumericDocValuesField;
-import org.apache.lucene.document.SortedSetDocValuesField;
-import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.*;
+import org.apache.lucene.index.CompositeReader;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.Fields;
+import org.apache.lucene.index.IndexOptions;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.LeafReader;
+import org.apache.lucene.index.NumericDocValues;
+import org.apache.lucene.index.SlowCompositeReaderWrapper;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.PhraseQuery;
-import org.apache.lucene.search.Query;
 import org.apache.lucene.search.RegexpQuery;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
@@ -73,6 +66,14 @@ import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LineFileDocs;
 import org.apache.lucene.util.RecyclingByteBlockAllocator;
 import org.apache.lucene.util.TestUtil;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 
@@ -170,21 +171,20 @@ public class TestMemoryIndexAgainstRAMDir extends BaseTokenStreamTestCase {
 
   private void duellReaders(CompositeReader other, LeafReader memIndexReader)
       throws IOException {
-    Fields memFields = memIndexReader.getTermVectors(0);
-    for (String field : FieldInfos.getIndexedFields(other)) {
+    LeafReader competitor = SlowCompositeReaderWrapper.wrap(other);
+    Fields memFields = memIndexReader.fields();
+    for (String field : competitor.fields()) {
       Terms memTerms = memFields.terms(field);
       Terms iwTerms = memIndexReader.terms(field);
       if (iwTerms == null) {
         assertNull(memTerms);
       } else {
-        NumericDocValues normValues = MultiDocValues.getNormValues(other, field);
+        NumericDocValues normValues = competitor.getNormValues(field);
         NumericDocValues memNormValues = memIndexReader.getNormValues(field);
         if (normValues != null) {
           // mem idx always computes norms on the fly
           assertNotNull(memNormValues);
-          assertEquals(0, normValues.nextDoc());
-          assertEquals(0, memNormValues.nextDoc());
-          assertEquals(normValues.longValue(), memNormValues.longValue());
+          assertEquals(normValues.get(0), memNormValues.get(0));
         }
           
         assertNotNull(memTerms);
@@ -246,7 +246,7 @@ public class TestMemoryIndexAgainstRAMDir extends BaseTokenStreamTestCase {
     for (String query : queries) {
       TopDocs ramDocs = ram.search(qp.parse(query), 1);
       TopDocs memDocs = mem.search(qp.parse(query), 1);
-      assertEquals(query, ramDocs.totalHits.value, memDocs.totalHits.value);
+      assertEquals(query, ramDocs.totalHits, memDocs.totalHits);
     }
     reader.close();
   }
@@ -435,181 +435,6 @@ public class TestMemoryIndexAgainstRAMDir extends BaseTokenStreamTestCase {
     assertNull(reader.terms("not-in-index"));
   }
 
-  public void testDocValuesMemoryIndexVsNormalIndex() throws Exception {
-    Document doc = new Document();
-    long randomLong = random().nextLong();
-    doc.add(new NumericDocValuesField("numeric", randomLong));
-    int numValues = atLeast(5);
-    for (int i = 0; i < numValues; i++) {
-      randomLong = random().nextLong();
-      doc.add(new SortedNumericDocValuesField("sorted_numeric", randomLong));
-      if (random().nextBoolean()) {
-        // randomly duplicate field/value
-        doc.add(new SortedNumericDocValuesField("sorted_numeric", randomLong));
-      }
-    }
-    BytesRef randomTerm = new BytesRef(randomTerm());
-    doc.add(new BinaryDocValuesField("binary", randomTerm));
-    if (random().nextBoolean()) {
-      doc.add(new StringField("binary", randomTerm, Field.Store.NO));
-    }
-    randomTerm = new BytesRef(randomTerm());
-    doc.add(new SortedDocValuesField("sorted", randomTerm));
-    if (random().nextBoolean()) {
-      doc.add(new StringField("sorted", randomTerm, Field.Store.NO));
-    }
-    numValues = atLeast(5);
-    for (int i = 0; i < numValues; i++) {
-      randomTerm = new BytesRef(randomTerm());
-      doc.add(new SortedSetDocValuesField("sorted_set", randomTerm));
-      if (random().nextBoolean()) {
-        // randomly duplicate field/value
-        doc.add(new SortedSetDocValuesField("sorted_set", randomTerm));
-      }
-      if (random().nextBoolean()) {
-        // randomily just add a normal string field
-        doc.add(new StringField("sorted_set", randomTerm, Field.Store.NO));
-      }
-    }
-
-    MockAnalyzer mockAnalyzer = new MockAnalyzer(random());
-    MemoryIndex memoryIndex = MemoryIndex.fromDocument(doc, mockAnalyzer);
-    IndexReader indexReader = memoryIndex.createSearcher().getIndexReader();
-    LeafReader leafReader =  indexReader.leaves().get(0).reader();
-
-    Directory dir = newDirectory();
-    IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(random(), mockAnalyzer));
-    writer.addDocument(doc);
-    writer.close();
-    IndexReader controlIndexReader = DirectoryReader.open(dir);
-    LeafReader controlLeafReader =  controlIndexReader.leaves().get(0).reader();
-
-    NumericDocValues numericDocValues = leafReader.getNumericDocValues("numeric");
-    NumericDocValues controlNumericDocValues = controlLeafReader.getNumericDocValues("numeric");
-    assertEquals(0, numericDocValues.nextDoc());
-    assertEquals(0, controlNumericDocValues.nextDoc());
-    assertEquals(controlNumericDocValues.longValue(), numericDocValues.longValue());
-
-    SortedNumericDocValues sortedNumericDocValues = leafReader.getSortedNumericDocValues("sorted_numeric");
-    assertEquals(0, sortedNumericDocValues.nextDoc());
-    SortedNumericDocValues controlSortedNumericDocValues = controlLeafReader.getSortedNumericDocValues("sorted_numeric");
-    assertEquals(0, controlSortedNumericDocValues.nextDoc());
-    assertEquals(controlSortedNumericDocValues.docValueCount(), sortedNumericDocValues.docValueCount());
-    for (int i = 0; i < controlSortedNumericDocValues.docValueCount(); i++) {
-      assertEquals(controlSortedNumericDocValues.nextValue(), sortedNumericDocValues.nextValue());
-    }
-
-    BinaryDocValues binaryDocValues = leafReader.getBinaryDocValues("binary");
-    BinaryDocValues controlBinaryDocValues = controlLeafReader.getBinaryDocValues("binary");
-    assertEquals(0, binaryDocValues.nextDoc());
-    assertEquals(0, controlBinaryDocValues.nextDoc());
-    assertEquals(controlBinaryDocValues.binaryValue(), binaryDocValues.binaryValue());
-
-    SortedDocValues sortedDocValues = leafReader.getSortedDocValues("sorted");
-    SortedDocValues controlSortedDocValues = controlLeafReader.getSortedDocValues("sorted");
-    assertEquals(controlSortedDocValues.getValueCount(), sortedDocValues.getValueCount());
-    assertEquals(0, sortedDocValues.nextDoc());
-    assertEquals(0, controlSortedDocValues.nextDoc());
-    assertEquals(controlSortedDocValues.binaryValue(), sortedDocValues.binaryValue());
-    assertEquals(controlSortedDocValues.ordValue(), sortedDocValues.ordValue());
-    assertEquals(controlSortedDocValues.lookupOrd(0), sortedDocValues.lookupOrd(0));
-
-    SortedSetDocValues sortedSetDocValues = leafReader.getSortedSetDocValues("sorted_set");
-    assertEquals(0, sortedSetDocValues.nextDoc());
-    SortedSetDocValues controlSortedSetDocValues = controlLeafReader.getSortedSetDocValues("sorted_set");
-    assertEquals(0, controlSortedSetDocValues.nextDoc());
-    assertEquals(controlSortedSetDocValues.getValueCount(), sortedSetDocValues.getValueCount());
-    for (long controlOrd = controlSortedSetDocValues.nextOrd(); controlOrd != SortedSetDocValues.NO_MORE_ORDS;
-         controlOrd = controlSortedSetDocValues.nextOrd()) {
-      assertEquals(controlOrd, sortedSetDocValues.nextOrd());
-      assertEquals(controlSortedSetDocValues.lookupOrd(controlOrd), sortedSetDocValues.lookupOrd(controlOrd));
-    }
-    assertEquals(SortedSetDocValues.NO_MORE_ORDS, sortedSetDocValues.nextOrd());
-
-    indexReader.close();
-    controlIndexReader.close();
-    dir.close();
-  }
-
-  public void testNormsWithDocValues() throws Exception {
-    MemoryIndex mi = new MemoryIndex(true, true);
-    MockAnalyzer mockAnalyzer = new MockAnalyzer(random());
-
-    mi.addField(new BinaryDocValuesField("text", new BytesRef("quick brown fox")), mockAnalyzer);
-    mi.addField(new TextField("text", "quick brown fox", Field.Store.NO), mockAnalyzer);
-    LeafReader leafReader = mi.createSearcher().getIndexReader().leaves().get(0).reader();
-
-    Document doc = new Document();
-    doc.add(new BinaryDocValuesField("text", new BytesRef("quick brown fox")));
-    Field field = new TextField("text", "quick brown fox", Field.Store.NO);
-    doc.add(field);
-    Directory dir = newDirectory();
-    IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(random(), mockAnalyzer));
-    writer.addDocument(doc);
-    writer.close();
-
-    IndexReader controlIndexReader = DirectoryReader.open(dir);
-    LeafReader controlLeafReader =  controlIndexReader.leaves().get(0).reader();
-
-    NumericDocValues norms = controlLeafReader.getNormValues("text");
-    assertEquals(0, norms.nextDoc());
-    NumericDocValues norms2 = leafReader.getNormValues("text");
-    assertEquals(0, norms2.nextDoc());
-    assertEquals(norms.longValue(), norms2.longValue());
-
-    controlIndexReader.close();
-    dir.close();
-  }
-
-  public void testPointValuesMemoryIndexVsNormalIndex() throws Exception {
-    int size = atLeast(12);
-
-    List<Integer> randomValues = new ArrayList<>();
-
-    Document doc = new Document();
-    for (Integer randomInteger : random().ints(size).toArray()) {
-      doc.add(new IntPoint("int", randomInteger));
-      randomValues.add(randomInteger);
-      doc.add(new LongPoint("long", randomInteger));
-      doc.add(new FloatPoint("float", randomInteger));
-      doc.add(new DoublePoint("double", randomInteger));
-    }
-
-    MockAnalyzer mockAnalyzer = new MockAnalyzer(random());
-    MemoryIndex memoryIndex = MemoryIndex.fromDocument(doc, mockAnalyzer);
-    IndexSearcher memoryIndexSearcher = memoryIndex.createSearcher();
-
-    Directory dir = newDirectory();
-    IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(random(), mockAnalyzer));
-    writer.addDocument(doc);
-    writer.close();
-    IndexReader controlIndexReader = DirectoryReader.open(dir);
-    IndexSearcher controlIndexSearcher = new IndexSearcher(controlIndexReader);
-
-    Supplier<Integer> valueSupplier = () -> randomValues.get(random().nextInt(randomValues.size()));
-    Query[] queries = new Query[] {
-        IntPoint.newExactQuery("int", valueSupplier.get()),
-        LongPoint.newExactQuery("long", valueSupplier.get()),
-        FloatPoint.newExactQuery("float", valueSupplier.get()),
-        DoublePoint.newExactQuery("double", valueSupplier.get()),
-        IntPoint.newSetQuery("int", valueSupplier.get(), valueSupplier.get()),
-        LongPoint.newSetQuery("long", valueSupplier.get(), valueSupplier.get()),
-        FloatPoint.newSetQuery("float", valueSupplier.get(), valueSupplier.get()),
-        DoublePoint.newSetQuery("double", valueSupplier.get(), valueSupplier.get()),
-        IntPoint.newRangeQuery("int", valueSupplier.get(), valueSupplier.get()),
-        LongPoint.newRangeQuery("long", valueSupplier.get(), valueSupplier.get()),
-        FloatPoint.newRangeQuery("float", valueSupplier.get(), valueSupplier.get()),
-        DoublePoint.newRangeQuery("double", valueSupplier.get(), valueSupplier.get())
-    };
-    for (Query query : queries) {
-      assertEquals(controlIndexSearcher.count(query), controlIndexSearcher.count(query));
-    }
-
-    memoryIndexSearcher.getIndexReader().close();
-    controlIndexReader.close();
-    dir.close();
-  }
-
   public void testDuellMemIndex() throws IOException {
     LineFileDocs lineFileDocs = new LineFileDocs(random());
     int numDocs = atLeast(10);
@@ -632,7 +457,7 @@ public class TestMemoryIndexAgainstRAMDir extends BaseTokenStreamTestCase {
       
       writer.addDocument(doc);
       writer.close();
-      for (IndexableField field : doc) {
+      for (IndexableField field : doc.getFields()) {
         memory.addField(field.name(), ((Field)field).stringValue(), mockAnalyzer);  
       }
       DirectoryReader competitor = DirectoryReader.open(dir);
@@ -652,7 +477,7 @@ public class TestMemoryIndexAgainstRAMDir extends BaseTokenStreamTestCase {
     memory.addField("foo", new CannedTokenStream(new Token("", 0, 5)));
     IndexSearcher searcher = memory.createSearcher();
     TopDocs docs = searcher.search(new TermQuery(new Term("foo", "")), 10);
-    assertEquals(1, docs.totalHits.value);
+    assertEquals(1, docs.totalHits);
     TestUtil.checkReader(searcher.getIndexReader());
   }
 

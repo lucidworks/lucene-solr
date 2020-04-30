@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.mockrandom;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.mockrandom;
 
 import java.io.IOException;
 import java.util.Random;
 
-import com.carrotsearch.randomizedtesting.generators.RandomPicks;
-import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.PostingsFormat;
@@ -39,8 +38,8 @@ import org.apache.lucene.codecs.blocktree.BlockTreeTermsReader;
 import org.apache.lucene.codecs.blocktree.BlockTreeTermsWriter;
 import org.apache.lucene.codecs.blocktreeords.OrdsBlockTreeTermsReader;
 import org.apache.lucene.codecs.blocktreeords.OrdsBlockTreeTermsWriter;
-import org.apache.lucene.codecs.lucene84.Lucene84PostingsReader;
-import org.apache.lucene.codecs.lucene84.Lucene84PostingsWriter;
+import org.apache.lucene.codecs.lucene50.Lucene50PostingsReader;
+import org.apache.lucene.codecs.lucene50.Lucene50PostingsWriter;
 import org.apache.lucene.codecs.memory.FSTOrdTermsReader;
 import org.apache.lucene.codecs.memory.FSTOrdTermsWriter;
 import org.apache.lucene.codecs.memory.FSTTermsReader;
@@ -49,7 +48,7 @@ import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.IndexFileNames;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.SegmentWriteState;
-import org.apache.lucene.store.ChecksumIndexInput;
+import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
@@ -61,7 +60,7 @@ import org.apache.lucene.util.TestUtil;
 
 public final class MockRandomPostingsFormat extends PostingsFormat {
   private final Random seedRandom;
-  private static final String SEED_EXT = "sd";
+  private final String SEED_EXT = "sd";
   
   public MockRandomPostingsFormat() {
     // This ctor should *only* be used at read-time: get NPE if you use it!
@@ -109,17 +108,18 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
     }
 
     final String seedFileName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, SEED_EXT);
-    try(IndexOutput out = state.directory.createOutput(seedFileName, state.context)) {
-      CodecUtil.writeIndexHeader(out, "MockRandomSeed", 0, state.segmentInfo.getId(), state.segmentSuffix);
+    final IndexOutput out = state.directory.createOutput(seedFileName, state.context);
+    try {
       out.writeLong(seed);
-      CodecUtil.writeFooter(out);
+    } finally {
+      out.close();
     }
 
     final Random random = new Random(seed);
     
     random.nextInt(); // consume a random for buffersize
 
-    PostingsWriterBase postingsWriter = new Lucene84PostingsWriter(state);
+    PostingsWriterBase postingsWriter = new Lucene50PostingsWriter(state);
 
     final FieldsConsumer fields;
     final int t1 = random.nextInt(5);
@@ -268,10 +268,8 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
   public FieldsProducer fieldsProducer(SegmentReadState state) throws IOException {
 
     final String seedFileName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, SEED_EXT);
-    final ChecksumIndexInput in = state.directory.openChecksumInput(seedFileName, state.context);
-    CodecUtil.checkIndexHeader(in, "MockRandomSeed", 0, 0, state.segmentInfo.getId(), state.segmentSuffix);
+    final IndexInput in = state.directory.openInput(seedFileName, state.context);
     final long seed = in.readLong();
-    CodecUtil.checkFooter(in);
     if (LuceneTestCase.VERBOSE) {
       System.out.println("MockRandomCodec: reading from seg=" + state.segmentInfo.name + " formatID=" + state.segmentSuffix + " seed=" + seed);
     }
@@ -284,7 +282,7 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
       System.out.println("MockRandomCodec: readBufferSize=" + readBufferSize);
     }
 
-    PostingsReaderBase postingsReader = new Lucene84PostingsReader(state);
+    PostingsReaderBase postingsReader = new Lucene50PostingsReader(state);
 
     final FieldsProducer fields;
     final int t1 = random.nextInt(5);
@@ -316,7 +314,7 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
 
       boolean success = false;
       try {
-        fields = new BlockTreeTermsReader(postingsReader, state, RandomPicks.randomFrom(random, BlockTreeTermsReader.FSTLoadMode.values()));
+        fields = new BlockTreeTermsReader(postingsReader, state);
         success = true;
       } finally {
         if (!success) {

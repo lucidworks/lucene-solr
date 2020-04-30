@@ -1,3 +1,19 @@
+package org.apache.lucene.facet.taxonomy.writercache;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import org.apache.lucene.facet.FacetTestCase;
+import org.apache.lucene.util.TestUtil;
+
+import org.junit.Test;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +30,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy.writercache;
-
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.nio.ByteBuffer;
-import java.nio.charset.CharsetDecoder;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import org.apache.lucene.facet.FacetTestCase;
 
 public class TestCharBlockArray extends FacetTestCase {
 
-  public void testArray() throws Exception {
+  @Test public void testArray() throws Exception {
     CharBlockArray array = new CharBlockArray();
     StringBuilder builder = new StringBuilder();
 

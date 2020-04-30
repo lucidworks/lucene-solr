@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.util.LinkedList;
 import java.util.List;
@@ -23,7 +23,7 @@ import java.util.List;
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.lucene.util.packed.PackedInts;
 
-import com.carrotsearch.randomizedtesting.generators.RandomNumbers;
+import com.carrotsearch.randomizedtesting.generators.RandomInts;
 
 @Slow
 public class TestTimSorterWorstCase extends LuceneTestCase {
@@ -33,9 +33,9 @@ public class TestTimSorterWorstCase extends LuceneTestCase {
     // but not so big we blow up available heap.
     final int length;
     if (TEST_NIGHTLY) {
-      length = RandomNumbers.randomIntBetween(random(), 140000000, 400000000);
+      length = RandomInts.randomIntBetween(random(), 140000000, 400000000);
     } else {
-      length = RandomNumbers.randomIntBetween(random(), 140000000, 200000000);
+      length = RandomInts.randomIntBetween(random(), 140000000, 200000000);
     }
     final PackedInts.Mutable arr = generateWorstCaseArray(length);
     new TimSorter(0) {

@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.core;
 
 import org.apache.solr.common.util.NamedList;
@@ -32,15 +33,11 @@ public class ConfigSet {
 
   private final NamedList properties;
 
-  private final boolean trusted;
-
-  public ConfigSet(String name, SolrConfig solrConfig, IndexSchema indexSchema,
-      NamedList properties, boolean trusted) {
+  public ConfigSet(String name, SolrConfig solrConfig, IndexSchema indexSchema, NamedList properties) {
     this.name = name;
     this.solrconfig = solrConfig;
     this.indexSchema = indexSchema;
     this.properties = properties;
-    this.trusted = trusted;
   }
 
   public String getName() {
@@ -57,9 +54,5 @@ public class ConfigSet {
 
   public NamedList getProperties() {
     return properties;
-  }
-  
-  public boolean isTrusted() {
-    return trusted;
   }
 }

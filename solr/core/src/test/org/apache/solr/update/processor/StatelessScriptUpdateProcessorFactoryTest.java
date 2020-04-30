@@ -1,3 +1,5 @@
+package org.apache.solr.update.processor;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.update.processor;
 
-import javax.script.ScriptEngine;
-import javax.script.ScriptEngineManager;
-import java.util.ArrayList;
-import java.util.List;
-
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.params.UpdateParams;
+import org.apache.solr.common.SolrException;
+
+import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.core.SolrCore;
+import org.apache.solr.search.SolrIndexSearcher;
+import org.apache.solr.util.RefCounted;
+
 import org.junit.Assume;
 import org.junit.BeforeClass;
+
+import javax.script.ScriptEngineManager;
+import javax.script.ScriptEngine;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Tests {@link StatelessScriptUpdateProcessorFactory}.
@@ -68,7 +76,7 @@ public class StatelessScriptUpdateProcessorFactoryTest extends UpdateProcessorTe
   public void testSingleScript() throws Exception {
     SolrCore core = h.getCore();
     UpdateRequestProcessorChain chained = core.getUpdateProcessingChain("single-script");
-    final StatelessScriptUpdateProcessorFactory factory = ((StatelessScriptUpdateProcessorFactory) chained.getProcessors().get(0));
+    final StatelessScriptUpdateProcessorFactory factory = ((StatelessScriptUpdateProcessorFactory) chained.getFactories()[0]);
     final List<String> functionMessages = new ArrayList<>();
     factory.setScriptEngineCustomizer(new ScriptEngineCustomizer() {
       @Override
@@ -113,7 +121,7 @@ public class StatelessScriptUpdateProcessorFactoryTest extends UpdateProcessorTe
     
       UpdateRequestProcessorChain chained = core.getUpdateProcessingChain(chain);
       final StatelessScriptUpdateProcessorFactory factory = 
-        ((StatelessScriptUpdateProcessorFactory) chained.getProcessors().get(0));
+        ((StatelessScriptUpdateProcessorFactory) chained.getFactories()[0]);
       final List<String> functionMessages = new ArrayList<>();
       ScriptEngineCustomizer customizer = new ScriptEngineCustomizer() {
           @Override
@@ -131,8 +139,8 @@ public class StatelessScriptUpdateProcessorFactoryTest extends UpdateProcessorTe
       
       assertEquals(chain + " didn't add Double field", 
                    42.3d, d.getFieldValue("script_added_d"));
-      assertEquals(chain + " didn't add integer field",
-          42, d.getFieldValue("script_added_i"));
+      assertEquals(chain + " didn't add integer field", 
+                   new Integer(42), d.getFieldValue("script_added_i"));
       
       processCommit("run-no-scripts");
 
@@ -209,8 +217,8 @@ public class StatelessScriptUpdateProcessorFactoryTest extends UpdateProcessorTe
                    "i went for it", d.getFieldValue("script_added_s"));
       assertEquals(chain +" didn't add Double field", 
                    42.3d, d.getFieldValue("script_added_d"));
-      assertEquals(chain + " didn't add integer field",
-          42, d.getFieldValue("script_added_i"));
+      assertEquals(chain + " didn't add integer field", 
+                   new Integer(42), d.getFieldValue("script_added_i"));
     }
   }
 
@@ -225,28 +233,39 @@ public class StatelessScriptUpdateProcessorFactoryTest extends UpdateProcessorTe
       
     assertEquals(chain +" didn't add Double field", 
                  42.3d, d.getFieldValue("script_added_d"));
-    assertEquals(chain + " didn't add integer field",
-        42, d.getFieldValue("script_added_i"));
+    assertEquals(chain + " didn't add integer field", 
+                 new Integer(42), d.getFieldValue("script_added_i"));
   }
 
   public void testPropogatedException() throws Exception  {
     final String chain = "error-on-add";
-    SolrException e = expectThrows(SolrException.class, () ->
-        processAdd(chain, doc(f("id", "5"), f("name", " foo "),
-            f("subject", "bar")))
-    );
-    assertTrue("Exception doesn't contain script error string: " + e.getMessage(),
-        0 < e.getMessage().indexOf("no-soup-fo-you"));
+    try {
+      SolrInputDocument d = processAdd(chain,
+                                       doc(f("id", "5"),
+                                           f("name", " foo "),
+                                           f("subject", "bar")));
+    } catch (SolrException e) {
+      assertTrue("Exception doesn't contain script error string: " + e.getMessage(),
+                 0 < e.getMessage().indexOf("no-soup-fo-you"));
+      return;
+    }
+    fail("Did not get exception from script");
+
   }
 
   public void testMissingFunctions() throws Exception  {
     final String chain = "missing-functions";
-    SolrException e = expectThrows(SolrException.class, () ->
-        processAdd(chain, doc(f("id", "5"),
-            f("name", " foo "), f("subject", "bar")))
-    );
-    assertTrue("Exception doesn't contain expected error: " + e.getMessage(),
-        0 < e.getMessage().indexOf("processAdd"));
+    try {
+      SolrInputDocument d = processAdd(chain,
+                                       doc(f("id", "5"),
+                                           f("name", " foo "),
+                                           f("subject", "bar")));
+    } catch (SolrException e) {
+      assertTrue("Exception doesn't contain expected error: " + e.getMessage(),
+                 0 < e.getMessage().indexOf("processAdd"));
+      return;
+    }
+    fail("Did not get exception from script");
   }
 
   public void testJavaScriptCompatibility() throws Exception  {

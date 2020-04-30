@@ -14,11 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
 import org.apache.lucene.search.Query;
 
-public abstract class ExtendedQueryBase extends Query implements ExtendedQuery {
+public class ExtendedQueryBase extends Query implements ExtendedQuery {
   private int cost;
   private boolean cache = true;
   private boolean cacheSep;

@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -29,14 +29,11 @@ import java.util.Set;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.Terms;
-import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
-import org.apache.lucene.search.Weight;
+import org.apache.lucene.util.ToStringUtils;
 
 /** Matches spans which are near one another.  One can specify <i>slop</i>, the
  * maximum number of intervening unmatched positions, as well as whether
@@ -127,11 +124,19 @@ public class SpanNearQuery extends SpanQuery implements Cloneable {
    * must be in the same order as in <code>clauses</code> and must be non-overlapping.
    * <br>When <code>inOrder</code> is false, the spans from each clause
    * need not be ordered and may overlap.
-   * @param clausesIn the clauses to find near each other, in the same field, at least 2.
+   * @param clauses the clauses to find near each other, in the same field, at least 2.
    * @param slop The slop value
    * @param inOrder true if order is important
    */
-  public SpanNearQuery(SpanQuery[] clausesIn, int slop, boolean inOrder) {
+  public SpanNearQuery(SpanQuery[] clauses, int slop, boolean inOrder) {
+    this(clauses, slop, inOrder, true);
+  }
+
+  /**
+   * @deprecated Use {@link #SpanNearQuery(SpanQuery[], int, boolean)}
+   */
+  @Deprecated
+  public SpanNearQuery(SpanQuery[] clausesIn, int slop, boolean inOrder, boolean collectPayloads) {
     this.clauses = new ArrayList<>(clausesIn.length);
     for (SpanQuery clause : clausesIn) {
       if (this.field == null) {                               // check field
@@ -176,31 +181,32 @@ public class SpanNearQuery extends SpanQuery implements Cloneable {
     buffer.append(", ");
     buffer.append(inOrder);
     buffer.append(")");
+    buffer.append(ToStringUtils.boost(getBoost()));
     return buffer.toString();
   }
 
   @Override
-  public SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+  public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
     List<SpanWeight> subWeights = new ArrayList<>();
     for (SpanQuery q : clauses) {
-      subWeights.add(q.createWeight(searcher, scoreMode, boost));
+      subWeights.add(q.createWeight(searcher, false));
     }
-    return new SpanNearWeight(subWeights, searcher, scoreMode.needsScores() ? getTermStates(subWeights) : null, boost);
+    return new SpanNearWeight(subWeights, searcher, needsScores ? getTermContexts(subWeights) : null);
   }
 
   public class SpanNearWeight extends SpanWeight {
 
     final List<SpanWeight> subWeights;
 
-    public SpanNearWeight(List<SpanWeight> subWeights, IndexSearcher searcher, Map<Term, TermStates> terms, float boost) throws IOException {
-      super(SpanNearQuery.this, searcher, terms, boost);
+    public SpanNearWeight(List<SpanWeight> subWeights, IndexSearcher searcher, Map<Term, TermContext> terms) throws IOException {
+      super(SpanNearQuery.this, searcher, terms);
       this.subWeights = subWeights;
     }
 
     @Override
-    public void extractTermStates(Map<Term, TermStates> contexts) {
+    public void extractTermContexts(Map<Term, TermContext> contexts) {
       for (SpanWeight w : subWeights) {
-        w.extractTermStates(contexts);
+        w.extractTermContexts(contexts);
       }
     }
 
@@ -223,8 +229,8 @@ public class SpanNearQuery extends SpanQuery implements Cloneable {
       }
 
       // all NearSpans require at least two subSpans
-      return (!inOrder) ? new NearSpansUnordered(slop, subSpans)
-          : new NearSpansOrdered(slop, subSpans);
+      return (!inOrder) ? new NearSpansUnordered(this, slop, subSpans, getSimScorer(context))
+          : new NearSpansOrdered(this, slop, subSpans, getSimScorer(context));
     }
 
     @Override
@@ -233,20 +239,13 @@ public class SpanNearQuery extends SpanQuery implements Cloneable {
         w.extractTerms(terms);
       }
     }
-
-    @Override
-    public boolean isCacheable(LeafReaderContext ctx) {
-      for (Weight w : subWeights) {
-        if (w.isCacheable(ctx) == false)
-          return false;
-      }
-      return true;
-    }
-
   }
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
     boolean actuallyRewritten = false;
     List<SpanQuery> rewrittenClauses = new ArrayList<>();
     for (int i = 0 ; i < clauses.size(); i++) {
@@ -256,43 +255,29 @@ public class SpanNearQuery extends SpanQuery implements Cloneable {
       rewrittenClauses.add(query);
     }
     if (actuallyRewritten) {
-      try {
-        SpanNearQuery rewritten = (SpanNearQuery) clone();
-        rewritten.clauses = rewrittenClauses;
-        return rewritten;
-      } catch (CloneNotSupportedException e) {
-        throw new AssertionError(e);
-      }
+      SpanNearQuery rewritten = (SpanNearQuery) clone();
+      rewritten.clauses = rewrittenClauses;
+      return rewritten;
     }
     return super.rewrite(reader);
   }
 
+  /** Returns true iff <code>o</code> is equal to this. */
   @Override
-  public void visit(QueryVisitor visitor) {
-    if (visitor.acceptField(getField()) == false) {
-      return;
+  public boolean equals(Object o) {
+    if (! super.equals(o)) {
+      return false;
     }
-    QueryVisitor v = visitor.getSubVisitor(BooleanClause.Occur.MUST, this);
-    for (SpanQuery clause : clauses) {
-      clause.visit(v);
-    }
-  }
+    final SpanNearQuery spanNearQuery = (SpanNearQuery) o;
 
-  @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           equalsTo(getClass().cast(other));
-  }
-  
-  private boolean equalsTo(SpanNearQuery other) {
-    return inOrder == other.inOrder && 
-           slop == other.slop &&
-           clauses.equals(other.clauses);
+    return (inOrder == spanNearQuery.inOrder)
+        && (slop == spanNearQuery.slop)
+        && clauses.equals(spanNearQuery.clauses);
   }
 
   @Override
   public int hashCode() {
-    int result = classHash();
+    int result = super.hashCode();
     result ^= clauses.hashCode();
     result += slop;
     int fac = 1 + (inOrder ? 8 : 4);
@@ -315,28 +300,23 @@ public class SpanNearQuery extends SpanQuery implements Cloneable {
     }
 
     @Override
-    public void visit(QueryVisitor visitor) {
-      visitor.visitLeaf(this);
-    }
-
-    @Override
     public String toString(String field) {
       return "SpanGap(" + field + ":" + width + ")";
     }
 
     @Override
-    public SpanWeight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-      return new SpanGapWeight(searcher, boost);
+    public SpanWeight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+      return new SpanGapWeight(searcher);
     }
 
     private class SpanGapWeight extends SpanWeight {
 
-      SpanGapWeight(IndexSearcher searcher, float boost) throws IOException {
-        super(SpanGapQuery.this, searcher, null, boost);
+      SpanGapWeight(IndexSearcher searcher) throws IOException {
+        super(SpanGapQuery.this, searcher, null);
       }
 
       @Override
-      public void extractTermStates(Map<Term, TermStates> contexts) {
+      public void extractTermContexts(Map<Term, TermContext> contexts) {
 
       }
 
@@ -349,32 +329,7 @@ public class SpanNearQuery extends SpanQuery implements Cloneable {
       public void extractTerms(Set<Term> terms) {
 
       }
-
-      @Override
-      public boolean isCacheable(LeafReaderContext ctx) {
-        return true;
-      }
-
     }
-
-    @Override
-    public boolean equals(Object other) {
-      return sameClassAs(other) &&
-             equalsTo(getClass().cast(other));
-    }
-    
-    private boolean equalsTo(SpanGapQuery other) {
-      return width == other.width &&
-             field.equals(other.field);
-    }
-
-    @Override
-    public int hashCode() {
-      int result = classHash();
-      result -= 7 * width;
-      return result * 15 - field.hashCode();
-    }
-
   }
 
   static class GapSpans extends Spans {
@@ -384,6 +339,7 @@ public class SpanNearQuery extends SpanQuery implements Cloneable {
     final int width;
 
     GapSpans(int width) {
+      super(null, null);
       this.width = width;
     }
 
@@ -440,7 +396,7 @@ public class SpanNearQuery extends SpanQuery implements Cloneable {
 
     @Override
     public float positionsCost() {
-      return 0;
+      throw new UnsupportedOperationException();
     }
   }
 

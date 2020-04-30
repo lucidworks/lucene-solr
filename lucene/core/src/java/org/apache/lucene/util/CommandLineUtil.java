@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -96,7 +96,7 @@ public final class CommandLineUtil {
   private static String adjustDirectoryClassName(String clazzName) {
     if (clazzName == null || clazzName.trim().length() == 0) {
       throw new IllegalArgumentException("The " + FSDirectory.class.getSimpleName()
-          + " implementation must not be null or empty");
+          + " implementation cannot be null or empty");
     }
     
     if (clazzName.indexOf(".") == -1) {// if not fully qualified, assume .store

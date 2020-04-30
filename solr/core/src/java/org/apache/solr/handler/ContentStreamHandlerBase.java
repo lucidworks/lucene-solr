@@ -1,3 +1,4 @@
+package org.apache.solr.handler;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +15,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler;
+
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.params.UpdateParams;
 import org.apache.solr.common.util.ContentStream;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.handler.loader.ContentStreamLoader;
@@ -74,11 +76,7 @@ public abstract class ContentStreamHandlerBase extends RequestHandlerBase {
       }
     } finally {
       // finish the request
-      try {
-        processor.finish();
-      } finally {
-        processor.close();
-      }
+      processor.finish();
     }
   }
 

@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -26,11 +26,9 @@ import java.util.Set;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermStates;
-import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
 
 abstract class SpanContainQuery extends SpanQuery implements Cloneable {
 
@@ -49,23 +47,15 @@ abstract class SpanContainQuery extends SpanQuery implements Cloneable {
 
   @Override
   public String getField() { return big.getField(); }
-  
-  public SpanQuery getBig() {
-    return big;
-  }
-
-  public SpanQuery getLittle() {
-    return little;
-  }
 
   public abstract class SpanContainWeight extends SpanWeight {
 
     final SpanWeight bigWeight;
     final SpanWeight littleWeight;
 
-    public SpanContainWeight(IndexSearcher searcher, Map<Term, TermStates> terms,
-                             SpanWeight bigWeight, SpanWeight littleWeight, float boost) throws IOException {
-      super(SpanContainQuery.this, searcher, terms, boost);
+    public SpanContainWeight(IndexSearcher searcher, Map<Term, TermContext> terms,
+                             SpanWeight bigWeight, SpanWeight littleWeight) throws IOException {
+      super(SpanContainQuery.this, searcher, terms);
       this.bigWeight = bigWeight;
       this.littleWeight = littleWeight;
     }
@@ -95,9 +85,9 @@ abstract class SpanContainQuery extends SpanQuery implements Cloneable {
     }
 
     @Override
-    public void extractTermStates(Map<Term, TermStates> contexts) {
-      bigWeight.extractTermStates(contexts);
-      littleWeight.extractTermStates(contexts);
+    public void extractTermContexts(Map<Term, TermContext> contexts) {
+      bigWeight.extractTermContexts(contexts);
+      littleWeight.extractTermContexts(contexts);
     }
 
   }
@@ -115,44 +105,32 @@ abstract class SpanContainQuery extends SpanQuery implements Cloneable {
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
     SpanQuery rewrittenBig = (SpanQuery) big.rewrite(reader);
     SpanQuery rewrittenLittle = (SpanQuery) little.rewrite(reader);
     if (big != rewrittenBig || little != rewrittenLittle) {
-      try {
-        SpanContainQuery clone = (SpanContainQuery) super.clone();
-        clone.big = rewrittenBig;
-        clone.little = rewrittenLittle;
-        return clone;
-      } catch (CloneNotSupportedException e) {
-        throw new AssertionError(e);
-      }
+      SpanContainQuery clone = (SpanContainQuery) super.clone();
+      clone.big = rewrittenBig;
+      clone.little = rewrittenLittle;
+      return clone;
     }
     return super.rewrite(reader);
   }
 
   @Override
-  public void visit(QueryVisitor visitor) {
-    if (visitor.acceptField(getField())) {
-      QueryVisitor v = visitor.getSubVisitor(BooleanClause.Occur.MUST, this);
-      big.visit(v);
-      little.visit(v);
+  public boolean equals(Object o) {
+    if (! super.equals(o)) {
+      return false;
     }
-  }
-
-  @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           equalsTo(getClass().cast(other));
-  } 
-  
-  private boolean equalsTo(SpanContainQuery other) {
-    return big.equals(other.big) && 
-           little.equals(other.little);
+    SpanContainQuery other = (SpanContainQuery)o;
+    return big.equals(other.big) && little.equals(other.little);
   }
 
   @Override
   public int hashCode() {
-    int h = Integer.rotateLeft(classHash(), 1);
+    int h = Integer.rotateLeft(super.hashCode(), 1);
     h ^= big.hashCode();
     h = Integer.rotateLeft(h, 1);
     h ^= little.hashCode();

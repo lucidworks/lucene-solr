@@ -1,3 +1,5 @@
+package org.apache.solr.handler.admin;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.admin;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.solr.handler.RequestHandlerBase;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.client.solrj.impl.XMLResponseParser;
-import org.apache.solr.core.SolrInfoBean;
+import org.apache.solr.core.SolrInfoMBean;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.util.ContentStream;
@@ -30,7 +31,11 @@ import org.apache.solr.response.BinaryResponseWriter;
 import org.apache.solr.response.SolrQueryResponse;
 
 import java.io.StringReader;
+import java.net.URL;
 import java.text.NumberFormat;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.Map;
@@ -114,7 +119,7 @@ public class SolrInfoMBeanHandler extends RequestHandlerBase {
     
     String[] requestedCats = req.getParams().getParams("cat");
     if (null == requestedCats || 0 == requestedCats.length) {
-      for (SolrInfoBean.Category cat : SolrInfoBean.Category.values()) {
+      for (SolrInfoMBean.Category cat : SolrInfoMBean.Category.values()) {
         cats.add(cat.name(), new SimpleOrderedMap<NamedList<Object>>());
       }
     } else {
@@ -125,27 +130,39 @@ public class SolrInfoMBeanHandler extends RequestHandlerBase {
          
     Set<String> requestedKeys = arrayToSet(req.getParams().getParams("key"));
     
-    Map<String, SolrInfoBean> reg = req.getCore().getInfoRegistry();
-    for (Map.Entry<String, SolrInfoBean> entry : reg.entrySet()) {
+    Map<String, SolrInfoMBean> reg = req.getCore().getInfoRegistry();
+    for (Map.Entry<String, SolrInfoMBean> entry : reg.entrySet()) {
       addMBean(req, cats, requestedKeys, entry.getKey(),entry.getValue());
     }
 
-    for (SolrInfoBean infoMBean : req.getCore().getCoreContainer().getResourceLoader().getInfoMBeans()) {
+    for (SolrInfoMBean infoMBean : req.getCore().getCoreDescriptor().getCoreContainer().getResourceLoader().getInfoMBeans()) {
       addMBean(req,cats,requestedKeys,infoMBean.getName(),infoMBean);
     }
     return cats;
   }
 
-  private void addMBean(SolrQueryRequest req, NamedList<NamedList<NamedList<Object>>> cats, Set<String> requestedKeys, String key, SolrInfoBean m) {
+  private void addMBean(SolrQueryRequest req, NamedList<NamedList<NamedList<Object>>> cats, Set<String> requestedKeys, String key, SolrInfoMBean m) {
     if ( ! ( requestedKeys.isEmpty() || requestedKeys.contains(key) ) ) return;
     NamedList<NamedList<Object>> catInfo = cats.get(m.getCategory().name());
     if ( null == catInfo ) return;
     NamedList<Object> mBeanInfo = new SimpleOrderedMap<>();
     mBeanInfo.add("class", m.getName());
+    mBeanInfo.add("version", m.getVersion());
     mBeanInfo.add("description", m.getDescription());
+    mBeanInfo.add("src", m.getSource());
+
+    // Use an external form
+    URL[] urls = m.getDocs();
+    if(urls!=null) {
+      List<String> docs = new ArrayList<>(urls.length);
+      for(URL url : urls) {
+        docs.add(url.toExternalForm());
+      }
+      mBeanInfo.add("docs", docs);
+    }
 
     if (req.getParams().getFieldBool(key, "stats", false))
-      mBeanInfo.add("stats", m.getMetricsSnapshot());
+      mBeanInfo.add("stats", m.getStatistics());
 
     catInfo.add(key, mBeanInfo);
   }
@@ -209,16 +226,14 @@ public class SolrInfoMBeanHandler extends RequestHandlerBase {
     for(int i=0; i<ref.size(); i++) {
       String name = ref.getName(i);
       Object r = ref.getVal(i);
-      Object n = now.get(name);
-      if (n == null) {
-        if (r != null) {
-          out.add("REMOVE " + name, r);
-          now.remove(name);
+      Object n = now.remove(name);
+      if(n == null) {
+        if(r!=null) {
+          out.add("REMOVE "+name, r);
         }
       }
-      else if (r != null) {
-        out.add(name, diffObject(r, n));
-        now.remove(name);
+      else {
+        out.add(name, diffObject(r,n));
       }
     }
     
@@ -233,9 +248,6 @@ public class SolrInfoMBeanHandler extends RequestHandlerBase {
   }
   
   public Object diffObject(Object ref, Object now) {
-    if (now instanceof Map) {
-      now = new NamedList((Map)now);
-    }
     if(ref instanceof NamedList) {
       return diffNamedList((NamedList)ref, (NamedList)now);
     }
@@ -287,10 +299,5 @@ public class SolrInfoMBeanHandler extends RequestHandlerBase {
   @Override
   public String getDescription() {
     return "Get Info (and statistics) for registered SolrInfoMBeans";
-  }
-
-  @Override
-  public Category getCategory() {
-    return Category.ADMIN;
   }
 }

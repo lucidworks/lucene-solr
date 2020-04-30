@@ -1,3 +1,5 @@
+package org.apache.solr.response.transform;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.response.transform;
 
 import java.util.Set;
 
-import org.apache.lucene.util.BytesRef;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.handler.component.QueryElevationComponent;
 import org.apache.solr.request.SolrQueryRequest;
@@ -45,10 +45,9 @@ class MarkTransformer extends BaseEditorialTransformer {
     super(name, idFieldName, ft);
   }
 
-  @SuppressWarnings("unchecked")
   @Override
-  protected Set<BytesRef> getIdSet() {
-    return (Set<BytesRef>) context.getRequest().getContext().get(QueryElevationComponent.BOOSTED);
+  protected Set<String> getIdSet() {
+    return (Set<String>) context.req.getContext().get(QueryElevationComponent.BOOSTED);
   }
 }
 

@@ -14,19 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.servlet;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.io.output.CloseShieldOutputStream;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.text.StringEscapeUtils;
+import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.commons.lang.StringUtils;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.SolrCore;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
@@ -41,26 +40,21 @@ import java.nio.charset.StandardCharsets;
 public final class LoadAdminUiServlet extends BaseSolrServlet {
 
   @Override
-  public void doGet(HttpServletRequest _request,
-                    HttpServletResponse _response)
+  public void doGet(HttpServletRequest request,
+                    HttpServletResponse response)
       throws IOException {
-    HttpServletRequest request = SolrDispatchFilter.closeShield(_request, false);
-    HttpServletResponse response = SolrDispatchFilter.closeShield(_response, false);
-    
+
     response.addHeader("X-Frame-Options", "DENY"); // security: SOLR-7966 - avoid clickjacking for admin interface
 
     // This attribute is set by the SolrDispatchFilter
     String admin = request.getRequestURI().substring(request.getContextPath().length());
     CoreContainer cores = (CoreContainer) request.getAttribute("org.apache.solr.CoreContainer");
     InputStream in = getServletContext().getResourceAsStream(admin);
-    Writer out = null;
     if(in != null && cores != null) {
       try {
         response.setCharacterEncoding("UTF-8");
         response.setContentType("text/html");
-
-        // We have to close this to flush OutputStreamWriter buffer
-        out = new OutputStreamWriter(new CloseShieldOutputStream(response.getOutputStream()), StandardCharsets.UTF_8);
+        Writer out = new OutputStreamWriter(response.getOutputStream(), StandardCharsets.UTF_8);
 
         String html = IOUtils.toString(in, "UTF-8");
         Package pack = SolrCore.class.getPackage();
@@ -71,15 +65,15 @@ public final class LoadAdminUiServlet extends BaseSolrServlet {
             "${version}" 
         };
         String[] replace = new String[] {
-            StringEscapeUtils.escapeEcmaScript(request.getContextPath()),
-            StringEscapeUtils.escapeEcmaScript(CommonParams.CORES_HANDLER_PATH),
-            StringEscapeUtils.escapeEcmaScript(pack.getSpecificationVersion())
+            StringEscapeUtils.escapeJavaScript(request.getContextPath()),
+            StringEscapeUtils.escapeJavaScript(CommonParams.CORES_HANDLER_PATH),
+            StringEscapeUtils.escapeJavaScript(pack.getSpecificationVersion())
         };
         
         out.write( StringUtils.replaceEach(html, search, replace) );
+        out.flush();
       } finally {
         IOUtils.closeQuietly(in);
-        IOUtils.closeQuietly(out);
       }
     } else {
       response.sendError(404);

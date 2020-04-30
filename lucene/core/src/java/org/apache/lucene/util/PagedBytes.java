@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
@@ -61,7 +64,7 @@ public final class PagedBytes implements Accountable {
     private final long bytesUsedPerBlock;
 
     private Reader(PagedBytes pagedBytes) {
-      blocks = ArrayUtil.copyOfSubArray(pagedBytes.blocks, 0, pagedBytes.numBlocks);
+      blocks = Arrays.copyOf(pagedBytes.blocks, pagedBytes.numBlocks);
       blockBits = pagedBytes.blockBits;
       blockMask = pagedBytes.blockMask;
       blockSize = pagedBytes.blockSize;
@@ -133,6 +136,11 @@ public final class PagedBytes implements Accountable {
       }
       return size;
     }
+    
+    @Override
+    public Collection<Accountable> getChildResources() {
+      return Collections.emptyList();
+    }
 
     @Override
     public String toString() {
@@ -153,7 +161,9 @@ public final class PagedBytes implements Accountable {
   }
 
   private void addBlock(byte[] block) {
-    blocks = ArrayUtil.grow(blocks, numBlocks + 1);
+    if (blocks.length == numBlocks) {
+      blocks = Arrays.copyOf(blocks, ArrayUtil.oversize(numBlocks, RamUsageEstimator.NUM_BYTES_OBJECT_REF));
+    }
     blocks[numBlocks++] = block;
   }
 
@@ -247,6 +257,11 @@ public final class PagedBytes implements Accountable {
       size += RamUsageEstimator.sizeOf(currentBlock);
     }
     return size;
+  }
+  
+  @Override
+  public Collection<Accountable> getChildResources() {
+    return Collections.emptyList();
   }
 
   /** Copy bytes in, writing the length as a 1 or 2 byte

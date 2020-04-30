@@ -1,3 +1,4 @@
+package org.apache.solr.rest.schema.analysis;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.rest.schema.analysis;
+
 import java.io.IOException;
 import java.util.Map;
 
@@ -30,7 +31,6 @@ import org.apache.solr.rest.ManagedResourceObserver;
  * are managed by the REST API. Specifically, this base class is useful
  * for token filters that have configuration and data that needs to be
  * updated programmatically, such as to support a UI for adding synonyms.  
- * @since 4.8.0
  */
 public abstract class BaseManagedTokenFilterFactory extends TokenFilterFactory 
   implements ResourceLoaderAware, ManagedResourceObserver

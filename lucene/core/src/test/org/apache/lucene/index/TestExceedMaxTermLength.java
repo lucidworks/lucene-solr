@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -83,19 +83,21 @@ public class TestExceedMaxTermLength extends LuceneTestCase {
       }
       doc.add(f);
       
-      IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+      try {
         w.addDocument(doc);
-      });
-      String maxLengthMsg = String.valueOf(IndexWriter.MAX_TERM_LENGTH);
-      String msg = expected.getMessage();
-      assertTrue("IllegalArgumentException didn't mention 'immense term': " + msg,
-                 msg.contains("immense term"));
-      assertTrue("IllegalArgumentException didn't mention max length ("+maxLengthMsg+"): " + msg,
-                 msg.contains(maxLengthMsg));
-      assertTrue("IllegalArgumentException didn't mention field name ("+name+"): " + msg,
-                 msg.contains(name));
-      assertTrue("IllegalArgumentException didn't mention original message: " + msg,
-                 msg.contains("bytes can be at most") && msg.contains("in length; got"));
+        fail("Did not get an exception from adding a monster term");
+      } catch (IllegalArgumentException e) {
+        final String maxLengthMsg = String.valueOf(IndexWriter.MAX_TERM_LENGTH);
+        final String msg = e.getMessage();
+        assertTrue("IllegalArgumentException didn't mention 'immense term': " + msg,
+                   msg.contains("immense term"));
+        assertTrue("IllegalArgumentException didn't mention max length ("+maxLengthMsg+"): " + msg,
+                   msg.contains(maxLengthMsg));
+        assertTrue("IllegalArgumentException didn't mention field name ("+name+"): " + msg,
+                   msg.contains(name));
+        assertTrue("IllegalArgumentException didn't mention original message: " + msg,
+            msg.contains("bytes can be at most") && msg.contains("in length; got"));
+      }
     } finally {
       w.close();
     }

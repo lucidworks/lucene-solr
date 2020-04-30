@@ -1,3 +1,5 @@
+package org.apache.solr.security;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.security;
 
 import java.util.List;
 import java.util.Map;
 
-import org.apache.solr.common.util.CommandOperation;
+import org.apache.solr.util.CommandOperation;
 
 /**An interface to be implemented by a Plugin whose Configuration is runtime editable
  *
@@ -33,6 +34,6 @@ public interface ConfigEditablePlugin {
    * of the implementation to ensure that the returned config is valid . The framework
    * does no validation of the data
    */
-  Map<String,Object> edit(Map<String, Object> latestConf, List<CommandOperation> commands);
+  public Map<String,Object> edit(Map<String,Object> latestConf, List<CommandOperation> commands);
 
 }

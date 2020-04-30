@@ -1,3 +1,4 @@
+package org.apache.solr.analysis;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.analysis;
+
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
@@ -60,13 +61,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
  *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
 public class ReversedWildcardFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "reversedWildcard";
   
   private char markerChar = ReverseStringFilter.START_OF_HEADING_MARKER;
   private boolean withOriginal;

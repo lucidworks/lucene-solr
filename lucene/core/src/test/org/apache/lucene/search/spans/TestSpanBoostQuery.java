@@ -1,3 +1,8 @@
+package org.apache.lucene.search.spans;
+
+import org.apache.lucene.index.Term;
+import org.apache.lucene.util.LuceneTestCase;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +19,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
-import org.apache.lucene.index.Term;
-import org.apache.lucene.util.LuceneTestCase;
-
 
 public class TestSpanBoostQuery extends LuceneTestCase {
 
@@ -40,11 +40,11 @@ public class TestSpanBoostQuery extends LuceneTestCase {
   }
 
   public void testToString() {
-    assertEquals("(foo:bar)^2.0", new SpanBoostQuery(new SpanTermQuery(new Term("foo", "bar")), 2).toString());
+    assertEquals("foo:bar^2.0", new SpanBoostQuery(new SpanTermQuery(new Term("foo", "bar")), 2).toString());
     SpanOrQuery bq = new SpanOrQuery(
         new SpanTermQuery(new Term("foo", "bar")),
         new SpanTermQuery(new Term("foo", "baz")));
-    assertEquals("(spanOr([foo:bar, foo:baz]))^2.0", new SpanBoostQuery(bq, 2).toString());
+    assertEquals("spanOr([foo:bar, foo:baz])^2.0", new SpanBoostQuery(bq, 2).toString());
   }
 
 }

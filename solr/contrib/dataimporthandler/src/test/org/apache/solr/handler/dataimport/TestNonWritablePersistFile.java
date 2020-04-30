@@ -50,53 +50,49 @@ public class TestNonWritablePersistFile extends AbstractDataImportHandlerTestCas
     "</dataConfig>\n";
   private static String tmpSolrHome;
 
-  private static File f;
-
   @BeforeClass
   public static void createTempSolrHomeAndCore() throws Exception {
     tmpSolrHome = createTempDir().toFile().getAbsolutePath();
     FileUtils.copyDirectory(getFile("dih/solr"), new File(tmpSolrHome).getAbsoluteFile());
     initCore("dataimport-solrconfig.xml", "dataimport-schema.xml", 
              new File(tmpSolrHome).getAbsolutePath());
-    
+  }  
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testNonWritablePersistFile() throws Exception {
     // See SOLR-2551
     String configDir = h.getCore().getResourceLoader().getConfigDir();
     String filePath = configDir;
     if (configDir != null && !configDir.endsWith(File.separator))
       filePath += File.separator;
     filePath += "dataimport.properties";
-    f = new File(filePath);
-    // execute the test only if we are able to set file to read only mode
-    assumeTrue("No dataimport.properties file", f.exists() || f.createNewFile());
-    assumeTrue("dataimport.properties can't be set read only", f.setReadOnly());
-    assumeFalse("dataimport.properties is still writable even though " + 
-                "marked readonly - test running as superuser?", f.canWrite());
-  }
-  
-  @AfterClass
-  public static void afterClass() throws Exception {
-    if (f != null) {
-      f.setWritable(true);
-    }
-  }
+    File f = new File(filePath);
 
-  @Test
-  @SuppressWarnings("unchecked")
-  public void testNonWritablePersistFile() throws Exception {
-    ignoreException("Properties is not writable");
+    try {
+      // execute the test only if we are able to set file to read only mode
+      assumeTrue("No dataimport.properties file", f.exists() || f.createNewFile());
+      assumeTrue("dataimport.properties can't be set read only", f.setReadOnly());
+      assumeFalse("dataimport.properties is still writable even though " + 
+                  "marked readonly - test running as superuser?", f.canWrite());
 
-    @SuppressWarnings("rawtypes")
-    List parentRow = new ArrayList();
-    parentRow.add(createMap("id", "1"));
-    MockDataSource.setIterator(FULLIMPORT_QUERY, parentRow.iterator());
+      ignoreException("Properties is not writable");
+
+      @SuppressWarnings("rawtypes")
+      List parentRow = new ArrayList();
+      parentRow.add(createMap("id", "1"));
+      MockDataSource.setIterator(FULLIMPORT_QUERY, parentRow.iterator());
       
-    @SuppressWarnings("rawtypes")
-    List childRow = new ArrayList();
-    childRow.add(createMap("desc", "hello"));
-    MockDataSource.setIterator("select * from y where y.A='1'",
+      @SuppressWarnings("rawtypes")
+      List childRow = new ArrayList();
+      childRow.add(createMap("desc", "hello"));
+      MockDataSource.setIterator("select * from y where y.A='1'",
                                  childRow.iterator());
       
-    runFullImport(dataConfig_delta);
-    assertQ(req("id:1"), "//*[@numFound='0']");
+      runFullImport(dataConfig_delta);
+      assertQ(req("id:1"), "//*[@numFound='0']");
+    } finally {
+      f.setWritable(true);
+    }
   }  
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.en;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.en;
-
 
 /*
 
@@ -44,6 +44,11 @@ package org.apache.lucene.analysis.en;
 */
 
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.FileInputStream;
+
+import static org.apache.lucene.util.RamUsageEstimator.NUM_BYTES_CHAR;
 import org.apache.lucene.util.ArrayUtil;
 
 /**
@@ -448,7 +453,7 @@ class PorterStemmer
   public boolean stem(char[] wordBuffer, int offset, int wordLen) {
     reset();
     if (b.length < wordLen) {
-      b = new char[ArrayUtil.oversize(wordLen, Character.BYTES)];
+      b = new char[ArrayUtil.oversize(wordLen, NUM_BYTES_CHAR)];
     }
     System.arraycopy(wordBuffer, offset, b, 0, wordLen);
     i = wordLen;

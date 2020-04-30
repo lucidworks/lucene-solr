@@ -1,3 +1,5 @@
+package org.apache.lucene.mockfile;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.mockfile;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -31,7 +32,7 @@ import java.util.Objects;
  * source of data, possibly transforming the data along the 
  * way or providing additional functionality. 
  */
-public abstract class FilterFileChannel extends FileChannel {
+public class FilterFileChannel extends FileChannel {
   
   /** 
    * The underlying {@code FileChannel} instance. 

@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
-
-import java.util.Comparator;
 
 import org.junit.runner.RunWith;
 
@@ -32,7 +30,7 @@ public class TestInPlaceMergeSorter extends BaseSortTestCase {
 
   @Override
   public Sorter newSorter(Entry[] arr) {
-    return new ArrayInPlaceMergeSorter<>(arr, Comparator.naturalOrder());
+    return new ArrayInPlaceMergeSorter<>(arr, ArrayUtil.<Entry>naturalComparator());
   }
 
 }

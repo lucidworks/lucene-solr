@@ -1,3 +1,9 @@
+package org.apache.solr.spelling.suggest;
+
+import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.common.params.SpellingParams;
+import org.junit.BeforeClass;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +20,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling.suggest;
-
-import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.common.params.SpellingParams;
-import org.junit.BeforeClass;
 
 public class TestFuzzyAnalyzedSuggestions extends SolrTestCaseJ4  {
   static final String URI_DEFAULT = "/fuzzy_suggest_analyzing";

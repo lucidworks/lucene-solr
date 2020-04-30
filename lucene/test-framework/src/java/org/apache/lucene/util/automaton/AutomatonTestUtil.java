@@ -1,3 +1,5 @@
+package org.apache.lucene.util.automaton;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.automaton;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -205,8 +206,8 @@ public class AutomatonTestUtil {
     }
 
     public int[] getRandomAcceptedString(Random r) {
-      int[] codePoints = new int[0];
-      int codepointCount = 0;
+
+      final List<Integer> soFar = new ArrayList<>();
 
       int s = 0;
 
@@ -248,11 +249,11 @@ public class AutomatonTestUtil {
         } else {
           t = transitions[s][r.nextInt(transitions[s].length)];
         }
-        codePoints = ArrayUtil.grow(codePoints, codepointCount + 1);
-        codePoints[codepointCount++] = getRandomCodePoint(r, t.min, t.max);
+        soFar.add(getRandomCodePoint(r, t.min, t.max));
         s = t.dest;
       }
-      return ArrayUtil.copyOfSubArray(codePoints, 0, codepointCount);
+
+      return ArrayUtil.toIntArray(soFar);
     }
   }
 

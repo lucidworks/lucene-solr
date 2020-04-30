@@ -47,13 +47,8 @@
     <double name="maxWriteMBPerSecRead">4000000</double>
     <str name="solr.hdfs.home">${solr.hdfs.home:}</str>
     <bool name="solr.hdfs.blockcache.enabled">${solr.hdfs.blockcache.enabled:true}</bool> 
-    <bool name="solr.hdfs.blockcache.global">${solr.hdfs.blockcache.global:true}</bool>
-    <bool name="solr.hdfs.blockcache.write.enabled">${solr.hdfs.blockcache.write.enabled:false}</bool>
-    <int name="solr.hdfs.blockcache.blocksperbank">${solr.hdfs.blockcache.blocksperbank:10}</int>
-    <int name="solr.hdfs.blockcache.slab.count">${solr.hdfs.blockcache.slab.count:1}</int>
+    <str name="solr.hdfs.blockcache.global">${solr.hdfs.blockcache.global:false}</str>
   </directoryFactory>
-
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
 
   <luceneMatchVersion>${tests.luceneMatchVersion:LATEST}</luceneMatchVersion>
 
@@ -63,15 +58,28 @@
 
   <updateHandler class="solr.DirectUpdateHandler2">
 
-    <autoCommit>
-      <maxTime>${solr.autoCommit.maxTime:-1}</maxTime>
-    </autoCommit>
-
     <!-- autocommit pending docs if certain criteria are met
     <autoCommit>
       <maxDocs>10000</maxDocs>
       <maxTime>3600000</maxTime>
     </autoCommit>
+    -->
+
+    <!-- The RunExecutableListener executes an external command.
+         exe - the name of the executable to run
+         dir - dir to use as the current working directory. default="."
+         wait - the calling thread waits until the executable returns. default="true"
+         args - the arguments to pass to the program.  default=nothing
+         env - environment variables to set.  default=nothing
+      -->
+    <!-- A postCommit event is fired after every commit
+    <listener event="postCommit" class="solr.RunExecutableListener">
+      <str name="exe">/var/opt/resin3/__PORT__/scripts/solr/snapshooter</str>
+      <str name="dir">/var/opt/resin3/__PORT__</str>
+      <bool name="wait">true</bool>
+      <arr name="args"> <str>arg1</str> <str>arg2</str> </arr>
+      <arr name="env"> <str>MYVAR=val1</str> </arr>
+    </listener>
     -->
     
     <updateLog enable="${enable.update.log:true}">
@@ -89,7 +97,7 @@
         range or wildcard queries that expand to big boolean
         queries.  An exception is thrown if exceeded.
     -->
-    <maxBooleanClauses>${solr.max.booleanClauses:1024}</maxBooleanClauses>
+    <maxBooleanClauses>1024</maxBooleanClauses>
 
     <!-- Cache specification for Filters or DocSets - unordered set of *all* documents
          that match a particular query.
@@ -183,13 +191,17 @@
        If the set cardinality <= maxSize elements, then HashDocSet will be used instead of the bitset
        based HashBitset. -->
 
-  <!-- requestHandler plugins
+  <!-- requestHandler plugins... incoming queries will be dispatched to the
+     correct handler based on the 'qt' param matching the
+     name of registered handlers.
+      The "standard" request handler is the default and will be used if qt
+     is not specified in the request.
   -->
-  <requestHandler name="/select" class="solr.SearchHandler">
+  <requestHandler name="standard" class="solr.StandardRequestHandler">
     <bool name="httpCaching">true</bool>
   </requestHandler>
 
-  <requestHandler name="/dismax" class="solr.SearchHandler" >
+  <requestHandler name="dismax" class="solr.SearchHandler" >
     <lst name="defaults">
      <str name="defType">dismax</str>
      <str name="q.alt">*:*</str>
@@ -201,7 +213,7 @@
         text^0.2 features_t^1.1 subject^1.4 title_stemmed^2.0 title^1.5
      </str>
      <str name="bf">
-        weight^0.5 recip(rord(id),1,1000,1000)^0.3
+        ord(weight)^0.5 recip(rord(iind),1,1000,1000)^0.3
      </str>
      <str name="mm">
         3&lt;-1 5&lt;-2 6&lt;90%
@@ -210,10 +222,10 @@
     </lst>
   </requestHandler>
 
-  <requestHandler name="/mock" class="org.apache.solr.core.MockQuerySenderListenerReqHandler"/>
+  <requestHandler name="mock" class="org.apache.solr.core.MockQuerySenderListenerReqHandler"/>
 
   <!-- test query parameter defaults -->
-  <requestHandler name="/defaults" class="solr.SearchHandler">
+  <requestHandler name="defaults" class="solr.StandardRequestHandler">
     <lst name="defaults">
       <int name="rows">4</int>
       <bool name="hl">true</bool>
@@ -222,7 +234,7 @@
   </requestHandler>
 
   <!-- test query parameter defaults -->
-  <requestHandler name="/lazy" class="solr.SearchHandler" startup="lazy">
+  <requestHandler name="lazy" class="solr.StandardRequestHandler" startup="lazy">
     <lst name="defaults">
       <int name="rows">4</int>
       <bool name="hl">true</bool>
@@ -320,7 +332,7 @@
    -->
   <queryConverter name="queryConverter" class="org.apache.solr.spelling.SpellingQueryConverter"/>
 
-  <requestHandler name="/spellCheckCompRH" class="org.apache.solr.handler.component.SearchHandler">
+  <requestHandler name="spellCheckCompRH" class="org.apache.solr.handler.component.SearchHandler">
     <lst name="defaults">
       <!-- omp = Only More Popular -->
       <str name="spellcheck.onlyMorePopular">false</str>
@@ -333,7 +345,7 @@
       <str>spellcheck</str>
     </arr>
   </requestHandler>
-  <requestHandler name="/spellCheckCompRH_Direct" class="org.apache.solr.handler.component.SearchHandler">
+    <requestHandler name="spellCheckCompRH_Direct" class="org.apache.solr.handler.component.SearchHandler">
     <lst name="defaults">
       <str name="spellcheck.dictionary">direct</str>
       <str name="spellcheck.onlyMorePopular">false</str>
@@ -344,7 +356,7 @@
       <str>spellcheck</str>
     </arr>
   </requestHandler>
-  <requestHandler name="/spellCheckWithWordbreak" class="org.apache.solr.handler.component.SearchHandler">
+  <requestHandler name="spellCheckWithWordbreak" class="org.apache.solr.handler.component.SearchHandler">
     <lst name="defaults">
       <str name="spellcheck.dictionary">default</str>
       <str name="spellcheck.dictionary">wordbreak</str>
@@ -354,7 +366,7 @@
       <str>spellcheck</str>
     </arr>
   </requestHandler>
-  <requestHandler name="/spellCheckWithWordbreak_Direct" class="org.apache.solr.handler.component.SearchHandler">
+  <requestHandler name="spellCheckWithWordbreak_Direct" class="org.apache.solr.handler.component.SearchHandler">
     <lst name="defaults">
       <str name="spellcheck.dictionary">direct</str>
       <str name="spellcheck.dictionary">wordbreak</str>
@@ -364,7 +376,7 @@
       <str>spellcheck</str>
     </arr>
   </requestHandler>
-  <requestHandler name="/spellCheckCompRH1" class="org.apache.solr.handler.component.SearchHandler">
+  <requestHandler name="spellCheckCompRH1" class="org.apache.solr.handler.component.SearchHandler">
       <lst name="defaults">
         <str name="defType">dismax</str>
         <str name="qf">lowerfilt1^1</str>
@@ -374,13 +386,13 @@
       </arr>
  </requestHandler>
  
-  <requestHandler name="/mltrh" class="org.apache.solr.handler.component.SearchHandler">
+  <requestHandler name="mltrh" class="org.apache.solr.handler.component.SearchHandler">
 
   </requestHandler>
 
   <searchComponent name="tvComponent" class="org.apache.solr.handler.component.TermVectorComponent"/>
 
-  <requestHandler name="/tvrh" class="org.apache.solr.handler.component.SearchHandler">
+  <requestHandler name="tvrh" class="org.apache.solr.handler.component.SearchHandler">
     <lst name="defaults">
 
     </lst>
@@ -439,12 +451,21 @@
   </highlighting>
   </searchComponent>
 
-  <requestDispatcher>
-    <requestParsers enableRemoteStreaming="true" enableStreamBody="true" multipartUploadLimitInKB="-1" />
+  <!-- enable streaming for testing... -->
+  <requestDispatcher handleSelect="true" >
+    <requestParsers enableRemoteStreaming="true" multipartUploadLimitInKB="2048" />
     <httpCaching lastModifiedFrom="openTime" etagSeed="Solr" never304="false">
       <cacheControl>max-age=30, public</cacheControl>
     </httpCaching>
   </requestDispatcher>
+
+  <!-- Echo the request contents back to the client -->
+  <requestHandler name="/debug/dump" class="solr.DumpRequestHandler" >
+    <lst name="defaults">
+      <str name="echoParams">explicit</str>
+      <str name="echoHandler">true</str>
+    </lst>
+  </requestHandler>
 
   <requestHandler name="/search-facet-def" class="solr.SearchHandler" >
     <lst name="defaults">
@@ -460,10 +481,10 @@
       <str name="facet.query">foo_s:bar</str>
     </lst>
   </requestHandler>
-  
+
   <admin>
     <defaultQuery>solr</defaultQuery>
-    <gettableFiles>solrconfig.xml schema.xml</gettableFiles>
+    <gettableFiles>solrconfig.xml schema.xml admin-extra.html</gettableFiles>
   </admin>
 
   <!-- test getting system property -->
@@ -553,21 +574,6 @@
     -->
     <str name="storageIO">org.apache.solr.rest.ManagedResourceStorage$InMemoryStorageIO</str>
   </restManager>
-
-  <!-- warning: not a best practice; requests generally ought to be explicit to thus not require this -->
-  <initParams path="/select,/dismax,/defaults,/lazy,/spellCheckCompRH,/spellCheckWithWordbreak,/spellCheckCompRH_Direct,/spellCheckCompRH1,/mltrh,/tvrh,/search-facet-def,/search-facet-invariants,/terms">
-    <lst name="defaults">
-      <str name="df">text</str>
-    </lst>
-  </initParams>
-
-  <transformer name="explain1" class="org.apache.solr.response.transform.ExplainAugmenterFactory" />
-  <transformer name="explainText" class="org.apache.solr.response.transform.ExplainAugmenterFactory" >
-    <str name="args">text</str>
-  </transformer>
-  <transformer name="explainNL" class="org.apache.solr.response.transform.ExplainAugmenterFactory" >
-    <str name="args">nl</str>
-  </transformer>
 
 </config>
 

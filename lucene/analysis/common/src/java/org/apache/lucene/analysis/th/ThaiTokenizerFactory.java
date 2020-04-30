@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.th;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.th;
-
 
 import java.util.Map;
 
@@ -31,14 +31,8 @@ import org.apache.lucene.util.AttributeFactory;
  *     &lt;tokenizer class="solr.ThaiTokenizerFactory"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- *
- * @since 4.10.0
- * @lucene.spi {@value #NAME}
  */
 public class ThaiTokenizerFactory extends TokenizerFactory {
-
-  /** SPI name */
-  public static final String NAME = "thai";
   
   /** Creates a new ThaiTokenizerFactory */
   public ThaiTokenizerFactory(Map<String,String> args) {

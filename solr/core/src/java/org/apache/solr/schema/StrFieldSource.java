@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.schema;
 
 import org.apache.lucene.index.LeafReaderContext;
@@ -45,8 +46,8 @@ public class StrFieldSource extends FieldCacheSource {
       }
 
       @Override
-      public int ordVal(int doc) throws IOException {
-        return getOrdForDoc(doc);
+      public int ordVal(int doc) {
+        return termsIndex.getOrd(doc);
       }
 
       @Override
@@ -55,12 +56,12 @@ public class StrFieldSource extends FieldCacheSource {
       }
 
       @Override
-      public Object objectVal(int doc) throws IOException {
+      public Object objectVal(int doc) {
         return strVal(doc);
       }
 
       @Override
-      public String toString(int doc) throws IOException {
+      public String toString(int doc) {
         return description() + '=' + strVal(doc);
       }
     };

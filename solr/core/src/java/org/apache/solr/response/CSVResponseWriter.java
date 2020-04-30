@@ -14,34 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.response;
 
-import java.io.CharArrayWriter;
-import java.io.IOException;
-import java.io.Writer;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
-import org.apache.lucene.index.IndexableField;
-import org.apache.solr.common.SolrDocument;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.params.SolrParams;
-import org.apache.solr.common.util.FastWriter;
-import org.apache.solr.common.util.NamedList;
 import org.apache.solr.internal.csv.CSVPrinter;
 import org.apache.solr.internal.csv.CSVStrategy;
+import org.apache.lucene.index.IndexableField;
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrDocumentList;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.DateUtil;
+import org.apache.solr.util.FastWriter;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.schema.StrField;
+import org.apache.solr.search.DocList;
 import org.apache.solr.search.ReturnFields;
 
+import java.io.CharArrayWriter;
+import java.io.IOException;
+import java.io.Writer;
+import java.util.*;
+
 /**
- * Response writer for csv data
+ *
  */
 
 public class CSVResponseWriter implements QueryResponseWriter {
@@ -68,7 +67,7 @@ public class CSVResponseWriter implements QueryResponseWriter {
 }
 
 
-class CSVWriter extends TabularResponseWriter {
+class CSVWriter extends TextResponseWriter {
   static String SEPARATOR = "separator";
   static String ENCAPSULATOR = "encapsulator";
   static String ESCAPE = "escape";
@@ -170,8 +169,7 @@ class CSVWriter extends TabularResponseWriter {
   public void writeResponse() throws IOException {
     SolrParams params = req.getParams();
 
-    strategy = new CSVStrategy
-        (',', '"', CSVStrategy.COMMENTS_DISABLED, CSVStrategy.ESCAPE_DISABLED, false, false, false, true, "\n");
+    strategy = new CSVStrategy(',', '"', CSVStrategy.COMMENTS_DISABLED, CSVStrategy.ESCAPE_DISABLED, false, false, false, true);
     CSVStrategy strat = strategy;
 
     String sep = params.get(CSV_SEPARATOR);
@@ -210,8 +208,7 @@ class CSVWriter extends TabularResponseWriter {
     printer = new CSVPrinter(writer, strategy);
     
 
-    CSVStrategy mvStrategy = new CSVStrategy(strategy.getDelimiter(), CSVStrategy.ENCAPSULATOR_DISABLED, 
-        CSVStrategy.COMMENTS_DISABLED, '\\', false, false, false, false, "\n");
+    CSVStrategy mvStrategy = new CSVStrategy(strategy.getDelimiter(), CSVStrategy.ENCAPSULATOR_DISABLED, CSVStrategy.COMMENTS_DISABLED, '\\', false, false, false, false);
     strat = mvStrategy;
 
     sep = params.get(MV_SEPARATOR);
@@ -238,7 +235,36 @@ class CSVWriter extends TabularResponseWriter {
       // encapsulator will already be disabled if it wasn't specified
     }
 
-    Collection<String> fields = getFields();
+    Collection<String> fields = returnFields.getRequestedFieldNames();
+    Object responseObj = rsp.getValues().get("response");
+    boolean returnOnlyStored = false;
+    if (fields==null||returnFields.hasPatternMatching()) {
+      if (responseObj instanceof SolrDocumentList) {
+        // get the list of fields from the SolrDocumentList
+        if(fields==null) {
+          fields = new LinkedHashSet<>();
+        }
+        for (SolrDocument sdoc: (SolrDocumentList)responseObj) {
+          fields.addAll(sdoc.getFieldNames());
+        }
+      } else {
+        // get the list of fields from the index
+        Collection<String> all = req.getSearcher().getFieldNames();
+        if(fields==null) {
+          fields = all;
+        }
+        else {
+          fields.addAll(all);
+        }
+      }
+      if (returnFields.wantsScore()) {
+        fields.add("score");
+      } else {
+        fields.remove("score");
+      }
+      returnOnlyStored = true;
+    }
+
     CSVSharedBufPrinter csvPrinterMV = new CSVSharedBufPrinter(mvWriter, mvStrategy);
 
     for (String field : fields) {
@@ -252,14 +278,15 @@ class CSVWriter extends TabularResponseWriter {
         continue;
       }
 
-      if (shouldSkipField(field)) {
-        continue;
-      }
-
       SchemaField sf = schema.getFieldOrNull(field);
       if (sf == null) {
         FieldType ft = new StrField();
         sf = new SchemaField(field, ft);
+      }
+      
+      // Return only stored fields, unless an explicit field list is specified
+      if (returnOnlyStored && sf != null && !sf.stored()) {
+        continue;
       }
 
       // check for per-field overrides
@@ -313,13 +340,40 @@ class CSVWriter extends TabularResponseWriter {
       printer.println();
     }
 
-    writeResponse(rsp.getResponse());
+    if (responseObj instanceof ResultContext ) {
+      writeDocuments(null, (ResultContext)responseObj, returnFields );
+    }
+    else if (responseObj instanceof DocList) {
+      ResultContext ctx = new ResultContext();
+      ctx.docs =  (DocList)responseObj;
+      writeDocuments(null, ctx, returnFields );
+    } else if (responseObj instanceof SolrDocumentList) {
+      writeSolrDocumentList(null, (SolrDocumentList)responseObj, returnFields );
+    }
+
   }
 
   @Override
   public void close() throws IOException {
     if (printer != null) printer.flush();
     super.close();
+  }
+
+  @Override
+  public void writeNamedList(String name, NamedList val) throws IOException {
+  }
+
+  @Override
+  public void writeStartDocumentList(String name, 
+      long start, int size, long numFound, Float maxScore) throws IOException
+  {
+    // nothing
+  }
+
+  @Override
+  public void writeEndDocumentList() throws IOException
+  {
+    // nothing
   }
 
   //NOTE: a document cannot currently contain another document
@@ -393,6 +447,14 @@ class CSVWriter extends TabularResponseWriter {
   }
 
   @Override
+  public void writeMap(String name, Map val, boolean excludeOuter, boolean isFirstVal) throws IOException {
+  }
+
+  @Override
+  public void writeArray(String name, Iterator val) throws IOException {
+  }
+
+  @Override
   public void writeNull(String name) throws IOException {
     printer.print(NullValue);
   }
@@ -420,6 +482,13 @@ class CSVWriter extends TabularResponseWriter {
   @Override
   public void writeDouble(String name, String val) throws IOException {
     printer.print(val, false);
+  }
+
+  @Override
+  public void writeDate(String name, Date val) throws IOException {
+    StringBuilder sb = new StringBuilder(25);
+    cal = DateUtil.formatDate(val, cal, sb);
+    writeDate(name, sb.toString());
   }
 
   @Override

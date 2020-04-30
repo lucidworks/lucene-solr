@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -94,6 +94,10 @@ public class TestIndexWriterCommit extends LuceneTestCase {
    */
   public void testCommitOnCloseAbort() throws IOException {
     Directory dir = newDirectory();
+    if (dir instanceof MockDirectoryWrapper) {
+      // test uses IW unref'ed check which is unaware of retries
+      ((MockDirectoryWrapper)dir).setEnableVirusScanner(false);
+    }
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random()))
                                                 .setMaxBufferedDocs(10));
     for (int i = 0; i < 14; i++) {
@@ -140,6 +144,12 @@ public class TestIndexWriterCommit extends LuceneTestCase {
                                     .setOpenMode(OpenMode.APPEND)
                                     .setMaxBufferedDocs(10));
 
+    // On abort, writer in fact may write to the same
+    // segments_N file:
+    if (dir instanceof MockDirectoryWrapper) {
+      ((MockDirectoryWrapper)dir).setPreventDoubleWrite(false);
+    }
+
     for(int i=0;i<12;i++) {
       for(int j=0;j<17;j++) {
         TestIndexWriter.addDoc(writer);
@@ -177,7 +187,13 @@ public class TestIndexWriterCommit extends LuceneTestCase {
 
     final String idFormat = TestUtil.getPostingsFormat("id");
     final String contentFormat = TestUtil.getPostingsFormat("content");
+    assumeFalse("This test cannot run with Memory codec", idFormat.equals("Memory") || contentFormat.equals("Memory"));
     MockDirectoryWrapper dir = newMockDirectory();
+    if (dir instanceof MockDirectoryWrapper) {
+      // the virus scanner can use up too much disk space :)
+      // an alternative is to expose MDW.triedToDelete and discount it
+      dir.setEnableVirusScanner(false);
+    }
     Analyzer analyzer;
     if (random().nextBoolean()) {
       // no payloads
@@ -257,6 +273,16 @@ public class TestIndexWriterCommit extends LuceneTestCase {
    */
   public void testCommitOnCloseForceMerge() throws IOException {
     Directory dir = newDirectory();
+    // Must disable throwing exc on double-write: this
+    // test uses IW.rollback which easily results in
+    // writing to same file more than once
+    if (dir instanceof MockDirectoryWrapper) {
+      ((MockDirectoryWrapper)dir).setPreventDoubleWrite(false);
+    }
+    if (dir instanceof MockDirectoryWrapper) {
+      // test uses IW unref'ed check which is unaware of retries
+      ((MockDirectoryWrapper)dir).setEnableVirusScanner(false);
+    }
     IndexWriter writer = new IndexWriter(
         dir,
         newIndexWriterConfig(new MockAnalyzer(random()))
@@ -421,13 +447,13 @@ public class TestIndexWriterCommit extends LuceneTestCase {
     // commit to "first"
     Map<String,String> commitData = new HashMap<>();
     commitData.put("tag", "first");
-    w.setLiveCommitData(commitData.entrySet());
+    w.setCommitData(commitData);
     w.commit();
 
     // commit to "second"
     w.addDocument(doc);
     commitData.put("tag", "second");
-    w.setLiveCommitData(commitData.entrySet());
+    w.setCommitData(commitData);
     w.close();
 
     // open "first" with IndexWriter
@@ -445,12 +471,12 @@ public class TestIndexWriterCommit extends LuceneTestCase {
                                .setIndexDeletionPolicy(NoDeletionPolicy.INSTANCE)
                                .setIndexCommit(commit));
 
-    assertEquals(1, w.getDocStats().numDocs);
+    assertEquals(1, w.numDocs());
 
     // commit IndexWriter to "third"
     w.addDocument(doc);
     commitData.put("tag", "third");
-    w.setLiveCommitData(commitData.entrySet());
+    w.setCommitData(commitData);
     w.close();
 
     // make sure "second" commit is still there
@@ -473,10 +499,12 @@ public class TestIndexWriterCommit extends LuceneTestCase {
     // new index.
     Directory dir = newDirectory();
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random())));
-    expectThrows(IndexNotFoundException.class, () -> {
+    try {
       DirectoryReader.listCommits(dir);
-    });
-
+      fail("listCommits should have thrown an exception over empty index");
+    } catch (IndexNotFoundException e) {
+      // that's expected !
+    }
     // No changes still should generate a commit, because it's a new index.
     writer.close();
     assertEquals("expected 1 commits!", 1, DirectoryReader.listCommits(dir).size());
@@ -543,6 +571,14 @@ public class TestIndexWriterCommit extends LuceneTestCase {
   public void testPrepareCommitRollback() throws IOException {
     Directory dir = newDirectory();
 
+    MockDirectoryWrapper mockDir;
+    if (dir instanceof MockDirectoryWrapper) {
+      mockDir = (MockDirectoryWrapper) dir;
+      mockDir.setPreventDoubleWrite(false);
+    } else {
+      mockDir = null;
+    }
+
     IndexWriter writer = new IndexWriter(
         dir,
         newIndexWriterConfig(new MockAnalyzer(random()))
@@ -563,7 +599,14 @@ public class TestIndexWriterCommit extends LuceneTestCase {
     IndexReader reader2 = DirectoryReader.open(dir);
     assertEquals(0, reader2.numDocs());
 
+    // We need to let IW delete the partial segments_N that was written in prepareCommit, else we get a false fail below:
+    if (mockDir != null) {
+      mockDir.setEnableVirusScanner(false);
+    }
     writer.rollback();
+    if (mockDir != null) {
+      mockDir.setEnableVirusScanner(true);
+    }
 
     IndexReader reader3 = DirectoryReader.openIfChanged(reader);
     assertNull(reader3);
@@ -632,7 +675,7 @@ public class TestIndexWriterCommit extends LuceneTestCase {
       TestIndexWriter.addDoc(w);
     Map<String,String> data = new HashMap<>();
     data.put("label", "test1");
-    w.setLiveCommitData(data.entrySet());
+    w.setCommitData(data);
     w.close();
 
     r = DirectoryReader.open(dir);
@@ -650,45 +693,18 @@ public class TestIndexWriterCommit extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriter w = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random())));
     w.addDocument(new Document());
-
     w.prepareCommit();
-    expectThrows(IllegalStateException.class, () -> {
+    try {
       w.close();
-    });
+      fail("didn't hit exception");
+    } catch (IllegalStateException ise) {
+      // expected
+    }
     w.commit();
     w.close();
-
     DirectoryReader r = DirectoryReader.open(dir);
     assertEquals(1, r.maxDoc());
     r.close();
-    dir.close();
-  }
-
-  // LUCENE-7335: make sure commit data is late binding
-  public void testCommitDataIsLive() throws Exception {
-    Directory dir = newDirectory();
-    IndexWriter w = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random())));
-    w.addDocument(new Document());
-
-    final Map<String,String> commitData = new HashMap<>();
-    commitData.put("foo", "bar");
-
-    // make sure "foo" / "bar" doesn't take
-    w.setLiveCommitData(commitData.entrySet());
-
-    commitData.clear();
-    commitData.put("boo", "baz");
-
-    // this finally does the commit, and should burn "boo" / "baz"
-    w.close();
-
-    List<IndexCommit> commits = DirectoryReader.listCommits(dir);
-    assertEquals(1, commits.size());
-
-    IndexCommit commit = commits.get(0);
-    Map<String,String> data = commit.getUserData();
-    assertEquals(1, data.size());
-    assertEquals("baz", data.get("boo"));
     dir.close();
   }
 }

@@ -14,22 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.schema;
 
 import java.io.IOException;
 import java.util.Map;
 
-import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
-import org.apache.solr.legacy.LegacyNumericUtils;
-import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
+import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.docvalues.IntDocValues;
 import org.apache.lucene.queries.function.valuesource.SortedSetFieldSource;
 import org.apache.lucene.search.SortedSetSelector;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.NumericUtils;
 import org.apache.lucene.util.mutable.MutableValue;
 import org.apache.lucene.util.mutable.MutableValueInt;
 
@@ -42,12 +43,10 @@ import org.apache.lucene.util.mutable.MutableValueInt;
  * </ul>
  * 
  * @see Integer
- * @deprecated Trie fields are deprecated as of Solr 7.0
  */
-@Deprecated
 public class TrieIntField extends TrieField implements IntValueFieldType {
   {
-    type = NumberType.INTEGER;
+    type=TrieTypes.INTEGER;
   }
 
   @Override
@@ -55,9 +54,9 @@ public class TrieIntField extends TrieField implements IntValueFieldType {
     if(val==null) return null;
     if (val instanceof Number) return ((Number) val).intValue();
     try {
-      if (val instanceof CharSequence) return Integer.parseInt(val.toString());
+      if (val instanceof String) return Integer.parseInt((String) val);
     } catch (NumberFormatException e) {
-      Float v = Float.parseFloat(val.toString());
+      Float v = Float.parseFloat((String) val);
       return v.intValue();
     }
     return super.toNativeType(val);
@@ -72,37 +71,23 @@ public class TrieIntField extends TrieField implements IntValueFieldType {
         SortedSetFieldSource thisAsSortedSetFieldSource = this; // needed for nested anon class ref
         
         SortedSetDocValues sortedSet = DocValues.getSortedSet(readerContext.reader(), field);
-        SortedDocValues view = SortedSetSelector.wrap(sortedSet, selector);
+        final SortedDocValues view = SortedSetSelector.wrap(sortedSet, selector);
         
         return new IntDocValues(thisAsSortedSetFieldSource) {
-          private int lastDocID;
-
-          private boolean setDoc(int docID) throws IOException {
-            if (docID < lastDocID) {
-              throw new IllegalArgumentException("docs out of order: lastDocID=" + lastDocID + " docID=" + docID);
-            }
-            if (docID > view.docID()) {
-              lastDocID = docID;
-              return docID == view.advance(docID);
-            } else {
-              return docID == view.docID();
-            }
-          }
-          
           @Override
-          public int intVal(int doc) throws IOException {
-            if (setDoc(doc)) {
-              BytesRef bytes = view.binaryValue();
-              assert bytes.length > 0;
-              return LegacyNumericUtils.prefixCodedToInt(bytes);
-            } else {
+          public int intVal(int doc) {
+            BytesRef bytes = view.get(doc);
+            if (0 == bytes.length) {
+              // the only way this should be possible is for non existent value
+              assert !exists(doc) : "zero bytes for doc, but exists is true";
               return 0;
             }
+            return NumericUtils.prefixCodedToInt(bytes);
           }
 
           @Override
-          public boolean exists(int doc) throws IOException {
-            return setDoc(doc);
+          public boolean exists(int doc) {
+            return -1 != view.getOrd(doc);
           }
 
           @Override
@@ -116,14 +101,14 @@ public class TrieIntField extends TrieField implements IntValueFieldType {
               }
               
               @Override
-              public void fillValue(int doc) throws IOException {
-                if (setDoc(doc)) {
-                  mval.exists = true;
-                  mval.value = LegacyNumericUtils.prefixCodedToInt(view.binaryValue());
-                } else {
-                  mval.exists = false;
-                  mval.value = 0;
-                }
+              public void fillValue(int doc) {
+                // micro optimized (eliminate at least one redudnent ord check) 
+                //mval.exists = exists(doc);
+                //mval.value = mval.exists ? intVal(doc) : 0;
+                //
+                BytesRef bytes = view.get(doc);
+                mval.exists = (0 == bytes.length);
+                mval.value = mval.exists ? NumericUtils.prefixCodedToInt(bytes) : 0;
               }
             };
           }

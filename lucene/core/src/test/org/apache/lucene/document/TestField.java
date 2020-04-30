@@ -1,3 +1,5 @@
+package org.apache.lucene.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.document;
-
 
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
@@ -35,53 +35,34 @@ import org.apache.lucene.util.LuceneTestCase;
 // sanity check some basics of fields
 public class TestField extends LuceneTestCase {
   
-  public void testDoublePoint() throws Exception {
-    Field field = new DoublePoint("foo", 5d);
+  public void testDoubleField() throws Exception {
+    Field fields[] = new Field[] {
+        new DoubleField("foo", 5d, Field.Store.NO),
+        new DoubleField("foo", 5d, Field.Store.YES)
+    };
 
-    trySetByteValue(field);
-    trySetBytesValue(field);
-    trySetBytesRefValue(field);
-    field.setDoubleValue(6d); // ok
-    trySetIntValue(field);
-    trySetFloatValue(field);
-    trySetLongValue(field);
-    trySetReaderValue(field);
-    trySetShortValue(field);
-    trySetStringValue(field);
-    trySetTokenStreamValue(field);
-
-    assertEquals(6d, field.numericValue().doubleValue(), 0.0d);
-    assertEquals("DoublePoint <foo:6.0>", field.toString());
+    for (Field field : fields) {
+      trySetBoost(field);
+      trySetByteValue(field);
+      trySetBytesValue(field);
+      trySetBytesRefValue(field);
+      field.setDoubleValue(6d); // ok
+      trySetIntValue(field);
+      trySetFloatValue(field);
+      trySetLongValue(field);
+      trySetReaderValue(field);
+      trySetShortValue(field);
+      trySetStringValue(field);
+      trySetTokenStreamValue(field);
+    
+      assertEquals(6d, field.numericValue().doubleValue(), 0.0d);
+    }
   }
-  
-  public void testDoublePoint2D() throws Exception {
-    DoublePoint field = new DoublePoint("foo", 5d, 4d);
-
-    trySetByteValue(field);
-    trySetBytesValue(field);
-    trySetBytesRefValue(field);
-    trySetDoubleValue(field);
-    field.setDoubleValues(6d, 7d); // ok
-    trySetIntValue(field);
-    trySetFloatValue(field);
-    trySetLongValue(field);
-    trySetReaderValue(field);
-    trySetShortValue(field);
-    trySetStringValue(field);
-    trySetTokenStreamValue(field);
-
-    IllegalStateException expected = expectThrows(IllegalStateException.class, () -> {
-      field.numericValue();
-    });
-    assertTrue(expected.getMessage().contains("cannot convert to a single numeric value"));
-    assertEquals("DoublePoint <foo:6.0,7.0>", field.toString());
-  }
-  
-
   
   public void testDoubleDocValuesField() throws Exception {
     DoubleDocValuesField field = new DoubleDocValuesField("foo", 5d);
 
+    trySetBoost(field);
     trySetByteValue(field);
     trySetBytesValue(field);
     trySetBytesRefValue(field);
@@ -100,6 +81,7 @@ public class TestField extends LuceneTestCase {
   public void testFloatDocValuesField() throws Exception {
     FloatDocValuesField field = new FloatDocValuesField("foo", 5f);
 
+    trySetBoost(field);
     trySetByteValue(field);
     trySetBytesValue(field);
     trySetBytesRefValue(field);
@@ -115,93 +97,58 @@ public class TestField extends LuceneTestCase {
     assertEquals(6f, Float.intBitsToFloat(field.numericValue().intValue()), 0.0f);
   }
   
-  public void testFloatPoint() throws Exception {
-    Field field = new FloatPoint("foo", 5f);
+  public void testFloatField() throws Exception {
+    Field fields[] = new Field[] {
+        new FloatField("foo", 5f, Field.Store.NO),
+        new FloatField("foo", 5f, Field.Store.YES)
+    };
 
-    trySetByteValue(field);
-    trySetBytesValue(field);
-    trySetBytesRefValue(field);
-    trySetDoubleValue(field);
-    trySetIntValue(field);
-    field.setFloatValue(6f); // ok
-    trySetLongValue(field);
-    trySetReaderValue(field);
-    trySetShortValue(field);
-    trySetStringValue(field);
-    trySetTokenStreamValue(field);
-
-    assertEquals(6f, field.numericValue().floatValue(), 0.0f);
-    assertEquals("FloatPoint <foo:6.0>", field.toString());
+    for (Field field : fields) {
+      trySetBoost(field);
+      trySetByteValue(field);
+      trySetBytesValue(field);
+      trySetBytesRefValue(field);
+      trySetDoubleValue(field);
+      trySetIntValue(field);
+      field.setFloatValue(6f); // ok
+      trySetLongValue(field);
+      trySetReaderValue(field);
+      trySetShortValue(field);
+      trySetStringValue(field);
+      trySetTokenStreamValue(field);
+      
+      assertEquals(6f, field.numericValue().floatValue(), 0.0f);
+    }
   }
   
-  public void testFloatPoint2D() throws Exception {
-    FloatPoint field = new FloatPoint("foo", 5f, 4f);
+  public void testIntField() throws Exception {
+    Field fields[] = new Field[] {
+        new IntField("foo", 5, Field.Store.NO),
+        new IntField("foo", 5, Field.Store.YES)
+    };
 
-    trySetByteValue(field);
-    trySetBytesValue(field);
-    trySetBytesRefValue(field);
-    trySetDoubleValue(field);
-    trySetIntValue(field);
-    trySetFloatValue(field);
-    field.setFloatValues(6f, 7f); // ok
-    trySetLongValue(field);
-    trySetReaderValue(field);
-    trySetShortValue(field);
-    trySetStringValue(field);
-    trySetTokenStreamValue(field);
-
-    IllegalStateException expected = expectThrows(IllegalStateException.class, () -> {
-      field.numericValue();
-    });
-    assertTrue(expected.getMessage().contains("cannot convert to a single numeric value"));
-    assertEquals("FloatPoint <foo:6.0,7.0>", field.toString());
-  }
-  
-  public void testIntPoint() throws Exception {
-    Field field = new IntPoint("foo", 5);
-
-    trySetByteValue(field);
-    trySetBytesValue(field);
-    trySetBytesRefValue(field);
-    trySetDoubleValue(field);
-    field.setIntValue(6); // ok
-    trySetFloatValue(field);
-    trySetLongValue(field);
-    trySetReaderValue(field);
-    trySetShortValue(field);
-    trySetStringValue(field);
-    trySetTokenStreamValue(field);
-
-    assertEquals(6, field.numericValue().intValue());
-    assertEquals("IntPoint <foo:6>", field.toString());
-  }
-  
-  public void testIntPoint2D() throws Exception {
-    IntPoint field = new IntPoint("foo", 5, 4);
-
-    trySetByteValue(field);
-    trySetBytesValue(field);
-    trySetBytesRefValue(field);
-    trySetDoubleValue(field);
-    trySetIntValue(field);
-    field.setIntValues(6, 7); // ok
-    trySetFloatValue(field);
-    trySetLongValue(field);
-    trySetReaderValue(field);
-    trySetShortValue(field);
-    trySetStringValue(field);
-    trySetTokenStreamValue(field);
-
-    IllegalStateException expected = expectThrows(IllegalStateException.class, () -> {
-      field.numericValue();
-    });
-    assertTrue(expected.getMessage().contains("cannot convert to a single numeric value"));
-    assertEquals("IntPoint <foo:6,7>", field.toString());
+    for (Field field : fields) {
+      trySetBoost(field);
+      trySetByteValue(field);
+      trySetBytesValue(field);
+      trySetBytesRefValue(field);
+      trySetDoubleValue(field);
+      field.setIntValue(6); // ok
+      trySetFloatValue(field);
+      trySetLongValue(field);
+      trySetReaderValue(field);
+      trySetShortValue(field);
+      trySetStringValue(field);
+      trySetTokenStreamValue(field);
+      
+      assertEquals(6, field.numericValue().intValue());
+    }
   }
   
   public void testNumericDocValuesField() throws Exception {
     NumericDocValuesField field = new NumericDocValuesField("foo", 5L);
 
+    trySetBoost(field);
     trySetByteValue(field);
     trySetBytesValue(field);
     trySetBytesRefValue(field);
@@ -217,51 +164,34 @@ public class TestField extends LuceneTestCase {
     assertEquals(6L, field.numericValue().longValue());
   }
   
-  public void testLongPoint() throws Exception {
-    Field field = new LongPoint("foo", 5);
+  public void testLongField() throws Exception {
+    Field fields[] = new Field[] {
+        new LongField("foo", 5L, Field.Store.NO),
+        new LongField("foo", 5L, Field.Store.YES)
+    };
 
-    trySetByteValue(field);
-    trySetBytesValue(field);
-    trySetBytesRefValue(field);
-    trySetDoubleValue(field);
-    trySetIntValue(field);
-    trySetFloatValue(field);
-    field.setLongValue(6); // ok
-    trySetReaderValue(field);
-    trySetShortValue(field);
-    trySetStringValue(field);
-    trySetTokenStreamValue(field);
-
-    assertEquals(6, field.numericValue().intValue());
-    assertEquals("LongPoint <foo:6>", field.toString());
-  }
-  
-  public void testLongPoint2D() throws Exception {
-    LongPoint field = new LongPoint("foo", 5, 4);
-
-    trySetByteValue(field);
-    trySetBytesValue(field);
-    trySetBytesRefValue(field);
-    trySetDoubleValue(field);
-    trySetIntValue(field);
-    trySetFloatValue(field);
-    trySetLongValue(field);
-    field.setLongValues(6, 7); // ok
-    trySetReaderValue(field);
-    trySetShortValue(field);
-    trySetStringValue(field);
-    trySetTokenStreamValue(field);
-
-    IllegalStateException expected = expectThrows(IllegalStateException.class, () -> {
-      field.numericValue();
-    });
-    assertTrue(expected.getMessage().contains("cannot convert to a single numeric value"));
-    assertEquals("LongPoint <foo:6,7>", field.toString());
+    for (Field field : fields) {
+      trySetBoost(field);
+      trySetByteValue(field);
+      trySetBytesValue(field);
+      trySetBytesRefValue(field);
+      trySetDoubleValue(field);
+      trySetIntValue(field);
+      trySetFloatValue(field);
+      field.setLongValue(6); // ok
+      trySetReaderValue(field);
+      trySetShortValue(field);
+      trySetStringValue(field);
+      trySetTokenStreamValue(field);
+      
+      assertEquals(6L, field.numericValue().longValue());
+    }
   }
   
   public void testSortedBytesDocValuesField() throws Exception {
     SortedDocValuesField field = new SortedDocValuesField("foo", new BytesRef("bar"));
 
+    trySetBoost(field);
     trySetByteValue(field);
     field.setBytesValue("fubar".getBytes(StandardCharsets.UTF_8));
     field.setBytesValue(new BytesRef("baz"));
@@ -280,6 +210,7 @@ public class TestField extends LuceneTestCase {
   public void testBinaryDocValuesField() throws Exception {
     BinaryDocValuesField field = new BinaryDocValuesField("foo", new BytesRef("bar"));
 
+    trySetBoost(field);
     trySetByteValue(field);
     field.setBytesValue("fubar".getBytes(StandardCharsets.UTF_8));
     field.setBytesValue(new BytesRef("baz"));
@@ -302,6 +233,7 @@ public class TestField extends LuceneTestCase {
     };
 
     for (Field field : fields) {
+      trySetBoost(field);
       trySetByteValue(field);
       trySetBytesValue(field);
       trySetBytesRefValue(field);
@@ -325,6 +257,7 @@ public class TestField extends LuceneTestCase {
     };
 
     for (Field field : fields) {
+      field.setBoost(5f);
       trySetByteValue(field);
       trySetBytesValue(field);
       trySetBytesRefValue(field);
@@ -338,12 +271,14 @@ public class TestField extends LuceneTestCase {
       field.setTokenStream(new CannedTokenStream(new Token("foo", 0, 3)));
       
       assertEquals("baz", field.stringValue());
+      assertEquals(5f, field.boost(), 0f);
     }
   }
   
   public void testTextFieldReader() throws Exception {
     Field field = new TextField("foo", new StringReader("bar"));
 
+    field.setBoost(5f);
     trySetByteValue(field);
     trySetBytesValue(field);
     trySetBytesRefValue(field);
@@ -357,6 +292,7 @@ public class TestField extends LuceneTestCase {
     field.setTokenStream(new CannedTokenStream(new Token("foo", 0, 3)));
       
     assertNotNull(field.readerValue());
+    assertEquals(5f, field.boost(), 0f);
   }
   
   /* TODO: this is pretty expert and crazy
@@ -373,6 +309,7 @@ public class TestField extends LuceneTestCase {
     };
     
     for (Field field : fields) {
+      trySetBoost(field);
       trySetByteValue(field);
       field.setBytesValue("baz".getBytes(StandardCharsets.UTF_8));
       field.setBytesValue(new BytesRef("baz"));
@@ -391,6 +328,7 @@ public class TestField extends LuceneTestCase {
   
   public void testStoredFieldString() throws Exception {
     Field field = new StoredField("foo", "bar");
+    trySetBoost(field);
     trySetByteValue(field);
     trySetBytesValue(field);
     trySetBytesRefValue(field);
@@ -408,6 +346,7 @@ public class TestField extends LuceneTestCase {
   
   public void testStoredFieldInt() throws Exception {
     Field field = new StoredField("foo", 1);
+    trySetBoost(field);
     trySetByteValue(field);
     trySetBytesValue(field);
     trySetBytesRefValue(field);
@@ -425,6 +364,7 @@ public class TestField extends LuceneTestCase {
   
   public void testStoredFieldDouble() throws Exception {
     Field field = new StoredField("foo", 1D);
+    trySetBoost(field);
     trySetByteValue(field);
     trySetBytesValue(field);
     trySetBytesRefValue(field);
@@ -442,6 +382,7 @@ public class TestField extends LuceneTestCase {
   
   public void testStoredFieldFloat() throws Exception {
     Field field = new StoredField("foo", 1F);
+    trySetBoost(field);
     trySetByteValue(field);
     trySetBytesValue(field);
     trySetBytesRefValue(field);
@@ -459,6 +400,7 @@ public class TestField extends LuceneTestCase {
   
   public void testStoredFieldLong() throws Exception {
     Field field = new StoredField("foo", 1L);
+    trySetBoost(field);
     trySetByteValue(field);
     trySetBytesValue(field);
     trySetBytesRefValue(field);
@@ -487,7 +429,7 @@ public class TestField extends LuceneTestCase {
 
     IndexSearcher s = newSearcher(r);
     TopDocs hits = s.search(new TermQuery(new Term("binary", br)), 1);
-    assertEquals(1, hits.totalHits.value);
+    assertEquals(1, hits.totalHits);
     Document storedDoc = s.doc(hits.scoreDocs[0].doc);
     assertEquals(br, storedDoc.getField("binary").binaryValue());
 
@@ -497,69 +439,111 @@ public class TestField extends LuceneTestCase {
   }
   
   private void trySetByteValue(Field f) {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       f.setByteValue((byte) 10);
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {
+      // expected
+    }
   }
 
   private void trySetBytesValue(Field f) {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       f.setBytesValue(new byte[] { 5, 5 });
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {
+      // expected
+    }
   }
   
   private void trySetBytesRefValue(Field f) {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       f.setBytesValue(new BytesRef("bogus"));
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {
+      // expected
+    }
   }
   
   private void trySetDoubleValue(Field f) {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       f.setDoubleValue(Double.MAX_VALUE);
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {
+      // expected
+    }
   }
   
   private void trySetIntValue(Field f) {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       f.setIntValue(Integer.MAX_VALUE);
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {
+      // expected
+    }
   }
   
   private void trySetLongValue(Field f) {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       f.setLongValue(Long.MAX_VALUE);
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {
+      // expected
+    }
   }
   
   private void trySetFloatValue(Field f) {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       f.setFloatValue(Float.MAX_VALUE);
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {
+      // expected
+    }
   }
   
   private void trySetReaderValue(Field f) {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       f.setReaderValue(new StringReader("BOO!"));
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {
+      // expected
+    }
   }
   
   private void trySetShortValue(Field f) {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       f.setShortValue(Short.MAX_VALUE);
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {
+      // expected
+    }
   }
   
   private void trySetStringValue(Field f) {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       f.setStringValue("BOO!");
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {
+      // expected
+    }
   }
   
   private void trySetTokenStreamValue(Field f) {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       f.setTokenStream(new CannedTokenStream(new Token("foo", 0, 3)));
-    });
+      fail();
+    } catch (IllegalArgumentException expected) {
+      // expected
+    }
+  }
+  
+  private void trySetBoost(Field f) {
+    try {
+      f.setBoost(5.0f);
+      fail();
+    } catch (IllegalArgumentException expected) {
+      // expected
+    }
   }
   
 }

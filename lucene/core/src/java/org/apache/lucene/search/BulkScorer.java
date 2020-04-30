@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -84,7 +84,7 @@ public abstract class BulkScorer {
   public abstract int score(LeafCollector collector, Bits acceptDocs, int min, int max) throws IOException;
 
   /**
-   * Same as {@link DocIdSetIterator#cost()} for bulk scorers.
+   * Same as {@link Scorer#cost()} for bulk scorers.
    */
   public abstract long cost();
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.util.automaton;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.automaton;
-
 
 /**
  * This exception is thrown when determinizing an automaton would result in one
- * which has too many states.
+ * has too many states.
  */
 public class TooComplexToDeterminizeException extends RuntimeException {
   private transient final Automaton automaton;

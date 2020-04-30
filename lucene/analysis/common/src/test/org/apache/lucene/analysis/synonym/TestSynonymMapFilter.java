@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.analysis.synonym;
 
 import java.io.IOException;
@@ -946,9 +947,12 @@ public class TestSynonymMapFilter extends BaseTokenStreamTestCase {
   public void testEmpty() throws Exception {
     Tokenizer tokenizer = new MockTokenizer();
     tokenizer.setReader(new StringReader("aa bb"));
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new SynonymFilter(tokenizer, new SynonymMap.Builder(true).build(), true);
-    });
-    assertEquals("fst must be non-null", expected.getMessage());
+      fail("did not hit expected exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+      assertEquals("fst must be non-null", iae.getMessage());
+    }
   }
 }

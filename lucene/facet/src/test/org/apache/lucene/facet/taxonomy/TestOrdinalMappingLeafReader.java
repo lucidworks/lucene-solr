@@ -1,3 +1,33 @@
+package org.apache.lucene.facet.taxonomy;
+
+import java.io.IOException;
+
+import org.apache.lucene.document.BinaryDocValuesField;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.facet.FacetField;
+import org.apache.lucene.facet.FacetResult;
+import org.apache.lucene.facet.FacetTestCase;
+import org.apache.lucene.facet.Facets;
+import org.apache.lucene.facet.FacetsCollector;
+import org.apache.lucene.facet.FacetsConfig;
+import org.apache.lucene.facet.LabelAndValue;
+import org.apache.lucene.facet.taxonomy.directory.DirectoryTaxonomyReader;
+import org.apache.lucene.facet.taxonomy.directory.DirectoryTaxonomyWriter;
+import org.apache.lucene.facet.taxonomy.directory.DirectoryTaxonomyWriter.MemoryOrdinalMap;
+import org.apache.lucene.index.BinaryDocValues;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.MultiDocValues;
+import org.apache.lucene.index.RandomIndexWriter;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.MatchAllDocsQuery;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.IOUtils;
+import org.junit.Before;
+import org.junit.Test;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,35 +44,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy;
-
-import java.io.IOException;
-
-import org.apache.lucene.document.BinaryDocValuesField;
-import org.apache.lucene.document.Document;
-import org.apache.lucene.facet.FacetField;
-import org.apache.lucene.facet.FacetResult;
-import org.apache.lucene.facet.FacetTestCase;
-import org.apache.lucene.facet.Facets;
-import org.apache.lucene.facet.FacetsCollector;
-import org.apache.lucene.facet.FacetsConfig;
-import org.apache.lucene.facet.LabelAndValue;
-import org.apache.lucene.facet.taxonomy.directory.DirectoryTaxonomyReader;
-import org.apache.lucene.facet.taxonomy.directory.DirectoryTaxonomyWriter.MemoryOrdinalMap;
-import org.apache.lucene.facet.taxonomy.directory.DirectoryTaxonomyWriter;
-import org.apache.lucene.index.BinaryDocValues;
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.MultiDocValues;
-import org.apache.lucene.index.RandomIndexWriter;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.MatchAllDocsQuery;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.IOUtils;
-import org.junit.Before;
-import org.junit.Test;
 
 public class TestOrdinalMappingLeafReader extends FacetTestCase {
   
@@ -106,9 +107,7 @@ public class TestOrdinalMappingLeafReader extends FacetTestCase {
     BinaryDocValues bdv = MultiDocValues.getBinaryValues(indexReader, "bdv");
     BinaryDocValues cbdv = MultiDocValues.getBinaryValues(indexReader, "cbdv");
     for (int i = 0; i < indexReader.maxDoc(); i++) {
-      assertEquals(i, bdv.nextDoc());
-      assertEquals(i, cbdv.nextDoc());
-      assertEquals(Integer.parseInt(cbdv.binaryValue().utf8ToString()), Integer.parseInt(bdv.binaryValue().utf8ToString())*2);
+      assertEquals(Integer.parseInt(cbdv.get(i).utf8ToString()), Integer.parseInt(bdv.get(i).utf8ToString())*2);
     }
     IOUtils.close(indexReader, taxoReader);
   }

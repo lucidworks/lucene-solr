@@ -1,3 +1,7 @@
+package org.apache.solr.cloud;
+
+import java.lang.invoke.MethodHandles;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +18,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -100,15 +103,20 @@ public class TestCloudInspectUtil extends SolrTestCaseJ4 {
     
     // ################################
     
-    final HashSet<String> addFailsExpectEx = new HashSet<String>();
-    final HashSet<String> deleteFailsExpectEx = new HashSet<String>();
+    addFails = new HashSet<String>();
+    deleteFails = new HashSet<String>();
     
-    final SolrDocumentList aExpectEx = getDocList("2", "3", "4");
-    final SolrDocumentList bExpectEx = getDocList("2", "3", "4");
+    a = getDocList("2", "3", "4");
+    b = getDocList("2", "3", "4");
 
-    expectThrows(IllegalArgumentException.class, "Expected exception because lists have no diff",
-        () -> CloudInspectUtil.checkIfDiffIsLegal(aExpectEx, bExpectEx,
-            "control", "cloud", addFailsExpectEx, deleteFailsExpectEx));
+    try {
+      legal = CloudInspectUtil.checkIfDiffIsLegal(a, b, "control", "cloud",
+          addFails, deleteFails);
+      fail("Expected exception because lists have no diff");
+    } catch (IllegalArgumentException e) {
+      // expected
+    }
+
   }
 
   private SolrDocumentList getDocList(String ... ids) {

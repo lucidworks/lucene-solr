@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,42 +16,64 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
+import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.cloud.AbstractFullDistribZkTestBase;
 import org.apache.solr.handler.TestBlobHandler;
+import org.apache.solr.util.RESTfulServerProvider;
 import org.apache.solr.util.RestTestHarness;
 import org.apache.solr.util.SimplePostTool;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
 import static java.util.Arrays.asList;
 import static org.apache.solr.handler.TestSolrConfigHandlerCloud.compareValues;
 
 public class TestDynamicLoading extends AbstractFullDistribZkTestBase {
+  private List<RestTestHarness> restTestHarnesses = new ArrayList<>();
+
+  private void setupHarnesses() {
+    for (final SolrClient client : clients) {
+      RestTestHarness harness = new RestTestHarness(new RESTfulServerProvider() {
+        @Override
+        public String getBaseURL() {
+          return ((HttpSolrClient)client).getBaseURL();
+        }
+      });
+      restTestHarnesses.add(harness);
+    }
+  }
 
   @BeforeClass
   public static void enableRuntimeLib() throws Exception {
     System.setProperty("enable.runtime.lib", "true");
   }
 
+  @Override
+  public void distribTearDown() throws Exception {
+    super.distribTearDown();
+    for (RestTestHarness r : restTestHarnesses) {
+      r.close();
+    }
+  }
+
   @Test
-  // 12-Jun-2018 @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028")
-  //17-Aug-2018 commented @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 20-Jul-2018
   public void testDynamicLoading() throws Exception {
     System.setProperty("enable.runtime.lib", "true");
-    setupRestTestHarnesses();
+    setupHarnesses();
 
     String blobName = "colltest";
     boolean success = false;
@@ -61,43 +85,43 @@ public class TestDynamicLoading extends AbstractFullDistribZkTestBase {
     String payload = "{\n" +
         "'add-runtimelib' : { 'name' : 'colltest' ,'version':1}\n" +
         "}";
-    RestTestHarness client = randomRestTestHarness();
-    TestSolrConfigHandler.runConfigCommand(client, "/config", payload);
+    RestTestHarness client = restTestHarnesses.get(random().nextInt(restTestHarnesses.size()));
+    TestSolrConfigHandler.runConfigCommand(client, "/config?wt=json", payload);
     TestSolrConfigHandler.testForResponseElement(client,
         null,
-        "/config/overlay",
+        "/config/overlay?wt=json",
         null,
         Arrays.asList("overlay", "runtimeLib", blobName, "version"),
         1l, 10);
 
 
     payload = "{\n" +
-        "'create-requesthandler' : { 'name' : '/test1', 'class': 'org.apache.solr.core.BlobStoreTestRequestHandler' ,registerPath: '/solr,/v2',  'runtimeLib' : true }\n" +
+        "'create-requesthandler' : { 'name' : '/test1', 'class': 'org.apache.solr.core.BlobStoreTestRequestHandler' , 'runtimeLib' : true }\n" +
         "}";
 
-    client = randomRestTestHarness();
-    TestSolrConfigHandler.runConfigCommand(client,"/config",payload);
+    client = restTestHarnesses.get(random().nextInt(restTestHarnesses.size()));
+    TestSolrConfigHandler.runConfigCommand(client,"/config?wt=json",payload);
     TestSolrConfigHandler.testForResponseElement(client,
         null,
-        "/config/overlay",
+        "/config/overlay?wt=json",
         null,
         Arrays.asList("overlay", "requestHandler", "/test1", "class"),
         "org.apache.solr.core.BlobStoreTestRequestHandler",10);
 
-    Map map = TestSolrConfigHandler.getRespMap("/test1", client);
+    Map map = TestSolrConfigHandler.getRespMap("/test1?wt=json", client);
 
-    assertNotNull(map.toString(), map = (Map) map.get("error"));
-    assertTrue(map.toString(), map.get("msg").toString().contains(".system collection not available"));
+    assertNotNull(TestBlobHandler.getAsString(map), map = (Map) map.get("error"));
+    assertEquals(TestBlobHandler.getAsString(map), ".system collection not available", map.get("msg"));
 
 
-    TestBlobHandler.createSystemCollection(getHttpSolrClient(baseURL, randomClient.getHttpClient()));
+    TestBlobHandler.createSystemCollection(new HttpSolrClient(baseURL, randomClient.getHttpClient()));
     waitForRecoveriesToFinish(".system", true);
 
-    map = TestSolrConfigHandler.getRespMap("/test1", client);
+    map = TestSolrConfigHandler.getRespMap("/test1?wt=json", client);
 
 
     assertNotNull(map = (Map) map.get("error"));
-    assertTrue("full output " + map, map.get("msg").toString().contains("no such blob or version available: colltest/1" ));
+    assertEquals("full output " + TestBlobHandler.getAsString(map), "no such blob or version available: colltest/1" , map.get("msg"));
     payload = " {\n" +
         "  'set' : {'watched': {" +
         "                    'x':'X val',\n" +
@@ -105,11 +129,11 @@ public class TestDynamicLoading extends AbstractFullDistribZkTestBase {
         "             }\n" +
         "  }";
 
-    TestSolrConfigHandler.runConfigCommand(client,"/config/params",payload);
+    TestSolrConfigHandler.runConfigCommand(client,"/config/params?wt=json",payload);
     TestSolrConfigHandler.testForResponseElement(
         client,
         null,
-        "/config/params",
+        "/config/params?wt=json",
         cloudClient,
         Arrays.asList("response", "params", "watched", "x"),
         "X val",
@@ -119,7 +143,7 @@ public class TestDynamicLoading extends AbstractFullDistribZkTestBase {
 
 
     for(int i=0;i<100;i++) {
-      map = TestSolrConfigHandler.getRespMap("/test1", client);
+      map = TestSolrConfigHandler.getRespMap("/test1?wt=json", client);
       if("X val".equals(map.get("x"))){
          success = true;
          break;
@@ -139,12 +163,12 @@ public class TestDynamicLoading extends AbstractFullDistribZkTestBase {
         "'create-searchcomponent' : { 'name' : 'get', 'class': 'org.apache.solr.core.RuntimeLibSearchComponent' , 'runtimeLib':true }," +
         "'create-queryResponseWriter' : { 'name' : 'json1', 'class': 'org.apache.solr.core.RuntimeLibResponseWriter' , 'runtimeLib':true }" +
         "}";
-    client = randomRestTestHarness();
-    TestSolrConfigHandler.runConfigCommand(client, "/config", payload);
+    client = restTestHarnesses.get(random().nextInt(restTestHarnesses.size()));
+    TestSolrConfigHandler.runConfigCommand(client, "/config?wt=json", payload);
 
     Map result = TestSolrConfigHandler.testForResponseElement(client,
         null,
-        "/config/overlay",
+        "/config/overlay?wt=json",
         null,
         Arrays.asList("overlay", "requestHandler", "/runtime", "class"),
         "org.apache.solr.core.RuntimeLibReqHandler", 10);
@@ -153,7 +177,7 @@ public class TestDynamicLoading extends AbstractFullDistribZkTestBase {
 
     result = TestSolrConfigHandler.testForResponseElement(client,
         null,
-        "/runtime",
+        "/runtime?wt=json",
         null,
         Arrays.asList("class"),
         "org.apache.solr.core.RuntimeLibReqHandler", 10);
@@ -180,11 +204,11 @@ public class TestDynamicLoading extends AbstractFullDistribZkTestBase {
     payload = "{\n" +
         "'update-runtimelib' : { 'name' : 'colltest' ,'version':2}\n" +
         "}";
-    client = randomRestTestHarness();
-    TestSolrConfigHandler.runConfigCommand(client, "/config", payload);
+    client = restTestHarnesses.get(random().nextInt(restTestHarnesses.size()));
+    TestSolrConfigHandler.runConfigCommand(client, "/config?wt=json", payload);
     TestSolrConfigHandler.testForResponseElement(client,
         null,
-        "/config/overlay",
+        "/config/overlay?wt=json",
         null,
         Arrays.asList("overlay", "runtimeLib", blobName, "version"),
         2l, 10);
@@ -204,11 +228,11 @@ public class TestDynamicLoading extends AbstractFullDistribZkTestBase {
         "             }\n" +
         "  }";
 
-    TestSolrConfigHandler.runConfigCommand(client,"/config/params",payload);
+    TestSolrConfigHandler.runConfigCommand(client,"/config/params?wt=json",payload);
     TestSolrConfigHandler.testForResponseElement(
         client,
         null,
-        "/config/params",
+        "/config/params?wt=json",
         cloudClient,
         Arrays.asList("response", "params", "watched", "x"),
         "X val",
@@ -216,7 +240,7 @@ public class TestDynamicLoading extends AbstractFullDistribZkTestBase {
    result = TestSolrConfigHandler.testForResponseElement(
         client,
         null,
-        "/test1",
+        "/test1?wt=json",
         cloudClient,
         Arrays.asList("x"),
         "X val",
@@ -229,11 +253,11 @@ public class TestDynamicLoading extends AbstractFullDistribZkTestBase {
         "             }\n" +
         "  }";
 
-    TestSolrConfigHandler.runConfigCommand(client,"/config/params",payload);
+    TestSolrConfigHandler.runConfigCommand(client,"/config/params?wt=json",payload);
     result = TestSolrConfigHandler.testForResponseElement(
         client,
         null,
-        "/test1",
+        "/test1?wt=json",
         cloudClient,
         Arrays.asList("x"),
         "X val changed",
@@ -241,16 +265,8 @@ public class TestDynamicLoading extends AbstractFullDistribZkTestBase {
   }
 
   public static ByteBuffer getFileContent(String f) throws IOException {
-    return getFileContent(f, true);
-  }
-  /**
-   * @param loadFromClassPath if true, it will look in the classpath to find the file,
-   *        otherwise load from absolute filesystem path.
-   */
-  public static ByteBuffer getFileContent(String f, boolean loadFromClassPath) throws IOException {
     ByteBuffer jar;
-    File file = loadFromClassPath ? getFile(f): new File(f);
-    try (FileInputStream fis = new FileInputStream(file)) {
+    try (FileInputStream fis = new FileInputStream(getFile(f))) {
       byte[] buf = new byte[fis.available()];
       fis.read(buf);
       jar = ByteBuffer.wrap(buf);
@@ -269,18 +285,19 @@ public class TestDynamicLoading extends AbstractFullDistribZkTestBase {
 
 
   public static ByteBuffer generateZip(Class... classes) throws IOException {
+    ZipOutputStream zipOut = null;
     SimplePostTool.BAOS bos = new SimplePostTool.BAOS();
-    try (ZipOutputStream zipOut = new ZipOutputStream(bos)) {
-      zipOut.setLevel(ZipOutputStream.DEFLATED);
-      for (Class c : classes) {
-        String path = c.getName().replace('.', '/').concat(".class");
-        ZipEntry entry = new ZipEntry(path);
-        ByteBuffer b = SimplePostTool.inputStreamToByteArray(c.getClassLoader().getResourceAsStream(path));
-        zipOut.putNextEntry(entry);
-        zipOut.write(b.array(), 0, b.limit());
-        zipOut.closeEntry();
-      }
+    zipOut = new ZipOutputStream(bos);
+    zipOut.setLevel(ZipOutputStream.DEFLATED);
+    for (Class c : classes) {
+      String path = c.getName().replace('.', '/').concat(".class");
+      ZipEntry entry = new ZipEntry(path);
+      ByteBuffer b = SimplePostTool.inputStreamToByteArray(c.getClassLoader().getResourceAsStream(path));
+      zipOut.putNextEntry(entry);
+      zipOut.write(b.array(), 0, b.limit());
+      zipOut.closeEntry();
     }
+    zipOut.close();
     return bos.getByteBuffer();
   }
 

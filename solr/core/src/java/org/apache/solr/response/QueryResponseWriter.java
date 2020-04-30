@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.response;
 
 import java.io.Writer;
@@ -50,7 +51,7 @@ public interface QueryResponseWriter extends NamedListInitializedPlugin {
    * Write a SolrQueryResponse, this method must be thread save.
    *
    * <p>
-   * Information about the request (in particular: formatting options) may be 
+   * Information about the request (in particular: formating options) may be 
    * obtained from <code>req</code> but the dominant source of information 
    * should be <code>rsp</code>.
    * <p>

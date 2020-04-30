@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.document;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -22,7 +23,6 @@ import java.util.Map;
 
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
-import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.Fields;
@@ -38,13 +38,14 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.IOUtils;
 
+import static org.apache.lucene.search.suggest.document.CompletionPostingsFormat.CODEC_NAME;
 import static org.apache.lucene.search.suggest.document.CompletionPostingsFormat.COMPLETION_VERSION_CURRENT;
 import static org.apache.lucene.search.suggest.document.CompletionPostingsFormat.DICT_EXTENSION;
 import static org.apache.lucene.search.suggest.document.CompletionPostingsFormat.INDEX_EXTENSION;
 
 /**
  * <p>
- * Weighted FSTs for any indexed {@link SuggestField} is built on {@link #write(Fields,NormsProducer)}.
+ * Weighted FSTs for any indexed {@link SuggestField} is built on {@link #write(Fields)}.
  * A weighted FST maps the analyzed forms of a field to its
  * surface form and document id. FSTs are stored in the CompletionDictionary (.lkp).
  * </p>
@@ -61,10 +62,8 @@ final class CompletionFieldsConsumer extends FieldsConsumer {
   private final SegmentWriteState state;
   private IndexOutput dictOut;
   private FieldsConsumer delegateFieldsConsumer;
-  private final String codecName;
 
-  CompletionFieldsConsumer(String codecName, PostingsFormat delegatePostingsFormat, SegmentWriteState state) throws IOException {
-    this.codecName = codecName;
+  CompletionFieldsConsumer(PostingsFormat delegatePostingsFormat, SegmentWriteState state) throws IOException {
     this.delegatePostingsFormatName = delegatePostingsFormat.getName();
     this.state = state;
     String dictFile = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, DICT_EXTENSION);
@@ -72,7 +71,7 @@ final class CompletionFieldsConsumer extends FieldsConsumer {
     try {
       this.delegateFieldsConsumer = delegatePostingsFormat.fieldsConsumer(state);
       dictOut = state.directory.createOutput(dictFile, state.context);
-      CodecUtil.writeIndexHeader(dictOut, codecName, COMPLETION_VERSION_CURRENT, state.segmentInfo.getId(), state.segmentSuffix);
+      CodecUtil.writeIndexHeader(dictOut, CODEC_NAME, COMPLETION_VERSION_CURRENT, state.segmentInfo.getId(), state.segmentSuffix);
       success = true;
     } finally {
       if (success == false) {
@@ -82,16 +81,12 @@ final class CompletionFieldsConsumer extends FieldsConsumer {
   }
 
   @Override
-  public void write(Fields fields, NormsProducer norms) throws IOException {
-    delegateFieldsConsumer.write(fields, norms);
+  public void write(Fields fields) throws IOException {
+    delegateFieldsConsumer.write(fields);
 
     for (String field : fields) {
       CompletionTermWriter termWriter = new CompletionTermWriter();
       Terms terms = fields.terms(field);
-      if (terms == null) {
-        // this can happen from ghost fields, where the incoming Fields iterator claims a field exists but it does not
-        continue;
-      }
       TermsEnum termsEnum = terms.iterator();
 
       // write terms
@@ -123,7 +118,7 @@ final class CompletionFieldsConsumer extends FieldsConsumer {
     boolean success = false;
     try (IndexOutput indexOut = state.directory.createOutput(indexFile, state.context)) {
       delegateFieldsConsumer.close();
-      CodecUtil.writeIndexHeader(indexOut, codecName, COMPLETION_VERSION_CURRENT, state.segmentInfo.getId(), state.segmentSuffix);
+      CodecUtil.writeIndexHeader(indexOut, CODEC_NAME, COMPLETION_VERSION_CURRENT, state.segmentInfo.getId(), state.segmentSuffix);
       /*
        * we write the delegate postings format name so we can load it
        * without getting an instance in the ctor

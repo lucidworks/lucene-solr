@@ -165,7 +165,7 @@ import org.apache.lucene.queryparser.flexible.core.messages.*;"
           target="@{target}"
           outputDirectory="@{outputDir}"
           javacchome="${build.dir}/javacc"
-          jdkversion="1.${javac.release}"
+          jdkversion="${javac.source}"
       />
       <fixcrlf srcdir="@{outputDir}" includes="*.java" encoding="UTF-8">
         <containsregexp expression="Generated.*By.*JavaCC"/>

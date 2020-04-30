@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -33,6 +33,7 @@ import org.apache.lucene.util.TestUtil;
 public class TestIndexWriterOutOfFileDescriptors extends LuceneTestCase {
   public void test() throws Exception {
     MockDirectoryWrapper dir = newMockFSDirectory(createTempDir("TestIndexWriterOutOfFileDescriptors"));
+    dir.setPreventDoubleWrite(false);
     double rate = random().nextDouble()*0.01;
     //System.out.println("rate=" + rate);
     dir.setRandomIOExceptionRateOnOpen(rate);

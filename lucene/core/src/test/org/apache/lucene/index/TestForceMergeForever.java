@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -56,21 +56,18 @@ public class TestForceMergeForever extends LuceneTestCase {
     final Directory d = newDirectory();
     MockAnalyzer analyzer = new MockAnalyzer(random());
     analyzer.setMaxTokenLength(TestUtil.nextInt(random(), 1, IndexWriter.MAX_TERM_LENGTH));
-    IndexWriterConfig iwc = newIndexWriterConfig(analyzer);
-    // SMS can cause this test to run indefinitely long:
-    iwc.setMergeScheduler(new ConcurrentMergeScheduler());
 
-    final MyIndexWriter w = new MyIndexWriter(d, iwc);
+    final MyIndexWriter w = new MyIndexWriter(d, newIndexWriterConfig(analyzer));
 
     // Try to make an index that requires merging:
     w.getConfig().setMaxBufferedDocs(TestUtil.nextInt(random(), 2, 11));
     final int numStartDocs = atLeast(20);
-    final LineFileDocs docs = new LineFileDocs(random());
+    final LineFileDocs docs = new LineFileDocs(random(), true);
     for(int docIDX=0;docIDX<numStartDocs;docIDX++) {
       w.addDocument(docs.nextDoc());
     }
     MergePolicy mp = w.getConfig().getMergePolicy();
-    final int mergeAtOnce = 1+w.listOfSegmentCommitInfos().size();
+    final int mergeAtOnce = 1+w.segmentInfos.size();
     if (mp instanceof TieredMergePolicy) {
       ((TieredMergePolicy) mp).setMaxMergeAtOnce(mergeAtOnce);
     } else if (mp instanceof LogMergePolicy) {
@@ -88,7 +85,7 @@ public class TestForceMergeForever extends LuceneTestCase {
       @Override
       public void run() {
         try {
-          while (doStop.get() == false) {
+          while (!doStop.get()) {
             w.updateDocument(new Term("docid", "" + random().nextInt(numStartDocs)),
                              docs.nextDoc());
             // Force deletes to apply

@@ -1,3 +1,4 @@
+package org.apache.solr.search.function.distance;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.function.distance;
-import org.locationtech.spatial4j.distance.DistanceUtils;
+
+import com.spatial4j.core.distance.DistanceUtils;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -26,7 +27,7 @@ import org.apache.lucene.search.IndexSearcher;
 import java.io.IOException;
 import java.util.Map;
 
-import static org.locationtech.spatial4j.distance.DistanceUtils.DEGREES_TO_RADIANS;
+import static com.spatial4j.core.distance.DistanceUtils.DEGREES_TO_RADIANS;
 
 /**
  * Haversine function with one point constant
@@ -65,7 +66,7 @@ public class HaversineConstFunction extends ValueSource {
 
     return new DoubleDocValues(this) {
       @Override
-      public double doubleVal(int doc) throws IOException {
+      public double doubleVal(int doc) {
         double latRad = latVals.doubleVal(doc) * DEGREES_TO_RADIANS;
         double lonRad = lonVals.doubleVal(doc) * DEGREES_TO_RADIANS;
         double diffX = latCenterRad - latRad;
@@ -77,7 +78,7 @@ public class HaversineConstFunction extends ValueSource {
         return (EARTH_MEAN_DIAMETER * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h)));
       }
       @Override
-      public String toString(int doc) throws IOException {
+      public String toString(int doc) {
         return name() + '(' + latVals.toString(doc) + ',' + lonVals.toString(doc) + ',' + latCenter + ',' + lonCenter + ')';
       }
     };

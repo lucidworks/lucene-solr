@@ -1,3 +1,5 @@
+package org.apache.solr.search.stats;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.stats;
 
 import org.apache.solr.BaseDistributedSearchTestCase;
 import org.apache.solr.client.solrj.SolrClient;
@@ -23,7 +24,6 @@ import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.junit.Test;
 
-// See: https://issues.apache.org/jira/browse/SOLR-12028 Tests cannot remove files on Windows machines occasionally
 public class TestDefaultStatsCache extends BaseDistributedSearchTestCase {
   private int docId = 0;
   
@@ -38,18 +38,14 @@ public class TestDefaultStatsCache extends BaseDistributedSearchTestCase {
     System.clearProperty("solr.statsCache");
   }
 
-  @Test 
+  @Test
   public void test() throws Exception {
     del("*:*");
-    commit();
-    String aDocId=null;
     for (int i = 0; i < clients.size(); i++) {
       int shard = i + 1;
       for (int j = 0; j <= i; j++) {
-        int currentId = docId++;
-        index_specific(i, id,currentId , "a_t", "one two three",
+        index_specific(i, id, docId++, "a_t", "one two three",
             "shard_i", shard);
-        aDocId = rarely() ? currentId+"":aDocId;
       }
     }
     commit();
@@ -57,26 +53,18 @@ public class TestDefaultStatsCache extends BaseDistributedSearchTestCase {
     handle.put("QTime", SKIPVAL);   
     handle.put("timestamp", SKIPVAL);
     
-    if (aDocId != null) {
-      dfQuery("q", "id:"+aDocId, "debugQuery", "true", "fl", "*,score");
-    }
     dfQuery("q", "a_t:one", "debugQuery", "true", "fl", "*,score");
     
     // add another document
     for (int i = 0; i < clients.size(); i++) {
       int shard = i + 1;
       for (int j = 0; j <= i; j++) {
-        int currentId = docId++;
-        index_specific(i, id, currentId, "a_t", "one two three four five",
+        index_specific(i, id, docId++, "a_t", "one two three four five",
             "shard_i", shard);
-        aDocId = rarely() ? currentId+"":aDocId;
       }
     }
     commit();
 
-    if (aDocId != null) {
-      dfQuery("q", "{!cache=false}id:"+aDocId,"debugQuery", "true", "fl", "*,score");
-    }
     dfQuery("q", "a_t:one a_t:four", "debugQuery", "true", "fl", "*,score");
   }
   
@@ -91,6 +79,10 @@ public class TestDefaultStatsCache extends BaseDistributedSearchTestCase {
     if (clients.size() == 1) {
       // only one shard
       assertEquals(controlScore, shardScore);
+    } else {
+      assertTrue("control:" + controlScore.floatValue() + " shard:"
+          + shardScore.floatValue(),
+          controlScore.floatValue() > shardScore.floatValue());
     }
   }
   

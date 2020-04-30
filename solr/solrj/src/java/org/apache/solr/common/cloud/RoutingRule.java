@@ -1,3 +1,5 @@
+package org.apache.solr.common.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.common.cloud;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.solr.common.util.SuppressForbidden;
-import org.apache.solr.common.util.Utils;
+import org.noggit.JSONUtil;
 
 /**
  * Used for routing docs with particular keys into another collection
@@ -72,6 +73,6 @@ public class RoutingRule extends ZkNodeProps {
 
   @Override
   public String toString() {
-    return Utils.toJSONString(propMap);
+    return JSONUtil.toJSON(propMap, -1);
   }
 }

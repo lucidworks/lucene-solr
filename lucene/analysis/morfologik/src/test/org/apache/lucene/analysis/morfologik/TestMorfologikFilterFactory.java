@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.morfologik;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.morfologik;
-
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -75,22 +75,26 @@ public class TestMorfologikFilterFactory extends BaseTokenStreamTestCase {
   public void testMissingDictionary() throws Exception {
     final ResourceLoader loader = new ClasspathResourceLoader(TestMorfologikFilterFactory.class);
 
-    IOException expected = expectThrows(IOException.class, () -> {
+    try {
       Map<String,String> params = new HashMap<>();
       params.put(MorfologikFilterFactory.DICTIONARY_ATTRIBUTE, "missing-dictionary-resource.dict");
       MorfologikFilterFactory factory = new MorfologikFilterFactory(params);
       factory.inform(loader);
-    });
-    assertTrue(expected.getMessage().contains("Resource not found"));
+      fail();
+    } catch (IOException e) {
+      assertTrue(e.getMessage().contains("Resource not found"));
+    }
   }
 
   /** Test that bogus arguments result in exception */
   public void testBogusArguments() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       HashMap<String,String> params = new HashMap<String,String>();
       params.put("bogusArg", "bogusValue");
       new MorfologikFilterFactory(params);
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
   }
 }

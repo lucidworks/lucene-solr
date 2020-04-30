@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
 
-
-import java.io.EOFException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Random;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
@@ -49,7 +48,7 @@ public class TestRAMDirectory extends BaseDirectoryTestCase {
   }
   
   // add enough document so that the index will be larger than RAMDirectory.READ_BUFFER_SIZE
-  private static final int DOCS_TO_ADD = 500;
+  private final int docsToAdd = 500;
 
   private Path buildIndex() throws IOException {
     Path path = createTempDir("buildIndex");
@@ -59,12 +58,12 @@ public class TestRAMDirectory extends BaseDirectoryTestCase {
         new MockAnalyzer(random())).setOpenMode(OpenMode.CREATE));
     // add some documents
     Document doc = null;
-    for (int i = 0; i < DOCS_TO_ADD; i++) {
+    for (int i = 0; i < docsToAdd; i++) {
       doc = new Document();
       doc.add(newStringField("content", English.intToEnglish(i).trim(), Field.Store.YES));
       writer.addDocument(doc);
     }
-    assertEquals(DOCS_TO_ADD, writer.getDocStats().maxDoc);
+    assertEquals(docsToAdd, writer.maxDoc());
     writer.close();
     dir.close();
 
@@ -83,6 +82,7 @@ public class TestRAMDirectory extends BaseDirectoryTestCase {
       assertFalse(files.contains("subdir"));
     } finally {
       IOUtils.close(fsDir);
+      IOUtils.rm(path);
     }
   }
 
@@ -100,13 +100,13 @@ public class TestRAMDirectory extends BaseDirectoryTestCase {
     
     // open reader to test document count
     IndexReader reader = DirectoryReader.open(ramDir);
-    assertEquals(DOCS_TO_ADD, reader.numDocs());
+    assertEquals(docsToAdd, reader.numDocs());
     
     // open search zo check if all doc's are there
     IndexSearcher searcher = newSearcher(reader);
     
     // search for all documents
-    for (int i = 0; i < DOCS_TO_ADD; i++) {
+    for (int i = 0; i < docsToAdd; i++) {
       Document doc = searcher.doc(i);
       assertTrue(doc.getField("content") != null);
     }
@@ -115,8 +115,8 @@ public class TestRAMDirectory extends BaseDirectoryTestCase {
     reader.close();
   }
   
-  private static final int NUM_THREADS = 10;
-  private static final int DOCS_PER_THREAD = 40;
+  private final int numThreads = 10;
+  private final int docsPerThread = 40;
   
   public void testRAMDirectorySize() throws IOException, InterruptedException {
 
@@ -132,15 +132,15 @@ public class TestRAMDirectory extends BaseDirectoryTestCase {
     
     assertEquals(ramDir.sizeInBytes(), ramDir.getRecomputedSizeInBytes());
     
-    Thread[] threads = new Thread[NUM_THREADS];
-    for (int i = 0; i< NUM_THREADS; i++) {
+    Thread[] threads = new Thread[numThreads];
+    for (int i=0; i<numThreads; i++) {
       final int num = i;
       threads[i] = new Thread(){
         @Override
         public void run() {
-          for (int j = 1; j< DOCS_PER_THREAD; j++) {
+          for (int j=1; j<docsPerThread; j++) {
             Document doc = new Document();
-            doc.add(newStringField("sizeContent", English.intToEnglish(num* DOCS_PER_THREAD +j).trim(), Field.Store.YES));
+            doc.add(newStringField("sizeContent", English.intToEnglish(num*docsPerThread+j).trim(), Field.Store.YES));
             try {
               writer.addDocument(doc);
             } catch (IOException e) {
@@ -150,40 +150,14 @@ public class TestRAMDirectory extends BaseDirectoryTestCase {
         }
       };
     }
-    for (int i = 0; i< NUM_THREADS; i++) {
+    for (int i=0; i<numThreads; i++)
       threads[i].start();
-    }
-    for (int i = 0; i< NUM_THREADS; i++) {
+    for (int i=0; i<numThreads; i++)
       threads[i].join();
-    }
 
     writer.forceMerge(1);
     assertEquals(ramDir.sizeInBytes(), ramDir.getRecomputedSizeInBytes());
     
     writer.close();
-  }
-
-  public void testShouldThrowEOFException() throws Exception {
-    final Random random = random();
-
-    try (Directory dir = newDirectory()) {
-      final int len = 16 + random().nextInt(2048) / 16 * 16;
-      final byte[] bytes = new byte[len];
-
-      try (IndexOutput os = dir.createOutput("foo", newIOContext(random))) {
-        os.writeBytes(bytes, bytes.length);
-      }
-
-      try (IndexInput is = dir.openInput("foo", newIOContext(random))) {
-        expectThrows(EOFException.class, () -> {
-          is.seek(0);
-          // Here, I go past EOF.
-          is.seek(len + random().nextInt(2048));
-          // since EOF is not enforced by the previous call in RAMInputStream
-          // this call to readBytes should throw the exception.
-          is.readBytes(bytes, 0, 16);
-        });
-      }
-    }
   }
 }

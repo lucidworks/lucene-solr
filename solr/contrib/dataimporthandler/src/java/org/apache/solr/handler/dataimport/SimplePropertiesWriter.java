@@ -1,3 +1,5 @@
+package org.apache.solr.handler.dataimport;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.dataimport;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -30,13 +31,11 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.IllformedLocaleException;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
 import org.apache.lucene.util.IOUtils;
-import org.apache.solr.common.util.SuppressForbidden;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SolrResourceLoader;
 import org.slf4j.Logger;
@@ -92,7 +91,16 @@ public class SimplePropertiesWriter extends DIHProperties {
     }
     findDirectory(dataImporter, params);
     if(params.get(LOCALE) != null) {
-      locale = getLocale(params.get(LOCALE));
+      String localeStr = params.get(LOCALE);
+      for (Locale l : Locale.getAvailableLocales()) {
+        if(localeStr.equals(l.getDisplayName(Locale.ROOT))) {
+          locale = l;
+          break;
+        }
+      }
+      if(locale==null) {
+        throw new DataImportHandlerException(SEVERE, "Unsupported locale for PropertWriter: " + localeStr);
+      }
     } else {
       locale = Locale.ROOT;
     }    
@@ -101,25 +109,7 @@ public class SimplePropertiesWriter extends DIHProperties {
     } else {
       dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", locale);
     }    
-  }
-  
-  @SuppressForbidden(reason = "Usage of outdated locale parsing with Locale#toString() because of backwards compatibility")
-  private Locale getLocale(String name) {
-    if (name == null) {
-      return Locale.ROOT;
-    }
-    for (final Locale l : Locale.getAvailableLocales()) {
-      if(name.equals(l.toString()) || name.equals(l.getDisplayName(Locale.ROOT))) {
-        return locale;
-      }
-    }
-    try {
-      return new Locale.Builder().setLanguageTag(name).build();
-    } catch (IllformedLocaleException ex) {
-      throw new DataImportHandlerException(SEVERE, "Unsupported locale for PropertyWriter: " + name);
-    }
-  }
-  
+  }  
   protected void findDirectory(DataImporter dataImporter, Map<String, String> params) {
     if(params.get(DIRECTORY) != null) {
       configDir = params.get(DIRECTORY);

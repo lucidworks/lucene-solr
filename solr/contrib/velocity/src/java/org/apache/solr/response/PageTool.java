@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.response;
 
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.search.DocList;
 import org.apache.solr.search.DocSlice;
 import org.apache.solr.common.SolrDocumentList;
@@ -38,16 +40,17 @@ public class PageTool {
     String rows = request.getParams().get("rows");
 
     if (rows != null) {
-      results_per_page = Integer.parseInt(rows);
+      results_per_page = new Integer(rows);
     }
     //TODO: Handle group by results
-    Object docs = response.getResponse();
+    Object docs = response.getValues().get("response");
     if (docs != null) {
       if (docs instanceof DocSlice) {
-        results_found = ((DocSlice) docs).matches();
-        start = ((DocSlice) docs).offset();
+        DocSlice doc_slice = (DocSlice) docs;
+        results_found = doc_slice.matches();
+        start = doc_slice.offset();
       } else if(docs instanceof ResultContext) {
-        DocList dl = ((ResultContext) docs).getDocList();
+        DocList dl = ((ResultContext) docs).docs;
         results_found = dl.matches();
         start = dl.offset();
       } else if(docs instanceof SolrDocumentList) {

@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.tst;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.tst;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
@@ -27,10 +27,11 @@ import org.apache.lucene.search.suggest.Lookup;
 import org.apache.lucene.search.suggest.SortedInputIterator;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
-import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.CharsRefBuilder;
 import org.apache.lucene.util.RamUsageEstimator;
+import org.apache.lucene.util.UnicodeUtil;
 
 /**
  * Suggest implementation based on a 
@@ -44,69 +45,12 @@ public class TSTLookup extends Lookup {
 
   /** Number of entries the lookup was built with */
   private long count = 0;
-
-  private final Directory tempDir;
-  private final String tempFileNamePrefix;
   
   /** 
    * Creates a new TSTLookup with an empty Ternary Search Tree.
    * @see #build(InputIterator)
    */
-  public TSTLookup() {
-    this(null, null);
-  }
-
-  /** 
-   * Creates a new TSTLookup, for building.
-   * @see #build(InputIterator)
-   */
-  public TSTLookup(Directory tempDir, String tempFileNamePrefix) {
-    this.tempDir = tempDir;
-    this.tempFileNamePrefix = tempFileNamePrefix;
-  }
-  
-  // TODO: Review if this comparator is really needed for TST to work correctly!!!
-
-  /** TST uses UTF-16 sorting, so we need a suitable BytesRef comparator to do this. */
-  private final static Comparator<BytesRef> utf8SortedAsUTF16SortOrder = (a, b) -> {
-    final byte[] aBytes = a.bytes;
-    int aUpto = a.offset;
-    final byte[] bBytes = b.bytes;
-    int bUpto = b.offset;
-    
-    final int aStop = aUpto + Math.min(a.length, b.length);
-
-    while(aUpto < aStop) {
-      int aByte = aBytes[aUpto++] & 0xff;
-      int bByte = bBytes[bUpto++] & 0xff;
-
-      if (aByte != bByte) {
-
-        // See http://icu-project.org/docs/papers/utf16_code_point_order.html#utf-8-in-utf-16-order
-
-        // We know the terms are not equal, but, we may
-        // have to carefully fixup the bytes at the
-        // difference to match UTF16's sort order:
-        
-        // NOTE: instead of moving supplementary code points (0xee and 0xef) to the unused 0xfe and 0xff, 
-        // we move them to the unused 0xfc and 0xfd [reserved for future 6-byte character sequences]
-        // this reserves 0xff for preflex's term reordering (surrogate dance), and if unicode grows such
-        // that 6-byte sequences are needed we have much bigger problems anyway.
-        if (aByte >= 0xee && bByte >= 0xee) {
-          if ((aByte & 0xfe) == 0xee) {
-            aByte += 0xe;
-          }
-          if ((bByte&0xfe) == 0xee) {
-            bByte += 0xe;
-          }
-        }
-        return aByte - bByte;
-      }
-    }
-
-    // One is a prefix of the other, or, they are equal:
-    return a.length - b.length;
-  };
+  public TSTLookup() {}
 
   @Override
   public void build(InputIterator iterator) throws IOException {
@@ -119,7 +63,7 @@ public class TSTLookup extends Lookup {
     root = new TernaryTreeNode();
 
     // make sure it's sorted and the comparator uses UTF16 sort order
-    iterator = new SortedInputIterator(tempDir, tempFileNamePrefix, iterator, utf8SortedAsUTF16SortOrder);
+    iterator = new SortedInputIterator(iterator, BytesRef.getUTF8SortedAsUTF16Comparator());
     count = 0;
     ArrayList<String> tokens = new ArrayList<>();
     ArrayList<Number> vals = new ArrayList<>();

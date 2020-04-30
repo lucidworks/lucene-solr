@@ -1,3 +1,5 @@
+package org.apache.lucene.benchmark.byTask.tasks;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.benchmark.byTask.tasks;
-
 
 import java.util.HashMap;
 import java.util.Map;
@@ -51,7 +51,7 @@ public class CommitIndexTask extends PerfTask {
     IndexWriter iw = getRunData().getIndexWriter();
     if (iw != null) {
       if (commitUserData != null) {
-        iw.setLiveCommitData(commitUserData.entrySet());
+        iw.setCommitData(commitUserData);
       }
       iw.commit();
     }

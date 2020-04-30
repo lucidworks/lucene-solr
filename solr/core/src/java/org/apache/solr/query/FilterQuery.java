@@ -1,3 +1,5 @@
+package org.apache.solr.query;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.query;
 
 import java.io.IOException;
 
@@ -22,11 +23,9 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.search.BoostQuery;
 import org.apache.lucene.search.ConstantScoreQuery;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Weight;
+import org.apache.lucene.util.ToStringUtils;
 import org.apache.solr.search.DocSet;
 import org.apache.solr.search.ExtendedQueryBase;
 import org.apache.solr.search.SolrConstantScoreQuery;
@@ -36,10 +35,6 @@ public class FilterQuery extends ExtendedQueryBase {
   protected final Query q;
 
   public FilterQuery(Query q) {
-    if (q == null) {
-      this.q = new MatchNoDocsQuery();
-      return;
-    }
     this.q = q;
   }
 
@@ -65,16 +60,16 @@ public class FilterQuery extends ExtendedQueryBase {
     sb.append("filter(");
     sb.append(q.toString(""));
     sb.append(')');
+    sb.append(ToStringUtils.boost(getBoost()));
     return sb.toString();
   }
 
-  @Override
-  public void visit(QueryVisitor visitor) {
-    q.visit(visitor);
-  }
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
     Query newQ = q.rewrite(reader);
     if (newQ != q) {
       return new FilterQuery(newQ);
@@ -84,18 +79,18 @@ public class FilterQuery extends ExtendedQueryBase {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+  public Weight createWeight(IndexSearcher searcher, boolean needScores) throws IOException {
     // SolrRequestInfo reqInfo = SolrRequestInfo.getRequestInfo();
 
     if (!(searcher instanceof SolrIndexSearcher)) {
       // delete-by-query won't have SolrIndexSearcher
-      return new BoostQuery(new ConstantScoreQuery(q), 0).createWeight(searcher, scoreMode, 1f);
+      return new BoostQuery(new ConstantScoreQuery(q), 0).createWeight(searcher, needScores);
     }
 
     SolrIndexSearcher solrSearcher = (SolrIndexSearcher)searcher;
     DocSet docs = solrSearcher.getDocSet(q);
     // reqInfo.addCloseHook(docs);  // needed for off-heap refcounting
 
-    return new BoostQuery(new SolrConstantScoreQuery(docs.getTopFilter()), 0).createWeight(searcher, scoreMode, 1f);
+    return new BoostQuery(new SolrConstantScoreQuery(docs.getTopFilter()), 0).createWeight(searcher, needScores);
   }
 }

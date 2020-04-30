@@ -1,3 +1,5 @@
+package org.apache.solr.core;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -13,19 +15,16 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ * 
  */
-package org.apache.solr.core;
 
 import java.util.Map;
 
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.metrics.MetricsMap;
-import org.apache.solr.metrics.SolrMetricManager;
-import org.apache.solr.response.SolrQueryResponse;
+import org.apache.solr.common.util.NamedList;
 import org.junit.BeforeClass;
 import org.junit.Test;
-
-import static org.apache.solr.common.util.Utils.fromJSONString;
+import org.noggit.ObjectBuilder;
 
 /**
  * Test that checks that long running queries are exited by Solr using the
@@ -84,46 +83,46 @@ public class ExitableDirectoryReaderTest extends SolrTestCaseJ4 {
 
   // There are lots of assumptions about how/when cache entries should be changed in this method. The
   // simple case above shows the root problem without the confusion. testFilterSimpleCase should be
-  // removed once it is running and this test should be un-ignored and the assumptions verified.
+  // removed once it is running and this test should be un-ignored and the assumptiions verified.
   // With all the weirdness, I'm not going to vouch for this test. Feel free to change it.
   @Test
   public void testCacheAssumptions() throws Exception {
     String fq= "name:d*";
     SolrCore core = h.getCore();
-    MetricsMap filterCacheStats = (MetricsMap)((SolrMetricManager.GaugeWrapper)core.getCoreMetricManager().getRegistry().getMetrics().get("CACHE.searcher.filterCache")).getGauge();
-    long fqInserts = (long) filterCacheStats.getValue().get("inserts");
+    SolrInfoMBean filterCacheStats = core.getInfoRegistry().get("filterCache");
+    long fqInserts = (long) filterCacheStats.getStatistics().get("inserts");
 
-    MetricsMap queryCacheStats = (MetricsMap)((SolrMetricManager.GaugeWrapper)core.getCoreMetricManager().getRegistry().getMetrics().get("CACHE.searcher.queryResultCache")).getGauge();
-    long qrInserts = (long) queryCacheStats.getValue().get("inserts");
+    SolrInfoMBean queryCacheStats = core.getInfoRegistry().get("queryResultCache");
+    long qrInserts = (long) queryCacheStats.getStatistics().get("inserts");
 
     // This gets 0 docs back. Use 10000 instead of 1 for timeAllowed and it gets 100 back and the for loop below
     // succeeds.
     String response = JQ(req("q", "*:*", "fq", fq, "indent", "true", "timeAllowed", "1", "sleep", sleep));
-    Map res = (Map) fromJSONString(response);
+    Map res = (Map) ObjectBuilder.fromJSON(response);
     Map body = (Map) (res.get("response"));
     assertTrue("Should have fewer docs than " + NUM_DOCS, (long) (body.get("numFound")) < NUM_DOCS);
 
     Map header = (Map) (res.get("responseHeader"));
-    assertTrue("Should have partial results", (Boolean) (header.get(SolrQueryResponse.RESPONSE_HEADER_PARTIAL_RESULTS_KEY)));
+    assertTrue("Should have partial results", (Boolean) (header.get("partialResults")));
 
     assertEquals("Should NOT have inserted partial results in the cache!",
-        (long) queryCacheStats.getValue().get("inserts"), qrInserts);
+        (long) queryCacheStats.getStatistics().get("inserts"), qrInserts);
 
-    assertEquals("Should NOT have another insert", fqInserts, (long) filterCacheStats.getValue().get("inserts"));
+    assertEquals("Should NOT have another insert", fqInserts, (long) filterCacheStats.getStatistics().get("inserts"));
 
     // At the end of all this, we should have no hits in the queryResultCache.
     response = JQ(req("q", "*:*", "fq", fq, "indent", "true", "timeAllowed", longTimeout));
 
     // Check that we did insert this one.
-    assertEquals("Hits should still be 0", (long) filterCacheStats.getValue().get("hits"), 0L);
-    assertEquals("Inserts should be bumped", (long) filterCacheStats.getValue().get("inserts"), fqInserts + 1);
+    assertEquals("Hits should still be 0", (long) filterCacheStats.getStatistics().get("hits"), 0L);
+    assertEquals("Inserts should be bumped", (long) filterCacheStats.getStatistics().get("inserts"), fqInserts + 1);
 
-    res = (Map) fromJSONString(response);
+    res = (Map) ObjectBuilder.fromJSON(response);
     body = (Map) (res.get("response"));
 
     assertEquals("Should have exactly " + NUM_DOCS, (long) (body.get("numFound")), NUM_DOCS);
     header = (Map) (res.get("responseHeader"));
-    assertTrue("Should NOT have partial results", header.get(SolrQueryResponse.RESPONSE_HEADER_PARTIAL_RESULTS_KEY) == null);
+    assertTrue("Should NOT have partial results", header.get("partialResults") == null);
   }
 
   // When looking at a problem raised on the user's list I ran across this anomaly with timeAllowed
@@ -132,36 +131,36 @@ public class ExitableDirectoryReaderTest extends SolrTestCaseJ4 {
   public void testQueryResults() throws Exception {
     String q = "name:e*";
     SolrCore core = h.getCore();
-    MetricsMap queryCacheStats = (MetricsMap)((SolrMetricManager.GaugeWrapper)core.getCoreMetricManager().getRegistry().getMetrics().get("CACHE.searcher.queryResultCache")).getGauge();
-    Map<String,Object> nl = queryCacheStats.getValue();
+    SolrInfoMBean queryCacheStats = core.getInfoRegistry().get("queryResultCache");
+    NamedList nl = queryCacheStats.getStatistics();
     long inserts = (long) nl.get("inserts");
 
     String response = JQ(req("q", q, "indent", "true", "timeAllowed", "1", "sleep", sleep));
 
     // The queryResultCache should NOT get an entry here.
-    nl = queryCacheStats.getValue();
+    nl = queryCacheStats.getStatistics();
     assertEquals("Should NOT have inserted partial results!", inserts, (long) nl.get("inserts"));
 
-    Map res = (Map) fromJSONString(response);
+    Map res = (Map) ObjectBuilder.fromJSON(response);
     Map body = (Map) (res.get("response"));
     Map header = (Map) (res.get("responseHeader"));
 
     assertTrue("Should have fewer docs than " + NUM_DOCS, (long) (body.get("numFound")) < NUM_DOCS);
-    assertTrue("Should have partial results", (Boolean) (header.get(SolrQueryResponse.RESPONSE_HEADER_PARTIAL_RESULTS_KEY)));
+    assertTrue("Should have partial results", (Boolean) (header.get("partialResults")));
 
     response = JQ(req("q", q, "indent", "true", "timeAllowed", longTimeout));
 
     // Check that we did insert this one.
-    Map<String,Object> nl2 = queryCacheStats.getValue();
+    NamedList nl2 = queryCacheStats.getStatistics();
     assertEquals("Hits should still be 0", (long) nl.get("hits"), (long) nl2.get("hits"));
     assertTrue("Inserts should be bumped", inserts < (long) nl2.get("inserts"));
 
-    res = (Map) fromJSONString(response);
+    res = (Map) ObjectBuilder.fromJSON(response);
     body = (Map) (res.get("response"));
     header = (Map) (res.get("responseHeader"));
 
     assertEquals("Should have exactly " + NUM_DOCS, NUM_DOCS, (long) (body.get("numFound")));
-    Boolean test = (Boolean) (header.get(SolrQueryResponse.RESPONSE_HEADER_PARTIAL_RESULTS_KEY));
+    Boolean test = (Boolean) (header.get("partialResults"));
     if (test != null) {
       assertFalse("Should NOT have partial results", test);
     }

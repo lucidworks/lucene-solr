@@ -16,16 +16,7 @@
  */
 package org.apache.solr.cloud;
 
-import java.io.IOException;
-import java.lang.invoke.MethodHandles;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
+import org.apache.commons.lang.StringUtils;
 import org.apache.lucene.util.TestUtil;
 import org.apache.solr.SolrTestCaseJ4.SuppressSSL;
 import org.apache.solr.client.solrj.SolrServerException;
@@ -38,10 +29,21 @@ import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.params.StatsParams;
 import org.apache.solr.common.util.NamedList;
+import org.apache.solr.util.DateFormatUtil;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.lang.invoke.MethodHandles;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.apache.solr.common.params.FacetParams.FACET;
 import static org.apache.solr.common.params.FacetParams.FACET_LIMIT;
@@ -80,11 +82,6 @@ public class TestCloudPivotFacet extends AbstractFullDistribZkTestBase {
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  // because floating point addition can depende on the order of operations, we ignore
-  // any stats that can be lossy -- the purpose of testing stats here is just to sanity check
-  // that the basic hooks between pivot faceting and stats.field work, and these let us do that
-  private static final String USE_STATS = "count=true missing=true min=true max=true";
-  
   // param used by test purely for tracing & validation
   private static String TRACE_MIN = "_test_min";
   // param used by test purely for tracing & validation
@@ -92,11 +89,6 @@ public class TestCloudPivotFacet extends AbstractFullDistribZkTestBase {
   // param used by test purely for tracing & validation
   private static String TRACE_SORT = "_test_sort";
 
-  public TestCloudPivotFacet() {
-    // we need DVs on point fields to compute stats & facets
-    if (Boolean.getBoolean(NUMERIC_POINTS_SYSPROP)) System.setProperty(NUMERIC_DOCVALUES_SYSPROP,"true");
-  }
-  
   /** 
    * Controls the odds of any given doc having a value in any given field -- as this gets lower, 
    * the counts for "facet.missing" pivots should increase.
@@ -111,10 +103,11 @@ public class TestCloudPivotFacet extends AbstractFullDistribZkTestBase {
   }
 
   @Test
-  //commented 2-Aug-2018 @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // 28-June-2018
   public void test() throws Exception {
 
-    waitForThingsToLevelOut(30000); // TODO: why would we have to wait?
+    sanityCheckAssertNumerics();
+
+    waitForThingsToLevelOut(30000); // TODO: why whould we have to wait?
     // 
     handle.clear();
     handle.put("QTime", SKIPVAL);
@@ -143,6 +136,7 @@ public class TestCloudPivotFacet extends AbstractFullDistribZkTestBase {
     final String[] fieldNames = fieldNameSet.toArray(new String[fieldNameSet.size()]);
     Arrays.sort(fieldNames); // need determinism when picking random fields
 
+
     for (int i = 0; i < 5; i++) {
 
       String q = "*:*";
@@ -162,11 +156,11 @@ public class TestCloudPivotFacet extends AbstractFullDistribZkTestBase {
         // if we are doing stats, then always generated the same # of STATS_FIELD
         // params, using multiple tags from a fixed set, but with diff fieldName values.
         // later, each pivot will randomly pick a tag.
-        baseP.add(StatsParams.STATS_FIELD, "{!key=sk1 tag=st1,st2 "+USE_STATS+"}" +
+        baseP.add(StatsParams.STATS_FIELD, "{!key=sk1 tag=st1,st2}" +
                   pickRandomStatsFields(fieldNames));
-        baseP.add(StatsParams.STATS_FIELD, "{!key=sk2 tag=st2,st3 "+USE_STATS+"}" +
+        baseP.add(StatsParams.STATS_FIELD, "{!key=sk2 tag=st2,st3}" +
                   pickRandomStatsFields(fieldNames));
-        baseP.add(StatsParams.STATS_FIELD, "{!key=sk3 tag=st3,st4 "+USE_STATS+"}" +
+        baseP.add(StatsParams.STATS_FIELD, "{!key=sk3 tag=st3,st4}" +
                   pickRandomStatsFields(fieldNames));
         // NOTE: there's a chance that some of those stats field names
         // will be the same, but if so, all the better to test that edge case
@@ -197,7 +191,7 @@ public class TestCloudPivotFacet extends AbstractFullDistribZkTestBase {
         // trace param for validation
         baseP.add(TRACE_MIN, min);
       }
-      
+
       if (random().nextBoolean()) {
         String missing = ""+random().nextBoolean();
         pivotP.add(FACET_MISSING, missing);
@@ -355,7 +349,7 @@ public class TestCloudPivotFacet extends AbstractFullDistribZkTestBase {
   /**
    * Compare top level stats in response with stats from pivot constraint
    */
-  private void assertPivotStats(String message, PivotField constraint, QueryResponse response) {
+  private void assertPivotStats(String message, PivotField constraint, QueryResponse response) throws SolrServerException {
 
     if (null == constraint.getFieldStatsInfo()) {
       // no stats for this pivot, nothing to check
@@ -388,18 +382,21 @@ public class TestCloudPivotFacet extends AbstractFullDistribZkTestBase {
         // regular stats, compare everything...
 
         assert actualStats != null;
-        try {
-          String msg = " of " + statsKey;
-          
-          // no wiggle room, these should always be exactly equals, regardless of field type
-          assertEquals("Count" + msg, pivotStats.getCount(), actualStats.getCount());
-          assertEquals("Missing" + msg, pivotStats.getMissing(), actualStats.getMissing());
-          assertEquals("Min" + msg, pivotStats.getMin(), actualStats.getMin());
-          assertEquals("Max" + msg, pivotStats.getMax(), actualStats.getMax());
+        String msg = " of " + statsKey + " => " + message;
 
-        } catch (AssertionError e) {
-          throw new AssertionError("Stats: Pivot[" + pivotStats + "] <==> Actual[" + actualStats + "]  => " + message, e);
-        }
+        // no wiggle room, these should always be exactly equals, regardless of field type
+        assertEquals("Count" + msg, pivotStats.getCount(), actualStats.getCount());
+        assertEquals("Missing" + msg, pivotStats.getMissing(), actualStats.getMissing());
+        assertEquals("Min" + msg, pivotStats.getMin(), actualStats.getMin());
+        assertEquals("Max" + msg, pivotStats.getMax(), actualStats.getMax());
+
+        // precision loss can affect these in some field types depending on shards used
+        // and the order that values are accumulated
+        assertNumerics("Sum" + msg, pivotStats.getSum(), actualStats.getSum());
+        assertNumerics("Mean" + msg, pivotStats.getMean(), actualStats.getMean());
+        assertNumerics("Stddev" + msg, pivotStats.getStddev(), actualStats.getStddev());
+        assertNumerics("SumOfSquares" + msg, 
+                      pivotStats.getSumOfSquares(), actualStats.getSumOfSquares());
       }
     }
 
@@ -477,7 +474,7 @@ public class TestCloudPivotFacet extends AbstractFullDistribZkTestBase {
     // otherwise, build up a term filter...
     String prefix = "{!term f=" + constraint.getField() + "}";
     if (value instanceof Date) {
-      return prefix + ((Date) value).toInstant();
+      return prefix + DateFormatUtil.formatExternal((Date)value);
     } else {
       return prefix + value;
     }
@@ -495,7 +492,7 @@ public class TestCloudPivotFacet extends AbstractFullDistribZkTestBase {
       // makes it a robust test (especially for multi-valued fields)
       fields[i] = fieldNames[TestUtil.nextInt(random(),0,fieldNames.length-1)];
     }
-    return String.join(",", fields);
+    return StringUtils.join(fields, ",");
   }
 
   /**
@@ -520,7 +517,7 @@ public class TestCloudPivotFacet extends AbstractFullDistribZkTestBase {
     // randomly decide which stat tag to use
 
     // if this is 0, or stats aren't enabled, we'll be asking for a tag that doesn't exist
-    // ...which should be fine (just like excluding a tagged fq that doesn't exist)
+    // ...which should be fine (just like excluding a taged fq that doesn't exist)
     final int statTag = TestUtil.nextInt(random(), -1, 4);
       
     if (0 <= statTag) {
@@ -681,11 +678,153 @@ public class TestCloudPivotFacet extends AbstractFullDistribZkTestBase {
   /**
    * Asserts the number of docs found in the response
    */
-  private void assertNumFound(String msg, int expected, QueryResponse response) {
+  private void assertNumFound(String msg, int expected, QueryResponse response) 
+    throws SolrServerException {
 
     countNumFoundChecks++;
 
     assertEquals(msg, expected, response.getResults().getNumFound());
+  }
+
+  /**
+   * Given two objects returned as stat values asserts that they are they are either both <code>null</code> 
+   * or all of the following are true:
+   * <ul>
+   *  <li>They have the exact same class</li>
+   *  <li>They are both Numbers or they are both Dates -- in the later case, their millisecond's 
+   *      since epoch are used for all subsequent comparisons
+   *  </li>
+   *  <li>Either:
+   *   <ul>
+   *    <li>They are Integer or Long objects with the exact same <code>longValue()</code></li>
+   *    <li>They are Float or Double objects and their <code>doubleValue()</code>s
+   *        are equally-ish with a "small" epsilon (relative to the scale of the expected value)
+   *    </li>
+   *   </ul>
+   *  </li>
+   * <ul>
+   *
+   * @see Date#getTime
+   * @see Number#doubleValue
+   * @see Number#longValue
+   * @see #assertEquals(String,double,double,double)
+   */
+  private void assertNumerics(String msg, Object expected, Object actual) {
+    if (null == expected || null == actual) {
+      assertEquals(msg, expected, actual);
+      return;
+    }
+    
+    assertEquals(msg + " ... values do not have the same type: " + expected + " vs " + actual,
+                 expected.getClass(), actual.getClass());
+
+    if (expected instanceof Date) {
+      expected = ((Date)expected).getTime();
+      actual = ((Date)actual).getTime();
+      msg = msg + " (w/dates converted to ms)";
+    }
+    
+    assertTrue(msg + " ... expected is not a Number: " + 
+               expected + "=>" + expected.getClass(),
+               expected instanceof Number);
+        
+    if (expected instanceof Long || expected instanceof Integer) {
+      assertEquals(msg, ((Number)expected).longValue(), ((Number)actual).longValue());
+      
+    } else if (expected instanceof Float || expected instanceof Double) {
+      // compute an epsilon relative to the size of the expected value
+      double expect = ((Number)expected).doubleValue();
+      double epsilon = Math.abs(expect * 0.1E-7D);
+
+      assertEquals(msg, expect, ((Number)actual).doubleValue(), epsilon);
+      
+    } else {
+      fail(msg + " ... where did this come from: " + expected.getClass());
+    }
+  }
+
+  /**
+   * test the test
+   */
+  private void sanityCheckAssertNumerics() {
+    
+    assertNumerics("Null?", null, null);
+    assertNumerics("large a", 
+                   new Double(2.3005390038169265E9), 
+                   new Double(2.300539003816927E9));
+    assertNumerics("large b",
+                   new Double(1.2722582464444444E9),
+                   new Double(1.2722582464444442E9));
+    assertNumerics("small", 
+                   new Double(2.3005390038169265E-9), 
+                   new Double(2.300539003816927E-9));
+    
+    assertNumerics("large a negative", 
+                   new Double(-2.3005390038169265E9), 
+                   new Double(-2.300539003816927E9));
+    assertNumerics("large b negative",
+                   new Double(-1.2722582464444444E9),
+                   new Double(-1.2722582464444442E9));
+    assertNumerics("small negative", 
+                   new Double(-2.3005390038169265E-9), 
+                   new Double(-2.300539003816927E-9));
+    
+    assertNumerics("high long", Long.MAX_VALUE, Long.MAX_VALUE);
+    assertNumerics("high int", Integer.MAX_VALUE, Integer.MAX_VALUE);
+    assertNumerics("low long", Long.MIN_VALUE, Long.MIN_VALUE);
+    assertNumerics("low int", Integer.MIN_VALUE, Integer.MIN_VALUE);
+
+    // NOTE: can't use 'fail' in these try blocks, because we are catching AssertionError
+    // (ie: the code we are expecting to 'fail' is an actual test assertion generator)
+    
+    for (Object num : new Object[] { new Date(42), 42, 42L, 42.0F }) {
+      try {
+        assertNumerics("non-null", null, num);
+        throw new RuntimeException("did not get assertion failure when expected was null");
+      } catch (AssertionError e) {}
+      
+      try {
+        assertNumerics("non-null", num, null);
+        throw new RuntimeException("did not get assertion failure when actual was null");
+      } catch (AssertionError e) {}
+    }
+  
+    try {
+      assertNumerics("non-number", "foo", 42);
+      throw new RuntimeException("did not get assertion failure when expected was non-number");
+    } catch (AssertionError e) {}
+
+    try {
+      assertNumerics("non-number", 42, "foo");
+      throw new RuntimeException("did not get assertion failure when actual was non-number");
+    } catch (AssertionError e) {}
+  
+    try {
+      assertNumerics("diff", 
+                     new Double(2.3005390038169265E9), 
+                     new Double(2.267272520100462E9));
+      throw new RuntimeException("did not get assertion failure when args are big & too diff");
+    } catch (AssertionError e) {}
+    try {
+      assertNumerics("diff", 
+                     new Double(2.3005390038169265E-9), 
+                     new Double(2.267272520100462E-9));
+      throw new RuntimeException("did not get assertion failure when args are small & too diff");
+    } catch (AssertionError e) {}
+  
+    try {
+      assertNumerics("diff long", Long.MAX_VALUE, Long.MAX_VALUE-1);
+      throw new RuntimeException("did not get assertion failure when args are diff longs");
+    } catch (AssertionError e) {}
+    try {
+      assertNumerics("diff int", Integer.MAX_VALUE, Integer.MAX_VALUE-1);
+      throw new RuntimeException("did not get assertion failure when args are diff ints");
+    } catch (AssertionError e) {}
+    try {
+      assertNumerics("diff date", new Date(42), new Date(43));
+      throw new RuntimeException("did not get assertion failure when args are diff dates");
+    } catch (AssertionError e) {}
+
   }
 
   /**

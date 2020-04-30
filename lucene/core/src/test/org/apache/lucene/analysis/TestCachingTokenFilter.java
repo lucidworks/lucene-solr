@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis;
-
 
 
 import java.io.IOException;
@@ -26,7 +26,7 @@ import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.search.DocIdSetIterator;
@@ -40,7 +40,7 @@ public class TestCachingTokenFilter extends BaseTokenStreamTestCase {
     Directory dir = newDirectory();
     RandomIndexWriter writer = new RandomIndexWriter(random(), dir);
     Document doc = new Document();
-    AtomicInteger resetCount = new AtomicInteger(0);
+    final AtomicInteger resetCount = new AtomicInteger(0);
     TokenStream stream = new TokenStream() {
       private int index = 0;
       private CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);
@@ -84,14 +84,14 @@ public class TestCachingTokenFilter extends BaseTokenStreamTestCase {
     writer.addDocument(doc);
     
     IndexReader reader = writer.getReader();
-    PostingsEnum termPositions = MultiTerms.getTermPostingsEnum(reader,
+    PostingsEnum termPositions = MultiFields.getTermPositionsEnum(reader,
                                                                           "preanalyzed",
                                                                           new BytesRef("term1"));
     assertTrue(termPositions.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
     assertEquals(1, termPositions.freq());
     assertEquals(0, termPositions.nextPosition());
 
-    termPositions = MultiTerms.getTermPostingsEnum(reader,
+    termPositions = MultiFields.getTermPositionsEnum(reader,
                                                      "preanalyzed",
                                                      new BytesRef("term2"));
     assertTrue(termPositions.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
@@ -99,7 +99,7 @@ public class TestCachingTokenFilter extends BaseTokenStreamTestCase {
     assertEquals(1, termPositions.nextPosition());
     assertEquals(3, termPositions.nextPosition());
     
-    termPositions = MultiTerms.getTermPostingsEnum(reader,
+    termPositions = MultiFields.getTermPositionsEnum(reader,
                                                      "preanalyzed",
                                                      new BytesRef("term3"));
     assertTrue(termPositions.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
@@ -121,10 +121,12 @@ public class TestCachingTokenFilter extends BaseTokenStreamTestCase {
     final TokenStream input = analyzer.tokenStream("field", "abc");
     CachingTokenFilter buffer = new CachingTokenFilter(input);
     buffer.reset();//ok
-    IllegalStateException e = expectThrows(IllegalStateException.class, () -> {
+    try {
       buffer.reset();//bad (this used to work which we don't want)
-    });
-    assertEquals("double reset()", e.getMessage());
+      fail("didn't get expected exception");
+    } catch (IllegalStateException e) {
+      assertEquals("double reset()", e.getMessage());
+    }
   }
   
   private void checkTokens(TokenStream stream) throws IOException {

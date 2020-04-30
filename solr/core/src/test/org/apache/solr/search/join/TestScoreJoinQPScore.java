@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search.join;
 
 import java.util.ArrayList;
@@ -21,17 +22,14 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Random;
 
-import com.codahale.metrics.Metric;
 import org.apache.lucene.search.BoostQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.join.ScoreMode;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrException;
-import org.apache.solr.metrics.MetricsMap;
-import org.apache.solr.metrics.SolrMetricManager;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.response.SolrQueryResponse;
@@ -178,9 +176,12 @@ public class TestScoreJoinQPScore extends SolrTestCaseJ4 {
 
   }
 
-  final static Comparator<String> lessFloat = (o1, o2) -> {
-    assertTrue(Float.parseFloat(o1) < Float.parseFloat(o2));
-    return 0;
+  final static Comparator<String> lessFloat = new Comparator<String>() {
+    @Override
+    public int compare(String o1, String o2) {
+      assertTrue(Float.parseFloat(o1) < Float.parseFloat(o2));
+      return 0;
+    }
   };
 
   @Ignore("SOLR-7814, also don't forget cover boost at testCacheHit()")
@@ -190,7 +191,7 @@ public class TestScoreJoinQPScore extends SolrTestCaseJ4 {
 
     final SolrQueryRequest req = req("q", "{!join from=movieId_s to=id score=" + score + " b=200}title:movie", "fl", "id,score", "omitHeader", "true");
     SolrRequestInfo.setRequestInfo(new SolrRequestInfo(req, new SolrQueryResponse()));
-    final Query luceneQ = QParser.getParser(req.getParams().get("q"), req).getQuery().rewrite(req.getSearcher().getSlowAtomicReader());
+    final Query luceneQ = QParser.getParser(req.getParams().get("q"), null, req).getQuery().rewrite(req.getSearcher().getLeafReader());
     assertTrue(luceneQ instanceof BoostQuery);
     float boost = ((BoostQuery) luceneQ).getBoost();
     assertEquals("" + luceneQ, Float.floatToIntBits(200), Float.floatToIntBits(boost));
@@ -201,23 +202,22 @@ public class TestScoreJoinQPScore extends SolrTestCaseJ4 {
   public void testCacheHit() throws Exception {
     indexDataForScorring();
 
-    Map<String, Metric> metrics = h.getCoreContainer().getMetricManager().registry(h.getCore().getCoreMetricManager().getRegistryName()).getMetrics();
-
-    MetricsMap mm = (MetricsMap)((SolrMetricManager.GaugeWrapper)metrics.get("CACHE.searcher.queryResultCache")).getGauge();
+    SolrCache cache = (SolrCache) h.getCore().getInfoRegistry()
+        .get("queryResultCache");
     {
-      Map<String,Object> statPre = mm.getValue();
+      final NamedList statPre = cache.getStatistics();
       h.query(req("q", "{!join from=movieId_s to=id score=Avg}title:first", "fl", "id", "omitHeader", "true"));
-      assertHitOrInsert(mm.getValue(), statPre);
+      assertHitOrInsert(cache, statPre);
     }
 
     {
-      Map<String,Object> statPre = mm.getValue();
+      final NamedList statPre = cache.getStatistics();
       h.query(req("q", "{!join from=movieId_s to=id score=Avg}title:first", "fl", "id", "omitHeader", "true"));
-      assertHit(mm.getValue(), statPre);
+      assertHit(cache, statPre);
     }
 
     {
-      Map<String,Object> statPre = mm.getValue();
+      NamedList statPre = cache.getStatistics();
 
       Random r = random();
       boolean changed = false;
@@ -238,14 +238,14 @@ public class TestScoreJoinQPScore extends SolrTestCaseJ4 {
               //" b=" + boost + 
               "}" + q, "fl", "id", "omitHeader", "true")
       );
-      assertInsert(mm.getValue(), statPre);
+      assertInsert(cache, statPre);
 
-      statPre = mm.getValue();
+      statPre = cache.getStatistics();
       final String repeat = h.query(req("q", "{!join from=" + from + " to=" + to + " score=" + score.toLowerCase(Locale.ROOT) +
           //" b=" + boost
               "}" + q, "fl", "id", "omitHeader", "true")
       );
-      assertHit(mm.getValue(), statPre);
+      assertHit(cache, statPre);
 
       assertEquals("lowercase shouldn't change anything", resp, repeat);
 
@@ -258,7 +258,6 @@ public class TestScoreJoinQPScore extends SolrTestCaseJ4 {
     // this queries are not overlap, with other in this test case. 
     // however it might be better to extract this method into the separate suite
     // for a while let's nuke a cache content, in case of repetitions
-    SolrCache cache = (SolrCache)h.getCore().getInfoRegistry().get("queryResultCache");
     cache.clear();
   }
 
@@ -269,32 +268,32 @@ public class TestScoreJoinQPScore extends SolrTestCaseJ4 {
     return l.get(r.nextInt(l.size()));
   }
 
-  private void assertInsert(Map<String,Object> current, final Map<String,Object> statPre) {
+  private void assertInsert(SolrCache cache, final NamedList statPre) {
     assertEquals("it lookups", 1,
-        delta("lookups", current, statPre));
-    assertEquals("it doesn't hit", 0, delta("hits", current, statPre));
+        delta("lookups", cache.getStatistics(), statPre));
+    assertEquals("it doesn't hit", 0, delta("hits", cache.getStatistics(), statPre));
     assertEquals("it inserts", 1,
-        delta("inserts", current, statPre));
+        delta("inserts", cache.getStatistics(), statPre));
   }
 
-  private void assertHit(Map<String,Object> current, final Map<String,Object> statPre) {
+  private void assertHit(SolrCache cache, final NamedList statPre) {
     assertEquals("it lookups", 1,
-        delta("lookups", current, statPre));
-    assertEquals("it hits", 1, delta("hits", current, statPre));
+        delta("lookups", cache.getStatistics(), statPre));
+    assertEquals("it hits", 1, delta("hits", cache.getStatistics(), statPre));
     assertEquals("it doesn't insert", 0,
-        delta("inserts", current, statPre));
+        delta("inserts", cache.getStatistics(), statPre));
   }
 
-  private void assertHitOrInsert(Map<String,Object> current, final Map<String,Object> statPre) {
+  private void assertHitOrInsert(SolrCache cache, final NamedList statPre) {
     assertEquals("it lookups", 1,
-        delta("lookups", current, statPre));
-    final long mayHit = delta("hits", current, statPre);
+        delta("lookups", cache.getStatistics(), statPre));
+    final long mayHit = delta("hits", cache.getStatistics(), statPre);
     assertTrue("it may hit", 0 == mayHit || 1 == mayHit);
     assertEquals("or insert on cold", 1,
-        delta("inserts", current, statPre) + mayHit);
+        delta("inserts", cache.getStatistics(), statPre) + mayHit);
   }
 
-  private long delta(String key, Map<String,Object> a, Map<String,Object> b) {
+  private long delta(String key, NamedList a, NamedList b) {
     return (Long) a.get(key) - (Long) b.get(key);
   }
 

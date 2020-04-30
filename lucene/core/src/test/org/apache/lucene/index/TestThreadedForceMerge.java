@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.Analyzer;
@@ -121,8 +121,8 @@ public class TestThreadedForceMerge extends LuceneTestCase {
 
       final int expectedDocCount = (int) ((1+iter)*(200+8*NUM_ITER2*(NUM_THREADS/2.0)*(1+NUM_THREADS)));
 
-      assertEquals("index=" + writer.segString() + " numDocs=" + writer.getDocStats().numDocs + " maxDoc=" + writer.getDocStats().maxDoc + " config=" + writer.getConfig(), expectedDocCount, writer.getDocStats().numDocs);
-      assertEquals("index=" + writer.segString() + " numDocs=" + writer.getDocStats().numDocs + " maxDoc=" + writer.getDocStats().maxDoc + " config=" + writer.getConfig(), expectedDocCount, writer.getDocStats().maxDoc);
+      assertEquals("index=" + writer.segString() + " numDocs=" + writer.numDocs() + " maxDoc=" + writer.maxDoc() + " config=" + writer.getConfig(), expectedDocCount, writer.numDocs());
+      assertEquals("index=" + writer.segString() + " numDocs=" + writer.numDocs() + " maxDoc=" + writer.maxDoc() + " config=" + writer.getConfig(), expectedDocCount, writer.maxDoc());
 
       writer.close();
       writer = new IndexWriter(directory, newIndexWriterConfig(ANALYZER)

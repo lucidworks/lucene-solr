@@ -1,3 +1,15 @@
+package org.apache.lucene.queryparser.xml.builders;
+
+import org.apache.lucene.search.spans.SpanBoostQuery;
+import org.apache.lucene.search.spans.SpanNearQuery;
+import org.apache.lucene.search.spans.SpanQuery;
+import org.apache.lucene.queryparser.xml.DOMUtils;
+import org.apache.lucene.queryparser.xml.ParserException;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+
+import java.util.ArrayList;
+import java.util.List;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +26,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.xml.builders;
 
-import org.apache.lucene.search.spans.SpanBoostQuery;
-import org.apache.lucene.search.spans.SpanNearQuery;
-import org.apache.lucene.search.spans.SpanQuery;
-import org.apache.lucene.queryparser.xml.DOMUtils;
-import org.apache.lucene.queryparser.xml.ParserException;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-
-import java.util.ArrayList;
-import java.util.List;
 /**
  * Builder for {@link SpanNearQuery}
  */

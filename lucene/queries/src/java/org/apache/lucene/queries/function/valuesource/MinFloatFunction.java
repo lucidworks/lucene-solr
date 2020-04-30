@@ -14,9 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function.valuesource;
 
-import java.io.IOException;
+package org.apache.lucene.queries.function.valuesource;
 
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -35,7 +34,7 @@ public class MinFloatFunction extends MultiFloatFunction {
   }
 
   @Override
-  protected float func(int doc, FunctionValues[] valsArr) throws IOException {
+  protected float func(int doc, FunctionValues[] valsArr) {
     if ( ! exists(doc, valsArr) ) return 0.0f;
 
     float val = Float.POSITIVE_INFINITY;
@@ -54,7 +53,7 @@ public class MinFloatFunction extends MultiFloatFunction {
    * @see MultiFunction#anyExists
    */
   @Override
-  protected boolean exists(int doc, FunctionValues[] valsArr) throws IOException {
+  protected boolean exists(int doc, FunctionValues[] valsArr) {
     return MultiFunction.anyExists(doc, valsArr);
   }
 

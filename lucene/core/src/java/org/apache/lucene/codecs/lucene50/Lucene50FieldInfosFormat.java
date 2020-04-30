@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.lucene50;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.lucene50;
-
 
 import java.io.IOException;
 import java.util.Collections;
@@ -112,7 +112,7 @@ public final class Lucene50FieldInfosFormat extends FieldInfosFormat {
       Throwable priorE = null;
       FieldInfo infos[] = null;
       try {
-        CodecUtil.checkIndexHeader(input, Lucene50FieldInfosFormat.CODEC_NAME, 
+        int format = CodecUtil.checkIndexHeader(input, Lucene50FieldInfosFormat.CODEC_NAME, 
                                      Lucene50FieldInfosFormat.FORMAT_START, 
                                      Lucene50FieldInfosFormat.FORMAT_CURRENT,
                                      segmentInfo.getId(), segmentSuffix);
@@ -139,8 +139,12 @@ public final class Lucene50FieldInfosFormat extends FieldInfosFormat {
           // DV Types are packed in one byte
           final DocValuesType docValuesType = getDocValuesType(input, input.readByte());
           final long dvGen = input.readLong();
-          Map<String,String> attributes = input.readMapOfStrings();
-
+          Map<String,String> attributes;
+          if (format >= FORMAT_SAFE_MAPS) {
+            attributes = input.readMapOfStrings();
+          } else {
+            attributes = Collections.unmodifiableMap(input.readStringStringMap());
+          }
           // just use the last field's map if its the same
           if (attributes.equals(lastAttributes)) {
             attributes = lastAttributes;
@@ -148,7 +152,7 @@ public final class Lucene50FieldInfosFormat extends FieldInfosFormat {
           lastAttributes = attributes;
           try {
             infos[i] = new FieldInfo(name, fieldNumber, storeTermVector, omitNorms, storePayloads, 
-                                     indexOptions, docValuesType, dvGen, attributes, 0, 0, 0, false);
+                                     indexOptions, docValuesType, dvGen, attributes);
             infos[i].checkConsistency();
           } catch (IllegalStateException e) {
             throw new CorruptIndexException("invalid fieldinfo for field: " + name + ", fieldNumber=" + fieldNumber, input, e);
@@ -284,8 +288,8 @@ public final class Lucene50FieldInfosFormat extends FieldInfosFormat {
   
   // Codec header
   static final String CODEC_NAME = "Lucene50FieldInfos";
+  static final int FORMAT_START = 0;
   static final int FORMAT_SAFE_MAPS = 1;
-  static final int FORMAT_START = FORMAT_SAFE_MAPS;
   static final int FORMAT_CURRENT = FORMAT_SAFE_MAPS;
   
   // Field flags

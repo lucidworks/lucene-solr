@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,60 +16,76 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
-import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
+import org.apache.solr.client.solrj.response.CollectionAdminResponse;
 import org.apache.solr.common.params.CollectionParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-public class OverseerStatusTest extends SolrCloudTestCase {
+public class OverseerStatusTest extends BasicDistributedZkTest {
 
-  @BeforeClass
-  public static void setupCluster() throws Exception {
-    configureCluster(2)
-        .addConfig("conf", configset("cloud-minimal"))
-        .configure();;
+  public OverseerStatusTest() {
+    schemaString = "schema15.xml";      // we need a string id
+    sliceCount = 1;
   }
 
   @Test
+  @ShardsFixed(num = 1)
   public void test() throws Exception {
+
+    waitForThingsToLevelOut(15);
 
     // find existing command counts because collection may be created by base test class too
     int numCollectionCreates = 0, numOverseerCreates = 0;
+    NamedList<Object> resp = new CollectionAdminRequest.OverseerStatus().process(cloudClient).getResponse();
+    if (resp != null) {
+      NamedList<Object> collection_operations = (NamedList<Object>) resp.get("collection_operations");
+      if (collection_operations != null)  {
+        SimpleOrderedMap<Object> createcollection = (SimpleOrderedMap<Object>) collection_operations.get(CollectionParams.CollectionAction.CREATE.toLower());
+        if (createcollection != null && createcollection.get("requests") != null) {
+          numCollectionCreates = (Integer) createcollection.get("requests");
+        }
+        NamedList<Object> overseer_operations = (NamedList<Object>) resp.get("overseer_operations");
+        if (overseer_operations != null)  {
+          createcollection = (SimpleOrderedMap<Object>) overseer_operations.get(CollectionParams.CollectionAction.CREATE.toLower());
+          if (createcollection != null && createcollection.get("requests") != null) {
+            numOverseerCreates = (Integer) createcollection.get("requests");
+          }
+        }
+      }
+    }
 
     String collectionName = "overseer_status_test";
-    CollectionAdminRequest.createCollection(collectionName, "conf", 1, 1).process(cluster.getSolrClient());
-
-    NamedList<Object> resp = new CollectionAdminRequest.OverseerStatus().process(cluster.getSolrClient()).getResponse();
+    CollectionAdminResponse response = createCollection(collectionName, 1, 1, 1);
+    resp = new CollectionAdminRequest.OverseerStatus().process(cloudClient).getResponse();
     NamedList<Object> collection_operations = (NamedList<Object>) resp.get("collection_operations");
     NamedList<Object> overseer_operations = (NamedList<Object>) resp.get("overseer_operations");
-    SimpleOrderedMap<Object> createcollection
-        = (SimpleOrderedMap<Object>) collection_operations.get(CollectionParams.CollectionAction.CREATE.toLower());
+    SimpleOrderedMap<Object> createcollection = (SimpleOrderedMap<Object>) collection_operations.get(CollectionParams.CollectionAction.CREATE.toLower());
     assertEquals("No stats for create in OverseerCollectionProcessor", numCollectionCreates + 1, createcollection.get("requests"));
     createcollection = (SimpleOrderedMap<Object>) overseer_operations.get(CollectionParams.CollectionAction.CREATE.toLower());
     assertEquals("No stats for create in Overseer", numOverseerCreates + 1, createcollection.get("requests"));
 
     // Reload the collection
-    CollectionAdminRequest.reloadCollection(collectionName).process(cluster.getSolrClient());
+    new CollectionAdminRequest.Reload().setCollectionName(collectionName).process(cloudClient);
 
-    resp = new CollectionAdminRequest.OverseerStatus().process(cluster.getSolrClient()).getResponse();
+
+    resp = new CollectionAdminRequest.OverseerStatus().process(cloudClient).getResponse();
     collection_operations = (NamedList<Object>) resp.get("collection_operations");
     SimpleOrderedMap<Object> reload = (SimpleOrderedMap<Object>) collection_operations.get(CollectionParams.CollectionAction.RELOAD.toLower());
     assertEquals("No stats for reload in OverseerCollectionProcessor", 1, reload.get("requests"));
 
-    HttpSolrClient.RemoteSolrException e = expectThrows(HttpSolrClient.RemoteSolrException.class,
-        "Split shard for non existent collection should have failed",
-        () -> CollectionAdminRequest
-            .splitShard("non_existent_collection")
-            .setShardName("non_existent_shard")
-            .process(cluster.getSolrClient())
-    );
-
-    resp = new CollectionAdminRequest.OverseerStatus().process(cluster.getSolrClient()).getResponse();
+    try {
+      new CollectionAdminRequest.SplitShard()
+              .setCollectionName("non_existent_collection")
+              .setShardName("non_existent_shard")
+              .process(cloudClient);
+      fail("Split shard for non existent collection should have failed");
+    } catch (Exception e) {
+      // expected because we did not correctly specify required params for split
+    }
+    resp = new CollectionAdminRequest.OverseerStatus().process(cloudClient).getResponse();
     collection_operations = (NamedList<Object>) resp.get("collection_operations");
     SimpleOrderedMap<Object> split = (SimpleOrderedMap<Object>) collection_operations.get(CollectionParams.CollectionAction.SPLITSHARD.toLower());
     assertEquals("No stats for split in OverseerCollectionProcessor", 1, split.get("errors"));
@@ -94,5 +112,6 @@ public class OverseerStatusTest extends SolrCloudTestCase {
     assertNotNull(updateState.get("errors"));
     assertNotNull(updateState.get("avgTimePerRequest"));
 
+    waitForThingsToLevelOut(15);
   }
 }

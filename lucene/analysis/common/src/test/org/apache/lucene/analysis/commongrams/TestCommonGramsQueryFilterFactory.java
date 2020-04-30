@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.commongrams;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.commongrams;
 
-import org.apache.lucene.analysis.CharArraySet;
+import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
-import org.apache.lucene.analysis.core.TestStopFilterFactory;
+import org.apache.lucene.analysis.core.TestStopFilter;
 import org.apache.lucene.analysis.util.BaseTokenStreamFactoryTestCase;
+import org.apache.lucene.analysis.util.CharArraySet;
 import org.apache.lucene.analysis.util.ClasspathResourceLoader;
 import org.apache.lucene.analysis.util.ResourceLoader;
 import org.apache.lucene.util.Version;
+
+import java.io.StringReader;
 
 /**
  * Tests pretty much copied from StopFilterFactoryTest We use the test files
@@ -33,7 +37,7 @@ import org.apache.lucene.util.Version;
 public class TestCommonGramsQueryFilterFactory extends BaseTokenStreamFactoryTestCase {
 
   public void testInform() throws Exception {
-    ResourceLoader loader = new ClasspathResourceLoader(TestStopFilterFactory.class);
+    ResourceLoader loader = new ClasspathResourceLoader(TestStopFilter.class);
     assertTrue("loader is null and it shouldn't be", loader != null);
     CommonGramsQueryFilterFactory factory = (CommonGramsQueryFilterFactory) tokenFilterFactory("CommonGramsQuery", Version.LATEST, loader,
         "words", "stop-1.txt", 
@@ -87,19 +91,11 @@ public class TestCommonGramsQueryFilterFactory extends BaseTokenStreamFactoryTes
   
   /** Test that bogus arguments result in exception */
   public void testBogusArguments() throws Exception {
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {      
+    try {
       tokenFilterFactory("CommonGramsQuery", "bogusArg", "bogusValue");
-    });
-    assertTrue(expected.getMessage().contains("Unknown parameters"));
-  }
-
-  public void testCompleteGraph() throws Exception {
-    CommonGramsQueryFilterFactory factory = (CommonGramsQueryFilterFactory) tokenFilterFactory("CommonGramsQuery");
-    CharArraySet words = factory.getCommonWords();
-    assertTrue("words is null and it shouldn't be", words != null);
-    assertTrue(words.contains("the"));
-    Tokenizer tokenizer = whitespaceMockTokenizer("testing the factory works");
-    TokenStream stream = factory.create(tokenizer);
-    assertGraphStrings(stream, "testing_the the_factory factory works");
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(expected.getMessage().contains("Unknown parameters"));
+    }
   }
 }

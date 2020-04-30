@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -24,7 +24,7 @@ import java.io.IOException;
  *
  * @lucene.experimental
  */
-public abstract class FilterLeafCollector implements LeafCollector {
+public class FilterLeafCollector implements LeafCollector {
 
   protected final LeafCollector in;
 
@@ -34,7 +34,7 @@ public abstract class FilterLeafCollector implements LeafCollector {
   }
 
   @Override
-  public void setScorer(Scorable scorer) throws IOException {
+  public void setScorer(Scorer scorer) throws IOException {
     in.setScorer(scorer);
   }
 
@@ -45,12 +45,7 @@ public abstract class FilterLeafCollector implements LeafCollector {
 
   @Override
   public String toString() {
-    String name = getClass().getSimpleName();
-    if (name.length() == 0) {
-      // an anonoymous subclass will have empty name?
-      name = "FilterLeafCollector";
-    }
-    return name + "(" + in + ")";
+    return getClass().getSimpleName() + "(" + in + ")";
   }
 
 }

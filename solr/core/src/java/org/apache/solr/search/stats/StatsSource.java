@@ -1,3 +1,5 @@
+package org.apache.solr.search.stats;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,11 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.stats;
 
 import java.io.IOException;
 
 import org.apache.lucene.index.Term;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.search.CollectionStatistics;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermStatistics;
@@ -33,7 +35,7 @@ import org.apache.solr.search.SolrIndexSearcher;
  */
 public abstract class StatsSource {
   
-  public abstract TermStatistics termStatistics(SolrIndexSearcher localSearcher, Term term, int docFreq, long totalTermFreq)
+  public abstract TermStatistics termStatistics(SolrIndexSearcher localSearcher, Term term, TermContext context)
       throws IOException;
   
   public abstract CollectionStatistics collectionStatistics(SolrIndexSearcher localSearcher, String field)

@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -56,7 +56,7 @@ public class TestNRTCachingDirectory extends BaseDirectoryTestCase {
     analyzer.setMaxTokenLength(TestUtil.nextInt(random(), 1, IndexWriter.MAX_TERM_LENGTH));
     IndexWriterConfig conf = newIndexWriterConfig(analyzer);
     RandomIndexWriter w = new RandomIndexWriter(random(), cachedDir, conf);
-    final LineFileDocs docs = new LineFileDocs(random());
+    final LineFileDocs docs = new LineFileDocs(random(), true);
     final int numDocs = TestUtil.nextInt(random(), 100, 400);
 
     if (VERBOSE) {
@@ -71,7 +71,7 @@ public class TestNRTCachingDirectory extends BaseDirectoryTestCase {
       w.addDocument(doc);
       if (random().nextInt(20) == 17) {
         if (r == null) {
-          r = DirectoryReader.open(w.w);
+          r = DirectoryReader.open(w.w, false);
         } else {
           final DirectoryReader r2 = DirectoryReader.openIfChanged(r);
           if (r2 != null) {
@@ -121,19 +121,5 @@ public class TestNRTCachingDirectory extends BaseDirectoryTestCase {
     IndexWriter writer = new IndexWriter(cachedFSDir, conf);
     writer.close();
     cachedFSDir.close();
-  }
-
-  public void testCreateTempOutputSameName() throws Exception {
-
-    Directory fsDir = FSDirectory.open(createTempDir("verify"));
-    NRTCachingDirectory nrtDir = new NRTCachingDirectory(fsDir, 2.0, 25.0);
-    String name = "foo_bar_0.tmp";
-    nrtDir.createOutput(name, IOContext.DEFAULT).close();
-
-    IndexOutput out = nrtDir.createTempOutput("foo", "bar", IOContext.DEFAULT);
-    assertFalse(name.equals(out.getName()));
-    out.close();
-    nrtDir.close();
-    fsDir.close();
   }
 }

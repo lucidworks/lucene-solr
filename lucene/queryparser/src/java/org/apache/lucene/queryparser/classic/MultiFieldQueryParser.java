@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.classic;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.classic;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -97,7 +98,7 @@ public class MultiFieldQueryParser extends QueryParser
   @Override
   protected Query getFieldQuery(String field, String queryText, int slop) throws ParseException {
     if (field == null) {
-      List<Query> clauses = new ArrayList<>();
+      List<BooleanClause> clauses = new ArrayList<>();
       for (int i = 0; i < fields.length; i++) {
         Query q = super.getFieldQuery(fields[i], queryText, true);
         if (q != null) {
@@ -110,12 +111,12 @@ public class MultiFieldQueryParser extends QueryParser
             }
           }
           q = applySlop(q,slop);
-          clauses.add(q);
+          clauses.add(new BooleanClause(q, BooleanClause.Occur.SHOULD));
         }
       }
       if (clauses.size() == 0)  // happens for stopwords
         return null;
-      return getMultiFieldQuery(clauses);
+      return getBooleanQuery(clauses, true);
     }
     Query q = super.getFieldQuery(field, queryText, true);
     q = applySlop(q,slop);
@@ -134,11 +135,7 @@ public class MultiFieldQueryParser extends QueryParser
       }
       q = builder.build();
     } else if (q instanceof MultiPhraseQuery) {
-      MultiPhraseQuery mpq = (MultiPhraseQuery)q;
-      
-      if (slop != mpq.getSlop()) {
-        q = new MultiPhraseQuery.Builder(mpq).setSlop(slop).build();
-      }
+      ((MultiPhraseQuery) q).setSlop(slop);
     }
     return q;
   }
@@ -147,60 +144,24 @@ public class MultiFieldQueryParser extends QueryParser
   @Override
   protected Query getFieldQuery(String field, String queryText, boolean quoted) throws ParseException {
     if (field == null) {
-      List<Query> clauses = new ArrayList<>();
-      Query[] fieldQueries = new Query[fields.length];
-      int maxTerms = 0;
+      List<BooleanClause> clauses = new ArrayList<>();
       for (int i = 0; i < fields.length; i++) {
         Query q = super.getFieldQuery(fields[i], queryText, quoted);
         if (q != null) {
-          if (q instanceof BooleanQuery) {
-            maxTerms = Math.max(maxTerms, ((BooleanQuery)q).clauses().size());
-          } else {
-            maxTerms = Math.max(1, maxTerms);
-          }
-          fieldQueries[i] = q;
-        }
-      }
-      for (int termNum = 0; termNum < maxTerms; termNum++) {
-        List<Query> termClauses = new ArrayList<>();
-        for (int i = 0; i < fields.length; i++) {
-          if (fieldQueries[i] != null) {
-            Query q = null;
-            if (fieldQueries[i] instanceof BooleanQuery) {
-              List<BooleanClause> nestedClauses = ((BooleanQuery)fieldQueries[i]).clauses();
-              if (termNum < nestedClauses.size()) {
-                q = nestedClauses.get(termNum).getQuery();
-              }
-            } else if (termNum == 0) { // e.g. TermQuery-s
-              q = fieldQueries[i];
-            }
-            if (q != null) {
-              if (boosts != null) {
-                //Get the boost from the map and apply them
-                Float boost = boosts.get(fields[i]);
-                if (boost != null) {
-                  q = new BoostQuery(q, boost);
-                }
-              }
-              termClauses.add(q);
+          //If the user passes a map of boosts
+          if (boosts != null) {
+            //Get the boost from the map and apply them
+            Float boost = boosts.get(fields[i]);
+            if (boost != null) {
+              q = new BoostQuery(q, boost.floatValue());
             }
           }
-        }
-        if (maxTerms > 1) {
-          if (termClauses.size() > 0) {
-            BooleanQuery.Builder builder = newBooleanQuery();
-            for (Query termClause : termClauses) {
-              builder.add(termClause, BooleanClause.Occur.SHOULD);
-            }
-            clauses.add(builder.build());
-          }
-        } else {
-          clauses.addAll(termClauses);
+          clauses.add(new BooleanClause(q, BooleanClause.Occur.SHOULD));
         }
       }
       if (clauses.size() == 0)  // happens for stopwords
         return null;
-      return getMultiFieldQuery(clauses);
+      return getBooleanQuery(clauses, true);
     }
     Query q = super.getFieldQuery(field, queryText, quoted);
     return q;
@@ -211,11 +172,12 @@ public class MultiFieldQueryParser extends QueryParser
   protected Query getFuzzyQuery(String field, String termStr, float minSimilarity) throws ParseException
   {
     if (field == null) {
-      List<Query> clauses = new ArrayList<>();
+      List<BooleanClause> clauses = new ArrayList<>();
       for (int i = 0; i < fields.length; i++) {
-        clauses.add(getFuzzyQuery(fields[i], termStr, minSimilarity));
+        clauses.add(new BooleanClause(getFuzzyQuery(fields[i], termStr, minSimilarity),
+            BooleanClause.Occur.SHOULD));
       }
-      return getMultiFieldQuery(clauses);
+      return getBooleanQuery(clauses, true);
     }
     return super.getFuzzyQuery(field, termStr, minSimilarity);
   }
@@ -224,11 +186,12 @@ public class MultiFieldQueryParser extends QueryParser
   protected Query getPrefixQuery(String field, String termStr) throws ParseException
   {
     if (field == null) {
-      List<Query> clauses = new ArrayList<>();
+      List<BooleanClause> clauses = new ArrayList<>();
       for (int i = 0; i < fields.length; i++) {
-        clauses.add(getPrefixQuery(fields[i], termStr));
+        clauses.add(new BooleanClause(getPrefixQuery(fields[i], termStr),
+            BooleanClause.Occur.SHOULD));
       }
-      return getMultiFieldQuery(clauses);
+      return getBooleanQuery(clauses, true);
     }
     return super.getPrefixQuery(field, termStr);
   }
@@ -236,11 +199,12 @@ public class MultiFieldQueryParser extends QueryParser
   @Override
   protected Query getWildcardQuery(String field, String termStr) throws ParseException {
     if (field == null) {
-      List<Query> clauses = new ArrayList<>();
+      List<BooleanClause> clauses = new ArrayList<>();
       for (int i = 0; i < fields.length; i++) {
-        clauses.add(getWildcardQuery(fields[i], termStr));
+        clauses.add(new BooleanClause(getWildcardQuery(fields[i], termStr),
+            BooleanClause.Occur.SHOULD));
       }
-      return getMultiFieldQuery(clauses);
+      return getBooleanQuery(clauses, true);
     }
     return super.getWildcardQuery(field, termStr);
   }
@@ -249,11 +213,12 @@ public class MultiFieldQueryParser extends QueryParser
   @Override
   protected Query getRangeQuery(String field, String part1, String part2, boolean startInclusive, boolean endInclusive) throws ParseException {
     if (field == null) {
-      List<Query> clauses = new ArrayList<>();
+      List<BooleanClause> clauses = new ArrayList<>();
       for (int i = 0; i < fields.length; i++) {
-        clauses.add(getRangeQuery(fields[i], part1, part2, startInclusive, endInclusive));
+        clauses.add(new BooleanClause(getRangeQuery(fields[i], part1, part2, startInclusive, endInclusive),
+            BooleanClause.Occur.SHOULD));
       }
-      return getMultiFieldQuery(clauses);
+      return getBooleanQuery(clauses, true);
     }
     return super.getRangeQuery(field, part1, part2, startInclusive, endInclusive);
   }
@@ -264,26 +229,14 @@ public class MultiFieldQueryParser extends QueryParser
   protected Query getRegexpQuery(String field, String termStr)
       throws ParseException {
     if (field == null) {
-      List<Query> clauses = new ArrayList<>();
+      List<BooleanClause> clauses = new ArrayList<>();
       for (int i = 0; i < fields.length; i++) {
-        clauses.add(getRegexpQuery(fields[i], termStr));
+        clauses.add(new BooleanClause(getRegexpQuery(fields[i], termStr),
+            BooleanClause.Occur.SHOULD));
       }
-      return getMultiFieldQuery(clauses);
+      return getBooleanQuery(clauses, true);
     }
     return super.getRegexpQuery(field, termStr);
-  }
-  
-  /** Creates a multifield query */
-  // TODO: investigate more general approach by default, e.g. DisjunctionMaxQuery?
-  protected Query getMultiFieldQuery(List<Query> queries) throws ParseException {
-    if (queries.isEmpty()) {
-      return null; // all clause words were filtered away by the analyzer.
-    }
-    BooleanQuery.Builder query = newBooleanQuery();
-    for (Query sub : queries) {
-      query.add(sub, BooleanClause.Occur.SHOULD);
-    }
-    return query.build();
   }
 
   /**

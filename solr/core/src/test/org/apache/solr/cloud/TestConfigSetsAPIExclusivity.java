@@ -14,21 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.cloud;
 
+import java.io.File;
 import java.lang.invoke.MethodHandles;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.SolrClient;
+import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.request.ConfigSetAdminRequest;
 import org.apache.solr.client.solrj.request.ConfigSetAdminRequest.Create;
 import org.apache.solr.client.solrj.request.ConfigSetAdminRequest.Delete;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,10 +62,7 @@ public class TestConfigSetsAPIExclusivity extends SolrTestCaseJ4 {
   @Override
   @After
   public void tearDown() throws Exception {
-    if (null != solrCluster) {
-      solrCluster.shutdown();
-      solrCluster = null;
-    }
+    solrCluster.shutdown();
     super.tearDown();
   }
 
@@ -91,7 +94,11 @@ public class TestConfigSetsAPIExclusivity extends SolrTestCaseJ4 {
   }
 
   private void setupBaseConfigSet(String baseConfigSetName) throws Exception {
-    solrCluster.uploadConfigSet(configset("configset-2"), baseConfigSetName);
+    final File configDir = getFile("solr").toPath().resolve("configsets/configset-2/conf").toFile();
+    final File tmpConfigDir = createTempDir().toFile();
+    tmpConfigDir.deleteOnExit();
+    FileUtils.copyDirectory(configDir, tmpConfigDir);
+    solrCluster.uploadConfigDir(tmpConfigDir, baseConfigSetName);
   }
 
   private Exception getFirstExceptionOrNull(List<Exception> list) {
@@ -115,8 +122,8 @@ public class TestConfigSetsAPIExclusivity extends SolrTestCaseJ4 {
     public abstract ConfigSetAdminRequest createRequest();
 
     public void run() {
-      final String baseUrl = solrCluster.getJettySolrRunners().get(0).getBaseUrl().toString();
-      final SolrClient solrClient = getHttpSolrClient(baseUrl);
+      final SolrClient solrClient =
+          new HttpSolrClient(solrCluster.getJettySolrRunners().get(0).getBaseUrl().toString());
       ConfigSetAdminRequest request = createRequest();
 
       for (int i = 0; i < trials; ++i) {

@@ -1,3 +1,5 @@
+package org.apache.lucene.util.automaton;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.automaton;
-
 
 import java.util.Iterator;
 import java.util.SortedSet;
@@ -152,11 +152,9 @@ public class LevenshteinAutomata {
     final int range = 2*n+1;
     ParametricDescription description = descriptions[n];
     // the number of states is based on the length of the word and n
-    final int numStates = description.size();
-    final int numTransitions = numStates * Math.min(1 + 2 * n, alphabet.length);
-    final int prefixStates = prefix != null ? prefix.codePointCount(0, prefix.length()) : 0;
+    int numStates = description.size();
 
-    final Automaton a = new Automaton(numStates + prefixStates, numTransitions);
+    Automaton a = new Automaton();
     int lastState;
     if (prefix != null) {
       // Insert prefix

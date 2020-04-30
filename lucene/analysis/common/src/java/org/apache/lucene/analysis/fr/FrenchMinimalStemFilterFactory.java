@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.fr;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.fr;
-
 
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.fr.FrenchMinimalStemFilter;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
@@ -33,13 +34,8 @@ import org.apache.lucene.analysis.util.TokenFilterFactory;
  *     &lt;filter class="solr.FrenchMinimalStemFilterFactory"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- * @since 3.1.0
- * @lucene.spi {@value #NAME}
  */
 public class FrenchMinimalStemFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "frenchMinimalStem";
   
   /** Creates a new FrenchMinimalStemFilterFactory */
   public FrenchMinimalStemFilterFactory(Map<String,String> args) {

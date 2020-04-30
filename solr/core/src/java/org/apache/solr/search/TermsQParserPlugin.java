@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,31 +16,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
 import java.util.Arrays;
-import java.util.Locale;
 import java.util.regex.Pattern;
 
 import org.apache.lucene.index.Term;
+import org.apache.lucene.queries.TermsQuery;
 import org.apache.lucene.search.AutomatonQuery;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.ConstantScoreQuery;
 import org.apache.lucene.search.DocValuesTermsQuery;
+import org.apache.lucene.search.Filter;
 import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.TermInSetQuery;
+import org.apache.lucene.search.QueryWrapperFilter;
 import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.automaton.Automata;
 import org.apache.lucene.util.automaton.Automaton;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.schema.FieldType;
-import org.apache.solr.schema.PointField;
 
 /**
  * Finds documents whose specified field has any of the specified values. It's like
@@ -60,39 +60,43 @@ public class TermsQParserPlugin extends QParserPlugin {
   /** Choose the internal algorithm */
   private static final String METHOD = "method";
 
+  @Override
+  public void init(NamedList args) {
+  }
+
   private static enum Method {
     termsFilter {
       @Override
-      Query makeFilter(String fname, BytesRef[] bytesRefs) {
-        return new TermInSetQuery(fname, bytesRefs);// constant scores
+      Filter makeFilter(String fname, BytesRef[] bytesRefs) {
+        return new QueryWrapperFilter(new TermsQuery(fname, bytesRefs));
       }
     },
     booleanQuery {
       @Override
-      Query makeFilter(String fname, BytesRef[] byteRefs) {
+      Filter makeFilter(String fname, BytesRef[] byteRefs) {
         BooleanQuery.Builder bq = new BooleanQuery.Builder();
+        bq.setDisableCoord(true);
         for (BytesRef byteRef : byteRefs) {
           bq.add(new TermQuery(new Term(fname, byteRef)), BooleanClause.Occur.SHOULD);
         }
-        return new ConstantScoreQuery(bq.build());
+        return new QueryWrapperFilter(bq.build());
       }
     },
     automaton {
       @Override
-      Query makeFilter(String fname, BytesRef[] byteRefs) {
-        ArrayUtil.timSort(byteRefs); // same sort algo as TermInSetQuery's choice
-        Automaton union = Automata.makeStringUnion(Arrays.asList(byteRefs)); // input must be sorted
-        return new AutomatonQuery(new Term(fname), union);//constant scores
+      Filter makeFilter(String fname, BytesRef[] byteRefs) {
+        Automaton union = Automata.makeStringUnion(Arrays.asList(byteRefs));
+        return new QueryWrapperFilter(new AutomatonQuery(new Term(fname), union));
       }
     },
     docValuesTermsFilter {//on 4x this is FieldCacheTermsFilter but we use the 5x name any way
       @Override
-      Query makeFilter(String fname, BytesRef[] byteRefs) {
-        return new DocValuesTermsQuery(fname, byteRefs);//constant scores
+      Filter makeFilter(String fname, BytesRef[] byteRefs) {
+        return new QueryWrapperFilter(new DocValuesTermsQuery(fname, byteRefs));
       }
     };
 
-    abstract Query makeFilter(String fname, BytesRef[] byteRefs);
+    abstract Filter makeFilter(String fname, BytesRef[] byteRefs);
   }
 
   @Override
@@ -106,7 +110,6 @@ public class TermsQParserPlugin extends QParserPlugin {
         String qstr = localParams.get(QueryParsing.V);//never null
         Method method = Method.valueOf(localParams.get(METHOD, Method.termsFilter.name()));
         //TODO pick the default method based on various heuristics from benchmarks
-        //TODO pick the default using FieldType.getSetQuery
 
         //if space then split on all whitespace & trim, otherwise strictly interpret
         final boolean sepIsSpace = separator.equals(" ");
@@ -116,14 +119,6 @@ public class TermsQParserPlugin extends QParserPlugin {
           return new MatchNoDocsQuery();
         final String[] splitVals = sepIsSpace ? qstr.split("\\s+") : qstr.split(Pattern.quote(separator), -1);
         assert splitVals.length > 0;
-        
-        if (ft.isPointField()) {
-          if (localParams.get(METHOD) != null) {
-            throw new IllegalArgumentException(
-                String.format(Locale.ROOT, "Method '%s' not supported in TermsQParser when using PointFields", localParams.get(METHOD)));
-          }
-          return ((PointField)ft).getSetQuery(this, req.getSchema().getField(fname), Arrays.asList(splitVals));
-        }
 
         BytesRef[] bytesRefs = new BytesRef[splitVals.length];
         BytesRefBuilder term = new BytesRefBuilder();
@@ -138,7 +133,7 @@ public class TermsQParserPlugin extends QParserPlugin {
           bytesRefs[i] = term.toBytesRef();
         }
 
-        return method.makeFilter(fname, bytesRefs);
+        return new SolrConstantScoreQuery(method.makeFilter(fname, bytesRefs));
       }
     };
   }

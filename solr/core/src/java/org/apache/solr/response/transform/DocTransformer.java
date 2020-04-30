@@ -14,13 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.response.transform;
 
 import java.io.IOException;
+import java.util.Set;
 
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.response.QueryResponseWriter;
-import org.apache.solr.response.ResultContext;
 import org.apache.solr.search.SolrIndexSearcher;
 
 /**
@@ -34,7 +35,7 @@ import org.apache.solr.search.SolrIndexSearcher;
  *
  */
 public abstract class DocTransformer {
-  protected ResultContext context;
+  protected  TransformContext context;
   /**
    *
    * @return The name of the transformer
@@ -42,58 +43,22 @@ public abstract class DocTransformer {
   public abstract String getName();
 
   /**
-   * This is called before {@link #transform} to provide context for any subsequent transformations.
-   *
-   * @param context The {@link ResultContext} stores information about how the documents were produced.
-   * @see #needsSolrIndexSearcher
+   * This is called before transform and sets
+   * @param context The {@link org.apache.solr.response.transform.TransformContext} stores information about the current state of things in Solr that may be
+   * useful for doing transformations.
    */
-  public void setContext( ResultContext context ) {
+  public void setContext( TransformContext context ) {
     this.context = context;
 
   }
 
   /**
-   * Indicates if this transformer requires access to the underlying index to perform it's functions.
+   * This is where implementations do the actual work
    *
-   * In some situations (notably RealTimeGet) this method <i>may</i> be called before {@link #setContext} 
-   * to determine if the transformer must be given a "full" ResultContext and accurate docIds 
-   * that can be looked up using {@link ResultContext#getSearcher}, or if optimizations can be taken 
-   * advantage of such that {@link ResultContext#getSearcher} <i>may</i> return null, and docIds passed to 
-   * {@link #transform} <i>may</i> be negative.
-   *
-   * The default implementation always returns <code>false</code>.
-   * 
-   * @see ResultContext#getSearcher
-   * @see #transform
-   */
-  public boolean needsSolrIndexSearcher() { return false; }
-  
-  /**
-   * This is where implementations do the actual work.
-   * If implementations require a valid docId and index access, the {@link #needsSolrIndexSearcher} 
-   * method must return true
-   *
-   * Default implementation calls {@link #transform(SolrDocument, int)}.
    *
    * @param doc The document to alter
-   * @param docid The Lucene internal doc id, or -1 in cases where the <code>doc</code> did not come from the index
-   * @param score the score for this document
+   * @param docid The Lucene internal doc id
    * @throws IOException If there is a low-level I/O error.
-   * @see #needsSolrIndexSearcher
-   */
-  public void transform(SolrDocument doc, int docid, float score) throws IOException {
-    transform(doc, docid);
-  }
-
-  /**
-   * This is where implementations do the actual work.
-   * If implementations require a valid docId and index access, the {@link #needsSolrIndexSearcher} 
-   * method must return true
-   *
-   * @param doc The document to alter
-   * @param docid The Lucene internal doc id, or -1 in cases where the <code>doc</code> did not come from the index
-   * @throws IOException If there is a low-level I/O error.
-   * @see #needsSolrIndexSearcher
    */
   public abstract void transform(SolrDocument doc, int docid) throws IOException;
 
@@ -113,28 +78,5 @@ public abstract class DocTransformer {
   @Override
   public String toString() {
     return getName();
-  }
-
-  /**
-   * Trivial Impl that ensure that the specified field is requested as an "extra" field,
-   * but then does nothing during the transformation phase.
-   */
-  public static final class NoopFieldTransformer extends DocTransformer {
-    final String field;
-
-    public NoopFieldTransformer() {
-      this.field = null;
-    }
-
-    public NoopFieldTransformer(String field ) {
-      this.field = field;
-    }
-    public String getName() { return "noop"; }
-    public String[] getExtraRequestFields() {
-      return this.field==null? null: new String[] { field };
-    }
-    public void transform(SolrDocument doc, int docid) {
-      // No-Op
-    }
   }
 }

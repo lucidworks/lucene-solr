@@ -17,7 +17,7 @@
 package org.apache.solr.analysis;
 
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.core.SolrConfig;
+import org.apache.solr.core.Config;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.FieldType;
 import org.apache.lucene.analysis.Analyzer;
@@ -37,7 +37,7 @@ public class TestLuceneMatchVersion extends SolrTestCaseJ4 {
   
   // this must match the solrconfig.xml version for this test
   public static final Version DEFAULT_VERSION =
-    SolrConfig.parseLuceneVersionString(System.getProperty("tests.luceneMatchVersion", "LATEST"));
+    Config.parseLuceneVersionString(System.getProperty("tests.luceneMatchVersion", "LATEST"));
 
   public void testStandardTokenizerVersions() throws Exception {
     assertEquals(DEFAULT_VERSION, solrConfig.luceneMatchVersion);
@@ -49,9 +49,19 @@ public class TestLuceneMatchVersion extends SolrTestCaseJ4 {
     assertEquals(DEFAULT_VERSION, (ana.getTokenizerFactory()).getLuceneMatchVersion());
     assertEquals(DEFAULT_VERSION, (ana.getTokenFilterFactories()[2]).getLuceneMatchVersion());
 
+    type = schema.getFieldType("text40");
+    ana = (TokenizerChain) type.getIndexAnalyzer();
+    assertEquals(Version.LUCENE_4_0_0_ALPHA, (ana.getTokenizerFactory()).getLuceneMatchVersion());
+    assertEquals(Version.LUCENE_5_0_0, (ana.getTokenFilterFactories()[2]).getLuceneMatchVersion());
+
     type = schema.getFieldType("textTurkishAnalyzerDefault");
     Analyzer ana1 = type.getIndexAnalyzer();
     assertTrue(ana1 instanceof TurkishAnalyzer);
     assertEquals(DEFAULT_VERSION, ana1.getVersion());
+
+    type = schema.getFieldType("textTurkishAnalyzer40");
+    ana1 = type.getIndexAnalyzer();
+    assertTrue(ana1 instanceof TurkishAnalyzer);
+    assertEquals(Version.LUCENE_4_0_0_ALPHA, ana1.getVersion());
   }
 }

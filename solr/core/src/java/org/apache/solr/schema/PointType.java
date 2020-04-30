@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.schema;
 
 import java.io.IOException;
@@ -21,7 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.lucene.document.StoredField;
+import com.spatial4j.core.distance.DistanceUtils;
+import org.apache.lucene.document.FieldType;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.valuesource.VectorValueSource;
@@ -29,14 +31,13 @@ import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.SortField;
+import org.apache.lucene.uninverting.UninvertingReader.Type;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.MapSolrParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.response.TextResponseWriter;
 import org.apache.solr.search.QParser;
 import org.apache.solr.search.SpatialOptions;
-import org.apache.solr.uninverting.UninvertingReader.Type;
-import org.locationtech.spatial4j.distance.DistanceUtils;
 
 /**
  * A point type that indexes a point in an n-dimensional space as separate fields and supports range queries.
@@ -66,25 +67,27 @@ public class PointType extends CoordinateFieldType implements SpatialQueryable {
   }
 
   @Override
-  public List<IndexableField> createFields(SchemaField field, Object value) {
+  public List<IndexableField> createFields(SchemaField field, Object value, float boost) {
     String externalVal = value.toString();
     String[] point = parseCommaSeparatedList(externalVal, dimension);
 
     // TODO: this doesn't currently support polyFields as sub-field types
-    List<IndexableField> f = new ArrayList<>((dimension*2)+1);
+    List<IndexableField> f = new ArrayList<>(dimension+1);
 
     if (field.indexed()) {
       for (int i=0; i<dimension; i++) {
         SchemaField sf = subField(field, i, schema);
-        f.addAll(sf.createFields(point[i]));
+        f.add(sf.createField(point[i], sf.indexed() && !sf.omitNorms() ? boost : 1f));
       }
     }
 
     if (field.stored()) {
       String storedVal = externalVal;  // normalize or not?
-      f.add(createField(field.getName(), storedVal, StoredField.TYPE));
+      FieldType customType = new FieldType();
+      customType.setStored(true);
+      f.add(createField(field.getName(), storedVal, customType, 1f));
     }
-
+    
     return f;
   }
 
@@ -105,7 +108,7 @@ public class PointType extends CoordinateFieldType implements SpatialQueryable {
    *
    */
   @Override
-  public IndexableField createField(SchemaField field, Object value) {
+  public IndexableField createField(SchemaField field, Object value, float boost) {
     throw new UnsupportedOperationException("PointType uses multiple fields.  field=" + field.getName());
   }
 
@@ -135,6 +138,7 @@ public class PointType extends CoordinateFieldType implements SpatialQueryable {
     String[] p2 = parseCommaSeparatedList(part2, dimension);
 
     BooleanQuery.Builder result = new BooleanQuery.Builder();
+    result.setDisableCoord(true);
     for (int i = 0; i < dimension; i++) {
       SchemaField subSF = subField(field, i, schema);
       // points must currently be ordered... should we support specifying any two opposite corner points?
@@ -148,20 +152,13 @@ public class PointType extends CoordinateFieldType implements SpatialQueryable {
     String[] p1 = parseCommaSeparatedList(externalVal, dimension);
     //TODO: should we assert that p1.length == dimension?
     BooleanQuery.Builder bq = new BooleanQuery.Builder();
+    bq.setDisableCoord(true);
     for (int i = 0; i < dimension; i++) {
       SchemaField sf = subField(field, i, schema);
       Query tq = sf.getType().getFieldQuery(parser, sf, p1[i]);
       bq.add(tq, BooleanClause.Occur.MUST);
     }
     return bq.build();
-  }
-  
-  @Override
-  protected void checkSupportsDocValues() {
-    // DocValues supported only when enabled at the fieldType 
-    if (!hasProperty(DOC_VALUES)) {
-      throw new UnsupportedOperationException("PointType can't have docValues=true in the field definition, use docValues=true in the fieldType definition, or in subFieldType/subFieldSuffix");
-    }
   }
 
   /**

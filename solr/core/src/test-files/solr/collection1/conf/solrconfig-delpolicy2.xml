@@ -20,14 +20,13 @@
 <config>
   <luceneMatchVersion>${tests.luceneMatchVersion:LATEST}</luceneMatchVersion>
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
   <indexConfig>
 
     <!-- we can't include solrconfig.snippet.randomindexconfig.xml because we need
          to configure an explicit deletion policy, but we still wnat to randomize as much 
          as possible. 
     -->
-    <mergePolicyFactory class="${solr.tests.mergePolicyFactory:org.apache.solr.util.RandomMergePolicyFactory}" />
+    <mergePolicy class="${solr.tests.mergePolicy:org.apache.solr.util.RandomMergePolicy}" />
     <useCompoundFile>${useCompoundFile:false}</useCompoundFile>
 
     <maxBufferedDocs>${solr.tests.maxBufferedDocs}</maxBufferedDocs>
@@ -43,6 +42,6 @@
     </deletionPolicy>
   </indexConfig>
 
-  <requestHandler name="/select" class="solr.SearchHandler"></requestHandler>
+  <requestHandler name="standard" class="solr.StandardRequestHandler"></requestHandler>
 </config>
 

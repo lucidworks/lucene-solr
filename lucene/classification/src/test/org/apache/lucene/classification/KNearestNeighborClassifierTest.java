@@ -21,15 +21,9 @@ import java.util.List;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.en.EnglishAnalyzer;
-import org.apache.lucene.classification.utils.ConfusionMatrixGenerator;
 import org.apache.lucene.index.LeafReader;
-import org.apache.lucene.index.MultiTerms;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.Terms;
-import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.search.similarities.BM25Similarity;
-import org.apache.lucene.search.similarities.LMDirichletSimilarity;
 import org.apache.lucene.util.BytesRef;
 import org.junit.Test;
 
@@ -40,20 +34,10 @@ public class KNearestNeighborClassifierTest extends ClassificationTestBase<Bytes
 
   @Test
   public void testBasicUsage() throws Exception {
-    LeafReader leafReader = null;
-    try {
-      MockAnalyzer analyzer = new MockAnalyzer(random());
-      leafReader = getSampleIndex(analyzer);
-      checkCorrectClassification(new KNearestNeighborClassifier(leafReader, null, analyzer, null, 1, 0, 0, categoryFieldName, textFieldName), TECHNOLOGY_INPUT, TECHNOLOGY_RESULT);
-      checkCorrectClassification(new KNearestNeighborClassifier(leafReader, new LMDirichletSimilarity(), analyzer, null, 1, 0, 0, categoryFieldName, textFieldName), TECHNOLOGY_INPUT, TECHNOLOGY_RESULT);
-      ClassificationResult<BytesRef> resultDS =  checkCorrectClassification(new KNearestNeighborClassifier(leafReader, new BM25Similarity(), analyzer, null, 3, 2, 1, categoryFieldName, textFieldName), TECHNOLOGY_INPUT, TECHNOLOGY_RESULT);
-      ClassificationResult<BytesRef> resultLMS =  checkCorrectClassification(new KNearestNeighborClassifier(leafReader, new LMDirichletSimilarity(), analyzer, null, 3, 2, 1, categoryFieldName, textFieldName), TECHNOLOGY_INPUT, TECHNOLOGY_RESULT);
-      assertTrue(resultDS.getScore() != resultLMS.getScore());
-    } finally {
-      if (leafReader != null) {
-        leafReader.close();
-      }
-    }
+    // usage with default MLT min docs / term freq
+    checkCorrectClassification(new KNearestNeighborClassifier(3), POLITICS_INPUT, POLITICS_RESULT, new MockAnalyzer(random()), textFieldName, categoryFieldName);
+    // usage without custom min docs / term freq for MLT
+    checkCorrectClassification(new KNearestNeighborClassifier(3, 2, 1), TECHNOLOGY_INPUT, TECHNOLOGY_RESULT, new MockAnalyzer(random()), textFieldName, categoryFieldName);
   }
 
   /**
@@ -68,11 +52,12 @@ public class KNearestNeighborClassifierTest extends ClassificationTestBase<Bytes
     LeafReader leafReader = null;
     try {
       Analyzer analyzer = new EnglishAnalyzer();
-      leafReader = getSampleIndex(analyzer);
-      KNearestNeighborClassifier knnClassifier = new KNearestNeighborClassifier(leafReader, null, analyzer, null, 6, 1, 1, categoryFieldName, textFieldName);
+      leafReader = populateSampleIndex(analyzer);
+      KNearestNeighborClassifier knnClassifier = new KNearestNeighborClassifier(6, 1, 1);
+      knnClassifier.train(leafReader, textFieldName, categoryFieldName, analyzer);
       List<ClassificationResult<BytesRef>> classes = knnClassifier.getClasses(STRONG_TECHNOLOGY_INPUT);
       assertTrue(classes.get(0).getScore() > classes.get(1).getScore());
-      checkCorrectClassification(knnClassifier, STRONG_TECHNOLOGY_INPUT, TECHNOLOGY_RESULT);
+      checkCorrectClassification(knnClassifier, STRONG_TECHNOLOGY_INPUT, TECHNOLOGY_RESULT, analyzer, textFieldName, categoryFieldName);
     } finally {
       if (leafReader != null) {
         leafReader.close();
@@ -93,11 +78,12 @@ public class KNearestNeighborClassifierTest extends ClassificationTestBase<Bytes
     LeafReader leafReader = null;
     try {
       Analyzer analyzer = new EnglishAnalyzer();
-      leafReader = getSampleIndex(analyzer);
-      KNearestNeighborClassifier knnClassifier = new KNearestNeighborClassifier(leafReader, null,analyzer, null, 3, 1, 1, categoryFieldName, textFieldName);
+      leafReader = populateSampleIndex(analyzer);
+      KNearestNeighborClassifier knnClassifier = new KNearestNeighborClassifier(3, 1, 1);
+      knnClassifier.train(leafReader, textFieldName, categoryFieldName, analyzer);
       List<ClassificationResult<BytesRef>> classes = knnClassifier.getClasses(SUPER_STRONG_TECHNOLOGY_INPUT);
       assertTrue(classes.get(0).getScore() > classes.get(1).getScore());
-      checkCorrectClassification(knnClassifier, SUPER_STRONG_TECHNOLOGY_INPUT, TECHNOLOGY_RESULT);
+      checkCorrectClassification(knnClassifier, SUPER_STRONG_TECHNOLOGY_INPUT, TECHNOLOGY_RESULT, analyzer, textFieldName, categoryFieldName);
     } finally {
       if (leafReader != null) {
         leafReader.close();
@@ -107,64 +93,12 @@ public class KNearestNeighborClassifierTest extends ClassificationTestBase<Bytes
 
   @Test
   public void testBasicUsageWithQuery() throws Exception {
-    LeafReader leafReader = null;
-    try {
-      MockAnalyzer analyzer = new MockAnalyzer(random());
-      leafReader = getSampleIndex(analyzer);
-      TermQuery query = new TermQuery(new Term(textFieldName, "it"));
-      checkCorrectClassification(new KNearestNeighborClassifier(leafReader, null, analyzer, query, 1, 0, 0, categoryFieldName, textFieldName), TECHNOLOGY_INPUT, TECHNOLOGY_RESULT);
-    } finally {
-      if (leafReader != null) {
-        leafReader.close();
-      }
-    }
+    checkCorrectClassification(new KNearestNeighborClassifier(1), TECHNOLOGY_INPUT, TECHNOLOGY_RESULT, new MockAnalyzer(random()), textFieldName, categoryFieldName, new TermQuery(new Term(textFieldName, "it")));
   }
 
   @Test
   public void testPerformance() throws Exception {
-    MockAnalyzer analyzer = new MockAnalyzer(random());
-    LeafReader leafReader = getRandomIndex(analyzer, 100);
-    try {
-      KNearestNeighborClassifier kNearestNeighborClassifier = new KNearestNeighborClassifier(leafReader, null,
-          analyzer, null, 1, 1, 1, categoryFieldName, textFieldName);
-
-      ConfusionMatrixGenerator.ConfusionMatrix confusionMatrix = ConfusionMatrixGenerator.getConfusionMatrix(leafReader,
-          kNearestNeighborClassifier, categoryFieldName, textFieldName, -1);
-      assertNotNull(confusionMatrix);
-
-      double avgClassificationTime = confusionMatrix.getAvgClassificationTime();
-      assertTrue(avgClassificationTime >= 0);
-
-      double accuracy = confusionMatrix.getAccuracy();
-      assertTrue(accuracy >= 0d);
-      assertTrue(accuracy <= 1d);
-
-      double recall = confusionMatrix.getRecall();
-      assertTrue(recall >= 0d);
-      assertTrue(recall <= 1d);
-
-      double precision = confusionMatrix.getPrecision();
-      assertTrue(precision >= 0d);
-      assertTrue(precision <= 1d);
-
-      Terms terms = MultiTerms.getTerms(leafReader, categoryFieldName);
-      TermsEnum iterator = terms.iterator();
-      BytesRef term;
-      while ((term = iterator.next()) != null) {
-        String s = term.utf8ToString();
-        recall = confusionMatrix.getRecall(s);
-        assertTrue(recall >= 0d);
-        assertTrue(recall <= 1d);
-        precision = confusionMatrix.getPrecision(s);
-        assertTrue(precision >= 0d);
-        assertTrue(precision <= 1d);
-        double f1Measure = confusionMatrix.getF1Measure(s);
-        assertTrue(f1Measure >= 0d);
-        assertTrue(f1Measure <= 1d);
-      }
-    } finally {
-      leafReader.close();
-    }
+    checkPerformance(new KNearestNeighborClassifier(100), new MockAnalyzer(random()), categoryFieldName);
   }
 
 }

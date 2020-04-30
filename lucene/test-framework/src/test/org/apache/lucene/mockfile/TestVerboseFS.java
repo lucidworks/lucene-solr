@@ -1,3 +1,5 @@
+package org.apache.lucene.mockfile;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.mockfile;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -82,7 +83,10 @@ public class TestVerboseFS extends MockFileSystemTestCase {
     Files.createDirectory(dir.resolve("subdir"));
     assertTrue(stream.sawMessage());
 
-    expectThrows(IOException.class, () -> Files.createDirectory(dir.resolve("subdir")));
+    try {
+      Files.createDirectory(dir.resolve("subdir"));
+      fail("didn't get expected exception");
+    } catch (IOException expected) {}
   }
   
   /** Test delete */
@@ -93,7 +97,10 @@ public class TestVerboseFS extends MockFileSystemTestCase {
     Files.delete(dir.resolve("foobar"));
     assertTrue(stream.sawMessage());
 
-    expectThrows(IOException.class, () -> Files.delete(dir.resolve("foobar")));
+    try {
+      Files.delete(dir.resolve("foobar"));
+      fail("didn't get expected exception");
+    } catch (IOException expected) {}
   }
   
   /** Test deleteIfExists */
@@ -116,7 +123,10 @@ public class TestVerboseFS extends MockFileSystemTestCase {
     Files.copy(dir.resolve("foobar"), dir.resolve("baz"));
     assertTrue(stream.sawMessage());
 
-    expectThrows(IOException.class, () -> Files.copy(dir.resolve("nonexistent"), dir.resolve("something")));
+    try {
+      Files.copy(dir.resolve("nonexistent"), dir.resolve("something"));
+      fail("didn't get expected exception");
+    } catch (IOException expected) {}
   }
   
   /** Test move */
@@ -127,7 +137,10 @@ public class TestVerboseFS extends MockFileSystemTestCase {
     Files.move(dir.resolve("foobar"), dir.resolve("baz"));
     assertTrue(stream.sawMessage());
 
-    expectThrows(IOException.class, () -> Files.move(dir.resolve("nonexistent"), dir.resolve("something")));
+    try {
+      Files.move(dir.resolve("nonexistent"), dir.resolve("something"));
+      fail("didn't get expected exception");
+    } catch (IOException expected) {}
   }
   
   /** Test newOutputStream */
@@ -137,8 +150,11 @@ public class TestVerboseFS extends MockFileSystemTestCase {
     OutputStream file = Files.newOutputStream(dir.resolve("output"));
     assertTrue(stream.sawMessage());
     file.close();
-
-    expectThrows(IOException.class, () -> Files.newOutputStream(dir.resolve("output"), StandardOpenOption.CREATE_NEW));
+    
+    try {
+      Files.newOutputStream(dir.resolve("output"), StandardOpenOption.CREATE_NEW);
+      fail("didn't get expected exception");
+    } catch (IOException expected) {}
   }
   
   /** Test FileChannel.open */
@@ -148,9 +164,11 @@ public class TestVerboseFS extends MockFileSystemTestCase {
     FileChannel channel = FileChannel.open(dir.resolve("foobar"), StandardOpenOption.CREATE_NEW, StandardOpenOption.READ, StandardOpenOption.WRITE);
     assertTrue(stream.sawMessage());
     channel.close();
-
-    expectThrows(IOException.class, () -> FileChannel.open(dir.resolve("foobar"),
-        StandardOpenOption.CREATE_NEW, StandardOpenOption.READ, StandardOpenOption.WRITE));
+    
+    try {
+      FileChannel.open(dir.resolve("foobar"), StandardOpenOption.CREATE_NEW, StandardOpenOption.READ, StandardOpenOption.WRITE);
+      fail("didn't get expected exception");
+    } catch (IOException expected) {}
   }
   
   /** Test AsynchronousFileChannel.open */
@@ -160,9 +178,11 @@ public class TestVerboseFS extends MockFileSystemTestCase {
     AsynchronousFileChannel channel = AsynchronousFileChannel.open(dir.resolve("foobar"), StandardOpenOption.CREATE_NEW, StandardOpenOption.READ, StandardOpenOption.WRITE);
     assertTrue(stream.sawMessage());
     channel.close();
-
-    expectThrows(IOException.class, () -> AsynchronousFileChannel.open(dir.resolve("foobar"),
-        StandardOpenOption.CREATE_NEW, StandardOpenOption.READ, StandardOpenOption.WRITE));
+    
+    try {
+      AsynchronousFileChannel.open(dir.resolve("foobar"), StandardOpenOption.CREATE_NEW, StandardOpenOption.READ, StandardOpenOption.WRITE);
+      fail("didn't get expected exception");
+    } catch (IOException expected) {}
   }
   
   /** Test newByteChannel */
@@ -172,16 +192,33 @@ public class TestVerboseFS extends MockFileSystemTestCase {
     SeekableByteChannel channel = Files.newByteChannel(dir.resolve("foobar"), StandardOpenOption.CREATE_NEW, StandardOpenOption.READ, StandardOpenOption.WRITE);
     assertTrue(stream.sawMessage());
     channel.close();
-
-    expectThrows(IOException.class, () -> Files.newByteChannel(dir.resolve("foobar"),
-        StandardOpenOption.CREATE_NEW, StandardOpenOption.READ, StandardOpenOption.WRITE));
+    
+    try {
+      Files.newByteChannel(dir.resolve("foobar"), StandardOpenOption.CREATE_NEW, StandardOpenOption.READ, StandardOpenOption.WRITE);
+      fail("didn't get expected exception");
+    } catch (IOException expected) {}
   }
   
-  /** Test that verbose does not corrupt file not found exceptions */
-  public void testVerboseFSNoSuchFileException() {
+  /** Test that verbose does not corrumpt file not found exceptions */
+  public void testVerboseFSNoSuchFileException() throws IOException {
     Path dir = wrap(createTempDir());
-    expectThrows(NoSuchFileException.class, () -> AsynchronousFileChannel.open(dir.resolve("doesNotExist.rip")));
-    expectThrows(NoSuchFileException.class, () -> FileChannel.open(dir.resolve("doesNotExist.rip")));
-    expectThrows(NoSuchFileException.class, () -> Files.newByteChannel(dir.resolve("stillopen")));
+    try {
+      AsynchronousFileChannel.open(dir.resolve("doesNotExist.rip"));
+      fail("did not hit exception");
+    } catch (NoSuchFileException nsfe) {
+      // expected
+    }
+    try {
+      FileChannel.open(dir.resolve("doesNotExist.rip"));
+      fail("did not hit exception");
+    } catch (NoSuchFileException nsfe) {
+      // expected
+    }
+    try {
+      Files.newByteChannel(dir.resolve("stillopen"));
+      fail("did not hit exception");
+    } catch (NoSuchFileException nsfe) {
+      // expected
+    }
   }
 }

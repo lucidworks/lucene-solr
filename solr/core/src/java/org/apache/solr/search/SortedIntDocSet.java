@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
 import java.util.Collection;
@@ -21,8 +22,10 @@ import java.util.Collections;
 
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.search.BitsFilteredDocIdSet;
 import org.apache.lucene.search.DocIdSet;
 import org.apache.lucene.search.DocIdSetIterator;
+import org.apache.lucene.search.Filter;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.FixedBitSet;
@@ -105,7 +108,7 @@ public class SortedIntDocSet extends DocSetBase {
     // FUTURE: try partitioning like a sort algorithm.  Pick the midpoint of the big
     // array, find where that should be in the small array, and then recurse with
     // the top and bottom half of both arrays until they are small enough to use
-    // a fallback intersection method.
+    // a fallback insersection method.
     // NOTE: I tried this and it worked, but it was actually slower than this current
     // highly optimized approach.
 
@@ -248,7 +251,7 @@ public class SortedIntDocSet extends DocSetBase {
     int i=0,j=0;
     int doca=a[i],docb=b[j];
     for(;;) {
-      // switch on the sign bit somehow? Hopefully JVM is smart enough to just test once.
+      // switch on the sign bit somehow?  Hopefull JVM is smart enough to just test once.
 
       // Since set a is less dense then set b, doca is likely to be greater than docb so
       // check that case first.  This resulted in a 13% speedup.
@@ -759,6 +762,11 @@ public class SortedIntDocSet extends DocSetBase {
           }
 
           @Override
+          public boolean isCacheable() {
+            return true;
+          }
+
+          @Override
           public long ramBytesUsed() {
             return RamUsageEstimator.sizeOf(docs);
           }
@@ -775,23 +783,11 @@ public class SortedIntDocSet extends DocSetBase {
       public String toString(String field) {
         return "SortedIntDocSetTopFilter";
       }
-
-      // Equivalence should/could be based on docs here? How did it work previously?
-
-      @Override
-      public boolean equals(Object other) {
-        return other == this;
-      }
-
-      @Override
-      public int hashCode() {
-        return System.identityHashCode(this);
-      }
     };
   }
 
   @Override
-  public SortedIntDocSet clone() {
+  protected SortedIntDocSet clone() {
     return new SortedIntDocSet(docs.clone());
   }
 
@@ -803,13 +799,5 @@ public class SortedIntDocSet extends DocSetBase {
   @Override
   public Collection<Accountable> getChildResources() {
     return Collections.emptyList();
-  }
-
-  @Override
-  public String toString() {
-    return "SortedIntDocSet{" +
-        "size=" + size() + "," +
-        "ramUsed=" + RamUsageEstimator.humanReadableUnits(ramBytesUsed())+
-        '}';
   }
 }

@@ -14,26 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.schema;
 
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
+
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.core.KeywordAnalyzer;
+import org.apache.lucene.analysis.core.KeywordTokenizerFactory;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
 import org.apache.lucene.analysis.util.CharFilterFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 import org.apache.lucene.analysis.util.TokenizerFactory;
 import org.apache.lucene.util.Version;
 import org.apache.solr.analysis.TokenizerChain;
 import org.apache.solr.common.SolrException;
-import org.apache.solr.core.SolrConfig;
+import org.apache.solr.core.Config;
 import org.apache.solr.core.SolrResourceLoader;
 import org.apache.solr.util.DOMUtil;
 import org.apache.solr.util.plugin.AbstractPluginLoader;
@@ -105,46 +111,31 @@ public final class FieldTypePluginLoader
     if (null != simFactory) {
       ft.setSimilarity(simFactory);
     }
-
-    if (ft instanceof HasImplicitIndexAnalyzer) {
-      ft.setIsExplicitAnalyzer(false);
-      if (null != queryAnalyzer && null != analyzer) {
-        if (log.isWarnEnabled()) {
-          log.warn("Ignoring index-time analyzer for field: " + name);
-        }
-      } else if (null == queryAnalyzer) { // Accept non-query-time analyzer as a query-time analyzer 
-        queryAnalyzer = analyzer;
-      }
-      if (null != queryAnalyzer) {
-        ft.setIsExplicitQueryAnalyzer(true);
-        ft.setQueryAnalyzer(queryAnalyzer);
-      }
+    
+    if (null == queryAnalyzer) {
+      queryAnalyzer = analyzer;
+      ft.setIsExplicitQueryAnalyzer(false);
     } else {
-      if (null == queryAnalyzer) {
-        queryAnalyzer = analyzer;
-        ft.setIsExplicitQueryAnalyzer(false);
-      } else {
-        ft.setIsExplicitQueryAnalyzer(true);
-      }
-      if (null == analyzer) {
-        analyzer = queryAnalyzer;
-        ft.setIsExplicitAnalyzer(false);
-      } else {
-        ft.setIsExplicitAnalyzer(true);
-      }
-  
-      if (null != analyzer) {
-        ft.setIndexAnalyzer(analyzer);
-        ft.setQueryAnalyzer(queryAnalyzer);
-        if (ft instanceof TextField) {
-          if (null == multiAnalyzer) {
-            multiAnalyzer = constructMultiTermAnalyzer(queryAnalyzer);
-            ((TextField)ft).setIsExplicitMultiTermAnalyzer(false);
-          } else {
-            ((TextField)ft).setIsExplicitMultiTermAnalyzer(true);
-          }
-          ((TextField)ft).setMultiTermAnalyzer(multiAnalyzer);
+      ft.setIsExplicitQueryAnalyzer(true);
+    }
+    if (null == analyzer) {
+      analyzer = queryAnalyzer;
+      ft.setIsExplicitAnalyzer(false);
+    } else {
+      ft.setIsExplicitAnalyzer(true);
+    }
+
+    if (null != analyzer) {
+      ft.setIndexAnalyzer(analyzer);
+      ft.setQueryAnalyzer(queryAnalyzer);
+      if (ft instanceof TextField) {
+        if (null == multiAnalyzer) {
+          multiAnalyzer = constructMultiTermAnalyzer(queryAnalyzer);
+          ((TextField)ft).setIsExplicitMultiTermAnalyzer(false);
+        } else {
+          ((TextField)ft).setIsExplicitMultiTermAnalyzer(true);
         }
+        ((TextField)ft).setMultiTermAnalyzer(multiAnalyzer);
       }
     }
     if (ft instanceof SchemaAware){
@@ -181,8 +172,60 @@ public final class FieldTypePluginLoader
       return new KeywordAnalyzer();
     }
 
-    return ((TokenizerChain) queryAnalyzer).getMultiTermAnalyzer();
+    TokenizerChain tc = (TokenizerChain) queryAnalyzer;
+    MultiTermChainBuilder builder = new MultiTermChainBuilder();
+
+    CharFilterFactory[] charFactories = tc.getCharFilterFactories();
+    for (CharFilterFactory fact : charFactories) {
+      builder.add(fact);
+    }
+
+    builder.add(tc.getTokenizerFactory());
+
+    for (TokenFilterFactory fact : tc.getTokenFilterFactories()) {
+      builder.add(fact);
+    }
+
+    return builder.build();
   }
+
+  private static class MultiTermChainBuilder {
+    static final KeywordTokenizerFactory keyFactory = new KeywordTokenizerFactory(new HashMap<String,String>());
+
+    ArrayList<CharFilterFactory> charFilters = null;
+    ArrayList<TokenFilterFactory> filters = new ArrayList<>(2);
+    TokenizerFactory tokenizer = keyFactory;
+
+    public void add(Object current) {
+      if (!(current instanceof MultiTermAwareComponent)) return;
+      AbstractAnalysisFactory newComponent = ((MultiTermAwareComponent)current).getMultiTermComponent();
+      if (newComponent instanceof TokenFilterFactory) {
+        if (filters == null) {
+          filters = new ArrayList<>(2);
+        }
+        filters.add((TokenFilterFactory)newComponent);
+      } else if (newComponent instanceof TokenizerFactory) {
+        tokenizer = (TokenizerFactory)newComponent;
+      } else if (newComponent instanceof CharFilterFactory) {
+        if (charFilters == null) {
+          charFilters = new ArrayList<>(1);
+        }
+        charFilters.add( (CharFilterFactory)newComponent);
+
+      } else {
+        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Unknown analysis component from MultiTermAwareComponent: " + newComponent);
+      }
+    }
+
+    public TokenizerChain build() {
+      CharFilterFactory[] charFilterArr =  charFilters == null ? null : charFilters.toArray(new CharFilterFactory[charFilters.size()]);
+      TokenFilterFactory[] filterArr = filters == null ? new TokenFilterFactory[0] : filters.toArray(new TokenFilterFactory[filters.size()]);
+      return new TokenizerChain(charFilterArr, tokenizer, filterArr);
+    }
+
+
+  }
+
 
   //
   // <analyzer><tokenizer class="...."/><tokenizer class="...." arg="....">
@@ -231,11 +274,12 @@ public final class FieldTypePluginLoader
         final String matchVersionStr = DOMUtil.getAttr(attrs, LUCENE_MATCH_VERSION_PARAM);
         final Version luceneMatchVersion = (matchVersionStr == null) ?
           schema.getDefaultLuceneMatchVersion() :
-          SolrConfig.parseLuceneVersionString(matchVersionStr);
+          Config.parseLuceneVersionString(matchVersionStr);
         if (luceneMatchVersion == null) {
-          throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
+          throw new SolrException
+            ( SolrException.ErrorCode.SERVER_ERROR,
               "Configuration Error: Analyzer '" + clazz.getName() +
-                  "' needs a '" + IndexSchema.LUCENE_MATCH_VERSION_PARAM + "' parameter");
+              "' needs a 'luceneMatchVersion' parameter");
         }
         analyzer.setVersion(luceneMatchVersion);
         return analyzer;
@@ -361,12 +405,12 @@ public final class FieldTypePluginLoader
 
   private Version parseConfiguredVersion(String configuredVersion, String pluginClassName) {
     Version version = (configuredVersion != null) ?
-            SolrConfig.parseLuceneVersionString(configuredVersion) : schema.getDefaultLuceneMatchVersion();
+            Config.parseLuceneVersionString(configuredVersion) : schema.getDefaultLuceneMatchVersion();
 
-    if (!version.onOrAfter(Version.LUCENE_7_0_0)) {
+    if (!version.onOrAfter(Version.LUCENE_4_0_0_ALPHA)) {
       log.warn(pluginClassName + " is using deprecated " + version +
-        " emulation. You should at some point declare and reindex to at least 7.0, because " +
-        "6.x emulation is deprecated and will be removed in 8.0");
+        " emulation. You should at some point declare and reindex to at least 4.0, because " +
+        "3.x emulation is deprecated and will be removed in 5.0");
     }
     return version;
   }

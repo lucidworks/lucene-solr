@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.util.ArrayUtil;
+import org.apache.lucene.util.RamUsageEstimator;
 
 /**
  * Caches all docs, and optionally also scores, coming from
@@ -47,7 +50,7 @@ public abstract class CachingCollector extends FilterCollector {
 
   private static final int INITIAL_ARRAY_SIZE = 128;
 
-  private static final class CachedScorable extends Scorable {
+  private static final class CachedScorer extends Scorer {
 
     // NOTE: these members are package-private b/c that way accessing them from
     // the outer class does not incur access check by the JVM. The same
@@ -56,13 +59,25 @@ public abstract class CachingCollector extends FilterCollector {
     int doc;
     float score;
 
+    private CachedScorer() { super(null); }
+
     @Override
     public final float score() { return score; }
 
     @Override
-    public int docID() {
-      return doc;
-    }
+    public final int advance(int target) { throw new UnsupportedOperationException(); }
+
+    @Override
+    public final int docID() { return doc; }
+
+    @Override
+    public final int freq() { throw new UnsupportedOperationException(); }
+
+    @Override
+    public final int nextDoc() { throw new UnsupportedOperationException(); }
+
+    @Override
+    public long cost() { return 1; }
 
   }
 
@@ -83,9 +98,6 @@ public abstract class CachingCollector extends FilterCollector {
     protected NoScoreCachingLeafCollector wrap(LeafCollector in, int maxDocsToCache) {
       return new NoScoreCachingLeafCollector(in, maxDocsToCache);
     }
-
-    // note: do *not* override needScore to say false. Just because we aren't caching the score doesn't mean the
-    //   wrapped collector doesn't need it to do its job.
 
     public LeafCollector getLeafCollector(LeafReaderContext context) throws IOException {
       postCollection();
@@ -165,18 +177,11 @@ public abstract class CachingCollector extends FilterCollector {
       scores.add(coll.cachedScores());
     }
 
-    /** Ensure the scores are collected so they can be replayed, even if the wrapped collector doesn't need them. */
-    @Override
-    public ScoreMode scoreMode() {
-      return ScoreMode.COMPLETE;
-    }
-
-    @Override
     protected void collect(LeafCollector collector, int i) throws IOException {
       final int[] docs = this.docs.get(i);
       final float[] scores = this.scores.get(i);
       assert docs.length == scores.length;
-      final CachedScorable scorer = new CachedScorable();
+      final CachedScorer scorer = new CachedScorer();
       collector.setScorer(scorer);
       for (int j = 0; j < docs.length; ++j) {
         scorer.doc = docs[j];
@@ -184,6 +189,7 @@ public abstract class CachingCollector extends FilterCollector {
         collector.collect(scorer.doc);
       }
     }
+
   }
 
   private class NoScoreCachingLeafCollector extends FilterLeafCollector {
@@ -200,7 +206,7 @@ public abstract class CachingCollector extends FilterCollector {
     }
 
     protected void grow(int newLen) {
-      docs = ArrayUtil.growExact(docs, newLen);
+      docs = Arrays.copyOf(docs, newLen);
     }
 
     protected void invalidate() {
@@ -220,7 +226,7 @@ public abstract class CachingCollector extends FilterCollector {
           if (docCount >= maxDocsToCache) {
             invalidate();
           } else {
-            final int newLen = Math.min(ArrayUtil.oversize(docCount + 1, Integer.BYTES), maxDocsToCache);
+            final int newLen = Math.min(ArrayUtil.oversize(docCount + 1, RamUsageEstimator.NUM_BYTES_INT), maxDocsToCache);
             grow(newLen);
           }
         }
@@ -237,14 +243,14 @@ public abstract class CachingCollector extends FilterCollector {
     }
 
     int[] cachedDocs() {
-      return docs == null ? null : ArrayUtil.copyOfSubArray(docs, 0, docCount);
+      return docs == null ? null : Arrays.copyOf(docs, docCount);
     }
 
   }
 
   private class ScoreCachingLeafCollector extends NoScoreCachingLeafCollector {
 
-    Scorable scorer;
+    Scorer scorer;
     float[] scores;
 
     ScoreCachingLeafCollector(LeafCollector in, int maxDocsToCache) {
@@ -253,7 +259,7 @@ public abstract class CachingCollector extends FilterCollector {
     }
 
     @Override
-    public void setScorer(Scorable scorer) throws IOException {
+    public void setScorer(Scorer scorer) throws IOException {
       this.scorer = scorer;
       super.setScorer(scorer);
     }
@@ -261,7 +267,7 @@ public abstract class CachingCollector extends FilterCollector {
     @Override
     protected void grow(int newLen) {
       super.grow(newLen);
-      scores = ArrayUtil.growExact(scores, newLen);
+      scores = Arrays.copyOf(scores, newLen);
     }
 
     @Override
@@ -277,7 +283,7 @@ public abstract class CachingCollector extends FilterCollector {
     }
 
     float[] cachedScores() {
-      return docs == null ? null : ArrayUtil.copyOfSubArray(scores, 0, docCount);
+      return docs == null ? null : Arrays.copyOf(scores, docCount);
     }
   }
 
@@ -293,8 +299,8 @@ public abstract class CachingCollector extends FilterCollector {
       public void collect(int doc) {}
 
       @Override
-      public ScoreMode scoreMode() {
-        return ScoreMode.COMPLETE;
+      public boolean needsScores() {
+        return true;
       }
 
     };
@@ -316,9 +322,9 @@ public abstract class CachingCollector extends FilterCollector {
    *          scores are cached.
    */
   public static CachingCollector create(Collector other, boolean cacheScores, double maxRAMMB) {
-    int bytesPerDoc = Integer.BYTES;
+    int bytesPerDoc = RamUsageEstimator.NUM_BYTES_INT;
     if (cacheScores) {
-      bytesPerDoc += Float.BYTES;
+      bytesPerDoc += RamUsageEstimator.NUM_BYTES_FLOAT;
     }
     final int maxDocsToCache = (int) ((maxRAMMB * 1024 * 1024) / bytesPerDoc);
     return create(other, cacheScores, maxDocsToCache);

@@ -1,3 +1,5 @@
+package org.apache.lucene.facet.taxonomy;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -32,18 +33,12 @@ import org.apache.lucene.facet.Facets;
 import org.apache.lucene.facet.FacetsCollector;
 import org.apache.lucene.facet.FacetsConfig;
 import org.apache.lucene.facet.taxonomy.SearcherTaxonomyManager.SearcherAndTaxonomy;
-import org.apache.lucene.facet.taxonomy.directory.DirectoryTaxonomyReader;
 import org.apache.lucene.facet.taxonomy.directory.DirectoryTaxonomyWriter;
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.IndexNotFoundException;
-import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.SegmentInfos;
 import org.apache.lucene.index.TieredMergePolicy;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.ReferenceManager;
-import org.apache.lucene.search.SearcherFactory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.TestUtil;
@@ -280,9 +275,12 @@ public class TestSearcherTaxonomyManager extends FacetTestCase {
     tw.replaceTaxonomy(taxoDir2);
     taxoDir2.close();
 
-    expectThrows(IllegalStateException.class, () -> {
+    try {
       mgr.maybeRefresh();
-    });
+      fail("should have hit exception");
+    } catch (IllegalStateException ise) {
+      // expected
+    }
 
     w.close();
     IOUtils.close(mgr, tw, taxoDir, dir);
@@ -327,38 +325,4 @@ public class TestSearcherTaxonomyManager extends FacetTestCase {
     IOUtils.close(mgr, tw, taxoDir, indexDir);
   }
 
-  public void testExceptionDuringRefresh() throws Exception {
-
-    Directory indexDir = newDirectory();
-    Directory taxoDir = newDirectory();
-
-    IndexWriter w = new IndexWriter(indexDir, newIndexWriterConfig(new MockAnalyzer(random())));
-    DirectoryTaxonomyWriter tw = new DirectoryTaxonomyWriter(taxoDir);
-    w.commit();
-    tw.commit();
-
-    SearcherTaxonomyManager mgr = new SearcherTaxonomyManager(indexDir, taxoDir, null);
-
-    tw.addCategory(new FacetLabel("a", "b"));
-    w.addDocument(new Document());
-
-    tw.commit();
-    w.commit();
-
-    // intentionally corrupt the taxo index:
-    SegmentInfos infos = SegmentInfos.readLatestCommit(taxoDir);
-    taxoDir.deleteFile(infos.getSegmentsFileName());
-    expectThrows(IndexNotFoundException.class, mgr::maybeRefreshBlocking);
-    IOUtils.close(w, tw, mgr, indexDir, taxoDir);
-  }
-
-  private SearcherTaxonomyManager getSearcherTaxonomyManager(Directory indexDir, Directory taxoDir, SearcherFactory searcherFactory) throws IOException {
-    if (random().nextBoolean()) {
-      return new SearcherTaxonomyManager(indexDir, taxoDir, searcherFactory);
-    } else {
-      IndexReader reader = DirectoryReader.open(indexDir);
-      DirectoryTaxonomyReader taxoReader = new DirectoryTaxonomyReader(taxoDir);
-      return new SearcherTaxonomyManager(reader, taxoReader, searcherFactory);
-    }
-  }
 }

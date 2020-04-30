@@ -78,15 +78,7 @@ solrAdminApp.controller('LoggingController',
       });
     };
     $scope.refresh();
-    $scope.toggleRefresh = function() {
-      if(!$scope.stopped) {
-        $scope.stopped = true;
-        $timeout.cancel($scope.timeout);
-      } else {
-        $scope.stopped = false;
-        $scope.timeout = $timeout($scope.refresh, 10000);
-      }
-    };
+
     $scope.toggleTimezone = function() {
       $scope.timezone = ($scope.timezone=="Local") ? "UTC":"Local";
       $cookies.logging_timezone = $scope.timezone;

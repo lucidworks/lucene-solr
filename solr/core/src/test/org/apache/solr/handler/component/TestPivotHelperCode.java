@@ -1,3 +1,6 @@
+package org.apache.solr.handler.component;
+
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +17,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
-
 
 import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.handler.component.PivotFacetField;
+
 import org.apache.lucene.util.TestUtil;
-import org.apache.solr.common.util.SuppressForbidden;
 
 import java.util.List;
 import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Collections;
 
 /**
  * A light weight test of various helper methods used in pivot faceting
@@ -87,7 +90,6 @@ public class TestPivotHelperCode extends SolrTestCaseJ4{
   }
 
 
-  @SuppressForbidden(reason = "Checking object equality for Long instance")
   public void testCompareWithNullLast() throws Exception {
     Long a = random().nextLong();
     Long b = random().nextLong();

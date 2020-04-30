@@ -1,3 +1,29 @@
+package org.apache.lucene.codecs.compressing;
+
+import java.io.IOException;
+
+import org.apache.lucene.analysis.MockAnalyzer;
+import org.apache.lucene.codecs.Codec;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.FieldType;
+import org.apache.lucene.document.StoredField;
+import org.apache.lucene.document.TextField;
+import org.apache.lucene.index.CodecReader;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.LeafReader;
+import org.apache.lucene.index.BaseTermVectorsFormatTestCase;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.NoMergePolicy;
+import org.apache.lucene.index.RandomIndexWriter;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.index.TermsEnum.SeekStatus;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.BytesRef;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,30 +40,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.compressing;
-
-import java.io.IOException;
-
-import org.apache.lucene.analysis.MockAnalyzer;
-import org.apache.lucene.codecs.Codec;
-import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.document.FieldType;
-import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.BaseTermVectorsFormatTestCase;
-import org.apache.lucene.index.CodecReader;
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.LeafReader;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.NoMergePolicy;
-import org.apache.lucene.index.RandomIndexWriter;
-import org.apache.lucene.index.Terms;
-import org.apache.lucene.index.TermsEnum.SeekStatus;
-import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.BytesRef;
 
 public class TestCompressingTermVectorsFormat extends BaseTermVectorsFormatTestCase {
 
@@ -55,15 +57,24 @@ public class TestCompressingTermVectorsFormat extends BaseTermVectorsFormatTestC
     ft.setStoreTermVectors(true);
     doc.add(new Field("foo", "this is a test", ft));
     iw.addDocument(doc);
-    LeafReader ir = getOnlyLeafReader(iw.getReader());
+    LeafReader ir = getOnlySegmentReader(iw.getReader());
     Terms terms = ir.getTermVector(0, "foo");
     assertNotNull(terms);
     TermsEnum termsEnum = terms.iterator();
     assertEquals(SeekStatus.FOUND, termsEnum.seekCeil(new BytesRef("this")));
-
-    expectThrows(UnsupportedOperationException.class, termsEnum::ord);
-    expectThrows(UnsupportedOperationException.class, () -> termsEnum.seekExact(0));
-
+    try {
+      termsEnum.ord();
+      fail();
+    } catch (UnsupportedOperationException expected) {
+      // expected exception
+    }
+    
+    try {
+      termsEnum.seekExact(0);
+      fail();
+    } catch (UnsupportedOperationException expected) {
+      // expected exception
+    }
     ir.close();
     iw.close();
     dir.close();
@@ -82,7 +93,7 @@ public class TestCompressingTermVectorsFormat extends BaseTermVectorsFormatTestC
     // by this test.
     iwConf.setCodec(CompressingCodec.randomInstance(random(), 4*1024, 100, false, 8));
     IndexWriter iw = new IndexWriter(dir, iwConf);
-    DirectoryReader ir = DirectoryReader.open(iw);
+    DirectoryReader ir = DirectoryReader.open(iw, true);
     for (int i = 0; i < 5; i++) {
       Document doc = new Document();
       FieldType ft = new FieldType(TextField.TYPE_NOT_STORED);
@@ -108,7 +119,7 @@ public class TestCompressingTermVectorsFormat extends BaseTermVectorsFormatTestC
     assertNotNull(ir2);
     ir.close();
     ir = ir2;
-    CodecReader sr = (CodecReader) getOnlyLeafReader(ir);
+    CodecReader sr = getOnlySegmentReader(ir);
     CompressingTermVectorsReader reader = (CompressingTermVectorsReader)sr.getTermVectorsReader();
     // we could get lucky, and have zero, but typically one.
     assertTrue(reader.getNumDirtyChunks() <= 1);

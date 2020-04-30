@@ -19,7 +19,6 @@ package org.apache.solr.handler.dataimport;
 import java.lang.invoke.MethodHandles;
 import java.util.HashMap;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,19 +47,19 @@ import org.slf4j.LoggerFactory;
  */
 public class TemplateTransformer extends Transformer {
 
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   private Map<String ,List<String>> templateVsVars = new HashMap<>();
 
   @Override
   @SuppressWarnings("unchecked")
   public Object transformRow(Map<String, Object> row, Context context) {
 
-
-    VariableResolver resolver = context.getVariableResolver();
+    VariableResolver resolver = (VariableResolver) context
+            .getVariableResolver();
     // Add current row to the copy of resolver map
+//    for (Map.Entry<String, Object> entry : row.entrySet())
 
     for (Map<String, String> map : context.getAllEntityFields()) {
-      map.entrySet();
       String expr = map.get(TEMPLATE);
       if (expr == null)
         continue;
@@ -76,7 +75,7 @@ public class TemplateTransformer extends Transformer {
       }
       for (String v : variables) {
         if (resolver.resolve(v) == null) {
-          log.warn("Unable to resolve variable: " + v
+          LOG.warn("Unable to resolve variable: " + v
                   + " while parsing expression: " + expr);
           resolvable = false;
         }
@@ -85,30 +84,15 @@ public class TemplateTransformer extends Transformer {
       if (!resolvable)
         continue;
       if(variables.size() == 1 && expr.startsWith("${") && expr.endsWith("}")){
-        addToRow(column, row, resolver.resolve(variables.get(0)));
+        row.put(column, resolver.resolve(variables.get(0)));
       } else {
-        addToRow(column, row, resolver.replaceTokens(expr));
+        row.put(column, resolver.replaceTokens(expr));
       }
+
     }
+
 
     return row;
   }
-
-  private void addToRow(String key, Map<String, Object> row, Object value) {
-    Object prevVal = row.get(key);
-    if (prevVal != null) {
-      if (prevVal instanceof List) {
-        ((List) prevVal).add(value);
-      } else {
-        ArrayList<Object> valList = new ArrayList<Object>();
-        valList.add(prevVal);
-        valList.add(value);
-        row.put(key, valList);
-      }
-    } else {
-      row.put(key, value);
-    }
-  }
-    
   public static final String TEMPLATE = "template";
 }

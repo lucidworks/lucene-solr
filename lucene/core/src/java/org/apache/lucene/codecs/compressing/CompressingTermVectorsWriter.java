@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.compressing;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.compressing;
-
 
 import java.io.IOException;
 import java.util.ArrayDeque;
@@ -37,7 +37,6 @@ import org.apache.lucene.index.MergeState;
 import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.GrowableByteArrayDataOutput;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
@@ -64,8 +63,9 @@ public final class CompressingTermVectorsWriter extends TermVectorsWriter {
   static final String CODEC_SFX_IDX = "Index";
   static final String CODEC_SFX_DAT = "Data";
 
-  static final int VERSION_START = 1;
-  static final int VERSION_CURRENT = VERSION_START;
+  static final int VERSION_START = 0;
+  static final int VERSION_CHUNK_STATS = 1;
+  static final int VERSION_CURRENT = VERSION_CHUNK_STATS;
 
   static final int PACKED_BLOCK_SIZE = 64;
 
@@ -176,8 +176,8 @@ public final class CompressingTermVectorsWriter extends TermVectorsWriter {
       if (hasOffsets) {
         if (offStart + totalPositions == startOffsetsBuf.length) {
           final int newLength = ArrayUtil.oversize(offStart + totalPositions, 4);
-          startOffsetsBuf = ArrayUtil.growExact(startOffsetsBuf, newLength);
-          lengthsBuf = ArrayUtil.growExact(lengthsBuf, newLength);
+          startOffsetsBuf = Arrays.copyOf(startOffsetsBuf, newLength);
+          lengthsBuf = Arrays.copyOf(lengthsBuf, newLength);
         }
         startOffsetsBuf[offStart + totalPositions] = startOffset;
         lengthsBuf[offStart + totalPositions] = length;
@@ -269,8 +269,8 @@ public final class CompressingTermVectorsWriter extends TermVectorsWriter {
   @Override
   public void finishDocument() throws IOException {
     // append the payload bytes of the doc after its terms
-    termSuffixes.writeBytes(payloadBytes.getBytes(), payloadBytes.getPosition());
-    payloadBytes.reset();
+    termSuffixes.writeBytes(payloadBytes.bytes, payloadBytes.length);
+    payloadBytes.length = 0;
     ++numDocs;
     if (triggerFlush()) {
       flush();
@@ -293,13 +293,7 @@ public final class CompressingTermVectorsWriter extends TermVectorsWriter {
   @Override
   public void startTerm(BytesRef term, int freq) throws IOException {
     assert freq >= 1;
-    final int prefix;
-    if (lastTerm.length == 0) {
-      // no previous term: no bytes to write
-      prefix = 0;
-    } else {
-      prefix = StringHelper.bytesDifference(lastTerm, term);
-    }
+    final int prefix = StringHelper.bytesDifference(lastTerm, term);
     curField.addTerm(freq, prefix, term.length - prefix);
     termSuffixes.writeBytes(term.bytes, term.offset + prefix, term.length - prefix);
     // copy last term
@@ -322,7 +316,7 @@ public final class CompressingTermVectorsWriter extends TermVectorsWriter {
   }
 
   private boolean triggerFlush() {
-    return termSuffixes.getPosition() >= chunkSize
+    return termSuffixes.length >= chunkSize
         || pendingDocs.size() >= MAX_DOCUMENTS_PER_CHUNK;
   }
 
@@ -361,14 +355,14 @@ public final class CompressingTermVectorsWriter extends TermVectorsWriter {
       flushPayloadLengths();
 
       // compress terms and payloads and write them to the output
-      compressor.compress(termSuffixes.getBytes(), 0, termSuffixes.getPosition(), vectorsStream);
+      compressor.compress(termSuffixes.bytes, 0, termSuffixes.length, vectorsStream);
     }
 
     // reset
     pendingDocs.clear();
     curDoc = null;
     curField = null;
-    termSuffixes.reset();
+    termSuffixes.length = 0;
     numChunks++;
   }
 
@@ -705,8 +699,8 @@ public final class CompressingTermVectorsWriter extends TermVectorsWriter {
       final int offStart = curField.offStart + curField.totalPositions;
       if (offStart + numProx > startOffsetsBuf.length) {
         final int newLength = ArrayUtil.oversize(offStart + numProx, 4);
-        startOffsetsBuf = ArrayUtil.growExact(startOffsetsBuf, newLength);
-        lengthsBuf = ArrayUtil.growExact(lengthsBuf, newLength);
+        startOffsetsBuf = Arrays.copyOf(startOffsetsBuf, newLength);
+        lengthsBuf = Arrays.copyOf(lengthsBuf, newLength);
       }
       int lastOffset = 0, startOffset, endOffset;
       for (int i = 0; i < numProx; ++i) {
@@ -736,11 +730,6 @@ public final class CompressingTermVectorsWriter extends TermVectorsWriter {
 
   @Override
   public int merge(MergeState mergeState) throws IOException {
-    if (mergeState.needsIndexSort) {
-      // TODO: can we gain back some optos even if index is sorted?  E.g. if sort results in large chunks of contiguous docs from one sub
-      // being copied over...?
-      return super.merge(mergeState);
-    }
     int docCount = 0;
     int numReaders = mergeState.maxDocs.length;
 

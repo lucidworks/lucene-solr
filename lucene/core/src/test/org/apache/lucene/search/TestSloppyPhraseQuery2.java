@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.util.Random;
 
@@ -147,8 +147,8 @@ public class TestSloppyPhraseQuery2 extends SearchEquivalenceTestBase {
     for (int i = 0; i < 10; i++) {
       MultiPhraseQuery q1 = randomPhraseQuery(seed);
       MultiPhraseQuery q2 = randomPhraseQuery(seed);
-      q1 = new MultiPhraseQuery.Builder(q1).setSlop(i).build();
-      q2 = new MultiPhraseQuery.Builder(q2).setSlop(i+1).build();
+      q1.setSlop(i);
+      q2.setSlop(i+1);
       assertSubsetOf(q1, q2);
     }
   }
@@ -156,7 +156,7 @@ public class TestSloppyPhraseQuery2 extends SearchEquivalenceTestBase {
   private MultiPhraseQuery randomPhraseQuery(long seed) {
     Random random = new Random(seed);
     int length = TestUtil.nextInt(random, 2, 5);
-    MultiPhraseQuery.Builder pqb = new MultiPhraseQuery.Builder();
+    MultiPhraseQuery pq = new MultiPhraseQuery();
     int position = 0;
     for (int i = 0; i < length; i++) {
       int depth = TestUtil.nextInt(random, 1, 3);
@@ -164,9 +164,9 @@ public class TestSloppyPhraseQuery2 extends SearchEquivalenceTestBase {
       for (int j = 0; j < depth; j++) {
         terms[j] = new Term("field", "" + (char) TestUtil.nextInt(random, 'a', 'z'));
       }
-      pqb.add(terms, position);
+      pq.add(terms, position);
       position += TestUtil.nextInt(random, 1, 3);
     }
-    return pqb.build();
+    return pq;
   }
 }

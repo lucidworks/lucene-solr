@@ -1,3 +1,5 @@
+package org.apache.lucene.search.spans;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.spans;
-
 
 import java.util.HashSet;
 import java.util.Set;
@@ -30,8 +30,6 @@ import org.apache.lucene.search.CheckHits;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.QueryUtils;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.similarities.TFIDFSimilarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
@@ -117,10 +115,9 @@ public class TestFieldMaskingSpanQuery extends LuceneTestCase {
                                          field("gender", "male"),
                                          field("first",  "bubba"),
                                          field("last",   "jones")     }));
-    writer.forceMerge(1);
     reader = writer.getReader();
     writer.close();
-    searcher = new IndexSearcher(getOnlyLeafReader(reader));
+    searcher = newSearcher(reader);
   }
 
   @AfterClass
@@ -144,7 +141,7 @@ public class TestFieldMaskingSpanQuery extends LuceneTestCase {
     QueryUtils.checkEqual(q, qr);
 
     Set<Term> terms = new HashSet<>();
-    qr.visit(QueryVisitor.termCollector(terms));
+    qr.createWeight(searcher, false).extractTerms(terms);
     assertEquals(1, terms.size());
   }
   
@@ -164,7 +161,7 @@ public class TestFieldMaskingSpanQuery extends LuceneTestCase {
     QueryUtils.checkUnequal(q, qr);
 
     Set<Term> terms = new HashSet<>();
-    qr.visit(QueryVisitor.termCollector(terms));
+    qr.createWeight(searcher, false).extractTerms(terms);
     assertEquals(2, terms.size());
   }
   
@@ -178,7 +175,7 @@ public class TestFieldMaskingSpanQuery extends LuceneTestCase {
     QueryUtils.checkEqual(q, qr);
 
     HashSet<Term> set = new HashSet<>();
-    qr.visit(QueryVisitor.termCollector(set));
+    qr.createWeight(searcher, true).extractTerms(set);
     assertEquals(2, set.size());
   }
   
@@ -236,7 +233,7 @@ public class TestFieldMaskingSpanQuery extends LuceneTestCase {
   
   public void testSimple2() throws Exception {
     assumeTrue("Broken scoring: LUCENE-3723", 
-        searcher.getSimilarity() instanceof TFIDFSimilarity);
+        searcher.getSimilarity(true) instanceof TFIDFSimilarity);
     SpanQuery q1 = new SpanTermQuery(new Term("gender", "female"));
     SpanQuery q2 = new SpanTermQuery(new Term("last", "smith"));
     SpanQuery q = new SpanNearQuery(new SpanQuery[]
@@ -254,7 +251,7 @@ public class TestFieldMaskingSpanQuery extends LuceneTestCase {
     SpanQuery q  = new SpanOrQuery(q1, new FieldMaskingSpanQuery(q2, "gender"));
     check(q, new int[] { 0, 1, 2, 3, 4 });
 
-    Spans span = q.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans span = MultiSpansWrapper.wrap(searcher.getIndexReader(), q);
     assertNext(span, 0,0,1);
     assertNext(span, 1,0,1);
     assertNext(span, 1,1,2);
@@ -276,8 +273,8 @@ public class TestFieldMaskingSpanQuery extends LuceneTestCase {
     check(qA, new int[] { 0, 1, 2, 4 });
     check(qB, new int[] { 0, 1, 2, 4 });
   
-    Spans spanA = qA.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
-    Spans spanB = qB.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans spanA = MultiSpansWrapper.wrap(searcher.getIndexReader(), qA);
+    Spans spanB = MultiSpansWrapper.wrap(searcher.getIndexReader(), qB);
     
     while (spanA.nextDoc() != Spans.NO_MORE_DOCS) {
       assertNotSame("spanB not still going", Spans.NO_MORE_DOCS, spanB.nextDoc());
@@ -292,7 +289,7 @@ public class TestFieldMaskingSpanQuery extends LuceneTestCase {
   
   public void testSpans2() throws Exception {
     assumeTrue("Broken scoring: LUCENE-3723",
-        searcher.getSimilarity() instanceof TFIDFSimilarity);
+        searcher.getSimilarity(true) instanceof TFIDFSimilarity);
     SpanQuery qA1 = new SpanTermQuery(new Term("gender", "female"));
     SpanQuery qA2 = new SpanTermQuery(new Term("first",  "james"));
     SpanQuery qA  = new SpanOrQuery(qA1, new FieldMaskingSpanQuery(qA2, "gender"));
@@ -302,7 +299,7 @@ public class TestFieldMaskingSpanQuery extends LuceneTestCase {
         new FieldMaskingSpanQuery(qB, "id") }, -1, false );
     check(q, new int[] { 0, 1, 2, 3 });
 
-    Spans span = q.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1f).getSpans(searcher.getIndexReader().leaves().get(0), SpanWeight.Postings.POSITIONS);
+    Spans span = MultiSpansWrapper.wrap(searcher.getIndexReader(), q);
     assertNext(span, 0,0,1);
     assertNext(span, 1,1,2);
     assertNext(span, 2,0,1);

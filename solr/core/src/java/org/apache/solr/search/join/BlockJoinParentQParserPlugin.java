@@ -14,10 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search.join;
 
 import org.apache.lucene.search.join.ScoreMode;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.search.QParser;
 import org.apache.solr.search.QParserPlugin;
@@ -38,6 +40,10 @@ public class BlockJoinParentQParserPlugin extends QParserPlugin {
 
   protected QParser createBJQParser(String qstr, SolrParams localParams, SolrParams params, SolrQueryRequest req) {
     return new BlockJoinParentQParser(qstr, localParams, params, req);
+  }
+
+  @Override
+  public void init(NamedList args) {
   }
 }
 

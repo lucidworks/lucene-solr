@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.IOException;
 
@@ -35,7 +35,7 @@ public abstract class BaseDirectory extends Directory {
   protected BaseDirectory(LockFactory lockFactory) {
     super();
     if (lockFactory == null) {
-      throw new NullPointerException("LockFactory must not be null, use an explicit instance!");
+      throw new NullPointerException("LockFactory cannot be null, use an explicit instance!");
     }
     this.lockFactory = lockFactory;
   }
@@ -47,13 +47,13 @@ public abstract class BaseDirectory extends Directory {
 
   @Override
   protected final void ensureOpen() throws AlreadyClosedException {
-    if (!isOpen) {
+    if (!isOpen)
       throw new AlreadyClosedException("this Directory is closed");
-    }
   }
 
   @Override
   public String toString() {
     return super.toString()  + " lockFactory=" + lockFactory;
   }
+  
 }

@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.miscellaneous;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.miscellaneous;
-
 
 import java.io.IOException;
 
@@ -62,7 +62,7 @@ public class TestEmptyTokenStream extends BaseTokenStreamTestCase {
     // this should not fail because we have no TermToBytesRefAttribute
     writer.addDocument(doc);
     
-    assertEquals(1, writer.getDocStats().numDocs);
+    assertEquals(1, writer.numDocs());
 
     writer.close();
     directory.close();

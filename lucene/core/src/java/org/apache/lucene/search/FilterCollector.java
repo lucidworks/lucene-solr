@@ -1,3 +1,9 @@
+package org.apache.lucene.search;
+
+import java.io.IOException;
+
+import org.apache.lucene.index.LeafReaderContext;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +20,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
-import java.io.IOException;
-
-import org.apache.lucene.index.LeafReaderContext;
-
 
 /**
  * {@link Collector} delegator.
  *
  * @lucene.experimental
  */
-public abstract class FilterCollector implements Collector {
+public class FilterCollector implements Collector {
 
   protected final Collector in;
 
@@ -46,7 +46,7 @@ public abstract class FilterCollector implements Collector {
   }
 
   @Override
-  public ScoreMode scoreMode() {
-    return in.scoreMode();
+  public boolean needsScores() {
+    return in.needsScores();
   }
 }

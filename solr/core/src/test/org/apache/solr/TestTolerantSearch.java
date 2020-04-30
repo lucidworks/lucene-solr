@@ -1,24 +1,4 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.apache.solr;
-
-import java.io.File;
-import java.io.IOException;
-import java.io.OutputStream;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.solr.client.solrj.SolrClient;
@@ -36,6 +16,27 @@ import org.apache.solr.response.BinaryResponseWriter;
 import org.apache.solr.response.SolrQueryResponse;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.OutputStream;
+
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 public class TestTolerantSearch extends SolrJettyTestBase {
   
@@ -56,12 +57,11 @@ public class TestTolerantSearch extends SolrJettyTestBase {
   
   @BeforeClass
   public static void createThings() throws Exception {
-    systemSetPropertySolrDisableShardsWhitelist("true");
     solrHome = createSolrHome();
-    createAndStartJetty(solrHome.getAbsolutePath());
+    createJetty(solrHome.getAbsolutePath());
     String url = jetty.getBaseUrl().toString();
-    collection1 = getHttpSolrClient(url + "/collection1");
-    collection2 = getHttpSolrClient(url + "/collection2");
+    collection1 = new HttpSolrClient(url + "/collection1");
+    collection2 = new HttpSolrClient(url + "/collection2");
     
     String urlCollection1 = jetty.getBaseUrl().toString() + "/" + "collection1";
     String urlCollection2 = jetty.getBaseUrl().toString() + "/" + "collection2";
@@ -69,7 +69,7 @@ public class TestTolerantSearch extends SolrJettyTestBase {
     shard2 = urlCollection2.replaceAll("https?://", "");
     
     //create second core
-    try (HttpSolrClient nodeClient = getHttpSolrClient(url)) {
+    try (HttpSolrClient nodeClient = new HttpSolrClient(url)) {
       CoreAdminRequest.Create req = new CoreAdminRequest.Create();
       req.setCoreName("collection2");
       req.setConfigSet("collection1");
@@ -99,20 +99,13 @@ public class TestTolerantSearch extends SolrJettyTestBase {
   
   @AfterClass
   public static void destroyThings() throws Exception {
-    if (null != collection1) {
-      collection1.close();
-      collection1 = null;
-    }
-    if (null != collection2) {
-      collection2.close();
-      collection2 = null;
-    }
-    if (null != jetty) {
-      jetty.stop();
-      jetty=null;
-    }
+    collection1.close();
+    collection2.close();
+    collection1 = null;
+    collection2 = null;
+    jetty.stop();
+    jetty=null;
     resetExceptionIgnores();
-    systemClearPropertySolrDisableShardsWhitelist();
   }
   
   @SuppressWarnings("unchecked")
@@ -139,12 +132,15 @@ public class TestTolerantSearch extends SolrJettyTestBase {
     query.setFacet(true);
     
     ignoreException("Dummy exception in BadResponseWriter");
-
-    expectThrows(SolrException.class, () -> collection1.query(query));
-
+    try {
+      collection1.query(query);
+      fail("Should get an exception");
+    } catch (Exception e) {
+      //expected
+    }
     query.set(ShardParams.SHARDS_TOLERANT, "true");
     QueryResponse response = collection1.query(query);
-    assertTrue(response.getResponseHeader().getBooleanArg(SolrQueryResponse.RESPONSE_HEADER_PARTIAL_RESULTS_KEY));
+    assertTrue(response.getResponseHeader().getBooleanArg("partialResults"));
     NamedList<Object> shardsInfo = ((NamedList<Object>)response.getResponse().get(ShardParams.SHARDS_INFO));
     boolean foundError = false;
     for (int i = 0; i < shardsInfo.size(); i++) {
@@ -155,7 +151,7 @@ public class TestTolerantSearch extends SolrJettyTestBase {
       }
     }
     assertTrue(foundError);
-    assertEquals("1", response.getResults().get(0).getFieldValue("id"));
+    assertEquals(1, response.getResults().get(0).getFieldValue("id"));
     assertEquals("batman", response.getResults().get(0).getFirstValue("subject"));
     unIgnoreException("Dummy exception in BadResponseWriter");
   }
@@ -184,12 +180,15 @@ public class TestTolerantSearch extends SolrJettyTestBase {
     query.setFacet(true);
     
     ignoreException("Dummy exception in BadResponseWriter");
-
-    expectThrows(Exception.class, () -> collection1.query(query));
-
+    try {
+      collection1.query(query);
+      fail("Should get an exception");
+    } catch (Exception e) {
+      //expected
+    }
     query.set(ShardParams.SHARDS_TOLERANT, "true");
     QueryResponse response = collection1.query(query);
-    assertTrue(response.getResponseHeader().getBooleanArg(SolrQueryResponse.RESPONSE_HEADER_PARTIAL_RESULTS_KEY));
+    assertTrue(response.getResponseHeader().getBooleanArg("partialResults"));
     NamedList<Object> shardsInfo = ((NamedList<Object>)response.getResponse().get(ShardParams.SHARDS_INFO));
     boolean foundError = false;
     for (int i = 0; i < shardsInfo.size(); i++) {
@@ -200,8 +199,8 @@ public class TestTolerantSearch extends SolrJettyTestBase {
       }
     }
     assertTrue(foundError);
-    assertFalse(""+response, response.getResults().isEmpty());
-    assertEquals("1", response.getResults().get(0).getFieldValue("id"));
+    
+    assertEquals(1, response.getResults().get(0).getFieldValue("id"));
     assertEquals("batman", response.getResults().get(0).getFirstValue("subject"));
     unIgnoreException("Dummy exception in BadResponseWriter");
   }

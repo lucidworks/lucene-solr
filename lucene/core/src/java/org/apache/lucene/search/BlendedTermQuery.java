@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +16,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.TermState;
-import org.apache.lucene.index.TermStates;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.util.ArrayUtil;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.InPlaceMergeSorter;
+import org.apache.lucene.util.ToStringUtils;
 
 /**
  * A {@link Query} that blends index statistics across multiple terms.
@@ -53,7 +54,7 @@ public final class BlendedTermQuery extends Query {
     private int numTerms = 0;
     private Term[] terms = new Term[0];
     private float[] boosts = new float[0];
-    private TermStates[] contexts = new TermStates[0];
+    private TermContext[] contexts = new TermContext[0];
     private RewriteMethod rewriteMethod = DISJUNCTION_MAX_REWRITE;
 
     /** Sole constructor. */
@@ -82,10 +83,10 @@ public final class BlendedTermQuery extends Query {
 
     /**
      * Expert: Add a {@link Term} with the provided boost and context.
-     * This method is useful if you already have a {@link TermStates}
+     * This method is useful if you already have a {@link TermContext}
      * object constructed for the given term.
      */
-    public Builder add(Term term, float boost, TermStates context) {
+    public Builder add(Term term, float boost, TermContext context) {
       if (numTerms >= BooleanQuery.getMaxClauseCount()) {
         throw new BooleanQuery.TooManyClauses();
       }
@@ -102,9 +103,9 @@ public final class BlendedTermQuery extends Query {
     /** Build the {@link BlendedTermQuery}. */
     public BlendedTermQuery build() {
       return new BlendedTermQuery(
-          ArrayUtil.copyOfSubArray(terms, 0, numTerms),
-          ArrayUtil.copyOfSubArray(boosts, 0, numTerms),
-          ArrayUtil.copyOfSubArray(contexts, 0, numTerms),
+          Arrays.copyOf(terms, numTerms),
+          Arrays.copyOf(boosts, numTerms),
+          Arrays.copyOf(contexts, numTerms),
           rewriteMethod);
     }
 
@@ -126,14 +127,16 @@ public final class BlendedTermQuery extends Query {
   }
 
   /**
-   * A {@link RewriteMethod} that adds all sub queries to a {@link BooleanQuery}.
-   * This {@link RewriteMethod} is useful when matching on several fields is
+   * A {@link RewriteMethod} that adds all sub queries to a {@link BooleanQuery}
+   * which has {@link BooleanQuery#isCoordDisabled() coords disabled}. This
+   * {@link RewriteMethod} is useful when matching on several fields is
    * considered better than having a good match on a single field.
    */
   public static final RewriteMethod BOOLEAN_REWRITE = new RewriteMethod() {
     @Override
     public Query rewrite(Query[] subQueries) {
       BooleanQuery.Builder merged = new BooleanQuery.Builder();
+      merged.setDisableCoord(true);
       for (Query query : subQueries) {
         merged.add(query, Occur.SHOULD);
       }
@@ -184,10 +187,10 @@ public final class BlendedTermQuery extends Query {
 
   private final Term[] terms;
   private final float[] boosts;
-  private final TermStates[] contexts;
+  private final TermContext[] contexts;
   private final RewriteMethod rewriteMethod;
 
-  private BlendedTermQuery(Term[] terms, float[] boosts, TermStates[] contexts,
+  private BlendedTermQuery(final Term[] terms, final float[] boosts, final TermContext[] contexts,
       RewriteMethod rewriteMethod) {
     assert terms.length == boosts.length;
     assert terms.length == contexts.length;
@@ -205,7 +208,7 @@ public final class BlendedTermQuery extends Query {
         terms[i] = terms[j];
         terms[j] = tmpTerm;
 
-        TermStates tmpContext = contexts[i];
+        TermContext tmpContext = contexts[i];
         contexts[i] = contexts[j];
         contexts[j] = tmpContext;
 
@@ -222,21 +225,20 @@ public final class BlendedTermQuery extends Query {
   }
 
   @Override
-  public boolean equals(Object other) {
-    return sameClassAs(other) &&
-           equalsTo(getClass().cast(other));
-  }
-  
-  private boolean equalsTo(BlendedTermQuery other) {
-    return Arrays.equals(terms, other.terms) && 
-           Arrays.equals(contexts, other.contexts) && 
-           Arrays.equals(boosts, other.boosts) && 
-           rewriteMethod.equals(other.rewriteMethod);
+  public boolean equals(Object obj) {
+    if (super.equals(obj) == false) {
+      return false;
+    }
+    BlendedTermQuery that = (BlendedTermQuery) obj;
+    return Arrays.equals(terms, that.terms)
+        && Arrays.equals(contexts, that.contexts)
+        && Arrays.equals(boosts, that.boosts)
+        && rewriteMethod.equals(that.rewriteMethod);
   }
 
   @Override
   public int hashCode() {
-    int h = classHash();
+    int h = super.hashCode();
     h = 31 * h + Arrays.hashCode(terms);
     h = 31 * h + Arrays.hashCode(contexts);
     h = 31 * h + Arrays.hashCode(boosts);
@@ -258,15 +260,19 @@ public final class BlendedTermQuery extends Query {
       builder.append(termQuery.toString(field));
     }
     builder.append(")");
+    builder.append(ToStringUtils.boost(getBoost()));
     return builder.toString();
   }
 
   @Override
   public final Query rewrite(IndexReader reader) throws IOException {
-    final TermStates[] contexts = ArrayUtil.copyOfSubArray(this.contexts, 0, this.contexts.length);
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
+    final TermContext[] contexts = Arrays.copyOf(this.contexts, this.contexts.length);
     for (int i = 0; i < contexts.length; ++i) {
-      if (contexts[i] == null || contexts[i].wasBuiltFor(reader.getContext()) == false) {
-        contexts[i] = TermStates.build(reader.getContext(), terms[i], true);
+      if (contexts[i] == null || contexts[i].topReaderContext != reader.getContext()) {
+        contexts[i] = TermContext.build(reader.getContext(), terms[i]);
       }
     }
 
@@ -275,13 +281,17 @@ public final class BlendedTermQuery extends Query {
     // ttf will be the sum of all total term freqs
     int df = 0;
     long ttf = 0;
-    for (TermStates ctx : contexts) {
+    for (TermContext ctx : contexts) {
       df = Math.max(df, ctx.docFreq());
-      ttf += ctx.totalTermFreq();
+      if (ctx.totalTermFreq() == -1L) {
+        ttf = -1L;
+      } else if (ttf != -1L) {
+        ttf += ctx.totalTermFreq();
+      }
     }
 
     for (int i = 0; i < contexts.length; ++i) {
-      contexts[i] = adjustFrequencies(reader.getContext(), contexts[i], df, ttf);
+      contexts[i] = adjustFrequencies(contexts[i], df, ttf);
     }
 
     Query[] termQueries = new Query[terms.length];
@@ -294,27 +304,17 @@ public final class BlendedTermQuery extends Query {
     return rewriteMethod.rewrite(termQueries);
   }
 
-  @Override
-  public void visit(QueryVisitor visitor) {
-    Term[] termsToVisit = Arrays.stream(terms).filter(t -> visitor.acceptField(t.field())).toArray(Term[]::new);
-    if (termsToVisit.length > 0) {
-      QueryVisitor v = visitor.getSubVisitor(Occur.SHOULD, this);
-      v.consumeTerms(this, termsToVisit);
-    }
-  }
-
-  private static TermStates adjustFrequencies(IndexReaderContext readerContext,
-                                              TermStates ctx, int artificialDf, long artificialTtf) throws IOException {
-    List<LeafReaderContext> leaves = readerContext.leaves();
+  private static TermContext adjustFrequencies(TermContext ctx, int artificialDf, long artificialTtf) {
+    List<LeafReaderContext> leaves = ctx.topReaderContext.leaves();
     final int len;
     if (leaves == null) {
       len = 1;
     } else {
       len = leaves.size();
     }
-    TermStates newCtx = new TermStates(readerContext);
+    TermContext newCtx = new TermContext(ctx.topReaderContext);
     for (int i = 0; i < len; ++i) {
-      TermState termState = ctx.get(leaves.get(i));
+      TermState termState = ctx.get(i);
       if (termState == null) {
         continue;
       }

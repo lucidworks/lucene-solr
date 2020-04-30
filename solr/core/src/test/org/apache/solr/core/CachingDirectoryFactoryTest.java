@@ -1,19 +1,3 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.apache.solr.core;
 
 import java.io.IOException;
@@ -34,6 +18,23 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 public class CachingDirectoryFactoryTest extends SolrTestCaseJ4 {
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -41,7 +42,7 @@ public class CachingDirectoryFactoryTest extends SolrTestCaseJ4 {
   private Map<String,Tracker> dirs = new HashMap<>();
   private volatile boolean stop = false;
   
-  private static class Tracker {
+  private class Tracker {
     String path;
     AtomicInteger refCnt = new AtomicInteger(0);
     Directory dir;
@@ -49,11 +50,8 @@ public class CachingDirectoryFactoryTest extends SolrTestCaseJ4 {
   
   @Test
   public void stressTest() throws Exception {
-    doStressTest(new RAMDirectoryFactory());
-    doStressTest(new ByteBuffersDirectoryFactory());
-  }
-  
-  private void doStressTest(final CachingDirectoryFactory df) throws Exception {
+    final CachingDirectoryFactory df = new RAMDirectoryFactory();
+    
     List<Thread> threads = new ArrayList<>();
     int threadCount = 11;
     for (int i = 0; i < threadCount; i++) {
@@ -195,10 +193,10 @@ public class CachingDirectoryFactoryTest extends SolrTestCaseJ4 {
             if (tracker == null) {
               tracker = new Tracker();
               tracker.path = path;
-              tracker.dir = df.get(path, DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
+              tracker.dir = df.get(path, DirContext.DEFAULT, "single");
               dirs.put(path, tracker);
             } else {
-              tracker.dir = df.get(path, DirContext.DEFAULT, DirectoryFactory.LOCK_TYPE_SINGLE);
+              tracker.dir = df.get(path, DirContext.DEFAULT, "single");
             }
             tracker.refCnt.incrementAndGet();
           }

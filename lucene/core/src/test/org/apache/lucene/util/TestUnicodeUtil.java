@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
 
 /*
  * Some of this code came from the excellent Unicode
@@ -110,7 +111,7 @@ public class TestUnicodeUtil extends LuceneTestCase {
     int num = atLeast(50000);
     for (int i = 0; i < num; i++) {
       final String s = TestUtil.randomUnicodeString(random());
-      final byte[] utf8 = new byte[UnicodeUtil.maxUTF8Length(s.length())];
+      final byte[] utf8 = new byte[s.length() * UnicodeUtil.MAX_UTF8_BYTES_PER_CHAR];
       final int utf8Len = UnicodeUtil.UTF16toUTF8(s, 0, s.length(), utf8);
       assertEquals(s.codePointCount(0, s.length()),
                    UnicodeUtil.codePointCount(new BytesRef(utf8, 0, utf8Len)));
@@ -126,30 +127,41 @@ public class TestUnicodeUtil extends LuceneTestCase {
   }
 
   private void assertcodePointCountThrowsAssertionOn(byte... bytes) {
-    expectThrows(IllegalArgumentException.class, () -> {
+    boolean threwAssertion = false;
+    try {
       UnicodeUtil.codePointCount(new BytesRef(bytes));
-    });
+    } catch (IllegalArgumentException e) {
+      threwAssertion = true;
+    }
+    assertTrue(threwAssertion);
   }
 
   public void testUTF8toUTF32() {
     int[] utf32 = new int[0];
+    int[] codePoints = new int[20];
     int num = atLeast(50000);
     for (int i = 0; i < num; i++) {
       final String s = TestUtil.randomUnicodeString(random());
-      final byte[] utf8 = new byte[UnicodeUtil.maxUTF8Length(s.length())];
+      final byte[] utf8 = new byte[s.length() * UnicodeUtil.MAX_UTF8_BYTES_PER_CHAR];
       final int utf8Len = UnicodeUtil.UTF16toUTF8(s, 0, s.length(), utf8);
       utf32 = ArrayUtil.grow(utf32, utf8Len);
       final int utf32Len = UnicodeUtil.UTF8toUTF32(new BytesRef(utf8, 0, utf8Len), utf32);
       
-      int[] codePoints = s.codePoints().toArray();
-      if (!FutureArrays.equals(codePoints, 0, codePoints.length, utf32, 0, codePoints.length)) {
+      int charUpto = 0;
+      int intUpto = 0;
+      while(charUpto < s.length()) {
+        final int cp = s.codePointAt(charUpto);
+        codePoints[intUpto++] = cp;
+        charUpto += Character.charCount(cp);
+      }
+      if (!ArrayUtil.equals(codePoints, 0, utf32, 0, intUpto)) {
         System.out.println("FAILED");
         for(int j=0;j<s.length();j++) {
           System.out.println("  char[" + j + "]=" + Integer.toHexString(s.charAt(j)));
         }
         System.out.println();
-        assertEquals(codePoints.length, utf32Len);
-        for(int j=0;j<codePoints.length;j++) {
+        assertEquals(intUpto, utf32Len);
+        for(int j=0;j<intUpto;j++) {
           System.out.println("  " + Integer.toHexString(utf32[j]) + " vs " + Integer.toHexString(codePoints[j]));
         }
         fail("mismatch");
@@ -207,7 +219,7 @@ public class TestUnicodeUtil extends LuceneTestCase {
     int num = atLeast(5000);
     for (int i = 0; i < num; i++) {
       String unicode = TestUtil.randomUnicodeString(random());
-      byte[] utf8 = new byte[UnicodeUtil.maxUTF8Length(unicode.length())];
+      byte[] utf8 = new byte[unicode.length() * UnicodeUtil.MAX_UTF8_BYTES_PER_CHAR];
       int len = UnicodeUtil.UTF16toUTF8(unicode, 0, unicode.length(), utf8);
       assertEquals(len, UnicodeUtil.calcUTF16toUTF8Length(unicode, 0, unicode.length()));
     }

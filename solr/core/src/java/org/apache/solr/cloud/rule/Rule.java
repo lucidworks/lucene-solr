@@ -1,3 +1,5 @@
+package org.apache.solr.cloud.rule;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud.rule;
+
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,6 +27,7 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.common.util.Utils;
 
+import static org.apache.solr.cloud.rule.ImplicitSnitch.CORES;
 import static org.apache.solr.cloud.rule.Rule.MatchStatus.CANNOT_ASSIGN_FAIL;
 import static org.apache.solr.cloud.rule.Rule.MatchStatus.NODE_CAN_BE_ASSIGNED;
 import static org.apache.solr.cloud.rule.Rule.MatchStatus.NOT_APPLICABLE;
@@ -34,7 +37,6 @@ import static org.apache.solr.cloud.rule.Rule.Operand.LESS_THAN;
 import static org.apache.solr.cloud.rule.Rule.Operand.NOT_EQUAL;
 import static org.apache.solr.common.cloud.ZkStateReader.REPLICA_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.SHARD_ID_PROP;
-import static org.apache.solr.common.cloud.rule.ImplicitSnitch.CORES;
 
 
 public class Rule {
@@ -73,8 +75,7 @@ public class Rule {
     if (o == null) return o;
     if (typ == String.class) return String.valueOf(o);
     if (typ == Integer.class) {
-      Double v = Double.parseDouble(String.valueOf(o));
-      return v.intValue();
+      return Integer.parseInt(String.valueOf(o));
     }
     return o;
   }
@@ -138,8 +139,7 @@ public class Rule {
       if (replica.isWildCard()) {
         //this means for each replica, the value must match
         //shard match is already tested
-        Map<String, Object> tags = nodeVsTags.get(testNode);
-        if (tag.canMatch(tags == null ? null : tags.get(tag.name), phase)) return NODE_CAN_BE_ASSIGNED;
+        if (tag.canMatch(nodeVsTags.get(testNode).get(tag.name), phase)) return NODE_CAN_BE_ASSIGNED;
         else return CANNOT_ASSIGN_FAIL;
       } else {
         int v = getNumberOfNodesWithSameTagVal(shard, nodeVsTags, shardVsNodeSet, shardName, tag, phase);
@@ -165,9 +165,7 @@ public class Rule {
         Map<String,Integer> nodesInThisShard = shardVsNodeSet.get(shardCondition.val.equals(WILD_WILD_CARD) ? entry.getKey() : shardName);
         if (nodesInThisShard != null) {
           for (Map.Entry<String,Integer> aNode : nodesInThisShard.entrySet()) {
-            Map<String, Object> tagValues = nodeVsTags.get(aNode.getKey());
-            if(tagValues == null) continue;
-            Object obj = tagValues.get(tag.name);
+            Object obj = nodeVsTags.get(aNode.getKey()).get(tag.name);
             if (tagCondition.canMatch(obj, phase)) countMatchingThisTagValue += aNode.getValue();
           }
         }
@@ -203,7 +201,7 @@ public class Rule {
 
       @Override
       public boolean canMatch(Object ruleVal, Object testVal) {
-        return testVal != null && compareNum(ruleVal, testVal) == 1;
+        return compareNum(ruleVal, testVal) == 1;
       }
 
     },
@@ -215,7 +213,7 @@ public class Rule {
 
       @Override
       public boolean canMatch(Object ruleVal, Object testVal) {
-        return testVal != null && compareNum(ruleVal, testVal) == -1;
+        return compareNum(ruleVal, testVal) == -1;
       }
 
       @Override
@@ -369,12 +367,7 @@ public class Rule {
     }
 
     public int compare(String n1, String n2, Map<String, Map<String, Object>> nodeVsTags) {
-      Map<String, Object> tags = nodeVsTags.get(n1);
-      Object n1Val = tags == null ? null : tags.get(name);
-      tags = nodeVsTags.get(n2);
-      Object n2Val = tags == null ? null : tags.get(name);
-      if (n1Val == null || n2Val == null) return -1;
-      return isWildCard() ? 0 : operand.compare(n1Val, n2Val);
+      return isWildCard() ? 0 : operand.compare(nodeVsTags.get(n1).get(name), nodeVsTags.get(n2).get(name));
     }
 
   }

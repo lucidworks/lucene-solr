@@ -14,13 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
-
-import static org.apache.solr.update.processor.FieldValueMutatingUpdateProcessor.valueMutator;
 
 
 /**
@@ -41,7 +40,6 @@ import static org.apache.solr.update.processor.FieldValueMutatingUpdateProcessor
  *     &lt;str name="fieldRegex"&gt;.*_literal&lt;/str&gt;
  *   &lt;/lst&gt;
  * &lt;/processor&gt;</pre>
- * @since 4.0.0
  */
 public final class TrimFieldUpdateProcessorFactory extends FieldMutatingUpdateProcessorFactory {
 
@@ -51,17 +49,20 @@ public final class TrimFieldUpdateProcessorFactory extends FieldMutatingUpdatePr
     // no trim specific init args
     super.init(args);
   }
-
+  
   @Override
   public UpdateRequestProcessor getInstance(SolrQueryRequest req,
                                             SolrQueryResponse rsp,
                                             UpdateRequestProcessor next) {
-    return valueMutator(getSelector(), next, src -> {
-      if (src instanceof CharSequence) {
-        return src.toString().trim();
+    return new FieldValueMutatingUpdateProcessor(getSelector(), next) {
+      @Override
+      protected Object mutateValue(final Object src) {
+        if (src instanceof CharSequence) {
+          return ((CharSequence)src).toString().trim();
+        }
+        return src;
       }
-      return src;
-    });
+    };
   }
 }
 

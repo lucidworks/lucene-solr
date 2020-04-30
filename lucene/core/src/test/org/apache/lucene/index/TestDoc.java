@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -120,6 +120,8 @@ public class TestDoc extends LuceneTestCase {
       // We create unreferenced files (we don't even write
       // a segments file):
       ((MockDirectoryWrapper) directory).setAssertNoUnrefencedFilesOnClose(false);
+      // this test itself deletes files (has no retry mechanism)
+      ((MockDirectoryWrapper) directory).setEnableVirusScanner(false);
     }
 
     IndexWriter writer = new IndexWriter(
@@ -162,6 +164,8 @@ public class TestDoc extends LuceneTestCase {
       // We create unreferenced files (we don't even write
       // a segments file):
       ((MockDirectoryWrapper) directory).setAssertNoUnrefencedFilesOnClose(false);
+      // this test itself deletes files (has no retry mechanism)
+      ((MockDirectoryWrapper) directory).setEnableVirusScanner(false);
     }
 
     writer = new IndexWriter(
@@ -213,16 +217,16 @@ public class TestDoc extends LuceneTestCase {
   private SegmentCommitInfo merge(Directory dir, SegmentCommitInfo si1, SegmentCommitInfo si2, String merged, boolean useCompoundFile)
     throws Exception {
     IOContext context = newIOContext(random(), new IOContext(new MergeInfo(-1, -1, false, -1)));
-    SegmentReader r1 = new SegmentReader(si1, Version.LATEST.major, false, context, Collections.emptyMap());
-    SegmentReader r2 = new SegmentReader(si2, Version.LATEST.major, false, context, Collections.emptyMap());
+    SegmentReader r1 = new SegmentReader(si1, context);
+    SegmentReader r2 = new SegmentReader(si2, context);
 
     final Codec codec = Codec.getDefault();
     TrackingDirectoryWrapper trackingDir = new TrackingDirectoryWrapper(si1.info.dir);
-    final SegmentInfo si = new SegmentInfo(si1.info.dir, Version.LATEST, null, merged, -1, false, codec, Collections.emptyMap(), StringHelper.randomId(), new HashMap<>(), null);
+    final SegmentInfo si = new SegmentInfo(si1.info.dir, Version.LATEST, merged, -1, false, codec, Collections.<String,String>emptyMap(), StringHelper.randomId(), new HashMap<String,String>());
 
     SegmentMerger merger = new SegmentMerger(Arrays.<CodecReader>asList(r1, r2),
                                              si, InfoStream.getDefault(), trackingDir,
-                                             new FieldInfos.FieldNumbers(null), context);
+                                             new FieldInfos.FieldNumbers(), context);
 
     MergeState mergeState = merger.merge();
     r1.close();
@@ -233,32 +237,30 @@ public class TestDoc extends LuceneTestCase {
       Collection<String> filesToDelete = si.files();
       codec.compoundFormat().write(dir, si, context);
       si.setUseCompoundFile(true);
-      for(String name : filesToDelete) {
-        si1.info.dir.deleteFile(name);
+      for (final String fileToDelete : filesToDelete) {
+        si1.info.dir.deleteFile(fileToDelete);
       }
     }
 
-    return new SegmentCommitInfo(si, 0, 0, -1L, -1L, -1L);
+    return new SegmentCommitInfo(si, 0, -1L, -1L, -1L);
   }
 
 
   private void printSegment(PrintWriter out, SegmentCommitInfo si)
     throws Exception {
-    SegmentReader reader = new SegmentReader(si, Version.LATEST.major, false, newIOContext(random()), Collections.emptyMap());
+    SegmentReader reader = new SegmentReader(si, newIOContext(random()));
 
     for (int i = 0; i < reader.numDocs(); i++)
       out.println(reader.document(i));
 
-    for (FieldInfo fieldInfo : reader.getFieldInfos()) {
-      if (fieldInfo.getIndexOptions() == IndexOptions.NONE) {
-        continue;
-      }
-      Terms terms = reader.terms(fieldInfo.name);
+    Fields fields = reader.fields();
+    for (String field : fields)  {
+      Terms terms = fields.terms(field);
       assertNotNull(terms);
       TermsEnum tis = terms.iterator();
       while(tis.next() != null) {
 
-        out.print("  term=" + fieldInfo.name + ":" + tis.term());
+        out.print("  term=" + field + ":" + tis.term());
         out.println("    DF=" + tis.docFreq());
 
         PostingsEnum positions = tis.postings(null, PostingsEnum.POSITIONS);

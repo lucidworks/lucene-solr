@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,39 +16,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.List;
 
 /** A Scorer for OR like queries, counterpart of <code>ConjunctionScorer</code>.
+ * This Scorer implements {@link Scorer#advance(int)} and uses advance() on the given Scorers. 
  */
-final class DisjunctionSumScorer extends DisjunctionScorer {
-
+final class DisjunctionSumScorer extends DisjunctionScorer { 
+  private final float[] coord;
+  
   /** Construct a <code>DisjunctionScorer</code>.
    * @param weight The weight to be used.
    * @param subScorers Array of at least two subscorers.
+   * @param coord Table of coordination factors
    */
-  DisjunctionSumScorer(Weight weight, List<Scorer> subScorers, ScoreMode scoreMode) throws IOException {
-    super(weight, subScorers, scoreMode);
+  DisjunctionSumScorer(Weight weight, List<Scorer> subScorers, float[] coord, boolean needsScores) {
+    super(weight, subScorers, needsScores);
+    this.coord = coord;
   }
 
   @Override
-  protected float score(DisiWrapper topList) throws IOException {
+  protected float score(DisiWrapper<Scorer> topList) throws IOException {
     double score = 0;
-
-    for (DisiWrapper w = topList; w != null; w = w.next) {
-      score += w.scorer.score();
+    int freq = 0;
+    for (DisiWrapper<Scorer> w = topList; w != null; w = w.next) {
+      score += w.iterator.score();
+      freq += 1;
     }
-    return (float)score;
+    return (float)score * coord[freq];
   }
-
-  @Override
-  public float getMaxScore(int upTo) throws IOException {
-    // It's ok to return a bad upper bound here since we use WANDScorer when
-    // we actually care about block scores.
-    return Float.MAX_VALUE;
-  }
-
 }

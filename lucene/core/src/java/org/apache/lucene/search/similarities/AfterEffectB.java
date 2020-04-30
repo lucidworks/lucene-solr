@@ -1,3 +1,5 @@
+package org.apache.lucene.search.similarities;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.similarities;
-
 
 import org.apache.lucene.search.Explanation;
 
@@ -29,24 +29,20 @@ public class AfterEffectB extends AfterEffect {
   public AfterEffectB() {}
 
   @Override
-  public final double scoreTimes1pTfn(BasicStats stats) {
+  public final float score(BasicStats stats, float tfn) {
     long F = stats.getTotalTermFreq()+1;
     long n = stats.getDocFreq()+1;
-    return (F + 1.0) / n;
+    return (F + 1) / (n * (tfn + 1));
   }
   
   @Override
-  public final Explanation explain(BasicStats stats, double tfn) {
+  public final Explanation explain(BasicStats stats, float tfn) {
     return Explanation.match(
-        (float) (scoreTimes1pTfn(stats) / (1 + tfn)),
-        getClass().getSimpleName()
-            + ", computed as (F + 1) / (n * (tfn + 1)) from:",
-        Explanation.match((float) tfn, "tfn, normalized term frequency"),
-        Explanation.match(stats.getTotalTermFreq(),
-            "F, total number of occurrences of term across all documents + 1"),
-        Explanation.match(stats.getDocFreq(),
-            "n, number of documents containing term + 1"),
-        Explanation.match((float) tfn, "tfn, normalized term frequency"));
+        score(stats, tfn),
+        getClass().getSimpleName() + ", computed from: ",
+        Explanation.match(tfn, "tfn"),
+        Explanation.match(stats.getTotalTermFreq(), "totalTermFreq"),
+        Explanation.match(stats.getDocFreq(), "docFreq"));
   }
 
   @Override

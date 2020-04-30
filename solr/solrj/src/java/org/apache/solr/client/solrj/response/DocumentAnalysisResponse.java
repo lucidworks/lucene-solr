@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.response;
 
 import org.apache.solr.common.util.NamedList;
@@ -34,6 +35,9 @@ public class DocumentAnalysisResponse extends AnalysisResponseBase implements It
 
   private final Map<String, DocumentAnalysis> documentAnalysisByKey = new HashMap<>();
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void setResponse(NamedList<Object> response) {
     super.setResponse(response);
@@ -49,19 +53,19 @@ public class DocumentAnalysisResponse extends AnalysisResponseBase implements It
         NamedList<Object> field = fieldEntry.getValue();
 
         @SuppressWarnings("unchecked")
-        NamedList<Object> query
-          = (NamedList<Object>) field.get("query");
+        NamedList<List<NamedList<Object>>> query 
+          = (NamedList<List<NamedList<Object>>>) field.get("query");
         if (query != null) {
           List<AnalysisPhase> phases = buildPhases(query);
           fieldAnalysis.setQueryPhases(phases);
         }
         
         @SuppressWarnings("unchecked")
-        NamedList<NamedList<Object>> index
-          = (NamedList<NamedList<Object>>) field.get("index");
-        for (Map.Entry<String, NamedList<Object>> valueEntry : index) {
+        NamedList<NamedList<List<NamedList<Object>>>> index 
+          = (NamedList<NamedList<List<NamedList<Object>>>>) field.get("index");
+        for (Map.Entry<String, NamedList<List<NamedList<Object>>>> valueEntry : index) {
           String fieldValue = valueEntry.getKey();
-          NamedList<Object> valueNL = valueEntry.getValue();
+          NamedList<List<NamedList<Object>>> valueNL = valueEntry.getValue();
           List<AnalysisPhase> phases = buildPhases(valueNL);
           fieldAnalysis.setIndexPhases(fieldValue, phases);
         }

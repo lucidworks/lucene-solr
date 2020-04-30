@@ -1,3 +1,5 @@
+package org.apache.lucene.facet.taxonomy;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy;
 
 import java.io.IOException;
 import java.util.List;
 
-import org.apache.lucene.facet.FacetsCollector.MatchingDocs;
 import org.apache.lucene.facet.FacetsCollector;
+import org.apache.lucene.facet.FacetsCollector.MatchingDocs;
 import org.apache.lucene.facet.FacetsConfig;
 import org.apache.lucene.index.BinaryDocValues;
 import org.apache.lucene.search.DocIdSetIterator;
@@ -42,7 +43,7 @@ public class TaxonomyFacetSumIntAssociations extends IntTaxonomyFacets {
   /** Create {@code TaxonomyFacetSumIntAssociations} against
    *  the specified index field. */
   public TaxonomyFacetSumIntAssociations(String indexFieldName, TaxonomyReader taxoReader, FacetsConfig config, FacetsCollector fc) throws IOException {
-    super(indexFieldName, taxoReader, config, fc);
+    super(indexFieldName, taxoReader, config);
     sumValues(fc.getMatchingDocs());
   }
 
@@ -61,27 +62,22 @@ public class TaxonomyFacetSumIntAssociations extends IntTaxonomyFacets {
         //System.out.println("  doc=" + doc);
         // TODO: use OrdinalsReader?  we'd need to add a
         // BytesRef getAssociation()?
-        if (dv.docID() < doc) {
-          dv.advance(doc);
-        }
-        if (dv.docID() == doc) {
-          final BytesRef bytesRef = dv.binaryValue();
-          byte[] bytes = bytesRef.bytes;
-          int end = bytesRef.offset + bytesRef.length;
-          int offset = bytesRef.offset;
-          while (offset < end) {
-            int ord = ((bytes[offset]&0xFF) << 24) |
-              ((bytes[offset+1]&0xFF) << 16) |
-              ((bytes[offset+2]&0xFF) << 8) |
-              (bytes[offset+3]&0xFF);
-            offset += 4;
-            int value = ((bytes[offset]&0xFF) << 24) |
-              ((bytes[offset+1]&0xFF) << 16) |
-              ((bytes[offset+2]&0xFF) << 8) |
-              (bytes[offset+3]&0xFF);
-            offset += 4;
-            increment(ord, value);
-          }
+        final BytesRef bytesRef = dv.get(doc);
+        byte[] bytes = bytesRef.bytes;
+        int end = bytesRef.offset + bytesRef.length;
+        int offset = bytesRef.offset;
+        while (offset < end) {
+          int ord = ((bytes[offset]&0xFF) << 24) |
+            ((bytes[offset+1]&0xFF) << 16) |
+            ((bytes[offset+2]&0xFF) << 8) |
+            (bytes[offset+3]&0xFF);
+          offset += 4;
+          int value = ((bytes[offset]&0xFF) << 24) |
+            ((bytes[offset+1]&0xFF) << 16) |
+            ((bytes[offset+2]&0xFF) << 8) |
+            (bytes[offset+3]&0xFF);
+          offset += 4;
+          values[ord] += value;
         }
       }
     }

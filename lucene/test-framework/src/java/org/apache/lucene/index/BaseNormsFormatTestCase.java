@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.CountDownLatch;
-import java.util.function.LongSupplier;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockAnalyzer;
@@ -32,15 +31,10 @@ import org.apache.lucene.document.NumericDocValuesField;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.search.CollectionStatistics;
-import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.TermStatistics;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.FixedBitSet;
-import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.TestUtil;
-
-import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
 
 /**
  * Abstract class to do basic tests for a norms format.
@@ -51,100 +45,53 @@ import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
  * if there is some bug in a given NormsFormat that this
  * test fails to catch then this test needs to be improved! */
 public abstract class BaseNormsFormatTestCase extends BaseIndexFileFormatTestCase {
-
-  /** Whether the codec supports sparse values. */
-  protected boolean codecSupportsSparsity() {
-    return true;
-  }
-
+  
   public void testByteRange() throws Exception {
     int iterations = atLeast(1);
     final Random r = random();
     for (int i = 0; i < iterations; i++) {
-      doTestNormsVersusDocValues(1, new LongSupplier() {
+      doTestNormsVersusDocValues(new LongProducer() {
         @Override
-        public long getAsLong() {
+        long next() {
           return TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE);
         }
       });
     }
   }
-
-  public void testSparseByteRange() throws Exception {
-    assumeTrue("Requires sparse norms support", codecSupportsSparsity());
-    int iterations = atLeast(1);
-    final Random r = random();
-    for (int i = 0; i < iterations; i++) {
-      doTestNormsVersusDocValues(random().nextDouble(), new LongSupplier() {
-        @Override
-        public long getAsLong() {
-          return TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE);
-        }
-      });
-    }
-  }
-
+  
   public void testShortRange() throws Exception {
     int iterations = atLeast(1);
     final Random r = random();
     for (int i = 0; i < iterations; i++) {
-      doTestNormsVersusDocValues(1, new LongSupplier() {
+      doTestNormsVersusDocValues(new LongProducer() {
         @Override
-        public long getAsLong() {
+        long next() {
           return TestUtil.nextLong(r, Short.MIN_VALUE, Short.MAX_VALUE);
         }
       });
     }
   }
-
-  public void testSparseShortRange() throws Exception {
-    assumeTrue("Requires sparse norms support", codecSupportsSparsity());
-    int iterations = atLeast(1);
-    final Random r = random();
-    for (int i = 0; i < iterations; i++) {
-      doTestNormsVersusDocValues(random().nextDouble(), new LongSupplier() {
-        @Override
-        public long getAsLong() {
-          return TestUtil.nextLong(r, Short.MIN_VALUE, Short.MAX_VALUE);
-        }
-      });
-    }
-  }
-
+  
   public void testLongRange() throws Exception {
     int iterations = atLeast(1);
     final Random r = random();
     for (int i = 0; i < iterations; i++) {
-      doTestNormsVersusDocValues(1, new LongSupplier() {
+      doTestNormsVersusDocValues(new LongProducer() {
         @Override
-        public long getAsLong() {
+        long next() {
           return TestUtil.nextLong(r, Long.MIN_VALUE, Long.MAX_VALUE);
         }
       });
     }
   }
-
-  public void testSparseLongRange() throws Exception {
-    assumeTrue("Requires sparse norms support", codecSupportsSparsity());
-    int iterations = atLeast(1);
-    final Random r = random();
-    for (int i = 0; i < iterations; i++) {
-      doTestNormsVersusDocValues(random().nextDouble(), new LongSupplier() {
-        @Override
-        public long getAsLong() {
-          return TestUtil.nextLong(r, Long.MIN_VALUE, Long.MAX_VALUE);
-        }
-      });
-    }
-  }
-
+  
   public void testFullLongRange() throws Exception {
     int iterations = atLeast(1);
     final Random r = random();
     for (int i = 0; i < iterations; i++) {
-      doTestNormsVersusDocValues(1, new LongSupplier() {
+      doTestNormsVersusDocValues(new LongProducer() {
         @Override
-        public long getAsLong() {
+        long next() {
           int thingToDo = r.nextInt(3);
           switch (thingToDo) {
             case 0: return Long.MIN_VALUE;
@@ -155,112 +102,52 @@ public abstract class BaseNormsFormatTestCase extends BaseIndexFileFormatTestCas
       });
     }
   }
-
-  public void testSparseFullLongRange() throws Exception {
-    assumeTrue("Requires sparse norms support", codecSupportsSparsity());
-    int iterations = atLeast(1);
-    final Random r = random();
-    for (int i = 0; i < iterations; i++) {
-      doTestNormsVersusDocValues(random().nextDouble(), new LongSupplier() {
-        @Override
-        public long getAsLong() {
-          int thingToDo = r.nextInt(3);
-          switch (thingToDo) {
-            case 0: return Long.MIN_VALUE;
-            case 1: return Long.MAX_VALUE;
-            default:  return TestUtil.nextLong(r, Long.MIN_VALUE, Long.MAX_VALUE);
-          }
-        }
-      });
-    }
-  }
-
+  
   public void testFewValues() throws Exception {
     int iterations = atLeast(1);
     final Random r = random();
     for (int i = 0; i < iterations; i++) {
-      doTestNormsVersusDocValues(1, new LongSupplier() {
+      doTestNormsVersusDocValues(new LongProducer() {
         @Override
-        public long getAsLong() {
+        long next() {
           return r.nextBoolean() ? 20 : 3;
         }
       });
     }
   }
-
-  public void testFewSparseValues() throws Exception {
-    assumeTrue("Requires sparse norms support", codecSupportsSparsity());
-    int iterations = atLeast(1);
-    final Random r = random();
-    for (int i = 0; i < iterations; i++) {
-      doTestNormsVersusDocValues(random().nextDouble(), new LongSupplier() {
-        @Override
-        public long getAsLong() {
-          return r.nextBoolean() ? 20 : 3;
-        }
-      });
-    }
-  }
-
+  
   public void testFewLargeValues() throws Exception {
     int iterations = atLeast(1);
     final Random r = random();
     for (int i = 0; i < iterations; i++) {
-      doTestNormsVersusDocValues(1, new LongSupplier() {
+      doTestNormsVersusDocValues(new LongProducer() {
         @Override
-        public long getAsLong() {
+        long next() {
           return r.nextBoolean() ? 1000000L : -5000;
         }
       });
     }
   }
-
-  public void testFewSparseLargeValues() throws Exception {
-    assumeTrue("Requires sparse norms support", codecSupportsSparsity());
-    int iterations = atLeast(1);
-    final Random r = random();
-    for (int i = 0; i < iterations; i++) {
-      doTestNormsVersusDocValues(random().nextDouble(), new LongSupplier() {
-        @Override
-        public long getAsLong() {
-          return r.nextBoolean() ? 1000000L : -5000;
-        }
-      });
-    }
-  }
-
+  
   public void testAllZeros() throws Exception {
     int iterations = atLeast(1);
     for (int i = 0; i < iterations; i++) {
-      doTestNormsVersusDocValues(1, new LongSupplier() {
+      doTestNormsVersusDocValues(new LongProducer() {
         @Override
-        public long getAsLong() {
+        long next() {
           return 0;
         }
       });
     }
   }
-
-  public void testSparseAllZeros() throws Exception {
-    assumeTrue("Requires sparse norms support", codecSupportsSparsity());
-    int iterations = atLeast(1);
-    for (int i = 0; i < iterations; i++) {
-      doTestNormsVersusDocValues(random().nextDouble(), new LongSupplier() {
-        @Override
-        public long getAsLong() {
-          return 0;
-        }
-      });
-    }
-  }
-
-  public void testMostZeros() throws Exception {
+  
+  public void testSparse() throws Exception {
     int iterations = atLeast(1);
     final Random r = random();
     for (int i = 0; i < iterations; i++) {
-      doTestNormsVersusDocValues(1, new LongSupplier() {
+      doTestNormsVersusDocValues(new LongProducer() {
         @Override
-        public long getAsLong() {
+        long next() {
           return r.nextInt(100) == 0 ? TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE) : 0;
         }
       });
@@ -272,61 +159,30 @@ public abstract class BaseNormsFormatTestCase extends BaseIndexFileFormatTestCas
     final Random r = random();
     for (int i = 0; i < iterations; i++) {
       final long commonValue = TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE);
-      doTestNormsVersusDocValues(1, new LongSupplier() {
+      doTestNormsVersusDocValues(new LongProducer() {
         @Override
-        public long getAsLong() {
+        long next() {
           return r.nextInt(100) == 0 ? TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE) : commonValue;
         }
       });
     }
   }
-
-  public void testSparseOutliers() throws Exception {
-    assumeTrue("Requires sparse norms support", codecSupportsSparsity());
-    int iterations = atLeast(1);
-    final Random r = random();
-    for (int i = 0; i < iterations; i++) {
-      final long commonValue = TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE);
-      doTestNormsVersusDocValues(random().nextDouble(), new LongSupplier() {
-        @Override
-        public long getAsLong() {
-          return r.nextInt(100) == 0 ? TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE) : commonValue;
-        }
-      });
-    }
-  }
-
+  
   public void testOutliers2() throws Exception {
     int iterations = atLeast(1);
     final Random r = random();
     for (int i = 0; i < iterations; i++) {
       final long commonValue = TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE);
       final long uncommonValue = TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE);
-      doTestNormsVersusDocValues(1, new LongSupplier() {
+      doTestNormsVersusDocValues(new LongProducer() {
         @Override
-        public long getAsLong() {
+        long next() {
           return r.nextInt(100) == 0 ? uncommonValue : commonValue;
         }
       });
     }
   }
-
-  public void testSparseOutliers2() throws Exception {
-    assumeTrue("Requires sparse norms support", codecSupportsSparsity());
-    int iterations = atLeast(1);
-    final Random r = random();
-    for (int i = 0; i < iterations; i++) {
-      final long commonValue = TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE);
-      final long uncommonValue = TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE);
-      doTestNormsVersusDocValues(random().nextDouble(), new LongSupplier() {
-        @Override
-        public long getAsLong() {
-          return r.nextInt(100) == 0 ? uncommonValue : commonValue;
-        }
-      });
-    }
-  }
-
+  
   public void testNCommon() throws Exception {
     final Random r = random();
     final int N = TestUtil.nextInt(r, 2, 15);
@@ -339,35 +195,14 @@ public abstract class BaseNormsFormatTestCase extends BaseIndexFileFormatTestCas
     for (int j = 0; j < numOtherValues; ++j) {
       otherValues[j] = TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE);
     }
-    doTestNormsVersusDocValues(1, new LongSupplier() {
+    doTestNormsVersusDocValues(new LongProducer() {
       @Override
-      public long getAsLong() {
+      long next() {
         return r.nextInt(100) == 0 ? otherValues[r.nextInt(numOtherValues - 1)] : commonValues[r.nextInt(N - 1)];
       }
     });
   }
-
-  public void testSparseNCommon() throws Exception {
-    assumeTrue("Requires sparse norms support", codecSupportsSparsity());
-    final Random r = random();
-    final int N = TestUtil.nextInt(r, 2, 15);
-    final long[] commonValues = new long[N];
-    for (int j = 0; j < N; ++j) {
-      commonValues[j] = TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE);
-    }
-    final int numOtherValues = TestUtil.nextInt(r, 2, 256 - N);
-    final long[] otherValues = new long[numOtherValues];
-    for (int j = 0; j < numOtherValues; ++j) {
-      otherValues[j] = TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE);
-    }
-    doTestNormsVersusDocValues(random().nextDouble(), new LongSupplier() {
-      @Override
-      public long getAsLong() {
-        return r.nextInt(100) == 0 ? otherValues[r.nextInt(numOtherValues - 1)] : commonValues[r.nextInt(N - 1)];
-      }
-    });
-  }
-
+  
   /**
    * a more thorough n-common that tests all low bpv
    */
@@ -388,73 +223,27 @@ public abstract class BaseNormsFormatTestCase extends BaseIndexFileFormatTestCas
         for (int j = 0; j < numOtherValues; ++j) {
           otherValues[j] = TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE);
         }
-        doTestNormsVersusDocValues(1, new LongSupplier() {
+        doTestNormsVersusDocValues(new LongProducer() {
           @Override
-          public long getAsLong() {
+          long next() {
             return r.nextInt(100) == 0 ? otherValues[r.nextInt(numOtherValues - 1)] : commonValues[r.nextInt(N - 1)];
           }
         });
       }
     }
   }
-
-  /**
-   * a more thorough n-common that tests all low bpv and sparse docs
-   */
-  @Nightly
-  public void testSparseNCommonBig() throws Exception {
-    assumeTrue("Requires sparse norms support", codecSupportsSparsity());
-    final int iterations = atLeast(1);
-    final Random r = random();
-    for (int i = 0; i < iterations; ++i) {
-      // 16 is 4 bpv, the max before we jump to 8bpv
-      for (int n = 2; n < 16; ++n) {
-        final int N = n;
-        final long[] commonValues = new long[N];
-        for (int j = 0; j < N; ++j) {
-          commonValues[j] = TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE);
-        }
-        final int numOtherValues = TestUtil.nextInt(r, 2, 256 - N);
-        final long[] otherValues = new long[numOtherValues];
-        for (int j = 0; j < numOtherValues; ++j) {
-          otherValues[j] = TestUtil.nextLong(r, Byte.MIN_VALUE, Byte.MAX_VALUE);
-        }
-        doTestNormsVersusDocValues(random().nextDouble(), new LongSupplier() {
-          @Override
-          public long getAsLong() {
-            return r.nextInt(100) == 0 ? otherValues[r.nextInt(numOtherValues - 1)] : commonValues[r.nextInt(N - 1)];
-          }
-        });
-      }
-    }
-  }
-
-  private void doTestNormsVersusDocValues(double density, LongSupplier longs) throws Exception {
+  
+  private void doTestNormsVersusDocValues(LongProducer longs) throws Exception {
     int numDocs = atLeast(500);
-    final FixedBitSet docsWithField = new FixedBitSet(numDocs);
-    final int numDocsWithField = Math.max(1, (int) (density * numDocs));
-    if (numDocsWithField == numDocs) {
-      docsWithField.set(0, numDocs);
-    } else {
-      int i = 0;
-      while (i < numDocsWithField) {
-        int doc = random().nextInt(numDocs);
-        if (docsWithField.get(doc) == false) {
-          docsWithField.set(doc);
-          ++i;
-        }
-      }
-    }
-    long norms[] = new long[numDocsWithField];
-    for (int i = 0; i < numDocsWithField; i++) {
-      norms[i] = longs.getAsLong();
+    long norms[] = new long[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+      norms[i] = longs.next();
     }
     
-    Directory dir = applyCreatedVersionMajor(newDirectory());
-    Analyzer analyzer = new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false);
+    Directory dir = newDirectory();
+    Analyzer analyzer = new MockAnalyzer(random(), MockTokenizer.KEYWORD, false);
     IndexWriterConfig conf = newIndexWriterConfig(analyzer);
-    CannedNormSimilarity sim = new CannedNormSimilarity(norms);
-    conf.setSimilarity(sim);
+    conf.setSimilarity(new CannedNormSimilarity(norms));
     RandomIndexWriter writer = new RandomIndexWriter(random(), dir, conf);
     Document doc = new Document();
     Field idField = new StringField("id", "", Field.Store.NO);
@@ -464,19 +253,12 @@ public abstract class BaseNormsFormatTestCase extends BaseIndexFileFormatTestCas
     doc.add(indexedField);
     doc.add(dvField);
     
-    for (int i = 0, j = 0; i < numDocs; i++) {
+    for (int i = 0; i < numDocs; i++) {
       idField.setStringValue(Integer.toString(i));
-      if (docsWithField.get(i) == false) {
-        Document doc2 = new Document();
-        doc2.add(idField);
-        writer.addDocument(doc2);
-      } else {
-        long value = norms[j++];
-        dvField.setLongValue(value);
-        // only empty fields may have 0 as a norm
-        indexedField.setStringValue(value == 0 ? "" : "a");
-        writer.addDocument(doc);
-      }
+      long value = norms[i];
+      dvField.setLongValue(value);
+      indexedField.setStringValue(Long.toString(value));
+      writer.addDocument(doc);
       if (random().nextInt(31) == 0) {
         writer.commit();
       }
@@ -492,35 +274,38 @@ public abstract class BaseNormsFormatTestCase extends BaseIndexFileFormatTestCas
     writer.commit();
     
     // compare
-    DirectoryReader ir = maybeWrapWithMergingReader(DirectoryReader.open(dir));
-    checkNormsVsDocValues(ir);
+    DirectoryReader ir = DirectoryReader.open(dir);
+    for (LeafReaderContext context : ir.leaves()) {
+      LeafReader r = context.reader();
+      NumericDocValues expected = r.getNumericDocValues("dv");
+      NumericDocValues actual = r.getNormValues("indexed");
+      for (int i = 0; i < r.maxDoc(); i++) {
+        assertEquals("doc " + i, expected.get(i), actual.get(i));
+      }
+    }
     ir.close();
     
     writer.forceMerge(1);
     
     // compare again
-    ir = maybeWrapWithMergingReader(DirectoryReader.open(dir));
-    checkNormsVsDocValues(ir);
+    ir = DirectoryReader.open(dir);
+    for (LeafReaderContext context : ir.leaves()) {
+      LeafReader r = context.reader();
+      NumericDocValues expected = r.getNumericDocValues("dv");
+      NumericDocValues actual = r.getNormValues("indexed");
+      for (int i = 0; i < r.maxDoc(); i++) {
+        assertEquals("doc " + i, expected.get(i), actual.get(i));
+      }
+    }
     
     writer.close();
     ir.close();
     dir.close();
   }
-
-  private void checkNormsVsDocValues(IndexReader ir) throws IOException {
-    for (LeafReaderContext context : ir.leaves()) {
-      LeafReader r = context.reader();
-      NumericDocValues expected = r.getNumericDocValues("dv");
-      NumericDocValues actual = r.getNormValues("indexed");
-      assertEquals(expected == null, actual == null);
-      if (expected != null) {
-        for (int d = expected.nextDoc(); d != DocIdSetIterator.NO_MORE_DOCS; d = expected.nextDoc()) {
-          assertEquals(d, actual.nextDoc());
-          assertEquals("doc " + d, expected.longValue(), actual.longValue());
-        }
-        assertEquals(NO_MORE_DOCS, actual.nextDoc());
-      }
-    }
+  
+  
+  static abstract class LongProducer {
+    abstract long next();
   }
   
   static class CannedNormSimilarity extends Similarity {
@@ -533,17 +318,16 @@ public abstract class BaseNormsFormatTestCase extends BaseIndexFileFormatTestCas
 
     @Override
     public long computeNorm(FieldInvertState state) {
-      assert state.length > 0;
-      while (true) {
-        long norm = norms[index++];
-        if (norm != 0) {
-          return norm;
-        }
-      }
+      return norms[index++];
     }
 
     @Override
-    public SimScorer scorer(float boost, CollectionStatistics collectionStats, TermStatistics... termStats) {
+    public SimWeight computeWeight(CollectionStatistics collectionStats, TermStatistics... termStats) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public SimScorer simScorer(SimWeight weight, LeafReaderContext context) throws IOException {
       throw new UnsupportedOperationException();
     }
   }
@@ -589,7 +373,7 @@ public abstract class BaseNormsFormatTestCase extends BaseIndexFileFormatTestCas
    *
    */
   public void testUndeadNorms() throws Exception {
-    Directory dir = applyCreatedVersionMajor(newDirectory());
+    Directory dir = newDirectory();
     RandomIndexWriter w = new RandomIndexWriter(random(), dir);
     int numDocs = atLeast(500);
     List<Integer> toDelete = new ArrayList<>();
@@ -606,178 +390,19 @@ public abstract class BaseNormsFormatTestCase extends BaseIndexFileFormatTestCas
       w.deleteDocuments(new Term("id", ""+id));
     }
     w.forceMerge(1);
-    IndexReader r = maybeWrapWithMergingReader(w.getReader());
+    IndexReader r = w.getReader();
     assertFalse(r.hasDeletions());
 
     // Confusingly, norms should exist, and should all be 0, even though we deleted all docs that had the field "content".  They should not
     // be undead:
     NumericDocValues norms = MultiDocValues.getNormValues(r, "content");
     assertNotNull(norms);
-    if (codecSupportsSparsity()) {
-      assertEquals(DocIdSetIterator.NO_MORE_DOCS, norms.nextDoc());
-    } else {
-      for(int i=0;i<r.maxDoc();i++) {
-        assertEquals(i, norms.nextDoc());
-        assertEquals(0, norms.longValue());
-      }
+    for(int i=0;i<r.maxDoc();i++) {
+      assertEquals(0, norms.get(i));
     }
 
     r.close();
     w.close();
     dir.close();
-  }
-
-  public void testThreads() throws Exception {
-    float density = codecSupportsSparsity() == false || random().nextBoolean() ? 1f : random().nextFloat();
-    int numDocs = atLeast(500);
-    final FixedBitSet docsWithField = new FixedBitSet(numDocs);
-    final int numDocsWithField = Math.max(1, (int) (density * numDocs));
-    if (numDocsWithField == numDocs) {
-      docsWithField.set(0, numDocs);
-    } else {
-      int i = 0;
-      while (i < numDocsWithField) {
-        int doc = random().nextInt(numDocs);
-        if (docsWithField.get(doc) == false) {
-          docsWithField.set(doc);
-          ++i;
-        }
-      }
-    }
-
-    long norms[] = new long[numDocsWithField];
-    for (int i = 0; i < numDocsWithField; i++) {
-      norms[i] = random().nextLong();
-    }
-
-    Directory dir = applyCreatedVersionMajor(newDirectory());
-    Analyzer analyzer = new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false);
-    IndexWriterConfig conf = newIndexWriterConfig(analyzer);conf.setMergePolicy(NoMergePolicy.INSTANCE);
-    conf.setSimilarity(new CannedNormSimilarity(norms));
-    RandomIndexWriter writer = new RandomIndexWriter(random(), dir, conf);
-    Document doc = new Document();
-    Field idField = new StringField("id", "", Field.Store.NO);
-    Field indexedField = new TextField("indexed", "", Field.Store.NO);
-    Field dvField = new NumericDocValuesField("dv", 0);
-    doc.add(idField);
-    doc.add(indexedField);
-    doc.add(dvField);
-    
-    for (int i = 0, j = 0; i < numDocs; i++) {
-      idField.setStringValue(Integer.toString(i));
-      if (docsWithField.get(i) == false) {
-        Document doc2 = new Document();
-        doc2.add(idField);
-        writer.addDocument(doc2);
-      } else {
-        long value = norms[j++];
-        dvField.setLongValue(value);
-        indexedField.setStringValue(value == 0 ? "" : "a");
-        writer.addDocument(doc);
-      }
-      if (random().nextInt(31) == 0) {
-        writer.commit();
-      }
-    }
-
-    DirectoryReader reader = maybeWrapWithMergingReader(writer.getReader());
-    writer.close();
-
-    final int numThreads = TestUtil.nextInt(random(), 3, 30);
-    Thread[] threads = new Thread[numThreads];
-    final CountDownLatch latch = new CountDownLatch(1);
-    for (int i = 0; i < numThreads; ++i) {
-      threads[i] = new Thread(new Runnable() {
-        @Override
-        public void run() {
-          try {
-            latch.await();
-            checkNormsVsDocValues(reader);
-            TestUtil.checkReader(reader);
-          } catch (Exception e) {
-            throw new RuntimeException(e);
-          }
-        }
-      });
-    }
-
-    for (Thread thread : threads) {
-      thread.start();
-    }
-    latch.countDown();
-    for (Thread thread : threads) {
-      thread.join();
-    }
-
-    reader.close();
-    dir.close();
-  }
-
-  public void testIndependantIterators() throws IOException {
-    Directory dir = newDirectory();
-    IndexWriterConfig conf = newIndexWriterConfig().setMergePolicy(newLogMergePolicy());
-    CannedNormSimilarity sim = new CannedNormSimilarity(new long[] {42, 10, 20});
-    conf.setSimilarity(sim);
-    RandomIndexWriter writer = new RandomIndexWriter(random(), dir, conf);
-    Document doc = new Document();
-    Field indexedField = new TextField("indexed", "a", Field.Store.NO);
-    doc.add(indexedField);
-    for (int i = 0; i < 3; ++i) {
-      writer.addDocument(doc);
-    }
-    writer.forceMerge(1);
-    LeafReader r = getOnlyLeafReader(maybeWrapWithMergingReader(writer.getReader()));
-    NumericDocValues n1 = r.getNormValues("indexed");
-    NumericDocValues n2 = r.getNormValues("indexed");
-    assertEquals(0, n1.nextDoc());
-    assertEquals(42, n1.longValue());
-    assertEquals(1, n1.nextDoc());
-    assertEquals(10, n1.longValue());
-    assertEquals(0, n2.nextDoc());
-    assertEquals(42, n2.longValue());
-    assertEquals(1, n2.nextDoc());
-    assertEquals(10, n2.longValue());
-    assertEquals(2, n2.nextDoc());
-    assertEquals(20, n2.longValue());
-    assertEquals(2, n1.nextDoc());
-    assertEquals(20, n1.longValue());
-    assertEquals(DocIdSetIterator.NO_MORE_DOCS, n1.nextDoc());
-    assertEquals(DocIdSetIterator.NO_MORE_DOCS, n2.nextDoc());
-    IOUtils.close(r, writer, dir);
-  }
-
-  public void testIndependantSparseIterators() throws IOException {
-    Directory dir = newDirectory();
-    IndexWriterConfig conf = newIndexWriterConfig().setMergePolicy(newLogMergePolicy());
-    CannedNormSimilarity sim = new CannedNormSimilarity(new long[] {42, 10, 20});
-    conf.setSimilarity(sim);
-    RandomIndexWriter writer = new RandomIndexWriter(random(), dir, conf);
-    Document doc = new Document();
-    Field indexedField = new TextField("indexed", "a", Field.Store.NO);
-    doc.add(indexedField);
-    Document emptyDoc = new Document();
-    for (int i = 0; i < 3; ++i) {
-      writer.addDocument(doc);
-      writer.addDocument(emptyDoc);
-    }
-    writer.forceMerge(1);
-    LeafReader r = getOnlyLeafReader(maybeWrapWithMergingReader(writer.getReader()));
-    NumericDocValues n1 = r.getNormValues("indexed");
-    NumericDocValues n2 = r.getNormValues("indexed");
-    assertEquals(0, n1.nextDoc());
-    assertEquals(42, n1.longValue());
-    assertEquals(2, n1.nextDoc());
-    assertEquals(10, n1.longValue());
-    assertEquals(0, n2.nextDoc());
-    assertEquals(42, n2.longValue());
-    assertEquals(2, n2.nextDoc());
-    assertEquals(10, n2.longValue());
-    assertEquals(4, n2.nextDoc());
-    assertEquals(20, n2.longValue());
-    assertEquals(4, n1.nextDoc());
-    assertEquals(20, n1.longValue());
-    assertEquals(DocIdSetIterator.NO_MORE_DOCS, n1.nextDoc());
-    assertEquals(DocIdSetIterator.NO_MORE_DOCS, n2.nextDoc());
-    IOUtils.close(r, writer, dir);
   }
 }

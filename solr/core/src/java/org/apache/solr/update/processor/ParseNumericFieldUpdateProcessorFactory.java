@@ -14,14 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
-import org.apache.commons.lang3.LocaleUtils;
+import org.apache.commons.lang.LocaleUtils;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.IndexSchema;
-import org.apache.solr.update.processor.FieldMutatingUpdateProcessor.FieldNameSelector;
 
 import java.util.Locale;
 
@@ -41,7 +41,6 @@ import java.util.Locale;
  * See {@link Locale} for a description of acceptable language, country (optional)
  * and variant (optional) values, joined with underscore(s).
  * </p>
- * @since 4.4.0
  */
 public abstract class ParseNumericFieldUpdateProcessorFactory extends FieldMutatingUpdateProcessorFactory {
 
@@ -69,11 +68,16 @@ public abstract class ParseNumericFieldUpdateProcessorFactory extends FieldMutat
    * @param core Where to get the current schema from
    */
   @Override
-  public FieldNameSelector getDefaultSelector(final SolrCore core) {
-    return fieldName -> {
-      final IndexSchema schema = core.getLatestSchema();
-      FieldType type = schema.getFieldTypeNoEx(fieldName);
-      return (null == type) || isSchemaFieldTypeCompatible(type);
+  public FieldMutatingUpdateProcessor.FieldNameSelector
+  getDefaultSelector(final SolrCore core) {
+
+    return new FieldMutatingUpdateProcessor.FieldNameSelector() {
+      @Override
+      public boolean shouldMutate(final String fieldName) {
+        final IndexSchema schema = core.getLatestSchema();
+        FieldType type = schema.getFieldTypeNoEx(fieldName);
+        return (null == type) || isSchemaFieldTypeCompatible(type);
+      }
     };
   }
 }

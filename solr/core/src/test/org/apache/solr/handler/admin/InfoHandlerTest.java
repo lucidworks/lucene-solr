@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.handler.admin;
 
 import java.io.IOException;
@@ -49,12 +50,22 @@ public class InfoHandlerTest extends SolrTestCaseJ4 {
     rsp = handleRequest(infoHandler, "logging");
     
     assertNotNull(rsp.getValues().get("watcher"));
+    
+    try {
+      rsp = handleRequest(infoHandler, "info");
+      fail("Should have failed with not found");
+    } catch(SolrException e) {
+      assertEquals(404, e.code());
+    }
+    
+    try {
+      rsp = handleRequest(infoHandler, "");
+      fail("Should have failed with not found");
+    } catch(SolrException e) {
+      assertEquals(404, e.code());
+    }
 
-    SolrException e = expectThrows(SolrException.class, () -> handleRequest(infoHandler, "info"));
-    assertEquals(404, e.code());
-
-    e = expectThrows(SolrException.class, () -> handleRequest(infoHandler, ""));
-    assertEquals(404, e.code());
+    
   }
 
   @Test

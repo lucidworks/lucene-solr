@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,16 +16,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
 import java.text.ParseException;
 import java.util.Arrays;
 
+import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ParametersFactory;
+import com.spatial4j.core.context.SpatialContext;
+import com.spatial4j.core.distance.DistanceUtils;
+import com.spatial4j.core.shape.Point;
+import com.spatial4j.core.shape.Rectangle;
+import org.apache.lucene.spatial.bbox.BBoxStrategy;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.core.SolrCore;
-import org.apache.solr.legacy.BBoxStrategy;
 import org.apache.solr.schema.BBoxField;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.SchemaField;
@@ -31,10 +37,6 @@ import org.apache.solr.util.SpatialUtils;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.locationtech.spatial4j.context.SpatialContext;
-import org.locationtech.spatial4j.distance.DistanceUtils;
-import org.locationtech.spatial4j.shape.Point;
-import org.locationtech.spatial4j.shape.Rectangle;
 
 /**
  * Test Solr 4's new spatial capabilities from the new Lucene spatial module. Don't thoroughly test it here because
@@ -42,18 +44,16 @@ import org.locationtech.spatial4j.shape.Rectangle;
  */
 public class TestSolr4Spatial extends SolrTestCaseJ4 {
 
-  private final String fieldName;
-  private final boolean canCalcDistance;
+  private String fieldName;
 
   public TestSolr4Spatial(String fieldName) {
     this.fieldName = fieldName;
-    this.canCalcDistance = !fieldName.equals("llp_idx");
   }
 
   @ParametersFactory
   public static Iterable<Object[]> parameters() {
     return Arrays.asList(new Object[][]{
-        {"llp"}, {"llp_idx"}, {"llp_dv"}, {"srpt_geohash"}, {"srpt_quad"}, {"srpt_packedquad"}, {"stqpt_geohash"}, {"pointvector"}, {"bbox"}, {"pbbox"}, {"bbox_ndv"}
+        {"srpt_geohash"}, {"srpt_quad"}, {"srpt_packedquad"}, {"stqpt_geohash"}, {"pointvector"}, {"bbox"}
     });
   }
 
@@ -83,10 +83,12 @@ public class TestSolr4Spatial extends SolrTestCaseJ4 {
         "fq", "{!field f=" + fieldName + "}Intersectssss"), 400);
 
     ignoreException("NonexistentShape");
-    SolrException e = expectThrows(SolrException.class, "should throw exception on non existent shape",
-        () -> assertU(adoc("id", "-1", fieldName, "NonexistentShape"))
-    );
-    assertEquals(400, e.code());
+    try {
+      assertU(adoc("id", "-1", fieldName, "NonexistentShape"));
+      fail();
+    } catch (SolrException e) {
+      assertEquals(400, e.code());
+    }
     unIgnoreException("NonexistentShape");
   }
 
@@ -104,10 +106,6 @@ public class TestSolr4Spatial extends SolrTestCaseJ4 {
     assertU(adoc("id", "11", fieldName, "89.9,-130"));
     assertU(adoc("id", "12", fieldName, "-89.9,50"));
     assertU(adoc("id", "13", fieldName, "-89.9,-130"));
-    if (random().nextBoolean()) {
-      assertU(commit());
-    }
-    assertU(adoc("id", "99"));//blank
     assertU(commit());
   }
 
@@ -176,14 +174,8 @@ public class TestSolr4Spatial extends SolrTestCaseJ4 {
     checkHits(fieldName, true, pt, distKM, sphereRadius, count, docIds);
   }
 
-  private boolean isBBoxField(String fieldName) {
-    return fieldName.equalsIgnoreCase("bbox") 
-        || fieldName.equalsIgnoreCase("pbbox")
-        || fieldName.equalsIgnoreCase("bbox_ndv"); 
-  }
-  
   private void checkHits(String fieldName, boolean exact, String ptStr, double distKM, double sphereRadius, int count, int ... docIds) throws ParseException {
-    if (exact && isBBoxField(fieldName)) {
+    if (exact && fieldName.equalsIgnoreCase("bbox")) {
       return; // bbox field only supports rectangular query
     }
     String [] tests = new String[docIds != null && docIds.length > 0 ? docIds.length + 1 : 1];
@@ -201,7 +193,7 @@ public class TestSolr4Spatial extends SolrTestCaseJ4 {
     //Test using the Lucene spatial syntax
     {
       //never actually need the score but lets test
-      String score = randomScoreMode();
+      String score = new String[]{null, "none","distance","recipDistance"}[random().nextInt(4)];
 
       double distDEG = DistanceUtils.dist2Degrees(distKM, DistanceUtils.EARTH_MEAN_RADIUS_KM);
       Point point = SpatialUtils.parsePoint(ptStr, SpatialContext.GEO);
@@ -234,10 +226,6 @@ public class TestSolr4Spatial extends SolrTestCaseJ4 {
 
   }
 
-  private String randomScoreMode() {
-    return canCalcDistance ? new String[]{null, "none","distance","recipDistance"}[random().nextInt(4)] : "none";
-  }
-
   @Test
   public void testRangeSyntax() {
     setupDocs();
@@ -245,10 +233,10 @@ public class TestSolr4Spatial extends SolrTestCaseJ4 {
     int docId = 1;
     int count = 1;
 
-    String score = randomScoreMode();//never actually need the score but lets test
+    String score = random().nextBoolean() ? "none" : "distance";//never actually need the score but lets test
     assertQ(req(
         "fl", "id", "q","*:*", "rows", "1000",    // testing quotes in range too
-        "fq", "{! "+(score==null?"":" score="+score)+" df="+fieldName+"}[32,-80 TO \"33 , -79\"]"),//lower-left to upper-right
+        "fq", "{! score="+score+" df="+fieldName+"}[32,-80 TO \"33 , -79\"]"),//lower-left to upper-right
 
         "//result/doc/*[@name='id'][.='" + docId + "']",
         "*[count(//doc)=" + count + "]");
@@ -256,46 +244,13 @@ public class TestSolr4Spatial extends SolrTestCaseJ4 {
 
   @Test
   public void testSort() throws Exception {
-    assumeTrue("dist sorting not supported on field " + fieldName, canCalcDistance);
     assertU(adoc("id", "100", fieldName, "1,2"));
     assertU(adoc("id", "101", fieldName, "4,-1"));
-    if (random().nextBoolean()) {
-      assertU(commit()); // new segment
-    }
-    if (random().nextBoolean()) {
-      assertU(adoc("id", "999", fieldName, "70,70"));//far away from these queries; we filter it out
-    } else {
-      assertU(adoc("id", "999")); // no data
-    }
+    assertU(adoc("id", "999", fieldName, "70,70"));//far away from these queries
     assertU(commit());
 
-
-    // geodist asc
-    assertJQ(req(
-        "q", radiusQuery(3, 4, 9, null, null),
-        "fl","id",
-        "sort","geodist() asc",
-        "sfield", fieldName, "pt", "3,4")
-        , 1e-3
-        , "/response/docs/[0]/id=='100'"
-        , "/response/docs/[1]/id=='101'"
-    );
-    // geodist desc  (simply reverse the assertions)
-    assertJQ(req(
-        "q", radiusQuery(3, 4, 9, null, null),
-        "fl","id",
-        "sort","geodist() desc", // DESC
-        "sfield", fieldName, "pt", "3,4")
-        , 1e-3
-        , "/response/docs/[0]/id=='101'" // FLIPPED
-        , "/response/docs/[1]/id=='100'" // FLIPPED
-    );
-
-    //
-    //  NOTE: the rest work via the score of the spatial query. Generally, you should use geodist() instead.
-    //
-
     //test absence of score=distance means it doesn't score
+
     assertJQ(req(
         "q", radiusQuery(3, 4, 9, null, null),
         "fl","id,score")
@@ -373,9 +328,9 @@ public class TestSolr4Spatial extends SolrTestCaseJ4 {
 
   private String radiusQuery(double lat, double lon, double dDEG, String score, String filter) {
     //Choose between the Solr/Geofilt syntax, and the Lucene spatial module syntax
-    if (isBBoxField(fieldName) || random().nextBoolean()) {
+    if (fieldName.equals("bbox") || random().nextBoolean()) {
       //we cheat for bbox strategy which doesn't do radius, only rect.
-      final String qparser = isBBoxField(fieldName) ? "bbox" : "geofilt";
+      final String qparser = fieldName.equals("bbox") ? "bbox" : "geofilt";
       return "{!" + qparser + " " +
           "sfield=" + fieldName + " "
           + (score != null ? "score="+score : "") + " "
@@ -391,9 +346,8 @@ public class TestSolr4Spatial extends SolrTestCaseJ4 {
 
   @Test
   public void testSortMultiVal() throws Exception {
-    assumeTrue("dist sorting not supported on field " + fieldName, canCalcDistance);
-    assumeFalse("Multivalue not supported for this field",
-        fieldName.equals("pointvector") || isBBoxField(fieldName));
+    RandomizedTest.assumeFalse("Multivalue not supported for this field",
+        fieldName.equals("pointvector") || fieldName.equals("bbox"));
 
     assertU(adoc("id", "100", fieldName, "1,2"));//1 point
     assertU(adoc("id", "101", fieldName, "4,-1", fieldName, "3,5"));//2 points, 2nd is pretty close to query point

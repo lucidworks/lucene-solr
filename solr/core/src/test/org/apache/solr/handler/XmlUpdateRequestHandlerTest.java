@@ -16,6 +16,7 @@
  */
 package org.apache.solr.handler;
 
+import org.apache.commons.lang.ObjectUtils;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.util.ContentStreamBase;
@@ -36,7 +37,6 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.util.Collection;
 import java.util.LinkedList;
-import java.util.Objects;
 import java.util.Queue;
 
 public class XmlUpdateRequestHandlerTest extends SolrTestCaseJ4 {
@@ -75,6 +75,13 @@ public class XmlUpdateRequestHandlerTest extends SolrTestCaseJ4 {
     //null for the processor is all right here
     XMLLoader loader = new XMLLoader();
     SolrInputDocument doc = loader.readDoc( parser );
+    
+    // Read boosts
+    assertEquals( 5.5f, doc.getDocumentBoost(), 0.1);
+    assertEquals( 1.0f, doc.getField( "name" ).getBoost(), 0.1);
+    assertEquals( 2.2f, doc.getField( "id" ).getBoost(), 0.1);
+    // Boost is the product of each value
+    assertEquals( (3*4*5.0f), doc.getField( "cat" ).getBoost(), 0.1);
     
     // Read values
     assertEquals( "12345", doc.getField( "id" ).getValue() );
@@ -194,7 +201,7 @@ public class XmlUpdateRequestHandlerTest extends SolrTestCaseJ4 {
       p.assertNoCommandsPending();
     }
 
-    private static class MockUpdateRequestProcessor extends UpdateRequestProcessor {
+    private class MockUpdateRequestProcessor extends UpdateRequestProcessor {
 
       private Queue<DeleteUpdateCommand> deleteCommands = new LinkedList<>();
 
@@ -223,10 +230,10 @@ public class XmlUpdateRequestHandlerTest extends SolrTestCaseJ4 {
         DeleteUpdateCommand expected = deleteCommands.poll();
         assertNotNull("Unexpected delete command: [" + cmd + "]", expected);
         assertTrue("Expected [" + expected + "] but found [" + cmd + "]",
-            Objects.equals(expected.id, cmd.id) &&
-            Objects.equals(expected.query, cmd.query) &&
+            ObjectUtils.equals(expected.id, cmd.id) &&
+            ObjectUtils.equals(expected.query, cmd.query) &&
             expected.commitWithin==cmd.commitWithin && 
-            Objects.equals(expected.getRoute(), cmd.getRoute()));
+            ObjectUtils.equals(expected.getRoute(), cmd.getRoute()));
       }
     }
 

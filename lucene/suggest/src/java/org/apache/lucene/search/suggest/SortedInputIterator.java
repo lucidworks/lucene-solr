@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,25 +16,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.ByteArrayDataOutput;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.OfflineSorter;
 import org.apache.lucene.util.OfflineSorter.ByteSequencesReader;
 import org.apache.lucene.util.OfflineSorter.ByteSequencesWriter;
-import org.apache.lucene.util.OfflineSorter;
 
 /**
  * This wrapper buffers incoming elements and makes sure they are sorted based on given comparator.
@@ -41,38 +41,36 @@ import org.apache.lucene.util.OfflineSorter;
 public class SortedInputIterator implements InputIterator {
   
   private final InputIterator source;
-  private IndexOutput tempInput;
-  private String tempSortedFileName;
+  private Path tempInput;
+  private Path tempSorted;
   private final ByteSequencesReader reader;
   private final Comparator<BytesRef> comparator;
   private final boolean hasPayloads;
   private final boolean hasContexts;
-  private final Directory tempDir;
-  private final String tempFileNamePrefix;
   private boolean done = false;
   
   private long weight;
+  private final BytesRefBuilder scratch = new BytesRefBuilder();
   private BytesRef payload = new BytesRef();
   private Set<BytesRef> contexts = null;
   
   /**
-   * Creates a new sorted wrapper, using {@linkplain Comparator#naturalOrder() natural order}
-   * for sorting. */
-  public SortedInputIterator(Directory tempDir, String tempFileNamePrefix, InputIterator source) throws IOException {
-    this(tempDir, tempFileNamePrefix, source, Comparator.naturalOrder());
+   * Creates a new sorted wrapper, using {@link
+   * BytesRef#getUTF8SortedAsUnicodeComparator} for
+   * sorting. */
+  public SortedInputIterator(InputIterator source) throws IOException {
+    this(source, BytesRef.getUTF8SortedAsUnicodeComparator());
   }
 
   /**
    * Creates a new sorted wrapper, sorting by BytesRef
    * (ascending) then cost (ascending).
    */
-  public SortedInputIterator(Directory tempDir, String tempFileNamePrefix, InputIterator source, Comparator<BytesRef> comparator) throws IOException {
+  public SortedInputIterator(InputIterator source, Comparator<BytesRef> comparator) throws IOException {
     this.hasPayloads = source.hasPayloads();
     this.hasContexts = source.hasContexts();
     this.source = source;
     this.comparator = comparator;
-    this.tempDir = tempDir;
-    this.tempFileNamePrefix = tempFileNamePrefix;
     this.reader = sort();
   }
   
@@ -84,8 +82,8 @@ public class SortedInputIterator implements InputIterator {
     }
     try {
       ByteArrayDataInput input = new ByteArrayDataInput();
-      BytesRef bytes = reader.next();
-      if (bytes != null) {
+      if (reader.read(scratch)) {
+      final BytesRef bytes = scratch.get();
         weight = decode(bytes, input);
         if (hasPayloads) {
           payload = decodePayload(bytes, input);
@@ -145,7 +143,6 @@ public class SortedInputIterator implements InputIterator {
     @Override
     public int compare(BytesRef left, BytesRef right) {
       // Make shallow copy in case decode changes the BytesRef:
-      assert left != right;
       leftScratch.bytes = left.bytes;
       leftScratch.offset = left.offset;
       leftScratch.length = left.length;
@@ -171,11 +168,14 @@ public class SortedInputIterator implements InputIterator {
   };
   
   private ByteSequencesReader sort() throws IOException {
-
-    OfflineSorter sorter = new OfflineSorter(tempDir, tempFileNamePrefix, tieBreakByCostComparator);
-    tempInput = tempDir.createTempOutput(tempFileNamePrefix, "input", IOContext.DEFAULT);
+    String prefix = getClass().getSimpleName();
+    Path directory = OfflineSorter.getDefaultTempDir();
+    tempInput = Files.createTempFile(directory, prefix, ".input");
+    tempSorted = Files.createTempFile(directory, prefix, ".sorted");
     
-    try (OfflineSorter.ByteSequencesWriter writer = new OfflineSorter.ByteSequencesWriter(tempInput)) {
+    final OfflineSorter.ByteSequencesWriter writer = new OfflineSorter.ByteSequencesWriter(tempInput);
+    boolean success = false;
+    try {
       BytesRef spare;
       byte[] buffer = new byte[0];
       ByteArrayDataOutput output = new ByteArrayDataOutput(buffer);
@@ -183,20 +183,36 @@ public class SortedInputIterator implements InputIterator {
       while ((spare = source.next()) != null) {
         encode(writer, output, buffer, spare, source.payload(), source.contexts(), source.weight());
       }
-      CodecUtil.writeFooter(tempInput);
+      writer.close();
+      new OfflineSorter(tieBreakByCostComparator).sort(tempInput, tempSorted);
+      ByteSequencesReader reader = new OfflineSorter.ByteSequencesReader(tempSorted);
+      success = true;
+      return reader;
+      
+    } finally {
+      if (success) {
+        IOUtils.close(writer);
+      } else {
+        try {
+          IOUtils.closeWhileHandlingException(writer);
+        } finally {
+          close();
+        }
+      }
     }
-
-    tempSortedFileName = sorter.sort(tempInput.getName());
-    return new OfflineSorter.ByteSequencesReader(tempDir.openChecksumInput(tempSortedFileName, IOContext.READONCE), tempSortedFileName);
   }
   
   private void close() throws IOException {
+    boolean success = false;
     try {
       IOUtils.close(reader);
+      success = true;
     } finally {
-      IOUtils.deleteFilesIgnoringExceptions(tempDir,
-                                            tempInput == null ? null : tempInput.getName(),
-                                            tempSortedFileName);
+      if (success) {
+        IOUtils.deleteFilesIfExist(tempInput, tempSorted);
+      } else {
+        IOUtils.deleteFilesIgnoringExceptions(tempInput, tempSorted);
+      }
     }
   }
   
@@ -231,24 +247,24 @@ public class SortedInputIterator implements InputIterator {
   
   /** decodes the weight at the current position */
   protected long decode(BytesRef scratch, ByteArrayDataInput tmpInput) {
-    tmpInput.reset(scratch.bytes, scratch.offset, scratch.length);
+    tmpInput.reset(scratch.bytes);
     tmpInput.skipBytes(scratch.length - 8); // suggestion
-    scratch.length -= Long.BYTES; // long
+    scratch.length -= 8; // long
     return tmpInput.readLong();
   }
   
   /** decodes the contexts at the current position */
   protected Set<BytesRef> decodeContexts(BytesRef scratch, ByteArrayDataInput tmpInput) {
-    tmpInput.reset(scratch.bytes, scratch.offset, scratch.length);
+    tmpInput.reset(scratch.bytes);
     tmpInput.skipBytes(scratch.length - 2); //skip to context set size
     short ctxSetSize = tmpInput.readShort();
     scratch.length -= 2;
     final Set<BytesRef> contextSet = new HashSet<>();
     for (short i = 0; i < ctxSetSize; i++) {
-      tmpInput.setPosition(scratch.offset + scratch.length - 2);
+      tmpInput.setPosition(scratch.length - 2);
       short curContextLength = tmpInput.readShort();
       scratch.length -= 2;
-      tmpInput.setPosition(scratch.offset + scratch.length - curContextLength);
+      tmpInput.setPosition(scratch.length - curContextLength);
       BytesRef contextSpare = new BytesRef(curContextLength);
       tmpInput.readBytes(contextSpare.bytes, 0, curContextLength);
       contextSpare.length = curContextLength;
@@ -260,11 +276,10 @@ public class SortedInputIterator implements InputIterator {
   
   /** decodes the payload at the current position */
   protected BytesRef decodePayload(BytesRef scratch, ByteArrayDataInput tmpInput) {
-    tmpInput.reset(scratch.bytes, scratch.offset, scratch.length);
+    tmpInput.reset(scratch.bytes);
     tmpInput.skipBytes(scratch.length - 2); // skip to payload size
     short payloadLength = tmpInput.readShort(); // read payload size
-    assert payloadLength >= 0: payloadLength;
-    tmpInput.setPosition(scratch.offset + scratch.length - 2 - payloadLength); // setPosition to start of payload
+    tmpInput.setPosition(scratch.length - 2 - payloadLength); // setPosition to start of payload
     BytesRef payloadScratch = new BytesRef(payloadLength); 
     tmpInput.readBytes(payloadScratch.bytes, 0, payloadLength); // read payload
     payloadScratch.length = payloadLength;

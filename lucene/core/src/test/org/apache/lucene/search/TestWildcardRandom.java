@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
@@ -94,7 +94,7 @@ public class TestWildcardRandom extends LuceneTestCase {
     }
     Query wq = new WildcardQuery(new Term("field", filledPattern));
     TopDocs docs = searcher.search(wq, 25);
-    assertEquals("Incorrect hits for pattern: " + pattern, numHits, docs.totalHits.value);
+    assertEquals("Incorrect hits for pattern: " + pattern, numHits, docs.totalHits);
   }
 
   @Override

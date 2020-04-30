@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis;
 
+import java.io.Reader;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
@@ -92,16 +94,7 @@ public final class MockAnalyzer extends Analyzer {
     MockTokenFilter filt = new MockTokenFilter(tokenizer, filter);
     return new TokenStreamComponents(tokenizer, maybePayload(filt, fieldName));
   }
-
-  @Override
-  protected TokenStream normalize(String fieldName, TokenStream in) {
-    TokenStream result = in;
-    if (lowerCase) {
-      result = new MockLowerCaseFilter(result);
-    }
-    return result;
-  }
-
+  
   private synchronized TokenFilter maybePayload(TokenFilter stream, String fieldName) {
     Integer val = previousMappings.get(fieldName);
     if (val == null) {

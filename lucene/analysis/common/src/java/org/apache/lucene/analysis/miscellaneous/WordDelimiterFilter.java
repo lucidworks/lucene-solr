@@ -13,25 +13,26 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */ 
+ */
+ 
 package org.apache.lucene.analysis.miscellaneous;
 
-import java.io.IOException;
-
-import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.core.WhitespaceTokenizer;
 import org.apache.lucene.analysis.standard.StandardTokenizer;
-import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
-import org.apache.lucene.analysis.tokenattributes.KeywordAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
+import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.TypeAttribute;
-import org.apache.lucene.search.PhraseQuery;
+import org.apache.lucene.analysis.util.CharArraySet;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.AttributeSource;
 import org.apache.lucene.util.InPlaceMergeSorter;
+import org.apache.lucene.util.RamUsageEstimator;
+
+import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * Splits words into subwords and performs optional transformations on subword
@@ -55,14 +56,11 @@ import org.apache.lucene.util.InPlaceMergeSorter;
  * </li>
  * </ul>
  * 
- * The <b>GENERATE...</b> options affect how incoming tokens are broken into parts, and the
- * various <b>CATENATE_...</b> parameters affect how those parts are combined.
- *
+ * The <b>combinations</b> parameter affects how subwords are combined:
  * <ul>
- * <li>If no CATENATE option is set, then no subword combinations are generated:
- * <code>"PowerShot"</code> &#8594; <code>0:"Power", 1:"Shot"</code> (0 and 1 are the token
- * positions)</li>
- * <li>CATENATE_WORDS means that in addition to the subwords, maximum runs of
+ * <li>combinations="0" causes no subword combinations: <code>"PowerShot"</code>
+ * &#8594; <code>0:"Power", 1:"Shot"</code> (0 and 1 are the token positions)</li>
+ * <li>combinations="1" means that in addition to the subwords, maximum runs of
  * non-numeric subwords are catenated and produced at the same position of the
  * last subword in the run:
  * <ul>
@@ -75,24 +73,16 @@ import org.apache.lucene.util.InPlaceMergeSorter;
  * </li>
  * </ul>
  * </li>
- * <li>CATENATE_NUMBERS works like CATENATE_WORDS, but for adjacent digit sequences.</li>
- * <li>CATENATE_ALL smushes together all the token parts without distinguishing numbers and words.</li>
  * </ul>
- *
  * One use for {@link WordDelimiterFilter} is to help match words with different
  * subword delimiters. For example, if the source text contained "wi-fi" one may
  * want "wifi" "WiFi" "wi-fi" "wi+fi" queries to all match. One way of doing so
- * is to specify CATENATE options in the analyzer used for indexing, and
- * not in the analyzer used for querying. Given that
+ * is to specify combinations="1" in the analyzer used for indexing, and
+ * combinations="0" (the default) in the analyzer used for querying. Given that
  * the current {@link StandardTokenizer} immediately removes many intra-word
  * delimiters, it is recommended that this filter be used after a tokenizer that
  * does not do this (such as {@link WhitespaceTokenizer}).
- *
- * @deprecated Use {@link WordDelimiterGraphFilter} instead: it produces a correct
- * token graph so that e.g. {@link PhraseQuery} works correctly when it's used in
- * the search time analyzer.
  */
-@Deprecated
 public final class WordDelimiterFilter extends TokenFilter {
   
   public static final int LOWER = 0x01;
@@ -128,7 +118,7 @@ public final class WordDelimiterFilter extends TokenFilter {
   /**
    * Causes maximum runs of word parts to be catenated:
    * <p>
-   * "500-42" =&gt; "50042"
+   * "wi-fi" =&gt; "wifi"
    */
   public static final int CATENATE_NUMBERS = 8;
 
@@ -164,12 +154,7 @@ public final class WordDelimiterFilter extends TokenFilter {
    * "O'Neil's" =&gt; "O", "Neil"
    */
   public static final int STEM_ENGLISH_POSSESSIVE = 256;
-
-  /**
-   * Suppresses processing terms with {@link KeywordAttribute#isKeyword()}=true.
-   */
-  public static final int IGNORE_KEYWORDS = 512;
-
+  
   /**
    * If not null is the set of tokens to protect from being delimited
    *
@@ -179,7 +164,6 @@ public final class WordDelimiterFilter extends TokenFilter {
   private final int flags;
     
   private final CharTermAttribute termAttribute = addAttribute(CharTermAttribute.class);
-  private final KeywordAttribute keywordAttribute = addAttribute(KeywordAttribute.class);;
   private final OffsetAttribute offsetAttribute = addAttribute(OffsetAttribute.class);
   private final PositionIncrementAttribute posIncAttribute = addAttribute(PositionIncrementAttribute.class);
   private final TypeAttribute typeAttribute = addAttribute(TypeAttribute.class);
@@ -249,9 +233,7 @@ public final class WordDelimiterFilter extends TokenFilter {
         if (!input.incrementToken()) {
           return false;
         }
-        if (has(IGNORE_KEYWORDS) && keywordAttribute.isKeyword()) {
-            return true;
-        }
+
         int termLength = termAttribute.length();
         char[] termBuffer = termAttribute.buffer();
         
@@ -426,9 +408,9 @@ public final class WordDelimiterFilter extends TokenFilter {
   private void buffer() {
     if (bufferedLen == buffered.length) {
       int newSize = ArrayUtil.oversize(bufferedLen+1, 8);
-      buffered = ArrayUtil.growExact(buffered, newSize);
-      startOff = ArrayUtil.growExact(startOff, newSize);
-      posInc = ArrayUtil.growExact(posInc, newSize);
+      buffered = Arrays.copyOf(buffered, newSize);
+      startOff = Arrays.copyOf(startOff, newSize);
+      posInc = Arrays.copyOf(posInc, newSize);
     }
     startOff[bufferedLen] = offsetAttribute.startOffset();
     posInc[bufferedLen] = posIncAttribute.getPositionIncrement();
@@ -448,7 +430,7 @@ public final class WordDelimiterFilter extends TokenFilter {
     savedType = typeAttribute.type();
 
     if (savedBuffer.length < termAttribute.length()) {
-      savedBuffer = new char[ArrayUtil.oversize(termAttribute.length(), Character.BYTES)];
+      savedBuffer = new char[ArrayUtil.oversize(termAttribute.length(), RamUsageEstimator.NUM_BYTES_CHAR)];
     }
 
     System.arraycopy(termAttribute.buffer(), 0, savedBuffer, 0, termAttribute.length());
@@ -514,6 +496,7 @@ public final class WordDelimiterFilter extends TokenFilter {
   private void generatePart(boolean isSingleWord) {
     clearAttributes();
     termAttribute.copyBuffer(savedBuffer, iterator.current, iterator.end - iterator.current);
+
     int startOffset = savedStartOffset + iterator.current;
     int endOffset = savedStartOffset + iterator.end;
     

@@ -1,3 +1,5 @@
+package org.apache.lucene.queries.function.docvalues;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function.docvalues;
-
-import java.io.IOException;
 
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -35,50 +34,45 @@ public abstract class FloatDocValues extends FunctionValues {
   }
 
   @Override
-  public byte byteVal(int doc) throws IOException {
+  public byte byteVal(int doc) {
     return (byte)floatVal(doc);
   }
 
   @Override
-  public short shortVal(int doc) throws IOException {
+  public short shortVal(int doc) {
     return (short)floatVal(doc);
   }
 
   @Override
-  public abstract float floatVal(int doc) throws IOException;
+  public abstract float floatVal(int doc);
 
   @Override
-  public int intVal(int doc) throws IOException {
+  public int intVal(int doc) {
     return (int)floatVal(doc);
   }
 
   @Override
-  public long longVal(int doc) throws IOException {
+  public long longVal(int doc) {
     return (long)floatVal(doc);
   }
 
   @Override
-  public boolean boolVal(int doc) throws IOException {
-    return floatVal(doc) != 0.0f;
-  }
-
-  @Override
-  public double doubleVal(int doc) throws IOException {
+  public double doubleVal(int doc) {
     return (double)floatVal(doc);
   }
 
   @Override
-  public String strVal(int doc) throws IOException {
+  public String strVal(int doc) {
     return Float.toString(floatVal(doc));
   }
 
   @Override
-  public Object objectVal(int doc) throws IOException {
+  public Object objectVal(int doc) {
     return exists(doc) ? floatVal(doc) : null;
   }
 
   @Override
-  public String toString(int doc) throws IOException {
+  public String toString(int doc) {
     return vs.description() + '=' + strVal(doc);
   }
 
@@ -93,7 +87,7 @@ public abstract class FloatDocValues extends FunctionValues {
       }
 
       @Override
-      public void fillValue(int doc) throws IOException {
+      public void fillValue(int doc) {
         mval.value = floatVal(doc);
         mval.exists = exists(doc);
       }

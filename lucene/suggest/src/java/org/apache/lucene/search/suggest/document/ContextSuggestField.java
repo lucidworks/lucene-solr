@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.document;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -90,7 +91,6 @@ public class ContextSuggestField extends SuggestField {
     }
     CompletionTokenStream completionTokenStream;
     if (stream instanceof CompletionTokenStream) {
-      //TODO this is awkward; is there a better way avoiding re-creating the chain?
       completionTokenStream = (CompletionTokenStream) stream;
       PrefixTokenFilter prefixTokenFilter = new PrefixTokenFilter(completionTokenStream.inputTokenStream, (char) CONTEXT_SEPARATOR, contexts);
       completionTokenStream = new CompletionTokenStream(prefixTokenFilter,

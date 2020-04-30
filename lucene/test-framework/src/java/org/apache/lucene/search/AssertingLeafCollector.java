@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,30 +16,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
 
 import java.io.IOException;
+import java.util.Random;
 
 /** Wraps another Collector and checks that
  *  order is respected. */
 class AssertingLeafCollector extends FilterLeafCollector {
 
+  private final Random random;
   private final int min;
   private final int max;
 
-  private Scorable scorer;
+  private Scorer scorer;
   private int lastCollected = -1;
 
-  AssertingLeafCollector(LeafCollector collector, int min, int max) {
+  AssertingLeafCollector(Random random, LeafCollector collector, int min, int max) {
     super(collector);
+    this.random = random;
     this.min = min;
     this.max = max;
   }
 
   @Override
-  public void setScorer(Scorable scorer) throws IOException {
+  public void setScorer(Scorer scorer) throws IOException {
     this.scorer = scorer;
-    super.setScorer(AssertingScorable.wrap(scorer));
+    super.setScorer(AssertingScorer.wrap(random, scorer, true));
   }
 
   @Override

@@ -14,18 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.queries.function.valuesource;
 
 import java.io.IOException;
 import java.util.Map;
 
-import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.docvalues.DoubleDocValues;
-import org.apache.lucene.search.SortField.Type;
 import org.apache.lucene.search.SortField;
+import org.apache.lucene.search.SortField.Type;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.mutable.MutableValue;
 import org.apache.lucene.util.mutable.MutableValueDouble;
 
@@ -51,37 +53,17 @@ public class DoubleFieldSource extends FieldCacheSource {
   
   @Override
   public FunctionValues getValues(Map context, LeafReaderContext readerContext) throws IOException {
-
-    final NumericDocValues values = getNumericDocValues(context, readerContext);
-
+    final NumericDocValues arr = DocValues.getNumeric(readerContext.reader(), field);
+    final Bits valid = DocValues.getDocsWithField(readerContext.reader(), field);
     return new DoubleDocValues(this) {
-      int lastDocID;
-
-      private double getValueForDoc(int doc) throws IOException {
-        if (doc < lastDocID) {
-          throw new IllegalArgumentException("docs were sent out-of-order: lastDocID=" + lastDocID + " vs docID=" + doc);
-        }
-        lastDocID = doc;
-        int curDocID = values.docID();
-        if (doc > curDocID) {
-          curDocID = values.advance(doc);
-        }
-        if (doc == curDocID) {
-          return Double.longBitsToDouble(values.longValue());
-        } else {
-          return 0.0;
-        }
-      }
-      
       @Override
-      public double doubleVal(int doc) throws IOException {
-        return getValueForDoc(doc);
+      public double doubleVal(int doc) {
+        return Double.longBitsToDouble(arr.get(doc));
       }
 
       @Override
-      public boolean exists(int doc) throws IOException {
-        getValueForDoc(doc);
-        return doc == values.docID();
+      public boolean exists(int doc) {
+        return arr.get(doc) != 0 || valid.get(doc);
       }
 
       @Override
@@ -95,17 +77,13 @@ public class DoubleFieldSource extends FieldCacheSource {
           }
 
           @Override
-          public void fillValue(int doc) throws IOException {
-            mval.value = getValueForDoc(doc);
-            mval.exists = exists(doc);
+          public void fillValue(int doc) {
+            mval.value = doubleVal(doc);
+            mval.exists = mval.value != 0 || valid.get(doc);
           }
         };
       }
     };
-  }
-
-  protected NumericDocValues getNumericDocValues(Map context, LeafReaderContext readerContext) throws IOException {
-    return DocValues.getNumeric(readerContext.reader(), field);
   }
 
   @Override

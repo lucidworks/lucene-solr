@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -24,10 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.lucene.codecs.FieldsConsumer;
-import org.apache.lucene.codecs.NormsProducer;
-import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.util.CollectionUtil;
-import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.IOUtils;
 
 final class FreqProxTermsWriter extends TermsHash {
@@ -37,27 +34,43 @@ final class FreqProxTermsWriter extends TermsHash {
   }
 
   private void applyDeletes(SegmentWriteState state, Fields fields) throws IOException {
+
     // Process any pending Term deletes for this newly
     // flushed segment:
-    if (state.segUpdates != null && state.segUpdates.deleteTerms.size() > 0) {
-      Map<Term,Integer> segDeletes = state.segUpdates.deleteTerms;
+    if (state.segUpdates != null && state.segUpdates.terms.size() > 0) {
+      Map<Term,Integer> segDeletes = state.segUpdates.terms;
       List<Term> deleteTerms = new ArrayList<>(segDeletes.keySet());
       Collections.sort(deleteTerms);
-      FrozenBufferedUpdates.TermDocsIterator iterator = new FrozenBufferedUpdates.TermDocsIterator(fields, true);
+      String lastField = null;
+      TermsEnum termsEnum = null;
+      PostingsEnum postingsEnum = null;
       for(Term deleteTerm : deleteTerms) {
-        DocIdSetIterator postings = iterator.nextTerm(deleteTerm.field(), deleteTerm.bytes());
-        if (postings != null ) {
+        if (deleteTerm.field().equals(lastField) == false) {
+          lastField = deleteTerm.field();
+          Terms terms = fields.terms(lastField);
+          if (terms != null) {
+            termsEnum = terms.iterator();
+          } else {
+            termsEnum = null;
+          }
+        }
+
+        if (termsEnum != null && termsEnum.seekExact(deleteTerm.bytes())) {
+          postingsEnum = termsEnum.postings(postingsEnum, 0);
           int delDocLimit = segDeletes.get(deleteTerm);
           assert delDocLimit < PostingsEnum.NO_MORE_DOCS;
-          int doc;
-          while ((doc = postings.nextDoc()) < delDocLimit) {
-            if (state.liveDocs == null) {
-              state.liveDocs = new FixedBitSet(state.segmentInfo.maxDoc());
-              state.liveDocs.set(0, state.segmentInfo.maxDoc());
-            }
-            if (state.liveDocs.get(doc)) {
-              state.delCountOnFlush++;
-              state.liveDocs.clear(doc);
+          while (true) {
+            int doc = postingsEnum.nextDoc();
+            if (doc < delDocLimit) {
+              if (state.liveDocs == null) {
+                state.liveDocs = state.segmentInfo.getCodec().liveDocsFormat().newLiveDocs(state.segmentInfo.maxDoc());
+              }
+              if (state.liveDocs.get(doc)) {
+                state.delCountOnFlush++;
+                state.liveDocs.clear(doc);
+              }
+            } else {
+              break;
             }
           }
         }
@@ -66,9 +79,8 @@ final class FreqProxTermsWriter extends TermsHash {
   }
 
   @Override
-  public void flush(Map<String,TermsHashPerField> fieldsToFlush, final SegmentWriteState state,
-      Sorter.DocMap sortMap, NormsProducer norms) throws IOException {
-    super.flush(fieldsToFlush, state, sortMap, norms);
+  public void flush(Map<String,TermsHashPerField> fieldsToFlush, final SegmentWriteState state) throws IOException {
+    super.flush(fieldsToFlush, state);
 
     // Gather all fields that saw any postings:
     List<FreqProxTermsWriterPerField> allFields = new ArrayList<>();
@@ -86,15 +98,13 @@ final class FreqProxTermsWriter extends TermsHash {
     CollectionUtil.introSort(allFields);
 
     Fields fields = new FreqProxFields(allFields);
+
     applyDeletes(state, fields);
-    if (sortMap != null) {
-      fields = new SortingLeafReader.SortingFields(fields, state.fieldInfos, sortMap);
-    }
 
     FieldsConsumer consumer = state.segmentInfo.getCodec().postingsFormat().fieldsConsumer(state);
     boolean success = false;
     try {
-      consumer.write(fields, norms);
+      consumer.write(fields);
       success = true;
     } finally {
       if (success) {

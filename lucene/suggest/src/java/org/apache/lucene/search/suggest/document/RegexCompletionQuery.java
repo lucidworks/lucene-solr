@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.document;
 
 import java.io.IOException;
 
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.search.suggest.BitsProducer;
-import org.apache.lucene.util.automaton.Automata;
-import org.apache.lucene.util.automaton.Automaton;
 import org.apache.lucene.util.automaton.Operations;
 import org.apache.lucene.util.automaton.RegExp;
 
@@ -63,7 +60,7 @@ public class RegexCompletionQuery extends CompletionQuery {
   /**
    * Calls {@link RegexCompletionQuery#RegexCompletionQuery(Term, int, int, BitsProducer)}
    * enabling all optional regex syntax and <code>maxDeterminizedStates</code> of
-   * {@value Operations#DEFAULT_MAX_DETERMINIZED_STATES}
+   * {@value org.apache.lucene.util.automaton.Operations#DEFAULT_MAX_DETERMINIZED_STATES}
    */
   public RegexCompletionQuery(Term term, BitsProducer filter) {
     this(term, RegExp.ALL, Operations.DEFAULT_MAX_DETERMINIZED_STATES, filter);
@@ -92,41 +89,7 @@ public class RegexCompletionQuery extends CompletionQuery {
   }
 
   @Override
-  public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    // If an empty regex is provided, we return an automaton that matches nothing. This ensures
-    // consistency with PrefixCompletionQuery, which returns no results for an empty term.
-    Automaton automaton = getTerm().text().isEmpty()
-        ? Automata.makeEmpty()
-        : new RegExp(getTerm().text(), flags).toAutomaton(maxDeterminizedStates);
-    return new CompletionWeight(this, automaton);
-  }
-
-  /**
-   * Get the regex flags
-   */
-  public int getFlags() {
-    return flags;
-  }
-
-  /**
-   * Get the maximum number of states permitted in the determinized automaton
-   */
-  public int getMaxDeterminizedStates() {
-    return maxDeterminizedStates;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int hashCode() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    visitor.visitLeaf(this);
+  public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
+    return new CompletionWeight(this, new RegExp(getTerm().text(), flags).toAutomaton(maxDeterminizedStates));
   }
 }

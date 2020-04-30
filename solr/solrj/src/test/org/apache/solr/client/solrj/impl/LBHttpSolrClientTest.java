@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.impl;
 
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -37,25 +38,19 @@ public class LBHttpSolrClientTest {
    * Validate that the parser passed in is used in the <code>HttpSolrClient</code> instances created.
    */
   @Test
-  // commented out on: 17-Feb-2019   @LuceneTestCase.BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 20-Sep-2018
   public void testLBHttpSolrClientHttpClientResponseParserStringArray() throws IOException {
-    CloseableHttpClient httpClient = HttpClientUtil.createClient(new ModifiableSolrParams());
-    try (
-         LBHttpSolrClient testClient = new LBHttpSolrClient.Builder().withHttpClient(httpClient).withResponseParser(null).build();
+
+    try (CloseableHttpClient httpClient = HttpClientUtil.createClient(new ModifiableSolrParams());
+         LBHttpSolrClient testClient = new LBHttpSolrClient(httpClient, (ResponseParser) null);
          HttpSolrClient httpSolrClient = testClient.makeSolrClient("http://127.0.0.1:8080")) {
       assertNull("Generated server should have null parser.", httpSolrClient.getParser());
-    } finally {
-      HttpClientUtil.close(httpClient);
     }
 
     ResponseParser parser = new BinaryResponseParser();
-    httpClient = HttpClientUtil.createClient(new ModifiableSolrParams());
-    try {
-      try ( LBHttpSolrClient testClient = new LBHttpSolrClient(httpClient, parser); HttpSolrClient httpSolrClient = testClient.makeSolrClient("http://127.0.0.1:8080")) {
-        assertEquals("Invalid parser passed to generated server.", parser, httpSolrClient.getParser());
-      }
-    } finally {
-      HttpClientUtil.close(httpClient);
+    try (CloseableHttpClient httpClient = HttpClientUtil.createClient(new ModifiableSolrParams());
+         LBHttpSolrClient testClient = new LBHttpSolrClient(httpClient, parser);
+         HttpSolrClient httpSolrClient = testClient.makeSolrClient("http://127.0.0.1:8080")) {
+      assertEquals("Invalid parser passed to generated server.", parser, httpSolrClient.getParser());
     }
   }
   

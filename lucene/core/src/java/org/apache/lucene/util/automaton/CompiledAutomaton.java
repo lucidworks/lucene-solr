@@ -1,3 +1,5 @@
+package org.apache.lucene.util.automaton;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,24 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util.automaton;
-
-
+  
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.lucene.index.SingleTermsEnum;
-import org.apache.lucene.index.Term;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
-import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.IntsRef;
-import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.StringHelper;
 import org.apache.lucene.util.UnicodeUtil;
 
@@ -42,9 +37,7 @@ import org.apache.lucene.util.UnicodeUtil;
  *
  * @lucene.experimental
  */
-public class CompiledAutomaton implements Accountable {
-  private static final long BASE_RAM_BYTES = RamUsageEstimator.shallowSizeOfInstance(CompiledAutomaton.class);
-
+public class CompiledAutomaton {
   /**
    * Automata are compiled into different internal forms for the
    * most efficient execution depending upon the language they accept.
@@ -145,7 +138,7 @@ public class CompiledAutomaton implements Accountable {
    *  to determine whether it is finite.  If simplify is true, we run
    *  possibly expensive operations to determine if the automaton is one
    *  the cases in {@link CompiledAutomaton.AUTOMATON_TYPE}. If simplify
-   *  requires determinizing the automaton then only maxDeterminizedStates
+   *  requires determinizing the autaomaton then only maxDeterminizedStates
    *  will be created.  Any more than that will cause a
    *  TooComplexToDeterminizeException.
    */
@@ -276,7 +269,7 @@ public class CompiledAutomaton implements Accountable {
       if (transition.min < leadLabel) {
         maxIndex = i;
       } else {
-        // Transitions are always sorted
+        // Transitions are alway sorted
         break;
       }
     }
@@ -347,27 +340,6 @@ public class CompiledAutomaton implements Accountable {
     }
   }
 
-  /**
-   * Report back to a QueryVisitor how this automaton matches terms
-   */
-  public void visit(QueryVisitor visitor, Query parent, String field) {
-    if (visitor.acceptField(field)) {
-      switch (type) {
-        case NORMAL:
-          visitor.consumeTermsMatching(parent, field, runAutomaton);
-          break;
-        case NONE:
-          break;
-        case ALL:
-          visitor.consumeTermsMatching(parent, field, new ByteRunAutomaton(Automata.makeAnyString()));
-          break;
-        case SINGLE:
-          visitor.consumeTerms(parent, new Term(field, term));
-          break;
-      }
-    }
-  }
-
   /** Finds largest term accepted by this Automaton, that's
    *  &lt;= the provided input term.  The result is placed in
    *  output; it's fine for output and input to point to
@@ -379,7 +351,7 @@ public class CompiledAutomaton implements Accountable {
 
     //if (DEBUG) System.out.println("CA.floor input=" + input.utf8ToString());
 
-    int state = 0;
+    int state = runAutomaton.getInitialState();
 
     // Special case empty string:
     if (input.length == 0) {
@@ -489,15 +461,4 @@ public class CompiledAutomaton implements Accountable {
 
     return true;
   }
-
-  @Override
-  public long ramBytesUsed() {
-    return BASE_RAM_BYTES +
-        RamUsageEstimator.sizeOfObject(automaton) +
-        RamUsageEstimator.sizeOfObject(commonSuffixRef) +
-        RamUsageEstimator.sizeOfObject(runAutomaton) +
-        RamUsageEstimator.sizeOfObject(term) +
-        RamUsageEstimator.sizeOfObject(transition);
-  }
-
 }

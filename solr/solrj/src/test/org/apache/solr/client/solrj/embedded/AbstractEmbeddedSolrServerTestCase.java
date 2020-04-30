@@ -1,3 +1,5 @@
+package org.apache.solr.client.solrj.embedded;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,34 +16,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.embedded;
 
 import java.io.File;
 import java.nio.file.Path;
 
-import org.apache.commons.io.FileUtils;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.core.CoreContainer;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.BeforeClass;
 
 public abstract class AbstractEmbeddedSolrServerTestCase extends SolrTestCaseJ4 {
 
-  protected static Path SOLR_HOME;
-  protected static Path CONFIG_HOME;
+  protected static final Path SOLR_HOME = getFile("solrj/solr/shared").toPath().toAbsolutePath();
 
   protected CoreContainer cores = null;
   protected File tempDir;
-
-  @BeforeClass
-  public static void setUpHome() throws Exception {
-    CONFIG_HOME = getFile("solrj/solr/shared").toPath().toAbsolutePath();
-    SOLR_HOME = createTempDir("solrHome");
-    FileUtils.copyDirectory(CONFIG_HOME.toFile(), SOLR_HOME.toFile());
-  }
 
   @Override
   @Before
@@ -49,7 +39,7 @@ public abstract class AbstractEmbeddedSolrServerTestCase extends SolrTestCaseJ4 
     super.setUp();
 
     System.setProperty("solr.solr.home", SOLR_HOME.toString());
-    System.setProperty("configSetBaseDir", CONFIG_HOME.resolve("../configsets").normalize().toString());
+    System.setProperty("configSetBase", SOLR_HOME.resolve("../configsets").normalize().toString());
     System.out.println("Solr home: " + SOLR_HOME.toString());
 
     //The index is always stored within a temporary directory
@@ -82,13 +72,6 @@ public abstract class AbstractEmbeddedSolrServerTestCase extends SolrTestCaseJ4 
     deleteAdditionalFiles();
 
     super.tearDown();
-  }
-
-  @AfterClass
-  public static void tearDownHome() throws Exception {
-    if (SOLR_HOME != null) {
-      FileUtils.deleteDirectory(SOLR_HOME.toFile());
-    }
   }
 
   protected void deleteAdditionalFiles() {

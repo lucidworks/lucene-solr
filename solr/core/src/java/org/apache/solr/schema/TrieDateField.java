@@ -14,12 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.schema;
 
+import java.text.ParseException;
 import java.util.Date;
+import java.util.Locale;
+import java.util.TimeZone;
 
 import org.apache.lucene.index.IndexableField;
-import org.apache.solr.update.processor.TimestampUpdateProcessorFactory;
+import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.update.processor.TimestampUpdateProcessorFactory; //jdoc
+import org.apache.solr.util.DateFormatUtil;
 import org.apache.solr.util.DateMathParser;
 
 /**
@@ -81,14 +87,107 @@ import org.apache.solr.util.DateMathParser;
  * </blockquote>
  *
  * @see TrieField
- * @deprecated Trie fields are deprecated as of Solr 7.0
  */
-@Deprecated
 public class TrieDateField extends TrieField implements DateValueFieldType {
   {
-    this.type = NumberType.DATE;
+    this.type = TrieTypes.DATE;
   }
   
+  // BEGIN: backwards
+  
+  /**
+   * @deprecated Use {@link DateFormatUtil#UTC}
+   */
+  @Deprecated
+  public static final TimeZone UTC = DateFormatUtil.UTC;
+
+  /**
+   * Fixed TimeZone (UTC) needed for parsing/formatting Dates in the
+   * canonical representation.
+   * @deprecated Use {@link DateFormatUtil#CANONICAL_TZ}
+   */
+  @Deprecated
+  protected static final TimeZone CANONICAL_TZ = DateFormatUtil.CANONICAL_TZ;
+  
+  /**
+   * Fixed Locale needed for parsing/formatting Milliseconds in the
+   * canonical representation.
+   * @deprecated Use {@link DateFormatUtil#CANONICAL_LOCALE}
+   */
+  @Deprecated
+  protected static final Locale CANONICAL_LOCALE = DateFormatUtil.CANONICAL_LOCALE;
+
+  /**
+   * @deprecated Use {@link DateFormatUtil#NOW}
+   */
+  @Deprecated
+  protected static final String NOW = DateFormatUtil.NOW;
+  
+  /**
+   * @deprecated Use {@link DateFormatUtil#Z}
+   */
+  @Deprecated
+  protected static final char Z = DateFormatUtil.Z;
+
+
+  /**
+   * @deprecated Use {@link DateFormatUtil#parseMath(Date,String)}
+   */
+  @Deprecated
+  public final Date parseMath(Date now, String val) {
+    return DateFormatUtil.parseMath(now, val);
+  }
+
+  /**
+   * @deprecated Use {@link DateFormatUtil#formatDate(Date)}
+   */
+  @Deprecated
+  protected final String formatDate(Date d) {
+    return DateFormatUtil.formatDate(d);
+  }
+
+  /**
+   * @deprecated Use {@link DateFormatUtil#formatExternal(Date)}
+   */
+  @Deprecated
+  public static final String formatExternal(Date d) {
+    return DateFormatUtil.formatExternal(d);
+  }
+
+  /**
+   * @deprecated Use {@link DateFormatUtil#formatExternal(Date)}
+   */
+  @Deprecated
+  public final String toExternal(Date d) {
+    return DateFormatUtil.formatExternal(d);
+  }
+
+  /**
+   * @deprecated Use {@link DateFormatUtil#parseDate(String)}
+   */
+  @Deprecated
+  public static final Date parseDate(String s) throws ParseException {
+    return DateFormatUtil.parseDate(s);
+  }
+
+  /**
+   * @deprecated Use {@link DateFormatUtil#parseDateLenient(String,SolrQueryRequest)}
+   */
+  @Deprecated
+  public final Date parseDateLenient(String s, SolrQueryRequest req) throws ParseException {
+    return DateFormatUtil.parseDateLenient(s, req);
+  }
+
+  /**
+   * @deprecated Use {@link DateFormatUtil#parseMathLenient(Date, String, SolrQueryRequest)}
+   */
+  @Deprecated
+  public final Date parseMathLenient(Date now, String val, SolrQueryRequest req) {
+    return DateFormatUtil.parseMathLenient(now, val, req);
+  }
+  
+  // END: backwards
+
   @Override
   public Date toObject(IndexableField f) {
     return (Date)super.toObject(f);
@@ -96,8 +195,8 @@ public class TrieDateField extends TrieField implements DateValueFieldType {
 
   @Override
   public Object toNativeType(Object val) {
-    if (val instanceof CharSequence) {
-      return DateMathParser.parseMath(null, val.toString());
+    if (val instanceof String) {
+      return DateFormatUtil.parseMath(null, (String)val);
     }
     return super.toNativeType(val);
   }

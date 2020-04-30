@@ -1,3 +1,43 @@
+package org.apache.solr.handler.component;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.lucene.index.FieldInfo;
+import org.apache.lucene.index.Fields;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.StoredFieldVisitor;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.util.BytesRef;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.params.CommonParams;
+import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.params.TermVectorParams;
+import org.apache.solr.common.util.Base64;
+import org.apache.solr.common.util.NamedList;
+import org.apache.solr.core.SolrCore;
+import org.apache.solr.schema.IndexSchema;
+import org.apache.solr.schema.SchemaField;
+import org.apache.solr.search.DocList;
+import org.apache.solr.search.DocListAndSet;
+import org.apache.solr.search.ReturnFields;
+import org.apache.solr.search.SolrIndexSearcher;
+import org.apache.solr.search.SolrReturnFields;
+import org.apache.solr.util.SolrPluginUtils;
+import org.apache.solr.util.plugin.SolrCoreAware;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,45 +54,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import org.apache.lucene.document.StoredField;
-import org.apache.lucene.index.Fields;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.PostingsEnum;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.index.Terms;
-import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.util.BytesRef;
-import org.apache.solr.common.SolrDocument;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.params.CommonParams;
-import org.apache.solr.common.params.SolrParams;
-import org.apache.solr.common.params.TermVectorParams;
-import org.apache.solr.common.util.Base64;
-import org.apache.solr.common.util.NamedList;
-import org.apache.solr.core.SolrCore;
-import org.apache.solr.schema.IndexSchema;
-import org.apache.solr.schema.SchemaField;
-import org.apache.solr.search.DocList;
-import org.apache.solr.search.DocListAndSet;
-import org.apache.solr.search.ReturnFields;
-import org.apache.solr.search.SolrDocumentFetcher;
-import org.apache.solr.search.SolrIndexSearcher;
-import org.apache.solr.search.SolrReturnFields;
-import org.apache.solr.util.SolrPluginUtils;
-import org.apache.solr.util.plugin.SolrCoreAware;
 
 /**
  * Return term vectors for the documents in a query result set.
@@ -81,11 +83,8 @@ public class TermVectorComponent extends SearchComponent implements SolrCoreAwar
 
   public static final String COMPONENT_NAME = "tv";
 
-  public static final String TERM_VECTORS = "termVectors";
-
-  private static final String TV_KEY_WARNINGS = "warnings";
-
   protected NamedList initParams;
+  public static final String TERM_VECTORS = "termVectors";
 
   /**
    * Helper method for determining the list of fields that we should 
@@ -148,6 +147,7 @@ public class TermVectorComponent extends SearchComponent implements SolrCoreAwar
     String uniqFieldName = null;
     if (keyField != null) {
       uniqFieldName = keyField.getName();
+      termVectors.add("uniqueKeyFieldName", uniqFieldName);
     }
 
     FieldOptions allFields = new FieldOptions();
@@ -182,7 +182,7 @@ public class TermVectorComponent extends SearchComponent implements SolrCoreAwar
       //we have specific fields to retrieve, or no fields
       for (String field : fields) {
 
-        // workaround SOLR-3523
+        // workarround SOLR-3523
         if (null == field || "score".equals(field)) continue; 
 
         // we don't want to issue warnings about the uniqueKey field
@@ -226,24 +226,29 @@ public class TermVectorComponent extends SearchComponent implements SolrCoreAwar
       }
     } //else, deal with all fields
 
-    // NOTE: currently all types of warnings are schema driven, and guaranteed
+    // NOTE: currently all typs of warnings are schema driven, and garunteed
     // to be consistent across all shards - if additional types of warnings 
-    // are added that might be different between shards, finishStage() needs
+    // are added that might be differnet between shards, finishStage() needs 
     // to be changed to account for that.
+    boolean hasWarnings = false;
     if (!noTV.isEmpty()) {
       warnings.add("noTermVectors", noTV);
+      hasWarnings = true;
     }
     if (!noPos.isEmpty()) {
       warnings.add("noPositions", noPos);
+      hasWarnings = true;
     }
     if (!noOff.isEmpty()) {
       warnings.add("noOffsets", noOff);
+      hasWarnings = true;
     }
     if (!noPay.isEmpty()) {
       warnings.add("noPayloads", noPay);
+      hasWarnings = true;
     }
-    if (warnings.size() > 0) {
-      termVectors.add(TV_KEY_WARNINGS, warnings);
+    if (hasWarnings) {
+      termVectors.add("warnings", warnings);
     }
 
     DocListAndSet listAndSet = rb.getResults();
@@ -262,35 +267,54 @@ public class TermVectorComponent extends SearchComponent implements SolrCoreAwar
 
     //Only load the id field to get the uniqueKey of that
     //field
-    SolrDocumentFetcher docFetcher = searcher.getDocFetcher();
-    SolrReturnFields srf = new SolrReturnFields(uniqFieldName, rb.req);
+
+    final String finalUniqFieldName = uniqFieldName;
+
+    final List<String> uniqValues = new ArrayList<>();
+    
+    // TODO: is this required to be single-valued? if so, we should STOP
+    // once we find it...
+    final StoredFieldVisitor getUniqValue = new StoredFieldVisitor() {
+      @Override 
+      public void stringField(FieldInfo fieldInfo, byte[] bytes) {
+        uniqValues.add(new String(bytes, StandardCharsets.UTF_8));
+      }
+
+      @Override 
+      public void intField(FieldInfo fieldInfo, int value) {
+        uniqValues.add(Integer.toString(value));
+      }
+
+      @Override 
+      public void longField(FieldInfo fieldInfo, long value) {
+        uniqValues.add(Long.toString(value));
+      }
+
+      @Override
+      public Status needsField(FieldInfo fieldInfo) {
+        return (fieldInfo.name.equals(finalUniqFieldName)) ? Status.YES : Status.NO;
+      }
+    };
 
     while (iter.hasNext()) {
       Integer docId = iter.next();
       NamedList<Object> docNL = new NamedList<>();
 
       if (keyField != null) {
-        // guaranteed to be one and only one since this is uniqueKey!
-        SolrDocument solrDoc = docFetcher.solrDoc(docId, srf);
-
-        String uKey = null;
-        Object val = solrDoc.getFieldValue(uniqFieldName);
-        if (val != null) {
-          if (val instanceof StoredField) {
-            uKey = ((StoredField) val).stringValue();
-          } else {
-            uKey = val.toString();
-          }
+        reader.document(docId, getUniqValue);
+        String uniqVal = null;
+        if (uniqValues.size() != 0) {
+          uniqVal = uniqValues.get(0);
+          uniqValues.clear();
+          docNL.add("uniqueKey", uniqVal);
+          termVectors.add(uniqVal, docNL);
         }
-        assert null != uKey;
-        docNL.add("uniqueKey", uKey);
-        termVectors.add(uKey, docNL);
       } else {
         // support for schemas w/o a unique key,
         termVectors.add("doc-" + docId, docNL);
       }
 
-      if (null != fields) {
+      if ( null != fields ) {
         for (Map.Entry<String, FieldOptions> entry : fieldOptions.entrySet()) {
           final String field = entry.getKey();
           final Terms vector = reader.getTermVector(docId, field);
@@ -302,14 +326,11 @@ public class TermVectorComponent extends SearchComponent implements SolrCoreAwar
       } else {
         // extract all fields
         final Fields vectors = reader.getTermVectors(docId);
-        // There can be no documents with vectors
-        if (vectors != null) {
-          for (String field : vectors) {
-            Terms terms = vectors.terms(field);
-            if (terms != null) {
-              TermsEnum termsEnum = terms.iterator();
-              mapOneVector(docNL, allFields, reader, docId, termsEnum, field);
-            }
+        for (String field : vectors) {
+          Terms terms = vectors.terms(field);
+          if (terms != null) {
+            TermsEnum termsEnum = terms.iterator();
+            mapOneVector(docNL, allFields, reader, docId, termsEnum, field);
           }
         }
       }
@@ -403,7 +424,7 @@ public class TermVectorComponent extends SearchComponent implements SolrCoreAwar
       result = new ArrayList<>(vals.length);
       for (int i = 0; i < vals.length; i++) {
         try {
-          result.add(Integer.valueOf(vals[i]));
+          result.add(new Integer(vals[i]));
         } catch (NumberFormatException e) {
           throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, e.getMessage(), e);
         }
@@ -421,7 +442,7 @@ public class TermVectorComponent extends SearchComponent implements SolrCoreAwar
   public void finishStage(ResponseBuilder rb) {
     if (rb.stage == ResponseBuilder.STAGE_GET_FIELDS) {
       
-      NamedList<Object> termVectorsNL = new NamedList<>();
+      NamedList<Object> termVectors = new NamedList<>();
       Map.Entry<String, Object>[] arr = new NamedList.NamedListEntry[rb.resultIds.size()];
 
       for (ShardRequest sreq : rb.finished) {
@@ -430,30 +451,24 @@ public class TermVectorComponent extends SearchComponent implements SolrCoreAwar
         }
         for (ShardResponse srsp : sreq.responses) {
           NamedList<Object> nl = (NamedList<Object>)srsp.getSolrResponse().getResponse().get(TERM_VECTORS);
-
-          // Add metadata (that which isn't a uniqueKey value):
-          Object warningsNL = nl.get(TV_KEY_WARNINGS);
-          // assume if that if warnings is already present; we don't need to merge.
-          if (warningsNL != null && termVectorsNL.indexOf(TV_KEY_WARNINGS, 0) < 0) {
-            termVectorsNL.add(TV_KEY_WARNINGS, warningsNL);
+          for (int i=0; i < nl.size(); i++) {
+            String key = nl.getName(i);
+            ShardDoc sdoc = rb.resultIds.get(key);
+            if (null == sdoc) {
+              // metadata, only need from one node, leave in order
+              if (termVectors.indexOf(key,0) < 0) {
+                termVectors.add(key, nl.getVal(i));
+              }
+            } else {
+              int idx = sdoc.positionInResponse;
+              arr[idx] = new NamedList.NamedListEntry<>(key, nl.getVal(i));
+            }
           }
-
-          // UniqueKey data
-          SolrPluginUtils.copyNamedListIntoArrayByDocPosInResponse(nl, rb.resultIds, arr);
         }
       }
       // remove nulls in case not all docs were able to be retrieved
-      SolrPluginUtils.removeNulls(arr, termVectorsNL);
-      rb.rsp.add(TERM_VECTORS, termVectorsNL);
-    }
-  }
-
-  @Override
-  public void modifyRequest(ResponseBuilder rb, SearchComponent who, ShardRequest sreq) {
-    SolrParams params = rb.req.getParams();
-    if (!params.getBool(COMPONENT_NAME, false)) return;
-    if ((sreq.purpose & ShardRequest.PURPOSE_GET_FIELDS) == 0) {
-      sreq.params.set(COMPONENT_NAME, "false");
+      termVectors.addAll(SolrPluginUtils.removeNulls(arr, new NamedList<Object>()));
+      rb.rsp.add(TERM_VECTORS, termVectors);
     }
   }
 
@@ -473,11 +488,6 @@ public class TermVectorComponent extends SearchComponent implements SolrCoreAwar
   @Override
   public String getDescription() {
     return "A Component for working with Term Vectors";
-  }
-
-  @Override
-  public Category getCategory() {
-    return Category.QUERY;
   }
 }
 

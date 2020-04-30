@@ -1,3 +1,4 @@
+package org.apache.solr.handler.clustering.carrot2;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.clustering.carrot2;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.carrot2.core.Cluster;
@@ -30,6 +29,8 @@ import org.carrot2.util.attribute.Bindable;
 import org.carrot2.util.attribute.Input;
 import org.carrot2.util.attribute.Output;
 
+import com.google.common.collect.Lists;
+
 /**
  * A mock Carrot2 clustering algorithm that outputs input documents as clusters.
  * Useful only in tests.
@@ -40,22 +41,22 @@ public class EchoClusteringAlgorithm extends ProcessingComponentBase implements
   @Input
   @Processing
   @Attribute(key = AttributeNames.DOCUMENTS)
-  public List<Document> documents;
+  private List<Document> documents;
 
   @Output
   @Processing
   @Attribute(key = AttributeNames.CLUSTERS)
-  public List<Cluster> clusters;
+  private List<Cluster> clusters;
 
   @Input
   @Processing
   @Attribute(key = "custom-fields")
-  public String customFields = "";
+  private String customFields = "";
 
   
   @Override
   public void process() throws ProcessingException {
-    clusters = new ArrayList<>();
+    clusters = Lists.newArrayListWithCapacity(documents.size());
     
     for (Document document : documents) {
       final Cluster cluster = new Cluster();

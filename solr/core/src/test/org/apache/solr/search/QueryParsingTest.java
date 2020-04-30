@@ -1,3 +1,4 @@
+package org.apache.solr.search;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +15,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
+
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.Sort;
+import org.apache.lucene.search.SortField;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrException;
-import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.schema.SchemaField;
 import org.junit.BeforeClass;
+import org.junit.Test;
+
+import java.util.List;
 
 /**
  *
@@ -41,9 +47,10 @@ public class QueryParsingTest extends SolrTestCaseJ4 {
    */
   public void testQParserEmptyInput() throws Exception {
     
-    SolrQueryRequest req = req("df", "text");
-
+    SolrQueryRequest req = req();
+    
     final String[] parsersTested = new String[] {
+      OldLuceneQParserPlugin.NAME,
       LuceneQParserPlugin.NAME,
       DisMaxQParserPlugin.NAME,
       ExtendedDismaxQParserPlugin.NAME
@@ -55,24 +62,16 @@ public class QueryParsingTest extends SolrTestCaseJ4 {
         try {
           parser = QParser.getParser(qstr, defType, req);
         } catch (Exception e) {
-          throw new RuntimeException("getParser excep using defType=" +
+          throw new RuntimeException("getParser excep using defType=" + 
                                      defType + " with qstr="+qstr, e);
         }
-
+        
         Query q = parser.parse();
         assertNull("expected no query",q);
       }
     }
   }
   
-  public void testLocalParamsWithModifiableSolrParams() throws Exception {
-    ModifiableSolrParams target = new ModifiableSolrParams();
-    QueryParsing.parseLocalParams("{!handler foo1=bar1 foo2=bar2 multi=loser multi=winner}", 0, target, new ModifiableSolrParams(), "{!", '}');
-    assertEquals("bar1", target.get("foo1"));
-    assertEquals("bar2", target.get("foo2"));
-    assertArrayEquals(new String[]{"loser", "winner"}, target.getParams("multi"));
-  }
-
   public void testLiteralFunction() throws Exception {
     
     final String NAME = FunctionQParserPlugin.NAME;
@@ -94,46 +93,5 @@ public class QueryParsingTest extends SolrTestCaseJ4 {
     assertNotNull(QParser.getParser
                   ("strdist(\"a value\",literal('a value'),edit)",
                    NAME, req).getQuery());
-  }
-
-  public void testGetQParser() throws Exception {
-    // invalid defType
-    SolrException exception = expectThrows(SolrException.class, () -> h.query(req("q", "ad", "defType", "bleh")));
-    assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, exception.code());
-    assertEquals("invalid query parser 'bleh' for query 'ad'", exception.getMessage());
-
-    // invalid qparser override in the local params
-    exception = expectThrows(SolrException.class, () -> h.query(req("q", "{!bleh}")));
-    assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, exception.code());
-    assertEquals("invalid query parser 'bleh' for query '{!bleh}'", exception.getMessage());
-
-    // invalid qParser with fq params
-    exception = expectThrows(SolrException.class, () -> h.query(req("q", "*:*", "fq", "{!some}")));
-    assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, exception.code());
-    assertEquals("invalid query parser 'some' for query '{!some}'", exception.getMessage());
-
-    // invalid qparser with function queries
-    exception = expectThrows(SolrException.class, () -> h.query(req("q", "*:*", "defType", "edismax", "boost", "{!hmm}")));
-    assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, exception.code());
-    assertEquals("invalid query parser 'hmm' for query '{!hmm}'", exception.getMessage());
-
-    exception = expectThrows(SolrException.class, () -> h.query(req("q", "*:*", "defType", "edismax", "boost", "query({!bleh v=ak})")));
-    assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, exception.code());
-    assertEquals("invalid query parser 'bleh' for query '{!bleh v=ak}'", exception.getMessage());
-
-    exception = expectThrows(SolrException.class, () ->
-        h.query(req("q", "*:*", "defType", "edismax", "boost", "query($qq)", "qq", "{!bleh v=a}")));
-    assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, exception.code());
-    assertEquals("invalid query parser 'bleh' for query '{!bleh v=a}'", exception.getMessage());
-
-    // ranking doesn't use defType
-    exception = expectThrows(SolrException.class, () -> h.query(req("q", "*:*", "rq", "{!bleh}")));
-    assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, exception.code());
-    assertEquals("invalid query parser 'bleh' for query '{!bleh}'", exception.getMessage());
-
-    // with stats.field
-    exception = expectThrows(SolrException.class, () -> h.query(req("q", "*:*", "stats", "true", "stats.field", "{!bleh}")));
-    assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, exception.code());
-    assertEquals("invalid query parser 'bleh' for query '{!bleh}'", exception.getMessage());
   }
 }

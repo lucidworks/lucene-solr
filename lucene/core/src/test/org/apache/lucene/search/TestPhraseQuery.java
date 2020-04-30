@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,17 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Random;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.CannedTokenStream;
@@ -36,24 +32,14 @@ import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.Impact;
-import org.apache.lucene.index.Impacts;
-import org.apache.lucene.index.ImpactsEnum;
-import org.apache.lucene.index.ImpactsSource;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.similarities.BM25Similarity;
-import org.apache.lucene.search.similarities.ClassicSimilarity;
+import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.ArrayUtil;
-import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 import org.junit.AfterClass;
@@ -109,7 +95,7 @@ public class TestPhraseQuery extends LuceneTestCase {
     reader = writer.getReader();
     writer.close();
 
-    searcher = new IndexSearcher(reader);
+    searcher = newSearcher(reader);
   }
   
   @Override
@@ -137,7 +123,7 @@ public class TestPhraseQuery extends LuceneTestCase {
     query = new PhraseQuery(3, "field", "one", "five");
     ScoreDoc[] hits = searcher.search(query, 1000).scoreDocs;
     assertEquals(1, hits.length);
-    QueryUtils.check(random(), query, searcher);
+    QueryUtils.check(random(), query,searcher);
   }
 
   /**
@@ -324,7 +310,7 @@ public class TestPhraseQuery extends LuceneTestCase {
     RandomIndexWriter writer = new RandomIndexWriter(random(), directory, 
         newIndexWriterConfig(new MockAnalyzer(random()))
           .setMergePolicy(newLogMergePolicy())
-          .setSimilarity(new BM25Similarity()));
+          .setSimilarity(new DefaultSimilarity()));
 
     Document doc = new Document();
     doc.add(newTextField("field", "foo firstname lastname foo", Field.Store.YES));
@@ -342,17 +328,17 @@ public class TestPhraseQuery extends LuceneTestCase {
     writer.close();
 
     IndexSearcher searcher = newSearcher(reader);
-    searcher.setSimilarity(new ClassicSimilarity());
+    searcher.setSimilarity(new DefaultSimilarity());
     PhraseQuery query = new PhraseQuery(Integer.MAX_VALUE, "field", "firstname", "lastname");
     ScoreDoc[] hits = searcher.search(query, 1000).scoreDocs;
     assertEquals(3, hits.length);
     // Make sure that those matches where the terms appear closer to
     // each other get a higher score:
-    assertEquals(1.0, hits[0].score, 0.01);
+    assertEquals(0.71, hits[0].score, 0.01);
     assertEquals(0, hits[0].doc);
-    assertEquals(0.63, hits[1].score, 0.01);
+    assertEquals(0.44, hits[1].score, 0.01);
     assertEquals(1, hits[1].doc);
-    assertEquals(0.47, hits[2].score, 0.01);
+    assertEquals(0.31, hits[2].score, 0.01);
     assertEquals(2, hits[2].doc);
     QueryUtils.check(random(), query,searcher);
     reader.close();
@@ -593,21 +579,21 @@ public class TestPhraseQuery extends LuceneTestCase {
     PhraseQuery.Builder pqBuilder = new PhraseQuery.Builder();
     pqBuilder.add(new Term("field", "a"), 0);
     pqBuilder.add(new Term("field", "b"), 1);
-    assertEquals(1, searcher.count(pqBuilder.build()));
+    assertEquals(1, searcher.search(pqBuilder.build(), 1).totalHits);
 
     // Now with "a|aa b"
     pqBuilder = new PhraseQuery.Builder();
     pqBuilder.add(new Term("field", "a"), 0);
     pqBuilder.add(new Term("field", "aa"), 0);
     pqBuilder.add(new Term("field", "b"), 1);
-    assertEquals(1, searcher.count(pqBuilder.build()));
+    assertEquals(1, searcher.search(pqBuilder.build(), 1).totalHits);
 
     // Now with "a|z b" which should not match; this isn't a MultiPhraseQuery
     pqBuilder = new PhraseQuery.Builder();
     pqBuilder.add(new Term("field", "a"), 0);
     pqBuilder.add(new Term("field", "z"), 0);
     pqBuilder.add(new Term("field", "b"), 1);
-    assertEquals(0, searcher.count(pqBuilder.build()));
+    assertEquals(0, searcher.search(pqBuilder.build(), 1).totalHits);
 
     r.close();
     dir.close();
@@ -707,379 +693,108 @@ public class TestPhraseQuery extends LuceneTestCase {
   }
   
   public void testNegativeSlop() throws Exception {
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new PhraseQuery(-2, "field", "two", "one");
-    });
+      fail("didn't get expected exception");
+    } catch (IllegalArgumentException expected) {
+      // expected exception
+    }
   }
 
   public void testNegativePosition() throws Exception {
     PhraseQuery.Builder builder = new PhraseQuery.Builder();
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       builder.add(new Term("field", "two"), -42);
-    });
+      fail("didn't get expected exception");
+    } catch (IllegalArgumentException expected) {
+      // expected exception
+    }
   }
 
   public void testBackwardPositions() throws Exception {
     PhraseQuery.Builder builder = new PhraseQuery.Builder();
     builder.add(new Term("field", "one"), 1);
     builder.add(new Term("field", "two"), 5);
-    expectThrows(IllegalArgumentException.class, () -> {
+    try {
       builder.add(new Term("field", "three"), 4);
-    });
+      fail("didn't get expected exception");
+    } catch (IllegalArgumentException expected) {
+      // expected exception
+    }
   }
 
-  static String[] DOCS = new String[] {
-      "a b c d e f g h",
-      "b c b",
-      "c d d d e f g b",
-      "c b a b c",
-      "a a b b c c d d",
-      "a b c d a b c d a b c d"
-  };
-
-  public void testTopPhrases() throws IOException {
-    Directory dir = newDirectory();
-    IndexWriter w = new IndexWriter(dir, newIndexWriterConfig());
-    String[] docs = ArrayUtil.copyOfSubArray(DOCS, 0, DOCS.length);
-    Collections.shuffle(Arrays.asList(docs), random());
-    for (String value : DOCS) {
-      Document doc = new Document();
-      doc.add(new TextField("f", value, Store.NO));
-      w.addDocument(doc);
-    }
-    IndexReader r = DirectoryReader.open(w);
-    w.close();
-    IndexSearcher searcher = newSearcher(r);
-    for (Query query : Arrays.asList(
-        new PhraseQuery("f", "b", "c"), // common phrase
-        new PhraseQuery("f", "e", "f"), // always appear next to each other
-        new PhraseQuery("f", "d", "d")  // repeated term
-        )) {
-      for (int topN = 1; topN <= 2; ++topN) {
-        TopScoreDocCollector collector1 = TopScoreDocCollector.create(topN, null, Integer.MAX_VALUE);
-        searcher.search(query, collector1);
-        ScoreDoc[] hits1 = collector1.topDocs().scoreDocs;
-        TopScoreDocCollector collector2 = TopScoreDocCollector.create(topN, null, 1);
-        searcher.search(query, collector2);
-        ScoreDoc[] hits2 = collector2.topDocs().scoreDocs;
-        assertTrue("" + query, hits1.length > 0);
-        CheckHits.checkEqual(query, hits1, hits2);
+  public void test52Compat() {
+    final int iters = atLeast(5);
+    for (int iter = 0; iter < iters; ++iter) {
+      int slop = random().nextInt(5);
+      String field = TestUtil.randomSimpleString(random());
+      Term[] terms = new Term[random().nextInt(5)];
+      final int[] positions = new int[terms.length];
+      for (int i = 0; i < terms.length; ++i) {
+        terms[i] = new Term(field, TestUtil.randomSimpleString(random()));
       }
-    }
-    r.close();
-    dir.close();
-  }
-
-  public void testMergeImpacts() throws IOException {
-    DummyImpactsEnum impacts1 = new DummyImpactsEnum(1000);
-    DummyImpactsEnum impacts2 = new DummyImpactsEnum(2000);
-    ImpactsSource mergedImpacts = ExactPhraseMatcher.mergeImpacts(new ImpactsEnum[] { impacts1, impacts2 });
-
-    impacts1.reset(
-        new Impact[][] {
-          new Impact[] { new Impact(3, 10), new Impact(5, 12), new Impact(8, 13) },
-          new Impact[] { new Impact(3, 10), new Impact(5, 11), new Impact(8, 13),  new Impact(12, 14) }
-        },
-        new int[] {
-            110,
-            945
-        });
-
-    // Merge with empty impacts
-    impacts2.reset(
-        new Impact[0][],
-        new int[0]);
-    assertEquals(
-        new Impact[][] {
-          new Impact[] { new Impact(3, 10), new Impact(5, 12), new Impact(8, 13) },
-          new Impact[] { new Impact(3, 10), new Impact(5, 11), new Impact(8, 13),  new Impact(12, 14) }
-        },
-        new int[] {
-            110,
-            945
-        },
-        mergedImpacts.getImpacts());
-
-    // Merge with dummy impacts
-    impacts2.reset(
-        new Impact[][] {
-          new Impact[] { new Impact(Integer.MAX_VALUE, 1) }
-        },
-        new int[] {
-            5000
-        });
-    assertEquals(
-        new Impact[][] {
-          new Impact[] { new Impact(3, 10), new Impact(5, 12), new Impact(8, 13) },
-          new Impact[] { new Impact(3, 10), new Impact(5, 11), new Impact(8, 13),  new Impact(12, 14) }
-        },
-        new int[] {
-            110,
-            945
-        },
-        mergedImpacts.getImpacts());
-
-    // Merge with dummy impacts that we don't special case
-    impacts2.reset(
-        new Impact[][] {
-          new Impact[] { new Impact(Integer.MAX_VALUE, 2) }
-        },
-        new int[] {
-            5000
-        });
-    assertEquals(
-        new Impact[][] {
-          new Impact[] { new Impact(3, 10), new Impact(5, 12), new Impact(8, 13) },
-          new Impact[] { new Impact(3, 10), new Impact(5, 11), new Impact(8, 13),  new Impact(12, 14) }
-        },
-        new int[] {
-            110,
-            945
-        },
-        mergedImpacts.getImpacts());
-
-    // First level of impacts2 doesn't cover the first level of impacts1
-    impacts2.reset(
-        new Impact[][] {
-          new Impact[] { new Impact(2, 10), new Impact(6, 13) },
-          new Impact[] { new Impact(3, 9), new Impact(5, 11), new Impact(7, 13) }
-        },
-        new int[] {
-            90,
-            1000
-        }); 
-    assertEquals(
-        new Impact[][] {
-          new Impact[] { new Impact(3, 10), new Impact(5, 12), new Impact(7, 13) },
-          new Impact[] { new Impact(3, 10), new Impact(5, 11), new Impact(7, 13) }
-        },
-        new int[] {
-            110,
-            945
-        },
-        mergedImpacts.getImpacts());
-
-    // Second level of impacts2 doesn't cover the first level of impacts1
-    impacts2.reset(
-        new Impact[][] {
-          new Impact[] { new Impact(2, 10), new Impact(6, 11) },
-          new Impact[] { new Impact(3, 9), new Impact(5, 11), new Impact(7, 13) }
-        },
-        new int[] {
-            150,
-            900
-        });
-    assertEquals(
-        new Impact[][] {
-          new Impact[] { new Impact(2, 10), new Impact(3, 11), new Impact(5, 12), new Impact(6, 13) },
-          new Impact[] { new Impact(3, 10), new Impact(5, 11), new Impact(8, 13),  new Impact(12, 14) } // same as impacts1
-        },
-        new int[] {
-            110,
-            945
-        },
-        mergedImpacts.getImpacts());
-
-    impacts2.reset(
-        new Impact[][] {
-          new Impact[] { new Impact(4, 10), new Impact(9, 13) },
-          new Impact[] { new Impact(1, 1), new Impact(4, 10), new Impact(5, 11), new Impact(8, 13), new Impact(12, 14), new Impact(13, 15) }
-        },
-        new int[] {
-            113,
-            950
-        });
-    assertEquals(
-        new Impact[][] {
-          new Impact[] { new Impact(3, 10), new Impact(4, 12), new Impact(8, 13) },
-          new Impact[] { new Impact(3, 10), new Impact(5, 11), new Impact(8, 13), new Impact(12, 14) }
-        },
-        new int[] {
-            110,
-            945
-        },
-        mergedImpacts.getImpacts());
-
-    // Make sure negative norms are treated as unsigned
-    impacts1.reset(
-        new Impact[][] {
-          new Impact[] { new Impact(3, 10), new Impact(5, -10), new Impact(8, -5) },
-          new Impact[] { new Impact(3, 10), new Impact(5, -15), new Impact(8, -5),  new Impact(12, -3) }
-        },
-        new int[] {
-            110,
-            945
-        });
-    impacts2.reset(
-        new Impact[][] {
-          new Impact[] { new Impact(2, 10), new Impact(12, -4) },
-          new Impact[] { new Impact(3, 9), new Impact(12, -4), new Impact(20, -1) }
-        },
-        new int[] {
-            150,
-            960
-        });
-    assertEquals(
-        new Impact[][] {
-          new Impact[] { new Impact(2, 10), new Impact(8, -4) },
-          new Impact[] { new Impact(3, 10), new Impact(8, -4), new Impact(12, -3) }
-        },
-        new int[] {
-            110,
-            945
-        },
-        mergedImpacts.getImpacts());
-  }
-
-  private static void assertEquals(Impact[][] impacts, int[] docIdUpTo, Impacts actual) {
-    assertEquals(impacts.length, actual.numLevels());
-    for (int i = 0; i < impacts.length; ++i) {
-      assertEquals(docIdUpTo[i], actual.getDocIdUpTo(i));
-      assertEquals(Arrays.asList(impacts[i]), actual.getImpacts(i));
-    }
-  }
-
-  private static class DummyImpactsEnum extends ImpactsEnum {
-
-    private final long cost;
-    private Impact[][] impacts;
-    private int[] docIdUpTo;
-
-    DummyImpactsEnum(long cost) {
-      this.cost = cost;
-    }
-
-    void reset(Impact[][] impacts, int[] docIdUpTo) {
-      this.impacts = impacts;
-      this.docIdUpTo = docIdUpTo;
-    }
-
-    @Override
-    public void advanceShallow(int target) throws IOException {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public Impacts getImpacts() throws IOException {
-      return new Impacts() {
-
-        @Override
-        public int numLevels() {
-          return impacts.length;
-        }
-
-        @Override
-        public int getDocIdUpTo(int level) {
-          return docIdUpTo[level];
-        }
-
-        @Override
-        public List<Impact> getImpacts(int level) {
-          return Arrays.asList(impacts[level]);
-        }
-
-      };
-    }
-
-    @Override
-    public int freq() throws IOException {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public int nextPosition() throws IOException {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public int startOffset() throws IOException {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public int endOffset() throws IOException {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public BytesRef getPayload() throws IOException {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public int docID() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public int nextDoc() throws IOException {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public int advance(int target) throws IOException {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public long cost() {
-      return cost;
-    }
-
-  }
-
-  public void testRandomTopDocs() throws IOException {
-    Directory dir = newDirectory();
-    IndexWriter w = new IndexWriter(dir, newIndexWriterConfig());
-    int numDocs = atLeast(128 * 8 * 8 * 3); // make sure some terms have skip data
-    for (int i = 0; i < numDocs; ++i) {
-      Document doc = new Document();
-      int numTerms = random().nextInt(1 << random().nextInt(5));
-      String text = IntStream.range(0, numTerms)
-          .mapToObj(index -> random().nextBoolean() ? "a" : random().nextBoolean() ? "b" : "c")
-          .collect(Collectors.joining(" "));
-      doc.add(new TextField("foo", text, Store.NO));
-      w.addDocument(doc);
-    }
-    IndexReader reader = DirectoryReader.open(w);
-    w.close();
-    IndexSearcher searcher = newSearcher(reader);
-
-    for (String firstTerm : new String[] {"a", "b", "c"}) {
-      for (String secondTerm : new String[] {"a", "b", "c"}) {
-        Query query = new PhraseQuery("foo", new BytesRef(firstTerm), new BytesRef(secondTerm));
-
-        TopScoreDocCollector collector1 = TopScoreDocCollector.create(10, null, Integer.MAX_VALUE); // COMPLETE
-        TopScoreDocCollector collector2 = TopScoreDocCollector.create(10, null, 10); // TOP_SCORES
-
-        searcher.search(query, collector1);
-        searcher.search(query, collector2);
-        CheckHits.checkEqual(query, collector1.topDocs().scoreDocs, collector2.topDocs().scoreDocs);
-
-        Query filteredQuery = new BooleanQuery.Builder()
-            .add(query, Occur.MUST)
-            .add(new TermQuery(new Term("foo", "b")), Occur.FILTER)
-            .build();
-
-        collector1 = TopScoreDocCollector.create(10, null, Integer.MAX_VALUE); // COMPLETE
-        collector2 = TopScoreDocCollector.create(10, null, 10); // TOP_SCORES
-        searcher.search(filteredQuery, collector1);
-        searcher.search(filteredQuery, collector2);
-        CheckHits.checkEqual(query, collector1.topDocs().scoreDocs, collector2.topDocs().scoreDocs);
+  
+      PhraseQuery q1 = new PhraseQuery();
+      PhraseQuery.Builder q2 = new PhraseQuery.Builder();
+      q1.setSlop(slop);
+      q2.setSlop(slop);
+      for (Term term : terms) {
+        q1.add(term);
+        q2.add(term);
       }
+      QueryUtils.checkEqual(q1, q2.build());
+  
+      if (terms.length > 0) {
+        positions[0] = random().nextInt(3);
+        for (int i = 1; i < terms.length; ++i) {
+          positions[i] = positions[i - 1] + random().nextInt(3);
+        }
+      }
+      q1 = new PhraseQuery();
+      q2 = new PhraseQuery.Builder();
+      q1.setSlop(slop);
+      q2.setSlop(slop);
+      for (Term term : terms) {
+        q1.add(term);
+        q2.add(term);
+      }
+      QueryUtils.checkEqual(q1, q2.build());
     }
-    reader.close();
-    dir.close();
   }
 
-  public void testNullTerm() {
-    NullPointerException e = expectThrows(NullPointerException.class, () -> new PhraseQuery.Builder().add(null));
-    assertEquals("Cannot add a null term to PhraseQuery", e.getMessage());
+  public void testBuilderImmutable() {
+    int slop = random().nextInt(5);
+    String field = TestUtil.randomSimpleString(random());
+    Term[] terms = new Term[random().nextInt(5)];
+    final int[] positions = new int[terms.length];
+    for (int i = 0; i < terms.length; ++i) {
+      terms[i] = new Term(field, TestUtil.randomSimpleString(random()));
+    }
+    PhraseQuery.Builder builder = new PhraseQuery.Builder();
+    builder.setSlop(slop);
+    for (Term term : terms) {
+      builder.add(term);
+    }
+    PhraseQuery q = builder.build();
+    try {
+      q.setSlop(2);
+      fail();
+    } catch (IllegalStateException expected) {
+      // ok
+    }
 
-    e = expectThrows(NullPointerException.class, () -> new PhraseQuery("field", (BytesRef)null));
-    assertEquals("Cannot add a null term to PhraseQuery", e.getMessage());
+    try {
+      q.add(new Term("foo", "bar"));
+      fail();
+    } catch (IllegalStateException expected) {
+      // ok
+    }
 
-    e = expectThrows(NullPointerException.class, () -> new PhraseQuery("field", (String)null));
-    assertEquals("Cannot add a null term to PhraseQuery", e.getMessage());
+    try {
+      q.add(new Term("foo", "bar"), 42);
+      fail();
+    } catch (IllegalStateException expected) {
+      // ok
+    }
   }
 }

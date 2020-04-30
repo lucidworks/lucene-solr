@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr;
 
 import org.apache.solr.common.params.CommonParams;
@@ -88,6 +89,7 @@ public class MinimalSchemaTest extends SolrTestCaseJ4 {
                 "show","schema")
             ,"//int[@name='numDocs'][.='2']"
             ,"//null[@name='uniqueKeyField']"
+            ,"//null[@name='defaultSearchField']"
             );
 
   }
@@ -109,15 +111,7 @@ public class MinimalSchemaTest extends SolrTestCaseJ4 {
             handler.startsWith("/admin") ||
             handler.startsWith("/schema") ||
             handler.startsWith("/config") ||
-            handler.startsWith("/mlt") ||
-            handler.startsWith("/export") ||
-            handler.startsWith("/graph") ||
-            handler.startsWith("/sql") ||
-            handler.startsWith("/stream") ||
-            handler.startsWith("/terms") ||
-            handler.startsWith("/analysis/")||
-            handler.startsWith("/debug/") ||
-            handler.startsWith("/replication")
+            handler.startsWith("/mlt")
             ) {
           continue;
         }

@@ -1,3 +1,5 @@
+package org.apache.lucene.queryparser.flexible.precedence.processors;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.flexible.precedence.processors;
 
 import org.apache.lucene.queryparser.flexible.precedence.PrecedenceQueryParser;
 import org.apache.lucene.queryparser.flexible.standard.processors.BooleanQuery2ModifierNodeProcessor;
+import org.apache.lucene.queryparser.flexible.standard.processors.GroupQueryNodeProcessor;
 import org.apache.lucene.queryparser.flexible.standard.processors.StandardQueryNodeProcessorPipeline;
 import org.apache.lucene.queryparser.flexible.core.config.QueryConfigHandler;
 
@@ -27,7 +29,7 @@ import org.apache.lucene.queryparser.flexible.core.config.QueryConfigHandler;
  * boolean precedence on it.
  * </p>
  * <p>
- * EXPERT: the precedence is enabled by removing {@link BooleanQuery2ModifierNodeProcessor} from the
+ * EXPERT: the precedence is enabled by removing {@link GroupQueryNodeProcessor} from the
  * {@link StandardQueryNodeProcessorPipeline} and appending {@link BooleanModifiersQueryNodeProcessor}
  * to the pipeline.
  * </p>

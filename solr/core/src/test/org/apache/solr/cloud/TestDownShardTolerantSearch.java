@@ -1,3 +1,5 @@
+package org.apache.solr.cloud;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.cloud;
 
+import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.embedded.JettySolrRunner;
-import org.apache.solr.client.solrj.request.CollectionAdminRequest;
-import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.params.ShardParams;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,48 +35,41 @@ import static org.hamcrest.CoreMatchers.is;
  * and also asserts that a meaningful exception is thrown when shards.tolerant=false
  * See SOLR-7566
  */
-public class TestDownShardTolerantSearch extends SolrCloudTestCase {
+public class TestDownShardTolerantSearch extends AbstractFullDistribZkTestBase {
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  @BeforeClass
-  public static void setupCluster() throws Exception {
-    configureCluster(2)
-        .addConfig("conf", configset("cloud-minimal"))
-        .configure();
+  public TestDownShardTolerantSearch() {
+    sliceCount = 2;
   }
 
   @Test
+  @ShardsFixed(num = 2)
   public void searchingShouldFailWithoutTolerantSearchSetToTrue() throws Exception {
+    waitForRecoveriesToFinish(true);
 
-    CollectionAdminRequest.createCollection("tolerant", "conf", 2, 1)
-        .process(cluster.getSolrClient());
-
-    UpdateRequest update = new UpdateRequest();
-    for (int i = 0; i < 100; i++) {
-      update.add("id", Integer.toString(i));
-    }
-    update.commit(cluster.getSolrClient(), "tolerant");
-
-    QueryResponse response = cluster.getSolrClient().query("tolerant", new SolrQuery("*:*").setRows(1));
+    indexAbunchOfDocs();
+    commit();
+    QueryResponse response = cloudClient.query(new SolrQuery("*:*").setRows(1));
     assertThat(response.getStatus(), is(0));
-    assertThat(response.getResults().getNumFound(), is(100L));
+    assertThat(response.getResults().getNumFound(), is(66L));
 
-    JettySolrRunner stoppedServer = cluster.stopJettySolrRunner(0);
-    
-    cluster.waitForJettyToStop(stoppedServer);
+    ChaosMonkey.kill(shardToJetty.get(SHARD1).get(0));
 
-    response = cluster.getSolrClient().query("tolerant", new SolrQuery("*:*").setRows(1).setParam(ShardParams.SHARDS_TOLERANT, true));
+    response = cloudClient.query(new SolrQuery("*:*").setRows(1).setParam(ShardParams.SHARDS_TOLERANT, true));
     assertThat(response.getStatus(), is(0));
     assertTrue(response.getResults().getNumFound() > 0);
 
-    SolrServerException e = expectThrows(SolrServerException.class,
-        "Request should have failed because we killed shard1 jetty",
-        () -> cluster.getSolrClient().query("tolerant", new SolrQuery("*:*").setRows(1)
-            .setParam(ShardParams.SHARDS_TOLERANT, false))
-    );
-    assertNotNull(e.getCause());
-    assertTrue("Error message from server should have the name of the down shard",
-        e.getCause().getMessage().contains("shard"));
+    try {
+      cloudClient.query(new SolrQuery("*:*").setRows(1).setParam(ShardParams.SHARDS_TOLERANT, false));
+      fail("Request should have failed because we killed shard1 jetty");
+    } catch (SolrServerException e) {
+      log.info("error from server", e);
+      assertNotNull(e.getCause());
+      assertTrue("Error message from server should have the name of the down shard",
+          e.getCause().getMessage().contains(SHARD1));
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
   }
 }

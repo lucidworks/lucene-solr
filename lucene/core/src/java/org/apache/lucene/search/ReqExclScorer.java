@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.Collection;
@@ -23,6 +23,9 @@ import java.util.Collections;
 
 /** A Scorer for queries with a required subscorer
  * and an excluding (prohibited) sub {@link Scorer}.
+ * <br>
+ * This <code>Scorer</code> implements {@link Scorer#advance(int)},
+ * and it uses the advance() on the given scorers.
  */
 class ReqExclScorer extends Scorer {
 
@@ -41,34 +44,76 @@ class ReqExclScorer extends Scorer {
   public ReqExclScorer(Scorer reqScorer, Scorer exclScorer) {
     super(reqScorer.weight);
     this.reqScorer = reqScorer;
-    reqTwoPhaseIterator = reqScorer.twoPhaseIterator();
+    reqTwoPhaseIterator = reqScorer.asTwoPhaseIterator();
     if (reqTwoPhaseIterator == null) {
-      reqApproximation = reqScorer.iterator();
+      reqApproximation = reqScorer;
     } else {
       reqApproximation = reqTwoPhaseIterator.approximation();
     }
-    exclTwoPhaseIterator = exclScorer.twoPhaseIterator();
+    exclTwoPhaseIterator = exclScorer.asTwoPhaseIterator();
     if (exclTwoPhaseIterator == null) {
-      exclApproximation = exclScorer.iterator();
+      exclApproximation = exclScorer;
     } else {
       exclApproximation = exclTwoPhaseIterator.approximation();
     }
   }
 
+  @Override
+  public int nextDoc() throws IOException {
+    return toNonExcluded(reqApproximation.nextDoc());
+  }
+
   /** Confirms whether or not the given {@link TwoPhaseIterator}
    *  matches on the current document. */
-  private static boolean matchesOrNull(TwoPhaseIterator it) throws IOException {
+  private static boolean matches(TwoPhaseIterator it) throws IOException {
     return it == null || it.matches();
   }
 
-  @Override
-  public DocIdSetIterator iterator() {
-    return TwoPhaseIterator.asDocIdSetIterator(twoPhaseIterator());
+  /** Confirm whether there is a match given the current positions of the
+   *  req and excl approximations. This method has 2 important properties:
+   *   - it only calls matches() on excl if the excl approximation is on
+   *     the same doc ID as the req approximation
+   *   - it does NOT call matches() on req if the excl approximation is exact
+   *     and is on the same doc ID as the req approximation */
+  private static boolean matches(int doc, int exclDoc,
+      TwoPhaseIterator reqTwoPhaseIterator,
+      TwoPhaseIterator exclTwoPhaseIterator) throws IOException {
+    assert exclDoc >= doc;
+    if (doc == exclDoc && matches(exclTwoPhaseIterator)) {
+      return false;
+    }
+    return matches(reqTwoPhaseIterator);
+  }
+
+  /** Advance to the next non-excluded doc. */
+  private int toNonExcluded(int doc) throws IOException {
+    int exclDoc = exclApproximation.docID();
+    for (;; doc = reqApproximation.nextDoc()) {
+      if (doc == NO_MORE_DOCS) {
+        return NO_MORE_DOCS;
+      }
+      if (exclDoc < doc) {
+        exclDoc = exclApproximation.advance(doc);
+      }
+      if (matches(doc, exclDoc, reqTwoPhaseIterator, exclTwoPhaseIterator)) {
+        return doc;
+      }
+    }
   }
 
   @Override
   public int docID() {
-    return reqApproximation.docID();
+    return reqScorer.docID();
+  }
+
+  @Override
+  public int freq() throws IOException {
+    return reqScorer.freq();
+  }
+
+  @Override
+  public long cost() {
+    return reqScorer.cost();
   }
 
   @Override
@@ -77,116 +122,37 @@ class ReqExclScorer extends Scorer {
   }
 
   @Override
-  public int advanceShallow(int target) throws IOException {
-    return reqScorer.advanceShallow(target);
+  public Collection<ChildScorer> getChildren() {
+    return Collections.singleton(new ChildScorer(reqScorer, "MUST"));
   }
 
   @Override
-  public float getMaxScore(int upTo) throws IOException {
-    return reqScorer.getMaxScore(upTo);
+  public int advance(int target) throws IOException {
+    return toNonExcluded(reqApproximation.advance(target));
   }
 
   @Override
-  public void setMinCompetitiveScore(float score) throws IOException {
-    // The score of this scorer is the same as the score of 'reqScorer'.
-    reqScorer.setMinCompetitiveScore(score);
-  }
-
-  @Override
-  public Collection<ChildScorable> getChildren() {
-    return Collections.singleton(new ChildScorable(reqScorer, "MUST"));
-  }
-
-  /**
-   * Estimation of the number of operations required to call DISI.advance.
-   * This is likely completely wrong, especially given that the cost of
-   * this method usually depends on how far you want to advance, but it's
-   * probably better than nothing.
-   */
-  private static final int ADVANCE_COST = 10;
-
-  private static float matchCost(
-      DocIdSetIterator reqApproximation,
-      TwoPhaseIterator reqTwoPhaseIterator,
-      DocIdSetIterator exclApproximation,
-      TwoPhaseIterator exclTwoPhaseIterator) {
-    float matchCost = 2; // we perform 2 comparisons to advance exclApproximation
-    if (reqTwoPhaseIterator != null) {
-      // this two-phase iterator must always be matched
-      matchCost += reqTwoPhaseIterator.matchCost();
+  public TwoPhaseIterator asTwoPhaseIterator() {
+    if (reqTwoPhaseIterator == null) {
+      return null;
     }
+    return new TwoPhaseIterator(reqApproximation) {
 
-    // match cost of the prohibited clause: we need to advance the approximation
-    // and match the two-phased iterator
-    final float exclMatchCost = ADVANCE_COST
-        + (exclTwoPhaseIterator == null ? 0 : exclTwoPhaseIterator.matchCost());
-
-    // upper value for the ratio of documents that reqApproximation matches that
-    // exclApproximation also matches
-    float ratio;
-    if (reqApproximation.cost() <= 0) {
-      ratio = 1f;
-    } else if (exclApproximation.cost() <= 0) {
-      ratio = 0f;
-    } else {
-      ratio = (float) Math.min(reqApproximation.cost(), exclApproximation.cost()) / reqApproximation.cost();
-    }
-    matchCost += ratio * exclMatchCost;
-
-    return matchCost;
-  }
-
-  @Override
-  public TwoPhaseIterator twoPhaseIterator() {
-    final float matchCost = matchCost(reqApproximation, reqTwoPhaseIterator, exclApproximation, exclTwoPhaseIterator);
-
-    if (reqTwoPhaseIterator == null
-        || (exclTwoPhaseIterator != null && reqTwoPhaseIterator.matchCost() <= exclTwoPhaseIterator.matchCost())) {
-      // reqTwoPhaseIterator is LESS costly than exclTwoPhaseIterator, check it first
-      return new TwoPhaseIterator(reqApproximation) {
-
-        @Override
-        public boolean matches() throws IOException {
-          final int doc = reqApproximation.docID();
-          // check if the doc is not excluded
-          int exclDoc = exclApproximation.docID();
-          if (exclDoc < doc) {
-            exclDoc = exclApproximation.advance(doc);
-          }
-          if (exclDoc != doc) {
-            return matchesOrNull(reqTwoPhaseIterator);
-          }
-          return matchesOrNull(reqTwoPhaseIterator) && !matchesOrNull(exclTwoPhaseIterator);
+      @Override
+      public boolean matches() throws IOException {
+        final int doc = reqApproximation.docID();
+        // check if the doc is not excluded
+        int exclDoc = exclApproximation.docID();
+        if (exclDoc < doc) {
+          exclDoc = exclApproximation.advance(doc);
         }
+        return ReqExclScorer.matches(doc, exclDoc, reqTwoPhaseIterator, exclTwoPhaseIterator);
+      }
 
-        @Override
-        public float matchCost() {
-          return matchCost;
-        }
-      };
-    } else {
-      // reqTwoPhaseIterator is MORE costly than exclTwoPhaseIterator, check it last
-      return new TwoPhaseIterator(reqApproximation) {
-
-        @Override
-        public boolean matches() throws IOException {
-          final int doc = reqApproximation.docID();
-          // check if the doc is not excluded
-          int exclDoc = exclApproximation.docID();
-          if (exclDoc < doc) {
-            exclDoc = exclApproximation.advance(doc);
-          }
-          if (exclDoc != doc) {
-            return matchesOrNull(reqTwoPhaseIterator);
-          }
-          return !matchesOrNull(exclTwoPhaseIterator) && matchesOrNull(reqTwoPhaseIterator);
-        }
-
-        @Override
-        public float matchCost() {
-          return matchCost;
-        }
-      };
-    }
+      @Override
+      public float matchCost() {
+        return reqTwoPhaseIterator.matchCost(); // TODO: also use cost of exclApproximation.advance()
+      }
+    };
   }
 }

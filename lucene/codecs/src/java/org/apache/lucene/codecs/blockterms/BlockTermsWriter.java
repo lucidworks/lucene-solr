@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.blockterms;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.blockterms;
-
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
-import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsWriterBase;
 import org.apache.lucene.codecs.TermStats;
 import org.apache.lucene.index.IndexOptions;
@@ -43,6 +43,7 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.RamUsageEstimator;
 
 // TODO: currently we encode all terms between two indexed
 // terms as a block; but, we could decouple the two, ie
@@ -126,7 +127,7 @@ public class BlockTermsWriter extends FieldsConsumer implements Closeable {
   }
 
   @Override
-  public void write(Fields fields, NormsProducer norms) throws IOException {
+  public void write(Fields fields) throws IOException {
 
     for(String field : fields) {
 
@@ -145,7 +146,7 @@ public class BlockTermsWriter extends FieldsConsumer implements Closeable {
           break;
         }
 
-        termsWriter.write(term, termsEnum, norms);
+        termsWriter.write(term, termsEnum);
       }
 
       termsWriter.finish();
@@ -231,9 +232,9 @@ public class BlockTermsWriter extends FieldsConsumer implements Closeable {
     
     private final BytesRefBuilder lastPrevTerm = new BytesRefBuilder();
 
-    void write(BytesRef text, TermsEnum termsEnum, NormsProducer norms) throws IOException {
+    void write(BytesRef text, TermsEnum termsEnum) throws IOException {
 
-      BlockTermState state = postingsWriter.writeTerm(text, termsEnum, docsSeen, norms);
+      BlockTermState state = postingsWriter.writeTerm(text, termsEnum, docsSeen);
       if (state == null) {
         // No docs for this term:
         return;
@@ -258,9 +259,11 @@ public class BlockTermsWriter extends FieldsConsumer implements Closeable {
         //System.out.println("  index term!");
       }
 
-      pendingTerms = ArrayUtil.grow(pendingTerms, pendingCount + 1);
-      for (int i = pendingCount; i < pendingTerms.length; i++) {
-        pendingTerms[i] = new TermEntry();
+      if (pendingTerms.length == pendingCount) {
+        pendingTerms = Arrays.copyOf(pendingTerms, ArrayUtil.oversize(pendingCount+1, RamUsageEstimator.NUM_BYTES_OBJECT_REF));
+        for(int i=pendingCount;i<pendingTerms.length;i++) {
+          pendingTerms[i] = new TermEntry();
+        }
       }
       final TermEntry te = pendingTerms[pendingCount];
       te.term.copyBytes(text);

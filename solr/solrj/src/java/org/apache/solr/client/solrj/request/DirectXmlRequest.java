@@ -14,14 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.client.solrj.request;
 
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrRequest;
-import org.apache.solr.client.solrj.request.RequestWriter.StringPayloadContentWriter;
 import org.apache.solr.client.solrj.response.UpdateResponse;
 import org.apache.solr.client.solrj.util.ClientUtils;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.ContentStream;
+
+import java.util.Collection;
 
 /**
  * Send arbitrary XML to a request handler
@@ -33,15 +36,16 @@ public class DirectXmlRequest extends SolrRequest<UpdateResponse> implements IsU
 
   final String xml;
   private SolrParams params;
-
-  public DirectXmlRequest(String path, String body) {
+  
+  public DirectXmlRequest( String path, String body )
+  {
     super( METHOD.POST, path );
     xml = body;
   }
 
   @Override
-  public RequestWriter.ContentWriter getContentWriter(String expectedType) {
-    return new StringPayloadContentWriter(xml, ClientUtils.TEXT_XML);
+  public Collection<ContentStream> getContentStreams() {
+    return ClientUtils.toContentStreams( xml, ClientUtils.TEXT_XML );
   }
 
   @Override

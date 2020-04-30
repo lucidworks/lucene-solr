@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.icu;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.icu;
-
 
 import org.apache.lucene.analysis.TokenStream;
 
@@ -59,34 +59,16 @@ import com.ibm.icu.text.Normalizer2;
  * All foldings, case folding, and normalization mappings are applied recursively
  * to ensure a fully folded and normalized result.
  * </p>
- * <p>
- * A normalizer with additional settings such as a filter that lists characters not
- * to be normalized can be passed in the constructor.
- * </p>
  */
 public final class ICUFoldingFilter extends ICUNormalizer2Filter {
-  /**
-   * A normalizer for search term folding to Unicode text,
-   * applying foldings from UTR#30 Character Foldings.
-   */
-  public static final Normalizer2 NORMALIZER = Normalizer2.getInstance(
-    // TODO: if the wrong version of the ICU jar is used, loading these data files may give a strange error.
-    // maybe add an explicit check? http://icu-project.org/apiref/icu4j/com/ibm/icu/util/VersionInfo.html
-    ICUFoldingFilter.class.getResourceAsStream("utr30.nrm"),
-    "utr30", Normalizer2.Mode.COMPOSE);
-
+  private static final Normalizer2 normalizer =  Normalizer2.getInstance(
+      ICUFoldingFilter.class.getResourceAsStream("utr30.nrm"), 
+      "utr30", Normalizer2.Mode.COMPOSE);
+  
   /**
    * Create a new ICUFoldingFilter on the specified input
    */
   public ICUFoldingFilter(TokenStream input) {
-    super(input, NORMALIZER);
-  }
-
-  /**
-   * Create a new ICUFoldingFilter on the specified input with the specified
-   * normalizer
-   */
-  public ICUFoldingFilter(TokenStream input, Normalizer2 normalizer) {
     super(input, normalizer);
   }
 }

@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.cloud.hdfs;
 
 import java.io.IOException;
@@ -22,13 +23,8 @@ import java.util.Collection;
 import java.util.List;
 
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakFilters;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.NRTCachingDirectory;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase.Nightly;
@@ -39,7 +35,6 @@ import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.cloud.BasicDistributedZkTest;
 import org.apache.solr.cloud.StoppableIndexingThread;
 import org.apache.solr.core.CoreContainer;
-import org.apache.solr.core.DirectoryFactory;
 import org.apache.solr.core.HdfsDirectoryFactory;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.store.blockcache.BlockCache;
@@ -58,6 +53,8 @@ import org.junit.Test;
     BadHdfsThreadsFilter.class // hdfs currently leaks thread(s)
 })
 public class HdfsWriteToMultipleCollectionsTest extends BasicDistributedZkTest {
+  private static final String SOLR_HDFS_HOME = "solr.hdfs.home";
+  private static final String SOLR_HDFS_BLOCKCACHE_GLOBAL = "solr.hdfs.blockcache.global";
   private static final String ACOLLECTION = "acollection";
   private static MiniDFSCluster dfsCluster;
   
@@ -69,12 +66,8 @@ public class HdfsWriteToMultipleCollectionsTest extends BasicDistributedZkTest {
   
   @AfterClass
   public static void teardownClass() throws Exception {
-    try {
-      HdfsTestUtil.teardownClass(dfsCluster);
-    } finally {
-      dfsCluster = null;
-      schemaString = null;
-    }
+    HdfsTestUtil.teardownClass(dfsCluster);
+    dfsCluster = null;
   }
   
   @Override
@@ -89,7 +82,7 @@ public class HdfsWriteToMultipleCollectionsTest extends BasicDistributedZkTest {
   }
   
   protected String getSolrXml() {
-    return "solr.xml";
+    return "solr-no-core.xml";
   }
 
   @Test
@@ -97,7 +90,7 @@ public class HdfsWriteToMultipleCollectionsTest extends BasicDistributedZkTest {
     int docCount = random().nextInt(1313) + 1;
     int cnt = random().nextInt(4) + 1;
     for (int i = 0; i < cnt; i++) {
-      createCollection(ACOLLECTION + i, "conf1", 2, 2, 9);
+      createCollection(ACOLLECTION + i, 2, 2, 9);
     }
     for (int i = 0; i < cnt; i++) {
       waitForRecoveriesToFinish(ACOLLECTION + i, false);
@@ -105,7 +98,7 @@ public class HdfsWriteToMultipleCollectionsTest extends BasicDistributedZkTest {
     List<CloudSolrClient> cloudClients = new ArrayList<>();
     List<StoppableIndexingThread> threads = new ArrayList<>();
     for (int i = 0; i < cnt; i++) {
-      CloudSolrClient client = getCloudSolrClient(zkServer.getZkAddress());
+      CloudSolrClient client = new CloudSolrClient(zkServer.getZkAddress());
       client.setDefaultCollection(ACOLLECTION + i);
       cloudClients.add(client);
       StoppableIndexingThread indexThread = new StoppableIndexingThread(null, client, "1", true, docCount, 1, true);
@@ -137,26 +130,13 @@ public class HdfsWriteToMultipleCollectionsTest extends BasicDistributedZkTest {
       for (SolrCore core : solrCores) {
         if (core.getCoreDescriptor().getCloudDescriptor().getCollectionName()
             .startsWith(ACOLLECTION)) {
-          DirectoryFactory factory = core.getDirectoryFactory();
-          assertTrue("Found: " + core.getDirectoryFactory().getClass().getName(), factory instanceof HdfsDirectoryFactory);
-          Directory dir = factory.get(core.getDataDir(), null, null);
-          try {
-            long dataDirSize = factory.size(dir);
-            Configuration conf = HdfsTestUtil.getClientConfiguration(dfsCluster);
-            FileSystem fileSystem = FileSystem.newInstance(
-                new Path(core.getDataDir()).toUri(), conf);
-            long size = fileSystem.getContentSummary(
-                new Path(core.getDataDir())).getLength();
-            assertEquals(size, dataDirSize);
-          } finally {
-            core.getDirectoryFactory().release(dir);
-          }
-          
+          assertTrue(core.getDirectoryFactory() instanceof HdfsDirectoryFactory);
           RefCounted<IndexWriter> iwRef = core.getUpdateHandler()
               .getSolrCoreState().getIndexWriter(core);
           try {
             IndexWriter iw = iwRef.get();
-            NRTCachingDirectory directory = (NRTCachingDirectory) iw.getDirectory();
+            NRTCachingDirectory directory = (NRTCachingDirectory) iw
+                .getDirectory();
             BlockDirectory blockDirectory = (BlockDirectory) directory
                 .getDelegate();
             assertTrue(blockDirectory.isBlockCacheReadEnabled());
@@ -168,7 +148,7 @@ public class HdfsWriteToMultipleCollectionsTest extends BasicDistributedZkTest {
             BlockCache blockCache = ((BlockDirectoryCache) cache)
                 .getBlockCache();
             if (lastBlockCache != null) {
-              if (Boolean.getBoolean("solr.hdfs.blockcache.global")) {
+              if (Boolean.getBoolean(SOLR_HDFS_BLOCKCACHE_GLOBAL)) {
                 assertEquals(lastBlockCache, blockCache);
               } else {
                 assertNotSame(lastBlockCache, blockCache);

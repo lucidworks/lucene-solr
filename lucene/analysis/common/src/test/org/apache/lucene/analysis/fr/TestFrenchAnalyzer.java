@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.fr;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,14 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.fr;
-
 
 import java.io.IOException;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
-import org.apache.lucene.analysis.CharArraySet;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.util.Version;
 
 /**
  * Test case for FrenchAnalyzer.
@@ -178,5 +179,12 @@ public class TestFrenchAnalyzer extends BaseTokenStreamTestCase {
     checkOneTerm(a, "sécuritaires", "securitair");
     checkOneTerm(a, "securitaires", "securitair");
     a.close();
+  }
+
+  public void testBackcompat40() throws IOException {
+    FrenchAnalyzer a = new FrenchAnalyzer();
+    a.setVersion(Version.LUCENE_4_6_1);
+    // this is just a test to see the correct unicode version is being used, not actually testing hebrew
+    assertAnalyzesTo(a, "א\"א", new String[] {"א", "א"});
   }
 }

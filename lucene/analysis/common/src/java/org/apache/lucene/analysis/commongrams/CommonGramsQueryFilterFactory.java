@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.commongrams;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.commongrams;
-
 
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.commongrams.CommonGramsFilter;
+import org.apache.lucene.analysis.commongrams.CommonGramsQueryFilter;
 
 /**
  * Construct {@link CommonGramsQueryFilter}.
@@ -32,13 +34,8 @@ import org.apache.lucene.analysis.TokenStream;
  *     &lt;filter class="solr.CommonGramsQueryFilterFactory" words="commongramsquerystopwords.txt" ignoreCase="false"/&gt;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
- *
- * @since 3.1
- * @lucene.spi {@value #NAME}
  */
 public class CommonGramsQueryFilterFactory extends CommonGramsFilterFactory {
-
-  public static final String NAME = "commonGramsQuery";
 
   /** Creates a new CommonGramsQueryFilterFactory */
   public CommonGramsQueryFilterFactory(Map<String,String> args) {

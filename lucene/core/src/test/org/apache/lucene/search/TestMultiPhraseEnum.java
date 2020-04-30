@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -45,11 +45,11 @@ public class TestMultiPhraseEnum extends LuceneTestCase {
     doc.add(new TextField("field", "foo bar", Field.Store.NO));
     writer.addDocument(doc);
     
-    DirectoryReader ir = DirectoryReader.open(writer);
+    DirectoryReader ir = DirectoryReader.open(writer, true);
     writer.close();
 
-    PostingsEnum p1 = getOnlyLeafReader(ir).postings(new Term("field", "foo"), PostingsEnum.POSITIONS);
-    PostingsEnum p2 = getOnlyLeafReader(ir).postings(new Term("field", "bar"), PostingsEnum.POSITIONS);
+    PostingsEnum p1 = getOnlySegmentReader(ir).postings(new Term("field", "foo"), PostingsEnum.POSITIONS);
+    PostingsEnum p2 = getOnlySegmentReader(ir).postings(new Term("field", "bar"), PostingsEnum.POSITIONS);
     PostingsEnum union = new MultiPhraseQuery.UnionPostingsEnum(Arrays.asList(p1, p2));
     
     assertEquals(-1, union.docID());
@@ -87,11 +87,11 @@ public class TestMultiPhraseEnum extends LuceneTestCase {
     writer.addDocument(doc);
     
     writer.forceMerge(1);
-    DirectoryReader ir = DirectoryReader.open(writer);
+    DirectoryReader ir = DirectoryReader.open(writer, true);
     writer.close();
 
-    PostingsEnum p1 = getOnlyLeafReader(ir).postings(new Term("field", "foo"), PostingsEnum.POSITIONS);
-    PostingsEnum p2 = getOnlyLeafReader(ir).postings(new Term("field", "bar"), PostingsEnum.POSITIONS);
+    PostingsEnum p1 = getOnlySegmentReader(ir).postings(new Term("field", "foo"), PostingsEnum.POSITIONS);
+    PostingsEnum p2 = getOnlySegmentReader(ir).postings(new Term("field", "bar"), PostingsEnum.POSITIONS);
     PostingsEnum union = new MultiPhraseQuery.UnionPostingsEnum(Arrays.asList(p1, p2));
     
     assertEquals(-1, union.docID());

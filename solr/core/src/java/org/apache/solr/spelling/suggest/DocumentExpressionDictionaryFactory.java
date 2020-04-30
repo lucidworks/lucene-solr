@@ -1,3 +1,5 @@
+package org.apache.solr.spelling.suggest;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling.suggest;
 
 import java.text.ParseException;
 import java.util.HashSet;
@@ -23,11 +24,16 @@ import java.util.Set;
 import org.apache.lucene.expressions.Expression;
 import org.apache.lucene.expressions.SimpleBindings;
 import org.apache.lucene.expressions.js.JavascriptCompiler;
-import org.apache.lucene.search.LongValuesSource;
+import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.spell.Dictionary;
 import org.apache.lucene.search.suggest.DocumentValueSourceDictionary;
 import org.apache.solr.core.SolrCore;
+import org.apache.solr.schema.FieldType;
+import org.apache.solr.schema.TrieDoubleField;
+import org.apache.solr.schema.TrieFloatField;
+import org.apache.solr.schema.TrieIntField;
+import org.apache.solr.schema.TrieLongField;
 import org.apache.solr.search.SolrIndexSearcher;
 
 /**
@@ -72,7 +78,15 @@ public class DocumentExpressionDictionaryFactory extends DictionaryFactory {
       if (params.getName(i).equals(SORT_FIELD)) {
         String sortFieldName = (String) params.getVal(i);
 
-        sortFields.add(getSortField(core, sortFieldName));
+        SortField.Type sortFieldType = getSortFieldType(core, sortFieldName);
+        
+        if (sortFieldType == null) {
+          throw new IllegalArgumentException(sortFieldName + " could not be mapped to any appropriate type"
+              + " [long, int, float, double]");
+        }
+        
+        SortField sortField = new SortField(sortFieldName, sortFieldType);
+        sortFields.add(sortField);
       }
     }
    
@@ -80,7 +94,7 @@ public class DocumentExpressionDictionaryFactory extends DictionaryFactory {
         sortFields), payloadField);
   }
 
-  public LongValuesSource fromExpression(String weightExpression, Set<SortField> sortFields) {
+  public ValueSource fromExpression(String weightExpression, Set<SortField> sortFields) {
     Expression expression = null;
     try {
       expression = JavascriptCompiler.compile(weightExpression);
@@ -91,11 +105,23 @@ public class DocumentExpressionDictionaryFactory extends DictionaryFactory {
     for (SortField sortField : sortFields) {
       bindings.add(sortField);
     }
-    return expression.getDoubleValuesSource(bindings).toLongValuesSource();
+    return expression.getValueSource(bindings);
   }
   
-  private SortField getSortField(SolrCore core, String sortFieldName) {
-    return core.getLatestSchema().getField(sortFieldName).getSortField(true);
+  private SortField.Type getSortFieldType(SolrCore core, String sortFieldName) {
+    SortField.Type type = null;
+    String fieldTypeName = core.getLatestSchema().getField(sortFieldName).getType().getTypeName();
+    FieldType ft = core.getLatestSchema().getFieldTypes().get(fieldTypeName);
+    if (ft instanceof TrieFloatField) {
+      type = SortField.Type.FLOAT;
+    } else if (ft instanceof TrieIntField) {
+      type = SortField.Type.INT;
+    } else if (ft instanceof TrieLongField) {
+      type = SortField.Type.LONG;
+    } else if (ft instanceof TrieDoubleField) {
+      type = SortField.Type.DOUBLE;
+    }
+    return type;
   }
   
 }

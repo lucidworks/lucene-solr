@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.schema;
 
 import java.util.HashMap;
@@ -42,45 +43,56 @@ public class CopyFieldTest extends SolrTestCaseJ4 {
 
   @Test
   public void testCopyFieldSchemaFieldSchemaField() {
-    IllegalArgumentException e = expectThrows(IllegalArgumentException.class, () -> {
+    try {
       new CopyField(new SchemaField("source", new TextField()), null);
-    });
-    assertTrue(e.getLocalizedMessage().contains("can't be NULL"));
-
-    e = expectThrows(IllegalArgumentException.class, () -> {
+      fail("CopyField failed with null SchemaField argument.");
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getLocalizedMessage().contains("can't be NULL"));
+    }
+    try {
       new CopyField(null, new SchemaField("destination", new TextField()));
-    });
-    assertTrue(e.getLocalizedMessage().contains("can't be NULL"));
-
-    e = expectThrows(IllegalArgumentException.class, () -> {
+      fail("CopyField failed with null SchemaField argument.");
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getLocalizedMessage().contains("can't be NULL"));
+    }
+    try {
       new CopyField(null, null);
-    });
-    assertTrue(e.getLocalizedMessage().contains("can't be NULL"));
+      fail("CopyField failed with null SchemaField argument.");
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getLocalizedMessage().contains("can't be NULL"));
+    }
   }
 
   @Test
   public void testCopyFieldSchemaFieldSchemaFieldInt() {
-    IllegalArgumentException e = expectThrows(IllegalArgumentException.class, () -> {
-      new CopyField(null, new SchemaField("destination", new TextField()), 1000);
-    });
-    assertTrue(e.getLocalizedMessage().contains("can't be NULL"));
-
-    e = expectThrows(IllegalArgumentException.class, () -> {
-      new CopyField(new SchemaField("source", new TextField()), null, 1000);
-    });
-    assertTrue(e.getLocalizedMessage().contains("can't be NULL"));
-
-    e = expectThrows(IllegalArgumentException.class, () -> {
+    try {
+      new CopyField(null,
+          new SchemaField("destination", new TextField()), 1000);
+      fail("CopyField failed with null SchemaField argument.");
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getLocalizedMessage().contains("can't be NULL"));
+    }
+    try {
+      new CopyField(new SchemaField("source", new TextField()), null,
+          1000);
+      fail("CopyField failed with null SchemaField argument.");
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getLocalizedMessage().contains("can't be NULL"));
+    }
+    try {
       new CopyField(null, null, 1000);
-    });
-    assertTrue(e.getLocalizedMessage().contains("can't be NULL"));
-
-    e = expectThrows(IllegalArgumentException.class, () -> {
+      fail("CopyField failed with null SchemaField argument.");
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getLocalizedMessage().contains("can't be NULL"));
+    }
+    try {
       new CopyField(new SchemaField("source", new TextField()),
           new SchemaField("destination", new TextField()), -1000);
-    });
-    assertTrue(e.getLocalizedMessage().contains("can't have a negative value"));
-
+      fail("CopyField failed with negative length argument.");
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getLocalizedMessage().contains(
+          "can't have a negative value"));
+    }
     new CopyField(new SchemaField("source", new TextField()),
         new SchemaField("destination", new TextField()), CopyField.UNLIMITED);
   }
@@ -113,7 +125,7 @@ public class CopyFieldTest extends SolrTestCaseJ4 {
   public void testCopyFieldFunctionality() 
     {
       SolrCore core = h.getCore();
-      assertU(adoc("id", "5", "title", "test copy field", "text_en", "this is a simple test of the copy field functionality"));
+      assertU(adoc("id", "10", "title", "test copy field", "text_en", "this is a simple test of the copy field functionality"));
       assertU(commit());
       
       Map<String,String> args = new HashMap<>();
@@ -123,7 +135,7 @@ public class CopyFieldTest extends SolrTestCaseJ4 {
       
       assertQ("Make sure they got in", req
               ,"//*[@numFound='1']"
-              ,"//result/doc[1]/str[@name='id'][.='5']"
+              ,"//result/doc[1]/int[@name='id'][.='10']"
               );
       
       args = new HashMap<>();
@@ -132,7 +144,7 @@ public class CopyFieldTest extends SolrTestCaseJ4 {
       req = new LocalSolrQueryRequest( core, new MapSolrParams( args) );
       assertQ("dynamic source", req
               ,"//*[@numFound='1']"
-              ,"//result/doc[1]/str[@name='id'][.='5']"
+              ,"//result/doc[1]/int[@name='id'][.='10']"
               ,"//result/doc[1]/arr[@name='highlight']/str[.='this is a simple test of ']"
               );
 
@@ -183,7 +195,7 @@ public class CopyFieldTest extends SolrTestCaseJ4 {
     SolrQueryRequest req = new LocalSolrQueryRequest( core, new MapSolrParams( args) );
     assertQ("sku2 copied to text", req
         ,"//*[@numFound='1']"
-        ,"//result/doc[1]/str[@name='id'][.='5']"
+        ,"//result/doc[1]/int[@name='id'][.='5']"
     );
 
     args = new HashMap<>();
@@ -192,7 +204,7 @@ public class CopyFieldTest extends SolrTestCaseJ4 {
     req = new LocalSolrQueryRequest( core, new MapSolrParams( args) );
     assertQ("sku1 copied to dynamic dest *_s", req
         ,"//*[@numFound='1']"
-        ,"//result/doc[1]/str[@name='id'][.='5']"
+        ,"//result/doc[1]/int[@name='id'][.='5']"
         ,"//result/doc[1]/arr[@name='sku1']/str[.='10-1839ACX-93']"
     );
 
@@ -231,7 +243,7 @@ public class CopyFieldTest extends SolrTestCaseJ4 {
     SolrQueryRequest req = new LocalSolrQueryRequest( core, new MapSolrParams( args) );
     assertQ("sku2 copied to text", req
         ,"//*[@numFound='1']"
-        ,"//result/doc[1]/str[@name='id'][.='5']"
+        ,"//result/doc[1]/int[@name='id'][.='5']"
     );
   }
 
@@ -246,7 +258,7 @@ public class CopyFieldTest extends SolrTestCaseJ4 {
     for (String q : new String[] {"5", "10-1839ACX-93", "AAM46" }) {
       assertQ(req("q","catchall_t:" + q)
               ,"//*[@numFound='1']"
-              ,"//result/doc[1]/str[@name='id'][.='5']");
+              ,"//result/doc[1]/int[@name='id'][.='5']");
     }
   }
 }

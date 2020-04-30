@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 
@@ -24,17 +24,15 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.util.AttributeSource;
-import org.apache.lucene.util.automaton.Automaton;
-import org.apache.lucene.util.automaton.ByteRunAutomaton;
+import org.apache.lucene.util.ToStringUtils;
 import org.apache.lucene.util.automaton.LevenshteinAutomata;
-import org.apache.lucene.util.automaton.Operations;
 
 /** Implements the fuzzy search query. The similarity measurement
  * is based on the Damerau-Levenshtein (optimal string alignment) algorithm,
  * though you can explicitly choose classic Levenshtein by passing <code>false</code>
  * to the <code>transpositions</code> parameter.
  * 
- * <p>This query uses {@link MultiTermQuery.TopTermsBlendedFreqScoringRewrite}
+ * <p>This query uses {@link MultiTermQuery.TopTermsScoringBooleanQueryRewrite}
  * as default. So terms will be collected and scored according to their
  * edit distance. Only the top terms are used for building the {@link BooleanQuery}.
  * It is not recommended to change the rewrite mode for fuzzy queries.
@@ -149,26 +147,6 @@ public class FuzzyQuery extends MultiTermQuery {
     return transpositions;
   }
 
-  /**
-   * Expert: Constructs an equivalent Automaton accepting terms matched by this query
-   */
-  public Automaton toAutomaton() {
-    return FuzzyTermsEnum.buildAutomaton(term.text(), prefixLength, transpositions, maxEdits);
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    if (visitor.acceptField(field)) {
-      if (maxEdits == 0 || prefixLength >= term.text().length()) {
-        visitor.consumeTerms(this, term);
-      } else {
-        // Note: we're rebuilding the automaton here, so this can be expensive
-        visitor.consumeTermsMatching(this, field,
-            new ByteRunAutomaton(toAutomaton(), false, Operations.DEFAULT_MAX_DETERMINIZED_STATES));
-      }
-    }
-  }
-
   @Override
   protected TermsEnum getTermsEnum(Terms terms, AttributeSource atts) throws IOException {
     if (maxEdits == 0 || prefixLength >= term.text().length()) {  // can only match if it's exact
@@ -176,7 +154,7 @@ public class FuzzyQuery extends MultiTermQuery {
     }
     return new FuzzyTermsEnum(terms, atts, getTerm(), maxEdits, prefixLength, transpositions);
   }
-
+  
   /**
    * Returns the pattern term.
    */
@@ -194,9 +172,10 @@ public class FuzzyQuery extends MultiTermQuery {
     buffer.append(term.text());
     buffer.append('~');
     buffer.append(Integer.toString(maxEdits));
+    buffer.append(ToStringUtils.boost(getBoost()));
     return buffer.toString();
   }
-
+  
   @Override
   public int hashCode() {
     final int prime = 31;

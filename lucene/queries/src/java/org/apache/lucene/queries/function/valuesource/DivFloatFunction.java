@@ -14,9 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queries.function.valuesource;
 
-import java.io.IOException;
+package org.apache.lucene.queries.function.valuesource;
 
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
@@ -38,7 +37,7 @@ public class DivFloatFunction extends DualFloatFunction {
   }
 
   @Override
-  protected float func(int doc, FunctionValues aVals, FunctionValues bVals) throws IOException {
+  protected float func(int doc, FunctionValues aVals, FunctionValues bVals) {
     return aVals.floatVal(doc) / bVals.floatVal(doc);
   }
 }

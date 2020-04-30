@@ -1,3 +1,5 @@
+package org.apache.lucene.store;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.store;
-
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -28,7 +28,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.apache.lucene.util.BitUtil;
-import org.apache.lucene.util.FutureObjects;
 
 /**
  * Abstract base class for performing read operations of Lucene's low-level
@@ -104,8 +103,8 @@ public abstract class DataInput implements Cloneable {
   }
 
   /** Reads an int stored in variable-length format.  Reads between one and
-   * five bytes.  Smaller values take fewer bytes.  Negative numbers are
-   * supported, but should be avoided.
+   * five bytes.  Smaller values take fewer bytes.  Negative numbers are not
+   * supported.
    * <p>
    * The format is described further in {@link DataOutput#writeVInt(int)}.
    * 
@@ -156,26 +155,6 @@ public abstract class DataInput implements Cloneable {
    */
   public long readLong() throws IOException {
     return (((long)readInt()) << 32) | (readInt() & 0xFFFFFFFFL);
-  }
-
-  /**
-   * Read a specified number of longs with the little endian byte order.
-   * <p>This method can be used to read longs whose bytes have been
-   * {@link Long#reverseBytes reversed} at write time:
-   * <pre class="prettyprint">
-   * for (long l : longs) {
-   *   output.writeLong(Long.reverseBytes(l));
-   * }
-   * </pre>
-   * @lucene.experimental
-   */
-  // TODO: LUCENE-9047: Make the entire DataInput/DataOutput API little endian
-  // Then this would just be `readLongs`?
-  public void readLELongs(long[] dst, int offset, int length) throws IOException {
-    FutureObjects.checkFromIndexSize(offset, length, dst.length);
-    for (int i = 0; i < length; ++i) {
-      dst[offset + i] = Long.reverseBytes(readLong());
-    }
   }
 
   /** Reads a long stored in variable-length format.  Reads between one and
@@ -276,6 +255,24 @@ public abstract class DataInput implements Cloneable {
       throw new Error("This cannot happen: Failing to clone DataInput");
     }
   }
+
+  /** Reads a Map&lt;String,String&gt; previously written
+   *  with {@link DataOutput#writeStringStringMap(Map)}. 
+   *  @deprecated Only for reading existing formats. Encode maps with 
+   *  {@link DataOutput#writeMapOfStrings(Map)} instead.
+   */
+  @Deprecated
+  public Map<String,String> readStringStringMap() throws IOException {
+    final Map<String,String> map = new HashMap<>();
+    final int count = readInt();
+    for(int i=0;i<count;i++) {
+      final String key = readString();
+      final String val = readString();
+      map.put(key, val);
+    }
+
+    return map;
+  }
   
   /** 
    * Reads a Map&lt;String,String&gt; previously written
@@ -289,7 +286,7 @@ public abstract class DataInput implements Cloneable {
     } else if (count == 1) {
       return Collections.singletonMap(readString(), readString());
     } else {
-      Map<String,String> map = count > 10 ? new HashMap<>() : new TreeMap<>();
+      Map<String,String> map = count > 10 ? new HashMap<String,String>() : new TreeMap<String,String>();
       for (int i = 0; i < count; i++) {
         final String key = readString();
         final String val = readString();
@@ -297,6 +294,21 @@ public abstract class DataInput implements Cloneable {
       }
       return Collections.unmodifiableMap(map);
     }
+  }
+
+  /** Reads a Set&lt;String&gt; previously written
+   *  with {@link DataOutput#writeStringSet(Set)}. 
+   *  @deprecated Only for reading existing formats. Encode maps with 
+   *  {@link DataOutput#writeSetOfStrings(Set)} instead. */
+  @Deprecated
+  public Set<String> readStringSet() throws IOException {
+    final Set<String> set = new HashSet<>();
+    final int count = readInt();
+    for(int i=0;i<count;i++) {
+      set.add(readString());
+    }
+
+    return set;
   }
   
   /** 
@@ -311,7 +323,7 @@ public abstract class DataInput implements Cloneable {
     } else if (count == 1) {
       return Collections.singleton(readString());
     } else {
-      Set<String> set = count > 10 ? new HashSet<>() : new TreeSet<>();
+      Set<String> set = count > 10 ? new HashSet<String>() : new TreeSet<String>();
       for (int i = 0; i < count; i++) {
         set.add(readString());
       }

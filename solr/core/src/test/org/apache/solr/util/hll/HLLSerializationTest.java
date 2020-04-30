@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.util.hll;
 
-import org.apache.solr.SolrTestCase;
+import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 
 import org.junit.Test;
@@ -35,7 +36,7 @@ import static org.apache.solr.util.hll.HLL.*;
 /**
  * Serialization smoke-tests.
  */
-public class HLLSerializationTest extends SolrTestCase {
+public class HLLSerializationTest extends LuceneTestCase {
   
   /**
    * A smoke-test that covers serialization/deserialization of an HLL

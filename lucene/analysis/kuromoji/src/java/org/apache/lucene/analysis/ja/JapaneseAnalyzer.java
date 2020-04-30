@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.ja;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,28 +16,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.ja;
-
 
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.apache.lucene.analysis.CharArraySet;
-import org.apache.lucene.analysis.LowerCaseFilter;
-import org.apache.lucene.analysis.StopFilter;
-import org.apache.lucene.analysis.StopwordAnalyzerBase;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.cjk.CJKWidthFilter;
+import org.apache.lucene.analysis.core.LowerCaseFilter;
+import org.apache.lucene.analysis.core.StopFilter;
 import org.apache.lucene.analysis.ja.JapaneseTokenizer.Mode;
 import org.apache.lucene.analysis.ja.dict.UserDictionary;
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.analysis.util.StopwordAnalyzerBase;
 
 /**
  * Analyzer for Japanese that uses morphological analysis.
  * @see JapaneseTokenizer
- *
- * @since 3.6.0
  */
 public class JapaneseAnalyzer extends StopwordAnalyzerBase {
   private final Mode mode;
@@ -95,12 +93,5 @@ public class JapaneseAnalyzer extends StopwordAnalyzerBase {
     stream = new JapaneseKatakanaStemFilter(stream);
     stream = new LowerCaseFilter(stream);
     return new TokenStreamComponents(tokenizer, stream);
-  }
-
-  @Override
-  protected TokenStream normalize(String fieldName, TokenStream in) {
-    TokenStream result = new CJKWidthFilter(in);
-    result = new LowerCaseFilter(result);
-    return result;
   }
 }

@@ -1,3 +1,4 @@
+package org.apache.solr.core;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,15 +15,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.core;
+
 import java.io.File;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
-import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 
 import org.apache.commons.io.FileUtils;
@@ -30,6 +26,7 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.LockFactory;
+import org.apache.lucene.store.NRTCachingDirectory;
 import org.apache.lucene.store.NativeFSLockFactory;
 import org.apache.lucene.store.NoLockFactory;
 import org.apache.lucene.store.SimpleFSLockFactory;
@@ -59,18 +56,19 @@ public class StandardDirectoryFactory extends CachingDirectoryFactory {
   @Override
   protected LockFactory createLockFactory(String rawLockType) throws IOException {
     if (null == rawLockType) {
-      rawLockType = DirectoryFactory.LOCK_TYPE_NATIVE;
-      log.warn("No lockType configured, assuming '"+rawLockType+"'.");
+      // we default to "native"
+      log.warn("No lockType configured, assuming 'native'.");
+      rawLockType = "native";
     }
     final String lockType = rawLockType.toLowerCase(Locale.ROOT).trim();
     switch (lockType) {
-      case DirectoryFactory.LOCK_TYPE_SIMPLE:
+      case "simple":
         return SimpleFSLockFactory.INSTANCE;
-      case DirectoryFactory.LOCK_TYPE_NATIVE:
+      case "native":
         return NativeFSLockFactory.INSTANCE;
-      case DirectoryFactory.LOCK_TYPE_SINGLE:
+      case "single":
         return new SingleInstanceLockFactory();
-      case DirectoryFactory.LOCK_TYPE_NONE:
+      case "none":
         return NoLockFactory.INSTANCE;
       default:
         throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
@@ -115,6 +113,8 @@ public class StandardDirectoryFactory extends CachingDirectoryFactory {
    * carefully - some Directory wrappers will
    * cache files for example.
    * 
+   * This implementation works with NRTCachingDirectory.
+   * 
    * You should first {@link Directory#sync(java.util.Collection)} any file that will be 
    * moved or avoid cached files through settings.
    * 
@@ -129,37 +129,29 @@ public class StandardDirectoryFactory extends CachingDirectoryFactory {
     Directory baseToDir = getBaseDir(toDir);
     
     if (baseFromDir instanceof FSDirectory && baseToDir instanceof FSDirectory) {
-  
-      Path path1 = ((FSDirectory) baseFromDir).getDirectory().toAbsolutePath();
-      Path path2 = ((FSDirectory) baseToDir).getDirectory().toAbsolutePath();
-      
-      try {
-        Files.move(path1.resolve(fileName), path2.resolve(fileName), StandardCopyOption.ATOMIC_MOVE);
-      } catch (AtomicMoveNotSupportedException e) {
-        Files.move(path1.resolve(fileName), path2.resolve(fileName));
+      File dir1 = ((FSDirectory) baseFromDir).getDirectory().toFile();
+      File dir2 = ((FSDirectory) baseToDir).getDirectory().toFile();
+      File indexFileInTmpDir = new File(dir1, fileName);
+      File indexFileInIndex = new File(dir2, fileName);
+      boolean success = indexFileInTmpDir.renameTo(indexFileInIndex);
+      if (success) {
+        return;
       }
-      return;
     }
 
     super.move(fromDir, toDir, fileName, ioContext);
   }
 
-  // perform an atomic rename if possible
-  public void renameWithOverwrite(Directory dir, String fileName, String toName) throws IOException {
-    Directory baseDir = getBaseDir(dir);
-    if (baseDir instanceof FSDirectory) {
-      Path path = ((FSDirectory) baseDir).getDirectory().toAbsolutePath();
-      try {
-        Files.move(path.resolve(fileName),
-            path.resolve(toName), StandardCopyOption.ATOMIC_MOVE,
-            StandardCopyOption.REPLACE_EXISTING);
-      } catch (AtomicMoveNotSupportedException e) {
-        Files.move(FileSystems.getDefault().getPath(path.toString(), fileName),
-            FileSystems.getDefault().getPath(path.toString(), toName), StandardCopyOption.REPLACE_EXISTING);
-      }
+  // special hack to work with NRTCachingDirectory
+  private Directory getBaseDir(Directory dir) {
+    Directory baseDir;
+    if (dir instanceof NRTCachingDirectory) {
+      baseDir = ((NRTCachingDirectory)dir).getDelegate();
     } else {
-      super.renameWithOverwrite(dir, fileName, toName);
+      baseDir = dir;
     }
+    
+    return baseDir;
   }
 
 }

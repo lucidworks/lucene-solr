@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -25,11 +25,6 @@ import java.util.Locale;
 import org.apache.lucene.index.MergePolicy.OneMerge;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.FilterDirectory;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexOutput;
-import org.apache.lucene.store.RateLimitedIndexOutput;
-import org.apache.lucene.store.RateLimiter;
 import org.apache.lucene.util.CollectionUtil;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.ThreadInterruptedException;
@@ -47,7 +42,7 @@ import org.apache.lucene.util.ThreadInterruptedException;
  *
  *  <p>If more than {@link #getMaxMergeCount} merges are
  *  requested then this class will forcefully throttle the
- *  incoming threads by pausing until one more merges
+ *  incoming threads by pausing until one more more merges
  *  complete.</p>
  *
  *  <p>This class attempts to detect whether the index is
@@ -260,36 +255,6 @@ public class ConcurrentMergeScheduler extends MergeScheduler {
     assert false: "merge thread " + currentThread + " was not found";
   }
 
-  @Override
-  public Directory wrapForMerge(OneMerge merge, Directory in) {
-    Thread mergeThread = Thread.currentThread();
-    if (!MergeThread.class.isInstance(mergeThread)) {
-      throw new AssertionError("wrapForMerge should be called from MergeThread. Current thread: "
-          + mergeThread);
-    }
-
-    // Return a wrapped Directory which has rate-limited output.
-    RateLimiter rateLimiter = ((MergeThread) mergeThread).rateLimiter;
-    return new FilterDirectory(in) {
-      @Override
-      public IndexOutput createOutput(String name, IOContext context) throws IOException {
-        ensureOpen();
-
-        // This Directory is only supposed to be used during merging,
-        // so all writes should have MERGE context, else there is a bug 
-        // somewhere that is failing to pass down the right IOContext:
-        assert context.context == IOContext.Context.MERGE: "got context=" + context.context;
-        
-        // Because rateLimiter is bound to a particular merge thread, this method should
-        // always be called from that context. Verify this.
-        assert mergeThread == Thread.currentThread() : "Not the same merge thread, current="
-          + Thread.currentThread() + ", expected=" + mergeThread;
-
-        return new RateLimitedIndexOutput(rateLimiter, in.createOutput(name, context));
-      }
-    };
-  }
-  
   /**
    * Called whenever the running merges have changed, to set merge IO limits.
    * This method sorts the merge threads by their merge size in
@@ -362,9 +327,8 @@ public class ConcurrentMergeScheduler extends MergeScheduler {
         newMBPerSec = targetMBPerSec;
       }
 
-      MergeRateLimiter rateLimiter = mergeThread.rateLimiter;
-      double curMBPerSec = rateLimiter.getMBPerSec();
-
+      double curMBPerSec = merge.rateLimiter.getMBPerSec();
+      
       if (verbose()) {
         long mergeStartNS = merge.mergeStartNS;
         if (mergeStartNS == -1) {
@@ -375,11 +339,11 @@ public class ConcurrentMergeScheduler extends MergeScheduler {
         message.append(String.format(Locale.ROOT, "merge thread %s estSize=%.1f MB (written=%.1f MB) runTime=%.1fs (stopped=%.1fs, paused=%.1fs) rate=%s\n",
                                      mergeThread.getName(),
                                      bytesToMB(merge.estimatedMergeBytes),
-                                     bytesToMB(rateLimiter.getTotalBytesWritten()),
+                                     bytesToMB(merge.rateLimiter.totalBytesWritten),
                                      nsToSec(now - mergeStartNS),
-                                     nsToSec(rateLimiter.getTotalStoppedNS()),
-                                     nsToSec(rateLimiter.getTotalPausedNS()),
-                                     rateToString(rateLimiter.getMBPerSec())));
+                                     nsToSec(merge.rateLimiter.getTotalStoppedNS()),
+                                     nsToSec(merge.rateLimiter.getTotalPausedNS()),
+                                     rateToString(merge.rateLimiter.getMBPerSec())));
 
         if (newMBPerSec != curMBPerSec) {
           if (newMBPerSec == 0.0) {
@@ -400,7 +364,7 @@ public class ConcurrentMergeScheduler extends MergeScheduler {
         }
       }
 
-      rateLimiter.setMBPerSec(newMBPerSec);
+      merge.rateLimiter.setMBPerSec(newMBPerSec);
     }
     if (verbose()) {
       message(message.toString());
@@ -418,8 +382,7 @@ public class ConcurrentMergeScheduler extends MergeScheduler {
         if (value != null) {
           spins = Boolean.parseBoolean(value);
         }
-      } catch (Exception ignored) {
-        // that's fine we might hit a SecurityException etc. here just continue
+      } catch (Throwable ignored) {
       }
       setDefaultMaxMergesAndThreads(spins);
       if (verbose()) {
@@ -486,7 +449,7 @@ public class ConcurrentMergeScheduler extends MergeScheduler {
     Thread currentThread = Thread.currentThread();
     int count = 0;
     for (MergeThread mergeThread : mergeThreads) {
-      if (currentThread != mergeThread && mergeThread.isAlive() && mergeThread.merge.isAborted() == false) {
+      if (currentThread != mergeThread && mergeThread.isAlive() && mergeThread.merge.rateLimiter.getAbort() == false) {
         count++;
       }
     }
@@ -534,6 +497,8 @@ public class ConcurrentMergeScheduler extends MergeScheduler {
         return;
       }
 
+      updateIOThrottle(merge);
+
       boolean success = false;
       try {
         if (verbose()) {
@@ -542,16 +507,14 @@ public class ConcurrentMergeScheduler extends MergeScheduler {
 
         // OK to spawn a new merge thread to handle this
         // merge:
-        final MergeThread newMergeThread = getMergeThread(writer, merge);
-        mergeThreads.add(newMergeThread);
-
-        updateIOThrottle(newMergeThread.merge, newMergeThread.rateLimiter);
+        final MergeThread merger = getMergeThread(writer, merge);
+        mergeThreads.add(merger);
 
         if (verbose()) {
-          message("    launch new thread [" + newMergeThread.getName() + "]");
+          message("    launch new thread [" + merger.getName() + "]");
         }
 
-        newMergeThread.start();
+        merger.start();
         updateMergeThreads();
 
         success = true;
@@ -635,17 +598,16 @@ public class ConcurrentMergeScheduler extends MergeScheduler {
 
   /** Runs a merge thread to execute a single merge, then exits. */
   protected class MergeThread extends Thread implements Comparable<MergeThread> {
+
     final IndexWriter writer;
     final OneMerge merge;
-    final MergeRateLimiter rateLimiter;
 
     /** Sole constructor. */
     public MergeThread(IndexWriter writer, OneMerge merge) {
       this.writer = writer;
       this.merge = merge;
-      this.rateLimiter = new MergeRateLimiter(merge.getMergeProgress());
     }
-
+    
     @Override
     public int compareTo(MergeThread other) {
       // Larger merges sort first:
@@ -654,7 +616,9 @@ public class ConcurrentMergeScheduler extends MergeScheduler {
 
     @Override
     public void run() {
+
       try {
+
         if (verbose()) {
           message("  merge thread: start");
         }
@@ -708,17 +672,11 @@ public class ConcurrentMergeScheduler extends MergeScheduler {
 
   /** Used for testing */
   void setSuppressExceptions() {
-    if (verbose()) {
-      message("will suppress merge exceptions");
-    }
     suppressExceptions = true;
   }
 
   /** Used for testing */
   void clearSuppressExceptions() {
-    if (verbose()) {
-      message("will not suppress merge exceptions");
-    }
     suppressExceptions = false;
   }
   
@@ -751,7 +709,7 @@ public class ConcurrentMergeScheduler extends MergeScheduler {
   }
 
   /** Tunes IO throttle when a new merge starts. */
-  private synchronized void updateIOThrottle(OneMerge newMerge, MergeRateLimiter rateLimiter) throws IOException {
+  private synchronized void updateIOThrottle(OneMerge newMerge) throws IOException {
     if (doAutoIOThrottle == false) {
       return;
     }
@@ -830,7 +788,7 @@ public class ConcurrentMergeScheduler extends MergeScheduler {
     } else {
       rate = targetMBPerSec;
     }
-    rateLimiter.setMBPerSec(rate);
+    newMerge.rateLimiter.setMBPerSec(rate);
     targetMBPerSecChanged();
   }
 

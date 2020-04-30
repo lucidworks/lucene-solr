@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.lucene50;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.lucene50;
-
 
 import java.io.IOException;
 import java.util.Collection;
@@ -32,6 +32,7 @@ import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.FixedBitSet;
+import org.apache.lucene.util.MutableBits;
 
 /** 
  * Lucene 5.0 live docs format 
@@ -62,6 +63,19 @@ public final class Lucene50LiveDocsFormat extends LiveDocsFormat {
   private static final int VERSION_CURRENT = VERSION_START;
 
   @Override
+  public MutableBits newLiveDocs(int size) throws IOException {
+    FixedBitSet bits = new FixedBitSet(size);
+    bits.set(0, size);
+    return bits;
+  }
+
+  @Override
+  public MutableBits newLiveDocs(Bits existing) throws IOException {
+    FixedBitSet fbs = (FixedBitSet) existing;
+    return fbs.clone();
+  }
+
+  @Override
   public Bits readLiveDocs(Directory dir, SegmentCommitInfo info, IOContext context) throws IOException {
     long gen = info.getDelGen();
     String name = IndexFileNames.fileNameFromGeneration(info.info.name, EXTENSION, gen);
@@ -80,7 +94,7 @@ public final class Lucene50LiveDocsFormat extends LiveDocsFormat {
           throw new CorruptIndexException("bits.deleted=" + (fbs.length() - fbs.cardinality()) + 
                                           " info.delcount=" + info.getDelCount(), input);
         }
-        return fbs.asReadOnlyBits();
+        return fbs;
       } catch (Throwable exception) {
         priorE = exception;
       } finally {
@@ -91,29 +105,21 @@ public final class Lucene50LiveDocsFormat extends LiveDocsFormat {
   }
 
   @Override
-  public void writeLiveDocs(Bits bits, Directory dir, SegmentCommitInfo info, int newDelCount, IOContext context) throws IOException {
+  public void writeLiveDocs(MutableBits bits, Directory dir, SegmentCommitInfo info, int newDelCount, IOContext context) throws IOException {
     long gen = info.getNextDelGen();
     String name = IndexFileNames.fileNameFromGeneration(info.info.name, EXTENSION, gen);
-    int delCount = 0;
+    FixedBitSet fbs = (FixedBitSet) bits;
+    if (fbs.length() - fbs.cardinality() != info.getDelCount() + newDelCount) {
+      throw new CorruptIndexException("bits.deleted=" + (fbs.length() - fbs.cardinality()) + 
+                                      " info.delcount=" + info.getDelCount() + " newdelcount=" + newDelCount, name);
+    }
+    long data[] = fbs.getBits();
     try (IndexOutput output = dir.createOutput(name, context)) {
       CodecUtil.writeIndexHeader(output, CODEC_NAME, VERSION_CURRENT, info.info.getId(), Long.toString(gen, Character.MAX_RADIX));
-      final int longCount = FixedBitSet.bits2words(bits.length());
-      for (int i = 0; i < longCount; ++i) {
-        long currentBits = 0;
-        for (int j = i << 6, end = Math.min(j + 63, bits.length() - 1); j <= end; ++j) {
-          if (bits.get(j)) {
-            currentBits |= 1L << j; // mod 64
-          } else {
-            delCount += 1;
-          }
-        }
-        output.writeLong(currentBits);
+      for (int i = 0; i < data.length; i++) {
+        output.writeLong(data[i]);
       }
       CodecUtil.writeFooter(output);
-    }
-    if (delCount != info.getDelCount() + newDelCount) {
-      throw new CorruptIndexException("bits.deleted=" + delCount + 
-          " info.delcount=" + info.getDelCount() + " newdelcount=" + newDelCount, name);
     }
   }
 

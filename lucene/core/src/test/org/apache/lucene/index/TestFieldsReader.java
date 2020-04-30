@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -32,6 +32,7 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
+import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -44,7 +45,7 @@ public class TestFieldsReader extends LuceneTestCase {
   @BeforeClass
   public static void beforeClass() throws Exception {
     testDoc = new Document();
-    fieldInfos = new FieldInfos.Builder(new FieldInfos.FieldNumbers(null));
+    fieldInfos = new FieldInfos.Builder();
     DocHelper.setupDoc(testDoc);
     for (IndexableField field : testDoc.getFields()) {
       FieldInfo fieldInfo = fieldInfos.getOrAdd(field.name());
@@ -187,37 +188,42 @@ public class TestFieldsReader extends LuceneTestCase {
   public void testExceptions() throws Throwable {
     Path indexDir = createTempDir("testfieldswriterexceptions");
 
-    Directory fsDir = newFSDirectory(indexDir);
-    FaultyFSDirectory dir = new FaultyFSDirectory(fsDir);
-    IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()))
-      .setOpenMode(OpenMode.CREATE);
-    IndexWriter writer = new IndexWriter(dir, iwc);
-    for(int i=0;i<2;i++)
-      writer.addDocument(testDoc);
-    writer.forceMerge(1);
-    writer.close();
+    try {
+      Directory fsDir = newFSDirectory(indexDir);
+      FaultyFSDirectory dir = new FaultyFSDirectory(fsDir);
+      IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()))
+                                .setOpenMode(OpenMode.CREATE);
+      IndexWriter writer = new IndexWriter(dir, iwc);
+      for(int i=0;i<2;i++)
+        writer.addDocument(testDoc);
+      writer.forceMerge(1);
+      writer.close();
 
-    IndexReader reader = DirectoryReader.open(dir);
-    dir.startFailing();
+      IndexReader reader = DirectoryReader.open(dir);
+      dir.startFailing();
 
-    boolean exc = false;
+      boolean exc = false;
 
-    for(int i=0;i<2;i++) {
-      try {
-        reader.document(i);
-      } catch (IOException ioe) {
-        // expected
-        exc = true;
+      for(int i=0;i<2;i++) {
+        try {
+          reader.document(i);
+        } catch (IOException ioe) {
+          // expected
+          exc = true;
+        }
+        try {
+          reader.document(i);
+        } catch (IOException ioe) {
+          // expected
+          exc = true;
+        }
       }
-      try {
-        reader.document(i);
-      } catch (IOException ioe) {
-        // expected
-        exc = true;
-      }
+      assertTrue(exc);
+      reader.close();
+      dir.close();
+    } finally {
+      IOUtils.rm(indexDir);
     }
-    assertTrue(exc);
-    reader.close();
-    dir.close();
+
   }
 }

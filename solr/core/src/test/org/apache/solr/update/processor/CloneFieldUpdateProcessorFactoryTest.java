@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
 import java.util.Arrays;
@@ -155,7 +156,7 @@ public class CloneFieldUpdateProcessorFactoryTest extends UpdateProcessorTestBas
 
     SolrInputDocument d;
 
-    // regardless of chain, all of these checks should be equivalent
+    // regardless of chain, all of these checks should be equivilent
     for (String chain : Arrays.asList("clone-single", "clone-single-regex",
                                       "clone-multi", "clone-multi-regex",
                                       "clone-array", "clone-array-regex", 
@@ -177,7 +178,7 @@ public class CloneFieldUpdateProcessorFactoryTest extends UpdateProcessorTestBas
       // append to existing values, preserve boost
       d = processAdd(chain,
                      doc(f("id", "1111"),
-                         field("dest_s", "orig1", "orig2"),
+                         field("dest_s", 2.3f, "orig1", "orig2"),
                          f("source0_s", "NOT COPIED"),
                          f("source1_s", "123456789", "", 42, "abcd")));
       assertNotNull(chain, d);
@@ -187,9 +188,11 @@ public class CloneFieldUpdateProcessorFactoryTest extends UpdateProcessorTestBas
       assertEquals(chain,
                    Arrays.asList("orig1", "orig2", "123456789", "", 42, "abcd"),
                    d.getFieldValues("dest_s"));
+      assertEquals(chain + ": dest boost changed",
+                   2.3f, d.getField("dest_s").getBoost(), 0.0f);
     }
 
-    // should be equivalent for any chain matching source1_s and source2_s (but not source0_s)
+    // should be equivilent for any chain matching source1_s and source2_s (but not source0_s)
     for (String chain : Arrays.asList("clone-multi", "clone-multi-regex",
                                       "clone-array", "clone-array-regex", 
                                       "clone-selector", "clone-selector-regex")) {
@@ -211,10 +214,10 @@ public class CloneFieldUpdateProcessorFactoryTest extends UpdateProcessorTestBas
                    Arrays.asList("123456789", "", 42, "abcd", "xxx", 999),
                    d.getFieldValues("dest_s"));
 
-      // append to existing values
+      // append to existing values, preserve boost
       d = processAdd(chain,
                      doc(f("id", "1111"),
-                         field("dest_s", "orig1", "orig2"),
+                         field("dest_s", 2.3f, "orig1", "orig2"),
                          f("source0_s", "NOT COPIED"),
                          f("source1_s", "123456789", "", 42, "abcd"),
                          f("source2_s", "xxx", 999)));
@@ -230,9 +233,11 @@ public class CloneFieldUpdateProcessorFactoryTest extends UpdateProcessorTestBas
                                  "123456789", "", 42, "abcd",
                                  "xxx", 999),
                    d.getFieldValues("dest_s"));
+      assertEquals(chain + ": dest boost changed",
+                   2.3f, d.getField("dest_s").getBoost(), 0.0f);
     }
     
-    // any chain that copies source1_s to dest_s should be equivalent for these assertions
+    // any chain that copies source1_s to dest_s should be equivilent for these assertions
     for (String chain : Arrays.asList("clone-simple-regex-syntax",
                                       "clone-single", "clone-single-regex",
                                       "clone-multi", "clone-multi-regex",
@@ -254,7 +259,7 @@ public class CloneFieldUpdateProcessorFactoryTest extends UpdateProcessorTestBas
       // append to existing values, preserve boost
       d = processAdd(chain,
                      doc(f("id", "1111"),
-                         field("dest_s", "orig1", "orig2"),
+                         field("dest_s", 2.3f, "orig1", "orig2"),
                          f("source1_s", "123456789", "", 42, "abcd")));
       assertNotNull(chain, d);
       assertEquals(chain,
@@ -263,6 +268,8 @@ public class CloneFieldUpdateProcessorFactoryTest extends UpdateProcessorTestBas
       assertEquals(chain,
                    Arrays.asList("orig1", "orig2", "123456789", "", 42, "abcd"),
                    d.getFieldValues("dest_s"));
+      assertEquals(chain + ": dest boost changed",
+                   2.3f, d.getField("dest_s").getBoost(), 0.0f);
     }
   }
 

@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -24,6 +24,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -40,6 +41,7 @@ import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.SnapshotDeletionPolicy;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.ThreadedIndexingAndSearchingTestCase;
+import org.apache.lucene.index.TrackingIndexWriter;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.NRTCachingDirectory;
 import org.apache.lucene.util.IOUtils;
@@ -47,7 +49,7 @@ import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.ThreadInterruptedException;
 
-@SuppressCodecs({ "SimpleText", "Direct" })
+@SuppressCodecs({ "SimpleText", "Memory", "Direct" })
 public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearchingTestCase {
 
   // Not guaranteed to reflect deletes:
@@ -56,7 +58,7 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
   // Is guaranteed to reflect deletes:
   private SearcherManager nrtDeletes;
 
-  private IndexWriter genWriter;
+  private TrackingIndexWriter genWriter;
 
   private ControlledRealTimeReopenThread<IndexSearcher> nrtDeletesThread;
   private ControlledRealTimeReopenThread<IndexSearcher> nrtNoDeletesThread;
@@ -98,16 +100,15 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
     // Randomly verify the update "took":
     if (random().nextInt(20) == 2) {
       if (VERBOSE) {
-        System.out.println(Thread.currentThread().getName() + ": nrt: verify updateDocuments " + id + " gen=" + gen);
+        System.out.println(Thread.currentThread().getName() + ": nrt: verify " + id);
       }
       nrtDeletesThread.waitForGeneration(gen);
-      assertTrue(gen <= nrtDeletesThread.getSearchingGen());
       final IndexSearcher s = nrtDeletes.acquire();
       if (VERBOSE) {
-        System.out.println(Thread.currentThread().getName() + ": nrt: got deletes searcher=" + s);
+        System.out.println(Thread.currentThread().getName() + ": nrt: got searcher=" + s);
       }
       try {
-        assertEquals(docs.size(), s.search(new TermQuery(id), 10).totalHits.value);
+        assertEquals(docs.size(), s.search(new TermQuery(id), 10).totalHits);
       } finally {
         nrtDeletes.release(s);
       }
@@ -122,16 +123,15 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
     // Randomly verify the add "took":
     if (random().nextInt(20) == 2) {
       if (VERBOSE) {
-        System.out.println(Thread.currentThread().getName() + ": nrt: verify addDocuments " + id + " gen=" + gen);
+        System.out.println(Thread.currentThread().getName() + ": nrt: verify " + id);
       }
       nrtNoDeletesThread.waitForGeneration(gen);
-      assertTrue(gen <= nrtNoDeletesThread.getSearchingGen());
       final IndexSearcher s = nrtNoDeletes.acquire();
       if (VERBOSE) {
-        System.out.println(Thread.currentThread().getName() + ": nrt: got noDeletes searcher=" + s);
+        System.out.println(Thread.currentThread().getName() + ": nrt: got searcher=" + s);
       }
       try {
-        assertEquals(docs.size(), s.search(new TermQuery(id), 10).totalHits.value);
+        assertEquals(docs.size(), s.search(new TermQuery(id), 10).totalHits);
       } finally {
         nrtNoDeletes.release(s);
       }
@@ -146,16 +146,15 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
     // Randomly verify the add "took":
     if (random().nextInt(20) == 2) {
       if (VERBOSE) {
-        System.out.println(Thread.currentThread().getName() + ": nrt: verify addDocument " + id + " gen=" + gen);
+        System.out.println(Thread.currentThread().getName() + ": nrt: verify " + id);
       }
       nrtNoDeletesThread.waitForGeneration(gen);
-      assertTrue(gen <= nrtNoDeletesThread.getSearchingGen());
       final IndexSearcher s = nrtNoDeletes.acquire();
       if (VERBOSE) {
-        System.out.println(Thread.currentThread().getName() + ": nrt: got noDeletes searcher=" + s);
+        System.out.println(Thread.currentThread().getName() + ": nrt: got searcher=" + s);
       }
       try {
-        assertEquals(1, s.search(new TermQuery(id), 10).totalHits.value);
+        assertEquals(1, s.search(new TermQuery(id), 10).totalHits);
       } finally {
         nrtNoDeletes.release(s);
       }
@@ -169,16 +168,15 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
     // Randomly verify the udpate "took":
     if (random().nextInt(20) == 2) {
       if (VERBOSE) {
-        System.out.println(Thread.currentThread().getName() + ": nrt: verify updateDocument " + id + " gen=" + gen);
+        System.out.println(Thread.currentThread().getName() + ": nrt: verify " + id);
       }
       nrtDeletesThread.waitForGeneration(gen);
-      assertTrue(gen <= nrtDeletesThread.getSearchingGen());
       final IndexSearcher s = nrtDeletes.acquire();
       if (VERBOSE) {
-        System.out.println(Thread.currentThread().getName() + ": nrt: got deletes searcher=" + s);
+        System.out.println(Thread.currentThread().getName() + ": nrt: got searcher=" + s);
       }
       try {
-        assertEquals(1, s.search(new TermQuery(id), 10).totalHits.value);
+        assertEquals(1, s.search(new TermQuery(id), 10).totalHits);
       } finally {
         nrtDeletes.release(s);
       }
@@ -192,16 +190,15 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
     // randomly verify the delete "took":
     if (random().nextInt(20) == 7) {
       if (VERBOSE) {
-        System.out.println(Thread.currentThread().getName() + ": nrt: verify deleteDocuments " + id + " gen=" + gen);
+        System.out.println(Thread.currentThread().getName() + ": nrt: verify del " + id);
       }
       nrtDeletesThread.waitForGeneration(gen);
-      assertTrue(gen <= nrtDeletesThread.getSearchingGen());
       final IndexSearcher s = nrtDeletes.acquire();
       if (VERBOSE) {
-        System.out.println(Thread.currentThread().getName() + ": nrt: got deletes searcher=" + s);
+        System.out.println(Thread.currentThread().getName() + ": nrt: got searcher=" + s);
       }
       try {
-        assertEquals(0, s.search(new TermQuery(id), 10).totalHits.value);
+        assertEquals(0, s.search(new TermQuery(id), 10).totalHits);
       } finally {
         nrtDeletes.release(s);
       }
@@ -218,7 +215,7 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
       System.out.println("TEST: make SearcherManager maxReopenSec=" + maxReopenSec + " minReopenSec=" + minReopenSec);
     }
 
-    genWriter = writer;
+    genWriter = new TrackingIndexWriter(writer);
 
     final SearcherFactory sf = new SearcherFactory() {
         @Override
@@ -230,8 +227,8 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
         }
       };
 
-    nrtNoDeletes = new SearcherManager(writer, false, false, sf);
-    nrtDeletes = new SearcherManager(writer, sf);
+    nrtNoDeletes = new SearcherManager(writer, false, sf);
+    nrtDeletes = new SearcherManager(writer, true, sf);
                          
     nrtDeletesThread = new ControlledRealTimeReopenThread<>(genWriter, nrtDeletes, maxReopenSec, minReopenSec);
     nrtDeletesThread.setName("NRTDeletes Reopen Thread");
@@ -310,8 +307,9 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
     final CountDownLatch latch = new CountDownLatch(1);
     final CountDownLatch signal = new CountDownLatch(1);
 
-    LatchedIndexWriter writer = new LatchedIndexWriter(d, conf, latch, signal);
-    final SearcherManager manager = new SearcherManager(writer, false, false, null);
+    LatchedIndexWriter _writer = new LatchedIndexWriter(d, conf, latch, signal);
+    final TrackingIndexWriter writer = new TrackingIndexWriter(_writer);
+    final SearcherManager manager = new SearcherManager(_writer, false, null);
     Document doc = new Document();
     doc.add(newTextField("test", "test", Field.Store.YES));
     writer.addDocument(doc);
@@ -332,12 +330,10 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
       }
     };
     t.start();
-    writer.waitAfterUpdate = true; // wait in addDocument to let some reopens go through
-
+    _writer.waitAfterUpdate = true; // wait in addDocument to let some reopens go through
     final long lastGen = writer.updateDocument(new Term("foo", "bar"), doc); // once this returns the doc is already reflected in the last reopen
 
-    // We now eagerly resolve deletes so the manager should see it after update:
-    assertTrue(manager.isSearcherCurrent());
+    assertFalse(manager.isSearcherCurrent()); // false since there is a delete in the queue
     
     IndexSearcher searcher = manager.acquire();
     try {
@@ -373,7 +369,7 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
     }
     thread.close();
     thread.join();
-    writer.close();
+    _writer.close();
     IOUtils.close(manager, d);
   }
   
@@ -389,13 +385,14 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
       super(d, conf);
       this.latch = latch;
       this.signal = signal;
+
     }
 
     @Override
-    public long updateDocument(Term term,
+    public void updateDocument(Term term,
         Iterable<? extends IndexableField> doc)
         throws IOException {
-      long result = super.updateDocument(term, doc);
+      super.updateDocument(term, doc);
       try {
         if (waitAfterUpdate) {
           signal.countDown();
@@ -404,7 +401,6 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
       } catch (InterruptedException e) {
         throw new ThreadInterruptedException(e);
       }
-      return result;
     }
   }
 
@@ -422,10 +418,12 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
       }
       };
 
-    expectThrows(IllegalStateException.class, () -> {
-      new SearcherManager(w.w, false, false, theEvilOne);
-    });
-
+    try {
+      new SearcherManager(w.w, false, theEvilOne);
+      fail("didn't hit expected exception");
+    } catch (IllegalStateException ise) {
+      // expected
+    }
     w.close();
     other.close();
     dir.close();
@@ -435,7 +433,7 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
     Directory dir = newDirectory();
     IndexWriter iw = new IndexWriter(dir, new IndexWriterConfig(null));
     final AtomicBoolean afterRefreshCalled = new AtomicBoolean(false);
-    SearcherManager sm = new SearcherManager(iw, new SearcherFactory());
+    SearcherManager sm = new SearcherManager(iw, true, new SearcherFactory());
     sm.addListener(new ReferenceManager.RefreshListener() {
       @Override
       public void beforeRefresh() {
@@ -482,9 +480,10 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
     config.setIndexDeletionPolicy(sdp);
     config.setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
     final IndexWriter iw = new IndexWriter(dir, config);
-    SearcherManager sm = new SearcherManager(iw, new SearcherFactory());
+    SearcherManager sm = new SearcherManager(iw, true, new SearcherFactory());
+    final TrackingIndexWriter tiw = new TrackingIndexWriter(iw);
     ControlledRealTimeReopenThread<IndexSearcher> controlledRealTimeReopenThread =
-      new ControlledRealTimeReopenThread<>(iw, sm, maxStaleSecs, 0);
+      new ControlledRealTimeReopenThread<>(tiw, sm, maxStaleSecs, 0);
 
     controlledRealTimeReopenThread.setDaemon(true);
     controlledRealTimeReopenThread.start();
@@ -516,7 +515,7 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
       d.add(new TextField("count", i + "", Field.Store.NO));
       d.add(new TextField("content", content, Field.Store.YES));
       long start = System.currentTimeMillis();
-      long l = iw.addDocument(d);
+      long l = tiw.addDocument(d);
       controlledRealTimeReopenThread.waitForGeneration(l);
       long wait = System.currentTimeMillis() - start;
       assertTrue("waited too long for generation " + wait,
@@ -524,7 +523,7 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
       IndexSearcher searcher = sm.acquire();
       TopDocs td = searcher.search(new TermQuery(new Term("count", i + "")), 10);
       sm.release(searcher);
-      assertEquals(1, td.totalHits.value);
+      assertEquals(1, td.totalHits);
     }
 
     for(Thread commitThread : commitThreads) {
@@ -535,20 +534,5 @@ public class TestControlledRealTimeReopenThread extends ThreadedIndexingAndSearc
     sm.close();
     iw.close();
     dir.close();
-  }
-
-  public void testDeleteAll() throws Exception {
-    Directory dir = newDirectory();
-    IndexWriter w = new IndexWriter(dir, newIndexWriterConfig());
-    SearcherManager mgr = new SearcherManager(w, new SearcherFactory());
-    nrtDeletesThread = new ControlledRealTimeReopenThread<>(w, mgr, 0.1, 0.01);
-    nrtDeletesThread.setName("NRTDeletes Reopen Thread");
-    nrtDeletesThread.setDaemon(true);
-    nrtDeletesThread.start();
-
-    long gen1 = w.addDocument(new Document());
-    long gen2 = w.deleteAll();
-    nrtDeletesThread.waitForGeneration(gen2);
-    IOUtils.close(nrtDeletesThread, nrtDeletes, w, dir);
   }
 }

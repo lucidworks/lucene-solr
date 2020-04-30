@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 
@@ -40,6 +40,15 @@ public class TestNRTReaderCleanup extends LuceneTestCase {
 
     MockDirectoryWrapper dir = newMockDirectory();
     
+    // don't act like windows either, or the test won't simulate the condition
+    dir.setEnableVirusScanner(false);
+
+    // Allow deletion of still open files:
+    dir.setNoDeleteOpenFile(false);
+
+    // Allow writing to same file more than once:
+    dir.setPreventDoubleWrite(false);
+
     IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     LogMergePolicy lmp = new LogDocMergePolicy();
     lmp.setMergeFactor(2);
@@ -57,8 +66,8 @@ public class TestNRTReaderCleanup extends LuceneTestCase {
     w.close();
 
     // Blow away index and make a new writer:
-    for(String name : dir.listAll()) {
-      dir.deleteFile(name);
+    for(String fileName : dir.listAll()) {
+      dir.deleteFile(fileName);
     }
 
     w = new RandomIndexWriter(random(), dir);

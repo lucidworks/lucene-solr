@@ -1,4 +1,6 @@
-/*
+package org.apache.lucene.search.suggest.jaspell;
+
+/** 
  * Copyright (c) 2005 Bruno Martins
  * All rights reserved.
  *
@@ -26,13 +28,14 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.apache.lucene.search.suggest.jaspell;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Vector;
@@ -71,7 +74,7 @@ public class JaspellTernarySearchTrie implements Accountable {
   /**
    * An inner class of Ternary Search Trie that represents a node in the trie.
    */
-  protected static final class TSTNode implements Accountable {
+  protected final class TSTNode implements Accountable {
 
     /** Index values for accessing relatives array. */
     protected final static int PARENT = 0, LOKID = 1, EQKID = 2, HIKID = 3;
@@ -110,10 +113,15 @@ public class JaspellTernarySearchTrie implements Accountable {
       }
       return mem;
     }
+    
+    @Override
+    public Collection<Accountable> getChildResources() {
+      return Collections.emptyList();
+    }
   }
 
   /**
-   * Compares characters by alphabetical order.
+   * Compares characters by alfabetical order.
    * 
    *@param cCompare2
    *          The first char in the comparison.
@@ -204,7 +212,7 @@ public class JaspellTernarySearchTrie implements Accountable {
    *@param file
    *          The <code>Path</code> with the data to load into the Trie.
    *@exception IOException
-   *              A problem occurred while reading the data.
+   *              A problem occured while reading the data.
    */
   public JaspellTernarySearchTrie(Path file) throws IOException {
     this(file, false);
@@ -221,7 +229,7 @@ public class JaspellTernarySearchTrie implements Accountable {
    *          If true, the file is compressed with the GZIP algorithm, and if
    *          false, the file is a normal text document.
    *@exception IOException
-   *              A problem occurred while reading the data.
+   *              A problem occured while reading the data.
    */
   public JaspellTernarySearchTrie(Path file, boolean compression)
           throws IOException {
@@ -231,54 +239,51 @@ public class JaspellTernarySearchTrie implements Accountable {
       in = new BufferedReader(IOUtils.getDecodingReader(new GZIPInputStream(
               Files.newInputStream(file)), StandardCharsets.UTF_8));
     else in = Files.newBufferedReader(file, StandardCharsets.UTF_8);
-    try {
-      String word;
-      int pos;
-      Float occur, one = 1f;
-      while ((word = in.readLine()) != null) {
-        pos = word.indexOf("\t");
-        occur = one;
-        if (pos != -1) {
-          occur = Float.parseFloat(word.substring(pos + 1).trim());
-          word = word.substring(0, pos);
-        }
-        String key = word.toLowerCase(locale);
-        if (rootNode == null) {
-          rootNode = new TSTNode(key.charAt(0), null);
-        }
-        TSTNode node = null;
-        if (key.length() > 0 && rootNode != null) {
-          TSTNode currentNode = rootNode;
-          int charIndex = 0;
-          while (true) {
-            if (currentNode == null) break;
-            int charComp = compareCharsAlphabetically(key.charAt(charIndex),
-                    currentNode.splitchar);
-            if (charComp == 0) {
-              charIndex++;
-              if (charIndex == key.length()) {
-                node = currentNode;
-                break;
-              }
-              currentNode = currentNode.relatives[TSTNode.EQKID];
-            } else if (charComp < 0) {
-              currentNode = currentNode.relatives[TSTNode.LOKID];
-            } else {
-              currentNode = currentNode.relatives[TSTNode.HIKID];
-            }
-          }
-          Float occur2 = null;
-          if (node != null) occur2 = ((Float) (node.data));
-          if (occur2 != null) {
-            occur += occur2.floatValue();
-          }
-          currentNode = getOrCreateNode(word.trim().toLowerCase(locale));
-          currentNode.data = occur;
-        }
+    String word;
+    int pos;
+    Float occur, one = new Float(1);
+    while ((word = in.readLine()) != null) {
+      pos = word.indexOf("\t");
+      occur = one;
+      if (pos != -1) {
+        occur = Float.parseFloat(word.substring(pos + 1).trim());
+        word = word.substring(0, pos);
       }
-    } finally {
-      IOUtils.close(in);
+      String key = word.toLowerCase(locale);
+      if (rootNode == null) {
+        rootNode = new TSTNode(key.charAt(0), null);
+      }
+      TSTNode node = null;
+      if (key.length() > 0 && rootNode != null) {
+        TSTNode currentNode = rootNode;
+        int charIndex = 0;
+        while (true) {
+          if (currentNode == null) break;
+          int charComp = compareCharsAlphabetically(key.charAt(charIndex),
+                  currentNode.splitchar);
+          if (charComp == 0) {
+            charIndex++;
+            if (charIndex == key.length()) {
+              node = currentNode;
+              break;
+            }
+            currentNode = currentNode.relatives[TSTNode.EQKID];
+          } else if (charComp < 0) {
+            currentNode = currentNode.relatives[TSTNode.LOKID];
+          } else {
+            currentNode = currentNode.relatives[TSTNode.HIKID];
+          }
+        }
+        Float occur2 = null;
+        if (node != null) occur2 = ((Float) (node.data));
+        if (occur2 != null) {
+          occur += occur2.floatValue();
+        }
+        currentNode = getOrCreateNode(word.trim().toLowerCase(locale));
+        currentNode.data = occur;
+      }
     }
+    in.close();
   }
 
   /**
@@ -421,9 +426,9 @@ public class JaspellTernarySearchTrie implements Accountable {
     }
     Float aux = (Float) (node.data);
     if (aux == null) {
-      aux = 1f;
+      aux = new Float(1);
     } else {
-      aux = (float) (aux.intValue() + 1);
+      aux = new Float(aux.intValue() + 1);
     }
     put(key2, aux);
     return aux;
@@ -439,14 +444,14 @@ public class JaspellTernarySearchTrie implements Accountable {
   protected String getKey(TSTNode node) {
     StringBuilder getKeyBuffer = new StringBuilder();
     getKeyBuffer.setLength(0);
-    getKeyBuffer.append("").append(node.splitchar);
+    getKeyBuffer.append("" + node.splitchar);
     TSTNode currentNode;
     TSTNode lastNode;
     currentNode = node.relatives[TSTNode.PARENT];
     lastNode = node;
     while (currentNode != null) {
       if (currentNode.relatives[TSTNode.EQKID] == lastNode) {
-        getKeyBuffer.append("").append(currentNode.splitchar);
+        getKeyBuffer.append("" + currentNode.splitchar);
       }
       lastNode = currentNode;
       currentNode = currentNode.relatives[TSTNode.PARENT];
@@ -899,5 +904,10 @@ public class JaspellTernarySearchTrie implements Accountable {
       mem += root.ramBytesUsed();
     }
     return mem;
+  }
+  
+  @Override
+  public Collection<Accountable> getChildResources() {
+    return Collections.emptyList();
   }
 }

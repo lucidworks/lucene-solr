@@ -14,22 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.schema;
 
 import java.io.IOException;
 import java.util.Map;
 
-import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
-import org.apache.solr.legacy.LegacyNumericUtils;
-import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
+import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.docvalues.LongDocValues;
 import org.apache.lucene.queries.function.valuesource.SortedSetFieldSource;
 import org.apache.lucene.search.SortedSetSelector;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.NumericUtils;
 import org.apache.lucene.util.mutable.MutableValue;
 import org.apache.lucene.util.mutable.MutableValueLong;
 
@@ -42,12 +43,10 @@ import org.apache.lucene.util.mutable.MutableValueLong;
  * </ul>
  * 
  * @see Long
- * @deprecated Trie fields are deprecated as of Solr 7.0
  */
-@Deprecated
 public class TrieLongField extends TrieField implements LongValueFieldType {
   {
-    type = NumberType.LONG;
+    type=TrieTypes.LONG;
   }
 
   @Override
@@ -55,9 +54,9 @@ public class TrieLongField extends TrieField implements LongValueFieldType {
     if(val==null) return null;
     if (val instanceof Number) return ((Number) val).longValue();
     try {
-      if (val instanceof CharSequence) return Long.parseLong(val.toString());
+      if (val instanceof String) return Long.parseLong((String) val);
     } catch (NumberFormatException e) {
-      Double v = Double.parseDouble((String)val);
+      Double v = Double.parseDouble((String) val);
       return v.longValue();
     }
     return super.toNativeType(val);
@@ -72,37 +71,23 @@ public class TrieLongField extends TrieField implements LongValueFieldType {
         SortedSetFieldSource thisAsSortedSetFieldSource = this; // needed for nested anon class ref
         
         SortedSetDocValues sortedSet = DocValues.getSortedSet(readerContext.reader(), field);
-        SortedDocValues view = SortedSetSelector.wrap(sortedSet, selector);
+        final SortedDocValues view = SortedSetSelector.wrap(sortedSet, selector);
         
         return new LongDocValues(thisAsSortedSetFieldSource) {
-          private int lastDocID;
-
-          private boolean setDoc(int docID) throws IOException {
-            if (docID < lastDocID) {
-              throw new IllegalArgumentException("docs out of order: lastDocID=" + lastDocID + " docID=" + docID);
-            }
-            if (docID > view.docID()) {
-              lastDocID = docID;
-              return docID == view.advance(docID);
-            } else {
-              return docID == view.docID();
-            }
-          }
-
           @Override
-          public long longVal(int doc) throws IOException {
-            if (setDoc(doc)) {
-              BytesRef bytes = view.binaryValue();
-              assert bytes.length > 0;
-              return LegacyNumericUtils.prefixCodedToLong(bytes);
-            } else {
+          public long longVal(int doc) {
+            BytesRef bytes = view.get(doc);
+            if (0 == bytes.length) {
+              // the only way this should be possible is for non existent value
+              assert !exists(doc) : "zero bytes for doc, but exists is true";
               return 0L;
             }
+            return NumericUtils.prefixCodedToLong(bytes);
           }
 
           @Override
-          public boolean exists(int doc) throws IOException {
-            return setDoc(doc);
+          public boolean exists(int doc) {
+            return -1 != view.getOrd(doc);
           }
 
           @Override
@@ -116,14 +101,14 @@ public class TrieLongField extends TrieField implements LongValueFieldType {
               }
               
               @Override
-              public void fillValue(int doc) throws IOException {
-                if (setDoc(doc)) {
-                  mval.exists = true;
-                  mval.value = LegacyNumericUtils.prefixCodedToLong(view.binaryValue());
-                } else {
-                  mval.exists = false;
-                  mval.value = 0L;
-                }
+              public void fillValue(int doc) {
+                // micro optimized (eliminate at least one redudnent ord check) 
+                //mval.exists = exists(doc);
+                //mval.value = mval.exists ? longVal(doc) : 0;
+                //
+                BytesRef bytes = view.get(doc);
+                mval.exists = (0 == bytes.length);
+                mval.value = mval.exists ? NumericUtils.prefixCodedToLong(bytes) : 0L;
               }
             };
           }

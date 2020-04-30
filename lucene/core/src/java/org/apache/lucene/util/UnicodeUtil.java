@@ -1,3 +1,6 @@
+package org.apache.lucene.util;
+
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,9 +17,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
-
 
 
 /*
@@ -449,7 +449,7 @@ public final class UnicodeUtil {
    *    content is prematurely truncated.
    */
   public static int UTF8toUTF32(final BytesRef utf8, final int[] ints) {
-    // TODO: ints must not be null, should be an assert
+    // TODO: ints cannot be null, should be an assert
     int utf32Count = 0;
     int utf8Upto = utf8.offset;
     final byte[] bytes = utf8.bytes;
@@ -569,7 +569,7 @@ public final class UnicodeUtil {
           }
         }
         
-        sb.append("0x").append(Integer.toHexString(ch));
+        sb.append("0x" + Integer.toHexString(ch));
       }
     }
     return sb.toString();
@@ -611,11 +611,6 @@ public final class UnicodeUtil {
       }
     }
     return out_offset;
-  }
-
-  /** Returns the maximum number of utf8 bytes required to encode a utf16 (e.g., java char[], String) */
-  public static int maxUTF8Length(int utf16Length) {
-    return Math.multiplyExact(utf16Length, MAX_UTF8_BYTES_PER_CHAR);
   }
   
   /**

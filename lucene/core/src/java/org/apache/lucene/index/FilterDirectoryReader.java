@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.io.IOException;
 import java.util.List;
@@ -37,7 +37,7 @@ public abstract class FilterDirectoryReader extends DirectoryReader {
    *  an instance of {@link FilterDirectoryReader}.  */
   public static DirectoryReader unwrap(DirectoryReader reader) {
     while (reader instanceof FilterDirectoryReader) {
-      reader = ((FilterDirectoryReader) reader).getDelegate();
+      reader = ((FilterDirectoryReader) reader).in;
     }
     return reader;
   }
@@ -50,18 +50,10 @@ public abstract class FilterDirectoryReader extends DirectoryReader {
    */
   public static abstract class SubReaderWrapper {
 
-    /**
-     * Wraps a list of LeafReaders
-     * @return an array of wrapped LeafReaders. The returned array might contain less elements compared to the given
-     * reader list if an entire reader is filtered out.
-     */
-    protected LeafReader[] wrap(List<? extends LeafReader> readers) {
+    private LeafReader[] wrap(List<? extends LeafReader> readers) {
       LeafReader[] wrapped = new LeafReader[readers.size()];
-      int i = 0;
-      for (LeafReader reader : readers) {
-        LeafReader wrap = wrap(reader);
-        assert wrap != null;
-        wrapped[i++] = wrap;
+      for (int i = 0; i < readers.size(); i++) {
+        wrapped[i] = wrap(readers.get(i));
       }
       return wrapped;
     }

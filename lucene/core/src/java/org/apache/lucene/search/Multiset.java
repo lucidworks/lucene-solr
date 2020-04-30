@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.util.AbstractCollection;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -63,6 +65,11 @@ final class Multiset<T> extends AbstractCollection<T> {
         remaining -= 1;
         return current;
       }
+
+      @Override
+      public void remove() {
+        throw new UnsupportedOperationException();
+      }
     };
   }
 
@@ -79,7 +86,12 @@ final class Multiset<T> extends AbstractCollection<T> {
 
   @Override
   public boolean add(T e) {
-    map.put(e, map.getOrDefault(e, 0) + 1);
+    Integer currentFreq = map.get(e);
+    if (currentFreq == null) {
+      map.put(e, 1);
+    } else {
+      map.put(e, map.get(e) + 1);
+    }
     size += 1;
     return true;
   }

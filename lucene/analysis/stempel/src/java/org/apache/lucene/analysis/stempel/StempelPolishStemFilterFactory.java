@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis.stempel;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,24 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.stempel;
-
 
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.pl.PolishAnalyzer;
+import org.apache.lucene.analysis.stempel.StempelFilter;
+import org.apache.lucene.analysis.stempel.StempelStemmer;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
  * Factory for {@link StempelFilter} using a Polish stemming table.
- * @since 3.1.0
- * @lucene.spi {@value #NAME}
  */
-public class StempelPolishStemFilterFactory extends TokenFilterFactory {
-
-  /** SPI name */
-  public static final String NAME = "stempelPolishStem";
+public class StempelPolishStemFilterFactory extends TokenFilterFactory {  
   
   /** Creates a new StempelPolishStemFilterFactory */
   public StempelPolishStemFilterFactory(Map<String,String> args) {

@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import org.apache.lucene.index.Term;
+import org.apache.lucene.util.ToStringUtils;
 import org.apache.lucene.util.automaton.Automaton;
 import org.apache.lucene.util.automaton.AutomatonProvider;
 import org.apache.lucene.util.automaton.Operations;
@@ -108,12 +109,7 @@ public class RegexpQuery extends AutomatonQuery {
           new RegExp(term.text(), flags).toAutomaton(
                        provider, maxDeterminizedStates), maxDeterminizedStates);
   }
-
-  /** Returns the regexp of this query wrapped in a Term. */
-  public Term getRegexp() {
-    return term;
-  }
-
+  
   /** Prints a user-readable version of this query. */
   @Override
   public String toString(String field) {
@@ -125,6 +121,7 @@ public class RegexpQuery extends AutomatonQuery {
     buffer.append('/');
     buffer.append(term.text());
     buffer.append('/');
+    buffer.append(ToStringUtils.boost(getBoost()));
     return buffer.toString();
   }
 }

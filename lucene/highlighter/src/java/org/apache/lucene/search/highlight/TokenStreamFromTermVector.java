@@ -1,3 +1,5 @@
+package org.apache.lucene.search.highlight;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.highlight;
 
 import java.io.IOException;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
+import org.apache.lucene.analysis.tokenattributes.PackedTokenAttributeImpl;
 import org.apache.lucene.analysis.tokenattributes.PayloadAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.util.AttributeFactory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefArray;
 import org.apache.lucene.util.BytesRefBuilder;
@@ -49,6 +52,11 @@ import org.apache.lucene.util.UnicodeUtil;
  * @lucene.internal
  */
 public final class TokenStreamFromTermVector extends TokenStream {
+
+  //This attribute factory uses less memory when captureState() is called.
+  public static final AttributeFactory ATTRIBUTE_FACTORY =
+      AttributeFactory.getStaticImplementation(
+          AttributeFactory.DEFAULT_ATTRIBUTE_FACTORY, PackedTokenAttributeImpl.class);
 
   private final Terms vector;
 
@@ -82,6 +90,7 @@ public final class TokenStreamFromTermVector extends TokenStream {
    * @param maxStartOffset if a token's start offset exceeds this then the token is not added. -1 disables the limit.
    */
   public TokenStreamFromTermVector(Terms vector, int maxStartOffset) throws IOException {
+    super(ATTRIBUTE_FACTORY);
     this.maxStartOffset = maxStartOffset < 0 ? Integer.MAX_VALUE : maxStartOffset;
     assert !hasAttribute(PayloadAttribute.class) : "AttributeFactory shouldn't have payloads *yet*";
     if (!vector.hasPositions() && !vector.hasOffsets()) {
@@ -230,8 +239,13 @@ public final class TokenStreamFromTermVector extends TokenStream {
     // Estimate the number of position slots we need from term stats.  We use some estimation factors taken from
     //  Wikipedia that reduce the likelihood of needing to expand the array.
     int sumTotalTermFreq = (int) vector.getSumTotalTermFreq();
-    assert sumTotalTermFreq != -1;
-
+    if (sumTotalTermFreq == -1) {//unfortunately term vectors seem to not have this stat
+      int size = (int) vector.size();
+      if (size == -1) {//doesn't happen with term vectors, it seems, but pick a default any way
+        size = 128;
+      }
+      sumTotalTermFreq = (int)(size * 2.4);
+    }
     final int originalPositionEstimate = (int) (sumTotalTermFreq * 1.5);//less than 1 in 10 docs exceed this
 
     // This estimate is based on maxStartOffset. Err on the side of this being larger than needed.

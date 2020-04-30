@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.fst;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.fst;
 
 import java.io.IOException;
 import java.util.*;
@@ -180,9 +181,9 @@ public class FSTCompletion {
         // Descend into the automaton using the key as prefix.
         if (descendWithPrefix(arc, utf8)) {
           automaton.readFirstTargetArc(arc, arc, fstReader);
-          if (arc.label() == FST.END_LABEL) {
+          if (arc.label == FST.END_LABEL) {
             // Normalize prefix-encoded weight.
-            return rootArc.label();
+            return rootArc.label;
           }
         }
       }
@@ -273,7 +274,7 @@ public class FSTCompletion {
         // of the key prefix. The arc we're at is the last key's byte,
         // so we will collect it too.
         output.length = key.length - 1;
-        if (collect(res, num, rootArc.label(), output, arc) && !collectAll) {
+        if (collect(res, num, rootArc.label, output, arc) && !collectAll) {
           // We have enough suggestions to return immediately. Keep on looking
           // for an
           // exact match, if requested.
@@ -360,11 +361,11 @@ public class FSTCompletion {
       output.bytes = ArrayUtil.grow(output.bytes);
     }
     assert output.offset == 0;
-    output.bytes[output.length++] = (byte) arc.label();
+    output.bytes[output.length++] = (byte) arc.label;
     FST.BytesReader fstReader = automaton.getBytesReader();
     automaton.readFirstTargetArc(arc, arc, fstReader);
     while (true) {
-      if (arc.label() == FST.END_LABEL) {
+      if (arc.label == FST.END_LABEL) {
         res.add(new Completion(output, bucket));
         if (res.size() >= num) return true;
       } else {

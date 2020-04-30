@@ -21,13 +21,13 @@
   <luceneMatchVersion>${tests.luceneMatchVersion:LATEST}</luceneMatchVersion>
   <dataDir>${solr.data.dir:}</dataDir>
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
+
   <xi:include href="solrconfig.snippet.randomindexconfig.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
 
   <updateHandler class="solr.DirectUpdateHandler2">
   </updateHandler>
 
-  <requestHandler name="/select" class="solr.SearchHandler">
+  <requestHandler name="standard" class="solr.StandardRequestHandler">
     <bool name="httpCaching">true</bool>
   </requestHandler>
 
@@ -40,7 +40,7 @@
   </requestHandler>
 
   <!-- test query parameter defaults -->
-  <requestHandler name="/defaults" class="solr.SearchHandler">
+  <requestHandler name="defaults" class="solr.StandardRequestHandler">
     <lst name="defaults">
       <int name="rows">4</int>
       <bool name="hl">true</bool>
@@ -49,7 +49,7 @@
   </requestHandler>
 
   <!-- test query parameter defaults -->
-  <requestHandler name="/lazy" class="solr.SearchHandler" startup="lazy">
+  <requestHandler name="lazy" class="solr.StandardRequestHandler" startup="lazy">
     <lst name="defaults">
       <int name="rows">4</int>
       <bool name="hl">true</bool>
@@ -57,8 +57,9 @@
     </lst>
   </requestHandler>
 
-  <requestDispatcher>
-    <requestParsers enableRemoteStreaming="false" multipartUploadLimitInKB="-1"/>
+  <!-- enable streaming for testing... -->
+  <requestDispatcher handleSelect="true">
+    <requestParsers enableRemoteStreaming="true" multipartUploadLimitInKB="2048"/>
     <httpCaching lastModifiedFrom="openTime" etagSeed="Solr" never304="false">
       <cacheControl>max-age=30, public</cacheControl>
     </httpCaching>

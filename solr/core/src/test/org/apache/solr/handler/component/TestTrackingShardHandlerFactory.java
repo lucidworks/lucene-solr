@@ -1,3 +1,5 @@
+package org.apache.solr.handler.component;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.handler.component;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -65,7 +66,7 @@ public class TestTrackingShardHandlerFactory extends AbstractFullDistribZkTestBa
       assertSame(trackingQueue, trackingShardHandlerFactory.getTrackingQueue());
     }
 
-    createCollection(collectionName, "conf1", 2, 1, 1);
+    createCollection(collectionName, 2, 1, 1);
 
     waitForRecoveriesToFinish(collectionName, true);
 

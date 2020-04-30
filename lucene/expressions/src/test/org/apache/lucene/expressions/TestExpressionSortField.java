@@ -1,3 +1,5 @@
+package org.apache.lucene.expressions;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.expressions;
-
 
 import org.apache.lucene.expressions.js.JavascriptCompiler;
 import org.apache.lucene.search.SortField;
@@ -31,7 +31,7 @@ public class TestExpressionSortField extends LuceneTestCase {
     bindings.add(new SortField("popularity", SortField.Type.INT));
     
     SortField sf = expr.getSortField(bindings, true);
-    assertEquals("<expr(sqrt(_score) + ln(popularity))>!", sf.toString());
+    assertEquals("<expr \"sqrt(_score) + ln(popularity)\">!", sf.toString());
   }
   
   public void testEquals() throws Exception {

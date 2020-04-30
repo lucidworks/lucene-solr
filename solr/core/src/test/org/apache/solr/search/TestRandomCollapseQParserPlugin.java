@@ -14,12 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.search;
 
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
 
+import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
 import org.apache.lucene.util.TestUtil;
 import org.apache.solr.CursorPagingTest;
 import org.apache.solr.SolrTestCaseJ4;
@@ -27,14 +29,19 @@ import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.params.ModifiableSolrParams;
 import static org.apache.solr.search.CollapsingQParserPlugin.NULL_IGNORE;
 import static org.apache.solr.search.CollapsingQParserPlugin.NULL_COLLAPSE;
 import static org.apache.solr.search.CollapsingQParserPlugin.NULL_EXPAND;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
+//We want codecs that support DocValues, and ones supporting blank/empty values.
+@SuppressCodecs({"Appending","Lucene3x","Lucene40","Lucene41","Lucene42"})
 public class TestRandomCollapseQParserPlugin extends SolrTestCaseJ4 {
 
   /** Full SolrServer instance for arbitrary introspection of response data and adding fqs */
@@ -163,7 +170,7 @@ public class TestRandomCollapseQParserPlugin extends SolrTestCaseJ4 {
             
             if (null == collapseVal) {
               if (NULL_EXPAND.equals(nullPolicy)) {
-                // nothing to check for this doc, it's in its own group
+                // nothing to check for this doc, it's in it's own group
                 continue;
               }
               
@@ -172,11 +179,11 @@ public class TestRandomCollapseQParserPlugin extends SolrTestCaseJ4 {
                           NULL_IGNORE.equals(nullPolicy));
             }
             
-            // workaround for SOLR-8082...
+            // work arround for SOLR-8082...
             //
             // what's important is that we already did the collapsing on the *real* collapseField
             // to verify the groupHead returned is really the best our verification filter
-            // on docs with that value in a different field containing the exact same values
+            // on docs with that value in a differnet ifeld containing the exact same values
             final String checkField = collapseField.replace("float_dv", "float");
             
             final String checkFQ = ((null == collapseVal)

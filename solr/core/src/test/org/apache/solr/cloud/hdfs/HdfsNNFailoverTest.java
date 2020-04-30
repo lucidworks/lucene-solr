@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.cloud.hdfs;
 
 import java.io.IOException;
@@ -33,8 +34,10 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakFilters;
     BadHdfsThreadsFilter.class // hdfs currently leaks thread(s)
 })
 public class HdfsNNFailoverTest extends BasicDistributedZkTest {
+
   private static final String COLLECTION = "collection";
   private static MiniDFSCluster dfsCluster;
+
   
   @BeforeClass
   public static void setupClass() throws Exception {
@@ -43,11 +46,8 @@ public class HdfsNNFailoverTest extends BasicDistributedZkTest {
   
   @AfterClass
   public static void teardownClass() throws Exception {
-    try {
-      HdfsTestUtil.teardownClass(dfsCluster);
-    } finally {
-      dfsCluster = null;
-    }
+    HdfsTestUtil.teardownClass(dfsCluster);
+    dfsCluster = null;
   }
   
   @Override
@@ -60,14 +60,14 @@ public class HdfsNNFailoverTest extends BasicDistributedZkTest {
     sliceCount = 1;
     fixShardCount(TEST_NIGHTLY ? 7 : random().nextInt(2) + 1);
   }
-
+  
   protected String getSolrXml() {
-    return "solr.xml";
+    return "solr-no-core.xml";
   }
 
   @Test
   public void test() throws Exception {
-    createCollection(COLLECTION, "conf1", 1, 1, 1);
+    createCollection(COLLECTION, 1, 1, 1);
     
     waitForRecoveriesToFinish(COLLECTION, false);
     

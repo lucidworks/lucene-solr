@@ -1,3 +1,5 @@
+package org.apache.solr.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search;
 
 import org.apache.solr.SolrTestCaseJ4;
 import org.junit.BeforeClass;
@@ -27,9 +28,6 @@ public class TestFieldSortValues extends SolrTestCaseJ4 {
 
   @BeforeClass
   public static void beforeClass() throws Exception {
-    System.setProperty("solr.tests.payload.fieldtype",
-                       Boolean.getBoolean(NUMERIC_POINTS_SYSPROP) ?
-                       "wrapped_point_int" : "wrapped_trie_int");
     initCore("solrconfig-minimal.xml", "schema-field-sort-values.xml");
   }
   
@@ -44,10 +42,10 @@ public class TestFieldSortValues extends SolrTestCaseJ4 {
 
     // payload is backed by a custom sort field which returns the payload value mod 3
     assertQ(req("q", "*:*", "fl", "id", "sort", "payload asc, id asc", "fsv", "true")
-        , "//result/doc[str='2'  and position()=1]"
-        , "//result/doc[str='3'  and position()=2]"
-        , "//result/doc[str='5'  and position()=3]"
-        , "//result/doc[str='1'  and position()=4]"
-        , "//result/doc[str='4'  and position()=5]");
+        , "//result/doc[int='2'  and position()=1]"
+        , "//result/doc[int='3'  and position()=2]"
+        , "//result/doc[int='5'  and position()=3]"
+        , "//result/doc[int='1'  and position()=4]"
+        , "//result/doc[int='4'  and position()=5]");
   }
 }

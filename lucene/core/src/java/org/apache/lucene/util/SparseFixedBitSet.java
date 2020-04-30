@@ -1,3 +1,5 @@
+package org.apache.lucene.util;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
-
 
 import java.io.IOException;
+import java.util.Arrays;
 
 import org.apache.lucene.search.DocIdSetIterator;
 
@@ -371,7 +372,7 @@ public class SparseFixedBitSet extends BitSet implements Bits, Accountable {
       // fast path: if we currently have nothing in the block, just copy the data
       // this especially happens all the time if you call OR on an empty set
       indices[i4096] = index;
-      this.bits[i4096] = ArrayUtil.copyOfSubArray(bits, 0, nonZeroLongCount);
+      this.bits[i4096] = Arrays.copyOf(bits, nonZeroLongCount);
       this.nonZeroLongCount += nonZeroLongCount;
       return;
     }
@@ -412,7 +413,7 @@ public class SparseFixedBitSet extends BitSet implements Bits, Accountable {
    * {@link #or(DocIdSetIterator)} impl that works best when <code>it</code> is dense
    */
   private void orDense(DocIdSetIterator it) throws IOException {
-    checkUnpositioned(it);
+    assertUnpositioned(it);
     // The goal here is to try to take advantage of the ordering of documents
     // to build the data-structure more efficiently
     // NOTE: this heavily relies on the fact that shifts are mod 64
@@ -465,7 +466,7 @@ public class SparseFixedBitSet extends BitSet implements Bits, Accountable {
       // specialize union with another SparseFixedBitSet
       final SparseFixedBitSet other = BitSetIterator.getSparseFixedBitSetOrNull(it);
       if (other != null) {
-        checkUnpositioned(it);
+        assertUnpositioned(it);
         or(other);
         return;
       }
@@ -482,6 +483,31 @@ public class SparseFixedBitSet extends BitSet implements Bits, Accountable {
     } else {
       orDense(it);
     }
+  }
+
+  // AND and AND_NOT do not need much specialization here since this sparse set
+  // is supposed to be used on sparse data and the default AND/AND_NOT impl
+  // (leap frog) is efficient when at least one of the sets contains sparse data
+
+  @Override
+  public void and(DocIdSetIterator it) throws IOException {
+    final SparseFixedBitSet other = BitSetIterator.getSparseFixedBitSetOrNull(it);
+    if (other != null) {
+      // if we are merging with another SparseFixedBitSet, a quick win is
+      // to clear up some blocks by only looking at their index. Then the set
+      // is sparser and the leap-frog approach of the parent class is more
+      // efficient. Since SparseFixedBitSet is supposed to be used for sparse
+      // sets, the intersection of two SparseFixedBitSet is likely very sparse
+      final int numCommonBlocks = Math.min(indices.length, other.indices.length);
+      for (int i = 0; i < numCommonBlocks; ++i) {
+        if ((indices[i] & other.indices[i]) == 0) {
+          this.nonZeroLongCount -= Long.bitCount(this.indices[i]);
+          this.indices[i] = 0;
+          this.bits[i] = null;
+        }
+      }
+    }
+    super.and(it);
   }
 
   @Override

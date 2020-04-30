@@ -1,3 +1,5 @@
+package org.apache.lucene.search.suggest.document;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.document;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockAnalyzer;
@@ -66,7 +67,7 @@ public class TestFuzzyCompletionQuery extends LuceneTestCase {
     DirectoryReader reader = iw.getReader();
     SuggestIndexSearcher suggestIndexSearcher = new SuggestIndexSearcher(reader);
     CompletionQuery query = new FuzzyCompletionQuery(analyzer, new Term("suggest_field", "sugg"));
-    TopSuggestDocs suggest = suggestIndexSearcher.suggest(query, 4, false);
+    TopSuggestDocs suggest = suggestIndexSearcher.suggest(query, 4);
     assertSuggestions(suggest,
         new Entry("suaggestion", 4 * 2),
         new Entry("suggestion", 2 * 3),
@@ -88,7 +89,6 @@ public class TestFuzzyCompletionQuery extends LuceneTestCase {
     document.add(new ContextSuggestField("suggest_field", "sudggestion", 1, "type2"));
     document.add(new ContextSuggestField("suggest_field", "sugdgestion", 1, "type3"));
     iw.addDocument(document);
-
     document = new Document();
     document.add(new ContextSuggestField("suggest_field", "suggdestion", 1, "type4"));
     document.add(new ContextSuggestField("suggest_field", "suggestion", 1, "type4"));
@@ -101,10 +101,10 @@ public class TestFuzzyCompletionQuery extends LuceneTestCase {
     DirectoryReader reader = iw.getReader();
     SuggestIndexSearcher suggestIndexSearcher = new SuggestIndexSearcher(reader);
     CompletionQuery query =  new ContextQuery(new FuzzyCompletionQuery(analyzer, new Term("suggest_field", "sugge")));
-    TopSuggestDocs suggest = suggestIndexSearcher.suggest(query, 5, false);
+    TopSuggestDocs suggest = suggestIndexSearcher.suggest(query, 5);
     assertSuggestions(suggest,
-        new Entry("suggdestion", "type4", 4),
         new Entry("suggestion", "type4", 4),
+        new Entry("suggdestion", "type4", 4),
         new Entry("sugdgestion", "type3", 3),
         new Entry("sudggestion", "type2", 2),
         new Entry("sduggestion", "type1", 1)
@@ -124,7 +124,6 @@ public class TestFuzzyCompletionQuery extends LuceneTestCase {
     document.add(new ContextSuggestField("suggest_field", "sudggestion", 1, "type2"));
     document.add(new ContextSuggestField("suggest_field", "sugdgestion", 1, "type3"));
     iw.addDocument(document);
-
     document = new Document();
     document.add(new ContextSuggestField("suggest_field", "suggdestion", 1, "type4"));
     document.add(new ContextSuggestField("suggest_field", "suggestion", 1, "type4"));
@@ -140,7 +139,7 @@ public class TestFuzzyCompletionQuery extends LuceneTestCase {
     ContextQuery contextQuery = new ContextQuery(fuzzyQuery);
     contextQuery.addContext("type1", 6);
     contextQuery.addContext("type3", 2);
-    TopSuggestDocs suggest = suggestIndexSearcher.suggest(contextQuery, 5, false);
+    TopSuggestDocs suggest = suggestIndexSearcher.suggest(contextQuery, 5);
     assertSuggestions(suggest,
         new Entry("sduggestion", "type1", 1 * (1 + 6)),
         new Entry("sugdgestion", "type3", 1 * (3 + 2))

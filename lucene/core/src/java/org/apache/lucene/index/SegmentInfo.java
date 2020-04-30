@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,22 +16,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
 
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 
 import org.apache.lucene.codecs.Codec;
-import org.apache.lucene.search.Sort;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.TrackingDirectoryWrapper;
 import org.apache.lucene.util.StringHelper;
@@ -69,25 +66,17 @@ public final class SegmentInfo {
 
   private Map<String,String> diagnostics;
   
-  private Map<String,String> attributes;
-
-  private final Sort indexSort;
+  private final Map<String,String> attributes;
 
   // Tracks the Lucene version this segment was created with, since 3.1. Null
   // indicates an older than 3.0 index, and it's used to detect a too old index.
   // The format expected is "x.y" - "2.x" for pre-3.0 indexes (or null), and
   // specific versions afterwards ("3.0.0", "3.1.0" etc.).
   // see o.a.l.util.Version.
-  private final Version version;
-
-  // Tracks the minimum version that contributed documents to a segment. For
-  // flush segments, that is the version that wrote it. For merged segments,
-  // this is the minimum minVersion of all the segments that have been merged
-  // into this segment
-  Version minVersion;
+  private Version version;
 
   void setDiagnostics(Map<String, String> diagnostics) {
-    this.diagnostics = Collections.unmodifiableMap(new HashMap<>(Objects.requireNonNull(diagnostics)));
+    this.diagnostics = Objects.requireNonNull(diagnostics);
   }
 
   /** Returns diagnostics saved into the segment when it was
@@ -101,24 +90,22 @@ public final class SegmentInfo {
    * <p>Note: this is public only to allow access from
    * the codecs package.</p>
    */
-  public SegmentInfo(Directory dir, Version version, Version minVersion, String name, int maxDoc,
+  public SegmentInfo(Directory dir, Version version, String name, int maxDoc,
                      boolean isCompoundFile, Codec codec, Map<String,String> diagnostics,
-                     byte[] id, Map<String,String> attributes, Sort indexSort) {
+                     byte[] id, Map<String,String> attributes) {
     assert !(dir instanceof TrackingDirectoryWrapper);
     this.dir = Objects.requireNonNull(dir);
     this.version = Objects.requireNonNull(version);
-    this.minVersion = minVersion;
     this.name = Objects.requireNonNull(name);
     this.maxDoc = maxDoc;
     this.isCompoundFile = isCompoundFile;
     this.codec = codec;
-    this.diagnostics = Collections.unmodifiableMap(new HashMap<>(Objects.requireNonNull(diagnostics)));
+    this.diagnostics = Objects.requireNonNull(diagnostics);
     this.id = id;
-    if (id.length != StringHelper.ID_LENGTH) {
+    if (id != null && id.length != StringHelper.ID_LENGTH) {
       throw new IllegalArgumentException("invalid id: " + Arrays.toString(id));
     }
-    this.attributes = Collections.unmodifiableMap(new HashMap<>(Objects.requireNonNull(attributes)));
-    this.indexSort = indexSort;
+    this.attributes = Objects.requireNonNull(attributes);
   }
 
   /**
@@ -173,7 +160,7 @@ public final class SegmentInfo {
   /** Return all files referenced by this SegmentInfo. */
   public Set<String> files() {
     if (setFiles == null) {
-      throw new IllegalStateException("files were not computed yet; segment=" + name + " maxDoc=" + maxDoc);
+      throw new IllegalStateException("files were not computed yet");
     }
     return Collections.unmodifiableSet(setFiles);
   }
@@ -181,6 +168,17 @@ public final class SegmentInfo {
   @Override
   public String toString() {
     return toString(0);
+  }
+  
+  
+  /**
+   * Used for debugging.
+   * 
+   * @deprecated Use {@link #toString(int)} instead.
+   */
+  @Deprecated
+  public String toString(Directory dir, int delCount) {
+    return toString(delCount);
   }
 
   /** Used for debugging.  Format may suddenly change.
@@ -206,23 +204,17 @@ public final class SegmentInfo {
       s.append('/').append(delCount);
     }
 
-    if (indexSort != null) {
-      s.append(":[indexSort=");
-      s.append(indexSort);
+    final String sorter_key = "sorter"; // SortingMergePolicy.SORTER_ID_PROP; // TODO: use this once we can import SortingMergePolicy (currently located in 'misc' instead of 'core')
+    final String sorter_val = diagnostics.get(sorter_key);
+    if (sorter_val != null) {
+      s.append(":[");
+      s.append(sorter_key);
+      s.append('=');
+      s.append(sorter_val);
       s.append(']');
     }
 
-    if (!diagnostics.isEmpty()) {
-      s.append(":[diagnostics=");
-      s.append(diagnostics.toString());
-      s.append(']');
-    }
-
-    if (!attributes.isEmpty()) {
-      s.append(":[attributes=");
-      s.append(attributes.toString());
-      s.append(']');
-    }
+    // TODO: we could append toString of attributes() here?
 
     return s.toString();
   }
@@ -251,17 +243,9 @@ public final class SegmentInfo {
     return version;
   }
 
-  /**
-   * Return the minimum Lucene version that contributed documents to this
-   * segment, or {@code null} if it is unknown.
-   */
-  public Version getMinVersion() {
-    return minVersion;
-  }
-
   /** Return the id that uniquely identifies this segment. */
   public byte[] getId() {
-    return id.clone();
+    return id == null ? null : id.clone();
   }
 
   private Set<String> setFiles;
@@ -295,9 +279,6 @@ public final class SegmentInfo {
       if (!m.matches()) {
         throw new IllegalArgumentException("invalid codec filename '" + file + "', must match: " + IndexFileNames.CODEC_FILE_PATTERN.pattern());
       }
-      if (file.toLowerCase(Locale.ROOT).endsWith(".tmp")) {
-        throw new IllegalArgumentException("invalid codec filename '" + file + "', cannot end with .tmp extension");
-      }
     }
   }
   
@@ -325,19 +306,9 @@ public final class SegmentInfo {
    * <p>
    * If a value already exists for the field, it will be replaced with the new
    * value.
-   * This method make a copy on write for every attribute change.
    */
   public String putAttribute(String key, String value) {
-    HashMap<String, String> newMap = new HashMap<>(attributes);
-    String oldValue = newMap.put(key, value);
-    // we make a full copy of this to prevent concurrent modifications to this in the toString method
-    // this method is only called when a segment is written but the SegmentInfo might be exposed
-    // in running merges which can cause ConcurrentModificationExceptions if we modify / share
-    // the same instance. Technically that's an unsafe publication but IW design would require
-    // significant changes to prevent this. On the other hand, since we expose the map in getAttributes()
-    // it's a good design to make it unmodifiable anyway.
-    attributes = Collections.unmodifiableMap(newMap);
-    return oldValue;
+    return attributes.put(key, value);
   }
   
   /**
@@ -346,11 +317,6 @@ public final class SegmentInfo {
    */
   public Map<String,String> getAttributes() {
     return attributes;
-  }
-
-  /** Return the sort order of this segment, or null if the index has no sort. */
-  public Sort getIndexSort() {
-    return indexSort;
   }
 }
 

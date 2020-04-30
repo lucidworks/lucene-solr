@@ -156,7 +156,7 @@
  *   over and over in many places, you can make a subclass of
  *   {@link org.apache.lucene.analysis.Analyzer}. In fact, Apache Lucene
  *   supplies a large family of <code>Analyzer</code> classes that deliver useful
- *   analysis chains. The most common of these is the <a href="{@docRoot}/org/apache/lucene/analysis/standard/StandardAnalyzer.html">StandardAnalyzer</a>.
+ *   analysis chains. The most common of these is the <a href="{@docRoot}/../analyzers-common/org/apache/lucene/analysis/standard/StandardAnalyzer.html">StandardAnalyzer</a>.
  *   Many applications will have a long and industrious life with nothing more
  *   than the <code>StandardAnalyzer</code>. The <a href="{@docRoot}/../analyzers-common/overview-summary.html">analyzers-common</a>
  *   library provides many pre-existing analyzers for various languages.
@@ -362,13 +362,11 @@
  * </p>
  * <ol>
  *   <li>Inhibiting phrase and proximity matches in sentence boundaries &ndash; for this, a tokenizer that 
- *       identifies a new sentence can add 1 to the position increment of the first token of the new sentence.</li>
- *   <li>Injecting synonyms &ndash; synonyms of a token should be created at the same position as the
- *       original token, and the output order of the original token and the injected synonym is undefined
- *       as long as they both leave from the same position.  As result, all synonyms of a token would be
- *       considered to appear in exactly the same position as that token, and so would they be seen by
- *       phrase and proximity searches.  For multi-token synonyms to work correctly, you should use
- *       {@code SynoymGraphFilter} at search time only.</li>
+ *     identifies a new sentence can add 1 to the position increment of the first token of the new sentence.</li>
+ *   <li>Injecting synonyms &ndash; here, synonyms of a token should be added after that token, 
+ *     and their position increment should be set to 0.
+ *     As result, all synonyms of a token would be considered to appear in exactly the 
+ *     same position as that token, and so would they be seen by phrase and proximity searches.</li>
  * </ol>
  * 
  * <h3>Token Position Length</h3>

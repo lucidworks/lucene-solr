@@ -1,10 +1,10 @@
+package org.apache.lucene.util;
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright 2005 The Apache Software Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.util;
+
 
 /** Floating point numbers smaller than 32 bits.
  *
@@ -97,74 +97,31 @@ public class SmallFloat {
     return Float.intBitsToFloat(bits);
   }
 
-  /** Float-like encoding for positive longs that preserves ordering and 4 significant bits. */
-  public static int longToInt4(long i) {
-    if (i < 0) {
-      throw new IllegalArgumentException("Only supports positive values, got " + i);
+
+  /** floatToByte(b, mantissaBits=5, zeroExponent=2)
+   * <br>smallest nonzero value = 0.033203125
+   * <br>largest value = 1984.0
+   * <br>epsilon = 0.03125
+   */
+  public static byte floatToByte52(float f) {
+    int bits = Float.floatToRawIntBits(f);
+    int smallfloat = bits >> (24-5);
+    if (smallfloat <= (63-2)<<5) {
+      return (bits<=0) ? (byte)0 : (byte)1;
     }
-    int numBits = 64 - Long.numberOfLeadingZeros(i);
-    if (numBits < 4) {
-      // subnormal value
-      return Math.toIntExact(i);
-    } else {
-      // normal value
-      int shift = numBits - 4;
-      // only keep the 5 most significant bits
-      int encoded = Math.toIntExact(i >>> shift);
-      // clear the most significant bit, which is implicit
-      encoded &= 0x07;
-      // encode the shift, adding 1 because 0 is reserved for subnormal values
-      encoded |= (shift + 1) << 3;
-      return encoded;
+    if (smallfloat >= ((63-2)<<5) + 0x100) {
+      return -1;
     }
+    return (byte)(smallfloat - ((63-2)<<5));
   }
 
-  /**
-   * Decode values encoded with {@link #longToInt4(long)}.
-   */
-  public static final long int4ToLong(int i) {
-    long bits = i & 0x07;
-    int shift = (i >>> 3) - 1;
-    long decoded;
-    if (shift == -1) {
-      // subnormal value
-      decoded = bits;
-    } else {
-      // normal value
-      decoded = (bits | 0x08) << shift;
-    }
-    return decoded;
-  }
-
-  private static final int MAX_INT4 = longToInt4(Integer.MAX_VALUE);
-  private static final int NUM_FREE_VALUES = 255 - MAX_INT4;
-
-  /**
-   * Encode an integer to a byte. It is built upon {@link #longToInt4(long)}
-   * and leverages the fact that {@code longToInt4(Integer.MAX_VALUE)} is
-   * less than 255 to encode low values more accurately.
-   */
-  public static byte intToByte4(int i) {
-    if (i < 0) {
-      throw new IllegalArgumentException("Only supports positive values, got " + i);
-    }
-    if (i < NUM_FREE_VALUES) {
-      return (byte) i;
-    } else {
-      return (byte) (NUM_FREE_VALUES + longToInt4(i - NUM_FREE_VALUES));
-    }
-  }
-
-  /**
-   * Decode values that have been encoded with {@link #intToByte4(int)}.
-   */
-  public static int byte4ToInt(byte b) {
-    int i = Byte.toUnsignedInt(b);
-    if (i < NUM_FREE_VALUES) {
-      return i;
-    } else {
-      long decoded = NUM_FREE_VALUES + int4ToLong(i - NUM_FREE_VALUES);
-      return Math.toIntExact(decoded);
-    }
+  /** byteToFloat(b, mantissaBits=5, zeroExponent=2) */
+  public static float byte52ToFloat(byte b) {
+    // on Java1.5 & 1.6 JVMs, prebuilding a decoding array and doing a lookup
+    // is only a little bit faster (anywhere from 0% to 7%)
+    if (b == 0) return 0.0f;
+    int bits = (b&0xff) << (24-5);
+    bits += (63-2) << 24;
+    return Float.intBitsToFloat(bits);
   }
 }

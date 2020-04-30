@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs.simpletext;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs.simpletext;
-
 
 import java.io.IOException;
 import java.util.Locale;
@@ -28,6 +28,7 @@ import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.StringHelper;
+import org.apache.lucene.util.UnicodeUtil;
 
 class SimpleTextUtil {
   public final static byte NEWLINE = 10;
@@ -76,15 +77,15 @@ class SimpleTextUtil {
     // same number of bytes
     // (BaseIndexFileFormatTestCase.testMergeStability cares):
     String checksum = String.format(Locale.ROOT, "%020d", out.getChecksum());
-    write(out, CHECKSUM);
-    write(out, checksum, scratch);
-    writeNewline(out);
+    SimpleTextUtil.write(out, CHECKSUM);
+    SimpleTextUtil.write(out, checksum, scratch);
+    SimpleTextUtil.writeNewline(out);
   }
   
   public static void checkFooter(ChecksumIndexInput input) throws IOException {
     BytesRefBuilder scratch = new BytesRefBuilder();
     String expectedChecksum = String.format(Locale.ROOT, "%020d", input.getChecksum());
-    readLine(input, scratch);
+    SimpleTextUtil.readLine(input, scratch);
     if (StringHelper.startsWith(scratch.get(), CHECKSUM) == false) {
       throw new CorruptIndexException("SimpleText failure: expected checksum line but got " + scratch.get().utf8ToString(), input);
     }
@@ -95,22 +96,5 @@ class SimpleTextUtil {
     if (input.length() != input.getFilePointer()) {
       throw new CorruptIndexException("Unexpected stuff at the end of file, please be careful with your text editor!", input);
     }
-  }
-
-  /** Inverse of {@link BytesRef#toString}. */
-  public static BytesRef fromBytesRefString(String s) {
-    if (s.length() < 2) {
-      throw new IllegalArgumentException("string " + s + " was not created from BytesRef.toString?");
-    }
-    if (s.charAt(0) != '[' || s.charAt(s.length()-1) != ']') {
-      throw new IllegalArgumentException("string " + s + " was not created from BytesRef.toString?");
-    }
-    String[] parts = s.substring(1, s.length()-1).split(" ");
-    byte[] bytes = new byte[parts.length];
-    for(int i=0;i<parts.length;i++) {
-      bytes[i] = (byte) Integer.parseInt(parts[i], 16);
-    }
-
-    return new BytesRef(bytes);
   }
 }

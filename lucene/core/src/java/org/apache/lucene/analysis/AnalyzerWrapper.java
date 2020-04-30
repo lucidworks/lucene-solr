@@ -1,3 +1,5 @@
+package org.apache.lucene.analysis;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,12 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis;
-
 
 import java.io.Reader;
-
-import org.apache.lucene.util.AttributeFactory;
 
 /**
  * Extension to {@link Analyzer} suitable for Analyzers which wrap
@@ -42,8 +40,6 @@ import org.apache.lucene.util.AttributeFactory;
  * as superclass!
  *
  * @see DelegatingAnalyzerWrapper
- *
- * @since 4.0.0
  */
 public abstract class AnalyzerWrapper extends Analyzer {
 
@@ -86,22 +82,6 @@ public abstract class AnalyzerWrapper extends Analyzer {
   }
 
   /**
-   * Wraps / alters the given TokenStream for normalization purposes, taken
-   * from the wrapped Analyzer, to form new components. It is through this
-   * method that new TokenFilters can be added by AnalyzerWrappers. By default,
-   * the given token stream are returned.
-   * 
-   * @param fieldName
-   *          Name of the field which is to be analyzed
-   * @param in
-   *          TokenStream taken from the wrapped Analyzer
-   * @return Wrapped / altered TokenStreamComponents.
-   */
-  protected TokenStream wrapTokenStreamForNormalization(String fieldName, TokenStream in) {
-    return in;
-  }
-
-  /**
    * Wraps / alters the given Reader. Through this method AnalyzerWrappers can
    * implement {@link #initReader(String, Reader)}. By default, the given reader
    * is returned.
@@ -115,30 +95,10 @@ public abstract class AnalyzerWrapper extends Analyzer {
   protected Reader wrapReader(String fieldName, Reader reader) {
     return reader;
   }
-
-  /**
-   * Wraps / alters the given Reader. Through this method AnalyzerWrappers can
-   * implement {@link #initReaderForNormalization(String, Reader)}. By default,
-   * the given reader  is returned.
-   * 
-   * @param fieldName
-   *          name of the field which is to be analyzed
-   * @param reader
-   *          the reader to wrap
-   * @return the wrapped reader
-   */
-  protected Reader wrapReaderForNormalization(String fieldName, Reader reader) {
-    return reader;
-  }
-
+  
   @Override
   protected final TokenStreamComponents createComponents(String fieldName) {
     return wrapComponents(fieldName, getWrappedAnalyzer(fieldName).createComponents(fieldName));
-  }
-
-  @Override
-  protected final TokenStream normalize(String fieldName, TokenStream in) {
-    return wrapTokenStreamForNormalization(fieldName, getWrappedAnalyzer(fieldName).normalize(fieldName, in));
   }
 
   @Override
@@ -154,15 +114,5 @@ public abstract class AnalyzerWrapper extends Analyzer {
   @Override
   public final Reader initReader(String fieldName, Reader reader) {
     return getWrappedAnalyzer(fieldName).initReader(fieldName, wrapReader(fieldName, reader));
-  }
-
-  @Override
-  protected final Reader initReaderForNormalization(String fieldName, Reader reader) {
-    return getWrappedAnalyzer(fieldName).initReaderForNormalization(fieldName, wrapReaderForNormalization(fieldName, reader));
-  }
-
-  @Override
-  protected final AttributeFactory attributeFactory(String fieldName) {
-    return getWrappedAnalyzer(fieldName).attributeFactory(fieldName);
   }
 }

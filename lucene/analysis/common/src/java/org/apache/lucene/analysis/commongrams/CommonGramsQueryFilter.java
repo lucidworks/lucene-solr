@@ -20,7 +20,6 @@ import java.io.IOException;
 
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
-import org.apache.lucene.analysis.tokenattributes.PositionLengthAttribute;
 import org.apache.lucene.analysis.tokenattributes.TypeAttribute;
 
 import static org.apache.lucene.analysis.commongrams.CommonGramsFilter.GRAM_TYPE;
@@ -47,7 +46,6 @@ public final class CommonGramsQueryFilter extends TokenFilter {
 
   private final TypeAttribute typeAttribute = addAttribute(TypeAttribute.class);
   private final PositionIncrementAttribute posIncAttribute = addAttribute(PositionIncrementAttribute.class);
-  private final PositionLengthAttribute posLengthAttribute = addAttribute(PositionLengthAttribute.class);
   
   private State previous;
   private String previousType;
@@ -62,6 +60,9 @@ public final class CommonGramsQueryFilter extends TokenFilter {
     super(input);
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void reset() throws IOException {
     super.reset();
@@ -90,8 +91,6 @@ public final class CommonGramsQueryFilter extends TokenFilter {
         
         if (isGramType()) {
           posIncAttribute.setPositionIncrement(1);
-          // We must set this back to 1 (from e.g. 2 or higher) otherwise the token graph is disconnected:
-          posLengthAttribute.setPositionLength(1);
         }
         return true;
       }
@@ -110,8 +109,6 @@ public final class CommonGramsQueryFilter extends TokenFilter {
     
     if (isGramType()) {
       posIncAttribute.setPositionIncrement(1);
-      // We must set this back to 1 (from e.g. 2 or higher) otherwise the token graph is disconnected:
-      posLengthAttribute.setPositionLength(1);
     }
     return true;
   }

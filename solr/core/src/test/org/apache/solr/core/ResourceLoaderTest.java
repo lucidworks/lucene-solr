@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.core;
 
 import java.io.IOException;
@@ -29,6 +30,7 @@ import java.util.Map;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
+import junit.framework.Assert;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.core.KeywordTokenizerFactory;
 import org.apache.lucene.analysis.ngram.NGramFilterFactory;
@@ -58,7 +60,6 @@ public class ResourceLoaderTest extends SolrTestCaseJ4 {
     Files.write(temp.resolve("dummy.txt"), new byte[]{});
     Path instanceDir = temp.resolve("instance");
     Files.createDirectories(instanceDir.resolve("conf"));
-
     try (SolrResourceLoader loader = new SolrResourceLoader(instanceDir)) {
       loader.openResource("../../dummy.txt").close();
       fail();
@@ -70,40 +71,47 @@ public class ResourceLoaderTest extends SolrTestCaseJ4 {
 
   public void testAwareCompatibility() throws Exception {
     
-    final Class<?> clazz1 = ResourceLoaderAware.class;
+    Class<?> clazz = ResourceLoaderAware.class;
     // Check ResourceLoaderAware valid objects
-    //noinspection unchecked
-    assertAwareCompatibility(clazz1, new NGramFilterFactory(map("minGramSize", "1", "maxGramSize", "2")));
-    assertAwareCompatibility(clazz1, new KeywordTokenizerFactory(new HashMap<>()));
+    assertAwareCompatibility( clazz, new NGramFilterFactory(new HashMap<String,String>()) );
+    assertAwareCompatibility( clazz, new KeywordTokenizerFactory(new HashMap<String,String>()) );
     
     // Make sure it throws an error for invalid objects
     Object[] invalid = new Object[] {
         // new NGramTokenFilter( null ),
-        "hello", 12.3f,
+        "hello",  new Float( 12.3f ),
         new LukeRequestHandler(),
         new JSONResponseWriter()
     };
     for( Object obj : invalid ) {
-      expectThrows(SolrException.class, () -> assertAwareCompatibility(clazz1, obj));
+      try {
+        assertAwareCompatibility(clazz, obj);
+        Assert.fail( "Should be invalid class: "+obj + " FOR " + clazz );
+      }
+      catch( SolrException ex ) { } // OK
     }
     
 
-    final Class<?> clazz2 = SolrCoreAware.class;
+    clazz = SolrCoreAware.class;
     // Check ResourceLoaderAware valid objects
-    assertAwareCompatibility(clazz2, new LukeRequestHandler());
-    assertAwareCompatibility(clazz2, new FacetComponent());
-    assertAwareCompatibility(clazz2, new JSONResponseWriter());
+    assertAwareCompatibility(clazz, new LukeRequestHandler());
+    assertAwareCompatibility(clazz, new FacetComponent());
+    assertAwareCompatibility(clazz, new JSONResponseWriter());
     
     // Make sure it throws an error for invalid objects
-    //noinspection unchecked
     invalid = new Object[] {
-        new NGramFilterFactory(map("minGramSize", "1", "maxGramSize", "2")),
-        "hello",   12.3f ,
-        new KeywordTokenizerFactory(new HashMap<>())
+        new NGramFilterFactory(new HashMap<String,String>()),
+        "hello",  new Float( 12.3f ),
+        new KeywordTokenizerFactory(new HashMap<String,String>())
     };
     for( Object obj : invalid ) {
-      expectThrows(SolrException.class, () -> assertAwareCompatibility(clazz2, obj));
+      try {
+        assertAwareCompatibility(clazz, obj);
+        Assert.fail( "Should be invalid class: "+obj + " FOR " + clazz );
+      }
+      catch( SolrException ex ) { } // OK
     }
+
   }
   
   public void testBOMMarkers() throws Exception {
@@ -136,11 +144,15 @@ public class ResourceLoaderTest extends SolrTestCaseJ4 {
   
   public void testWrongEncoding() throws Exception {
     String wrongEncoding = "stopwordsWrongEncoding.txt";
-    try(SolrResourceLoader loader = new SolrResourceLoader(TEST_PATH().resolve("collection1"))) {
-      // ensure we get our exception
-      SolrException thrown = expectThrows(SolrException.class, () -> loader.getLines(wrongEncoding));
-      assertTrue(thrown.getCause() instanceof CharacterCodingException);
+    SolrResourceLoader loader = new SolrResourceLoader(TEST_PATH().resolve("collection1"));
+    // ensure we get our exception
+    try {
+      loader.getLines(wrongEncoding);
+      fail();
+    } catch (SolrException expected) {
+      assertTrue(expected.getCause() instanceof CharacterCodingException);
     }
+    loader.close();
   }
 
   public void testClassLoaderLibs() throws Exception {

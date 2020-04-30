@@ -3,8 +3,11 @@ package org.apache.lucene.expressions.js;
 import org.antlr.v4.runtime.atn.*;
 import org.antlr.v4.runtime.dfa.DFA;
 import org.antlr.v4.runtime.*;
+import org.antlr.v4.runtime.misc.*;
 import org.antlr.v4.runtime.tree.*;
 import java.util.List;
+import java.util.Iterator;
+import java.util.ArrayList;
 
 @SuppressWarnings({"all", "warnings", "unchecked", "unused", "cast"})
 class JavascriptParser extends Parser {
@@ -134,55 +137,6 @@ class JavascriptParser extends Parser {
       super.copyFrom(ctx);
     }
   }
-  public static class ConditionalContext extends ExpressionContext {
-    public List<ExpressionContext> expression() {
-      return getRuleContexts(ExpressionContext.class);
-    }
-    public ExpressionContext expression(int i) {
-      return getRuleContext(ExpressionContext.class,i);
-    }
-    public TerminalNode COND() { return getToken(JavascriptParser.COND, 0); }
-    public TerminalNode COLON() { return getToken(JavascriptParser.COLON, 0); }
-    public ConditionalContext(ExpressionContext ctx) { copyFrom(ctx); }
-    @Override
-    public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
-      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitConditional(this);
-      else return visitor.visitChildren(this);
-    }
-  }
-  public static class BoolorContext extends ExpressionContext {
-    public List<ExpressionContext> expression() {
-      return getRuleContexts(ExpressionContext.class);
-    }
-    public ExpressionContext expression(int i) {
-      return getRuleContext(ExpressionContext.class,i);
-    }
-    public TerminalNode BOOLOR() { return getToken(JavascriptParser.BOOLOR, 0); }
-    public BoolorContext(ExpressionContext ctx) { copyFrom(ctx); }
-    @Override
-    public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
-      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitBoolor(this);
-      else return visitor.visitChildren(this);
-    }
-  }
-  public static class BoolcompContext extends ExpressionContext {
-    public List<ExpressionContext> expression() {
-      return getRuleContexts(ExpressionContext.class);
-    }
-    public ExpressionContext expression(int i) {
-      return getRuleContext(ExpressionContext.class,i);
-    }
-    public TerminalNode LT() { return getToken(JavascriptParser.LT, 0); }
-    public TerminalNode LTE() { return getToken(JavascriptParser.LTE, 0); }
-    public TerminalNode GT() { return getToken(JavascriptParser.GT, 0); }
-    public TerminalNode GTE() { return getToken(JavascriptParser.GTE, 0); }
-    public BoolcompContext(ExpressionContext ctx) { copyFrom(ctx); }
-    @Override
-    public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
-      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitBoolcomp(this);
-      else return visitor.visitChildren(this);
-    }
-  }
   public static class NumericContext extends ExpressionContext {
     public TerminalNode OCTAL() { return getToken(JavascriptParser.OCTAL, 0); }
     public TerminalNode HEX() { return getToken(JavascriptParser.HEX, 0); }
@@ -191,37 +145,6 @@ class JavascriptParser extends Parser {
     @Override
     public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
       if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitNumeric(this);
-      else return visitor.visitChildren(this);
-    }
-  }
-  public static class AddsubContext extends ExpressionContext {
-    public List<ExpressionContext> expression() {
-      return getRuleContexts(ExpressionContext.class);
-    }
-    public ExpressionContext expression(int i) {
-      return getRuleContext(ExpressionContext.class,i);
-    }
-    public TerminalNode ADD() { return getToken(JavascriptParser.ADD, 0); }
-    public TerminalNode SUB() { return getToken(JavascriptParser.SUB, 0); }
-    public AddsubContext(ExpressionContext ctx) { copyFrom(ctx); }
-    @Override
-    public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
-      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitAddsub(this);
-      else return visitor.visitChildren(this);
-    }
-  }
-  public static class UnaryContext extends ExpressionContext {
-    public ExpressionContext expression() {
-      return getRuleContext(ExpressionContext.class,0);
-    }
-    public TerminalNode BOOLNOT() { return getToken(JavascriptParser.BOOLNOT, 0); }
-    public TerminalNode BWNOT() { return getToken(JavascriptParser.BWNOT, 0); }
-    public TerminalNode ADD() { return getToken(JavascriptParser.ADD, 0); }
-    public TerminalNode SUB() { return getToken(JavascriptParser.SUB, 0); }
-    public UnaryContext(ExpressionContext ctx) { copyFrom(ctx); }
-    @Override
-    public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
-      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitUnary(this);
       else return visitor.visitChildren(this);
     }
   }
@@ -235,23 +158,6 @@ class JavascriptParser extends Parser {
     @Override
     public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
       if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitPrecedence(this);
-      else return visitor.visitChildren(this);
-    }
-  }
-  public static class MuldivContext extends ExpressionContext {
-    public List<ExpressionContext> expression() {
-      return getRuleContexts(ExpressionContext.class);
-    }
-    public ExpressionContext expression(int i) {
-      return getRuleContext(ExpressionContext.class,i);
-    }
-    public TerminalNode MUL() { return getToken(JavascriptParser.MUL, 0); }
-    public TerminalNode DIV() { return getToken(JavascriptParser.DIV, 0); }
-    public TerminalNode REM() { return getToken(JavascriptParser.REM, 0); }
-    public MuldivContext(ExpressionContext ctx) { copyFrom(ctx); }
-    @Override
-    public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
-      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitMuldiv(this);
       else return visitor.visitChildren(this);
     }
   }
@@ -293,33 +199,21 @@ class JavascriptParser extends Parser {
       else return visitor.visitChildren(this);
     }
   }
-  public static class BworContext extends ExpressionContext {
+  public static class BoolcompContext extends ExpressionContext {
     public List<ExpressionContext> expression() {
       return getRuleContexts(ExpressionContext.class);
     }
     public ExpressionContext expression(int i) {
       return getRuleContext(ExpressionContext.class,i);
     }
-    public TerminalNode BWOR() { return getToken(JavascriptParser.BWOR, 0); }
-    public BworContext(ExpressionContext ctx) { copyFrom(ctx); }
+    public TerminalNode LT() { return getToken(JavascriptParser.LT, 0); }
+    public TerminalNode LTE() { return getToken(JavascriptParser.LTE, 0); }
+    public TerminalNode GT() { return getToken(JavascriptParser.GT, 0); }
+    public TerminalNode GTE() { return getToken(JavascriptParser.GTE, 0); }
+    public BoolcompContext(ExpressionContext ctx) { copyFrom(ctx); }
     @Override
     public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
-      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitBwor(this);
-      else return visitor.visitChildren(this);
-    }
-  }
-  public static class BoolandContext extends ExpressionContext {
-    public List<ExpressionContext> expression() {
-      return getRuleContexts(ExpressionContext.class);
-    }
-    public ExpressionContext expression(int i) {
-      return getRuleContext(ExpressionContext.class,i);
-    }
-    public TerminalNode BOOLAND() { return getToken(JavascriptParser.BOOLAND, 0); }
-    public BoolandContext(ExpressionContext ctx) { copyFrom(ctx); }
-    @Override
-    public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
-      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitBooland(this);
+      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitBoolcomp(this);
       else return visitor.visitChildren(this);
     }
   }
@@ -338,6 +232,36 @@ class JavascriptParser extends Parser {
       else return visitor.visitChildren(this);
     }
   }
+  public static class BworContext extends ExpressionContext {
+    public List<ExpressionContext> expression() {
+      return getRuleContexts(ExpressionContext.class);
+    }
+    public ExpressionContext expression(int i) {
+      return getRuleContext(ExpressionContext.class,i);
+    }
+    public TerminalNode BWOR() { return getToken(JavascriptParser.BWOR, 0); }
+    public BworContext(ExpressionContext ctx) { copyFrom(ctx); }
+    @Override
+    public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
+      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitBwor(this);
+      else return visitor.visitChildren(this);
+    }
+  }
+  public static class BoolorContext extends ExpressionContext {
+    public List<ExpressionContext> expression() {
+      return getRuleContexts(ExpressionContext.class);
+    }
+    public ExpressionContext expression(int i) {
+      return getRuleContext(ExpressionContext.class,i);
+    }
+    public TerminalNode BOOLOR() { return getToken(JavascriptParser.BOOLOR, 0); }
+    public BoolorContext(ExpressionContext ctx) { copyFrom(ctx); }
+    @Override
+    public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
+      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitBoolor(this);
+      else return visitor.visitChildren(this);
+    }
+  }
   public static class BwandContext extends ExpressionContext {
     public List<ExpressionContext> expression() {
       return getRuleContexts(ExpressionContext.class);
@@ -350,6 +274,52 @@ class JavascriptParser extends Parser {
     @Override
     public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
       if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitBwand(this);
+      else return visitor.visitChildren(this);
+    }
+  }
+  public static class UnaryContext extends ExpressionContext {
+    public ExpressionContext expression() {
+      return getRuleContext(ExpressionContext.class,0);
+    }
+    public TerminalNode BOOLNOT() { return getToken(JavascriptParser.BOOLNOT, 0); }
+    public TerminalNode BWNOT() { return getToken(JavascriptParser.BWNOT, 0); }
+    public TerminalNode ADD() { return getToken(JavascriptParser.ADD, 0); }
+    public TerminalNode SUB() { return getToken(JavascriptParser.SUB, 0); }
+    public UnaryContext(ExpressionContext ctx) { copyFrom(ctx); }
+    @Override
+    public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
+      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitUnary(this);
+      else return visitor.visitChildren(this);
+    }
+  }
+  public static class BoolandContext extends ExpressionContext {
+    public List<ExpressionContext> expression() {
+      return getRuleContexts(ExpressionContext.class);
+    }
+    public ExpressionContext expression(int i) {
+      return getRuleContext(ExpressionContext.class,i);
+    }
+    public TerminalNode BOOLAND() { return getToken(JavascriptParser.BOOLAND, 0); }
+    public BoolandContext(ExpressionContext ctx) { copyFrom(ctx); }
+    @Override
+    public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
+      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitBooland(this);
+      else return visitor.visitChildren(this);
+    }
+  }
+  public static class AddsubContext extends ExpressionContext {
+    public List<ExpressionContext> expression() {
+      return getRuleContexts(ExpressionContext.class);
+    }
+    public ExpressionContext expression(int i) {
+      return getRuleContext(ExpressionContext.class,i);
+    }
+    public TerminalNode ADD() { return getToken(JavascriptParser.ADD, 0); }
+    public TerminalNode SUB() { return getToken(JavascriptParser.SUB, 0); }
+    public AddsubContext(ExpressionContext ctx) { copyFrom(ctx); }
+    @Override
+    public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
+      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitAddsub(this);
       else return visitor.visitChildren(this);
     }
   }
@@ -366,6 +336,39 @@ class JavascriptParser extends Parser {
     @Override
     public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
       if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitBooleqne(this);
+      else return visitor.visitChildren(this);
+    }
+  }
+  public static class MuldivContext extends ExpressionContext {
+    public List<ExpressionContext> expression() {
+      return getRuleContexts(ExpressionContext.class);
+    }
+    public ExpressionContext expression(int i) {
+      return getRuleContext(ExpressionContext.class,i);
+    }
+    public TerminalNode MUL() { return getToken(JavascriptParser.MUL, 0); }
+    public TerminalNode DIV() { return getToken(JavascriptParser.DIV, 0); }
+    public TerminalNode REM() { return getToken(JavascriptParser.REM, 0); }
+    public MuldivContext(ExpressionContext ctx) { copyFrom(ctx); }
+    @Override
+    public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
+      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitMuldiv(this);
+      else return visitor.visitChildren(this);
+    }
+  }
+  public static class ConditionalContext extends ExpressionContext {
+    public List<ExpressionContext> expression() {
+      return getRuleContexts(ExpressionContext.class);
+    }
+    public ExpressionContext expression(int i) {
+      return getRuleContext(ExpressionContext.class,i);
+    }
+    public TerminalNode COND() { return getToken(JavascriptParser.COND, 0); }
+    public TerminalNode COLON() { return getToken(JavascriptParser.COLON, 0); }
+    public ConditionalContext(ExpressionContext ctx) { copyFrom(ctx); }
+    @Override
+    public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
+      if ( visitor instanceof JavascriptVisitor ) return ((JavascriptVisitor<? extends T>)visitor).visitConditional(this);
       else return visitor.visitChildren(this);
     }
   }

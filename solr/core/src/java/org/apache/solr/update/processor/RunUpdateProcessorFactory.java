@@ -14,10 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
 import java.io.IOException;
 import org.apache.solr.common.SolrException;
+import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.update.*;
@@ -25,7 +27,7 @@ import org.apache.solr.update.*;
 
 /**
  * Executes the update commands using the underlying UpdateHandler.
- * Almost all processor chains should end with an instance of 
+ * Allmost all processor chains should end with an instance of 
  * <code>RunUpdateProcessorFactory</code> unless the user is explicitly 
  * executing the update commands in an alternative custom 
  * <code>UpdateRequestProcessorFactory</code>
@@ -35,19 +37,10 @@ import org.apache.solr.update.*;
  */
 public class RunUpdateProcessorFactory extends UpdateRequestProcessorFactory 
 {
-
-  public static final String PRE_RUN_CHAIN_NAME = "_preRun_";
-
   @Override
   public UpdateRequestProcessor getInstance(SolrQueryRequest req, SolrQueryResponse rsp, UpdateRequestProcessor next) 
   {
-    RunUpdateProcessor runUpdateProcessor = new RunUpdateProcessor(req, next);
-    UpdateRequestProcessorChain preRun = req.getCore().getUpdateProcessingChain(PRE_RUN_CHAIN_NAME);
-    if (preRun != null) {
-      return preRun.createProcessor(req, rsp, false, runUpdateProcessor);
-    } else {
-      return runUpdateProcessor;
-    }
+    return new RunUpdateProcessor(req, next);
   }
 }
 

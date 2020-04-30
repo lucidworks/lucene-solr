@@ -1,3 +1,5 @@
+package org.apache.solr.schema;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.schema;
 
 import java.util.HashMap;
 import java.util.Random;
@@ -43,13 +44,13 @@ public class CustomAnalyzerStrField extends StrField {
 
     // two arg constructor
     Analyzer a2 = new TokenizerChain
-      (new KeywordTokenizerFactory(new HashMap<>()),
+      (new KeywordTokenizerFactory(new HashMap<String,String>()),
        r.nextBoolean() ? null : new TokenFilterFactory[0]);
     
     // three arg constructor
     Analyzer a3 = new TokenizerChain
       (r.nextBoolean() ? null : new CharFilterFactory[0],
-       new KeywordTokenizerFactory(new HashMap<>()),
+       new KeywordTokenizerFactory(new HashMap<String,String>()),
        r.nextBoolean() ? null : new TokenFilterFactory[0]);
 
     if (r.nextBoolean()) {

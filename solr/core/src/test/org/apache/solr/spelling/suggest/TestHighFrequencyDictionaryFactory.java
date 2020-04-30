@@ -1,3 +1,5 @@
+package org.apache.solr.spelling.suggest;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.spelling.suggest;
 
 import org.apache.solr.SolrTestCaseJ4;
 import org.junit.BeforeClass;
@@ -28,19 +29,13 @@ public class TestHighFrequencyDictionaryFactory extends SolrTestCaseJ4  {
   public static void beforeClass() throws Exception {
     initCore("solrconfig-phrasesuggest.xml","schema-phrasesuggest.xml");
     // Suggestions text include : change, charge, chance
-    assertU(adoc("id", "9999990",
-        "text", "true",
-        "stext", "foobar"));
     assertU(adoc("id", "9999991",
         "text", "true",
-        "stext", "foobar"));
+        "stext", "change"));
     assertU(adoc("id", "9999992",
         "text", "true",
-        "stext", "change"));
-    assertU(adoc("id", "9999993",
-        "text", "true",
         "stext", "charge"));    
-    assertU(adoc("id", "9999993",
+    assertU(adoc("id", "9999992",
             "text", "true",
             "stext", "chance"));
 

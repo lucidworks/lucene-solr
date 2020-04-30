@@ -1,3 +1,16 @@
+package org.apache.lucene.facet.taxonomy.directory;
+
+import org.apache.lucene.facet.taxonomy.ParallelTaxonomyArrays;
+import org.apache.lucene.facet.taxonomy.TaxonomyReader;
+import org.apache.lucene.index.CorruptIndexException;
+import org.apache.lucene.index.PostingsEnum;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.MultiFields;
+import org.apache.lucene.search.DocIdSetIterator;
+import org.apache.lucene.util.ArrayUtil;
+
+import java.io.IOException;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,25 +27,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.facet.taxonomy.directory;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-
-import org.apache.lucene.facet.taxonomy.ParallelTaxonomyArrays;
-import org.apache.lucene.facet.taxonomy.TaxonomyReader;
-import org.apache.lucene.index.CorruptIndexException;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.MultiTerms;
-import org.apache.lucene.index.PostingsEnum;
-import org.apache.lucene.search.DocIdSetIterator;
-import org.apache.lucene.util.Accountable;
-import org.apache.lucene.util.Accountables;
-import org.apache.lucene.util.ArrayUtil;
-import org.apache.lucene.util.RamUsageEstimator;
 
 /**
  * A {@link ParallelTaxonomyArrays} that are initialized from the taxonomy
@@ -40,7 +34,7 @@ import org.apache.lucene.util.RamUsageEstimator;
  * 
  * @lucene.experimental
  */
-class TaxonomyIndexArrays extends ParallelTaxonomyArrays implements Accountable {
+class TaxonomyIndexArrays extends ParallelTaxonomyArrays {
 
   private final int[] parents;
 
@@ -132,10 +126,10 @@ class TaxonomyIndexArrays extends ParallelTaxonomyArrays implements Accountable 
       return;
     }
     
-    // it's ok to use MultiTerms because we only iterate on one posting list.
+    // it's ok to use MultiFields because we only iterate on one posting list.
     // breaking it to loop over the leaves() only complicates code for no
     // apparent gain.
-    PostingsEnum positions = MultiTerms.getTermPostingsEnum(reader,
+    PostingsEnum positions = MultiFields.getTermPositionsEnum(reader,
         Consts.FIELD_PAYLOADS, Consts.PAYLOAD_PARENT_BYTES_REF,
         PostingsEnum.PAYLOADS);
 
@@ -221,29 +215,4 @@ class TaxonomyIndexArrays extends ParallelTaxonomyArrays implements Accountable 
     return siblings;
   }
 
-  @Override
-  public synchronized long ramBytesUsed() {
-    long ramBytesUsed = RamUsageEstimator.NUM_BYTES_OBJECT_HEADER + 3 * RamUsageEstimator.NUM_BYTES_OBJECT_REF + 1;
-    ramBytesUsed += RamUsageEstimator.shallowSizeOf(parents);
-    if (children != null) {
-      ramBytesUsed += RamUsageEstimator.shallowSizeOf(children);
-    }
-    if (siblings != null) {
-      ramBytesUsed += RamUsageEstimator.shallowSizeOf(siblings);
-    }
-    return ramBytesUsed;
-  }
-
-  @Override
-  public synchronized Collection<Accountable> getChildResources() {
-    final List<Accountable> resources = new ArrayList<>();
-    resources.add(Accountables.namedAccountable("parents", RamUsageEstimator.shallowSizeOf(parents)));
-    if (children != null) {
-      resources.add(Accountables.namedAccountable("children", RamUsageEstimator.shallowSizeOf(children)));
-    }
-    if (siblings != null) {
-      resources.add(Accountables.namedAccountable("siblings", RamUsageEstimator.shallowSizeOf(siblings)));
-    }
-    return Collections.unmodifiableList(resources);
-  }
 }

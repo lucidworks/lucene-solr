@@ -26,9 +26,8 @@
         solr.StandardDirectoryFactory, the default, is filesystem based.
         solr.RAMDirectoryFactory is memory based and not persistent. -->
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
-  <schemaFactory class="ClassicIndexSchemaFactory"/>
 
-  <requestHandler name="/select" class="solr.SearchHandler"/>
+  <requestHandler name="standard" class="solr.StandardRequestHandler"/>
 
   <updateHandler class="solr.DirectUpdateHandler2"/>
 
@@ -39,10 +38,5 @@
   <valueSourceParser name="nvl" class="org.apache.solr.search.function.NvlValueSourceParser">
     <float name="nvlFloatValue">0.0</float>
   </valueSourceParser>
-  <initParams path="/select">
-    <lst name="defaults">
-      <str name="df">text</str>
-    </lst>
-  </initParams>
 
 </config>

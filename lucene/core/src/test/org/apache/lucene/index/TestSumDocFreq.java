@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
-
-import java.util.Collection;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -75,9 +73,10 @@ public class TestSumDocFreq extends LuceneTestCase {
   
   private void assertSumDocFreq(IndexReader ir) throws Exception {
     // compute sumDocFreq across all fields
-    final Collection<String> fields = FieldInfos.getIndexedFields(ir);
+    Fields fields = MultiFields.getFields(ir);
+
     for (String f : fields) {
-      Terms terms = MultiTerms.getTerms(ir, f);
+      Terms terms = fields.terms(f);
       long sumDocFreq = terms.getSumDocFreq();
       if (sumDocFreq == -1) {
         if (VERBOSE) {

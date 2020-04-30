@@ -14,13 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.update.processor;
 
+import org.apache.solr.core.SolrCore;
+import org.apache.solr.schema.IndexSchema;
+import org.apache.solr.schema.FieldType;
+import org.apache.solr.schema.SchemaField;
+import org.apache.solr.schema.TextField;
+import org.apache.solr.schema.StrField;
+
 import org.apache.solr.common.SolrInputField;
+import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 
-import static org.apache.solr.update.processor.FieldMutatingUpdateProcessor.mutator;
+import org.apache.commons.lang.StringUtils;
 
 /**
  * <p>
@@ -63,7 +72,6 @@ import static org.apache.solr.update.processor.FieldMutatingUpdateProcessor.muta
  * document that had no values for the <code>category</code> field, would also 
  * have no value in the <code>category_count</code> field.
  * </p>
- * @since 4.0.0
  */
 public final class CountFieldValuesUpdateProcessorFactory extends FieldMutatingUpdateProcessorFactory {
 
@@ -71,11 +79,15 @@ public final class CountFieldValuesUpdateProcessorFactory extends FieldMutatingU
   public UpdateRequestProcessor getInstance(SolrQueryRequest req,
                                             SolrQueryResponse rsp,
                                             UpdateRequestProcessor next) {
-    return mutator(getSelector(), next, src -> {
-      SolrInputField result = new SolrInputField(src.getName());
-      result.setValue(src.getValueCount());
-      return result;
-    });
+    return new FieldMutatingUpdateProcessor(getSelector(), next) {
+      @Override
+      protected SolrInputField mutate(final SolrInputField src) {
+        SolrInputField result = new SolrInputField(src.getName());
+        result.setValue(src.getValueCount(),
+                        src.getBoost());
+        return result;
+      }
+    };
   }
 }
 

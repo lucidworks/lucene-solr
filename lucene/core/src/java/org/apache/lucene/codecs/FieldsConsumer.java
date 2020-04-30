@@ -1,3 +1,5 @@
+package org.apache.lucene.codecs;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.codecs;
-
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -76,14 +76,14 @@ public abstract class FieldsConsumer implements Closeable {
    *         live docs when pulling docs/positions enums.
    *  </ul>
    */
-  public abstract void write(Fields fields, NormsProducer norms) throws IOException;
+  public abstract void write(Fields fields) throws IOException;
   
   /** Merges in the fields from the readers in 
    *  <code>mergeState</code>. The default implementation skips
-   *  and maps around deleted documents, and calls {@link #write(Fields,NormsProducer)}.
+   *  and maps around deleted documents, and calls {@link #write(Fields)}.
    *  Implementations can override this method for more sophisticated
    *  merging (bulk-byte copying, etc). */
-  public void merge(MergeState mergeState, NormsProducer norms) throws IOException {
+  public void merge(MergeState mergeState) throws IOException {
     final List<Fields> fields = new ArrayList<>();
     final List<ReaderSlice> slices = new ArrayList<>();
 
@@ -102,7 +102,7 @@ public abstract class FieldsConsumer implements Closeable {
     Fields mergedFields = new MappedMultiFields(mergeState, 
                                                 new MultiFields(fields.toArray(Fields.EMPTY_ARRAY),
                                                                 slices.toArray(ReaderSlice.EMPTY_ARRAY)));
-    write(mergedFields, norms);
+    write(mergedFields);
   }
 
   // NOTE: strange but necessary so javadocs linting is happy:

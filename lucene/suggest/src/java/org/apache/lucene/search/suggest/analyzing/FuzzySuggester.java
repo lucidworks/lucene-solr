@@ -1,3 +1,4 @@
+package org.apache.lucene.search.suggest.analyzing;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search.suggest.analyzing;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +24,6 @@ import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.TokenStreamToAutomaton;
 import org.apache.lucene.analysis.tokenattributes.TermToBytesRefAttribute; // javadocs
-import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.UnicodeUtil;
@@ -113,8 +113,8 @@ public final class FuzzySuggester extends AnalyzingSuggester {
    * 
    * @param analyzer the analyzer used for this suggester
    */
-  public FuzzySuggester(Directory tempDir, String tempFileNamePrefix, Analyzer analyzer) {
-    this(tempDir, tempFileNamePrefix, analyzer, analyzer);
+  public FuzzySuggester(Analyzer analyzer) {
+    this(analyzer, analyzer);
   }
   
   /**
@@ -125,8 +125,8 @@ public final class FuzzySuggester extends AnalyzingSuggester {
    * @param queryAnalyzer
    *           Analyzer that will be used for analyzing query text during lookup
    */
-  public FuzzySuggester(Directory tempDir, String tempFileNamePrefix, Analyzer indexAnalyzer, Analyzer queryAnalyzer) {
-    this(tempDir, tempFileNamePrefix, indexAnalyzer, queryAnalyzer, EXACT_FIRST | PRESERVE_SEP, 256, -1, true, DEFAULT_MAX_EDITS, DEFAULT_TRANSPOSITIONS,
+  public FuzzySuggester(Analyzer indexAnalyzer, Analyzer queryAnalyzer) {
+    this(indexAnalyzer, queryAnalyzer, EXACT_FIRST | PRESERVE_SEP, 256, -1, true, DEFAULT_MAX_EDITS, DEFAULT_TRANSPOSITIONS,
          DEFAULT_NON_FUZZY_PREFIX, DEFAULT_MIN_FUZZY_LENGTH, DEFAULT_UNICODE_AWARE);
   }
 
@@ -154,11 +154,11 @@ public final class FuzzySuggester extends AnalyzingSuggester {
    * @param minFuzzyLength minimum length of lookup key before any edits are allowed (see default {@link #DEFAULT_MIN_FUZZY_LENGTH})
    * @param unicodeAware operate Unicode code points instead of bytes.
    */
-  public FuzzySuggester(Directory tempDir, String tempFileNamePrefix, Analyzer indexAnalyzer, Analyzer queryAnalyzer,
+  public FuzzySuggester(Analyzer indexAnalyzer, Analyzer queryAnalyzer,
                         int options, int maxSurfaceFormsPerAnalyzedForm, int maxGraphExpansions,
                         boolean preservePositionIncrements, int maxEdits, boolean transpositions,
                         int nonFuzzyPrefix, int minFuzzyLength, boolean unicodeAware) {
-    super(tempDir, tempFileNamePrefix, indexAnalyzer, queryAnalyzer, options, maxSurfaceFormsPerAnalyzedForm, maxGraphExpansions, preservePositionIncrements);
+    super(indexAnalyzer, queryAnalyzer, options, maxSurfaceFormsPerAnalyzedForm, maxGraphExpansions, preservePositionIncrements);
     if (maxEdits < 0 || maxEdits > LevenshteinAutomata.MAXIMUM_SUPPORTED_DISTANCE) {
       throw new IllegalArgumentException("maxEdits must be between 0 and " + LevenshteinAutomata.MAXIMUM_SUPPORTED_DISTANCE);
     }

@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.lucene.util;
 
 import java.util.Arrays;
@@ -28,9 +29,12 @@ public class TestFilterIterator extends LuceneTestCase {
 
   private static void assertNoMore(Iterator<?> it) {
     assertFalse(it.hasNext());
-    expectThrows(NoSuchElementException.class, () -> {
+    try {
       it.next();
-    });
+      fail("Should throw NoSuchElementException");
+    } catch (NoSuchElementException nsee) {
+      // pass
+    }
     assertFalse(it.hasNext());
   }
 
@@ -129,9 +133,12 @@ public class TestFilterIterator extends LuceneTestCase {
       }
     };
     assertEquals("a", it.next());
-    expectThrows(UnsupportedOperationException.class, () -> {
+    try {
       it.remove();
-    });
+      fail("Should throw UnsupportedOperationException");
+    } catch (UnsupportedOperationException oue) {
+      // pass
+    }
   }
 
 }

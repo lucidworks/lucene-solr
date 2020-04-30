@@ -1,3 +1,5 @@
+package org.apache.solr.client.solrj.impl;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.client.solrj.impl;
 
 import org.apache.http.cookie.CookieAttributeHandler;
 import org.apache.http.cookie.CookieOrigin;
 import org.apache.http.cookie.MalformedCookieException;
 import org.apache.http.impl.cookie.BasicClientCookie;
-import org.apache.solr.SolrTestCaseJ4;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -37,7 +37,12 @@ public class SolrPortAwareCookieSpecTest {
     h.validate(cookie, origin);
 
     cookie.setDomain("somehost:1234");
-    SolrTestCaseJ4.expectThrows(MalformedCookieException.class, () -> h.validate(cookie, origin));
+    try {
+      h.validate(cookie, origin);
+      Assert.fail("MalformedCookieException should have been thrown");
+    } catch (final MalformedCookieException ex) {
+      // expected
+    }
   }
 
   @Test
@@ -47,7 +52,12 @@ public class SolrPortAwareCookieSpecTest {
     final CookieAttributeHandler h = new SolrPortAwareCookieSpecFactory.PortAwareDomainHandler();
 
     cookie.setDomain("myhost");
-    SolrTestCaseJ4.expectThrows(IllegalArgumentException.class, () -> h.match(cookie, null));
+    try {
+      h.match(cookie, null);
+      Assert.fail("IllegalArgumentException should have been thrown, since origin is null.");
+    } catch (final IllegalArgumentException ex) {
+      // expected
+    }
 
     cookie.setDomain(null);
     Assert.assertFalse(h.match(cookie, origin));
@@ -75,7 +85,12 @@ public class SolrPortAwareCookieSpecTest {
     h.validate(cookie, origin);
 
     cookie.setDomain("otherhost");
-    SolrTestCaseJ4.expectThrows(MalformedCookieException.class, () ->  h.validate(cookie, origin));
+    try {
+      h.validate(cookie, origin);
+      Assert.fail("MalformedCookieException should have been thrown");
+    } catch (final MalformedCookieException ex) {
+      // expected
+    }
   }
 
   @Test
@@ -88,10 +103,19 @@ public class SolrPortAwareCookieSpecTest {
     h.validate(cookie, origin);
 
     cookie.setDomain(".otherdomain.com");
-    SolrTestCaseJ4.expectThrows(MalformedCookieException.class, () ->  h.validate(cookie, origin));
-
+    try {
+      h.validate(cookie, origin);
+      Assert.fail("MalformedCookieException should have been thrown");
+    } catch (final MalformedCookieException ex) {
+      // expected
+    }
     cookie.setDomain("www.otherdomain.com");
-    SolrTestCaseJ4.expectThrows(MalformedCookieException.class, () ->  h.validate(cookie, origin));
+    try {
+      h.validate(cookie, origin);
+      Assert.fail("MalformedCookieException should have been thrown");
+    } catch (final MalformedCookieException ex) {
+      // expected
+    }
   }
 
   @Test
@@ -104,7 +128,12 @@ public class SolrPortAwareCookieSpecTest {
     h.validate(cookie, origin);
 
     cookie.setDomain(".com");
-    SolrTestCaseJ4.expectThrows(MalformedCookieException.class, () ->  h.validate(cookie, origin));
+    try {
+      h.validate(cookie, origin);
+      Assert.fail("MalformedCookieException should have been thrown");
+    } catch (final MalformedCookieException ex) {
+      // expected
+    }
   }
 
   @Test
@@ -117,7 +146,12 @@ public class SolrPortAwareCookieSpecTest {
     h.validate(cookie, origin);
 
     cookie.setDomain(".b.c");
-    SolrTestCaseJ4.expectThrows(MalformedCookieException.class, () ->  h.validate(cookie, origin));
+    try {
+      h.validate(cookie, origin);
+      Assert.fail("MalformedCookieException should have been thrown");
+    } catch (final MalformedCookieException ex) {
+      // expected
+    }
   }
 
   @Test
@@ -146,9 +180,18 @@ public class SolrPortAwareCookieSpecTest {
   @Test
   public void testDomainInvalidInput() throws Exception {
     final CookieAttributeHandler h = new SolrPortAwareCookieSpecFactory.PortAwareDomainHandler();
-    SolrTestCaseJ4.expectThrows(IllegalArgumentException.class, () -> h.match(null, null));
-    SolrTestCaseJ4.expectThrows(IllegalArgumentException.class,
-        () -> h.match(new BasicClientCookie("name", "value"), null));
+    try {
+      h.match(null, null);
+      Assert.fail("IllegalArgumentException must have been thrown");
+    } catch (final IllegalArgumentException ex) {
+      // expected
+    }
+    try {
+      h.match(new BasicClientCookie("name", "value"), null);
+      Assert.fail("IllegalArgumentException must have been thrown");
+    } catch (final IllegalArgumentException ex) {
+      // expected
+    }
   }
 
 }

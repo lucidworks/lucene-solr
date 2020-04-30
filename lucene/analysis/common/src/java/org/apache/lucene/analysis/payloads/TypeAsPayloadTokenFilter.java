@@ -1,3 +1,4 @@
+package org.apache.lucene.analysis.payloads;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.analysis.payloads;
 
-
-import java.io.IOException;
 
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
@@ -25,9 +23,11 @@ import org.apache.lucene.analysis.tokenattributes.PayloadAttribute;
 import org.apache.lucene.analysis.tokenattributes.TypeAttribute;
 import org.apache.lucene.util.BytesRef;
 
+import java.io.IOException;
+
 
 /**
- * Makes the {@link TypeAttribute} a payload.
+ * Makes the {@link org.apache.lucene.analysis.Token#type()} a payload.
  *
  * Encodes the type using {@link String#getBytes(String)} with "UTF-8" as the encoding
  *

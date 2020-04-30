@@ -14,12 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.core;
 
 import javax.xml.xpath.XPathConstants;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.LinkedHashMap;
 
 import org.apache.lucene.index.ConcurrentMergeScheduler;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -30,7 +30,6 @@ import org.apache.solr.handler.admin.ShowFileRequestHandler;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.IndexSchemaFactory;
 import org.apache.solr.update.SolrIndexConfig;
-import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.w3c.dom.Node;
@@ -70,8 +69,8 @@ public class TestConfig extends SolrTestCaseJ4 {
   }
   @Test
   public void testDisableRequetsHandler() throws Exception {
-    assertNull(h.getCore().getRequestHandler("/disabled"));
-    assertNotNull(h.getCore().getRequestHandler("/enabled"));
+    assertNull(h.getCore().getRequestHandler("disabled"));
+    assertNotNull(h.getCore().getRequestHandler("enabled"));
   }
 
   @Test
@@ -106,38 +105,6 @@ public class TestConfig extends SolrTestCaseJ4 {
     assertTrue("file handler should have been automatically registered", handler != null);
 
   }
-  
- @Test
- public void testCacheEnablingDisabling() throws Exception {
-   // ensure if cache is not defined in the config then cache is disabled 
-   SolrConfig sc = new SolrConfig(TEST_PATH().resolve("collection1"), "solrconfig-defaults.xml", null, true);
-   assertNull(sc.filterCacheConfig);
-   assertNull(sc.queryResultCacheConfig);
-   assertNull(sc.documentCacheConfig);
-   
-   // enable all the caches via system properties and verify 
-   System.setProperty("filterCache.enabled", "true");
-   System.setProperty("queryResultCache.enabled", "true");
-   System.setProperty("documentCache.enabled", "true");
-   sc = new SolrConfig(TEST_PATH().resolve("collection1"), "solrconfig-cache-enable-disable.xml", null, true);
-   assertNotNull(sc.filterCacheConfig);
-   assertNotNull(sc.queryResultCacheConfig);
-   assertNotNull(sc.documentCacheConfig);
-   
-   // disable all the caches via system properties and verify
-   System.setProperty("filterCache.enabled", "false");
-   System.setProperty("queryResultCache.enabled", "false");
-   System.setProperty("documentCache.enabled", "false");
-   sc = new SolrConfig(TEST_PATH().resolve("collection1"), "solrconfig-cache-enable-disable.xml", null, true);
-   assertNull(sc.filterCacheConfig);
-   assertNull(sc.queryResultCacheConfig);
-   assertNull(sc.documentCacheConfig);
-   
-   System.clearProperty("filterCache.enabled");
-   System.clearProperty("queryResultCache.enabled");
-   System.clearProperty("documentCache.enabled");
- }
-  
 
   // If defaults change, add test methods to cover each version
   @Test
@@ -146,25 +113,22 @@ public class TestConfig extends SolrTestCaseJ4 {
     int numDefaultsTested = 0;
     int numNullDefaults = 0;
 
-    SolrConfig sc = new SolrConfig(TEST_PATH().resolve("collection1"), "solrconfig-defaults.xml", null, true);
+    SolrConfig sc = new SolrConfig(new SolrResourceLoader(TEST_PATH().resolve("collection1")), "solrconfig-defaults.xml", null);
     SolrIndexConfig sic = sc.indexConfig;
 
-    ++numDefaultsTested; assertEquals("default useCompoundFile", false, sic.useCompoundFile);
+    ++numDefaultsTested; assertEquals("default useCompoundFile", false, sic.getUseCompoundFile());
 
     ++numDefaultsTested; assertEquals("default maxBufferedDocs", -1, sic.maxBufferedDocs);
+    ++numDefaultsTested; assertEquals("default maxMergeDocs", -1, sic.maxMergeDocs);
+    ++numDefaultsTested; assertEquals("default mergeFactor", -1, sic.mergeFactor);
 
     ++numDefaultsTested; assertEquals("default ramBufferSizeMB", 100.0D, sic.ramBufferSizeMB, 0.0D);
-    ++numDefaultsTested; assertEquals("default ramPerThreadHardLimitMB", -1, sic.ramPerThreadHardLimitMB);
     ++numDefaultsTested; assertEquals("default writeLockTimeout", -1, sic.writeLockTimeout);
-    ++numDefaultsTested; assertEquals("default LockType", DirectoryFactory.LOCK_TYPE_NATIVE, sic.lockType);
+    ++numDefaultsTested; assertEquals("default LockType", SolrIndexConfig.LOCK_TYPE_NATIVE, sic.lockType);
 
     ++numDefaultsTested; assertEquals("default infoStream", InfoStream.NO_OUTPUT, sic.infoStream);
 
-    ++numDefaultsTested; assertNotNull("default metrics", sic.metricsInfo);
-
-    ++numDefaultsTested; ++numNullDefaults;
-    assertNull("default mergePolicyFactoryInfo", sic.mergePolicyFactoryInfo);
-
+    ++numDefaultsTested; ++numNullDefaults; assertNull("default mergePolicyInfo", sic.mergePolicyInfo);
     ++numDefaultsTested; ++numNullDefaults; assertNull("default mergeSchedulerInfo", sic.mergeSchedulerInfo);
     ++numDefaultsTested; ++numNullDefaults; assertNull("default mergedSegmentWarmerInfo", sic.mergedSegmentWarmerInfo);
 
@@ -172,63 +136,31 @@ public class TestConfig extends SolrTestCaseJ4 {
     IndexWriterConfig iwc = sic.toIndexWriterConfig(h.getCore());
 
     assertNotNull("null mp", iwc.getMergePolicy());
-    assertTrue("mp is not TieredMergePolicy", iwc.getMergePolicy() instanceof TieredMergePolicy);
+    assertTrue("mp is not TMP", iwc.getMergePolicy() instanceof TieredMergePolicy);
 
     assertNotNull("null ms", iwc.getMergeScheduler());
     assertTrue("ms is not CMS", iwc.getMergeScheduler() instanceof ConcurrentMergeScheduler);
 
     assertNull("non-null mergedSegmentWarmer", iwc.getMergedSegmentWarmer());
 
-    final int numDefaultsMapped = sic.toMap(new LinkedHashMap<>()).size();
-    assertEquals("numDefaultsTested vs. numDefaultsMapped+numNullDefaults ="+sic.toMap(new LinkedHashMap<>()).keySet(), numDefaultsTested, numDefaultsMapped+numNullDefaults);
+    final int numDefaultsMapped = sic.toMap().size();
+    assertEquals("numDefaultsTested vs. numDefaultsMapped+numNullDefaults ="+sic.toMap().keySet(), numDefaultsTested, numDefaultsMapped+numNullDefaults);
   }
 
-  @Test
-  public void testConvertAutoCommitMaxSizeStringToBytes() {
 
-    // Valid values
-    Assert.assertEquals(300, SolrConfig.convertHeapOptionStyleConfigStringToBytes("300"));
-    Assert.assertEquals(307200, SolrConfig.convertHeapOptionStyleConfigStringToBytes("300k"));
-    Assert.assertEquals(307200, SolrConfig.convertHeapOptionStyleConfigStringToBytes("300K"));
-    Assert.assertEquals(314572800, SolrConfig.convertHeapOptionStyleConfigStringToBytes("300m"));
-    Assert.assertEquals(314572800, SolrConfig.convertHeapOptionStyleConfigStringToBytes("300M"));
-    Assert.assertEquals(322122547200L, SolrConfig.convertHeapOptionStyleConfigStringToBytes("300g"));
-    Assert.assertEquals(322122547200L, SolrConfig.convertHeapOptionStyleConfigStringToBytes("300G"));
-    Assert.assertEquals(-1, SolrConfig.convertHeapOptionStyleConfigStringToBytes(""));
-
-    // Invalid values
-    RuntimeException thrown = expectThrows(RuntimeException.class, () -> {
-      SolrConfig.convertHeapOptionStyleConfigStringToBytes("3jbk32k"); // valid suffix but non-numeric prefix
-    });
-    assertTrue(thrown.getMessage().contains("Invalid"));
-
-    thrown = expectThrows(RuntimeException.class, () -> {
-      SolrConfig.convertHeapOptionStyleConfigStringToBytes("300x"); // valid prefix but invalid suffix
-    });
-    assertTrue(thrown.getMessage().contains("Invalid"));
-  }
-
-  @Test
-  public void testMaxSizeSettingWithoutAutoCommit() throws Exception {
-    SolrConfig solrConfig = new SolrConfig(TEST_PATH().resolve("collection1"), "bad-solrconfig-no-autocommit-tag.xml", null, true);
-    Assert.assertEquals(-1, solrConfig.getUpdateHandlerInfo().autoCommitMaxSizeBytes);
-    Assert.assertEquals(-1, solrConfig.getUpdateHandlerInfo().autoCommmitMaxDocs);
-    Assert.assertEquals(-1, solrConfig.getUpdateHandlerInfo().autoCommmitMaxTime);
-  }
-
-  // sanity check that sys properties are working as expected
+  // sanity check that sys propertis are working as expected
   public void testSanityCheckTestSysPropsAreUsed() throws Exception {
 
-    SolrConfig sc = new SolrConfig(TEST_PATH().resolve("collection1"), "solrconfig-basic.xml", null, true);
+    SolrConfig sc = new SolrConfig(new SolrResourceLoader(TEST_PATH().resolve("collection1")), "solrconfig-basic.xml", null);
     SolrIndexConfig sic = sc.indexConfig;
 
     assertEquals("ramBufferSizeMB sysprop", 
                  Double.parseDouble(System.getProperty("solr.tests.ramBufferSizeMB")), 
                                     sic.ramBufferSizeMB, 0.0D);
-    assertEquals("ramPerThreadHardLimitMB sysprop",
-        Integer.parseInt(System.getProperty("solr.tests.ramPerThreadHardLimitMB")), sic.ramPerThreadHardLimitMB);
     assertEquals("useCompoundFile sysprop", 
-                 Boolean.parseBoolean(System.getProperty("useCompoundFile")), sic.useCompoundFile);
+                 Boolean.parseBoolean(System.getProperty("useCompoundFile")), sic.getUseCompoundFile());
   }
 
 }
+
+

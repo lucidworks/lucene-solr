@@ -1,3 +1,5 @@
+package org.apache.lucene.search;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.search;
-
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -162,7 +162,7 @@ public abstract class ReferenceManager<G> implements Closeable {
 
   private void doMaybeRefresh() throws IOException {
     // it's ok to call lock() here (blocking) because we're supposed to get here
-    // from either maybeRefresh() or maybeRefreshBlocking(), after the lock has
+    // from either maybeRefreh() or maybeRefreshBlocking(), after the lock has
     // already been obtained. Doing that protects us from an accidental bug
     // where this method will be called outside the scope of refreshLock.
     // Per ReentrantLock's javadoc, calling lock() by the same thread more than
@@ -291,7 +291,7 @@ public abstract class ReferenceManager<G> implements Closeable {
    */
   public void addListener(RefreshListener listener) {
     if (listener == null) {
-      throw new NullPointerException("Listener must not be null");
+      throw new NullPointerException("Listener cannot be null");
     }
     refreshListeners.add(listener);
   }
@@ -301,7 +301,7 @@ public abstract class ReferenceManager<G> implements Closeable {
    */
   public void removeListener(RefreshListener listener) {
     if (listener == null) {
-      throw new NullPointerException("Listener must not be null");
+      throw new NullPointerException("Listener cannot be null");
     }
     refreshListeners.remove(listener);
   }

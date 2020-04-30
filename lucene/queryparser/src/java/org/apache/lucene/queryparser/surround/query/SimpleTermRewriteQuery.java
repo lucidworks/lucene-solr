@@ -1,3 +1,4 @@
+package org.apache.lucene.queryparser.surround.query;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,18 +15,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.queryparser.surround.query;
-
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.ArrayList;
 
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryVisitor;
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.index.Term;
 
 class SimpleTermRewriteQuery extends RewriteQuery<SimpleTerm> {
 
@@ -38,6 +36,9 @@ class SimpleTermRewriteQuery extends RewriteQuery<SimpleTerm> {
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
+    if (getBoost() != 1f) {
+      return super.rewrite(reader);
+    }
     final List<Query> luceneSubQueries = new ArrayList<>();
     srndQuery.visitMatchingTerms(reader, fieldName,
     new SimpleTerm.MatchingTermVisitor() {
@@ -51,12 +52,6 @@ class SimpleTermRewriteQuery extends RewriteQuery<SimpleTerm> {
     : SrndBooleanQuery.makeBooleanQuery(
       /* luceneSubQueries all have default weight */
       luceneSubQueries, BooleanClause.Occur.SHOULD); /* OR the subquery terms */
-  }
-
-  @Override
-  public void visit(QueryVisitor visitor) {
-    // TODO: implement this
-    visitor.visitLeaf(this);
   }
 }
 

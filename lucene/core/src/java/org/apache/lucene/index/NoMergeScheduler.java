@@ -1,3 +1,5 @@
+package org.apache.lucene.index;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,10 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.lucene.index;
-
-import org.apache.lucene.index.MergePolicy.OneMerge;
-import org.apache.lucene.store.Directory;
 
 /**
  * A {@link MergeScheduler} which never executes any merges. It is also a
@@ -43,11 +41,6 @@ public final class NoMergeScheduler extends MergeScheduler {
 
   @Override
   public void merge(IndexWriter writer, MergeTrigger trigger, boolean newMergesFound) {}
-  
-  @Override
-  public Directory wrapForMerge(OneMerge merge, Directory in) {
-    return in;
-  }
 
   @Override
   public MergeScheduler clone() {

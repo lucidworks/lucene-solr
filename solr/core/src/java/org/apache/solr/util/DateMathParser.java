@@ -14,30 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.util;
 
-import java.text.ParseException;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
-import java.time.format.DateTimeParseException;
-import java.time.temporal.ChronoUnit;
-import java.util.Calendar;
+import org.apache.solr.request.SolrRequestInfo;
+import org.apache.solr.common.params.CommonParams; //jdoc
+
 import java.util.Date;
-import java.util.HashMap;
+import java.util.Calendar;
+import java.util.TimeZone;
 import java.util.Locale;
 import java.util.Map;
-import java.util.TimeZone;
+import java.util.HashMap;
+import java.text.ParseException;
 import java.util.regex.Pattern;
-
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.params.CommonParams;
-import org.apache.solr.request.SolrRequestInfo;
 
 /**
  * A Simple Utility class for parsing "math" like strings relating to Dates.
@@ -99,223 +89,164 @@ import org.apache.solr.request.SolrRequestInfo;
  * request param.
  * </p>
  *
- * <p>
- *   Historical dates:  The calendar computation is completely done with the
- *   Gregorian system/algorithm.  It does <em>not</em> switch to Julian or
- *   anything else, unlike the default {@link java.util.GregorianCalendar}.
- * </p>
  * @see SolrRequestInfo#getClientTimeZone
  * @see SolrRequestInfo#getNOW
  */
 public class DateMathParser  {
-
-  public static final TimeZone UTC = TimeZone.getTimeZone("UTC");
+  
+  public static TimeZone UTC = TimeZone.getTimeZone("UTC");
 
   /** Default TimeZone for DateMath rounding (UTC) */
   public static final TimeZone DEFAULT_MATH_TZ = UTC;
+  /** Default Locale for DateMath rounding (Locale.ROOT) */
+  public static final Locale DEFAULT_MATH_LOCALE = Locale.ROOT;
 
   /**
-   * Differs by {@link DateTimeFormatter#ISO_INSTANT} in that it's lenient.
-   * @see #parseNoMath(String)
-   */
-  public static final DateTimeFormatter PARSER = new DateTimeFormatterBuilder()
-      .parseCaseInsensitive().parseLenient().appendInstant().toFormatter(Locale.ROOT);
-
-  /**
-   * A mapping from (uppercased) String labels identifying time units,
-   * to the corresponding {@link ChronoUnit} enum (e.g. "YEARS") used to
-   * set/add/roll that unit of measurement.
+   * A mapping from (uppercased) String labels idenyifying time units,
+   * to the corresponding Calendar constant used to set/add/roll that unit
+   * of measurement.
    *
    * <p>
    * A single logical unit of time might be represented by multiple labels
-   * for convenience (ie: <code>DATE==DAYS</code>,
-   * <code>MILLI==MILLIS</code>)
+   * for convenience (ie: <code>DATE==DAY</code>,
+   * <code>MILLI==MILLISECOND</code>)
    * </p>
    *
    * @see Calendar
    */
-  public static final Map<String,ChronoUnit> CALENDAR_UNITS = makeUnitsMap();
-
+  public static final Map<String,Integer> CALENDAR_UNITS = makeUnitsMap();
 
   /** @see #CALENDAR_UNITS */
-  private static Map<String,ChronoUnit> makeUnitsMap() {
+  private static Map<String,Integer> makeUnitsMap() {
 
     // NOTE: consciously choosing not to support WEEK at this time,
     // because of complexity in rounding down to the nearest week
-    // around a month/year boundary.
+    // arround a month/year boundry.
     // (Not to mention: it's not clear what people would *expect*)
     // 
     // If we consider adding some time of "week" support, then
     // we probably need to change "Locale loc" to default to something 
     // from a param via SolrRequestInfo as well.
     
-    Map<String,ChronoUnit> units = new HashMap<>(13);
-    units.put("YEAR",        ChronoUnit.YEARS);
-    units.put("YEARS",       ChronoUnit.YEARS);
-    units.put("MONTH",       ChronoUnit.MONTHS);
-    units.put("MONTHS",      ChronoUnit.MONTHS);
-    units.put("DAY",         ChronoUnit.DAYS);
-    units.put("DAYS",        ChronoUnit.DAYS);
-    units.put("DATE",        ChronoUnit.DAYS);
-    units.put("HOUR",        ChronoUnit.HOURS);
-    units.put("HOURS",       ChronoUnit.HOURS);
-    units.put("MINUTE",      ChronoUnit.MINUTES);
-    units.put("MINUTES",     ChronoUnit.MINUTES);
-    units.put("SECOND",      ChronoUnit.SECONDS);
-    units.put("SECONDS",     ChronoUnit.SECONDS);
-    units.put("MILLI",       ChronoUnit.MILLIS);
-    units.put("MILLIS",      ChronoUnit.MILLIS);
-    units.put("MILLISECOND", ChronoUnit.MILLIS);
-    units.put("MILLISECONDS",ChronoUnit.MILLIS);
-
-    // NOTE: Maybe eventually support NANOS
+    Map<String,Integer> units = new HashMap<>(13);
+    units.put("YEAR",        Calendar.YEAR);
+    units.put("YEARS",       Calendar.YEAR);
+    units.put("MONTH",       Calendar.MONTH);
+    units.put("MONTHS",      Calendar.MONTH);
+    units.put("DAY",         Calendar.DATE);
+    units.put("DAYS",        Calendar.DATE);
+    units.put("DATE",        Calendar.DATE);
+    units.put("HOUR",        Calendar.HOUR_OF_DAY);
+    units.put("HOURS",       Calendar.HOUR_OF_DAY);
+    units.put("MINUTE",      Calendar.MINUTE);
+    units.put("MINUTES",     Calendar.MINUTE);
+    units.put("SECOND",      Calendar.SECOND);
+    units.put("SECONDS",     Calendar.SECOND);
+    units.put("MILLI",       Calendar.MILLISECOND);
+    units.put("MILLIS",      Calendar.MILLISECOND);
+    units.put("MILLISECOND", Calendar.MILLISECOND);
+    units.put("MILLISECONDS",Calendar.MILLISECOND);
 
     return units;
   }
 
   /**
-   * Returns a modified time by "adding" the specified value of units
+   * Modifies the specified Calendar by "adding" the specified value of units
    *
    * @exception IllegalArgumentException if unit isn't recognized.
    * @see #CALENDAR_UNITS
    */
-  private static LocalDateTime add(LocalDateTime t, int val, String unit) {
-    ChronoUnit uu = CALENDAR_UNITS.get(unit);
+  public static void add(Calendar c, int val, String unit) {
+    Integer uu = CALENDAR_UNITS.get(unit);
     if (null == uu) {
       throw new IllegalArgumentException("Adding Unit not recognized: "
                                          + unit);
     }
-    return t.plus(val, uu);
+    c.add(uu.intValue(), val);
   }
   
   /**
-   * Returns a modified time by "rounding" down to the specified unit
+   * Modifies the specified Calendar by "rounding" down to the specified unit
    *
    * @exception IllegalArgumentException if unit isn't recognized.
    * @see #CALENDAR_UNITS
    */
-  private static LocalDateTime round(LocalDateTime t, String unit) {
-    ChronoUnit uu = CALENDAR_UNITS.get(unit);
+  public static void round(Calendar c, String unit) {
+    Integer uu = CALENDAR_UNITS.get(unit);
     if (null == uu) {
       throw new IllegalArgumentException("Rounding Unit not recognized: "
                                          + unit);
     }
-    // note: OffsetDateTime.truncatedTo does not support >= DAYS units so we handle those
-    switch (uu) {
-      case YEARS:
-        return LocalDateTime.of(LocalDate.of(t.getYear(), 1, 1), LocalTime.MIDNIGHT); // midnight is 00:00:00
-      case MONTHS:
-        return LocalDateTime.of(LocalDate.of(t.getYear(), t.getMonth(), 1), LocalTime.MIDNIGHT);
-      case DAYS:
-        return LocalDateTime.of(t.toLocalDate(), LocalTime.MIDNIGHT);
-      default:
-        assert !uu.isDateBased();// >= DAY
-        return t.truncatedTo(uu);
-    }
-  }
-
-  /**
-   * Parses a String which may be a date (in the standard ISO-8601 format)
-   * followed by an optional math expression.
-   * The TimeZone is taken from the {@code TZ} param retrieved via {@link SolrRequestInfo}, defaulting to UTC.
-   * @param now an optional fixed date to use as "NOW". {@link SolrRequestInfo} is consulted if unspecified.
-   * @param val the string to parse
-   */
-  //TODO this API is a bit clumsy.  "now" is rarely used.
-  public static Date parseMath(Date now, String val) {
-    return parseMath(now, val, null);
-  }
-
-  /**
-   * Parses a String which may be a date (in the standard ISO-8601 format)
-   * followed by an optional math expression.
-   * @param now an optional fixed date to use as "NOW"
-   * @param val the string to parse
-   * @param zone the timezone to use
-   */
-  public static Date parseMath(Date now, String val, TimeZone zone) {
-    String math;
-    final DateMathParser p = new DateMathParser(zone);
-
-    if (null != now) p.setNow(now);
-
-    if (val.startsWith("NOW")) {
-      math = val.substring("NOW".length());
-    } else {
-      final int zz = val.indexOf('Z');
-      if (zz == -1) {
-        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
-            "Invalid Date String:'" + val + '\'');
-      }
-      math = val.substring(zz+1);
-      try {
-        p.setNow(parseNoMath(val.substring(0, zz + 1)));
-      } catch (DateTimeParseException e) {
-        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
-            "Invalid Date in Date Math String:'" + val + '\'', e);
-      }
+    int u = uu.intValue();
+    
+    switch (u) {
+      
+    case Calendar.YEAR:
+      c.clear(Calendar.MONTH);
+      /* fall through */
+    case Calendar.MONTH:
+      c.clear(Calendar.DAY_OF_MONTH);
+      c.clear(Calendar.DAY_OF_WEEK);
+      c.clear(Calendar.DAY_OF_WEEK_IN_MONTH);
+      c.clear(Calendar.DAY_OF_YEAR);
+      c.clear(Calendar.WEEK_OF_MONTH);
+      c.clear(Calendar.WEEK_OF_YEAR);
+      /* fall through */
+    case Calendar.DATE:
+      c.clear(Calendar.HOUR_OF_DAY);
+      c.clear(Calendar.HOUR);
+      c.clear(Calendar.AM_PM);
+      /* fall through */
+    case Calendar.HOUR_OF_DAY:
+      c.clear(Calendar.MINUTE);
+      /* fall through */
+    case Calendar.MINUTE:
+      c.clear(Calendar.SECOND);
+      /* fall through */
+    case Calendar.SECOND:
+      c.clear(Calendar.MILLISECOND);
+      break;
+    default:
+      throw new IllegalStateException(
+        "No logic for rounding value ("+u+") " + unit
+      );
     }
 
-    if (null == math || math.equals("")) {
-      return p.getNow();
-    }
-
-    try {
-      return p.parseMath(math);
-    } catch (ParseException e) {
-      throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
-          "Invalid Date Math String:'" +val+'\'',e);
-    }
   }
 
-  /**
-   * Parsing Solr dates <b>without DateMath</b>.
-   * This is the standard/pervasive ISO-8601 UTC format but is configured with some leniency.
-   *
-   * Callers should almost always call {@link #parseMath(Date, String)} instead.
-   *
-   * @throws DateTimeParseException if it can't parse
-   */
-  private static Date parseNoMath(String val) {
-    //TODO write the equivalent of a Date::from; avoids Instant -> Date
-    return new Date(PARSER.parse(val, Instant::from).toEpochMilli());
-  }
-
+  
   private TimeZone zone;
   private Locale loc;
   private Date now;
   
   /**
-   * Chooses defaults based on the current request.
+   * Default constructor that assumes UTC should be used for rounding unless 
+   * otherwise specified in the SolrRequestInfo
+   * 
    * @see SolrRequestInfo#getClientTimeZone
-   * @see SolrRequestInfo#getNOW()
+   * @see #DEFAULT_MATH_LOCALE
    */
   public DateMathParser() {
-    this(null, null);
-  }
-
-  //TODO Deprecate?
-  public DateMathParser(TimeZone tz) {
-    this(null, tz);
+    this(null, DEFAULT_MATH_LOCALE);
+    
   }
 
   /**
-   * @param now The current time. If null, it defaults to {@link SolrRequestInfo#getNOW()}.
-   *            otherwise the current time is assumed.
-   * @param tz The TimeZone used for rounding (to determine when hours/days begin).  If null, then this method defaults
-   *           to the value dictated by the SolrRequestInfo if it exists -- otherwise it uses UTC.
+   * @param tz The TimeZone used for rounding (to determine when hours/days begin).  If null, then this method defaults to the value dicated by the SolrRequestInfo if it 
+   * exists -- otherwise it uses UTC.
+   * @param l The Locale used for rounding (to determine when weeks begin).  If null, then this method defaults to en_US.
    * @see #DEFAULT_MATH_TZ
+   * @see #DEFAULT_MATH_LOCALE
    * @see Calendar#getInstance(TimeZone,Locale)
    * @see SolrRequestInfo#getClientTimeZone
    */
-  public DateMathParser(Date now, TimeZone tz) {
-    this.now = now;// potentially null; it's okay
-
+  public DateMathParser(TimeZone tz, Locale l) {
+    loc = (null != l) ? l : DEFAULT_MATH_LOCALE;
     if (null == tz) {
       SolrRequestInfo reqInfo = SolrRequestInfo.getRequestInfo();
       tz = (null != reqInfo) ? reqInfo.getClientTimeZone() : DEFAULT_MATH_TZ;
     }
-    this.zone = (null != tz) ? tz : DEFAULT_MATH_TZ;
+    zone = (null != tz) ? tz : DEFAULT_MATH_TZ;
   }
 
   /**
@@ -323,6 +254,13 @@ public class DateMathParser  {
    */
   public TimeZone getTimeZone() {
     return this.zone;
+  }
+
+  /**
+   * @return the locale
+   */
+  public Locale getLocale() {
+    return this.loc;
   }
 
   /** 
@@ -334,7 +272,7 @@ public class DateMathParser  {
   }
   
   /** 
-   * Returns a clone of this instance's concept of "now" (never null).
+   * Returns a cloned of this instance's concept of "now".
    *
    * If setNow was never called (or if null was specified) then this method 
    * first defines 'now' as the value dictated by the SolrRequestInfo if it 
@@ -350,7 +288,7 @@ public class DateMathParser  {
         // fall back to current time if no request info set
         now = new Date();
       } else {
-        now = reqInfo.getNOW(); // never null
+        now = reqInfo.getNOW();
       }
     }
     return (Date) now.clone();
@@ -362,15 +300,15 @@ public class DateMathParser  {
    * @exception ParseException positions in ParseExceptions are token positions, not character positions.
    */
   public Date parseMath(String math) throws ParseException {
+
+    Calendar cal = Calendar.getInstance(zone, loc);
+    cal.setTime(getNow());
+
     /* check for No-Op */
     if (0==math.length()) {
-      return getNow();
+      return cal.getTime();
     }
-
-    ZoneId zoneId = zone.toZoneId();
-    // localDateTime is a date and time local to the timezone specified
-    LocalDateTime localDateTime = ZonedDateTime.ofInstant(getNow().toInstant(), zoneId).toLocalDateTime();
-
+    
     String[] ops = splitter.split(math);
     int pos = 0;
     while ( pos < ops.length ) {
@@ -388,7 +326,7 @@ public class DateMathParser  {
             ("Need a unit after command: \"" + command + "\"", pos);
         }
         try {
-          localDateTime = round(localDateTime, ops[pos++]);
+          round(cal, ops[pos++]);
         } catch (IllegalArgumentException e) {
           throw new ParseException
             ("Unit not recognized: \"" + ops[pos-1] + "\"", pos-1);
@@ -402,7 +340,7 @@ public class DateMathParser  {
         }
         int val = 0;
         try {
-          val = Integer.parseInt(ops[pos++]);
+          val = Integer.valueOf(ops[pos++]);
         } catch (NumberFormatException e) {
           throw new ParseException
             ("Not a Number: \"" + ops[pos-1] + "\"", pos-1);
@@ -412,7 +350,7 @@ public class DateMathParser  {
         }
         try {
           String unit = ops[pos++];
-          localDateTime = add(localDateTime, val, unit);
+          add(cal, val, unit);
         } catch (IllegalArgumentException e) {
           throw new ParseException
             ("Unit not recognized: \"" + ops[pos-1] + "\"", pos-1);
@@ -424,7 +362,7 @@ public class DateMathParser  {
       }
     }
     
-    return Date.from(ZonedDateTime.of(localDateTime, zoneId).toInstant());
+    return cal.getTime();
   }
 
   private static Pattern splitter = Pattern.compile("\\b|(?<=\\d)(?=\\D)");

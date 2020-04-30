@@ -1,3 +1,4 @@
+package org.apache.solr.rest;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.rest;
 
 import java.io.File;
 import java.nio.file.Paths;
@@ -24,12 +24,12 @@ import java.util.Set;
 
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.Utils;
 import org.apache.solr.core.SolrResourceLoader;
 import org.apache.solr.rest.ManagedResourceStorage.StorageIO;
 import org.apache.solr.rest.schema.analysis.ManagedWordSetResource;
 import org.junit.Ignore;
 import org.junit.Test;
+import org.noggit.JSONUtil;
 import org.restlet.Request;
 import org.restlet.data.Reference;
 
@@ -63,7 +63,7 @@ public class TestRestManager extends SolrRestletTestBase {
     
   }
   
-  private static class MockAnalysisComponent implements ManagedResourceObserver {
+  private class MockAnalysisComponent implements ManagedResourceObserver {
 
     @Override
     public void onManagedResourceInitialized(NamedList<?> args, ManagedResource res)
@@ -175,8 +175,8 @@ public class TestRestManager extends SolrRestletTestBase {
      * 
              "/managedResources/[0]/class=='org.apache.solr.rest.schema.analysis.ManagedWordSetResource'",
              "/managedResources/[0]/resourceId=='/schema/analysis/stopwords/english'",
-             "/managedResources/[1]/class=='org.apache.solr.rest.schema.analysis.ManagedSynonymGraphFilterFactory$SynonymManager'",
-             "/managedResources/[1]/resourceId=='/schema/analysis/synonyms/englishgraph'");
+             "/managedResources/[1]/class=='org.apache.solr.rest.schema.analysis.ManagedSynonymFilterFactory$SynonymManager'",
+             "/managedResources/[1]/resourceId=='/schema/analysis/synonyms/english'");
     */
     
     // no pre-existing managed config components
@@ -195,7 +195,7 @@ public class TestRestManager extends SolrRestletTestBase {
     assertJQ(newEndpoint, "/wordSet/managedList==[]");
     
     // add some words to this new word list manager
-    assertJPut(newEndpoint, Utils.toJSONString(Arrays.asList("this", "is", "a", "test")), "/responseHeader/status==0");
+    assertJPut(newEndpoint, JSONUtil.toJSON(Arrays.asList("this", "is", "a", "test")), "/responseHeader/status==0");
 
     assertJQ(newEndpoint
         ,"/wordSet/managedList==['a','is','test','this']"

@@ -1,3 +1,5 @@
+package org.apache.solr.search.stats;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,28 +16,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.solr.search.stats;
+
+import org.apache.solr.core.PluginInfo;
+import org.apache.solr.handler.component.ResponseBuilder;
+import org.apache.solr.request.SolrQueryRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.invoke.MethodHandles;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.solr.handler.component.ResponseBuilder;
-import org.apache.solr.request.SolrQueryRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-/**
- * This class implements exact caching of statistics. It requires an additional
- * round-trip to parse query at shard servers, and return term statistics for
- * query terms (and collection statistics for term fields).
- * <p>Global statistics are accumulated in the instance of this component (with the same life-cycle as
- * SolrSearcher), in unbounded maps. NOTE: This may lead to excessive memory usage, in which case
- * a {@link LRUStatsCache} should be considered.</p>
- */
 public class ExactSharedStatsCache extends ExactStatsCache {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   
   // local stats obtained from shard servers
   private final Map<String,Map<String,TermStats>> perShardTermStats = new ConcurrentHashMap<>();
@@ -45,19 +40,13 @@ public class ExactSharedStatsCache extends ExactStatsCache {
   private final Map<String,CollectionStats> currentGlobalColStats = new ConcurrentHashMap<>();
 
   @Override
-  protected StatsSource doGet(SolrQueryRequest req) {
-    log.debug("total={}, cache {}", currentGlobalColStats, currentGlobalTermStats.size());
-    return new ExactStatsSource(statsCacheMetrics, currentGlobalTermStats, currentGlobalColStats);
+  public StatsSource get(SolrQueryRequest req) {
+    LOG.debug("total={}, cache {}", currentGlobalColStats, currentGlobalTermStats.size());
+    return new ExactStatsSource(currentGlobalTermStats, currentGlobalColStats);
   }
-
+  
   @Override
-  public void clear() {
-    super.clear();
-    perShardTermStats.clear();
-    perShardColStats.clear();
-    currentGlobalTermStats.clear();
-    currentGlobalColStats.clear();
-  }
+  public void init(PluginInfo info) {}
 
   @Override
   protected void addToPerShardColStats(SolrQueryRequest req, String shard,
@@ -67,7 +56,7 @@ public class ExactSharedStatsCache extends ExactStatsCache {
 
   @Override
   protected void printStats(SolrQueryRequest req) {
-    log.debug("perShardColStats={}, perShardTermStats={}", perShardColStats, perShardTermStats);
+    LOG.debug("perShardColStats={}, perShardTermStats={}", perShardColStats, perShardTermStats);
   }
 
   @Override
@@ -85,7 +74,7 @@ public class ExactSharedStatsCache extends ExactStatsCache {
 
   protected TermStats getPerShardTermStats(SolrQueryRequest req, String t, String shard) {
     Map<String,TermStats> cache = perShardTermStats.get(shard);
-    return (cache != null) ? cache.get(t) : null; //Term doesn't exist in shard;
+    return cache.get(t);
   }
 
   protected void addToGlobalColStats(SolrQueryRequest req,

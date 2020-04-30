@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.solr.core;
 
 import javax.script.ScriptEngineManager;
@@ -24,10 +25,6 @@ public class TestBadConfig extends AbstractBadConfigTestBase {
 
   public void testUnsetSysProperty() throws Exception {
     assertConfigs("bad_solrconfig.xml","schema.xml","unset.sys.property");
-  }
-
-  public void testNRTModeProperty() throws Exception {
-    assertConfigs("bad-solrconfig-nrtmode.xml","schema.xml", "nrtMode");
   }
 
   public void testMultipleDirectoryFactories() throws Exception {
@@ -76,8 +73,8 @@ public class TestBadConfig extends AbstractBadConfigTestBase {
   }
 
   public void testBogusMergePolicy() throws Exception {
-    assertConfigs("bad-mpf-solrconfig.xml", "schema-minimal.xml",
-                  "DummyMergePolicyFactory");
+    assertConfigs("bad-mp-solrconfig.xml", "schema-minimal.xml",
+                  "DummyMergePolicy");
   }
 
   public void testSchemaMutableButNotManaged() throws Exception {
@@ -93,10 +90,5 @@ public class TestBadConfig extends AbstractBadConfigTestBase {
   public void testUnknownSchemaAttribute() throws Exception {
     assertConfigs("bad-solrconfig-unexpected-schema-attribute.xml", "schema-minimal.xml",
                   "Unexpected arg(s): {bogusParam=bogusValue}");
-  }
-
-  public void testTolerantUpdateProcessorNoUniqueKey() throws Exception {
-    assertConfigs("solrconfig-tolerant-update-minimal.xml", "schema-minimal.xml",
-                  "requires a schema that includes a uniqueKey field");
   }
 }
