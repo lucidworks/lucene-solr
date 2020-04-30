@@ -43,7 +43,6 @@ import org.apache.solr.core.CloseHook;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.security.PKIAuthenticationPlugin;
 import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.update.AddUpdateCommand;
@@ -382,12 +381,9 @@ public final class DocExpirationUpdateProcessorFactory
     public void run() {
       // setup the request context early so the logging (including any from 
       // shouldWeDoPeriodicDelete() ) includes the core context info
-      final LocalSolrQueryRequest req = new LocalSolrQueryRequest
+      final SolrQueryRequest req = new LocalSolrQueryRequest
         (factory.core, Collections.<String,String[]>emptyMap());
       try {
-	// HACK: to indicate to PKI that this is a server initiated request for the purposes
-        // of distributed requet/credential forwarding...
-        req.setUserPrincipalName(PKIAuthenticationPlugin.NODE_IS_USER);
         final SolrQueryResponse rsp = new SolrQueryResponse();
         rsp.addResponseHeader(new SimpleOrderedMap<>(1));
         SolrRequestInfo.setRequestInfo(new SolrRequestInfo(req, rsp));
