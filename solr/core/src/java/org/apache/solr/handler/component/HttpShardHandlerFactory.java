@@ -44,7 +44,6 @@ import org.apache.solr.client.solrj.impl.HttpClientUtil;
 import org.apache.solr.client.solrj.impl.LBHttpSolrClient;
 import org.apache.solr.client.solrj.impl.LBHttpSolrClient.Builder;
 import org.apache.solr.client.solrj.routing.AffinityReplicaListTransformerFactory;
-import org.apache.solr.client.solrj.routing.PreferenceRule;
 import org.apache.solr.client.solrj.routing.ReplicaListTransformer;
 import org.apache.solr.client.solrj.routing.ReplicaListTransformerFactory;
 import org.apache.solr.client.solrj.routing.RequestReplicaListTransformerGenerator;

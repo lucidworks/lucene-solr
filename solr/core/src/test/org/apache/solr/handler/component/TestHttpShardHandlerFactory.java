@@ -32,7 +32,6 @@ import java.util.List;
 import java.util.Set;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.impl.LBHttpSolrClient;
-import org.apache.solr.client.solrj.routing.PreferenceRule;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.ClusterState;
