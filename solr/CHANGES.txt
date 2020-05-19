@@ -16,6 +16,14 @@ In this release, there is an example Solr server including a bundled
 servlet container in the directory named "example".
 See the Solr tutorial at https://lucene.apache.org/solr/guide/solr-tutorial.html
 
+==================  7.7.2_SOLR-12217 ==================
+
+* BACKPORT: SOLR-12217 - Add support for shards.preference in SolrJ for single shard cases
+  This also neccessitated the backporting of the following dependent jiras:
+  * SOLR-13257 - Enable replica routing affinity for better cache usage
+  * SOLR-13445 - Preferred replicas on nodes with same system properties as the query master
+  * SOLR-13865 - Centralize the replica-choosing strategy for distributed requests across Solr
+
 
 ==================  7.7.2 ==================
 
