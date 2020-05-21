@@ -234,8 +234,30 @@ public abstract class FacetProcessor<FacetRequestT extends FacetRequest>  {
       }
     }
 
-    // recompute the base domain
-    fcontext.base = fcontext.searcher.getDocSet(qlist);
+    List<Domain> domains = (List<Domain>)fcontext.qcontext.get("domains");
+    DocSet cachedDocSet = null;
+    if(domains != null) {
+      for(Domain domain : domains) {
+        if(domain.queriesEqual(qlist)) {
+          cachedDocSet = domain.getDocSet();
+          break;
+        }
+      }
+    } else {
+      domains = new ArrayList();
+      fcontext.qcontext.put("domains", domains);
+    }
+
+    if(cachedDocSet != null) {
+      //System.out.println("Cached DocSet");
+      fcontext.base = cachedDocSet;
+    } else {
+      // recompute the base domain
+      //fcontext.facetInfo
+      //System.out.println("Re-compute DocSet");
+      fcontext.base = fcontext.searcher.getDocSet(qlist);
+      domains.add(new Domain(qlist, fcontext.base));
+    }
   }
 
   /** modifies the context base if there is a join field domain change */
@@ -290,6 +312,33 @@ public abstract class FacetProcessor<FacetRequestT extends FacetRequest>  {
 
     fcontext.base = result;
     return appliedFilters;
+  }
+
+
+  private static class Domain {
+    private List<Query> queries;
+    private DocSet docSet;
+    public Domain(List<Query> queries, DocSet docSet) {
+      this.queries = queries;
+      this.docSet = docSet;
+    }
+
+    public boolean queriesEqual(List _queries) {
+      if(queries.size() != _queries.size()) {
+        return false;
+      }
+
+      for(int i=0; i<queries.size(); i++) {
+        if(!queries.get(i).equals(_queries.get(i))) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    public DocSet getDocSet() {
+      return this.docSet;
+    }
   }
 
   protected void processStats(SimpleOrderedMap<Object> bucket, Query bucketQ, DocSet docs, long docCount) throws IOException {
