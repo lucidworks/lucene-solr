@@ -35,6 +35,8 @@ public class NodeConfig {
 
   private final Path solrDataHome;
 
+  private final Integer booleanQueryMaxClauseCount;
+  
   private final Path configSetBaseDirectory;
 
   private final String sharedLibDirectory;
@@ -73,7 +75,8 @@ public class NodeConfig {
 
   private final PluginInfo transientCacheConfig;
 
-  private NodeConfig(String nodeName, Path coreRootDirectory, Path solrDataHome, Path configSetBaseDirectory, String sharedLibDirectory,
+  private NodeConfig(String nodeName, Path coreRootDirectory, Path solrDataHome, Integer booleanQueryMaxClauseCount,
+                     Path configSetBaseDirectory, String sharedLibDirectory,
                      PluginInfo shardHandlerFactoryConfig, UpdateShardHandlerConfig updateShardHandlerConfig,
                      String coreAdminHandlerClass, String collectionsAdminHandlerClass,
                      String infoHandlerClass, String configSetsHandlerClass,
@@ -84,6 +87,7 @@ public class NodeConfig {
     this.nodeName = nodeName;
     this.coreRootDirectory = coreRootDirectory;
     this.solrDataHome = solrDataHome;
+    this.booleanQueryMaxClauseCount = booleanQueryMaxClauseCount;
     this.configSetBaseDirectory = configSetBaseDirectory;
     this.sharedLibDirectory = sharedLibDirectory;
     this.shardHandlerFactoryConfig = shardHandlerFactoryConfig;
@@ -123,6 +127,15 @@ public class NodeConfig {
     return solrDataHome;
   }
 
+  /** 
+   * If null, the lucene default will not be overridden
+   *
+   * @see org.apache.lucene.search.BooleanQuery#setMaxClauseCount
+   */
+  public Integer getBooleanQueryMaxClauseCount() {
+    return booleanQueryMaxClauseCount;
+  }
+  
   public PluginInfo getShardHandlerFactoryPluginInfo() {
     return shardHandlerFactoryConfig;
   }
@@ -210,6 +223,7 @@ public class NodeConfig {
 
     private Path coreRootDirectory;
     private Path solrDataHome;
+    private Integer booleanQueryMaxClauseCount;
     private Path configSetBaseDirectory;
     private String sharedLibDirectory = "lib";
     private PluginInfo shardHandlerFactoryConfig;
@@ -277,6 +291,11 @@ public class NodeConfig {
       if (solrDataHomeString != null && !solrDataHomeString.isEmpty()) {
         this.solrDataHome = loader.getInstancePath().resolve(solrDataHomeString);
       }
+      return this;
+    }
+    
+    public NodeConfigBuilder setBooleanQueryMaxClauseCount(Integer booleanQueryMaxClauseCount) {
+      this.booleanQueryMaxClauseCount = booleanQueryMaxClauseCount;
       return this;
     }
 
@@ -378,7 +397,7 @@ public class NodeConfig {
     }
 
     public NodeConfig build() {
-      return new NodeConfig(nodeName, coreRootDirectory, solrDataHome, configSetBaseDirectory, sharedLibDirectory, shardHandlerFactoryConfig,
+        return new NodeConfig(nodeName, coreRootDirectory, solrDataHome, booleanQueryMaxClauseCount, configSetBaseDirectory, sharedLibDirectory, shardHandlerFactoryConfig,
                             updateShardHandlerConfig, coreAdminHandlerClass, collectionsAdminHandlerClass, infoHandlerClass, configSetsHandlerClass,
                             logWatcherConfig, cloudConfig, coreLoadThreads, replayUpdatesThreads, transientCacheSize, useSchemaCache, managementPath, loader, solrProperties,
                             backupRepositoryPlugins, metricsConfig, transientCacheConfig);

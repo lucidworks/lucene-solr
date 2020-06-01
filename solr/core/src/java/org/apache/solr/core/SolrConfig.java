@@ -207,6 +207,8 @@ public class SolrConfig extends Config implements MapSerializable {
     getRequestParams();
     initLibs();
     luceneMatchVersion = getLuceneVersion("luceneMatchVersion");
+    log.info("Using Lucene MatchVersion: {}", luceneMatchVersion);
+
     String indexConfigPrefix;
 
     // Old indexDefaults and mainIndex sections are deprecated and fails fast for luceneMatchVersion=>LUCENE_4_0_0.
@@ -234,8 +236,12 @@ public class SolrConfig extends Config implements MapSerializable {
     indexConfig = new SolrIndexConfig(this, "indexConfig", null);
 
     booleanQueryMaxClauseCount = getInt("query/maxBooleanClauses", BooleanQuery.getMaxClauseCount());
-    log.info("Using Lucene MatchVersion: {}", luceneMatchVersion);
-
+    if (BooleanQuery.getMaxClauseCount() < booleanQueryMaxClauseCount) {
+      log.warn("solrconfig.xml: <maxBooleanClauses> of {} is greater than global limit of {} "+
+               "and will have no effect", booleanQueryMaxClauseCount, BooleanQuery.getMaxClauseCount());
+      log.warn("set 'maxBooleanClauses' in solr.xml to increase global limit");
+    }
+    
     // Warn about deprecated / discontinued parameters
     // boolToFilterOptimizer has had no effect since 3.1
     if (get("query/boolTofilterOptimizer", null) != null)
@@ -371,21 +377,10 @@ public class SolrConfig extends Config implements MapSerializable {
   public static final Map<String, SolrPluginInfo> classVsSolrPluginInfo;
 
   static {
-    // Raise the Lucene static limit so we can control this with higher granularity.  See SOLR-10921
-    BooleanQuery.setMaxClauseCount(Integer.MAX_VALUE-1);
-
     Map<String, SolrPluginInfo> map = new HashMap<>();
     for (SolrPluginInfo plugin : plugins) map.put(plugin.clazz.getName(), plugin);
     classVsSolrPluginInfo = Collections.unmodifiableMap(map);
   }
-
-  {
-    // non-static setMaxClauseCount because the test framework sometimes reverts the value on us and
-    // the static setting above is only executed once.  This re-sets the value every time a SolrConfig
-    // object is created. See SOLR-10921
-    BooleanQuery.setMaxClauseCount(Integer.MAX_VALUE-1);
-  }
-
 
   public static class SolrPluginInfo {
 

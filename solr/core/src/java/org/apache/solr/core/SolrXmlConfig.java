@@ -254,6 +254,9 @@ public class SolrXmlConfig {
         case "solrDataHome":
           builder.setSolrDataHome(value);
           break;
+        case "maxBooleanClauses":
+          builder.setBooleanQueryMaxClauseCount(parseInt(name, value));
+          break;
         case "managementPath":
           builder.setManagementPath(value);
           break;
