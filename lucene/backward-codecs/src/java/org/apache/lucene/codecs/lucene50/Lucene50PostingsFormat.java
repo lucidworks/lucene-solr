@@ -95,14 +95,14 @@ import org.apache.lucene.util.packed.PackedInts;
  * <p>
  * Files and detailed format:
  * <ul>
- *   <li><code>.tim</code>: <a href="#Termdictionary">Term Dictionary</a></li>
- *   <li><code>.tip</code>: <a href="#Termindex">Term Index</a></li>
- *   <li><code>.doc</code>: <a href="#Frequencies">Frequencies and Skip Data</a></li>
- *   <li><code>.pos</code>: <a href="#Positions">Positions</a></li>
- *   <li><code>.pay</code>: <a href="#Payloads">Payloads and Offsets</a></li>
+ *   <li><tt>.tim</tt>: <a href="#Termdictionary">Term Dictionary</a></li>
+ *   <li><tt>.tip</tt>: <a href="#Termindex">Term Index</a></li>
+ *   <li><tt>.doc</tt>: <a href="#Frequencies">Frequencies and Skip Data</a></li>
+ *   <li><tt>.pos</tt>: <a href="#Positions">Positions</a></li>
+ *   <li><tt>.pay</tt>: <a href="#Payloads">Payloads and Offsets</a></li>
  * </ul>
  *
- * <a id="Termdictionary"></a>
+ * <a name="Termdictionary"></a>
  * <dl>
  * <dd>
  * <b>Term Dictionary</b>
@@ -162,7 +162,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * </dd>
  * </dl>
  *
- * <a id="Termindex"></a>
+ * <a name="Termindex"></a>
  * <dl>
  * <dd>
  * <b>Term Index</b>
@@ -172,7 +172,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * </dl>
  *
  *
- * <a id="Frequencies"></a>
+ * <a name="Frequencies"></a>
  * <dl>
  * <dd>
  * <b>Frequencies and Skip Data</b>
@@ -260,7 +260,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * </dd>
  * </dl>
  *
- * <a id="Positions"></a>
+ * <a name="Positions"></a>
  * <dl>
  * <dd>
  * <b>Positions</b>
@@ -313,7 +313,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * </dd>
  * </dl>
  *
- * <a id="Payloads"></a>
+ * <a name="Payloads"></a>
  * <dl>
  * <dd>
  * <b>Payloads and Offsets</b>
@@ -391,11 +391,18 @@ public class Lucene50PostingsFormat extends PostingsFormat {
    */
   // NOTE: must be multiple of 64 because of PackedInts long-aligned encoding/decoding
   public final static int BLOCK_SIZE = 128;
+  private final BlockTreeTermsReader.FSTLoadMode fstLoadMode;
 
   /** Creates {@code Lucene50PostingsFormat} with default
    *  settings. */
   public Lucene50PostingsFormat() {
+    this(BlockTreeTermsReader.FSTLoadMode.AUTO);
+  }
+
+  /** Creates {@code Lucene50PostingsFormat}. */
+  public Lucene50PostingsFormat(BlockTreeTermsReader.FSTLoadMode loadMode) {
     super("Lucene50");
+    this.fstLoadMode = loadMode;
   }
 
   @Override
@@ -413,7 +420,7 @@ public class Lucene50PostingsFormat extends PostingsFormat {
     PostingsReaderBase postingsReader = new Lucene50PostingsReader(state);
     boolean success = false;
     try {
-      FieldsProducer ret = new BlockTreeTermsReader(postingsReader, state);
+      FieldsProducer ret = new BlockTreeTermsReader(postingsReader, state, fstLoadMode);
       success = true;
       return ret;
     } finally {

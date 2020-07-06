@@ -257,9 +257,8 @@ public class TestInjection {
         if (rand.nextBoolean()) {
           throw new TestShutdownFailError("Test exception for non graceful close");
         } else {
-          final Timer timer = new Timer();
+          
           final Thread cthread = Thread.currentThread();
-
           TimerTask task = new TimerTask() {
             @Override
             public void run() {
@@ -276,10 +275,11 @@ public class TestInjection {
               }
               
               cthread.interrupt();
-              timers.remove(timer);
+              timers.remove(this);
+              cancel();
             }
           };
-
+          Timer timer = new Timer();
           timers.add(timer);
           timer.schedule(task, rand.nextInt(500));
         }
@@ -436,7 +436,7 @@ public class TestInjection {
       boolean enabled = pair.first();
       int chanceIn100 = pair.second();
       if (enabled && rand.nextInt(100) >= (100 - chanceIn100)) {
-        log.info("Injecting failure: {}", label);
+        log.info("Injecting failure: " + label);
         throw new SolrException(ErrorCode.SERVER_ERROR, "Error: " + label);
       }
     }

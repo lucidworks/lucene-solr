@@ -245,9 +245,7 @@ public final class DocumentsImpl extends LukeModel implements Documents {
       if (penum.nextDoc() == PostingsEnum.NO_MORE_DOCS) {
         // end of the iterator
         resetPostingsIterator();
-        if (log.isInfoEnabled()) {
-          log.info("Reached the end of the postings iterator for term: {} in field: {}", BytesRefUtils.decode(tenum.term()), curField);
-        }
+        log.info("Reached the end of the postings iterator for term: {} in field: {}", BytesRefUtils.decode(tenum.term()), curField);
         return Optional.empty();
       } else {
         return Optional.of(penum.docID());

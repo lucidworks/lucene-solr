@@ -47,11 +47,6 @@ public class SpanishMinimalStemFilterFactory extends TokenFilterFactory {
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public SpanishMinimalStemFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) { return new SpanishMinimalStemFilter(input); }
 }

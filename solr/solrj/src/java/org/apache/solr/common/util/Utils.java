@@ -51,6 +51,7 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.StringReader;
+import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.lang.invoke.MethodHandles;
 import java.net.URL;
@@ -702,8 +703,12 @@ public class Utils {
       throw new IllegalArgumentException("nodeName does not contain expected '_' separator: " + nodeName);
     }
     final String hostAndPort = nodeName.substring(0, _offset);
-    final String path = URLDecoder.decode(nodeName.substring(1 + _offset), UTF_8);
-    return urlScheme + "://" + hostAndPort + (path.isEmpty() ? "" : ("/" + path));
+    try {
+      final String path = URLDecoder.decode(nodeName.substring(1 + _offset), "UTF-8");
+      return urlScheme + "://" + hostAndPort + (path.isEmpty() ? "" : ("/" + path));
+    } catch (UnsupportedEncodingException e) {
+      throw new IllegalStateException("JVM Does not seem to support UTF-8", e);
+    }
   }
 
   public static long time(TimeSource timeSource, TimeUnit unit) {
@@ -769,13 +774,13 @@ public class Utils {
     try {
       rsp = client.execute(httpGet);
     } catch (IOException e) {
-      log.error("Error in request to url : {}", url, e);
+      log.error("Error in request to url : " + url, e);
       throw new SolrException(SolrException.ErrorCode.UNKNOWN, "error sending request");
     }
     int statusCode = rsp.getStatusLine().getStatusCode();
     if (statusCode != 200) {
       try {
-        log.error("Failed a request to: {}, status: {}, body: {}", url, rsp.getStatusLine(), EntityUtils.toString(rsp.getEntity(), StandardCharsets.UTF_8)); // logOk
+        log.error("Failed a request to: {}, status: {}, body: {}", url, rsp.getStatusLine(), EntityUtils.toString(rsp.getEntity(), StandardCharsets.UTF_8));
       } catch (IOException e) {
         log.error("could not print error", e);
       }

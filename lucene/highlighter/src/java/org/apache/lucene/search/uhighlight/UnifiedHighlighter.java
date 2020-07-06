@@ -17,6 +17,7 @@
 package org.apache.lucene.search.uhighlight;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.text.BreakIterator;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -61,7 +62,6 @@ import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.search.spans.SpanQuery;
 import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.InPlaceMergeSorter;
 
 /**
@@ -644,7 +644,6 @@ public class UnifiedHighlighter {
 
       batchDocIdx += fieldValsByDoc.size();
     }
-    IOUtils.close(indexReaderWithTermVecCache);
     assert docIdIter.docID() == DocIdSetIterator.NO_MORE_DOCS
         || docIdIter.nextDoc() == DocIdSetIterator.NO_MORE_DOCS;
 
@@ -1027,9 +1026,9 @@ public class UnifiedHighlighter {
     }
 
     @Override
-    public void stringField(FieldInfo fieldInfo, String value) throws IOException {
+    public void stringField(FieldInfo fieldInfo, byte[] byteValue) throws IOException {
+      String value = new String(byteValue, StandardCharsets.UTF_8);
       assert currentField >= 0;
-      Objects.requireNonNull(value, "String value should not be null");
       CharSequence curValue = values[currentField];
       if (curValue == null) {
         //question: if truncate due to maxLength, should we try and avoid keeping the other chars in-memory on

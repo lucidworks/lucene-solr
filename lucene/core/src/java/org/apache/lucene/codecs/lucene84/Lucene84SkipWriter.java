@@ -165,7 +165,7 @@ final class Lucene84SkipWriter extends MultiLevelSkipListWriter {
   private final ByteBuffersDataOutput freqNormOut = ByteBuffersDataOutput.newResettableInstance();
 
   @Override
-  protected void writeSkipData(int level, DataOutput skipBuffer) throws IOException {
+  protected void writeSkipData(int level, IndexOutput skipBuffer) throws IOException {
 
     int delta = curDoc - lastSkipDoc[level];
 

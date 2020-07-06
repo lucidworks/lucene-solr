@@ -19,9 +19,7 @@ package org.apache.lucene.codecs.blocktree;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 
 import org.apache.lucene.codecs.BlockTermState;
 import org.apache.lucene.codecs.CodecUtil;
@@ -37,22 +35,24 @@ import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.ByteArrayDataOutput;
-import org.apache.lucene.store.ByteBuffersDataOutput;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.RAMOutputStream;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.FixedBitSet;
+import org.apache.lucene.util.FutureArrays;
+import org.apache.lucene.util.FutureObjects;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.IntsRefBuilder;
 import org.apache.lucene.util.StringHelper;
 import org.apache.lucene.util.compress.LZ4;
 import org.apache.lucene.util.compress.LowercaseAsciiCompression;
+import org.apache.lucene.util.fst.Builder;
 import org.apache.lucene.util.fst.ByteSequenceOutputs;
 import org.apache.lucene.util.fst.BytesRefFSTEnum;
 import org.apache.lucene.util.fst.FST;
-import org.apache.lucene.util.fst.FSTCompiler;
 import org.apache.lucene.util.fst.Util;
 
 /*
@@ -95,12 +95,12 @@ import org.apache.lucene.util.fst.Util;
  *
  * Files:
  * <ul>
- *   <li><code>.tim</code>: <a href="#Termdictionary">Term Dictionary</a></li>
- *   <li><code>.tip</code>: <a href="#Termindex">Term Index</a></li>
+ *   <li><tt>.tim</tt>: <a href="#Termdictionary">Term Dictionary</a></li>
+ *   <li><tt>.tip</tt>: <a href="#Termindex">Term Index</a></li>
  * </ul>
  * <p>
- * <a id="Termdictionary"></a>
- * <h2>Term Dictionary</h2>
+ * <a name="Termdictionary"></a>
+ * <h3>Term Dictionary</h3>
  *
  * <p>The .tim file contains the list of terms in each
  * field along with per-term statistics (such as docfreq)
@@ -158,8 +158,8 @@ import org.apache.lucene.util.fst.Util;
  *    <li>For inner nodes of the tree, every entry will steal one bit to mark whether it points
  *        to child nodes(sub-block). If so, the corresponding TermStats and TermMetaData are omitted </li>
  * </ul>
- * <a id="Termindex"></a>
- * <h2>Term Index</h2>
+ * <a name="Termindex"></a>
+ * <h3>Term Index</h3>
  * <p>The .tip file contains an index into the term dictionary, so that it can be 
  * accessed randomly.  The index is also used to determine
  * when a given term cannot exist on disk (in the .tim file), saving a disk seek.</p>
@@ -431,12 +431,12 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
       return "BLOCK: prefix=" + brToString(prefix);
     }
 
-    public void compileIndex(List<PendingBlock> blocks, ByteBuffersDataOutput scratchBytes, IntsRefBuilder scratchIntsRef) throws IOException {
+    public void compileIndex(List<PendingBlock> blocks, RAMOutputStream scratchBytes, IntsRefBuilder scratchIntsRef) throws IOException {
 
       assert (isFloor && blocks.size() > 1) || (isFloor == false && blocks.size() == 1): "isFloor=" + isFloor + " blocks=" + blocks;
       assert this == blocks.get(0);
 
-      assert scratchBytes.size() == 0;
+      assert scratchBytes.getFilePointer() == 0;
 
       // TODO: try writing the leading vLong in MSB order
       // (opposite of what Lucene does today), for better
@@ -457,27 +457,30 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
       }
 
       final ByteSequenceOutputs outputs = ByteSequenceOutputs.getSingleton();
-      final FSTCompiler<BytesRef> fstCompiler = new FSTCompiler.Builder<>(FST.INPUT_TYPE.BYTE1, outputs).shouldShareNonSingletonNodes(false).build();
+      final Builder<BytesRef> indexBuilder = new Builder<>(FST.INPUT_TYPE.BYTE1,
+                                                           0, 0, true, false, Integer.MAX_VALUE,
+                                                           outputs, true, 15);
       //if (DEBUG) {
       //  System.out.println("  compile index for prefix=" + prefix);
       //}
       //indexBuilder.DEBUG = false;
-      final byte[] bytes = scratchBytes.toArrayCopy();
+      final byte[] bytes = new byte[(int) scratchBytes.getFilePointer()];
       assert bytes.length > 0;
-      fstCompiler.add(Util.toIntsRef(prefix, scratchIntsRef), new BytesRef(bytes, 0, bytes.length));
+      scratchBytes.writeTo(bytes, 0);
+      indexBuilder.add(Util.toIntsRef(prefix, scratchIntsRef), new BytesRef(bytes, 0, bytes.length));
       scratchBytes.reset();
 
       // Copy over index for all sub-blocks
       for(PendingBlock block : blocks) {
         if (block.subIndices != null) {
           for(FST<BytesRef> subIndex : block.subIndices) {
-            append(fstCompiler, subIndex, scratchIntsRef);
+            append(indexBuilder, subIndex, scratchIntsRef);
           }
           block.subIndices = null;
         }
       }
 
-      index = fstCompiler.compile();
+      index = indexBuilder.finish();
 
       assert subIndices == null;
 
@@ -492,19 +495,19 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
     // TODO: maybe we could add bulk-add method to
     // Builder?  Takes FST and unions it w/ current
     // FST.
-    private void append(FSTCompiler<BytesRef> fstCompiler, FST<BytesRef> subIndex, IntsRefBuilder scratchIntsRef) throws IOException {
+    private void append(Builder<BytesRef> builder, FST<BytesRef> subIndex, IntsRefBuilder scratchIntsRef) throws IOException {
       final BytesRefFSTEnum<BytesRef> subIndexEnum = new BytesRefFSTEnum<>(subIndex);
       BytesRefFSTEnum.InputOutput<BytesRef> indexEnt;
       while((indexEnt = subIndexEnum.next()) != null) {
         //if (DEBUG) {
         //  System.out.println("      add sub=" + indexEnt.input + " " + indexEnt.input + " output=" + indexEnt.output);
         //}
-        fstCompiler.add(Util.toIntsRef(indexEnt.input, scratchIntsRef), indexEnt.output);
+        builder.add(Util.toIntsRef(indexEnt.input, scratchIntsRef), indexEnt.output);
       }
     }
   }
 
-  private final ByteBuffersDataOutput scratchBytes = ByteBuffersDataOutput.newResettableInstance();
+  private final RAMOutputStream scratchBytes = new RAMOutputStream();
   private final IntsRefBuilder scratchIntsRef = new IntsRefBuilder();
 
   static final BytesRef EMPTY_BYTES_REF = new BytesRef();
@@ -673,7 +676,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
     }
 
     private boolean allEqual(byte[] b, int startOffset, int endOffset, byte value) {
-      Objects.checkFromToIndex(startOffset, endOffset, b.length);
+      FutureObjects.checkFromToIndex(startOffset, endOffset, b.length);
       for (int i = startOffset; i < endOffset; ++i) {
         if (b[i] != value) {
           return false;
@@ -848,7 +851,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
         // average suffix length is greater than 6.
         if (suffixWriter.length() > 6L * numEntries) {
           LZ4.compress(suffixWriter.bytes(), 0, suffixWriter.length(), spareWriter, compressionHashTable);
-          if (spareWriter.size() < suffixWriter.length() - (suffixWriter.length() >>> 2)) {
+          if (spareWriter.getFilePointer() < suffixWriter.length() - (suffixWriter.length() >>> 2)) {
             // LZ4 saved more than 25%, go for it
             compressionAlg = CompressionAlgorithm.LZ4;
           }
@@ -872,15 +875,15 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
       if (compressionAlg == CompressionAlgorithm.NO_COMPRESSION) {
         termsOut.writeBytes(suffixWriter.bytes(), suffixWriter.length());
       } else {
-        spareWriter.copyTo(termsOut);
+        spareWriter.writeTo(termsOut);
       }
       suffixWriter.setLength(0);
       spareWriter.reset();
 
       // Write suffix lengths
-      final int numSuffixBytes = Math.toIntExact(suffixLengthsWriter.size());
+      final int numSuffixBytes = Math.toIntExact(suffixLengthsWriter.getFilePointer());
       spareBytes = ArrayUtil.grow(spareBytes, numSuffixBytes);
-      suffixLengthsWriter.copyTo(new ByteArrayDataOutput(spareBytes));
+      suffixLengthsWriter.writeTo(new ByteArrayDataOutput(spareBytes));
       suffixLengthsWriter.reset();
       if (allEqual(spareBytes, 1, numSuffixBytes, spareBytes[0])) {
         // Structured fields like IDs often have most values of the same length
@@ -892,14 +895,14 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
       }
 
       // Stats
-      final int numStatsBytes = Math.toIntExact(statsWriter.size());
+      final int numStatsBytes = Math.toIntExact(statsWriter.getFilePointer());
       termsOut.writeVInt(numStatsBytes);
-      statsWriter.copyTo(termsOut);
+      statsWriter.writeTo(termsOut);
       statsWriter.reset();
 
       // Write term meta data byte[] blob
-      termsOut.writeVInt((int) metaWriter.size());
-      metaWriter.copyTo(termsOut);
+      termsOut.writeVInt((int) metaWriter.getFilePointer());
+      metaWriter.writeTo(termsOut);
       metaWriter.reset();
 
       // if (DEBUG) {
@@ -955,7 +958,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
     /** Pushes the new term to the top of the stack, and writes new blocks. */
     private void pushTerm(BytesRef text) throws IOException {
       // Find common prefix between last term and current term:
-      int prefixLength = Arrays.mismatch(lastTerm.bytes(), 0, lastTerm.length(), text.bytes, text.offset, text.offset + text.length);
+      int prefixLength = FutureArrays.mismatch(lastTerm.bytes(), 0, lastTerm.length(), text.bytes, text.offset, text.offset + text.length);
       if (prefixLength == -1) { // Only happens for the first term, if it is empty
         assert lastTerm.length() == 0;
         prefixLength = 0;
@@ -1043,11 +1046,11 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
       }
     }
 
-    private final ByteBuffersDataOutput suffixLengthsWriter = ByteBuffersDataOutput.newResettableInstance();
+    private final RAMOutputStream suffixLengthsWriter = new RAMOutputStream();
     private final BytesRefBuilder suffixWriter = new BytesRefBuilder();
-    private final ByteBuffersDataOutput statsWriter = ByteBuffersDataOutput.newResettableInstance();
-    private final ByteBuffersDataOutput metaWriter = ByteBuffersDataOutput.newResettableInstance();
-    private final ByteBuffersDataOutput spareWriter = ByteBuffersDataOutput.newResettableInstance();
+    private final RAMOutputStream statsWriter = new RAMOutputStream();
+    private final RAMOutputStream metaWriter = new RAMOutputStream();
+    private final RAMOutputStream spareWriter = new RAMOutputStream();
     private byte[] spareBytes = BytesRef.EMPTY_BYTES;
     private final LZ4.HighCompressionHashTable compressionHashTable = new LZ4.HighCompressionHashTable();
   }

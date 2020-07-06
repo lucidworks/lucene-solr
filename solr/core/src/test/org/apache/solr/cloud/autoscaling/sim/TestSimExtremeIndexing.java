@@ -124,9 +124,7 @@ public class TestSimExtremeIndexing extends SimSolrCloudTestCase {
     long batchSize = BATCH_SIZE;
     for (long i = 0; i < NUM_BATCHES; i++) {
       addDocs(collectionName, i * batchSize, batchSize);
-      if (log.isInfoEnabled()) {
-        log.info(String.format(Locale.ROOT, "#### Total docs so far: %,d", ((i + 1) * batchSize))); // logOk
-      }
+      log.info(String.format(Locale.ROOT, "#### Total docs so far: %,d", ((i + 1) * batchSize)));
       timeSource.sleep(waitForSeconds);
     }
     timeSource.sleep(60000);

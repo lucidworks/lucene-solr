@@ -37,9 +37,4 @@ public class TestSimpleTextCompoundFormat extends BaseCompoundFormatTestCase {
   public void testMissingCodecHeadersAreCaught() {
     // SimpleText does not catch broken sub-files in CFS!
   }
-
-  @Override
-  public void testCheckIntegrity() {
-    // SimpleText does not catch broken sub-files in CFS!
-  }
 }

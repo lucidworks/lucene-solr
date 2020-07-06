@@ -50,11 +50,6 @@ public class UAX29URLEmailTokenizerFactory extends TokenizerFactory {
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public UAX29URLEmailTokenizerFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public UAX29URLEmailTokenizer create(AttributeFactory factory) {
     UAX29URLEmailTokenizer tokenizer = new UAX29URLEmailTokenizer(factory);

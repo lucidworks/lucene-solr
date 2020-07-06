@@ -50,12 +50,6 @@ public class PatternCaptureGroupFilterFactory extends TokenFilterFactory {
     pattern = getPattern(args, "pattern");
     preserveOriginal = args.containsKey("preserve_original") ? Boolean.parseBoolean(args.get("preserve_original")) : true;
   }
-  
-  /** Default ctor for compatibility with SPI */
-  public PatternCaptureGroupFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public PatternCaptureGroupTokenFilter create(TokenStream input) {
     return new PatternCaptureGroupTokenFilter(input, preserveOriginal, pattern);

@@ -49,7 +49,7 @@ import org.apache.solr.client.solrj.io.stream.expr.Explanation.ExpressionType;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.ExecutorUtil;
-import org.apache.solr.common.util.SolrNamedThreadFactory;
+import org.apache.solr.common.util.SolrjNamedThreadFactory;
 
 import static org.apache.solr.common.params.CommonParams.SORT;
 
@@ -300,7 +300,7 @@ public class ShortestPathStream extends TupleStream implements Expressible {
 
     try {
 
-      threadPool = ExecutorUtil.newMDCAwareFixedThreadPool(threads, new SolrNamedThreadFactory("ShortestPathStream"));
+      threadPool = ExecutorUtil.newMDCAwareFixedThreadPool(threads, new SolrjNamedThreadFactory("ShortestPathStream"));
 
       //Breadth first search
       TRAVERSE:

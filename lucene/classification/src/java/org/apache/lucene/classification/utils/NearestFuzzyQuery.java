@@ -112,8 +112,11 @@ public class NearestFuzzyQuery extends Query {
       if (prefixLength != other.prefixLength)
         return false;
       if (queryString == null) {
-        return other.queryString == null;
-      } else return queryString.equals(other.queryString);
+        if (other.queryString != null)
+          return false;
+      } else if (!queryString.equals(other.queryString))
+        return false;
+      return true;
     }
 
 

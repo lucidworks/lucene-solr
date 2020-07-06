@@ -54,7 +54,7 @@ public class MessageFilesParser  extends SimpleFileVisitor<Path> {
         }
       }
     } catch (IOException e) {
-      log.warn("Invalid file? {}", file);
+      log.warn("Invalid file? " + file.toString());
     }
     return FileVisitResult.CONTINUE;
   }

@@ -55,7 +55,6 @@ import org.apache.lucene.util.FixedBitSet;
  *   <li>{@link XYShape#newLineQuery newLineQuery()} for matching cartesian shapes that have some {@link QueryRelation} with a linestring.
  *   <li>{@link XYShape#newPolygonQuery newPolygonQuery()} for matching cartesian shapes that have some {@link QueryRelation} with a polygon.
  * </ul>
- * <p>
  **/
 abstract class ShapeQuery extends Query {
   /** field name */
@@ -85,20 +84,7 @@ abstract class ShapeQuery extends Query {
                                                      int maxXOffset, int maxYOffset, byte[] maxTriangle);
 
   /** returns true if the provided triangle matches the query */
-  protected boolean queryMatches(byte[] triangle, ShapeField.DecodedTriangle scratchTriangle, ShapeField.QueryRelation queryRelation) {
-    switch (queryRelation) {
-      case INTERSECTS: return queryIntersects(triangle, scratchTriangle);
-      case WITHIN: return queryContains(triangle, scratchTriangle);
-      case DISJOINT: return queryIntersects(triangle, scratchTriangle) == false;
-      default: throw new IllegalArgumentException("Unsupported query type :[" + queryRelation + "]");
-    }
-  }
-
-  /** returns true if the provided triangle intersects the query */
-  protected abstract boolean queryIntersects(byte[] triangle, ShapeField.DecodedTriangle scratchTriangle);
-
-  /** returns true if the provided triangle is within the query */
-  protected abstract boolean queryContains(byte[] triangle, ShapeField.DecodedTriangle scratchTriangle);
+  protected abstract boolean queryMatches(byte[] triangle, ShapeField.DecodedTriangle scratchTriangle, ShapeField.QueryRelation queryRelation);
 
   /** Return the within relationship between the query and the indexed shape.*/
   protected abstract Component2D.WithinRelation queryWithin(byte[] triangle, ShapeField.DecodedTriangle scratchTriangle);

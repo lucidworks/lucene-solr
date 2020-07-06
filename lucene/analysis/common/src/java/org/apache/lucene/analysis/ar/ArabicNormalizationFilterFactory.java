@@ -48,11 +48,6 @@ public class ArabicNormalizationFilterFactory extends TokenFilterFactory {
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public ArabicNormalizationFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new ArabicNormalizationFilter(input);

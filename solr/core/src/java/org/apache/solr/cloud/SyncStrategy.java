@@ -39,6 +39,7 @@ import org.apache.solr.handler.component.HttpShardHandlerFactory;
 import org.apache.solr.handler.component.ShardHandler;
 import org.apache.solr.handler.component.ShardRequest;
 import org.apache.solr.handler.component.ShardResponse;
+import org.apache.solr.logging.MDCLoggingContext;
 import org.apache.solr.update.PeerSync;
 import org.apache.solr.update.UpdateShardHandler;
 import org.slf4j.Logger;
@@ -88,24 +89,27 @@ public class SyncStrategy {
     if (SKIP_AUTO_RECOVERY) {
       return PeerSync.PeerSyncResult.success();
     }
+    
+    MDCLoggingContext.setCore(core);
+    try {
+      if (isClosed) {
+        log.warn("Closed, skipping sync up.");
+        return PeerSync.PeerSyncResult.failure();
+      }
+      
+      recoveryRequests.clear();
+      
+      log.info("Sync replicas to " + ZkCoreNodeProps.getCoreUrl(leaderProps));
+      
+      if (core.getUpdateHandler().getUpdateLog() == null) {
+        log.error("No UpdateLog found - cannot sync");
+        return PeerSync.PeerSyncResult.failure();
+      }
 
-    if (isClosed) {
-      log.warn("Closed, skipping sync up.");
-      return PeerSync.PeerSyncResult.failure();
+      return syncReplicas(zkController, core, leaderProps, peerSyncOnlyWithActive);
+    } finally {
+      MDCLoggingContext.clear();
     }
-
-    recoveryRequests.clear();
-
-    if (log.isInfoEnabled()) {
-      log.info("Sync replicas to {}", ZkCoreNodeProps.getCoreUrl(leaderProps));
-    }
-
-    if (core.getUpdateHandler().getUpdateLog() == null) {
-      log.error("No UpdateLog found - cannot sync");
-      return PeerSync.PeerSyncResult.failure();
-    }
-
-    return syncReplicas(zkController, core, leaderProps, peerSyncOnlyWithActive);
   }
   
   private PeerSync.PeerSyncResult syncReplicas(ZkController zkController, SolrCore core,
@@ -154,7 +158,7 @@ public class SyncStrategy {
   }
   
   private PeerSync.PeerSyncResult syncWithReplicas(ZkController zkController, SolrCore core,
-      ZkNodeProps props, String collection, String shardId, boolean peerSyncOnlyWithActive) throws Exception {
+      ZkNodeProps props, String collection, String shardId, boolean peerSyncOnlyWithActive) {
     List<ZkCoreNodeProps> nodes = zkController.getZkStateReader()
         .getReplicaProps(collection, shardId,core.getCoreDescriptor().getCloudDescriptor().getCoreNodeName());
     
@@ -179,9 +183,8 @@ public class SyncStrategy {
     // Fingerprinting here is off because the we currently rely on having at least one of the nodes return "true", and if replicas are out-of-sync
     // we still need to pick one as leader.  A followup sync from the replica to the new leader (with fingerprinting on) should then fail and
     // initiate recovery-by-replication.
-    try (PeerSync peerSync = new PeerSync(core, syncWith, core.getUpdateHandler().getUpdateLog().getNumRecordsToKeep(), true, peerSyncOnlyWithActive, false)) {
-      return peerSync.sync();
-    }
+    PeerSync peerSync = new PeerSync(core, syncWith, core.getUpdateHandler().getUpdateLog().getNumRecordsToKeep(), true, peerSyncOnlyWithActive, false);
+    return peerSync.sync();
   }
   
   private void syncToMe(ZkController zkController, String collection,
@@ -200,18 +203,14 @@ public class SyncStrategy {
         .getReplicaProps(collection, shardId,
             cd.getCloudDescriptor().getCoreNodeName());
     if (nodes == null) {
-      if (log.isInfoEnabled()) {
-        log.info("{} has no replicas", ZkCoreNodeProps.getCoreUrl(leaderProps));
-      }
+      log.info(ZkCoreNodeProps.getCoreUrl(leaderProps) + " has no replicas");
       return;
     }
 
     ZkCoreNodeProps zkLeader = new ZkCoreNodeProps(leaderProps);
     for (ZkCoreNodeProps node : nodes) {
       try {
-        if (log.isInfoEnabled()) {
-          log.info("{}: try and ask {} to sync", ZkCoreNodeProps.getCoreUrl(leaderProps), node.getCoreUrl());
-        }
+        log.info(ZkCoreNodeProps.getCoreUrl(leaderProps) + ": try and ask " + node.getCoreUrl() + " to sync");
         
         requestSync(node.getBaseUrl(), node.getCoreUrl(), zkLeader.getCoreUrl(), node.getCoreName(), nUpdates);
         
@@ -230,10 +229,8 @@ public class SyncStrategy {
       }
       
       if (!success) {
-        if (log.isInfoEnabled()) {
-          log.info("{}: Sync failed - we will ask replica ({}) to recover."
-              , ZkCoreNodeProps.getCoreUrl(leaderProps), srsp.getShardAddress());
-        }
+        log.info(ZkCoreNodeProps.getCoreUrl(leaderProps) + ": Sync failed - we will ask replica (" + srsp.getShardAddress()
+            + ") to recover.");
         if (isClosed) {
           log.info("We have been closed, don't request that a replica recover");
         } else {
@@ -244,9 +241,7 @@ public class SyncStrategy {
           recoveryRequests.add(rr);
         }
       } else {
-        if (log.isInfoEnabled()) {
-          log.info("{}: sync completed with {}", ZkCoreNodeProps.getCoreUrl(leaderProps), srsp.getShardAddress());
-        }
+        log.info(ZkCoreNodeProps.getCoreUrl(leaderProps) + ": " + " sync completed with " + srsp.getShardAddress());
       }
       
     }

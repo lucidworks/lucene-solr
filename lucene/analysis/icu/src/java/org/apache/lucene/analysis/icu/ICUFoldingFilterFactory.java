@@ -63,11 +63,6 @@ public class ICUFoldingFilterFactory extends TokenFilterFactory {
     this.normalizer = normalizer;
   }
 
-  /** Default ctor for compatibility with SPI */
-  public ICUFoldingFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new ICUFoldingFilter(input, normalizer);

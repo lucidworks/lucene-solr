@@ -16,9 +16,8 @@
  */
 package org.apache.lucene.index;
 
-import java.util.Objects;
-
 import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.FutureObjects;
 
 
 /**
@@ -41,7 +40,7 @@ final class BitsSlice implements Bits {
     
   @Override
   public boolean get(int doc) {
-    Objects.checkIndex(doc, length);
+    FutureObjects.checkIndex(doc, length);
     return parent.get(doc+start);
   }
 

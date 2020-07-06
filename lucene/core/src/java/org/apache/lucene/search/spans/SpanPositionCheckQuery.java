@@ -20,6 +20,7 @@ package org.apache.lucene.search.spans;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
@@ -81,6 +82,11 @@ public abstract class SpanPositionCheckQuery extends SpanQuery implements Clonea
     public SpanPositionCheckWeight(SpanWeight matchWeight, IndexSearcher searcher, Map<Term, TermStates> terms, float boost) throws IOException {
       super(SpanPositionCheckQuery.this, searcher, terms, boost);
       this.matchWeight = matchWeight;
+    }
+
+    @Override
+    public void extractTerms(Set<Term> terms) {
+      matchWeight.extractTerms(terms);
     }
 
     @Override

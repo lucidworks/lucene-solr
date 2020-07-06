@@ -136,9 +136,8 @@ public class XPathEntityProcessor extends EntityProcessorBase {
           // some XML parsers are broken and don't close the byte stream (but they should according to spec)
           IOUtils.closeQuietly(xsltSource.getInputStream());
         }
-        if (log.isInfoEnabled()) {
-          log.info("Using xslTransformer: {}", xslTransformer.getClass().getName());
-        }
+        log.info("Using xslTransformer: "
+                        + xslTransformer.getClass().getName());
       } catch (Exception e) {
         throw new DataImportHandlerException(SEVERE,
                 "Error initializing XSL ", e);
@@ -294,12 +293,10 @@ public class XPathEntityProcessor extends EntityProcessorBase {
         if (ABORT.equals(onError)) {
           wrapAndThrow(SEVERE, e);
         } else if (SKIP.equals(onError)) {
-          if (log.isDebugEnabled()) {
-            log.debug("Skipping url : {}", s, e);
-          }
+          if (log.isDebugEnabled()) log.debug("Skipping url : " + s, e);
           wrapAndThrow(DataImportHandlerException.SKIP, e);
         } else {
-          log.warn("Failed for url : {}", s, e);
+          log.warn("Failed for url : " + s, e);
           rowIterator = Collections.EMPTY_LIST.iterator();
           return;
         }
@@ -316,7 +313,7 @@ public class XPathEntityProcessor extends EntityProcessorBase {
           } else if (SKIP.equals(onError)) {
             wrapAndThrow(DataImportHandlerException.SKIP, e);
           } else {
-            log.warn("Failed for url : {}", s, e);
+            log.warn("Failed for url : " + s, e);
             rowIterator = Collections.EMPTY_LIST.iterator();
             return;
           }

@@ -130,7 +130,7 @@ public interface CommonQueryParserConfiguration {
   
   /**
    * Set the minimum similarity for fuzzy queries. Default is defined on
-   * {@link FuzzyQuery#defaultMaxEdits}.
+   * {@link FuzzyQuery#defaultMinSimilarity}.
    */
   public void setFuzzyMinSim(float fuzzyMinSim);
   

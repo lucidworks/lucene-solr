@@ -149,7 +149,6 @@ public class VectorDistanceFunction extends ValueSource {
   }
 
   @Override
-  @SuppressWarnings({"rawtypes"})
   public FunctionValues getValues(Map context, LeafReaderContext readerContext) throws IOException {
 
     final FunctionValues vals1 = source1.getValues(context, readerContext);
@@ -178,7 +177,6 @@ public class VectorDistanceFunction extends ValueSource {
   }
 
   @Override
-  @SuppressWarnings({"rawtypes"})
   public void createWeight(Map context, IndexSearcher searcher) throws IOException {
     source1.createWeight(context, searcher);
     source2.createWeight(context, searcher);

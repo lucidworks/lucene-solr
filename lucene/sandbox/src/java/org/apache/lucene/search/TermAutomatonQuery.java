@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexReaderContext;
@@ -372,6 +373,15 @@ public class TermAutomatonQuery extends Query implements Accountable {
       } else {
         stats = similarity.scorer(boost, searcher.collectionStatistics(field),
                                          allTermStats.toArray(new TermStatistics[allTermStats.size()]));
+      }
+    }
+
+    @Override
+    public void extractTerms(Set<Term> terms) {
+      for(BytesRef text : termToID.keySet()) {
+        if (text != null) {
+          terms.add(new Term(field, text));
+        }
       }
     }
 

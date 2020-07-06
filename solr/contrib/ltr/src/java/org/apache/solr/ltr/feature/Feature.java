@@ -19,15 +19,16 @@ package org.apache.solr.ltr.feature;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.QueryVisitor;
 import org.apache.lucene.search.Scorer;
-import org.apache.lucene.search.TwoPhaseIterator;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.RamUsageEstimator;
@@ -299,6 +300,11 @@ public abstract class Feature extends Query implements Accountable {
       return Feature.this.toString();
     }
 
+    @Override
+    public void extractTerms(Set<Term> terms) {
+      // no-op
+    }
+
     /**
      * A 'recipe' for computing a feature
      */
@@ -339,46 +345,6 @@ public abstract class Feature extends Query implements Accountable {
       public DocIdSetIterator iterator() {
         return itr;
       }
-    }
-
-    /**
-     * A <code>FeatureScorer</code> that contains a <code>Scorer</code>,
-     * which it delegates to where appropriate.
-     */
-    public abstract class FilterFeatureScorer extends FeatureScorer {
-
-      final protected Scorer in;
-
-      public FilterFeatureScorer(Feature.FeatureWeight weight, Scorer scorer) {
-        super(weight, null);
-        this.in = scorer;
-      }
-
-      @Override
-      public int docID() {
-        return in.docID();
-      }
-
-      @Override
-      public DocIdSetIterator iterator() {
-        return in.iterator();
-      }
-
-      @Override
-      public TwoPhaseIterator twoPhaseIterator() {
-        return in.twoPhaseIterator();
-      }
-
-      @Override
-      public int advanceShallow(int target) throws IOException {
-        return in.advanceShallow(target);
-      }
-
-      @Override
-      public float getMaxScore(int upTo) throws IOException {
-        return in.getMaxScore(upTo);
-      }
-
     }
 
     /**

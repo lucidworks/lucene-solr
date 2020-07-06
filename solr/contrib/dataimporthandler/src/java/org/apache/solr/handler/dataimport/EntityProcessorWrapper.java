@@ -112,7 +112,7 @@ public class EntityProcessorWrapper extends EntityProcessor {
       try {
         Class clazz = DocBuilder.loadClass(trans, context.getSolrCore());
         if (Transformer.class.isAssignableFrom(clazz)) {
-          transformers.add((Transformer) clazz.getConstructor().newInstance());
+          transformers.add((Transformer) clazz.newInstance());
         } else {
           Method meth = clazz.getMethod(TRANSFORM_ROW, Map.class);
           transformers.add(new ReflectionTransformer(meth, clazz, trans));
@@ -124,7 +124,7 @@ public class EntityProcessorWrapper extends EntityProcessor {
             log.error(msg);
             wrapAndThrow(SEVERE, nsme,msg);        
       } catch (Exception e) {
-        log.error("Unable to load Transformer: {}", aTransArr, e);
+        log.error("Unable to load Transformer: " + aTransArr, e);
         wrapAndThrow(SEVERE, e,"Unable to load Transformer: " + trans);
       }
     }
@@ -164,7 +164,7 @@ public class EntityProcessorWrapper extends EntityProcessor {
       this.meth = meth;
       this.clazz = clazz;
       this.trans = trans;
-      o = clazz.getConstructor().newInstance();
+      o = clazz.newInstance();
     }
 
     @Override
@@ -172,7 +172,7 @@ public class EntityProcessorWrapper extends EntityProcessor {
       try {
         return meth.invoke(o, aRow);
       } catch (Exception e) {
-        log.warn("method invocation failed on transformer : {}", trans, e);
+        log.warn("method invocation failed on transformer : " + trans, e);
         throw new DataImportHandlerException(WARN, e);
       }
     }

@@ -35,6 +35,7 @@ public class DocSetPerf {
 
   static FixedBitSet bs;
   static BitDocSet bds;
+  static HashDocSet hds;
   static int[] ids; // not unique
 
   static Random rand = getRandom();
@@ -58,6 +59,7 @@ public class DocSetPerf {
       }
     }
     bds = new BitDocSet(bs,bitsToSet);
+    hds = new HashDocSet(ids,0,count);
   }
 
   public static void main(String[] args) {
@@ -79,11 +81,13 @@ public class DocSetPerf {
 
     FixedBitSet[] sets = new FixedBitSet[numSets];
     DocSet[] bset = new DocSet[numSets];
-
+    DocSet[] hset = new DocSet[numSets];
+    
     for (int i=0; i<numSets; i++) {
       generate(randSize ? rand.nextInt(bitSetSize) : bitSetSize, numBitsSet);
       sets[i] = bs;
       bset[i] = bds;
+      hset[i] = hds;
     }
 
     final RTimer timer = new RTimer();
@@ -93,6 +97,7 @@ public class DocSetPerf {
         generate(randSize ? rand.nextInt(bitSetSize) : bitSetSize, numBitsSet);
         FixedBitSet bs1=bs;
         BitDocSet bds1=bds;
+        HashDocSet hds1=hds;
         generate(randSize ? rand.nextInt(bitSetSize) : bitSetSize, numBitsSet);
 
         FixedBitSet res = bs1.clone();
@@ -101,6 +106,17 @@ public class DocSetPerf {
 
         test(bds1.intersection(bds).size() == icount);
         test(bds1.intersectionSize(bds) == icount);
+        if (bds1.intersection(hds).size() != icount) {
+          DocSet ds = bds1.intersection(hds);
+          System.out.println("STOP");
+        }
+
+        test(bds1.intersection(hds).size() == icount);
+        test(bds1.intersectionSize(hds) == icount);
+        test(hds1.intersection(bds).size() == icount);
+        test(hds1.intersectionSize(bds) == icount);
+        test(hds1.intersection(hds).size() == icount);
+        test(hds1.intersectionSize(hds) == icount);
 
         ret += icount;
       }
@@ -110,6 +126,7 @@ public class DocSetPerf {
     String oper=null;
 
     if (test.endsWith("B")) { type="B"; }
+    if (test.endsWith("H")) { type="H"; }
     if (test.endsWith("M")) { type="M"; }
     if (test.startsWith("intersect")) oper="intersect";
     if (test.startsWith("intersectSize")) oper="intersectSize";
@@ -124,10 +141,14 @@ public class DocSetPerf {
 
         if (type=="B") {
           a=bset[idx1]; b=bset[idx2];
+        } else if (type=="H") {
+          a=hset[idx1]; b=bset[idx2];
         } else if (type=="M") {
           if (idx1 < idx2) {
             a=bset[idx1];
+            b=hset[idx2];
           } else {
+            a=hset[idx1];
             b=bset[idx2];
           }
         }

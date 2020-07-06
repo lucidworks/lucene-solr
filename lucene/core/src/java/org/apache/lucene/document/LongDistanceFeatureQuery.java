@@ -17,8 +17,8 @@
 package org.apache.lucene.document;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Objects;
+import java.util.Set;
 
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.LeafReaderContext;
@@ -27,6 +27,7 @@ import org.apache.lucene.index.PointValues;
 import org.apache.lucene.index.PointValues.IntersectVisitor;
 import org.apache.lucene.index.PointValues.Relation;
 import org.apache.lucene.index.SortedNumericDocValues;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
@@ -37,6 +38,7 @@ import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.ScorerSupplier;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.DocIdSetBuilder;
+import org.apache.lucene.util.FutureArrays;
 
 final class LongDistanceFeatureQuery extends Query {
 
@@ -94,6 +96,9 @@ final class LongDistanceFeatureQuery extends Query {
       public boolean isCacheable(LeafReaderContext ctx) {
         return false;
       }
+
+      @Override
+      public void extractTerms(Set<Term> terms) {}
 
       @Override
       public Explanation explain(LeafReaderContext context, int doc) throws IOException {
@@ -396,11 +401,11 @@ final class LongDistanceFeatureQuery extends Query {
             // Already visited or skipped
             return;
           }
-          if (Arrays.compareUnsigned(packedValue, 0, Long.BYTES, minValueAsBytes, 0, Long.BYTES) < 0) {
+          if (FutureArrays.compareUnsigned(packedValue, 0, Long.BYTES, minValueAsBytes, 0, Long.BYTES) < 0) {
             // Doc's value is too low, in this dimension
             return;
           }
-          if (Arrays.compareUnsigned(packedValue, 0, Long.BYTES, maxValueAsBytes, 0, Long.BYTES) > 0) {
+          if (FutureArrays.compareUnsigned(packedValue, 0, Long.BYTES, maxValueAsBytes, 0, Long.BYTES) > 0) {
             // Doc's value is too high, in this dimension
             return;
           }
@@ -411,13 +416,13 @@ final class LongDistanceFeatureQuery extends Query {
 
         @Override
         public Relation compare(byte[] minPackedValue, byte[] maxPackedValue) {
-          if (Arrays.compareUnsigned(minPackedValue, 0, Long.BYTES, maxValueAsBytes, 0, Long.BYTES) > 0 ||
-              Arrays.compareUnsigned(maxPackedValue, 0, Long.BYTES, minValueAsBytes, 0, Long.BYTES) < 0) {
+          if (FutureArrays.compareUnsigned(minPackedValue, 0, Long.BYTES, maxValueAsBytes, 0, Long.BYTES) > 0 ||
+              FutureArrays.compareUnsigned(maxPackedValue, 0, Long.BYTES, minValueAsBytes, 0, Long.BYTES) < 0) {
             return Relation.CELL_OUTSIDE_QUERY;
           }
 
-          if (Arrays.compareUnsigned(minPackedValue, 0, Long.BYTES, minValueAsBytes, 0, Long.BYTES) < 0 ||
-              Arrays.compareUnsigned(maxPackedValue, 0, Long.BYTES, maxValueAsBytes, 0, Long.BYTES) > 0) {
+          if (FutureArrays.compareUnsigned(minPackedValue, 0, Long.BYTES, minValueAsBytes, 0, Long.BYTES) < 0 ||
+              FutureArrays.compareUnsigned(maxPackedValue, 0, Long.BYTES, maxValueAsBytes, 0, Long.BYTES) > 0) {
             return Relation.CELL_CROSSES_QUERY;
           }
 

@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.api.AnnotatedApi;
 import org.apache.solr.api.Api;
 import org.apache.solr.api.ApiBag;
 import org.apache.solr.api.Command;
@@ -172,9 +173,10 @@ public class TestApiFramework extends SolrTestCaseJ4 {
     Utils.fromJSONString(json);
 
     ApiBag apiBag = new ApiBag(false);
-    List<Api> apis =  apiBag.registerObject(new ApiTest());
+    AnnotatedApi api = new AnnotatedApi(new ApiTest());
+    apiBag.register(api, Collections.emptyMap());
 
-    ValidatingJsonMap spec = apis.get(0).getSpec();
+    ValidatingJsonMap spec = api.getSpec();
 
     assertEquals("POST", spec._getStr("/methods[0]",null) );
     assertEquals("POST", spec._getStr("/methods[0]",null) );
@@ -224,17 +226,10 @@ public class TestApiFramework extends SolrTestCaseJ4 {
 
   public void testAnnotatedApi() {
     ApiBag apiBag = new ApiBag(false);
-    apiBag.registerObject(new DummyTest());
+    apiBag.register(new AnnotatedApi(new DummyTest()), Collections.emptyMap());
     SolrQueryResponse rsp = v2ApiInvoke(apiBag, "/node/filestore/package/mypkg/jar1.jar", "GET",
         new ModifiableSolrParams(), null);
     assertEquals("/package/mypkg/jar1.jar", rsp.getValues().get("path"));
-
-    apiBag = new ApiBag(false);
-    apiBag.registerObject(new DummyTest1());
-    rsp = v2ApiInvoke(apiBag, "/node/filestore/package/mypkg/jar1.jar", "GET",
-        new ModifiableSolrParams(), null);
-    assertEquals("/package/mypkg/jar1.jar", rsp.getValues().get("path"));
-
   }
 
   @EndPoint(
@@ -243,18 +238,6 @@ public class TestApiFramework extends SolrTestCaseJ4 {
       permission = PermissionNameProvider.Name.ALL)
   public class DummyTest {
     @Command
-    public void read(SolrQueryRequest req, SolrQueryResponse rsp) {
-      rsp.add("FSRead.called", "true");
-      rsp.add("path", req.getPathTemplateValues().get("*"));
-    }
-  }
-
-
-  public class DummyTest1 {
-    @EndPoint(
-        path = "/node/filestore/*",
-        method = SolrRequest.METHOD.GET,
-        permission = PermissionNameProvider.Name.ALL)
     public void read(SolrQueryRequest req, SolrQueryResponse rsp) {
       rsp.add("FSRead.called", "true");
       rsp.add("path", req.getPathTemplateValues().get("*"));

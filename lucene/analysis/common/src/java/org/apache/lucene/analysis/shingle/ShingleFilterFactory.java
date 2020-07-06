@@ -72,11 +72,6 @@ public class ShingleFilterFactory extends TokenFilterFactory {
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public ShingleFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public ShingleFilter create(TokenStream input) {
     ShingleFilter r = new ShingleFilter(input, minShingleSize, maxShingleSize);

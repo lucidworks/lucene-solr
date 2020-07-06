@@ -60,11 +60,6 @@ public class TypeTokenFilterFactory extends TokenFilterFactory implements Resour
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public TypeTokenFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public void inform(ResourceLoader loader) throws IOException {
     List<String> files = splitFileNames(stopTypesFiles);

@@ -345,10 +345,6 @@ Alternatively, you can change the setting temporarily by running this comamnd:
 echo 1 > /proc/sys/vm/swappiness
 ----
 
-== Security Considerations
-
-include::securing-solr.adoc[tag=security-network-binding-1]
-
 == Running Multiple Solr Nodes per Host
 
 The `bin/solr` script is capable of running multiple instances on one machine, but for a *typical* installation, this is not a recommended setup. Extra CPU and memory resources are required for each additional instance. A single instance is easily capable of handling multiple indexes.

@@ -45,11 +45,6 @@ public abstract class ConditionalTokenFilterFactory extends TokenFilterFactory i
     super(args);
   }
 
-  /** Default ctor for compatibility with SPI */
-  public ConditionalTokenFilterFactory() {
-    throw defaultCtorException();
-  }
-
   /**
    * Set the inner filter factories to produce the {@link TokenFilter}s that will be
    * wrapped by the {@link ConditionalTokenFilter}

@@ -47,11 +47,6 @@ public class TurkishLowerCaseFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public TurkishLowerCaseFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new TurkishLowerCaseFilter(input);

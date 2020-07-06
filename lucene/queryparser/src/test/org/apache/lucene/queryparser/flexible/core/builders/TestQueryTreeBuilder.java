@@ -16,6 +16,8 @@
  */
 package org.apache.lucene.queryparser.flexible.core.builders;
 
+import junit.framework.Assert;
+
 import org.apache.lucene.queryparser.flexible.core.QueryNodeException;
 import org.apache.lucene.queryparser.flexible.core.nodes.FieldQueryNode;
 import org.apache.lucene.queryparser.flexible.core.nodes.QueryNode;
@@ -32,13 +34,13 @@ public class TestQueryTreeBuilder extends LuceneTestCase {
     QueryTreeBuilder qtb = new QueryTreeBuilder();
     qtb.setBuilder("field", new DummyBuilder());
     Object result = qtb.build(new FieldQueryNode(new UnescapedCharSequence("field"), "foo", 0, 0));
-    assertEquals("OK", result);
+    Assert.assertEquals("OK", result);
     
     // LUCENE-4890
     qtb = new QueryTreeBuilder();
     qtb.setBuilder(DummyQueryNodeInterface.class, new DummyBuilder());
     result = qtb.build(new DummyQueryNode());
-    assertEquals("OK", result);
+    Assert.assertEquals("OK", result);
   }
   
   private static interface DummyQueryNodeInterface extends QueryNode {

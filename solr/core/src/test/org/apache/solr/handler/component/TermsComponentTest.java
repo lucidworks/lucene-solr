@@ -16,7 +16,6 @@
  */
 package org.apache.solr.handler.component;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.regex.Pattern;
 
@@ -155,14 +154,10 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
       ModifiableSolrParams params = new ModifiableSolrParams();
       params.add(TermsParams.TERMS_REGEXP_FLAG, "case_insensitive", "literal", "comments", "multiline", "unix_lines",
               "unicode_case", "dotall", "canon_eq");
-      try (TermsComponent termsComponent = new TermsComponent()) {
-        int flags = termsComponent.resolveRegexpFlags(params);
-        int expected = Pattern.CASE_INSENSITIVE | Pattern.LITERAL | Pattern.COMMENTS | Pattern.MULTILINE | Pattern.UNIX_LINES
-            | Pattern.UNICODE_CASE | Pattern.DOTALL | Pattern.CANON_EQ;
-        assertEquals(expected, flags);
-      } catch (IOException e) {
-        fail("Error closing TermsComponent");
-      }
+      int flags = new TermsComponent().resolveRegexpFlags(params);
+      int expected = Pattern.CASE_INSENSITIVE | Pattern.LITERAL | Pattern.COMMENTS | Pattern.MULTILINE | Pattern.UNIX_LINES
+              | Pattern.UNICODE_CASE | Pattern.DOTALL | Pattern.CANON_EQ;
+      assertEquals(expected, flags);
   }
 
   @Test
@@ -338,36 +333,6 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
        "terms.maxcount","3",
        "terms.limit","50")
        ,"count(//lst[@name='standardfilt']/*)=3"
-    );
-  }
-
-  @Test
-  public void testTermsWithJSON() throws Exception {
-    ModifiableSolrParams params = params(
-        "qt", "/terms", "terms", "true", "terms.fl", "standardfilt", "terms.lower", "a",
-        "terms.sort", "index", "wt", "json"
-    );
-
-    assertJQ(req(params), "/terms/standardfilt/[0]==a", "/terms/standardfilt/[1]==1");
-
-    // enable terms.ttf
-    params.set("terms.ttf", "true");
-    assertJQ(req(params), "/terms/standardfilt/[0]==a", "/terms/standardfilt/[1]/df==1",
-        "/terms/standardfilt/[1]/ttf==1");
-
-    // test the response with terms.list and terms.ttf=false
-    params.set("terms.list", "spider,snake,shark");
-    params.remove("terms.ttf");
-    assertJQ(req(params), "/terms/standardfilt/[0]==shark", "/terms/standardfilt/[1]==2",
-        "/terms/standardfilt/[2]==snake", "/terms/standardfilt/[3]==3",
-        "/terms/standardfilt/[4]==spider", "/terms/standardfilt/[5]==1"
-    );
-    // with terms.list and terms.ttf=true
-    params.set("terms.ttf", "true");
-    assertJQ(req(params),
-        "/terms/standardfilt/[0]==shark", "/terms/standardfilt/[1]/df==2", "/terms/standardfilt/[1]/ttf==2",
-        "/terms/standardfilt/[2]==snake", "/terms/standardfilt/[3]/df==3", "/terms/standardfilt/[3]/ttf==3",
-        "/terms/standardfilt/[4]==spider", "/terms/standardfilt/[5]/df==1", "/terms/standardfilt/[5]/ttf==1"
     );
   }
 

@@ -56,11 +56,6 @@ public class FingerprintFilterFactory extends TokenFilterFactory {
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public FingerprintFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new FingerprintFilter(input, maxOutputTokenSize, separator);

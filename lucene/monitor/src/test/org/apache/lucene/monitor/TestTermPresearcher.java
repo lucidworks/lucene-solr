@@ -131,7 +131,6 @@ public class TestTermPresearcher extends PresearcherTestBase {
 
         MemoryIndex mindex = new MemoryIndex();
         mindex.addField("f", "this is a test document", WHITESPACE);
-        mindex.addField("g", "#######", ANALYZER); // analyzes away to empty field
         LeafReader docsReader = (LeafReader) mindex.createSearcher().getIndexReader();
 
         QueryIndex.QueryTermFilter termFilter = new QueryIndex.QueryTermFilter(reader);
@@ -150,5 +149,4 @@ public class TestTermPresearcher extends PresearcherTestBase {
     }
 
   }
-
 }

@@ -25,7 +25,8 @@ import java.util.HashSet;
  * meaning all locking will take place through this one instance.
  * Only use this {@link LockFactory} when you are certain all
  * IndexWriters for a given index are running
- * against a single shared in-process Directory instance.
+ * against a single shared in-process Directory instance.  This is
+ * currently the default locking for RAMDirectory.
  *
  * @see LockFactory
  */

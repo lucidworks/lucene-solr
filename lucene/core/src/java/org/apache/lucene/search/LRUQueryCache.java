@@ -36,6 +36,7 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.ReaderUtil;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.index.TieredMergePolicy;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Accountables;
@@ -143,7 +144,7 @@ public class LRUQueryCache implements QueryCache, Accountable {
    * than 3% of the total number of documents in the index.
    * This should guarantee that all leaves from the upper
    * {@link TieredMergePolicy tier} will be cached while ensuring that at most
-   * <code>33</code> leaves can make it to the cache (very likely less than 10 in
+   * <tt>33</tt> leaves can make it to the cache (very likely less than 10 in
    * practice), which is useful for this implementation since some operations
    * perform in linear time with the number of cached leaves.
    * Only clauses whose cost is at most 100x the cost of the top-level query will
@@ -670,6 +671,11 @@ public class LRUQueryCache implements QueryCache, Accountable {
       this.in = in;
       this.policy = policy;
       used = new AtomicBoolean(false);
+    }
+
+    @Override
+    public void extractTerms(Set<Term> terms) {
+      in.extractTerms(terms);
     }
 
     @Override

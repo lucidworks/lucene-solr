@@ -338,7 +338,7 @@ public class ReplicaAssigner {
     for (Class c : Snitch.WELL_KNOWN_SNITCHES) {
       if (snitches.containsKey(c)) continue;// it is already specified explicitly , ignore
       try {
-        snitches.put(c, new SnitchInfoImpl(Collections.EMPTY_MAP, (Snitch) c.getConstructor().newInstance(), cloudManager));
+        snitches.put(c, new SnitchInfoImpl(Collections.EMPTY_MAP, (Snitch) c.newInstance(), cloudManager));
       } catch (Exception e) {
         throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Error instantiating Snitch " + c.getName());
       }
@@ -381,7 +381,7 @@ public class ReplicaAssigner {
         if (context.exception != null) {
           failedNodes.put(node, context);
           participatingLiveNodes.remove(node);
-          log.warn("Not all tags were obtained from node {}", node, context.exception);
+          log.warn("Not all tags were obtained from node " + node, context.exception);
           context.exception = new SolrException(SolrException.ErrorCode.SERVER_ERROR,
               "Not all tags were obtained from node " + node);
         } else {
@@ -433,7 +433,7 @@ public class ReplicaAssigner {
       try {
         if (klas.indexOf('.') == -1) klas = Snitch.class.getPackage().getName() + "." + klas;
         Snitch inst =
-            (Snitch) Snitch.class.getClassLoader().loadClass(klas).getConstructor().newInstance() ;
+            (Snitch) Snitch.class.getClassLoader().loadClass(klas).newInstance() ;
         snitches.put(inst.getClass(), new SnitchInfoImpl(map, inst, cloudManager));
       } catch (Exception e) {
         throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);

@@ -27,7 +27,6 @@ import org.apache.http.HttpStatus;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.embedded.JettySolrRunner;
-import org.apache.solr.client.solrj.impl.BaseHttpSolrClient;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.impl.LBHttpSolrClient;
@@ -116,7 +115,7 @@ public class TestDelegationWithHadoopAuth extends SolrCloudTestCase {
       DelegationTokenResponse.Renew renewResponse = renew.process(client);
       assertEquals(HttpStatus.SC_OK, expectedStatusCode);
       return renewResponse.getExpirationTime();
-    } catch (BaseHttpSolrClient.RemoteSolrException ex) {
+    } catch (HttpSolrClient.RemoteSolrException ex) {
       assertEquals(expectedStatusCode, ex.code());
       return -1;
     }
@@ -128,7 +127,7 @@ public class TestDelegationWithHadoopAuth extends SolrCloudTestCase {
     try {
       cancel.process(client);
       assertEquals(HttpStatus.SC_OK, expectedStatusCode);
-    } catch (BaseHttpSolrClient.RemoteSolrException ex) {
+    } catch (HttpSolrClient.RemoteSolrException ex) {
       assertEquals(expectedStatusCode, ex.code());
     }
   }
@@ -192,7 +191,7 @@ public class TestDelegationWithHadoopAuth extends SolrCloudTestCase {
       try {
         delegationTokenClient.request(req, null);
         return HttpStatus.SC_OK;
-      } catch (BaseHttpSolrClient.RemoteSolrException re) {
+      } catch (HttpSolrClient.RemoteSolrException re) {
         return re.code();
       }
     } finally {
@@ -205,7 +204,7 @@ public class TestDelegationWithHadoopAuth extends SolrCloudTestCase {
     try {
       client.request(request);
       assertEquals(HttpStatus.SC_OK, expectedStatusCode);
-    } catch (BaseHttpSolrClient.RemoteSolrException ex) {
+    } catch (HttpSolrClient.RemoteSolrException ex) {
       assertEquals(expectedStatusCode, ex.code());
     }
   }

@@ -391,7 +391,6 @@ public class TokenSourcesTest extends BaseTokenStreamTestCase {
       if (startOffsets[i] == startOffsets[i-1]) {
         if (VERBOSE)
           System.out.println("Skipping test because can't easily validate random token-stream is correct.");
-        rTokenStream.close();
         return;
       }
     }
@@ -439,7 +438,6 @@ public class TokenSourcesTest extends BaseTokenStreamTestCase {
 
     reader.close();
     dir.close();
-    rTokenStream.close();
   }
 
   public void testMaxStartOffsetConsistency() throws IOException {

@@ -18,7 +18,6 @@ package org.apache.lucene.index;
 
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -145,11 +144,10 @@ public class TestFieldsReader extends LuceneTestCase {
     }
 
     @Override
-    public void readInternal(ByteBuffer b) throws IOException {
+    public void readInternal(byte[] b, int offset, int length) throws IOException {
       simOutage();
       delegate.seek(getFilePointer());
-      delegate.readBytes(b.array(), b.position(), b.remaining());
-      b.position(b.limit());
+      delegate.readBytes(b, offset, length);
     }
     
     @Override

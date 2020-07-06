@@ -21,7 +21,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
-import java.lang.StackWalker.StackFrame;
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Inherited;
@@ -67,6 +66,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockAnalyzer;
@@ -153,7 +153,7 @@ import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
 /**
  * Base class for all Lucene unit tests, Junit3 or Junit4 variant.
  * 
- * <h2>Class and instance setup.</h2>
+ * <h3>Class and instance setup.</h3>
  * 
  * <p>
  * The preferred way to specify class (suite-level) setup/cleanup is to use
@@ -170,13 +170,13 @@ import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
  * your subclass, make sure you call <code>super.setUp()</code> and
  * <code>super.tearDown()</code>. This is detected and enforced.
  * 
- * <h2>Specifying test cases</h2>
+ * <h3>Specifying test cases</h3>
  * 
  * <p>
  * Any test method with a <code>testXXX</code> prefix is considered a test case.
  * Any test method annotated with {@link Test} is considered a test case.
  * 
- * <h2>Randomized execution and test facilities</h2>
+ * <h3>Randomized execution and test facilities</h3>
  * 
  * <p>
  * {@link LuceneTestCase} uses {@link RandomizedRunner} to execute test cases.
@@ -483,15 +483,17 @@ public abstract class LuceneTestCase extends Assert {
 
   /** Filesystem-based {@link Directory} implementations. */
   private static final List<String> FS_DIRECTORIES = Arrays.asList(
+    "SimpleFSDirectory",
     "NIOFSDirectory",
-    // NIOFSDirectory as replacement for MMapDirectory if unmapping is not supported on Windows (to make randomization stable):
-    hasWorkingMMapOnWindows() ? "MMapDirectory" : "NIOFSDirectory"
+    // SimpleFSDirectory as replacement for MMapDirectory if unmapping is not supported on Windows (to make randomization stable):
+    hasWorkingMMapOnWindows() ? "MMapDirectory" : "SimpleFSDirectory"
   );
 
   /** All {@link Directory} implementations. */
   private static final List<String> CORE_DIRECTORIES;
   static {
     CORE_DIRECTORIES = new ArrayList<>(FS_DIRECTORIES);
+    CORE_DIRECTORIES.add("RAMDirectory");
     CORE_DIRECTORIES.add(ByteBuffersDirectory.class.getSimpleName());
   }
   
@@ -594,13 +596,14 @@ public abstract class LuceneTestCase extends Assert {
   private final static long STATIC_LEAK_THRESHOLD = 10 * 1024 * 1024;
 
   /** By-name list of ignored types like loggers etc. */
-  private final static Set<String> STATIC_LEAK_IGNORED_TYPES = Set.of(
+  private final static Set<String> STATIC_LEAK_IGNORED_TYPES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
       "org.slf4j.Logger",
       "org.apache.solr.SolrLogFormatter",
-      "java.io.File", // Solr sometimes refers to this in a static way, but it has a "java.nio.fs.Path" inside
+      "java.io.File", // Solr sometimes refers to this in a static way, but it has a "java.nio.fs.Path" inside 
       Path.class.getName(), // causes problems because interface is implemented by hidden classes
       Class.class.getName(),
-      EnumSet.class.getName());
+      EnumSet.class.getName()
+  )));
 
   /**
    * This controls how suite-level rules are nested. It is important that _all_ rules declared
@@ -955,7 +958,7 @@ public abstract class LuceneTestCase extends Assert {
       } else {
         cms = new ConcurrentMergeScheduler() {
             @Override
-            protected synchronized boolean maybeStall(MergeSource mergeSource) {
+            protected synchronized boolean maybeStall(IndexWriter writer) {
               return true;
             }
           };
@@ -1646,7 +1649,7 @@ public abstract class LuceneTestCase extends Assert {
             newDirectoryImpl(random, clazzName1, lf),
             newDirectoryImpl(random, clazzName2, lf));
       } else {
-        clazzName = ByteBuffersDirectory.class.getName();
+        clazzName = "RAMDirectory";
       }
     }
 
@@ -1670,7 +1673,7 @@ public abstract class LuceneTestCase extends Assert {
       
       // the remaining dirs are no longer filesystem based, so we must check that the passedLockFactory is not file based:
       if (!(lf instanceof FSLockFactory)) {
-        // try ctor with only LockFactory
+        // try ctor with only LockFactory (e.g. RAMDirectory)
         try {
           return clazz.getConstructor(LockFactory.class).newInstance(lf);
         } catch (NoSuchMethodException nsme) {
@@ -1679,7 +1682,7 @@ public abstract class LuceneTestCase extends Assert {
       }
 
       // try empty ctor
-      return clazz.getConstructor().newInstance();
+      return clazz.newInstance();
     } catch (Exception e) {
       Rethrow.rethrow(e);
       throw null; // dummy to prevent compiler failure
@@ -1953,15 +1956,6 @@ public abstract class LuceneTestCase extends Assert {
         ret = random.nextBoolean()
             ? new AssertingIndexSearcher(random, r, ex)
             : new AssertingIndexSearcher(random, r.getContext(), ex);
-      } else if (random.nextBoolean()) {
-        int maxDocPerSlice = 1 + random.nextInt(100000);
-        int maxSegmentsPerSlice = 1 + random.nextInt(20);
-        ret = new IndexSearcher(r, ex) {
-          @Override
-          protected LeafSlice[] slices(List<LeafReaderContext> leaves) {
-            return slices(leaves, maxDocPerSlice, maxSegmentsPerSlice);
-          }
-        };
       } else {
         ret = random.nextBoolean()
             ? new IndexSearcher(r, ex)
@@ -2710,22 +2704,22 @@ public abstract class LuceneTestCase extends Assert {
   /** Inspects stack trace to figure out if a method of a specific class called us. */
   public static boolean callStackContains(Class<?> clazz, String methodName) {
     final String className = clazz.getName();
-    return StackWalker.getInstance().walk(s -> s.skip(1) // exclude this utility method
-        .anyMatch(f -> className.equals(f.getClassName()) && methodName.equals(f.getMethodName())));
+    return Stream.of(new Exception().getStackTrace()).skip(1) // exclude this utility method
+        .anyMatch(f -> className.equals(f.getClassName()) && methodName.equals(f.getMethodName()));
   }
 
   /** Inspects stack trace to figure out if one of the given method names (no class restriction) called us. */
   public static boolean callStackContainsAnyOf(String... methodNames) {
-    return StackWalker.getInstance().walk(s -> s.skip(1) // exclude this utility method
-        .map(StackFrame::getMethodName)
-        .anyMatch(Set.of(methodNames)::contains));
+    return Stream.of(new Exception().getStackTrace()).skip(1) // exclude this utility method
+        .map(StackTraceElement::getMethodName)
+        .anyMatch(Arrays.asList(methodNames)::contains);
   }
 
   /** Inspects stack trace if the given class called us. */
   public static boolean callStackContains(Class<?> clazz) {
-    return StackWalker.getInstance().walk(s -> s.skip(1) // exclude this utility method
-        .map(StackFrame::getClassName)
-        .anyMatch(clazz.getName()::equals));
+    return Stream.of(new Exception().getStackTrace()).skip(1) // exclude this utility method
+        .map(StackTraceElement::getClassName)
+        .anyMatch(clazz.getName()::equals);
   }
 
   /** A runnable that can throw any checked exception. */
@@ -2988,31 +2982,5 @@ public abstract class LuceneTestCase extends Assert {
     // if collation keys don't really respect collation order, things are screwed.
     assumeTrue("hit JDK collator bug", Integer.signum(v1) == Integer.signum(v2));
     return v1;
-  }
-
-
-  /**
-   * Ensures that the MergePolicy has sane values for tests that test with lots of documents.
-   */
-  protected static IndexWriterConfig ensureSaneIWCOnNightly(IndexWriterConfig conf) {
-    if (LuceneTestCase.TEST_NIGHTLY) {
-      // newIWConfig makes smallish max seg size, which
-      // results in tons and tons of segments for this test
-      // when run nightly:
-      MergePolicy mp = conf.getMergePolicy();
-      if (mp instanceof TieredMergePolicy) {
-        ((TieredMergePolicy) mp).setMaxMergedSegmentMB(5000.);
-      } else if (mp instanceof LogByteSizeMergePolicy) {
-        ((LogByteSizeMergePolicy) mp).setMaxMergeMB(1000.);
-      } else if (mp instanceof LogMergePolicy) {
-        ((LogMergePolicy) mp).setMaxMergeDocs(100000);
-      }
-      // when running nightly, merging can still have crazy parameters,
-      // and might use many per-field codecs. turn on CFS for IW flushes
-      // and ensure CFS ratio is reasonable to keep it contained.
-      conf.setUseCompoundFile(true);
-      mp.setNoCFSRatio(Math.max(0.25d, mp.getNoCFSRatio()));
-    }
-    return conf;
   }
 }

@@ -50,6 +50,7 @@ public class TestSuggestStopFilter extends BaseTokenStreamTestCase {
     Tokenizer stream = new MockTokenizer();
     stream.setReader(new StringReader("go to "));
     TokenStream filter = new SuggestStopFilter(stream, stopWords);
+    filter = new SuggestStopFilter(stream, stopWords);
     assertTokenStreamContents(filter,
                               new String[] {"go"},
                               new int[] {0},
@@ -68,6 +69,8 @@ public class TestSuggestStopFilter extends BaseTokenStreamTestCase {
     Tokenizer stream = new MockTokenizer();
     stream.setReader(new StringReader("go to school"));
     TokenStream filter = new SuggestStopFilter(stream, stopWords);
+
+    filter = new SuggestStopFilter(stream, stopWords);
     assertTokenStreamContents(filter,
                               new String[] {"go", "school"},
                               new int[] {0, 6},
@@ -86,6 +89,8 @@ public class TestSuggestStopFilter extends BaseTokenStreamTestCase {
     Tokenizer stream = new MockTokenizer();
     stream.setReader(new StringReader("go to a the school"));
     TokenStream filter = new SuggestStopFilter(stream, stopWords);
+
+    filter = new SuggestStopFilter(stream, stopWords);
     assertTokenStreamContents(filter,
                               new String[] { "go", "school" },
                               new int[] {0, 12},
@@ -104,6 +109,8 @@ public class TestSuggestStopFilter extends BaseTokenStreamTestCase {
     Tokenizer stream = new MockTokenizer();
     stream.setReader(new StringReader("go to a the"));
     TokenStream filter = new SuggestStopFilter(stream, stopWords);
+
+    filter = new SuggestStopFilter(stream, stopWords);
     assertTokenStreamContents(filter,
                               new String[] { "go", "the"},
                               new int[] {0, 8},
@@ -122,6 +129,8 @@ public class TestSuggestStopFilter extends BaseTokenStreamTestCase {
     Tokenizer stream = new MockTokenizer();
     stream.setReader(new StringReader("go to a the "));
     TokenStream filter = new SuggestStopFilter(stream, stopWords);
+
+    filter = new SuggestStopFilter(stream, stopWords);
     assertTokenStreamContents(filter,
                               new String[] { "go"},
                               new int[] {0},

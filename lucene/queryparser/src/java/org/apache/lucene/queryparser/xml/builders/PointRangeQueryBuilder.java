@@ -30,8 +30,7 @@ import org.w3c.dom.Element;
 /**
  * Creates a range query across 1D {@link PointValues}. The table below specifies the required
  * attributes and the defaults if optional attributes are omitted:
- * <table>
- * <caption>supported attributes</caption>
+ * <table summary="supported attributes">
  * <tr>
  * <th>Attribute name</th>
  * <th>Values</th>
@@ -46,13 +45,13 @@ import org.w3c.dom.Element;
  * </tr>
  * <tr>
  * <td>lowerTerm</td>
- * <td>Specified by <code>type</code></td>
+ * <td>Specified by <tt>type</tt></td>
  * <td>No</td>
  * <td>Integer.MIN_VALUE Long.MIN_VALUE Float.NEGATIVE_INFINITY Double.NEGATIVE_INFINITY</td>
  * </tr>
  * <tr>
  * <td>upperTerm</td>
- * <td>Specified by <code>type</code></td>
+ * <td>Specified by <tt>type</tt></td>
  * <td>No</td>
  * <td>Integer.MAX_VALUE Long.MAX_VALUE Float.POSITIVE_INFINITY Double.POSITIVE_INFINITY</td>
  * </tr>
@@ -65,8 +64,8 @@ import org.w3c.dom.Element;
  * </table>
  * <p>
  * A {@link ParserException} will be thrown if an error occurs parsing the
- * supplied <code>lowerTerm</code> or <code>upperTerm</code> into the numeric type
- * specified by <code>type</code>.
+ * supplied <tt>lowerTerm</tt> or <tt>upperTerm</tt> into the numeric type
+ * specified by <tt>type</tt>.
  */
 public class PointRangeQueryBuilder implements QueryBuilder {
 

@@ -44,7 +44,7 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
-import org.apache.lucene.store.NIOFSDirectory;
+import org.apache.lucene.store.SimpleFSDirectory;
 import org.apache.lucene.util.Constants;
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.lucene.util.TestUtil;
@@ -221,14 +221,12 @@ public class TestReplicationHandler extends SolrTestCaseJ4 {
     NamedList res = query(query, client);
     while (expectedDocCount != numFound(res)
            && timeSlept < 30000) {
-      log.info("Waiting for {} docs", expectedDocCount);
+      log.info("Waiting for " + expectedDocCount + " docs");
       timeSlept += 100;
       Thread.sleep(100);
       res = query(query, client);
     }
-    if (log.isInfoEnabled()) {
-      log.info("Waited for {}ms and found {} docs", timeSlept, numFound(res));
-    }
+    log.info("Waited for {}ms and found {} docs", timeSlept, numFound(res));
     return res;
   }
   
@@ -707,9 +705,7 @@ public class TestReplicationHandler extends SolrTestCaseJ4 {
           assertEquals(1, Integer.parseInt(getStringOrNull(slaveDetails,"timesIndexReplicated")) - failed);
           break;
         } catch (NumberFormatException | AssertionError notYet) {
-          if (log.isInfoEnabled()) {
-            log.info("{}th attempt failure on {} details are {}", retries + 1, notYet, slaveDetails); // logOk
-          }
+          log.info((retries+1)+"th attempt failure on " + notYet+" details are "+slaveDetails);
           if (retries>9) {
             log.error("giving up: ", notYet);
             throw notYet;
@@ -1511,8 +1507,7 @@ public class TestReplicationHandler extends SolrTestCaseJ4 {
     long timeTakenInSeconds = TimeUnit.SECONDS.convert(timeTaken, TimeUnit.NANOSECONDS);
 
     //Let's make sure it took more than approximateTimeInSeconds to make sure that it was throttled
-    log.info("approximateTimeInSeconds = {} timeTakenInSeconds = {}"
-        , approximateTimeInSeconds, timeTakenInSeconds);
+    log.info("approximateTimeInSeconds = " + approximateTimeInSeconds + " timeTakenInSeconds = " + timeTakenInSeconds);
     assertTrue(timeTakenInSeconds - approximateTimeInSeconds > 0);
   }
 
@@ -1629,7 +1624,7 @@ public class TestReplicationHandler extends SolrTestCaseJ4 {
     // confirm backups really are empty
     for (int i = 1; i <=2; i++) {
       final String name = "snapshot.empty_backup"+i;
-      try (Directory dir = new NIOFSDirectory(new File(backupDir, name).toPath());
+      try (Directory dir = new SimpleFSDirectory(new File(backupDir, name).toPath());
            IndexReader reader = DirectoryReader.open(dir)) {
         assertEquals(name + " is not empty", 0, reader.numDocs());
       }

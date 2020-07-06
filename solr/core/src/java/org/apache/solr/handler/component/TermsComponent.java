@@ -89,14 +89,14 @@ public class TermsComponent extends SearchComponent {
       !HttpShardHandlerFactory.doGetDisableShardsWhitelist());
 
   @Override
-  public void init( @SuppressWarnings({"rawtypes"})NamedList args )
+  public void init( NamedList args )
   {
     super.init(args);
     whitelistHostChecker = new WhitelistHostChecker(
         (String) args.get(HttpShardHandlerFactory.INIT_SHARDS_WHITELIST), 
         !HttpShardHandlerFactory.doGetDisableShardsWhitelist());
   }
-
+  
   @Override
   public void prepare(ResponseBuilder rb) throws IOException {
     SolrParams params = rb.req.getParams();
@@ -275,6 +275,7 @@ public class TermsComponent extends SearchComponent {
         // If no lower bound was specified, use the prefix
         lowerBytes = prefixBytes;
       } else {
+        lowerBytes = new BytesRef();
         if (raw) {
           // TODO: how to handle binary? perhaps we don't for "raw"... or if the field exists
           // perhaps we detect if the FieldType is non-character and expect hex if so?
@@ -415,7 +416,6 @@ public class TermsComponent extends SearchComponent {
         th.parse(terms);
 
 
-        @SuppressWarnings({"unchecked"})
         NamedList<Number> stats = (NamedList<Number>)srsp.getSolrResponse().getResponse().get("indexstats");
         if(stats != null) {
           th.numDocs += stats.get("numDocs").longValue();
@@ -432,7 +432,6 @@ public class TermsComponent extends SearchComponent {
     }
 
     TermsHelper ti = rb._termsHelper;
-    @SuppressWarnings({"rawtypes"})
     NamedList terms = ti.buildResponse();
 
     rb.rsp.add("terms", terms);
@@ -554,7 +553,7 @@ public class TermsComponent extends SearchComponent {
 
       // loop through each field we want terms from
       for (Map.Entry<String, HashMap<String, TermsResponse.Term>> entry : fieldmap.entrySet()) {
-        NamedList<Object> fieldTerms = new NamedList<>();
+        NamedList<Object> fieldterms = new SimpleOrderedMap<>();
         TermsResponse.Term[] data = null;
         if (sort) {
           data = getCountSorted(entry.getValue());
@@ -567,7 +566,7 @@ public class TermsComponent extends SearchComponent {
         int cnt = 0;
         for (TermsResponse.Term tc : data) {
           if (tc.getFrequency() >= freqmin && tc.getFrequency() <= freqmax) {
-            addTermToNamedList(fieldTerms, tc.getTerm(), tc.getFrequency(), tc.getTotalTermFreq(), includeTotalTermFreq);
+            addTermToNamedList(fieldterms, tc.getTerm(), tc.getFrequency(), tc.getTotalTermFreq(), includeTotalTermFreq);
             cnt++;
           }
 
@@ -576,7 +575,7 @@ public class TermsComponent extends SearchComponent {
           }
         }
 
-        response.add(entry.getKey(), fieldTerms);
+        response.add(entry.getKey(), fieldterms);
       }
 
       return response;
@@ -621,8 +620,8 @@ public class TermsComponent extends SearchComponent {
     for (String field : fields) {
       SchemaField sf = indexSearcher.getSchema().getField(field);
       FieldType fieldType = sf.getType();
-      NamedList<Object> termsMap = new NamedList<>();
-
+      NamedList<Object> termsMap = new SimpleOrderedMap<>();
+      
       if (fieldType.isPointField()) {
         for (String term : splitTerms) {
           Query q = fieldType.getFieldQuery(null, sf, term);
@@ -636,10 +635,10 @@ public class TermsComponent extends SearchComponent {
         for (int i = 0; i < splitTerms.length; i++) {
           terms[i] = new Term(field, fieldType.readableToIndexed(splitTerms[i]));
         }
-
+  
         TermStates[] termStates = new TermStates[terms.length];
         collectTermStates(topReaderContext, termStates, terms);
-
+  
         for (int i = 0; i < terms.length; i++) {
           if (termStates[i] != null) {
             String outTerm = fieldType.indexedToReadable(terms[i].bytes().utf8ToString());

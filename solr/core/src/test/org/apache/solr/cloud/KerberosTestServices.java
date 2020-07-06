@@ -78,7 +78,7 @@ public class KerberosTestServices {
         FileUtils.deleteDirectory(workDir); // clean directory
         numTries++;
         if (numTries == 3) {
-          log.error("Failed setting up MiniKDC. Tried {} times.", numTries);
+          log.error("Failed setting up MiniKDC. Tried " + numTries + " times.");
           throw e;
         }
         log.error("BindException encountered when setting up MiniKdc. Trying again.");

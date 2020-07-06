@@ -89,19 +89,13 @@ class PHPSerializedWriter extends JSONWriter {
     writeNamedListAsMapMangled(name,val);
   }
   
-  @Deprecated
+  
+
   @Override
   public void writeStartDocumentList(String name, 
       long start, int size, long numFound, Float maxScore) throws IOException
   {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void writeStartDocumentList(String name, 
-      long start, int size, long numFound, Float maxScore, Boolean numFoundExact) throws IOException
-  {
-    writeMapOpener(headerSize(maxScore, numFoundExact));
+    writeMapOpener((maxScore==null) ? 3 : 4);
     writeKey("numFound",false);
     writeLong(null,numFound);
     writeKey("start",false);
@@ -110,10 +104,6 @@ class PHPSerializedWriter extends JSONWriter {
     if (maxScore!=null) {
       writeKey("maxScore",false);
       writeFloat(null,maxScore);
-    }
-    if (numFoundExact != null) {
-      writeKey("numFoundExact",false);
-      writeBool(null, numFoundExact);
     }
     writeKey("docs",false);
     writeArrayOpener(size);

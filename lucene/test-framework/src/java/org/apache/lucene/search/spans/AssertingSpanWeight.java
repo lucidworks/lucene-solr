@@ -18,6 +18,7 @@ package org.apache.lucene.search.spans;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
@@ -60,6 +61,12 @@ public class AssertingSpanWeight extends SpanWeight {
   public LeafSimScorer getSimScorer(LeafReaderContext context) throws IOException {
     return in.getSimScorer(context);
   }
+
+  @Override
+  public void extractTerms(Set<Term> terms) {
+    in.extractTerms(terms);
+  }
+
   @Override
   public SpanScorer scorer(LeafReaderContext context) throws IOException {
     return in.scorer(context);

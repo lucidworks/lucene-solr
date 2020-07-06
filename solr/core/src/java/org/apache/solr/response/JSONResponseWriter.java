@@ -78,7 +78,7 @@ public class JSONResponseWriter implements QueryResponseWriter {
     return new JSONWriter(writer, req, rsp);
   }
 
-
+}
 
 /**
  * Writes NamedLists directly as an array of NameTypeValue JSON objects...
@@ -215,19 +215,11 @@ class ArrayOfNameTypeValueJSONWriter extends JSONWriter {
     super.writeSolrDocument(name, doc, returnFields, idx);
   }
 
-  @Deprecated
   @Override
   public void writeStartDocumentList(String name, long start, int size, long numFound, Float maxScore) throws IOException {
     ifNeededWriteTypeAndValueKey("doclist");
     super.writeStartDocumentList(name, start, size, numFound, maxScore);
   }
-  
-  @Override
-  public void writeStartDocumentList(String name, long start, int size, long numFound, Float maxScore, Boolean numFoundExact) throws IOException {
-    ifNeededWriteTypeAndValueKey("doclist");
-    super.writeStartDocumentList(name, start, size, numFound, maxScore, numFoundExact);
-  }
-
 
   @Override
   public void writeMap(String name, Map val, boolean excludeOuter, boolean isFirstVal) throws IOException {
@@ -248,10 +240,9 @@ class ArrayOfNameTypeValueJSONWriter extends JSONWriter {
   }
 }
 
-abstract static class NaNFloatWriter extends JSONWriter {
-
+abstract class NaNFloatWriter extends JSONWriter {
+  
   abstract protected String getNaN();
-
   abstract protected String getInf();
 
   public NaNFloatWriter(Writer writer, SolrQueryRequest req, SolrQueryResponse rsp) {
@@ -283,5 +274,4 @@ abstract static class NaNFloatWriter extends JSONWriter {
       writeDouble(name, Double.toString(val));
     }
   }
-}
 }

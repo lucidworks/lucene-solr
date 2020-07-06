@@ -63,7 +63,7 @@ public abstract class BaseHttpClusterStateProvider implements ClusterStateProvid
         this.liveNodes = fetchLiveNodes(initialClient);
         liveNodesTimestamp = System.nanoTime();
         break;
-      } catch (SolrServerException | IOException e) {
+      } catch (IOException e) {
         log.warn("Attempt to fetch cluster state from {} failed.", solrUrl, e);
       }
     }
@@ -87,8 +87,8 @@ public abstract class BaseHttpClusterStateProvider implements ClusterStateProvid
         ClusterState cs = fetchClusterState(client, collection, null);
         return cs.getCollectionRef(collection);
       } catch (SolrServerException | IOException e) {
-        log.warn("Attempt to fetch cluster state from {} failed."
-            , Utils.getBaseUrlForNodeName(nodeName, urlScheme), e);
+        log.warn("Attempt to fetch cluster state from " +
+            Utils.getBaseUrlForNodeName(nodeName, urlScheme) + " failed.", e);
       } catch (RemoteSolrException e) {
         if ("NOT_FOUND".equals(e.getMetadata("CLUSTERSTATUS"))) {
           return null;
@@ -226,9 +226,8 @@ public abstract class BaseHttpClusterStateProvider implements ClusterStateProvid
         } catch (SolrServerException | RemoteSolrException | IOException e) {
           // Situation where we're hitting an older Solr which doesn't have LISTALIASES
           if (e instanceof RemoteSolrException && ((RemoteSolrException)e).code()==400) {
-            log.warn("LISTALIASES not found, possibly using older Solr server. Aliases won't work {}"
-                ,"unless you re-create the CloudSolrClient using zkHost(s) or upgrade Solr server"
-                , e);
+            log.warn("LISTALIASES not found, possibly using older Solr server. Aliases won't work"
+                + " unless you re-create the CloudSolrClient using zkHost(s) or upgrade Solr server", e);
             this.aliases = Collections.emptyMap();
             this.aliasProperties = Collections.emptyMap();
             this.aliasesTimestamp = System.nanoTime();
@@ -260,7 +259,7 @@ public abstract class BaseHttpClusterStateProvider implements ClusterStateProvid
       String baseUrl = Utils.getBaseUrlForNodeName(nodeName, urlScheme);
       try (SolrClient client = getSolrClient(baseUrl)) {
         return fetchClusterState(client, null, null);
-      } catch (SolrServerException | BaseHttpSolrClient.RemoteSolrException | IOException e) {
+      } catch (SolrServerException | HttpSolrClient.RemoteSolrException | IOException e) {
         log.warn("Attempt to fetch cluster state from {} failed.", baseUrl, e);
       } catch (NotACollectionException e) {
         // not possible! (we passed in null for collection so it can't be an alias)
@@ -283,7 +282,7 @@ public abstract class BaseHttpClusterStateProvider implements ClusterStateProvid
         Map<String, Object> clusterProperties = new HashMap<>();
         fetchClusterState(client, null, clusterProperties);
         return clusterProperties;
-      } catch (SolrServerException | BaseHttpSolrClient.RemoteSolrException | IOException e) {
+      } catch (SolrServerException | HttpSolrClient.RemoteSolrException | IOException e) {
         log.warn("Attempt to fetch cluster state from {} failed.", baseUrl, e);
       } catch (NotACollectionException e) {
         // not possible! (we passed in null for collection so it can't be an alias)

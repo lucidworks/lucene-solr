@@ -18,8 +18,7 @@
 /**
  * A filter that decomposes compound words you find in many Germanic
  * languages into the word parts. This example shows what it does:
- * <table style="border: 1px solid">
- *  <caption>example input stream</caption>
+ * <table border="1" summary="example input stream">
  *  <tr>
  *   <th>Input token stream</th>
  *  </tr>
@@ -28,8 +27,7 @@
  *  </tr>
  * </table>
  * <br>
- * <table style="border: 1px solid">
- *  <caption>example output stream</caption>
+ * <table border="1" summary="example output stream">
  *  <tr>
  *   <th>Output token stream</th>
  *  </tr>
@@ -73,8 +71,8 @@
  *  word.</li>
  * </ul>
  * 
- * <h2>Compound word token filters</h2>
- * <h3>HyphenationCompoundWordTokenFilter</h3>
+ * <h3>Compound word token filters</h3>
+ * <h4>HyphenationCompoundWordTokenFilter</h4>
  * The {@link
  * org.apache.lucene.analysis.compound.HyphenationCompoundWordTokenFilter
  * HyphenationCompoundWordTokenFilter} uses hyphenation grammars to find
@@ -82,7 +80,7 @@
  * without a dictionary as well but then produces a lot of "nonword" tokens.
  * The quality of the output tokens is directly connected to the quality of the
  * grammar file you use. For languages like German they are quite good.
- * <h4>Grammar file</h4>
+ * <h5>Grammar file</h5>
  * Unfortunately we cannot bundle the hyphenation grammar files with Lucene
  * because they do not use an ASF compatible license (they use the LaTeX
  * Project Public License instead). You can find the XML based grammar
@@ -99,7 +97,7 @@
  * <a href="http://xmlgraphics.apache.org/fop/">Apache FOP project</a>
  * .
  * 
- * <h3>DictionaryCompoundWordTokenFilter</h3>
+ * <h4>DictionaryCompoundWordTokenFilter</h4>
  * The {@link
  * org.apache.lucene.analysis.compound.DictionaryCompoundWordTokenFilter
  * DictionaryCompoundWordTokenFilter} uses a dictionary-only approach to
@@ -107,7 +105,7 @@
  * uses the hyphenation grammars. You can use it as a first start to
  * see if your dictionary is good or not because it is much simpler in design.
  * 
- * <h2>Dictionary</h2>
+ * <h3>Dictionary</h3>
  * The output quality of both token filters is directly connected to the
  * quality of the dictionary you use. They are language dependent of course.
  * You always should use a dictionary
@@ -118,10 +116,9 @@
  * dictionaries</a>
  * Wiki.
  * 
- * <h2>Which variant should I use?</h2>
+ * <h3>Which variant should I use?</h3>
  * This decision matrix should help you:
- * <table style="border: 1px solid">
- *  <caption>comparison of dictionary and hyphenation based decompounding</caption>
+ * <table border="1" summary="comparison of dictionary and hyphenation based decompounding">
  *  <tr>
  *   <th>Token filter</th>
  *   <th>Output quality</th>
@@ -138,7 +135,7 @@
  *   <td>slow</td>
  *  </tr>
  * </table>
- * <h2>Examples</h2>
+ * <h3>Examples</h3>
  * <pre class="prettyprint">
  *   public void testHyphenationCompoundWordsDE() throws Exception {
  *     String[] dict = { "Rind", "Fleisch", "Draht", "Schere", "Gesetz",

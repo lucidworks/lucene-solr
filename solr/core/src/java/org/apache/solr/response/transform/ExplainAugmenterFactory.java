@@ -103,17 +103,22 @@ public class ExplainAugmenterFactory extends TransformerFactory
     }
 
     @Override
-    public void transform(SolrDocument doc, int docid) throws IOException {
+    public void transform(SolrDocument doc, int docid) {
       if( context != null && context.getQuery() != null ) {
-        Explanation exp = context.getSearcher().explain(context.getQuery(), docid);
-        if( style == Style.nl ) {
-          doc.setField( name, SolrPluginUtils.explanationToNamedList(exp) );
+        try {
+          Explanation exp = context.getSearcher().explain(context.getQuery(), docid);
+          if( style == Style.nl ) {
+            doc.setField( name, SolrPluginUtils.explanationToNamedList(exp) );
+          }
+          else if( style == Style.html ) {
+            doc.setField( name, toHtml(exp));
+          }
+          else {
+            doc.setField( name, exp.toString() );
+          }
         }
-        else if( style == Style.html ) {
-          doc.setField( name, toHtml(exp));
-        }
-        else {
-          doc.setField( name, exp.toString() );
+        catch (IOException e) {
+          e.printStackTrace();
         }
       }
     }

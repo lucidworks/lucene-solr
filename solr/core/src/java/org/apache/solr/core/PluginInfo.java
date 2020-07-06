@@ -42,7 +42,6 @@ import static org.apache.solr.schema.FieldType.CLASS_NAME;
  */
 public class PluginInfo implements MapSerializable {
   public final String name, className, type, pkgName;
-  @SuppressWarnings({"rawtypes"})
   public final NamedList initArgs;
   public final Map<String, String> attributes;
   public final List<PluginInfo> children;
@@ -50,7 +49,7 @@ public class PluginInfo implements MapSerializable {
 
 
 
-  public PluginInfo(String type, Map<String, String> attrs, @SuppressWarnings({"rawtypes"})NamedList initArgs, List<PluginInfo> children) {
+  public PluginInfo(String type, Map<String, String> attrs, NamedList initArgs, List<PluginInfo> children) {
     this.type = type;
     this.name = attrs.get(NAME);
     Pair<String, String> parsed = parseClassName(attrs.get(CLASS_NAME));
@@ -93,7 +92,6 @@ public class PluginInfo implements MapSerializable {
     isFromSolrConfig = true;
   }
 
-  @SuppressWarnings({"unchecked", "rawtypes"})
   public PluginInfo(String type, Map<String,Object> map) {
     LinkedHashMap m = new LinkedHashMap<>(map);
     initArgs = new NamedList();
@@ -165,7 +163,6 @@ public class PluginInfo implements MapSerializable {
     return  l.isEmpty() ? null:l.get(0);
   }
 
-  @SuppressWarnings({"unchecked", "rawtypes"})
   public Map<String, Object> toMap(Map<String, Object> map) {
     map.putAll(attributes);
     Map m = map;
@@ -200,7 +197,6 @@ public class PluginInfo implements MapSerializable {
     for (PluginInfo child : children) if(type.equals(child.type)) result.add(child);
     return result;
   }
-  @SuppressWarnings({"rawtypes"})
   public static final PluginInfo EMPTY_INFO = new PluginInfo("",Collections.<String,String>emptyMap(), new NamedList(),Collections.<PluginInfo>emptyList());
 
   private static final HashSet<String> NL_TAGS = new HashSet<>

@@ -17,7 +17,6 @@
 package org.apache.solr.security;
 
 import java.lang.invoke.MethodHandles;
-import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
@@ -27,16 +26,16 @@ import javax.servlet.FilterChain;
 import javax.servlet.FilterConfig;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.commons.collections.iterators.IteratorEnumeration;
 import org.apache.hadoop.security.token.delegation.web.DelegationTokenAuthenticationHandler;
 import org.apache.http.HttpRequest;
 import org.apache.http.protocol.HttpContext;
 import org.apache.solr.client.solrj.impl.Http2SolrClient;
-import org.apache.solr.client.solrj.impl.HttpListenerFactory;
 import org.apache.solr.client.solrj.impl.Krb5HttpClientBuilder;
 import org.apache.solr.client.solrj.impl.SolrHttpClientBuilder;
 import org.apache.solr.cloud.ZkController;
@@ -46,7 +45,6 @@ import org.apache.solr.common.cloud.SecurityAwareZkACLProvider;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.servlet.SolrDispatchFilter;
-import org.eclipse.jetty.client.api.Request;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -97,7 +95,6 @@ public class KerberosPlugin extends AuthenticationPlugin implements HttpClientBu
       throw new SolrException(ErrorCode.SERVER_ERROR, "Error initializing kerberos authentication plugin: "+e);
     }
   }
-
 
   @VisibleForTesting
   protected FilterConfig getInitFilterConfig(Map<String, Object> pluginConfig, boolean skipKerberosChecking) {
@@ -188,7 +185,7 @@ public class KerberosPlugin extends AuthenticationPlugin implements HttpClientBu
     } else {
       kerberosFilter = new KerberosFilter(coreContainer);
     }
-    log.info("Params: {}", params);
+    log.info("Params: "+params);
 
     FilterConfig conf = new FilterConfig() {
       @Override
@@ -198,7 +195,7 @@ public class KerberosPlugin extends AuthenticationPlugin implements HttpClientBu
 
       @Override
       public Enumeration<String> getInitParameterNames() {
-        return Collections.enumeration(params.keySet());
+        return new IteratorEnumeration(params.keySet().iterator());
       }
 
       @Override
@@ -231,14 +228,14 @@ public class KerberosPlugin extends AuthenticationPlugin implements HttpClientBu
   }
 
   @Override
-  public boolean doAuthenticate(HttpServletRequest req, HttpServletResponse rsp,
-                                FilterChain chain) throws Exception {
-    log.debug("Request to authenticate using kerberos: {}", req);
+  public boolean doAuthenticate(ServletRequest req, ServletResponse rsp,
+      FilterChain chain) throws Exception {
+    log.debug("Request to authenticate using kerberos: "+req);
     kerberosFilter.doFilter(req, rsp, chain);
 
     String requestContinuesAttr = (String)req.getAttribute(RequestContinuesRecorderAuthenticationHandler.REQUEST_CONTINUES_ATTR);
     if (requestContinuesAttr == null) {
-      log.warn("Could not find {}", RequestContinuesRecorderAuthenticationHandler.REQUEST_CONTINUES_ATTR);
+      log.warn("Could not find " + RequestContinuesRecorderAuthenticationHandler.REQUEST_CONTINUES_ATTR);
       return false;
     } else {
       return Boolean.parseBoolean(requestContinuesAttr);
@@ -251,26 +248,8 @@ public class KerberosPlugin extends AuthenticationPlugin implements HttpClientBu
     if (info != null && (info.getAction() == SolrDispatchFilter.Action.FORWARD ||
         info.getAction() == SolrDispatchFilter.Action.REMOTEQUERY)) {
       if (info.getUserPrincipal() != null) {
-        if (log.isInfoEnabled()) {
-          log.info("Setting original user principal: {}", info.getUserPrincipal().getName());
-        }
+        log.info("Setting original user principal: {}", info.getUserPrincipal().getName());
         httpRequest.setHeader(ORIGINAL_USER_PRINCIPAL_HEADER, info.getUserPrincipal().getName());
-        return true;
-      }
-    }
-    return false;
-  }
-
-  @Override
-  protected boolean interceptInternodeRequest(Request request) {
-    SolrRequestInfo info = SolrRequestInfo.getRequestInfo();
-    if (info != null && (info.getAction() == SolrDispatchFilter.Action.FORWARD ||
-        info.getAction() == SolrDispatchFilter.Action.REMOTEQUERY)) {
-      if (info.getUserPrincipal() != null) {
-        if (log.isInfoEnabled()) {
-          log.info("Setting original user principal: {}", info.getUserPrincipal().getName());
-        }
-        request.header(ORIGINAL_USER_PRINCIPAL_HEADER, info.getUserPrincipal().getName());
         return true;
       }
     }
@@ -284,14 +263,6 @@ public class KerberosPlugin extends AuthenticationPlugin implements HttpClientBu
 
   @Override
   public void setup(Http2SolrClient client) {
-    final HttpListenerFactory.RequestResponseListener listener = new HttpListenerFactory.RequestResponseListener() {
-      @Override
-      public void onQueued(Request request) {
-        interceptInternodeRequest(request);
-      }
-    };
-    client.addListenerFactory(() -> listener);
-
     kerberosBuilder.setup(client);
   }
 

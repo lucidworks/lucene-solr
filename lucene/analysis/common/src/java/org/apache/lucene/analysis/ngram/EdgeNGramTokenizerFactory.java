@@ -53,11 +53,6 @@ public class EdgeNGramTokenizerFactory extends TokenizerFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public EdgeNGramTokenizerFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public Tokenizer create(AttributeFactory factory) {
     return new EdgeNGramTokenizer(factory, minGramSize, maxGramSize);

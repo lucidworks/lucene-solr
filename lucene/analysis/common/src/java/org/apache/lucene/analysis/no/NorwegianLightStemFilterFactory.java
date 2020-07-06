@@ -63,11 +63,6 @@ public class NorwegianLightStemFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public NorwegianLightStemFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new NorwegianLightStemFilter(input, flags);

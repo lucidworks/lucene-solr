@@ -18,7 +18,9 @@ package org.apache.solr.update;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.util.Set;
 import java.util.Vector;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.solr.core.DirectoryFactory;
 import org.apache.solr.core.HdfsDirectoryFactory;
@@ -26,7 +28,6 @@ import org.apache.solr.core.PluginInfo;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SolrEventListener;
 import org.apache.solr.core.SolrInfoBean;
-import org.apache.solr.metrics.SolrMetricsContext;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.util.plugin.SolrCoreAware;
@@ -54,7 +55,7 @@ public abstract class UpdateHandler implements SolrInfoBean {
 
   protected final UpdateLog ulog;
 
-  protected SolrMetricsContext solrMetricsContext;
+  protected Set<String> metricNames = ConcurrentHashMap.newKeySet();
 
   private void parseEventListeners() {
     final Class<SolrEventListener> clazz = SolrEventListener.class;
@@ -64,11 +65,11 @@ public abstract class UpdateHandler implements SolrInfoBean {
       if ("postCommit".equals(event)) {
         SolrEventListener obj = core.createInitInstance(info,clazz,label,null);
         commitCallbacks.add(obj);
-        log.info("added SolrEventListener for postCommit: {}", obj);
+        log.info("added SolrEventListener for postCommit: " + obj);
       } else if ("postOptimize".equals(event)) {
         SolrEventListener obj = core.createInitInstance(info,clazz,label,null);
         optimizeCallbacks.add(obj);
-        log.info("added SolrEventListener for postOptimize: {}", obj);
+        log.info("added SolrEventListener for postOptimize: " + obj);
       }
     }
   }
@@ -133,9 +134,7 @@ public abstract class UpdateHandler implements SolrInfoBean {
         ulog.clearLog(core, ulogPluginInfo);
       }
 
-      if (log.isInfoEnabled()) {
-        log.info("Using UpdateLog implementation: {}", ulog.getClass().getName());
-      }
+      log.info("Using UpdateLog implementation: " + ulog.getClass().getName());
       ulog.init(ulogPluginInfo);
       ulog.init(this, core);
     } else {
@@ -161,6 +160,7 @@ public abstract class UpdateHandler implements SolrInfoBean {
   public abstract int mergeIndexes(MergeIndexesCommand cmd) throws IOException;
   public abstract void commit(CommitUpdateCommand cmd) throws IOException;
   public abstract void rollback(RollbackUpdateCommand cmd) throws IOException;
+  public abstract void close() throws IOException;
   public abstract UpdateLog getUpdateLog();
 
   /**
@@ -205,9 +205,8 @@ public abstract class UpdateHandler implements SolrInfoBean {
   public Category getCategory() {
     return Category.UPDATE;
   }
-
   @Override
-  public SolrMetricsContext getSolrMetricsContext() {
-    return solrMetricsContext;
+  public Set<String> getMetricNames() {
+    return metricNames;
   }
 }

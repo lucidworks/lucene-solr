@@ -286,8 +286,11 @@ public class TestRandomDVFaceting extends SolrTestCaseJ4 {
         for (int i=1; i<responses.size(); i++) {
           String err = JSONTestUtil.match("/", responses.get(i), responses.get(0), 0.0);
           if (err != null) {
-            log.error("ERROR: mismatch facet response: {}\n expected ={}\n response = {}\n request = {}"
-                , err, responses.get(0), responses.get(i), params);
+            log.error("ERROR: mismatch facet response: " + err +
+                "\n expected =" + responses.get(0) +
+                "\n response = " + responses.get(i) +
+                "\n request = " + params
+            );
             fail(err);
           }
         }

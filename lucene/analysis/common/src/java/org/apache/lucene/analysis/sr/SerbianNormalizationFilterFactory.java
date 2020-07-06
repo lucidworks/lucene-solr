@@ -48,15 +48,10 @@ public class SerbianNormalizationFilterFactory extends TokenFilterFactory {
   public SerbianNormalizationFilterFactory(Map<String,String> args) {
     super(args);
 
-    this.haircut = get(args, "haircut", Arrays.asList( "bald", "regular" ), "bald");
+  this.haircut = get(args, "haircut", Arrays.asList( "bald", "regular" ), "bald");
     if (!args.isEmpty()) {
       throw new IllegalArgumentException("Unknown parameters: " + args);
     }
-  }
-
-  /** Default ctor for compatibility with SPI */
-  public SerbianNormalizationFilterFactory() {
-    throw defaultCtorException();
   }
 
   @Override

@@ -19,8 +19,8 @@ package org.apache.lucene.index;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
-import java.util.Objects;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
@@ -114,9 +114,10 @@ final class SortingStoredFieldsConsumer extends StoredFieldsConsumer {
     }
 
     @Override
-    public void stringField(FieldInfo fieldInfo, String value) throws IOException {
+    public void stringField(FieldInfo fieldInfo, byte[] value) throws IOException {
       reset(fieldInfo);
-      stringValue = Objects.requireNonNull(value, "String value should not be null");
+      // TODO: can we avoid new String here?
+      stringValue = new String(value, StandardCharsets.UTF_8);
       write();
     }
 

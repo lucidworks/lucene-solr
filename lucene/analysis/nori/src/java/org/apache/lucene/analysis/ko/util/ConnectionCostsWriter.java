@@ -19,7 +19,6 @@ package org.apache.lucene.analysis.ko.util;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -31,7 +30,7 @@ import org.apache.lucene.store.OutputStreamDataOutput;
 
 final class ConnectionCostsWriter {
   
-  private final ByteBuffer costs; // array is backward IDs first since get is called using the same backward ID consecutively. maybe doesn't matter.
+  private final short[][] costs; // array is backward IDs first since get is called using the same backward ID consecutively. maybe doesn't matter.
   private final int forwardSize;
   private final int backwardSize;
   /**
@@ -40,12 +39,11 @@ final class ConnectionCostsWriter {
   ConnectionCostsWriter(int forwardSize, int backwardSize) {
     this.forwardSize = forwardSize;
     this.backwardSize = backwardSize;
-    this.costs = ByteBuffer.allocateDirect(2 * backwardSize * forwardSize);
+    this.costs = new short[backwardSize][forwardSize];
   }
   
   public void add(int forwardId, int backwardId, int cost) {
-    int offset = (backwardId * forwardSize + forwardId) * 2;
-    costs.putShort(offset, (short) cost);
+    this.costs[backwardId][forwardId] = (short)cost;
   }
   
   public void write(Path baseDir) throws IOException {
@@ -58,11 +56,14 @@ final class ConnectionCostsWriter {
       out.writeVInt(forwardSize);
       out.writeVInt(backwardSize);
       int last = 0;
-      for (int i = 0; i < costs.limit() / 2; i++) {
-        short cost = costs.getShort(i * 2);
-        int delta = (int) cost - last;
-        out.writeZInt(delta);
-        last = cost;
+      assert costs.length == backwardSize;
+      for (short[] a : costs) {
+        assert a.length == forwardSize;
+        for (short cost : a) {
+          int delta = (int) cost - last;
+          out.writeZInt(delta);
+          last = cost;
+        }
       }
     }
   }

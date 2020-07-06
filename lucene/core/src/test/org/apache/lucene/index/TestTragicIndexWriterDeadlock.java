@@ -107,7 +107,7 @@ public class TestTragicIndexWriterDeadlock extends LuceneTestCase {
     CountDownLatch done = new CountDownLatch(1);
     ConcurrentMergeScheduler cms = new ConcurrentMergeScheduler() {
         @Override
-        protected void doMerge(MergeSource mergeSource, MergePolicy.OneMerge merge) throws IOException {
+        protected void doMerge(IndexWriter writer, MergePolicy.OneMerge merge) throws IOException {
           // let merge takes forever, until commit thread is stalled
           try {
             done.await();
@@ -115,7 +115,7 @@ public class TestTragicIndexWriterDeadlock extends LuceneTestCase {
             Thread.currentThread().interrupt();
             throw new RuntimeException(ie);
           }
-          super.doMerge(mergeSource, merge);
+          super.doMerge(writer, merge);
         }
 
         @Override
@@ -125,7 +125,7 @@ public class TestTragicIndexWriterDeadlock extends LuceneTestCase {
         }
 
         @Override
-        protected void handleMergeException(Throwable exc) {
+        protected void handleMergeException(Directory dir, Throwable exc) {
         }
       };
 
@@ -138,7 +138,7 @@ public class TestTragicIndexWriterDeadlock extends LuceneTestCase {
 
     final IndexWriter w = new IndexWriter(dir, iwc) {
       @Override
-      protected void mergeSuccess(MergePolicy.OneMerge merge) {
+      void mergeSuccess(MergePolicy.OneMerge merge) {
         // tragedy strikes!
         throw new OutOfMemoryError();
       }

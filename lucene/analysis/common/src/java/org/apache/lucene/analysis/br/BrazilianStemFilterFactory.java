@@ -49,11 +49,6 @@ public class BrazilianStemFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public BrazilianStemFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public BrazilianStemFilter create(TokenStream in) {
     return new BrazilianStemFilter(in);

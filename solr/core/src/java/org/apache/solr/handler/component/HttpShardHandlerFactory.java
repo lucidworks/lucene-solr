@@ -68,11 +68,10 @@ import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SolrInfoBean;
 import org.apache.solr.metrics.SolrMetricManager;
 import org.apache.solr.metrics.SolrMetricProducer;
-import org.apache.solr.metrics.SolrMetricsContext;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.security.HttpClientBuilderPlugin;
 import org.apache.solr.update.UpdateShardHandlerConfig;
-import org.apache.solr.common.util.SolrNamedThreadFactory;
+import org.apache.solr.util.DefaultSolrThreadFactory;
 import org.apache.solr.util.stats.InstrumentedHttpListenerFactory;
 import org.apache.solr.util.stats.MetricUtils;
 import org.slf4j.Logger;
@@ -90,9 +89,16 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
   //
   // Consider CallerRuns policy and a lower max threads to throttle
   // requests at some point (or should we simply return failure?)
-  //
-  // This executor is initialized in the init method
-  private ExecutorService commExecutor;
+  private ExecutorService commExecutor = new ExecutorUtil.MDCAwareThreadPoolExecutor(
+      0,
+      Integer.MAX_VALUE,
+      5, TimeUnit.SECONDS, // terminate idle threads after 5 sec
+      new SynchronousQueue<>(),  // directly hand off tasks
+      new DefaultSolrThreadFactory("httpShardExecutor"),
+      // the Runnable added to this executor handles all exceptions so we disable stack trace collection as an optimization
+      // see SOLR-11880 for more details
+      false
+  );
 
   protected volatile Http2SolrClient defaultClient;
   protected InstrumentedHttpListenerFactory httpListenerFactory;
@@ -106,7 +112,6 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
   float permittedLoadBalancerRequestsMaximumFraction = 1.0f;
   boolean accessPolicy = false;
   private WhitelistHostChecker whitelistHostChecker = null;
-  private SolrMetricsContext solrMetricsContext;
 
   private String scheme = null;
 
@@ -166,7 +171,7 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
     // a little hack for backward-compatibility when we are moving from apache http client to jetty client
     return new HttpShardHandler(this, null) {
       @Override
-      protected NamedList<Object> request(String url, @SuppressWarnings({"rawtypes"})SolrRequest req) throws IOException, SolrServerException {
+      protected NamedList<Object> request(String url, SolrRequest req) throws IOException, SolrServerException {
         try (SolrClient client = new HttpSolrClient.Builder(url).withHttpClient(httpClient).build()) {
           return client.request(req);
         }
@@ -212,8 +217,7 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
     }
   }
 
-  @SuppressWarnings({"unchecked"})
-  private void initReplicaListTransformers(@SuppressWarnings({"rawtypes"})NamedList routingConfig) {
+  private void initReplicaListTransformers(NamedList routingConfig) {
     String defaultRouting = null;
     ReplicaListTransformerFactory stableRltFactory = null;
     ReplicaListTransformerFactory defaultRltFactory;
@@ -254,7 +258,6 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
   @Override
   public void init(PluginInfo info) {
     StringBuilder sb = new StringBuilder();
-    @SuppressWarnings({"rawtypes"})
     NamedList args = info.initArgs;
     this.scheme = getParameter(args, INIT_URL_SCHEME, null,sb);
     if(StringUtils.endsWith(this.scheme, "://")) {
@@ -301,10 +304,7 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
         this.maximumPoolSize,
         this.keepAliveTime, TimeUnit.SECONDS,
         blockingQueue,
-        new SolrNamedThreadFactory("httpShardExecutor"),
-        // the Runnable added to this executor handles all exceptions so we disable stack trace collection as an optimization
-        // see SOLR-11880 for more details
-        false
+        new DefaultSolrThreadFactory("httpShardExecutor")
     );
 
     this.httpListenerFactory = new InstrumentedHttpListenerFactory(this.metricNameStrategy);
@@ -332,10 +332,9 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
     clientBuilderPlugin.setup(defaultClient);
   }
 
-  protected <T> T getParameter(@SuppressWarnings({"rawtypes"})NamedList initArgs, String configKey, T defaultValue, StringBuilder sb) {
+  protected <T> T getParameter(NamedList initArgs, String configKey, T defaultValue, StringBuilder sb) {
     T toReturn = defaultValue;
     if (initArgs != null) {
-      @SuppressWarnings({"unchecked"})
       T temp = (T) initArgs.get(configKey);
       toReturn = (temp != null) ? temp : defaultValue;
     }
@@ -359,16 +358,6 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
         }
       }
     }
-    try {
-      SolrMetricProducer.super.close();
-    } catch (Exception e) {
-      log.warn("Exception closing.", e);
-    }
-  }
-
-  @Override
-  public SolrMetricsContext getSolrMetricsContext() {
-    return solrMetricsContext;
   }
 
   /**
@@ -411,7 +400,6 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
   protected ReplicaListTransformer getReplicaListTransformer(final SolrQueryRequest req) {
     final SolrParams params = req.getParams();
     final SolrCore core = req.getCore(); // explicit check for null core (temporary?, for tests)
-    @SuppressWarnings("resource")
     ZkController zkController = core == null ? null : core.getCoreContainer().getZkController();
     if (zkController != null) {
       return requestReplicaListTransformerGenerator.getReplicaListTransformer(
@@ -451,12 +439,11 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
   }
 
   @Override
-  public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
-    solrMetricsContext = parentContext.getChildContext(this);
+  public void initializeMetrics(SolrMetricManager manager, String registry, String tag, String scope) {
     String expandedScope = SolrMetricManager.mkName(scope, SolrInfoBean.Category.QUERY.name());
-    httpListenerFactory.initializeMetrics(solrMetricsContext, expandedScope);
+    httpListenerFactory.initializeMetrics(manager, registry, tag, expandedScope);
     commExecutor = MetricUtils.instrumentedExecutorService(commExecutor, null,
-        solrMetricsContext.getMetricRegistry(),
+        manager.registry(registry),
         SolrMetricManager.mkName("httpShardExecutor", expandedScope, "threadPool"));
   }
 
@@ -553,8 +540,7 @@ public class HttpShardHandlerFactory extends ShardHandlerFactory implements org.
           throw new SolrException(ErrorCode.BAD_REQUEST, "Invalid URL syntax in \"shards\" parameter: " + shardsParamValue);
         }
         if (!localWhitelistHosts.contains(url.getHost() + ":" + url.getPort())) {
-          log.warn("The '{}' parameter value '{}' contained value(s) not on the shards whitelist ({}), shardUrl: '{}'"
-              , ShardParams.SHARDS, shardsParamValue, localWhitelistHosts, shardUrl);
+          log.warn("The '"+ShardParams.SHARDS+"' parameter value '"+shardsParamValue+"' contained value(s) not on the shards whitelist ("+localWhitelistHosts+"), shardUrl:" + shardUrl);
           throw new SolrException(ErrorCode.FORBIDDEN,
               "The '"+ShardParams.SHARDS+"' parameter value '"+shardsParamValue+"' contained value(s) not on the shards whitelist. shardUrl:" + shardUrl + "." +
                   HttpShardHandlerFactory.SET_SOLR_DISABLE_SHARDS_WHITELIST_CLUE);

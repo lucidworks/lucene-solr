@@ -1,6 +1,7 @@
 = Solr Upgrade Notes
-:page-children: major-changes-in-solr-9, major-changes-in-solr-8, major-changes-in-solr-7, major-changes-from-solr-5-to-solr-6
-:toclevels: 3
+:page-children: major-changes-in-solr-8, major-changes-in-solr-7, major-changes-from-solr-5-to-solr-6
+:page-toclevels: 3
+:page-tocclass: right
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -29,10 +30,6 @@ file found in your Solr package. That file includes all the changes and updates
 that may effect your existing implementation.
 
 Detailed steps for upgrading a Solr cluster are in the section <<upgrading-a-solr-cluster.adoc#upgrading-a-solr-cluster,Upgrading a Solr Cluster>>.
-
-== Upgrading to 9.x Releases (NOT RELEASED)
-
-// DEVS: please put 9.0 Upgrade Notes in `major-changes-in-solr-9.adoc`!.
 
 == Upgrading to 8.x Releases
 
@@ -93,7 +90,7 @@ Solr now has the ability to run with a Java security manager enabled. To enable 
 
 In Solr 9.0, this will be the default.
 
-// See SOLR-14147: See also the section <<securing-solr.adoc#enable-security-manager,Enable Security Manager>>.
+See also the section <<securing-solr.adoc#enable-security-manager,Enable Security Manager>>.
 
 *Block/Allow Specific IPs*
 

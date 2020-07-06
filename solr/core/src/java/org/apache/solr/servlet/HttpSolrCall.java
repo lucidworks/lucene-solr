@@ -307,6 +307,7 @@ public class HttpSolrCall {
 
     // With a valid core...
     if (core != null) {
+      MDCLoggingContext.setCore(core);
       config = core.getSolrConfig();
       // get or create/cache the parser for the core
       SolrRequestParsers parser = config.getRequestParsers();
@@ -331,7 +332,7 @@ public class HttpSolrCall {
         return; // we are done with a valid handler
       }
     }
-    log.debug("no handler or core retrieved for {}, follow through...", path);
+    log.debug("no handler or core retrieved for " + path + ", follow through...");
 
     action = PASSTHROUGH;
   }
@@ -341,7 +342,7 @@ public class HttpSolrCall {
         SYSTEM_COLL.equals(corename) &&
         "POST".equals(req.getMethod()) &&
         !cores.getZkController().getClusterState().hasCollection(SYSTEM_COLL)) {
-      log.info("Going to auto-create {} collection", SYSTEM_COLL);
+      log.info("Going to auto-create " + SYSTEM_COLL + " collection");
       SolrQueryResponse rsp = new SolrQueryResponse();
       String repFactor = String.valueOf(Math.min(3, cores.getZkController().getClusterState().getLiveNodes().size()));
       cores.getCollectionsHandler().handleRequestBody(new LocalSolrQueryRequest(null,
@@ -477,9 +478,7 @@ public class HttpSolrCall {
       if (headers != null) {
         for (Map.Entry<String, String> e : headers.entrySet()) response.setHeader(e.getKey(), e.getValue());
       }
-      if (log.isDebugEnabled()) {
-        log.debug("USER_REQUIRED {} {}", req.getHeader("Authorization"), req.getUserPrincipal());
-      }
+      log.debug("USER_REQUIRED "+req.getHeader("Authorization")+" "+ req.getUserPrincipal());
       sendError(statusCode,
           "Authentication failed, Response code: " + statusCode);
       if (shouldAudit(EventType.REJECTED)) {
@@ -488,9 +487,7 @@ public class HttpSolrCall {
       return RETURN;
     }
     if (statusCode == AuthorizationResponse.FORBIDDEN.statusCode) {
-      if (log.isDebugEnabled()) {
-        log.debug("UNAUTHORIZED auth header {} context : {}, msg: {}", req.getHeader("Authorization"), context, authResponse.getMessage());
-      }
+      log.debug("UNAUTHORIZED auth header {} context : {}, msg: {}", req.getHeader("Authorization"), context, authResponse.getMessage());
       sendError(statusCode,
           "Unauthorized request, Response code: " + statusCode);
       if (shouldAudit(EventType.UNAUTHORIZED)) {
@@ -617,6 +614,8 @@ public class HttpSolrCall {
         t = t.getCause();
       }
       return RETURN;
+    } finally {
+      MDCLoggingContext.clear();
     }
 
   }
@@ -726,7 +725,7 @@ public class HttpSolrCall {
 
       if (httpEntity != null) {
         if (httpEntity.getContentEncoding() != null)
-          resp.setHeader(httpEntity.getContentEncoding().getName(), httpEntity.getContentEncoding().getValue());
+          resp.setCharacterEncoding(httpEntity.getContentEncoding().getValue());
         if (httpEntity.getContentType() != null) resp.setContentType(httpEntity.getContentType().getValue());
 
         InputStream is = httpEntity.getContent();

@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
+import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import org.apache.http.HttpClientConnection;
 import org.apache.http.HttpException;
@@ -33,8 +34,8 @@ import org.apache.http.client.methods.HttpRequestWrapper;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.protocol.HttpRequestExecutor;
+import org.apache.solr.metrics.SolrMetricManager;
 import org.apache.solr.metrics.SolrMetricProducer;
-import org.apache.solr.metrics.SolrMetricsContext;
 
 import static org.apache.solr.metrics.SolrMetricManager.mkName;
 
@@ -90,9 +91,11 @@ public class InstrumentedHttpRequestExecutor extends HttpRequestExecutor impleme
     KNOWN_METRIC_NAME_STRATEGIES.put("methodOnly", METHOD_ONLY);
   }
 
+  protected MetricRegistry metricsRegistry;
+  protected SolrMetricManager metricManager;
+  protected String registryName;
   protected String scope;
   protected HttpClientMetricNameStrategy nameStrategy;
-  protected SolrMetricsContext solrMetricsContext;
 
   public InstrumentedHttpRequestExecutor(int waitForContinue, HttpClientMetricNameStrategy nameStrategy) {
     super(waitForContinue);
@@ -108,14 +111,9 @@ public class InstrumentedHttpRequestExecutor extends HttpRequestExecutor impleme
   }
 
   @Override
-  public SolrMetricsContext getSolrMetricsContext() {
-    return solrMetricsContext;
-  }
-
-  @Override
   public HttpResponse execute(HttpRequest request, HttpClientConnection conn, HttpContext context) throws IOException, HttpException {
     Timer.Context timerContext = null;
-    if (solrMetricsContext != null) {
+    if (metricsRegistry != null) {
       timerContext = timer(request).time();
     }
     try {
@@ -128,12 +126,14 @@ public class InstrumentedHttpRequestExecutor extends HttpRequestExecutor impleme
   }
 
   private Timer timer(HttpRequest request) {
-    return solrMetricsContext.timer(null, nameStrategy.getNameFor(scope, request));
+    return metricsRegistry.timer(nameStrategy.getNameFor(scope, request));
   }
 
   @Override
-  public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
-    this.solrMetricsContext = parentContext.getChildContext(this);
+  public void initializeMetrics(SolrMetricManager manager, String registry, String tag, String scope) {
+    this.metricManager = manager;
+    this.registryName = registry;
+    this.metricsRegistry = manager.registry(registry);
     this.scope = scope;
   }
 }

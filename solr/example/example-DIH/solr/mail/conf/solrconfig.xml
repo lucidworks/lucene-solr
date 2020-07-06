@@ -35,7 +35,7 @@
        that you fully re-index after changing this setting as it can
        affect both how text is indexed and queried.
   -->
-  <luceneMatchVersion>9.0.0</luceneMatchVersion>
+  <luceneMatchVersion>8.5.1</luceneMatchVersion>
 
   <!-- <lib/> directives can be used to instruct Solr to load any Jars
        identified and use them to resolve any "plugins" specified in
@@ -112,8 +112,8 @@
        wraps solr.StandardDirectoryFactory and caches small files in memory
        for better NRT performance.
 
-       One can force a particular implementation via solr.MMapDirectoryFactory
-       or solr.NIOFSDirectoryFactory.
+       One can force a particular implementation via solr.MMapDirectoryFactory,
+       solr.NIOFSDirectoryFactory, or solr.SimpleFSDirectoryFactory.
 
        solr.RAMDirectoryFactory is memory based and not persistent.
     -->
@@ -376,7 +376,18 @@
 
 
     <!-- Solr Internal Query Caches
-        Starting with Solr 9.0 the default cache implementation used is CaffeineCache.
+
+         There are four implementations of cache available for Solr:
+         LRUCache, based on a synchronized LinkedHashMap, 
+         LFUCache and FastLRUCache, based on a ConcurrentHashMap, and CaffeineCache -
+         a modern and robust cache implementation. Note that in Solr 9.0
+         only CaffeineCache will be available, other implementations are now
+         deprecated.
+
+         FastLRUCache has faster gets and slower puts in single
+         threaded operation and thus is generally faster than LRUCache
+         when the hit ratio of the cache is high (> 75%), and may be
+         faster under other scenarios on multi-cpu systems.
     -->
 
     <!-- Filter Cache
@@ -385,17 +396,20 @@
          unordered sets of *all* documents that match a query.  When a
          new searcher is opened, its caches may be prepopulated or
          "autowarmed" using data from caches in the old searcher.
-         autowarmCount is the number of items to prepopulate.
+         autowarmCount is the number of items to prepopulate.  For
+         LRUCache, the autowarmed items will be the most recently
+         accessed items.
 
          Parameters:
-           class - the SolrCache implementation
+           class - the SolrCache implementation LRUCache or
+               (LRUCache or FastLRUCache)
            size - the maximum number of entries in the cache
            initialSize - the initial capacity (number of entries) of
                the cache.  (see java.util.HashMap)
            autowarmCount - the number of entries to prepopulate from
                and old cache.
       -->
-    <filterCache class="solr.CaffeineCache"
+    <filterCache class="solr.FastLRUCache"
                  size="512"
                  initialSize="512"
                  autowarmCount="0"/>
@@ -405,7 +419,7 @@
          Caches results of searches - ordered lists of document ids
          (DocList) based on a query, a sort, and the range of documents requested.
       -->
-    <queryResultCache class="solr.CaffeineCache"
+    <queryResultCache class="solr.LRUCache"
                      size="512"
                      initialSize="512"
                      autowarmCount="0"/>
@@ -416,14 +430,14 @@
          document).  Since Lucene internal document ids are transient,
          this cache will not be autowarmed.
       -->
-    <documentCache class="solr.CaffeineCache"
+    <documentCache class="solr.LRUCache"
                    size="512"
                    initialSize="512"
                    autowarmCount="0"/>
 
     <!-- custom cache currently used by block join -->
     <cache name="perSegFilter"
-      class="solr.search.CaffeineCache"
+      class="solr.search.LRUCache"
       size="10"
       initialSize="0"
       autowarmCount="10"
@@ -436,7 +450,7 @@
          even if not configured here.
       -->
     <!--
-       <fieldValueCache class="solr.CaffeineCache"
+       <fieldValueCache class="solr.FastLRUCache"
                         size="512"
                         autowarmCount="128"
                         showItems="32" />
@@ -453,7 +467,7 @@
       -->
     <!--
        <cache name="myUserCache"
-              class="solr.CaffeineCache"
+              class="solr.LRUCache"
               size="4096"
               initialSize="1024"
               autowarmCount="1024"

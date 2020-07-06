@@ -282,7 +282,7 @@ public abstract class FieldType extends FieldProperties {
   public IndexableField createField(SchemaField field, Object value) {
     if (!field.indexed() && !field.stored()) {
       if (log.isTraceEnabled())
-        log.trace("Ignoring unindexed/unstored field: {}", field);
+        log.trace("Ignoring unindexed/unstored field: " + field);
       return null;
     }
     
@@ -1185,10 +1185,8 @@ public abstract class FieldType extends FieldProperties {
         List<SimpleOrderedMap<Object>> charFilterProps = new ArrayList<>();
         for (CharFilterFactory charFilterFactory : charFilterFactories) {
           SimpleOrderedMap<Object> props = new SimpleOrderedMap<>();
+          props.add(CLASS_NAME, charFilterFactory.getClassArg());
           factoryArgs = charFilterFactory.getOriginalArgs();
-          if (!factoryArgs.containsKey(TYPE_NAME)) {
-            props.add(CLASS_NAME, charFilterFactory.getClassArg());
-          }
           if (null != factoryArgs) {
             for (Map.Entry<String, String> entry : factoryArgs.entrySet()) {
               String key = entry.getKey();
@@ -1210,10 +1208,8 @@ public abstract class FieldType extends FieldProperties {
 
       SimpleOrderedMap<Object> tokenizerProps = new SimpleOrderedMap<>();
       TokenizerFactory tokenizerFactory = tokenizerChain.getTokenizerFactory();
+      tokenizerProps.add(CLASS_NAME, tokenizerFactory.getClassArg());
       factoryArgs = tokenizerFactory.getOriginalArgs();
-      if (!factoryArgs.containsKey(TYPE_NAME)) {
-        tokenizerProps.add(CLASS_NAME, tokenizerFactory.getClassArg());
-      }
       if (null != factoryArgs) {
         for (Map.Entry<String, String> entry : factoryArgs.entrySet()) {
           String key = entry.getKey();
@@ -1235,10 +1231,8 @@ public abstract class FieldType extends FieldProperties {
         List<SimpleOrderedMap<Object>> filterProps = new ArrayList<>();
         for (TokenFilterFactory filterFactory : filterFactories) {
           SimpleOrderedMap<Object> props = new SimpleOrderedMap<>();
+          props.add(CLASS_NAME, filterFactory.getClassArg());
           factoryArgs = filterFactory.getOriginalArgs();
-          if (!factoryArgs.containsKey(TYPE_NAME)) {
-            props.add(CLASS_NAME, filterFactory.getClassArg());
-          }
           if (null != factoryArgs) {
             for (Map.Entry<String, String> entry : factoryArgs.entrySet()) {
               String key = entry.getKey();

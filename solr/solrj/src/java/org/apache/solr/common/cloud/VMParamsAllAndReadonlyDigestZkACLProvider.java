@@ -19,7 +19,7 @@ package org.apache.solr.common.cloud;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
-
+import java.util.Properties;
 import org.apache.solr.common.StringUtils;
 import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.data.ACL;
@@ -70,10 +70,13 @@ public class VMParamsAllAndReadonlyDigestZkACLProvider extends SecurityAwareZkAC
   }
 
   protected List<ACL> createACLsToAdd(boolean includeReadOnly) {
-    String digestAllUsername = System.getProperty(zkDigestAllUsernameVMParamName);
-    String digestAllPassword = System.getProperty(zkDigestAllPasswordVMParamName);
-    String digestReadonlyUsername = System.getProperty(zkDigestReadonlyUsernameVMParamName);
-    String digestReadonlyPassword = System.getProperty(zkDigestReadonlyPasswordVMParamName);
+     Properties props = VMParamsSingleSetCredentialsDigestZkCredentialsProvider.readCredentialsFile
+      (System.getProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_FILE_VM_PARAM_NAME));
+    
+    String digestAllUsername = props.getProperty(zkDigestAllUsernameVMParamName);
+    String digestAllPassword = props.getProperty(zkDigestAllPasswordVMParamName);
+    String digestReadonlyUsername = props.getProperty(zkDigestReadonlyUsernameVMParamName);
+    String digestReadonlyPassword = props.getProperty(zkDigestReadonlyPasswordVMParamName);
 
     return createACLsToAdd(includeReadOnly,
         digestAllUsername, digestAllPassword,

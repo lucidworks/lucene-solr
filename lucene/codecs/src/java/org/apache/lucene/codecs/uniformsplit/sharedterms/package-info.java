@@ -17,10 +17,11 @@
 
 /**
  * Pluggable term index / block terms dictionary implementations.
- * <p>
+ *
  * Extension of {@link org.apache.lucene.codecs.uniformsplit} with Shared Terms principle:
  * Terms are shared between all fields. It is particularly adapted to index a massive number of fields
  * because all the terms are stored in a single FST dictionary.
+ *
  *   <ul>
  *     <li>Designed to be extensible</li>
  *     <li>Highly reduced on-heap memory usage when dealing with a massive number of fields.</li>

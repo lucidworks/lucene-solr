@@ -182,7 +182,7 @@ public class CoreDescriptor {
    */
   public CoreDescriptor(String name, Path instanceDir, Map<String, String> coreProps,
                         Properties containerProperties, ZkController zkController) {
-    this.instanceDir = instanceDir.toAbsolutePath();
+    this.instanceDir = instanceDir;
 
     originalCoreProperties.setProperty(CORE_NAME, name);
 
@@ -290,7 +290,9 @@ public class CoreDescriptor {
     return defaultProperties.get(CORE_DATADIR).equals(coreProperties.getProperty(CORE_DATADIR));
   }
 
-  /** The core instance directory (absolute). */
+  /**
+   * @return the core instance directory
+   */
   public Path getInstanceDir() {
     return instanceDir;
   }

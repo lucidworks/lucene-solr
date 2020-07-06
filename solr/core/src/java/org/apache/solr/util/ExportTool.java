@@ -73,7 +73,6 @@ import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.common.util.JavaBinCodec;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.SolrNamedThreadFactory;
 import org.apache.solr.common.util.StrUtils;
 import org.noggit.CharArr;
 import org.noggit.JSONWriter;
@@ -351,7 +350,7 @@ public class ExportTool extends SolrCLI.ToolBase {
       fos.close();
 
     }
-    private BiConsumer<String, Object> bic= new BiConsumer<>() {
+    private BiConsumer<String, Object> bic= new BiConsumer<String, Object>() {
       @Override
       public void accept(String s, Object o) {
         try {
@@ -400,9 +399,9 @@ public class ExportTool extends SolrCLI.ToolBase {
       DocCollection coll = stateProvider.getCollection(this.coll);
       Map<String, Slice> m = coll.getSlicesMap();
       producerThreadpool = ExecutorUtil.newMDCAwareFixedThreadPool(m.size(),
-          new SolrNamedThreadFactory("solrcli-exporter-producers"));
+          new DefaultSolrThreadFactory("solrcli-exporter-producers"));
       consumerThreadpool = ExecutorUtil.newMDCAwareFixedThreadPool(1,
-          new SolrNamedThreadFactory("solrcli-exporter-consumer"));
+          new DefaultSolrThreadFactory("solrcli-exporter-consumer"));
       sink.start();
       CountDownLatch consumerlatch = new CountDownLatch(1);
       try {

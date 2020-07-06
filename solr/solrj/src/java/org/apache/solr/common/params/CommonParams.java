@@ -16,6 +16,9 @@
  */
 package org.apache.solr.common.params;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
@@ -162,12 +165,6 @@ public interface CommonParams {
    * Timeout value in milliseconds.  If not set, or the value is &gt;= 0, there is no timeout.
    */
   String TIME_ALLOWED = "timeAllowed";
-
-  /**
-   * The number of hits that need to be counted accurately. If more than {@link #MIN_EXACT_COUNT} documents
-   * match a query, then the value in "numFound" may be an estimate to speedup search.
-   */
-  String MIN_EXACT_COUNT = "minExactCount";
   
   /** 'true' if the header should include the handler name */
   String HEADER_ECHO_HANDLER = "echoHandler";
@@ -199,7 +196,7 @@ public interface CommonParams {
   String OK = "OK";
   String FAILURE = "FAILURE";
 
-  Set<String> ADMIN_PATHS = Set.of(
+  Set<String> ADMIN_PATHS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
       CORES_HANDLER_PATH,
       COLLECTIONS_HANDLER_PATH,
       HEALTH_CHECK_HANDLER_PATH,
@@ -212,7 +209,7 @@ public interface CommonParams {
       AUTOSCALING_PATH,
       AUTOSCALING_HISTORY_PATH,
       AUTOSCALING_DIAGNOSTICS_PATH,
-      AUTOSCALING_SUGGESTIONS_PATH);
+      AUTOSCALING_SUGGESTIONS_PATH)));
   String APISPEC_LOCATION = "apispec/";
   String INTROSPECT = "/_introspect";
 

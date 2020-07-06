@@ -2146,7 +2146,7 @@ public class TestIndexSorting extends LuceneTestCase {
     IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
       iwc.setIndexSort(Sort.RELEVANCE);
     });
-    assertEquals("Cannot sort index with sort field <score>", expected.getMessage());
+    assertEquals("invalid SortField type: must be one of [STRING, INT, FLOAT, LONG, DOUBLE] but got: <score>", expected.getMessage());
   }
 
   // you can't change the index sort on an existing index:
@@ -2498,7 +2498,6 @@ public class TestIndexSorting extends LuceneTestCase {
         System.out.println("  float=" + docValues.floatValue);
         System.out.println("  double=" + docValues.doubleValue);
         System.out.println("  bytes=" + new BytesRef(docValues.bytesValue));
-        System.out.println("  mvf=" + Arrays.toString(docValues.floatValues));
       }
 
       Document doc = new Document();
@@ -2742,7 +2741,7 @@ public class TestIndexSorting extends LuceneTestCase {
         Document doc = new Document();
         doc.add(dvs.get(j));
         IllegalArgumentException exc = expectThrows(IllegalArgumentException.class, () -> w.addDocument(doc));
-        assertThat(exc.getMessage(), containsString("expected field [field] to be "));
+        assertThat(exc.getMessage(), containsString("invalid doc value type"));
         doc.clear();
         doc.add(dvs.get(i));
         w.addDocument(doc);

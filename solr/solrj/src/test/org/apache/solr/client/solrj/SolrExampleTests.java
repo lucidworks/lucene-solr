@@ -42,7 +42,7 @@ import org.apache.solr.client.solrj.embedded.SolrExampleStreamingHttp2Test;
 import org.apache.solr.client.solrj.embedded.SolrExampleStreamingTest.ErrorTrackingConcurrentUpdateSolrClient;
 import org.apache.solr.client.solrj.impl.BinaryResponseParser;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
-import org.apache.solr.client.solrj.impl.BaseHttpSolrClient.RemoteSolrException;
+import org.apache.solr.client.solrj.impl.HttpSolrClient.RemoteSolrException;
 import org.apache.solr.client.solrj.impl.NoOpResponseParser;
 import org.apache.solr.client.solrj.impl.XMLResponseParser;
 import org.apache.solr.client.solrj.request.AbstractUpdateRequest;
@@ -143,9 +143,7 @@ abstract public class SolrExampleTests extends SolrExampleTestsBase
       rsp = getSolrClient().query(new SolrQuery("*:*").setRows(20));
     }
 
-    if (log.isInfoEnabled()) {
-      log.info("time taken to execute {} queries is {} ms", count, timer.getTime());
-    }
+    log.info("time taken to execute {} queries is {} ms",count, timer.getTime());
 
   }
 
@@ -552,9 +550,7 @@ abstract public class SolrExampleTests extends SolrExampleTestsBase
       assertTrue("Unexpected exception message: " + concurrentClient.lastError.getMessage(), 
           concurrentClient.lastError.getMessage().contains("Remote error message: Document contains multiple values for uniqueKey"));
     } else {
-      if (log.isInfoEnabled()) {
-        log.info("Ignoring update test for client: {}", client.getClass().getName());
-      }
+      log.info("Ignoring update test for client:" + client.getClass().getName());
     }
   }
   

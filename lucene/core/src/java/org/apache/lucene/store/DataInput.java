@@ -23,12 +23,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.apache.lucene.util.BitUtil;
+import org.apache.lucene.util.FutureObjects;
 
 /**
  * Abstract base class for performing read operations of Lucene's low-level
@@ -172,7 +172,7 @@ public abstract class DataInput implements Cloneable {
   // TODO: LUCENE-9047: Make the entire DataInput/DataOutput API little endian
   // Then this would just be `readLongs`?
   public void readLELongs(long[] dst, int offset, int length) throws IOException {
-    Objects.checkFromIndexSize(offset, length, dst.length);
+    FutureObjects.checkFromIndexSize(offset, length, dst.length);
     for (int i = 0; i < length; ++i) {
       dst[offset + i] = Long.reverseBytes(readLong());
     }

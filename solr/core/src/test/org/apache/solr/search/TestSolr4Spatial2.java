@@ -17,7 +17,6 @@
 package org.apache.solr.search;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -199,8 +198,8 @@ public class TestSolr4Spatial2 extends SolrTestCaseJ4 {
 
     // a random point using the number of decimal places we support for round-tripping.
     String randPointStr =
-        new BigDecimal(GeoTestUtil.nextLatitude()).setScale(7, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() +
-        "," + new BigDecimal(GeoTestUtil.nextLongitude()).setScale(7, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
+        new BigDecimal(GeoTestUtil.nextLatitude()).setScale(7, BigDecimal.ROUND_HALF_UP).stripTrailingZeros().toPlainString() +
+        "," + new BigDecimal(GeoTestUtil.nextLongitude()).setScale(7, BigDecimal.ROUND_HALF_UP).stripTrailingZeros().toPlainString();
 
     List<RetrievalCombo> combos = Arrays.asList(
         new RetrievalCombo("llp_1_dv_st", ptHighPrecision),
@@ -316,11 +315,8 @@ public class TestSolr4Spatial2 extends SolrTestCaseJ4 {
       assertJQ(sameReq, "/response/numFound==1", "/response/docs/[0]/id=='1'");
 
       // When there are new segments, we accumulate another hit. This tests the cache was not blown away on commit.
-      // (i.e. the cache instance is new but it should've been regenerated from the old one).
       // Checking equality for the first reader's cache key indicates whether the cache should still be valid.
       Object leafKey2 = getFirstLeafReaderKey();
-      // get the current instance of metrics - the old one may not represent the current cache instance
-      cacheMetrics = (MetricsMap) ((SolrMetricManager.GaugeWrapper)h.getCore().getCoreMetricManager().getRegistry().getMetrics().get("CACHE.searcher.perSegSpatialFieldCache_" + fieldName)).getGauge();
       assertEquals(leafKey1.equals(leafKey2) ? "2" : "1", cacheMetrics.getValue().get("cumulative_hits").toString());
     }
 

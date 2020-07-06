@@ -98,7 +98,7 @@ public class OverseerConfigSetMessageHandler implements OverseerMessageHandler {
                 + " expected: " + CONFIGSETS_ACTION_PREFIX);
       }
       operation = operation.substring(CONFIGSETS_ACTION_PREFIX.length());
-      log.info("OverseerConfigSetMessageHandler.processMessage : {}, {}", operation, message);
+      log.info("OverseerConfigSetMessageHandler.processMessage : " + operation + " , " + message.toString());
 
       ConfigSetParams.ConfigSetAction action = ConfigSetParams.ConfigSetAction.get(operation);
       if (action == null) {

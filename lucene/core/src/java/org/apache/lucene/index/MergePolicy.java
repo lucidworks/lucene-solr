@@ -403,14 +403,24 @@ public abstract class MergePolicy {
 
   /** Exception thrown if there are any problems while executing a merge. */
   public static class MergeException extends RuntimeException {
+    private Directory dir;
+
     /** Create a {@code MergeException}. */
-    public MergeException(String message) {
+    public MergeException(String message, Directory dir) {
       super(message);
+      this.dir = dir;
     }
 
     /** Create a {@code MergeException}. */
-    public MergeException(Throwable exc) {
+    public MergeException(Throwable exc, Directory dir) {
       super(exc);
+      this.dir = dir;
+    }
+
+    /** Returns the {@link Directory} of the index that hit
+     *  the exception. */
+    public Directory getDirectory() {
+      return dir;
     }
   }
 
@@ -432,7 +442,7 @@ public abstract class MergePolicy {
   }
   
   /**
-   * Default ratio for compound file system usage. Set to <code>1.0</code>, always use 
+   * Default ratio for compound file system usage. Set to <tt>1.0</tt>, always use 
    * compound file system.
    */
   protected static final double DEFAULT_NO_CFS_RATIO = 1.0;

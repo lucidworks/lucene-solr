@@ -106,11 +106,6 @@ public class ProtectedTermFilterFactory extends ConditionalTokenFilterFactory im
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public ProtectedTermFilterFactory() {
-    throw defaultCtorException();
-  }
-
   private void handleWrappedFilterArgs(Map<String, String> args) {
     LinkedHashMap<String, Map<String, String>> wrappedFilterArgs = new LinkedHashMap<>();
     splitAt(',', wrappedFilters).forEach(filterName -> {          // Format: SPIname[-id]

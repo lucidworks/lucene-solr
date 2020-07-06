@@ -18,7 +18,6 @@ package org.apache.lucene.expressions;
 
 
 import org.apache.lucene.expressions.js.JavascriptCompiler;
-import org.apache.lucene.search.DoubleValuesSource;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.util.LuceneTestCase;
 
@@ -28,8 +27,8 @@ public class TestExpressionSortField extends LuceneTestCase {
     Expression expr = JavascriptCompiler.compile("sqrt(_score) + ln(popularity)");
     
     SimpleBindings bindings = new SimpleBindings();    
-    bindings.add("_score", DoubleValuesSource.SCORES);
-    bindings.add("popularity", DoubleValuesSource.fromIntField("popularity"));
+    bindings.add(new SortField("_score", SortField.Type.SCORE));
+    bindings.add(new SortField("popularity", SortField.Type.INT));
     
     SortField sf = expr.getSortField(bindings, true);
     assertEquals("<expr(sqrt(_score) + ln(popularity))>!", sf.toString());
@@ -39,13 +38,13 @@ public class TestExpressionSortField extends LuceneTestCase {
     Expression expr = JavascriptCompiler.compile("sqrt(_score) + ln(popularity)");
     
     SimpleBindings bindings = new SimpleBindings();    
-    bindings.add("_score", DoubleValuesSource.SCORES);
-    bindings.add("popularity", DoubleValuesSource.fromIntField("popularity"));
+    bindings.add(new SortField("_score", SortField.Type.SCORE));
+    bindings.add(new SortField("popularity", SortField.Type.INT));
     
     SimpleBindings otherBindings = new SimpleBindings();
-    otherBindings.add("_score", DoubleValuesSource.fromLongField("_score"));
-    otherBindings.add("popularity", DoubleValuesSource.fromIntField("popularity"));
-
+    otherBindings.add(new SortField("_score", SortField.Type.LONG));
+    otherBindings.add(new SortField("popularity", SortField.Type.INT));
+    
     SortField sf1 = expr.getSortField(bindings, true);
     
     // different order
@@ -91,9 +90,9 @@ public class TestExpressionSortField extends LuceneTestCase {
     Expression exprH = JavascriptCompiler.compile("b / c + e * g - sqrt(f)");
     // several variables
     Expression exprI = JavascriptCompiler.compile("b / c + e * g");
-
-    bindings.add("_score", DoubleValuesSource.SCORES);
-    bindings.add("intfield", DoubleValuesSource.fromIntField("intfield"));
+    
+    bindings.add(new SortField("_score", SortField.Type.SCORE));
+    bindings.add(new SortField("intfield", SortField.Type.INT));
     bindings.add("a", exprA);
     bindings.add("b", exprB);
     bindings.add("c", exprC);

@@ -28,16 +28,16 @@ import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsWriterBase;
 import org.apache.lucene.codecs.TermStats;
+import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.IndexFileNames;
-import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.store.ByteBuffersDataOutput;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.RAMOutputStream;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
@@ -301,7 +301,7 @@ public class BlockTermsWriter extends FieldsConsumer implements Closeable {
       return pos1;
     }
 
-    private final ByteBuffersDataOutput bytesWriter = ByteBuffersDataOutput.newResettableInstance();
+    private final RAMOutputStream bytesWriter = new RAMOutputStream();
 
     private void flushBlock() throws IOException {
       //System.out.println("BTW.flushBlock seg=" + segment + " pendingCount=" + pendingCount + " fp=" + out.getFilePointer());
@@ -327,8 +327,8 @@ public class BlockTermsWriter extends FieldsConsumer implements Closeable {
         bytesWriter.writeVInt(suffix);
         bytesWriter.writeBytes(pendingTerms[termCount].term.bytes(), commonPrefix, suffix);
       }
-      out.writeVInt(Math.toIntExact(bytesWriter.size()));
-      bytesWriter.copyTo(out);
+      out.writeVInt((int) bytesWriter.getFilePointer());
+      bytesWriter.writeTo(out);
       bytesWriter.reset();
 
       // 3rd pass: write the freqs as byte[] blob
@@ -342,8 +342,8 @@ public class BlockTermsWriter extends FieldsConsumer implements Closeable {
           bytesWriter.writeVLong(state.totalTermFreq-state.docFreq);
         }
       }
-      out.writeVInt(Math.toIntExact(bytesWriter.size()));
-      bytesWriter.copyTo(out);
+      out.writeVInt((int) bytesWriter.getFilePointer());
+      bytesWriter.writeTo(out);
       bytesWriter.reset();
 
       // 4th pass: write the metadata 
@@ -353,8 +353,8 @@ public class BlockTermsWriter extends FieldsConsumer implements Closeable {
         postingsWriter.encodeTerm(bytesWriter, fieldInfo, state, absolute);
         absolute = false;
       }
-      out.writeVInt(Math.toIntExact(bytesWriter.size()));
-      bytesWriter.copyTo(out);
+      out.writeVInt((int) bytesWriter.getFilePointer());
+      bytesWriter.writeTo(out);
       bytesWriter.reset();
 
       lastPrevTerm.copyBytes(pendingTerms[pendingCount-1].term);

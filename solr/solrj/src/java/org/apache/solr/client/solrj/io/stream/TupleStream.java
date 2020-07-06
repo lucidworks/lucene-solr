@@ -51,7 +51,7 @@ import org.apache.solr.common.params.SolrParams;
 public abstract class TupleStream implements Closeable, Serializable, MapWriter {
 
   private static final long serialVersionUID = 1;
-
+  
   private UUID streamNodeId = UUID.randomUUID();
 
   public TupleStream() {
@@ -68,9 +68,9 @@ public abstract class TupleStream implements Closeable, Serializable, MapWriter 
   public abstract Tuple read() throws IOException;
 
   public abstract StreamComparator getStreamSort();
-
+  
   public abstract Explanation toExplanation(StreamFactory factory) throws IOException;
-
+  
   public int getCost() {
     return 0;
   }
@@ -169,10 +169,6 @@ public abstract class TupleStream implements Closeable, Serializable, MapWriter 
           shards.add(sortedReplicas.get(0).getCoreUrl());
         }
       }
-    }
-    Object core = streamContext.get("core");
-    if (streamContext != null && streamContext.isLocal() && core != null) {
-      shards.removeIf(shardUrl -> !shardUrl.contains((CharSequence) core));
     }
 
     return shards;

@@ -46,7 +46,7 @@ import org.slf4j.LoggerFactory;
 public class JWTIssuerConfig {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   static final String PARAM_ISS_NAME = "name";
-  @Deprecated(since = "8.3") // Remove this option at some point
+  @Deprecated // Remove this option at some point
   static final String PARAM_JWK_URL = "jwkUrl";
   static final String PARAM_JWKS_URL = "jwksUrl";
   static final String PARAM_JWK = "jwk";

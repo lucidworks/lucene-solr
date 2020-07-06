@@ -26,6 +26,7 @@ import org.apache.lucene.geo.ShapeTestUtil;
 import org.apache.lucene.geo.XYGeometry;
 import org.apache.lucene.geo.XYLine;
 import org.apache.lucene.geo.XYRectangle;
+import org.apache.lucene.index.PointValues.Relation;
 
 /** random cartesian bounding box, line, and polygon query tests for random generated {@code x, y} points */
 public class TestXYPointShapeQueries extends BaseXYShapeTestCase {
@@ -85,11 +86,20 @@ public class TestXYPointShapeQueries extends BaseXYShapeTestCase {
 
     @Override
     public boolean testComponentQuery(Component2D query, Object shape) {
-      Point point = (Point) shape;
+      Point p = (Point) shape;
+      double lat = encoder.quantizeY(p.y);
+      double lon = encoder.quantizeX(p.x);
       if (queryRelation == QueryRelation.CONTAINS) {
-        return testWithinQuery(query, XYShape.createIndexableFields("dummy", point.x, point.y)) == Component2D.WithinRelation.CANDIDATE;
+        return query.withinTriangle(lon, lat, true, lon, lat, true, lon, lat, true) == Component2D.WithinRelation.CANDIDATE;
       }
-      return testComponentQuery(query, XYShape.createIndexableFields("dummy", point.x, point.y));
+      // for consistency w/ the query we test the point as a triangle
+      Relation r = query.relateTriangle(lon, lat, lon, lat, lon, lat);
+      if (queryRelation == QueryRelation.WITHIN) {
+        return r == Relation.CELL_INSIDE_QUERY;
+      } else if (queryRelation == QueryRelation.DISJOINT) {
+        return r == Relation.CELL_OUTSIDE_QUERY;
+      }
+      return r != Relation.CELL_OUTSIDE_QUERY;
     }
   }
 }

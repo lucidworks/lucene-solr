@@ -74,7 +74,7 @@ import java.util.concurrent.TimeUnit;
 public class ZkTestServer {
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-
+  
   public static File SOLRHOME;
   static {
     try {
@@ -85,10 +85,10 @@ public class ZkTestServer {
       // must override getSolrHome
     }
   }
-
+  
   public static final int TIMEOUT = 45000;
   public static final int TICK_TIME = 1000;
-
+  
   protected final ZKServerMain zkServer = new ZKServerMain();
 
   private volatile Path zkDir;
@@ -96,12 +96,12 @@ public class ZkTestServer {
   private volatile int clientPort;
 
   private volatile Thread zooThread;
-
+  
   private volatile int theTickTime = TICK_TIME;
   // SOLR-12101 - provide defaults to avoid max timeout 20 enforced by our server instance when tick time is 1000
   private volatile int maxSessionTimeout = 90000;
   private volatile int minSessionTimeout = 3000;
-
+  
   protected volatile SolrZkClient rootClient;
   protected volatile SolrZkClient chRootClient;
 
@@ -178,9 +178,7 @@ public class ZkTestServer {
       }
 
       public void updateForFire(WatchedEvent event) {
-        if (log.isDebugEnabled()) {
-          log.debug("Watch fired: {}: {}", desc, event.getPath());
-        }
+        log.debug("Watch fired: {}: {}", desc, event.getPath());
         counters.decrementAndGet(event.getPath());
       }
 
@@ -437,7 +435,7 @@ public class ZkTestServer {
       log.info("Overriding limiter action to: {}", limiterAction);
       getLimiter().setAction(LimitViolationAction.valueOf(limiterAction));
     }
-
+    
     ObjectReleaseTracker.track(this);
   }
 
@@ -448,12 +446,12 @@ public class ZkTestServer {
       log.error("error making rootClient, trying one more time", e);
       rootClient = new SolrZkClient(getZkHost(), TIMEOUT, 30000);
     }
-
+    
     if (solrFormat) {
       tryCleanSolrZkNode();
       makeSolrZkNode();
     }
-
+    
     chRootClient = new SolrZkClient(getZkAddress(), AbstractZkTestCase.TIMEOUT, 30000);
   }
 
@@ -495,7 +493,7 @@ public class ZkTestServer {
   public int getPort() {
     return zkServer.getLocalPort();
   }
-
+  
   public void expire(final long sessionId) {
     zkServer.zooKeeperServer.expire(new Session() {
       @Override
@@ -523,7 +521,7 @@ public class ZkTestServer {
     this.zkDb = zkDb;
     zkServer.zooKeeperServer.setZKDatabase(zkDb);
   }
-
+  
   public void run() throws InterruptedException, IOException {
     run(true);
   }
@@ -561,7 +559,7 @@ public class ZkTestServer {
               } else {
                 this.clientPortAddress = new InetSocketAddress(clientPort);
               }
-              log.info("client port: {}", this.clientPortAddress);
+              log.info("client port:" + this.clientPortAddress);
             }
           };
           try {
@@ -594,7 +592,7 @@ public class ZkTestServer {
         }
         cnt++;
       }
-      log.info("start zk server on port: {}", port);
+      log.info("start zk server on port:" + port);
 
       waitForServerUp(getZkHost(), 30000);
 
@@ -618,11 +616,11 @@ public class ZkTestServer {
       } catch (Exception e) {
         log.error("Exception shutting down ZooKeeper Test Server",e);
       }
-
+      
       if (zkDb != null) {
         zkDb.close();
       }
-
+      
       while (true) {
         try {
           zooThread.join();
@@ -639,7 +637,7 @@ public class ZkTestServer {
     }
     ObjectReleaseTracker.release(this);
   }
-
+  
   public static boolean waitForServerDown(String hp, long timeoutMs) {
     log.info("waitForServerDown: {}", hp);
     final TimeOut timeout = new TimeOut(timeoutMs, TimeUnit.MILLISECONDS, TimeSource.NANO_TIME);
@@ -650,7 +648,7 @@ public class ZkTestServer {
       } catch (IOException e) {
         return true;
       }
-
+      
       if (timeout.hasTimedOut()) {
         throw new RuntimeException("Time out waiting for ZooKeeper shutdown!");
       }
@@ -661,7 +659,7 @@ public class ZkTestServer {
       }
     }
   }
-
+  
   public static boolean waitForServerUp(String hp, long timeoutMs) {
     log.info("waitForServerUp: {}", hp);
     final TimeOut timeout = new TimeOut(timeoutMs, TimeUnit.MILLISECONDS, TimeSource.NANO_TIME);
@@ -673,7 +671,7 @@ public class ZkTestServer {
       } catch (IOException e) {
         e.printStackTrace();
       }
-
+      
       if (timeout.hasTimedOut()) {
         throw new RuntimeException("Time out waiting for ZooKeeper to startup!");
       }
@@ -684,7 +682,7 @@ public class ZkTestServer {
       }
     }
   }
-
+  
   public static class HostPort {
     String host;
     int port;
@@ -707,7 +705,7 @@ public class ZkTestServer {
   public static String send4LetterWord(String host, int port, String cmd)
           throws IOException
   {
-    log.info("connecting to {} {}", host, port);
+    log.info("connecting to " + host + " " + port);
     BufferedReader reader = null;
     try (Socket sock = new Socket(host, port)) {
       OutputStream outstream = sock.getOutputStream();
@@ -730,9 +728,9 @@ public class ZkTestServer {
       }
     }
   }
-
+  
   public static List<HostPort> parseHostPortList(String hplist) {
-    log.info("parse host and port list: {}", hplist);
+    log.info("parse host and port list: " + hplist);
     ArrayList<HostPort> alist = new ArrayList<>();
     for (String hp : hplist.split(",")) {
       int idx = hp.lastIndexOf(':');
@@ -783,7 +781,7 @@ public class ZkTestServer {
   public void setMinSessionTimeout(int minSessionTimeout) {
     this.minSessionTimeout = minSessionTimeout;
   }
-
+  
   void buildZooKeeper(String config,
       String schema) throws Exception {
     buildZooKeeper(SOLRHOME, config, schema);
@@ -805,9 +803,7 @@ public class ZkTestServer {
     File file = new File(solrhome, "collection1"
         + File.separator + "conf" + File.separator + srcName);
     if (!file.exists()) {
-      if (log.isInfoEnabled()) {
-        log.info("skipping {} because it doesn't exist", file.getAbsolutePath());
-      }
+      log.info("skipping " + file.getAbsolutePath() + " because it doesn't exist");
       return;
     }
 
@@ -815,20 +811,18 @@ public class ZkTestServer {
     if (zkChroot != null) {
       destPath = zkChroot + destPath;
     }
-    if (log.isInfoEnabled()) {
-      log.info("put {} to {}", file.getAbsolutePath(), destPath);
-    }
+    log.info("put " + file.getAbsolutePath() + " to " + destPath);
     zkClient.makePath(destPath, file, false, true);
   }
-
+  
   // static to share with distrib test
   public void buildZooKeeper(File solrhome, String config, String schema) throws Exception {
 
     Map<String,Object> props = new HashMap<>();
     props.put("configName", "conf1");
     final ZkNodeProps zkProps = new ZkNodeProps(props);
-
-
+    
+    
     List<Op> ops = new ArrayList<>(2);
     String path = "/collections";
     ops.add(Op.create(path, null, chRootClient.getZkACLProvider().getACLsToAdd(path),  CreateMode.PERSISTENT));
@@ -863,23 +857,23 @@ public class ZkTestServer {
     putConfig("conf1", chRootClient, solrhome, "old_synonyms.txt");
     putConfig("conf1", chRootClient, solrhome, "synonyms.txt");
   }
-
+  
   public void makeSolrZkNode() throws Exception {
     rootClient.makePath("/solr", false, true);
   }
-
+  
   public void tryCleanSolrZkNode() throws Exception {
     tryCleanPath("/solr");
   }
-
+  
   void tryCleanPath(String path) throws Exception {
     if (rootClient.exists(path, true)) {
       rootClient.clean(path);
     }
   }
-
+  
   protected void printLayout() throws Exception {
-    rootClient.printLayoutToStream(System.out);
+    rootClient.printLayoutToStdOut();
   }
 
   public SolrZkClient getZkClient() {

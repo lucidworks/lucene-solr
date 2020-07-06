@@ -40,8 +40,8 @@ import org.apache.solr.client.solrj.cloud.autoscaling.ReplicaInfo;
 import org.apache.solr.client.solrj.cloud.autoscaling.Row;
 import org.apache.solr.client.solrj.cloud.autoscaling.Variable.Type;
 import org.apache.solr.client.solrj.embedded.JettySolrRunner;
-import org.apache.solr.client.solrj.impl.BaseHttpSolrClient;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
+import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.impl.SolrClientCloudManager;
 import org.apache.solr.client.solrj.impl.SolrClientNodeStateProvider;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
@@ -59,7 +59,6 @@ import org.apache.solr.common.util.TimeSource;
 import org.apache.solr.common.util.Utils;
 import org.apache.solr.util.TimeOut;
 import org.junit.After;
-import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.rules.ExpectedException;
 import org.slf4j.Logger;
@@ -81,13 +80,6 @@ public class TestPolicyCloud extends SolrCloudTestCase {
         .configure();
   }
 
-  @Before
-  public void before() throws Exception {
-    // remove default policy
-    String commands =  "{set-cluster-policy : []}";
-    cluster.getSolrClient().request(AutoScalingRequest.create(SolrRequest.METHOD.POST, commands));
-  }
-
   @After
   public void after() throws Exception {
     cluster.deleteAllCollections();
@@ -99,7 +91,7 @@ public class TestPolicyCloud extends SolrCloudTestCase {
     String commands =  "{ set-cluster-policy: [ {cores: '0', node: '#ANY'} ] }"; // disallow replica placement anywhere
     cluster.getSolrClient().request(AutoScalingRequest.create(SolrRequest.METHOD.POST, commands));
     String collectionName = "testCreateCollection";
-    BaseHttpSolrClient.RemoteSolrException exp = expectThrows(BaseHttpSolrClient.RemoteSolrException.class,
+    HttpSolrClient.RemoteSolrException exp = expectThrows(HttpSolrClient.RemoteSolrException.class,
         () -> CollectionAdminRequest.createCollection(collectionName, "conf", 2, 1).process(cluster.getSolrClient()));
 
     assertTrue(exp.getMessage().contains("No node can satisfy the rules"));
@@ -166,9 +158,7 @@ public class TestPolicyCloud extends SolrCloudTestCase {
 
       for (Row row : session.getSortedNodes()) {
         Object val = row.getVal(Type.TOTALDISK.tagName, null);
-        if (log.isInfoEnabled()) {
-          log.info("node: {} , totaldisk : {}, freedisk : {}", row.node, val, row.getVal("freedisk", null));
-        }
+        log.info("node: {} , totaldisk : {}, freedisk : {}", row.node, val, row.getVal("freedisk",null));
         assertTrue(val != null);
 
       }
@@ -355,7 +345,7 @@ public class TestPolicyCloud extends SolrCloudTestCase {
     try {
       solrClient.request(req);
       fail("expected exception");
-    } catch (BaseHttpSolrClient.RemoteExecutionException e) {
+    } catch (HttpSolrClient.RemoteExecutionException e) {
       // expected
       assertTrue(String.valueOf(getObjectByPath(e.getMetaData(),
           false, "error/details[0]/errorMessages[0]")).contains("Invalid metrics: param in"));

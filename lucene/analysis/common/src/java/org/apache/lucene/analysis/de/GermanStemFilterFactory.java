@@ -49,11 +49,6 @@ public class GermanStemFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public GermanStemFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public GermanStemFilter create(TokenStream in) {
     return new GermanStemFilter(in);

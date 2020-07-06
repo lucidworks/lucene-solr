@@ -198,7 +198,7 @@ public final class JapaneseTokenizer extends Tokenizer {
    * @param mode tokenization mode.
    */
   public JapaneseTokenizer(UserDictionary userDictionary, boolean discardPunctuation, Mode mode) {
-    this(DEFAULT_TOKEN_ATTRIBUTE_FACTORY, userDictionary, discardPunctuation, true, mode);
+    this(DEFAULT_TOKEN_ATTRIBUTE_FACTORY, userDictionary, discardPunctuation, false, mode);
   }
 
   /**
@@ -229,7 +229,7 @@ public final class JapaneseTokenizer extends Tokenizer {
          TokenInfoDictionary.getInstance(),
          UnknownDictionary.getInstance(),
          ConnectionCosts.getInstance(),
-         userDictionary, discardPunctuation, true, mode);
+         userDictionary, discardPunctuation, false, mode);
   }
 
   /**

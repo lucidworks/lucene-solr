@@ -63,9 +63,7 @@ public class UtilizeNodeCmd implements OverseerCollectionMessageHandler.Cmd {
     //first look for suggestions if any
     List<Suggester.SuggestionInfo> suggestions = PolicyHelper.getSuggestions(autoScalingConfig, ocmh.overseer.getSolrCloudManager());
     for (Suggester.SuggestionInfo suggestionInfo : suggestions) {
-      if (log.isInfoEnabled()) {
-        log.info("op: {}", suggestionInfo.getOperation());
-      }
+      log.info("op: " + suggestionInfo.getOperation());
       String coll = null;
       List<String> pieces = StrUtils.splitSmart(suggestionInfo.getOperation().getPath(), '/');
       if (pieces.size() > 1) {
@@ -73,7 +71,7 @@ public class UtilizeNodeCmd implements OverseerCollectionMessageHandler.Cmd {
       } else {
         continue;
       }
-      log.info("coll: {}", coll);
+      log.info("coll: " + coll);
       if (suggestionInfo.getOperation() instanceof V2Request) {
         String targetNode = (String) Utils.getObjectByPath(suggestionInfo.getOperation(), true, "command/move-replica/targetNode");
         if (Objects.equals(targetNode, nodeName)) {
@@ -108,9 +106,7 @@ public class UtilizeNodeCmd implements OverseerCollectionMessageHandler.Cmd {
           REPLICA_PROP, request.getParams().get(REPLICA_PROP),
           ASYNC, request.getParams().get(ASYNC)));
     }
-    if (log.isInfoEnabled()) {
-      log.info("total_suggestions: {}", requests.size());
-    }
+    log.info("total_suggestions: {}", requests.size());
     if (requests.size() == 0) {
       PolicyHelper.logState(ocmh.overseer.getSolrCloudManager(), initialsuggester);
     }

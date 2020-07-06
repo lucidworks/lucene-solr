@@ -52,7 +52,7 @@ public class TestKoreanNumberFilterFactory extends BaseTokenStreamTestCase {
   /** Test that bogus arguments result in exception */
   public void testBogusArguments() {
     IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () ->
-        new KoreanNumberFilterFactory(new HashMap<>() {{
+        new KoreanNumberFilterFactory(new HashMap<String, String>() {{
           put("bogusArg", "bogusValue");
         }})
     );

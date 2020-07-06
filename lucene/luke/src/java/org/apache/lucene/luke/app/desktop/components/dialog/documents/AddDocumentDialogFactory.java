@@ -365,7 +365,7 @@ public final class AddDocumentDialogFactory implements DialogOpener.DialogFactor
       }
 
       addDocument(doc);
-      log.info("Added document: {}", doc);
+      log.info("Added document: {}", doc.toString());
     }
 
     @SuppressWarnings("unchecked")

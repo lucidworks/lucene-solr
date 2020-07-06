@@ -19,9 +19,11 @@ package org.apache.lucene.queries.function;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.Set;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.DoubleValues;
 import org.apache.lucene.search.DoubleValuesSource;
@@ -105,13 +107,7 @@ public final class FunctionScoreQuery extends Query {
 
   @Override
   public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
-    ScoreMode sm;
-    if (scoreMode.needsScores() && source.needsScores()) {
-      sm = ScoreMode.COMPLETE;
-    } else {
-      sm = ScoreMode.COMPLETE_NO_SCORES;
-    }
-    Weight inner = in.createWeight(searcher, sm, 1f);
+    Weight inner = in.createWeight(searcher, scoreMode.needsScores() && source.needsScores() ? scoreMode : ScoreMode.COMPLETE_NO_SCORES, 1f);
     if (scoreMode.needsScores() == false)
       return inner;
     return new FunctionScoreWeight(this, inner, source.rewrite(searcher), boost);
@@ -160,6 +156,11 @@ public final class FunctionScoreQuery extends Query {
       this.inner = inner;
       this.valueSource = valueSource;
       this.boost = boost;
+    }
+
+    @Override
+    public void extractTerms(Set<Term> terms) {
+      this.inner.extractTerms(terms);
     }
 
     @Override

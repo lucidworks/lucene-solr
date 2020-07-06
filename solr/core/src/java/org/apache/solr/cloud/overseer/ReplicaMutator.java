@@ -251,7 +251,7 @@ public class ReplicaMutator {
       coreNodeName = ClusterStateMutator.getAssignedCoreNodeName(collection,
           message.getStr(ZkStateReader.NODE_NAME_PROP), message.getStr(ZkStateReader.CORE_NAME_PROP));
       if (coreNodeName != null) {
-        log.debug("node={} is already registered", coreNodeName);
+        log.debug("node=" + coreNodeName + " is already registered");
       } else {
         if (!forceSetState) {
           log.info("Failed to update state because the replica does not exist, {}", message);
@@ -269,7 +269,7 @@ public class ReplicaMutator {
       //get shardId from ClusterState
       sliceName = ClusterStateMutator.getAssignedId(collection, coreNodeName);
       if (sliceName != null) {
-        log.debug("shard={} is already registered", sliceName);
+        log.debug("shard=" + sliceName + " is already registered");
       }
     }
     if (sliceName == null) {
@@ -277,10 +277,10 @@ public class ReplicaMutator {
       if (collectionExists) {
         // use existing numShards
         numShards = collection.getSlices().size();
-        log.debug("Collection already exists with {} = {}", ZkStateReader.NUM_SHARDS_PROP, numShards);
+        log.debug("Collection already exists with " + ZkStateReader.NUM_SHARDS_PROP + "=" + numShards);
       }
       sliceName = Assign.assignShard(collection, numShards);
-      log.info("Assigning new node to shard shard={}", sliceName);
+      log.info("Assigning new node to shard shard=" + sliceName);
     }
 
     Slice slice = collection != null ?  collection.getSlice(sliceName) : null;
@@ -395,9 +395,7 @@ public class ReplicaMutator {
           }
         }
         if (allActive) {
-          if (log.isInfoEnabled()) {
-            log.info("Shard: {} - all {} replicas are active. Finding status of fellow sub-shards", sliceName, slice.getReplicasMap().size());
-          }
+          log.info("Shard: {} - all {} replicas are active. Finding status of fellow sub-shards", sliceName, slice.getReplicasMap().size());
           // find out about other sub shards
           Map<String, Slice> allSlicesCopy = new HashMap<>(collection.getSlicesMap());
           List<Slice> subShardSlices = new ArrayList<>();
@@ -408,9 +406,7 @@ public class ReplicaMutator {
             Slice otherSlice = entry.getValue();
             if (otherSlice.getState() == Slice.State.RECOVERY) {
               if (slice.getParent() != null && slice.getParent().equals(otherSlice.getParent())) {
-                if (log.isInfoEnabled()) {
-                  log.info("Shard: {} - Fellow sub-shard: {} found", sliceName, otherSlice.getName());
-                }
+                log.info("Shard: {} - Fellow sub-shard: {} found", sliceName, otherSlice.getName());
                 // this is a fellow sub shard so check if all replicas are active
                 for (Map.Entry<String, Replica> sliceEntry : otherSlice.getReplicasMap().entrySet()) {
                   if (sliceEntry.getValue().getState() != Replica.State.ACTIVE) {
@@ -418,9 +414,7 @@ public class ReplicaMutator {
                     break outer;
                   }
                 }
-                if (log.isInfoEnabled()) {
-                  log.info("Shard: {} - Fellow sub-shard: {} has all {} replicas active", sliceName, otherSlice.getName(), otherSlice.getReplicasMap().size());
-                }
+                log.info("Shard: {} - Fellow sub-shard: {} has all {} replicas active", sliceName, otherSlice.getName(), otherSlice.getReplicasMap().size());
                 subShardSlices.add(otherSlice);
               }
             }
@@ -453,8 +447,8 @@ public class ReplicaMutator {
                   isLeaderSame = false;
                 }
               } catch (Exception e) {
-                log.warn("Error occurred while checking if parent shard node is still live with the same zk session id. {}"
-                    , "We cannot switch shard states at this time.", e);
+                log.warn("Error occurred while checking if parent shard node is still live with the same zk session id. " +
+                    "We cannot switch shard states at this time.", e);
                 return collection; // we aren't going to make any changes right now
               }
             }
@@ -472,14 +466,10 @@ public class ReplicaMutator {
                 String lastTimeStr = subShardSlice.getStr(ZkStateReader.STATE_TIMESTAMP_PROP);
                 if (lastTimeStr != null) {
                   long start = Long.parseLong(lastTimeStr);
-                  if (log.isInfoEnabled()) {
-                    log.info("TIMINGS: Sub-shard {} recovered in {} ms", subShardSlice.getName(),
-                        TimeUnit.MILLISECONDS.convert(now - start, TimeUnit.NANOSECONDS));
-                  }
+                  log.info("TIMINGS: Sub-shard " + subShardSlice.getName() + " recovered in " +
+                      TimeUnit.MILLISECONDS.convert(now - start, TimeUnit.NANOSECONDS) + " ms");
                 } else {
-                  if (log.isInfoEnabled()) {
-                    log.info("TIMINGS Sub-shard {} not available: {}", subShardSlice.getName(), subShardSlice);
-                  }
+                  log.info("TIMINGS Sub-shard " + subShardSlice.getName() + " not available: " + subShardSlice);
                 }
               }
             } else {
@@ -493,8 +483,8 @@ public class ReplicaMutator {
             try {
               SplitShardCmd.unlockForSplit(cloudManager, collection.getName(), parentSliceName);
             } catch (Exception e) {
-              log.warn("Failed to unlock shard after {} successful split: {} / {}"
-                  , (isLeaderSame ? "" : "un"), collection.getName(), parentSliceName);
+              log.warn("Failed to unlock shard after " + (isLeaderSame ? "" : "un") + "successful split: {} / {}",
+                  collection.getName(), parentSliceName);
             }
             ZkNodeProps m = new ZkNodeProps(propMap);
             return new SliceMutator(cloudManager).updateShardState(prevState, m).collection;

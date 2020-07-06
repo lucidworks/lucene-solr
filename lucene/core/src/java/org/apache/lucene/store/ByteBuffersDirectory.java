@@ -159,12 +159,6 @@ public final class ByteBuffersDirectory extends BaseDirectory {
     return file.length();
   }
 
-  public boolean fileExists(String name) {
-    ensureOpen();
-    FileEntry file = files.get(name);
-    return file != null;
-  }
-
   @Override
   public IndexOutput createOutput(String name, IOContext context) throws IOException {
     ensureOpen();

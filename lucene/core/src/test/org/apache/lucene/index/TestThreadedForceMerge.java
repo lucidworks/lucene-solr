@@ -137,7 +137,10 @@ public class TestThreadedForceMerge extends LuceneTestCase {
     writer.close();
   }
 
-  /* */
+  /*
+    Run above stress test against RAMDirectory and then
+    FSDirectory.
+  */
   public void testThreadedForceMerge() throws Exception {
     Directory directory = newDirectory();
     runTest(random(), directory);

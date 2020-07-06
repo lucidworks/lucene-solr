@@ -344,10 +344,6 @@ public abstract class ShardSearchingTestBase extends LuceneTestCase {
           } else {
             shardHits[nodeID] = searchNode(nodeID, nodeVersions, query, null, numHits, null);
           }
-
-          for (int i = 0; i < shardHits[nodeID].scoreDocs.length; i++) {
-            shardHits[nodeID].scoreDocs[i].shardIndex = nodeID;
-          }
         }
 
         // Merge:
@@ -402,10 +398,6 @@ public abstract class ShardSearchingTestBase extends LuceneTestCase {
           } else {
             shardHits[nodeID] = searchNode(nodeID, nodeVersions, query, null, numHits, shardAfter);
           }
-
-          for (int i = 0; i < shardHits[nodeID].scoreDocs.length; i++) {
-            shardHits[nodeID].scoreDocs[i].shardIndex = nodeID;
-          }
           //System.out.println("  node=" + nodeID + " totHits=" + shardHits[nodeID].totalHits);
         }
 
@@ -428,10 +420,6 @@ public abstract class ShardSearchingTestBase extends LuceneTestCase {
             shardHits[nodeID] = localSearch(query, numHits, sort);
           } else {
             shardHits[nodeID] = (TopFieldDocs) searchNode(nodeID, nodeVersions, query, sort, numHits, null);
-          }
-
-          for (int i = 0; i < shardHits[nodeID].scoreDocs.length; i++) {
-            shardHits[nodeID].scoreDocs[i].shardIndex = nodeID;
           }
         }
 
@@ -550,7 +538,8 @@ public abstract class ShardSearchingTestBase extends LuceneTestCase {
   private final class ChangeIndices extends Thread {
     @Override
     public void run() {
-      try (final LineFileDocs docs = new LineFileDocs(random())) {
+      try {
+        final LineFileDocs docs = new LineFileDocs(random());
         int numDocs = 0;
         while (System.nanoTime() < endTimeNanos) {
           final int what = random().nextInt(3);

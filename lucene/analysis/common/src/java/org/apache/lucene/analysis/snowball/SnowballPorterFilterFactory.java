@@ -27,7 +27,7 @@ import org.apache.lucene.analysis.miscellaneous.SetKeywordMarkerFilter;
 import org.apache.lucene.analysis.util.ResourceLoader;
 import org.apache.lucene.analysis.util.ResourceLoaderAware;
 import org.apache.lucene.analysis.util.TokenFilterFactory;
-import org.tartarus.snowball.SnowballStemmer;
+import org.tartarus.snowball.SnowballProgram;
 
 /**
  * Factory for {@link SnowballFilter}, with configurable language
@@ -54,7 +54,7 @@ public class SnowballPorterFilterFactory extends TokenFilterFactory implements R
 
   private final String language;
   private final String wordFiles;
-  private Class<? extends SnowballStemmer> stemClass;
+  private Class<? extends SnowballProgram> stemClass;
   private CharArraySet protectedWords = null;
   
   /** Creates a new SnowballPorterFilterFactory */
@@ -67,15 +67,10 @@ public class SnowballPorterFilterFactory extends TokenFilterFactory implements R
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public SnowballPorterFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public void inform(ResourceLoader loader) throws IOException {
     String className = "org.tartarus.snowball.ext." + language + "Stemmer";
-    stemClass = loader.newInstance(className, SnowballStemmer.class).getClass();
+    stemClass = loader.newInstance(className, SnowballProgram.class).getClass();
 
     if (wordFiles != null) {
       protectedWords = getWordSet(loader, wordFiles, false);
@@ -84,9 +79,9 @@ public class SnowballPorterFilterFactory extends TokenFilterFactory implements R
 
   @Override
   public TokenFilter create(TokenStream input) {
-    SnowballStemmer program;
+    SnowballProgram program;
     try {
-      program = stemClass.getConstructor().newInstance();
+      program = stemClass.newInstance();
     } catch (Exception e) {
       throw new RuntimeException("Error instantiating stemmer for language " + language + "from class " + stemClass, e);
     }

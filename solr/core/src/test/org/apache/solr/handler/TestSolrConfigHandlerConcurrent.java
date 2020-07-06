@@ -88,7 +88,7 @@ public class TestSolrConfigHandlerConcurrent extends AbstractFullDistribZkTestBa
     for (List e : collectErrors) {
       if(!e.isEmpty()){
         success = false;
-        log.error("{}", e);
+        log.error(e.toString());
       }
 
     }

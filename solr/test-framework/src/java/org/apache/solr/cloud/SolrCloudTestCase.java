@@ -347,9 +347,7 @@ public class SolrCloudTestCase extends SolrTestCaseJ4 {
     return (liveNodes, collectionState) -> {
       if (collectionState == null)
         return false;
-      if (log.isInfoEnabled()) {
-        log.info("active slice count: {} expected: {}", collectionState.getActiveSlices().size(), expectedShards);
-      }
+      log.info("active slice count: " + collectionState.getActiveSlices().size() + " expected:" + expectedShards);
       if (collectionState.getActiveSlices().size() != expectedShards)
         return false;
       return compareActiveReplicaCountsForShards(expectedReplicas, liveNodes, collectionState);
@@ -391,7 +389,7 @@ public class SolrCloudTestCase extends SolrTestCaseJ4 {
       }
     }
 
-    log.info("active replica count: {} expected replica count: {}", activeReplicas, expectedReplicas);
+    log.info("active replica count: " + activeReplicas + " expected replica count: " + expectedReplicas);
 
     return activeReplicas == expectedReplicas;
 

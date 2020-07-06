@@ -68,20 +68,6 @@
 
     <!-- NOTE: please insert releases in numeric order, NOT chronologically. -->
     <release>
-         <Version>
-           <name>solr-8.5.2</name>
-           <created>2020-05-26</created>
-           <revision>8.5.2</revision>
-         </Version>
-    </release>
-    <release>
-         <Version>
-           <name>solr-8.5.1</name>
-           <created>2020-04-16</created>
-           <revision>8.5.1</revision>
-         </Version>
-    </release>
-    <release>
       <Version>
         <name>solr-8.5.0</name>
         <created>2020-03-24</created>
@@ -142,13 +128,6 @@
         <name>solr-8.0.0</name>
         <created>2019-03-14</created>
         <revision>8.0.0</revision>
-      </Version>
-    </release>
-    <release>
-      <Version>
-        <name>solr-7.7.3</name>
-        <created>2020-04-28</created>
-        <revision>7.7.3</revision>
       </Version>
     </release>
     <release>
@@ -245,7 +224,7 @@
     <release>
       <Version>
         <name>solr-6.6.6</name>
-        <created>2018-04-05</created>
+        <created>2019-04-05</created>
         <revision>6.6.6</revision>
       </Version>
     </release>

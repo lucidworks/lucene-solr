@@ -16,8 +16,6 @@
  */
 package org.apache.lucene.util;
 
-import java.util.Arrays;
-
 /** Represents byte[], as a slice (offset + length) into an
  *  existing byte[].  The {@link #bytes} member should never be null;
  *  use {@link #EMPTY_BYTES} if necessary.
@@ -95,7 +93,7 @@ public final class BytesRef implements Comparable<BytesRef>, Cloneable {
    * @lucene.internal
    */
   public boolean bytesEquals(BytesRef other) {
-    return Arrays.equals(this.bytes, this.offset, this.offset + this.length, 
+    return FutureArrays.equals(this.bytes, this.offset, this.offset + this.length, 
                                other.bytes, other.offset, other.offset + other.length);
   }
 
@@ -159,7 +157,7 @@ public final class BytesRef implements Comparable<BytesRef>, Cloneable {
   /** Unsigned byte order comparison */
   @Override
   public int compareTo(BytesRef other) {
-    return Arrays.compareUnsigned(this.bytes, this.offset, this.offset + this.length, 
+    return FutureArrays.compareUnsigned(this.bytes, this.offset, this.offset + this.length, 
                                         other.bytes, other.offset, other.offset + other.length);
   }
     

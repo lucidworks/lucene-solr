@@ -19,6 +19,7 @@ package org.apache.lucene.codecs.mockrandom;
 import java.io.IOException;
 import java.util.Random;
 
+import com.carrotsearch.randomizedtesting.generators.RandomPicks;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.FieldsProducer;
@@ -293,7 +294,7 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
 
       boolean success = false;
       try {
-        fields = new BlockTreeTermsReader(postingsReader, state);
+        fields = new BlockTreeTermsReader(postingsReader, state, RandomPicks.randomFrom(random, BlockTreeTermsReader.FSTLoadMode.values()));
         success = true;
       } finally {
         if (!success) {

@@ -41,6 +41,7 @@ import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.FutureArrays;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.NumericUtils;
@@ -818,7 +819,7 @@ public class TestBKD extends LuceneTestCase {
           random().nextBytes(queryMin[dim]);
           queryMax[dim] = new byte[numBytesPerDim];
           random().nextBytes(queryMax[dim]);
-          if (Arrays.compareUnsigned(queryMin[dim], 0, numBytesPerDim, queryMax[dim], 0, numBytesPerDim) > 0) {
+          if (FutureArrays.compareUnsigned(queryMin[dim], 0, numBytesPerDim, queryMax[dim], 0, numBytesPerDim) > 0) {
             byte[] x = queryMin[dim];
             queryMin[dim] = queryMax[dim];
             queryMax[dim] = x;
@@ -837,8 +838,8 @@ public class TestBKD extends LuceneTestCase {
             public void visit(int docID, byte[] packedValue) {
               //System.out.println("visit check docID=" + docID);
               for(int dim=0;dim<numIndexDims;dim++) {
-                if (Arrays.compareUnsigned(packedValue, dim * numBytesPerDim, dim * numBytesPerDim + numBytesPerDim, queryMin[dim], 0, numBytesPerDim) < 0 ||
-                    Arrays.compareUnsigned(packedValue, dim * numBytesPerDim, dim * numBytesPerDim + numBytesPerDim, queryMax[dim], 0, numBytesPerDim) > 0) {
+                if (FutureArrays.compareUnsigned(packedValue, dim * numBytesPerDim, dim * numBytesPerDim + numBytesPerDim, queryMin[dim], 0, numBytesPerDim) < 0 ||
+                    FutureArrays.compareUnsigned(packedValue, dim * numBytesPerDim, dim * numBytesPerDim + numBytesPerDim, queryMax[dim], 0, numBytesPerDim) > 0) {
                   //System.out.println("  no");
                   return;
                 }
@@ -874,11 +875,11 @@ public class TestBKD extends LuceneTestCase {
             public Relation compare(byte[] minPacked, byte[] maxPacked) {
               boolean crosses = false;
               for(int dim=0;dim<numIndexDims;dim++) {
-                if (Arrays.compareUnsigned(maxPacked, dim * numBytesPerDim, dim * numBytesPerDim + numBytesPerDim, queryMin[dim], 0, numBytesPerDim) < 0 ||
-                    Arrays.compareUnsigned(minPacked, dim * numBytesPerDim, dim * numBytesPerDim + numBytesPerDim, queryMax[dim], 0, numBytesPerDim) > 0) {
+                if (FutureArrays.compareUnsigned(maxPacked, dim * numBytesPerDim, dim * numBytesPerDim + numBytesPerDim, queryMin[dim], 0, numBytesPerDim) < 0 ||
+                    FutureArrays.compareUnsigned(minPacked, dim * numBytesPerDim, dim * numBytesPerDim + numBytesPerDim, queryMax[dim], 0, numBytesPerDim) > 0) {
                   return Relation.CELL_OUTSIDE_QUERY;
-                } else if (Arrays.compareUnsigned(minPacked, dim * numBytesPerDim, dim * numBytesPerDim + numBytesPerDim, queryMin[dim], 0, numBytesPerDim) < 0 ||
-                           Arrays.compareUnsigned(maxPacked, dim * numBytesPerDim, dim * numBytesPerDim + numBytesPerDim, queryMax[dim], 0, numBytesPerDim) > 0) {
+                } else if (FutureArrays.compareUnsigned(minPacked, dim * numBytesPerDim, dim * numBytesPerDim + numBytesPerDim, queryMin[dim], 0, numBytesPerDim) < 0 ||
+                           FutureArrays.compareUnsigned(maxPacked, dim * numBytesPerDim, dim * numBytesPerDim + numBytesPerDim, queryMax[dim], 0, numBytesPerDim) > 0) {
                   crosses = true;
                 }
               }
@@ -896,8 +897,8 @@ public class TestBKD extends LuceneTestCase {
           boolean matches = true;
           for(int dim=0;dim<numIndexDims;dim++) {
             byte[] x = docValues[ord][dim];
-            if (Arrays.compareUnsigned(x, 0, numBytesPerDim, queryMin[dim], 0, numBytesPerDim) < 0 ||
-                Arrays.compareUnsigned(x, 0, numBytesPerDim, queryMax[dim], 0, numBytesPerDim) > 0) {
+            if (FutureArrays.compareUnsigned(x, 0, numBytesPerDim, queryMin[dim], 0, numBytesPerDim) < 0 ||
+                FutureArrays.compareUnsigned(x, 0, numBytesPerDim, queryMax[dim], 0, numBytesPerDim) > 0) {
               matches = false;
               break;
             }
@@ -1151,7 +1152,7 @@ public class TestBKD extends LuceneTestCase {
           previous = new byte[numDataDims * numBytesPerDim];
           System.arraycopy(packedValue, 0, previous, 0, numDataDims * numBytesPerDim);
         } else {
-          int mismatch = Arrays.mismatch(packedValue, previous);
+          int mismatch = FutureArrays.mismatch(packedValue, 0, numDataDims * numBytesPerDim, previous,  0, numDataDims * numBytesPerDim);
           if (mismatch != -1) {
             if (hasChanged == false) {
               hasChanged = true;
@@ -1308,12 +1309,14 @@ public class TestBKD extends LuceneTestCase {
     pointsIn.seek(indexFP);
     BKDReader points = new BKDReader(pointsIn);
 
-    // If all points match, then the point count is numLeaves * maxPointsInLeafNode
-    int numLeaves = numValues / maxPointsInLeafNode;
-    if (numValues % maxPointsInLeafNode != 0) {
-      numLeaves++;
+    int actualMaxPointsInLeafNode = numValues;
+    while (actualMaxPointsInLeafNode > maxPointsInLeafNode) {
+      actualMaxPointsInLeafNode = (actualMaxPointsInLeafNode + 1) / 2;
     }
-    assertEquals(numLeaves * maxPointsInLeafNode,
+
+    // If all points match, then the point count is numLeaves * maxPointsInLeafNode
+    final int numLeaves = Integer.highestOneBit((numValues - 1) / actualMaxPointsInLeafNode) << 1;
+    assertEquals(numLeaves * actualMaxPointsInLeafNode,
         points.estimatePointCount(new IntersectVisitor() {
           @Override
           public void visit(int docID, byte[] packedValue) throws IOException {}
@@ -1353,16 +1356,16 @@ public class TestBKD extends LuceneTestCase {
 
       @Override
       public Relation compare(byte[] minPackedValue, byte[] maxPackedValue) {
-        if (Arrays.compareUnsigned(uniquePointValue, 0, numBytesPerDim, maxPackedValue, 0, numBytesPerDim) > 0 ||
-            Arrays.compareUnsigned(uniquePointValue, 0, numBytesPerDim, minPackedValue, 0, numBytesPerDim) < 0) {
+        if (FutureArrays.compareUnsigned(uniquePointValue, 0, numBytesPerDim, maxPackedValue, 0, numBytesPerDim) > 0 ||
+            FutureArrays.compareUnsigned(uniquePointValue, 0, numBytesPerDim, minPackedValue, 0, numBytesPerDim) < 0) {
           return Relation.CELL_OUTSIDE_QUERY;
         }
         return Relation.CELL_CROSSES_QUERY;
       }
     });
     assertTrue(""+pointCount,
-        pointCount == (maxPointsInLeafNode + 1) / 2 || // common case
-        pointCount == 2*((maxPointsInLeafNode + 1) / 2)); // if the point is a split value
+        pointCount == (actualMaxPointsInLeafNode + 1) / 2 || // common case
+        pointCount == 2*((actualMaxPointsInLeafNode + 1) / 2)); // if the point is a split value
 
     pointsIn.close();
     dir.close();

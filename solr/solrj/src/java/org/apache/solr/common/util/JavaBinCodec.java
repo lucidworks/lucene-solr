@@ -588,14 +588,10 @@ public class JavaBinCodec implements PushWriter {
 
   public SolrDocumentList readSolrDocumentList(DataInputInputStream dis) throws IOException {
     SolrDocumentList solrDocs = new SolrDocumentList();
-    @SuppressWarnings("unchecked")
-    List<Object> list = (List<Object>) readVal(dis);
+    List list = (List) readVal(dis);
     solrDocs.setNumFound((Long) list.get(0));
     solrDocs.setStart((Long) list.get(1));
     solrDocs.setMaxScore((Float) list.get(2));
-    if (list.size() > 3) { //needed for back compatibility
-      solrDocs.setNumFoundExact((Boolean)list.get(3));
-    }
 
     @SuppressWarnings("unchecked")
     List<SolrDocument> l = (List<SolrDocument>) readVal(dis);
@@ -606,11 +602,10 @@ public class JavaBinCodec implements PushWriter {
   public void writeSolrDocumentList(SolrDocumentList docs)
           throws IOException {
     writeTag(SOLRDOCLST);
-    List<Object> l = new ArrayList<>(4);
+    List<Number> l = new ArrayList<>(3);
     l.add(docs.getNumFound());
     l.add(docs.getStart());
     l.add(docs.getMaxScore());
-    l.add(docs.getNumFoundExact());
     writeArray(l);
     writeArray(docs);
   }
@@ -872,11 +867,11 @@ public class JavaBinCodec implements PushWriter {
         if(this == obj) {
           return true;
         }
-        if (obj instanceof Map.Entry<?, ?>) {
-          Entry<?, ?> entry = (Entry<?, ?>) obj;
-          return (this.getKey().equals(entry.getKey()) && this.getValue().equals(entry.getValue()));
+        if(!(obj instanceof Entry)) {
+          return false;
         }
-        return false;
+        Map.Entry<Object, Object> entry = (Entry<Object, Object>) obj;
+        return (this.getKey().equals(entry.getKey()) && this.getValue().equals(entry.getValue()));
       }
     };
   }
@@ -967,7 +962,7 @@ public class JavaBinCodec implements PushWriter {
 
   private Function<ByteArrayUtf8CharSequence, String> getStringProvider() {
     if (stringProvider == null) {
-      stringProvider = new Function<>() {
+      stringProvider = new Function<ByteArrayUtf8CharSequence,String>() {
         final CharArr charArr = new CharArr(8);
         @Override
         public String apply(ByteArrayUtf8CharSequence butf8cs) {

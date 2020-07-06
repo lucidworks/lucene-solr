@@ -40,18 +40,18 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
-import org.apache.lucene.search.DoubleValuesSource;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
-import org.apache.lucene.store.ByteBuffersDirectory;
+import org.apache.lucene.search.SortField;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.RAMDirectory;
 
 
 /** Shows facets aggregation by an expression. */
 public class ExpressionAggregationFacetsExample {
 
-  private final Directory indexDir = new ByteBuffersDirectory();
-  private final Directory taxoDir = new ByteBuffersDirectory();
+  private final Directory indexDir = new RAMDirectory();
+  private final Directory taxoDir = new RAMDirectory();
   private final FacetsConfig config = new FacetsConfig();
 
   /** Empty constructor */
@@ -91,8 +91,8 @@ public class ExpressionAggregationFacetsExample {
     // and its popularity field
     Expression expr = JavascriptCompiler.compile("_score * sqrt(popularity)");
     SimpleBindings bindings = new SimpleBindings();
-    bindings.add("_score", DoubleValuesSource.SCORES); // the score of the document
-    bindings.add("popularity", DoubleValuesSource.fromLongField("popularity")); // the value of the 'popularity' field
+    bindings.add(new SortField("_score", SortField.Type.SCORE)); // the score of the document
+    bindings.add(new SortField("popularity", SortField.Type.LONG)); // the value of the 'popularity' field
 
     // Aggregates the facet values
     FacetsCollector fc = new FacetsCollector(true);

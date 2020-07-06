@@ -58,11 +58,6 @@ public class ElisionFilterFactory extends TokenFilterFactory implements Resource
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public ElisionFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public void inform(ResourceLoader loader) throws IOException {
     if (articlesFile == null) {

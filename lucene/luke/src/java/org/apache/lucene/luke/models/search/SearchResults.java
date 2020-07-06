@@ -19,6 +19,7 @@ package org.apache.lucene.luke.models.search;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -91,7 +92,7 @@ public final class SearchResults {
    * Returns the documents of the current page.
    */
   public List<Doc> getHits() {
-    return List.copyOf(hits);
+    return Collections.unmodifiableList(hits);
   }
 
   /**
@@ -151,7 +152,7 @@ public final class SearchResults {
      * Returns the field data of this document.
      */
     public Map<String, String[]> getFieldValues() {
-      return Map.copyOf(fieldValues);
+      return Collections.unmodifiableMap(fieldValues);
     }
 
     private Doc() {

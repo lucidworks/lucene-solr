@@ -51,7 +51,7 @@ public class TestJapaneseTokenizerFactory extends BaseTokenStreamTestCase {
     TokenStream ts = factory.create(newAttributeFactory());
     ((Tokenizer)ts).setReader(new StringReader("シニアソフトウェアエンジニア"));
     assertTokenStreamContents(ts,
-                              new String[] { "シニア", "ソフトウェア", "エンジニア" }
+                              new String[] { "シニア", "シニアソフトウェアエンジニア", "ソフトウェア", "エンジニア" }
     );
   }
 
@@ -112,15 +112,15 @@ public class TestJapaneseTokenizerFactory extends BaseTokenStreamTestCase {
   /**
    * Test discarding compound (original) token
    */
-  public void testPreserveCompoundToken() throws IOException {
+  public void testDiscardCompoundToken() throws IOException {
     Map<String,String> args = new HashMap<>();
-    args.put("discardCompoundToken", "false");
+    args.put("discardCompoundToken", "true");
     JapaneseTokenizerFactory factory = new JapaneseTokenizerFactory(args);
     factory.inform(new StringMockResourceLoader(""));
     TokenStream ts = factory.create(newAttributeFactory());
-    ((Tokenizer)ts).setReader(new StringReader("シニアソフトウェアエンジニア"));
+    ((Tokenizer)ts).setReader(new StringReader("株式会社フーの上場のお知らせ"));
     assertTokenStreamContents(ts,
-        new String[] { "シニア", "シニアソフトウェアエンジニア", "ソフトウェア", "エンジニア" }
+        new String[] { "株式", "会社", "フー", "の", "上場", "の", "お知らせ"}
     );
   }
 

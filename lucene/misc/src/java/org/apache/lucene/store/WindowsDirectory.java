@@ -18,7 +18,6 @@ package org.apache.lucene.store;
 
 import java.io.IOException;
 import java.io.EOFException;
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
 
 /**
@@ -84,10 +83,10 @@ public class WindowsDirectory extends FSDirectory {
     }
     
     @Override
-    protected void readInternal(ByteBuffer b) throws IOException {
+    protected void readInternal(byte[] b, int offset, int length) throws IOException {
       int bytesRead;
       try {
-        bytesRead = WindowsDirectory.read(fd, b.array(), b.position(), b.remaining(), getFilePointer());
+        bytesRead = WindowsDirectory.read(fd, b, offset, length, getFilePointer());
       } catch (IOException ioe) {
         throw new IOException(ioe.getMessage() + ": " + this, ioe);
       }

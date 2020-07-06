@@ -38,7 +38,10 @@ import org.junit.Test;
 public class TestSolrCachePerf extends SolrTestCaseJ4 {
 
   private static final Class<? extends SolrCache>[] IMPLS = new Class[] {
-      CaffeineCache.class
+      CaffeineCache.class,
+      LRUCache.class,
+      LFUCache.class,
+      FastLRUCache.class
   };
 
   private final int NUM_KEYS = 5000;
@@ -52,6 +55,7 @@ public class TestSolrCachePerf extends SolrTestCaseJ4 {
   }
 
   @Test
+  @BadApple(bugUrl = "https://issues.apache.org/jira/browse/SOLR-14094")
   public void testGetPutCompute() throws Exception {
     Map<String, SummaryStatistics> getPutRatio = new HashMap<>();
     Map<String, SummaryStatistics> computeRatio = new HashMap<>();
@@ -69,7 +73,7 @@ public class TestSolrCachePerf extends SolrTestCaseJ4 {
     }
     computeRatio.forEach((type, computeStats) -> {
       SummaryStatistics getPutStats = getPutRatio.get(type);
-      assertGreaterThanOrEqual( "Compute ratio should be higher or equal to get/put ratio", computeStats.getMean(), getPutStats.getMean(), 0.0001);
+      assertGreaterThanOrEqual( "Cache " + type + ": compute ratio should be higher or equal to get/put ratio", computeStats.getMean(), getPutStats.getMean(), 0.001);
     });
   }
 
@@ -140,7 +144,7 @@ public class TestSolrCachePerf extends SolrTestCaseJ4 {
         t.join();
       }
       long stopTime = System.nanoTime();
-      Map<String, Object> metrics = cache.getSolrMetricsContext().getMetricsSnapshot();
+      Map<String, Object> metrics = cache.getMetricsSnapshot();
       perImplRatio.addValue(
           Double.parseDouble(String.valueOf(metrics.get("CACHE.foo.hitratio"))));
       perImplTime.addValue((double)(stopTime - startTime));

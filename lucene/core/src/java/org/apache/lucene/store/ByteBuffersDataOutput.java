@@ -206,7 +206,7 @@ public final class ByteBuffersDataOutput extends DataOutput implements Accountab
       result.add(EMPTY);
     } else {
       for (ByteBuffer bb : blocks) {
-        bb = bb.asReadOnlyBuffer().flip();
+        bb = (ByteBuffer) bb.asReadOnlyBuffer().flip(); // cast for jdk8 (covariant in jdk9+) 
         result.add(bb);
       }
     }
@@ -231,7 +231,7 @@ public final class ByteBuffersDataOutput extends DataOutput implements Accountab
       result.add(EMPTY);
     } else {
       for (ByteBuffer bb : blocks) {
-        bb = bb.duplicate().flip();
+        bb = (ByteBuffer) bb.duplicate().flip(); // cast for jdk8 (covariant in jdk9+) 
         result.add(bb);
       }
     }
@@ -283,7 +283,8 @@ public final class ByteBuffersDataOutput extends DataOutput implements Accountab
       if (bb.hasArray()) {
         output.writeBytes(bb.array(), bb.arrayOffset(), bb.position());
       } else {
-        bb = bb.asReadOnlyBuffer().flip();
+        bb = bb.asReadOnlyBuffer();
+        bb.flip();
         output.copyBytes(new ByteBuffersDataInput(Collections.singletonList(bb)), bb.remaining());
       }
     }

@@ -39,7 +39,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
-import javax.script.ScriptEngineManager;
 
 import com.google.common.collect.ImmutableMap;
 import org.apache.commons.io.FileUtils;
@@ -55,9 +54,9 @@ import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.embedded.JettySolrRunner;
-import org.apache.solr.client.solrj.impl.BaseHttpSolrClient;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpClientUtil;
+import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.request.ConfigSetAdminRequest;
 import org.apache.solr.client.solrj.request.ConfigSetAdminRequest.Create;
 import org.apache.solr.client.solrj.request.ConfigSetAdminRequest.Delete;
@@ -84,7 +83,6 @@ import org.apache.solr.util.ExternalPaths;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 import org.junit.After;
-import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -346,15 +344,12 @@ public class TestConfigSetsAPI extends SolrTestCaseJ4 {
   
   @Test
   public void testUploadWithScriptUpdateProcessor() throws Exception {
-    Assume.assumeNotNull((new ScriptEngineManager()).getEngineByExtension("js"));
-    Assume.assumeNotNull((new ScriptEngineManager()).getEngineByName("JavaScript"));
-    
       // Authorization off
       // unprotectConfigsHandler(); // TODO Enable this back when testUploadWithLibDirective() is re-enabled
       final String untrustedSuffix = "-untrusted";
       uploadConfigSetWithAssertions("with-script-processor", untrustedSuffix, null, null);
       // try to create a collection with the uploaded configset
-      Throwable thrown = expectThrows(BaseHttpSolrClient.RemoteSolrException.class, () -> {
+      Throwable thrown = expectThrows(HttpSolrClient.RemoteSolrException.class, () -> {
         createCollection("newcollection2", "with-script-processor" + untrustedSuffix,
       1, 1, solrCluster.getSolrClient());
       });
@@ -380,7 +375,7 @@ public class TestConfigSetsAPI extends SolrTestCaseJ4 {
     final String untrustedSuffix = "-untrusted";
     uploadConfigSetWithAssertions("with-lib-directive", untrustedSuffix, null, null);
     // try to create a collection with the uploaded configset
-    Throwable thrown = expectThrows(BaseHttpSolrClient.RemoteSolrException.class, () -> {
+    Throwable thrown = expectThrows(HttpSolrClient.RemoteSolrException.class, () -> {
       createCollection("newcollection3", "with-lib-directive" + untrustedSuffix,
           1, 1, solrCluster.getSolrClient());
     });
@@ -429,7 +424,6 @@ public class TestConfigSetsAPI extends SolrTestCaseJ4 {
     String securityJson = "{\n" +
         "  'authentication':{\n" +
         "    'class':'solr.BasicAuthPlugin',\n" +
-        "    'blockUnknown': false,\n" +
         "    'credentials':{'solr':'orwp2Ghgj39lmnrZOTm7Qtre1VqHFDfwAEzr0ApbN3Y= Ju5osoAqOX8iafhWpPP01E5P+sg8tK8tHON7rCYZRRw='}},\n" +
         "  'authorization':{\n" +
         "    'class':'solr.RuleBasedAuthorizationPlugin',\n" +
@@ -505,14 +499,10 @@ public class TestConfigSetsAPI extends SolrTestCaseJ4 {
         File.separator + TestUtil.randomSimpleString(random(), 6, 8) + ".zip");
 
     File directory = TestDynamicLoading.getFile(directoryPath);
-    if (log.isInfoEnabled()) {
-      log.info("Directory: {}", directory.getAbsolutePath());
-    }
+    log.info("Directory: "+directory.getAbsolutePath());
     try {
       zip (directory, zipFile);
-      if (log.isInfoEnabled()) {
-        log.info("Zipfile: {}", zipFile.getAbsolutePath());
-      }
+      log.info("Zipfile: "+zipFile.getAbsolutePath());
       return zipFile.getAbsolutePath();
     } catch (IOException e) {
       throw new RuntimeException(e);

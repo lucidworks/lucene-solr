@@ -24,21 +24,20 @@ import org.apache.solr.JSONTestUtil;
 import org.apache.solr.SolrTestCaseHS;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.CommonParams;
-import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.search.CaffeineCache;
 import org.apache.solr.search.DocSet;
+import org.apache.solr.search.FastLRUCache;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 
+@SuppressWarnings("deprecation")
 @LuceneTestCase.SuppressCodecs({"Lucene3x","Lucene40","Lucene41","Lucene42","Lucene45","Appending"})
 public class TestJsonRequest extends SolrTestCaseHS {
 
   private static SolrInstances servers;  // for distributed testing
 
-  @SuppressWarnings("deprecation")
   @BeforeClass
   public static void beforeTests() throws Exception {
     systemSetPropertySolrDisableShardsWhitelist("true");
@@ -52,7 +51,6 @@ public class TestJsonRequest extends SolrTestCaseHS {
     }
   }
 
-  @SuppressWarnings("deprecation")
   @AfterClass
   public static void afterTests() throws Exception {
     JSONTestUtil.failRepeatedKeys = false;
@@ -180,7 +178,7 @@ public class TestJsonRequest extends SolrTestCaseHS {
         , "response/docs==[{id:'5', x:5.5},{id:'4', x:5.5}]"
     );
 
-    doParamRefDslTest(client);
+
 
     // test templating before parsing JSON
     client.testJQ( params("json","${OPENBRACE} query:'cat_s:A' ${CLOSEBRACE}", "json","${OPENBRACE} filter:'where_s:NY'${CLOSEBRACE}",  "OPENBRACE","{", "CLOSEBRACE","}")
@@ -408,47 +406,11 @@ public class TestJsonRequest extends SolrTestCaseHS {
 
   }
 
-  private static void doParamRefDslTest(Client client) throws Exception {
-    // referencing in dsl                //nestedqp
-    client.testJQ( params("json","{query: {query:  {param:'ref1'}}}", "ref1","{!field f=cat_s}A")
-        , "response/numFound==2"
-    );   
-    // referencing json string param
-    client.testJQ( params("json", random().nextBoolean()  ? 
-            "{query:{query:{param:'ref1'}}}"  // nestedqp
-           : "{query: {query: {query:{param:'ref1'}}}}",  // nestedqp, v local param  
-          "json",random().nextBoolean() 
-              ? "{params:{ref1:'{!field f=cat_s}A'}}" // string param  
-              : "{queries:{ref1:{field:{f:cat_s,query:A}}}}" ) // qdsl
-        , "response/numFound==2"
-    );
-    {                                                     // shortest top level ref
-      final ModifiableSolrParams params = params("json","{query:{param:'ref1'}}");
-      if (random().nextBoolean()) {
-        params.add("ref1","cat_s:A"); // either to plain string
-      } else {
-        params.add("json","{queries:{ref1:{field:{f:cat_s,query:A}}}}");// or to qdsl
-      }
-      client.testJQ( params, "response/numFound==2");
-    }  // ref in bool must
-    client.testJQ( params("json","{query:{bool: {must:[{param:fq1},{param:fq2}]}}}",
-        "json","{params:{fq1:'cat_s:A', fq2:'where_s:NY'}}", "json.fields", "id")
-        , "response/docs==[{id:'1'}]"
-    );// referencing dsl&strings from filters objs&array
-    client.testJQ( params("json.filter","{param:fq1}","json.filter","{param:fq2}",
-        "json", random().nextBoolean() ?
-             "{queries:{fq1:{lucene:{query:'cat_s:A'}}, fq2:{lucene:{query:'where_s:NY'}}}}" : 
-             "{params:{fq1:'cat_s:A', fq2:'where_s:NY'}}", 
-        "json.fields", "id", "q", "*:*")
-        , "response/docs==[{id:'1'}]"
-    );
-  }
-
   private static void testFilterCachingLocally(Client client) throws Exception {
     if(client.getClientProvider()==null) {
       final SolrQueryRequest request = req();
       try {
-        final CaffeineCache<Query,DocSet> filterCache = (CaffeineCache<Query,DocSet>) request.getSearcher().getFilterCache();
+        final FastLRUCache<Query,DocSet> filterCache = (FastLRUCache<Query,DocSet>) request.getSearcher().getFilterCache();
         filterCache.clear();
         final TermQuery catA = new TermQuery(new Term("cat_s", "A"));
         assertNull("cache is empty",filterCache.get(catA));

@@ -35,12 +35,12 @@
  * regular expression operations.
  * <p>
  * The most commonly used functionality is located in the classes
- * <code>{@link org.apache.lucene.util.automaton.Automaton}</code> and
- * <code>{@link org.apache.lucene.util.automaton.RegExp}</code>.
+ * <tt>{@link org.apache.lucene.util.automaton.Automaton}</tt> and
+ * <tt>{@link org.apache.lucene.util.automaton.RegExp}</tt>.
  * <p>
  * For more information, go to the package home page at 
- * <code><a href="http://www.brics.dk/automaton/" 
- * target="_top">http://www.brics.dk/automaton/</a></code>.
+ * <tt><a href="http://www.brics.dk/automaton/" 
+ * target="_top">http://www.brics.dk/automaton/</a></tt>.
  * @lucene.experimental
  */
 package org.apache.lucene.util.automaton;

@@ -63,60 +63,33 @@ public class AnnotatedApi extends Api implements PermissionNameProvider {
 
   public static final String ERR = "Error executing commands :";
   private EndPoint endPoint;
-  private final Map<String, Cmd> commands ;
-  private final Cmd singletonCommand;
+  private Map<String, Cmd> commands = new HashMap<>();
   private final Api fallback;
 
-  public static List<Api> getApis(Object obj) {
-    Class<? extends Object> klas = obj.getClass();
+  public AnnotatedApi(Object obj) {
+    this(obj, null);
+  }
+
+  public AnnotatedApi(Object obj, Api fallback) {
+    super(readSpec(obj.getClass()));
+    this.fallback = fallback;
+    Class<?> klas = obj.getClass();
     if (!Modifier.isPublic(klas.getModifiers())) {
       throw new RuntimeException(obj.getClass().getName() + " is not public");
     }
-    if (klas.getAnnotation(EndPoint.class) != null) {
-      EndPoint endPoint = klas.getAnnotation(EndPoint.class);
-      List<Method> methods = new ArrayList<>();
-      Map<String, Cmd> commands = new HashMap<>();
-      for (Method m : klas.getDeclaredMethods()) {
-        Command command = m.getAnnotation(Command.class);
-        if (command != null) {
-          methods.add(m);
-          if (commands.containsKey(command.name())) {
-            throw new RuntimeException("Duplicate commands " + command.name());
-          }
-          commands.put(command.name(), new Cmd(command.name(), obj, m));
-        }
+
+    endPoint = klas.getAnnotation(EndPoint.class);
+
+    for (Method m : klas.getDeclaredMethods()) {
+      Command command = m.getAnnotation(Command.class);
+      if (command == null) continue;
+
+      if (commands.containsKey(command.name())) {
+        throw new RuntimeException("Duplicate commands " + command.name());
       }
-      if (commands.isEmpty()) {
-        throw new RuntimeException("No method with @Command in class: " + obj.getClass().getName());
-      }
-      SpecProvider specProvider = readSpec(endPoint, methods);
-      return Collections.singletonList(new AnnotatedApi(specProvider, endPoint, commands, null));
-    } else {
-      List<Api> apis = new ArrayList<>();
-      for (Method m : klas.getDeclaredMethods()) {
-        EndPoint endPoint = m.getAnnotation(EndPoint.class);
-        if (endPoint == null) continue;
-        if (!Modifier.isPublic(m.getModifiers())) {
-          throw new RuntimeException("Non public method " + m.toGenericString());
-        }
-        Cmd cmd = new Cmd("", obj, m);
-        SpecProvider specProvider = readSpec(endPoint, Collections.singletonList(m));
-        apis.add(new AnnotatedApi(specProvider, endPoint, Collections.singletonMap("", cmd), null));
-      }
-      if (apis.isEmpty()) {
-        throw new RuntimeException("Invalid Class : " + obj.getClass().getName() + " No @EndPoints");
-      }
-      return apis;
+      commands.put(command.name(), new Cmd(command, obj, m));
     }
-  }
 
-
-  private AnnotatedApi(SpecProvider specProvider, EndPoint endPoint, Map<String, Cmd> commands, Api fallback) {
-    super(specProvider);
-    this.endPoint = endPoint;
-    this.fallback = fallback;
-    this.commands = commands;
-    this.singletonCommand = commands.get("");
   }
 
   @Override
@@ -124,7 +97,10 @@ public class AnnotatedApi extends Api implements PermissionNameProvider {
     return endPoint.permission();
   }
 
-  private static SpecProvider readSpec(EndPoint endPoint, List<Method> m) {
+  private static SpecProvider readSpec(Class klas) {
+    EndPoint endPoint = (EndPoint) klas.getAnnotation(EndPoint.class);
+    if (endPoint == null)
+      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Invalid class :  " + klas.getName());
     return () -> {
       Map map = new LinkedHashMap();
       List<String> methods = new ArrayList<>();
@@ -135,7 +111,7 @@ public class AnnotatedApi extends Api implements PermissionNameProvider {
       map.put("url", new ValidatingJsonMap(Collections.singletonMap("paths", Arrays.asList(endPoint.path()))));
       Map<String, Object> cmds = new HashMap<>();
 
-      for (Method method : m) {
+      for (Method method : klas.getMethods()) {
         Command command = method.getAnnotation(Command.class);
         if (command != null && !command.name().isEmpty()) {
           cmds.put(command.name(), AnnotatedApi.createSchema(method));
@@ -147,14 +123,18 @@ public class AnnotatedApi extends Api implements PermissionNameProvider {
       return new ValidatingJsonMap(map);
     };
 
+
   }
 
 
   @Override
   public void call(SolrQueryRequest req, SolrQueryResponse rsp) {
-    if (singletonCommand != null) {
-      singletonCommand.invoke(req, rsp, null);
-      return;
+    if (commands.size() == 1) {
+      Cmd cmd = commands.get("");
+      if (cmd != null) {
+        cmd.invoke(req, rsp, null);
+        return;
+      }
     }
 
     List<CommandOperation> cmds = req.getCommands(true);
@@ -181,14 +161,14 @@ public class AnnotatedApi extends Api implements PermissionNameProvider {
 
     List<Map> errs = CommandOperation.captureErrors(cmds);
     if (!errs.isEmpty()) {
-      log.error("{}{}", ERR, Utils.toJSONString(errs));
+      log.error(ERR + Utils.toJSONString(errs));
       throw new ApiBag.ExceptionWithErrObject(SolrException.ErrorCode.BAD_REQUEST, ERR, errs);
     }
 
   }
 
-  static class Cmd {
-    final String command;
+  class Cmd {
+    final Command command;
     final Method method;
     final Object obj;
     ObjectMapper mapper = SolrJacksonAnnotationInspector.createObjectMapper();
@@ -197,7 +177,7 @@ public class AnnotatedApi extends Api implements PermissionNameProvider {
     boolean isWrappedInPayloadObj = false;
 
 
-    Cmd(String command, Object obj, Method method) {
+    Cmd(Command command, Object obj, Method method) {
       if (Modifier.isPublic(method.getModifiers())) {
         this.command = command;
         this.obj = obj;
@@ -224,6 +204,7 @@ public class AnnotatedApi extends Api implements PermissionNameProvider {
           } else {
             c = (Class) t;
           }
+
         }
         if (parameterTypes.length > 3) {
           throw new RuntimeException("Invalid params count for method " + method);

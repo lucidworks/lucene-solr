@@ -49,7 +49,7 @@ import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.cloud.SocketProxy;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.common.util.ExecutorUtil;
-import org.apache.solr.common.util.SolrNamedThreadFactory;
+import org.apache.solr.common.util.SolrjNamedThreadFactory;
 import org.apache.solr.common.util.TimeSource;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.servlet.SolrDispatchFilter;
@@ -172,20 +172,20 @@ public class JettySolrRunner {
     private void executeDelay() {
       int delayMs = 0;
       for (Delay delay: delays) {
-        this.log.info("Delaying {}, for reason: {}", delay.delayValue, delay.reason);
+        this.log.info("Delaying "+delay.delayValue+", for reason: "+delay.reason);
         if (delay.counter.decrementAndGet() == 0) {
           delayMs += delay.delayValue;
         }
       }
 
       if (delayMs > 0) {
-        this.log.info("Pausing this socket connection for {}ms...", delayMs);
+        this.log.info("Pausing this socket connection for " + delayMs + "ms...");
         try {
           Thread.sleep(delayMs);
         } catch (InterruptedException e) {
           throw new RuntimeException(e);
         }
-        this.log.info("Waking up after the delay of {}ms...", delayMs);
+        this.log.info("Waking up after the delay of " + delayMs + "ms...");
       }
     }
 
@@ -411,7 +411,7 @@ public class JettySolrRunner {
     GzipHandler gzipHandler = new GzipHandler();
     gzipHandler.setHandler(chain);
 
-    gzipHandler.setMinGzipSize(23); // https://github.com/eclipse/jetty.project/issues/4191
+    gzipHandler.setMinGzipSize(0);
     gzipHandler.setCheckGzExists(false);
     gzipHandler.setCompressionLevel(-1);
     gzipHandler.setExcludedAgentPatterns(".*MSIE.6\\.0.*");
@@ -561,14 +561,13 @@ public class JettySolrRunner {
     int tryCnt = 1;
     while (true) {
       try {
-        tryCnt++;
-        log.info("Trying to start Jetty on port {} try number {} ...", port, tryCnt);
+        log.info("Trying to start Jetty on port {} try number {} ...", port, tryCnt++);
         server.start();
         break;
       } catch (IOException ioe) {
         Exception e = lookForBindException(ioe);
         if (e instanceof BindException) {
-          log.info("Port is in use, will try again until timeout of {}", timeout);
+          log.info("Port is in use, will try again until timeout of " + timeout);
           server.stop();
           Thread.sleep(3000);
           if (!timeout.hasTimedOut()) {
@@ -617,7 +616,7 @@ public class JettySolrRunner {
       SolrDispatchFilter sdf = getSolrDispatchFilter();
       ExecutorService customThreadPool = null;
       if (sdf != null) {
-        customThreadPool = ExecutorUtil.newMDCAwareCachedThreadPool(new SolrNamedThreadFactory("jettyShutDown"));
+        customThreadPool = ExecutorUtil.newMDCAwareCachedThreadPool(new SolrjNamedThreadFactory("jettyShutDown"));
 
         sdf.closeOnDestroy(false);
 //        customThreadPool.submit(() -> {
@@ -810,9 +809,13 @@ public class JettySolrRunner {
   /**
    * A main class that starts jetty+solr This is useful for debugging
    */
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
+    try {
     JettySolrRunner jetty = new JettySolrRunner(".", "/solr", 8983);
     jetty.start();
+    } catch (Exception ex) {
+      ex.printStackTrace();
+    }
   }
 
   /**

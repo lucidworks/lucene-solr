@@ -34,9 +34,9 @@ import org.apache.lucene.index.MergePolicy.OneMerge;
 import org.apache.lucene.index.MergePolicy;
 import org.apache.lucene.index.MergeScheduler;
 import org.apache.lucene.index.MergeTrigger;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MockDirectoryWrapper;
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.InfoStream;
 import org.apache.lucene.util.LuceneTestCase;
@@ -57,22 +57,22 @@ public class TestMergeSchedulerExternal extends LuceneTestCase {
   private class MyMergeScheduler extends ConcurrentMergeScheduler {
 
     private class MyMergeThread extends ConcurrentMergeScheduler.MergeThread {
-      public MyMergeThread(MergeSource mergeSource, MergePolicy.OneMerge merge) {
-        super(mergeSource, merge);
+      public MyMergeThread(IndexWriter writer, MergePolicy.OneMerge merge) {
+        super(writer, merge);
         mergeThreadCreated = true;
       }
     }
 
     @Override
-    protected MergeThread getMergeThread(MergeSource mergeSource, MergePolicy.OneMerge merge) throws IOException {
-      MergeThread thread = new MyMergeThread(mergeSource, merge);
+    protected MergeThread getMergeThread(IndexWriter writer, MergePolicy.OneMerge merge) throws IOException {
+      MergeThread thread = new MyMergeThread(writer, merge);
       thread.setDaemon(true);
       thread.setName("MyMergeThread");
       return thread;
     }
 
     @Override
-    protected void handleMergeException(Throwable t) {
+    protected void handleMergeException(Directory dir, Throwable t) {
       excCalled = true;
       if (infoStream.isEnabled("IW")) {
         infoStream.message("IW", "TEST: now handleMergeException");
@@ -80,9 +80,9 @@ public class TestMergeSchedulerExternal extends LuceneTestCase {
     }
 
     @Override
-    protected void doMerge(MergeSource mergeSource, MergePolicy.OneMerge merge) throws IOException {
+    protected void doMerge(IndexWriter writer, MergePolicy.OneMerge merge) throws IOException {
       mergeCalled = true;
-      super.doMerge(mergeSource, merge);
+      super.doMerge(writer, merge);
     }
   }
 
@@ -153,13 +153,13 @@ public class TestMergeSchedulerExternal extends LuceneTestCase {
   private static class ReportingMergeScheduler extends MergeScheduler {
 
     @Override
-    public void merge(MergeSource mergeSource, MergeTrigger trigger) throws IOException {
+    public void merge(IndexWriter writer, MergeTrigger trigger, boolean newMergesFound) throws IOException {
       OneMerge merge = null;
-      while ((merge = mergeSource.getNextMerge()) != null) {
+      while ((merge = writer.getNextMerge()) != null) {
         if (VERBOSE) {
           System.out.println("executing merge " + merge.segString());
         }
-        mergeSource.merge(merge);
+        writer.merge(merge);
       }
     }
 
@@ -172,7 +172,7 @@ public class TestMergeSchedulerExternal extends LuceneTestCase {
     // we don't really need to execute anything, just to make sure the custom MS
     // compiles. But ensure that it can be used as well, e.g., no other hidden
     // dependencies or something. Therefore, don't use any random API !
-    Directory dir = new ByteBuffersDirectory();
+    Directory dir = new RAMDirectory();
     IndexWriterConfig conf = new IndexWriterConfig(null);
     conf.setMergeScheduler(new ReportingMergeScheduler());
     IndexWriter writer = new IndexWriter(dir, conf);
@@ -184,4 +184,5 @@ public class TestMergeSchedulerExternal extends LuceneTestCase {
     writer.close();
     dir.close();
   }
+  
 }

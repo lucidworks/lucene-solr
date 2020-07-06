@@ -47,11 +47,6 @@ public final class HMMChineseTokenizerFactory extends TokenizerFactory {
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public HMMChineseTokenizerFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public Tokenizer create(AttributeFactory factory) {
     return new HMMChineseTokenizer(factory);

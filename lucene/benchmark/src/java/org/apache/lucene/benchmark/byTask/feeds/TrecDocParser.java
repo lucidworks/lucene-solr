@@ -96,7 +96,7 @@ public abstract class TrecDocParser {
    */
   public static String stripTags(String buf, int start) {
     if (start>0) {
-      buf = buf.substring(start);
+      buf = buf.substring(0);
     }
     return buf.replaceAll("<[^>]*>", " ");
   }

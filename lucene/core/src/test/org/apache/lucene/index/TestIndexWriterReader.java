@@ -33,10 +33,10 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.store.AlreadyClosedException;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MockDirectoryWrapper.FakeIOException;
 import org.apache.lucene.store.MockDirectoryWrapper;
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.InfoStream;
@@ -809,16 +809,11 @@ public class TestIndexWriterReader extends LuceneTestCase {
   // Stress test reopen during add/delete
   public void testDuringAddDelete() throws Exception {
     Directory dir1 = newDirectory();
-    IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()))
-        .setMergePolicy(newLogMergePolicy(2));
-    if (TEST_NIGHTLY) {
-      // if we have a ton of iterations we need to make sure we don't do unnecessary
-      // extra flushing otherwise we will timeout on nightly
-      iwc.setRAMBufferSizeMB(IndexWriterConfig.DEFAULT_RAM_BUFFER_SIZE_MB);
-      iwc.setMaxBufferedDocs(IndexWriterConfig.DISABLE_AUTO_FLUSH);
-    }
     final IndexWriter writer = new IndexWriter(
-        dir1,iwc);
+        dir1,
+        newIndexWriterConfig(new MockAnalyzer(random()))
+          .setMergePolicy(newLogMergePolicy(2))
+    );
 
     // create the index
     createIndexNoClose(false, "test", writer);
@@ -827,7 +822,7 @@ public class TestIndexWriterReader extends LuceneTestCase {
     DirectoryReader r = writer.getReader();
 
     final int iters = TEST_NIGHTLY ? 1000 : 10;
-    final List<Throwable> excs = Collections.synchronizedList(new ArrayList<>());
+    final List<Throwable> excs = Collections.synchronizedList(new ArrayList<Throwable>());
 
     final Thread[] threads = new Thread[numThreads];
     final AtomicInteger remainingThreads = new AtomicInteger(numThreads);
@@ -1113,7 +1108,7 @@ public class TestIndexWriterReader extends LuceneTestCase {
   /** Make sure if all we do is open NRT reader against
    *  writer, we don't see merge starvation. */
   public void testTooManySegments() throws Exception {
-    Directory dir = getAssertNoDeletesDirectory(new ByteBuffersDirectory());
+    Directory dir = getAssertNoDeletesDirectory(new RAMDirectory());
     // Don't use newIndexWriterConfig, because we need a
     // "sane" mergePolicy:
     IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random()));

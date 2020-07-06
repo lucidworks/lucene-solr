@@ -362,7 +362,7 @@ abstract class BaseIndexFileFormatTestCase extends LuceneTestCase {
                                                          segmentInfo, fieldInfos,
                                                          null, new IOContext(new FlushInfo(1, 20)));
     
-    SegmentReadState readState = new SegmentReadState(dir, segmentInfo, fieldInfos, IOContext.READ);
+    SegmentReadState readState = new SegmentReadState(dir, segmentInfo, fieldInfos, false, IOContext.READ, Collections.emptyMap());
 
     // PostingsFormat
     NormsProducer fakeNorms = new NormsProducer() {
@@ -623,7 +623,7 @@ abstract class BaseIndexFileFormatTestCase extends LuceneTestCase {
         } catch (AlreadyClosedException ace) {
           // OK: writer was closed by abort; we just reopen now:
           dir.setRandomIOExceptionRateOnOpen(0.0); // disable exceptions on openInput until next iteration
-          assertTrue(iw.isDeleterClosed());
+          assertTrue(iw.deleter.isClosed());
           assertTrue(allowAlreadyClosed);
           allowAlreadyClosed = false;
           conf = newIndexWriterConfig(analyzer);
@@ -659,7 +659,7 @@ abstract class BaseIndexFileFormatTestCase extends LuceneTestCase {
           } catch (AlreadyClosedException ace) {
             // OK: writer was closed by abort; we just reopen now:
             dir.setRandomIOExceptionRateOnOpen(0.0); // disable exceptions on openInput until next iteration
-            assertTrue(iw.isDeleterClosed());
+            assertTrue(iw.deleter.isClosed());
             assertTrue(allowAlreadyClosed);
             allowAlreadyClosed = false;
             conf = newIndexWriterConfig(analyzer);
@@ -728,21 +728,16 @@ abstract class BaseIndexFileFormatTestCase extends LuceneTestCase {
     return r;
   }
 
-  /**
-   * A directory that tracks created files that haven't been deleted.
-   */
-  protected static class FileTrackingDirectoryWrapper extends FilterDirectory {
+  private static class FileTrackingDirectoryWrapper extends FilterDirectory {
 
     private final Set<String> files = Collections.newSetFromMap(new ConcurrentHashMap<String,Boolean>());
 
-    /** Sole constructor. */
     FileTrackingDirectoryWrapper(Directory in) {
       super(in);
     }
 
-    /** Get the set of created files. */
-    public Set<String> getFiles() {
-      return Set.copyOf(files);
+    Set<String> getFiles() {
+      return Collections.unmodifiableSet(new HashSet<>(files));
     }
 
     @Override
@@ -825,19 +820,16 @@ abstract class BaseIndexFileFormatTestCase extends LuceneTestCase {
 
   }
 
-  /** A directory that tracks read bytes. */
-  protected static class ReadBytesDirectoryWrapper extends FilterDirectory {
+  private static class ReadBytesDirectoryWrapper extends FilterDirectory {
 
-    /** Sole constructor. */
-    public ReadBytesDirectoryWrapper(Directory in) {
+    ReadBytesDirectoryWrapper(Directory in) {
       super(in);
     }
 
     private final Map<String, FixedBitSet> readBytes = new ConcurrentHashMap<>();
 
-    /** Get information about which bytes have been read. */
-    public Map<String, FixedBitSet> getReadBytes() {
-      return Map.copyOf(readBytes);
+    Map<String, FixedBitSet> getReadBytes() {
+      return Collections.unmodifiableMap(new HashMap<>(readBytes));
     }
 
     @Override

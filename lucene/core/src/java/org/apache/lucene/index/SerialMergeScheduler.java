@@ -31,13 +31,13 @@ public class SerialMergeScheduler extends MergeScheduler {
    * "synchronized" so that even if the application is using
    * multiple threads, only one merge may run at a time. */
   @Override
-  synchronized public void merge(MergeSource mergeSource, MergeTrigger trigger) throws IOException {
+  synchronized public void merge(IndexWriter writer, MergeTrigger trigger, boolean newMergesFound) throws IOException {
     while(true) {
-      MergePolicy.OneMerge merge = mergeSource.getNextMerge();
+      MergePolicy.OneMerge merge = writer.getNextMerge();
       if (merge == null) {
         break;
       }
-      mergeSource.merge(merge);
+      writer.merge(merge);
     }
   }
 

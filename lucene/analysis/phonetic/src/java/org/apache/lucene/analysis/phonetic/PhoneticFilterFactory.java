@@ -114,11 +114,6 @@ public class PhoneticFilterFactory extends TokenFilterFactory implements Resourc
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public PhoneticFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public void inform(ResourceLoader loader) throws IOException {
     clazz = registry.get(name.toUpperCase(Locale.ROOT));
@@ -154,7 +149,7 @@ public class PhoneticFilterFactory extends TokenFilterFactory implements Resourc
     // Unfortunately, Commons-Codec doesn't offer any thread-safe guarantees so we must play it safe and instantiate
     // every time.  A simple benchmark showed this as negligible.
     try {
-      Encoder encoder = clazz.getConstructor().newInstance();
+      Encoder encoder = clazz.newInstance();
       // Try to set the maxCodeLength
       if(maxCodeLength != null && setMaxCodeLenMethod != null) {
         setMaxCodeLenMethod.invoke(encoder, maxCodeLength);

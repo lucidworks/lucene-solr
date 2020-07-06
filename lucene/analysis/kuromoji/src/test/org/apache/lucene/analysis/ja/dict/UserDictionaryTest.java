@@ -81,34 +81,11 @@ public class UserDictionaryTest extends LuceneTestCase {
 
   @Test
   public void testReadInvalid1() throws IOException {
-    // the concatenated segment must be the same as the surface form
+    // the concatenated segment must not be longer than its surface form
     String invalidEntry = "日経新聞,日本 経済 新聞,ニホン ケイザイ シンブン,カスタム名詞";
     RuntimeException e = expectThrows(RuntimeException.class,
         "RuntimeException should be thrown when passed an invalid dictionary entry.",
         () -> UserDictionary.open(new StringReader(invalidEntry)));
-    assertTrue(e.getMessage().contains("does not match the surface form"));
+    assertTrue(e.getMessage().contains("is longer than the surface form"));
   }
-
-  @Test
-  public void testReadInvalid2() throws IOException {
-    // the concatenated segment must be the same as the surface form
-    String invalidEntry = "日本経済新聞,日経 新聞,ニッケイ シンブン,カスタム名詞";
-    RuntimeException e = expectThrows(RuntimeException.class,
-        "RuntimeException should be thrown when passed an invalid dictionary entry.",
-        () -> UserDictionary.open(new StringReader(invalidEntry)));
-    assertTrue(e.getMessage().contains("does not match the surface form"));
-  }
-
-  @Test
-  public void testSharp() throws IOException {
-    String[] inputs = {"テスト#", "テスト#テスト"};
-    UserDictionary dictionary = TestJapaneseTokenizer.readDict();
-
-    for (String input: inputs) {
-      System.out.println(input);
-      int[][] result = dictionary.lookup(input.toCharArray(), 0, input.length());
-      assertEquals("カスタム名刺", dictionary.getPartOfSpeech(result[0][0]));
-    }
-  }
-
 }

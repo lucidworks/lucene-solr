@@ -58,11 +58,6 @@ public class JapanesePartOfSpeechStopFilterFactory extends TokenFilterFactory im
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public JapanesePartOfSpeechStopFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public void inform(ResourceLoader loader) throws IOException {
     stopTags = null;

@@ -22,9 +22,7 @@ import java.io.Closeable;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.io.PrintWriter;
 import java.io.StringReader;
-import java.io.StringWriter;
 import java.net.URI;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
@@ -44,8 +42,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -89,7 +85,6 @@ import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.BaseDirectoryWrapper;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.store.FilterDirectory;
@@ -101,6 +96,8 @@ import org.apache.lucene.store.MMapDirectory;
 import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.store.NIOFSDirectory;
 import org.apache.lucene.store.NoLockFactory;
+import org.apache.lucene.store.RAMDirectory;
+import org.apache.lucene.store.SimpleFSDirectory;
 import org.apache.lucene.store.SimpleFSLockFactory;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
@@ -877,7 +874,7 @@ public class TestIndexWriter extends LuceneTestCase {
       this.random = new Random(random().nextLong());
       // make a little directory for addIndexes
       // LUCENE-2239: won't work with NIOFS/MMAP
-      adder = new MockDirectoryWrapper(random, new ByteBuffersDirectory());
+      adder = new MockDirectoryWrapper(random, new RAMDirectory());
       IndexWriterConfig conf = newIndexWriterConfig(random, new MockAnalyzer(random));
       if (conf.getMergeScheduler() instanceof ConcurrentMergeScheduler) {
         conf.setMergeScheduler(new SuppressingConcurrentMergeScheduler() {
@@ -918,7 +915,7 @@ public class TestIndexWriter extends LuceneTestCase {
     @Override
     public void run() {
       // LUCENE-2239: won't work with NIOFS/MMAP
-      MockDirectoryWrapper dir = new MockDirectoryWrapper(random, new ByteBuffersDirectory());
+      MockDirectoryWrapper dir = new MockDirectoryWrapper(random, new RAMDirectory());
 
       // open/close slowly sometimes
       dir.setUseSlowOpenClosers(true);
@@ -1604,7 +1601,7 @@ public class TestIndexWriter extends LuceneTestCase {
 
   public void testDeleteAllNRTLeftoverFiles() throws Exception {
 
-    MockDirectoryWrapper d = new MockDirectoryWrapper(random(), new ByteBuffersDirectory());
+    MockDirectoryWrapper d = new MockDirectoryWrapper(random(), new RAMDirectory());
     IndexWriter w = new IndexWriter(d, new IndexWriterConfig(new MockAnalyzer(random())));
     Document doc = new Document();
     for(int i = 0; i < 20; i++) {
@@ -1626,7 +1623,7 @@ public class TestIndexWriter extends LuceneTestCase {
   }
 
   public void testNRTReaderVersion() throws Exception {
-    Directory d = new MockDirectoryWrapper(random(), new ByteBuffersDirectory());
+    Directory d = new MockDirectoryWrapper(random(), new RAMDirectory());
     IndexWriter w = new IndexWriter(d, new IndexWriterConfig(new MockAnalyzer(random())));
     Document doc = new Document();
     doc.add(newStringField("id", "0", Field.Store.YES));
@@ -2399,7 +2396,7 @@ public class TestIndexWriter extends LuceneTestCase {
 
     iwc.setMergeScheduler(new ConcurrentMergeScheduler() {
         @Override
-        public void doMerge(MergeSource mergeSource, MergePolicy.OneMerge merge) throws IOException {
+        public void doMerge(IndexWriter writer, MergePolicy.OneMerge merge) throws IOException {
           mergeStarted.countDown();
           try {
             closeStarted.await();
@@ -2407,7 +2404,7 @@ public class TestIndexWriter extends LuceneTestCase {
             Thread.currentThread().interrupt();
             throw new RuntimeException(ie);
           }
-          super.doMerge(mergeSource, merge);
+          super.doMerge(writer, merge);
         }
 
         @Override
@@ -2484,11 +2481,8 @@ public class TestIndexWriter extends LuceneTestCase {
     assertEquals(StringHelper.ID_LENGTH, id1.length);
     
     byte[] id2 = sis.info(0).info.getId();
-    byte[] sciId2 = sis.info(0).getId();
     assertNotNull(id2);
-    assertNotNull(sciId2);
     assertEquals(StringHelper.ID_LENGTH, id2.length);
-    assertEquals(StringHelper.ID_LENGTH, sciId2.length);
 
     // Make sure CheckIndex includes id output:
     ByteArrayOutputStream bos = new ByteArrayOutputStream(1024);
@@ -2692,7 +2686,7 @@ public class TestIndexWriter extends LuceneTestCase {
 
     // MMapDirectory doesn't work because it closes its file handles after mapping!
     List<Closeable> toClose = new ArrayList<>();
-    try (FSDirectory dir = new NIOFSDirectory(root);
+    try (FSDirectory dir = new SimpleFSDirectory(root);
          Closeable closeable = () -> IOUtils.close(toClose)) {
       assert closeable != null;
       IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random()))
@@ -2758,7 +2752,7 @@ public class TestIndexWriter extends LuceneTestCase {
     // Use WindowsFS to prevent open files from being deleted:
     FileSystem fs = new WindowsFS(path.getFileSystem()).getFileSystem(URI.create("file:///"));
     Path root = new FilterPath(path, fs);
-    try (FSDirectory _dir = new NIOFSDirectory(root)) {
+    try (FSDirectory _dir = new SimpleFSDirectory(root)) {
       Directory dir = new FilterDirectory(_dir) {};
 
       IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random()));
@@ -2800,7 +2794,7 @@ public class TestIndexWriter extends LuceneTestCase {
     IndexCommit indexCommit;
     DirectoryReader reader;
     // MMapDirectory doesn't work because it closes its file handles after mapping!
-    try (FSDirectory dir = new NIOFSDirectory(root)) {
+    try (FSDirectory dir = new SimpleFSDirectory(root)) {
       IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random())).setIndexDeletionPolicy(NoDeletionPolicy.INSTANCE);
       IndexWriter w = new IndexWriter(dir, iwc);
       w.commit();
@@ -2842,7 +2836,7 @@ public class TestIndexWriter extends LuceneTestCase {
     Path root = new FilterPath(path, fs);
     DirectoryReader reader;
     // MMapDirectory doesn't work because it closes its file handles after mapping!
-    try (FSDirectory dir = new NIOFSDirectory(root)) {
+    try (FSDirectory dir = new SimpleFSDirectory(root)) {
       IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random()));
       IndexWriter w = new IndexWriter(dir, iwc);
       w.commit();
@@ -2925,15 +2919,16 @@ public class TestIndexWriter extends LuceneTestCase {
   public void testFlushLargestWriter() throws IOException, InterruptedException {
     Directory dir = newDirectory();
     IndexWriter w = new IndexWriter(dir, new IndexWriterConfig());
-    int numDocs = indexDocsForMultipleDWPTs(w);
-    DocumentsWriterPerThread largestNonPendingWriter
+    int numDocs = indexDocsForMultipleThreadStates(w);
+    DocumentsWriterPerThreadPool.ThreadState largestNonPendingWriter
         = w.docWriter.flushControl.findLargestNonPendingWriter();
-    assertFalse(largestNonPendingWriter.isFlushPending());
+    assertFalse(largestNonPendingWriter.flushPending);
+    assertNotNull(largestNonPendingWriter.dwpt);
 
     int numRamDocs = w.numRamDocs();
-    int numDocsInDWPT = largestNonPendingWriter.getNumDocsInRAM();
+    int numDocsInDWPT = largestNonPendingWriter.dwpt.getNumDocsInRAM();
     assertTrue(w.flushNextBuffer());
-    assertTrue(largestNonPendingWriter.hasFlushed());
+    assertNull(largestNonPendingWriter.dwpt);
     assertEquals(numRamDocs-numDocsInDWPT, w.numRamDocs());
 
     // make sure it's not locked
@@ -2949,7 +2944,7 @@ public class TestIndexWriter extends LuceneTestCase {
     dir.close();
   }
 
-  private int indexDocsForMultipleDWPTs(IndexWriter w) throws InterruptedException {
+  private int indexDocsForMultipleThreadStates(IndexWriter w) throws InterruptedException {
     Thread[] threads = new Thread[3];
     CountDownLatch latch = new CountDownLatch(threads.length);
     int numDocsPerThread = 10 + random().nextInt(30);
@@ -2979,16 +2974,16 @@ public class TestIndexWriter extends LuceneTestCase {
   public void testNeverCheckOutOnFullFlush() throws IOException, InterruptedException {
     Directory dir = newDirectory();
     IndexWriter w = new IndexWriter(dir, new IndexWriterConfig());
-    indexDocsForMultipleDWPTs(w);
-    DocumentsWriterPerThread largestNonPendingWriter
+    indexDocsForMultipleThreadStates(w);
+    DocumentsWriterPerThreadPool.ThreadState largestNonPendingWriter
         = w.docWriter.flushControl.findLargestNonPendingWriter();
-    assertFalse(largestNonPendingWriter.isFlushPending());
-    assertFalse(largestNonPendingWriter.hasFlushed());
-    int threadPoolSize = w.docWriter.perThreadPool.size();
+    assertFalse(largestNonPendingWriter.flushPending);
+    assertNotNull(largestNonPendingWriter.dwpt);
+    int activeThreadStateCount = w.docWriter.perThreadPool.getActiveThreadStateCount();
     w.docWriter.flushControl.markForFullFlush();
     DocumentsWriterPerThread documentsWriterPerThread = w.docWriter.flushControl.checkoutLargestNonPendingWriter();
     assertNull(documentsWriterPerThread);
-    assertEquals(threadPoolSize, w.docWriter.flushControl.numQueuedFlushes());
+    assertEquals(activeThreadStateCount, w.docWriter.flushControl.numQueuedFlushes());
     w.docWriter.flushControl.abortFullFlushes();
     assertNull("was aborted", w.docWriter.flushControl.checkoutLargestNonPendingWriter());
     assertEquals(0, w.docWriter.flushControl.numQueuedFlushes());
@@ -2999,11 +2994,11 @@ public class TestIndexWriter extends LuceneTestCase {
   public void testHoldLockOnLargestWriter() throws IOException, InterruptedException {
     Directory dir = newDirectory();
     IndexWriter w = new IndexWriter(dir, new IndexWriterConfig());
-    int numDocs = indexDocsForMultipleDWPTs(w);
-    DocumentsWriterPerThread largestNonPendingWriter
+    int numDocs = indexDocsForMultipleThreadStates(w);
+    DocumentsWriterPerThreadPool.ThreadState largestNonPendingWriter
         = w.docWriter.flushControl.findLargestNonPendingWriter();
-    assertFalse(largestNonPendingWriter.isFlushPending());
-    assertFalse(largestNonPendingWriter.hasFlushed());
+    assertFalse(largestNonPendingWriter.flushPending);
+    assertNotNull(largestNonPendingWriter.dwpt);
 
     CountDownLatch wait = new CountDownLatch(1);
     CountDownLatch locked = new CountDownLatch(1);
@@ -3036,7 +3031,7 @@ public class TestIndexWriter extends LuceneTestCase {
     lockThread.join();
     flushThread.join();
 
-    assertTrue("largest DWPT should be flushed", largestNonPendingWriter.hasFlushed());
+    assertNull("largest DWPT should be flushed", largestNonPendingWriter.dwpt);
     // make sure it's not locked
     largestNonPendingWriter.lock();
     largestNonPendingWriter.unlock();
@@ -3122,19 +3117,21 @@ public class TestIndexWriter extends LuceneTestCase {
   }
 
   private static void waitForDocsInBuffers(IndexWriter w, int buffersWithDocs) {
-    // wait until at least N DWPTs have a doc in order to observe
+    // wait until at least N threadstates have a doc in order to observe
     // who flushes the segments.
     while(true) {
       int numStatesWithDocs = 0;
       DocumentsWriterPerThreadPool perThreadPool = w.docWriter.perThreadPool;
-      for (DocumentsWriterPerThread dwpt : perThreadPool) {
-        dwpt.lock();
+      for (int i = 0; i < perThreadPool.getActiveThreadStateCount(); i++) {
+        DocumentsWriterPerThreadPool.ThreadState threadState = perThreadPool.getThreadState(i);
+        threadState.lock();
         try {
-          if (dwpt.getNumDocsInRAM() > 1) {
+          DocumentsWriterPerThread dwpt = threadState.dwpt;
+          if (dwpt != null && dwpt.getNumDocsInRAM() > 1) {
             numStatesWithDocs++;
           }
         } finally {
-          dwpt.unlock();
+          threadState.unlock();
         }
       }
       if (numStatesWithDocs >= buffersWithDocs) {
@@ -3448,12 +3445,12 @@ public class TestIndexWriter extends LuceneTestCase {
     d.add(new StringField("id", "doc-1", Field.Store.YES));
     writer.addDocument(d);
     writer.deleteDocuments(new Term("id", "doc-1"));
-    assertEquals(1, writer.cloneSegmentInfos().size());
+    assertEquals(1, writer.listOfSegmentCommitInfos().size());
     writer.flush();
-    assertEquals(1, writer.cloneSegmentInfos().size());
+    assertEquals(1, writer.listOfSegmentCommitInfos().size());
     writer.commit();
     assertFiles(writer);
-    assertEquals(1, writer.cloneSegmentInfos().size());
+    assertEquals(1, writer.listOfSegmentCommitInfos().size());
     IOUtils.close(writer, dir);
   }
 
@@ -3706,19 +3703,22 @@ public class TestIndexWriter extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriter w = new IndexWriter(dir, new IndexWriterConfig());
     w.addDocument(new Document());
-    assertEquals(1, w.docWriter.perThreadPool.size());
+    int activeThreadStateCount = w.docWriter.perThreadPool.getActiveThreadStateCount();
+    assertEquals(1, activeThreadStateCount);
     CountDownLatch latch = new CountDownLatch(1);
     Thread thread = new Thread(() -> {
       latch.countDown();
       List<Closeable> states = new ArrayList<>();
       try {
         for (int i = 0; i < 100; i++) {
-          DocumentsWriterPerThread state = w.docWriter.perThreadPool.getAndLock();
+          DocumentsWriterPerThreadPool.ThreadState state = w.docWriter.perThreadPool.getAndLock();
           states.add(state::unlock);
-          state.deleteQueue.getNextSequenceNumber();
+          if (state.isInitialized()) {
+            state.dwpt.deleteQueue.getNextSequenceNumber();
+          } else {
+            w.docWriter.deleteQueue.getNextSequenceNumber();
+          }
         }
-      } catch (IOException e) {
-        throw new AssertionError(e);
       } finally {
         IOUtils.closeWhileHandlingException(states);
       }
@@ -3775,67 +3775,7 @@ public class TestIndexWriter extends LuceneTestCase {
       stopped.set(true);
       indexer.join();
       refresher.join();
-      Throwable e = w.getTragicException();
-      IOSupplier<String> supplier = () -> {
-        if (e != null) {
-          StringWriter writer = new StringWriter();
-          try (PrintWriter printWriter = new PrintWriter(writer)) {
-            e.printStackTrace(printWriter);
-          }
-          return writer.toString();
-        } else {
-          return "";
-        }
-      };
-      assertNull("should not consider ACE a tragedy on a closed IW: " + supplier.get(), w.getTragicException());
       IOUtils.close(sm, dir);
-    }
-  }
-
-  public void testCloseableQueue() throws IOException, InterruptedException {
-    try(Directory dir = newDirectory();
-        IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig())) {
-      IndexWriter.EventQueue queue = new IndexWriter.EventQueue(writer);
-      AtomicInteger executed = new AtomicInteger(0);
-
-      queue.add(w -> {
-        assertNotNull(w);
-        executed.incrementAndGet();
-      });
-      queue.add(w -> {
-        assertNotNull(w);
-        executed.incrementAndGet();
-      });
-      queue.processEvents();
-      assertEquals(2, executed.get());
-      queue.processEvents();
-      assertEquals(2, executed.get());
-
-      queue.add(w -> {
-        assertNotNull(w);
-        executed.incrementAndGet();
-      });
-      queue.add(w -> {
-        assertNotNull(w);
-        executed.incrementAndGet();
-      });
-
-
-      Thread t = new Thread(() -> {
-        try {
-          queue.processEvents();
-        } catch (IOException e) {
-          throw new AssertionError();
-        } catch (AlreadyClosedException ex) {
-          // possible
-        }
-      });
-      t.start();
-      queue.close();
-      t.join();
-      assertEquals(4, executed.get());
-      expectThrows(AlreadyClosedException.class, () -> queue.processEvents());
-      expectThrows(AlreadyClosedException.class, () -> queue.add(w -> {}));
     }
   }
 
@@ -3951,219 +3891,6 @@ public class TestIndexWriter extends LuceneTestCase {
       }
       for (Thread thread : threads) {
         thread.join();
-      }
-    }
-  }
-
-  public void testMaxCompletedSequenceNumber() throws IOException, InterruptedException {
-    try (Directory dir = newDirectory();
-         IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig());) {
-      assertEquals(1, writer.addDocument(new Document()));
-      assertEquals(2, writer.updateDocument(new Term("foo", "bar"), new Document()));
-      writer.flushNextBuffer();
-      assertEquals(3, writer.commit());
-      assertEquals(4, writer.addDocument(new Document()));
-      assertEquals(4, writer.getMaxCompletedSequenceNumber());
-      // commit moves seqNo by 2 since there is one DWPT that could still be in-flight
-      assertEquals(6, writer.commit());
-      assertEquals(6, writer.getMaxCompletedSequenceNumber());
-      assertEquals(7, writer.addDocument(new Document()));
-      writer.getReader().close();
-      // getReader moves seqNo by 2 since there is one DWPT that could still be in-flight
-      assertEquals(9, writer.getMaxCompletedSequenceNumber());
-    }
-    try (Directory dir = newDirectory();
-         IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig());
-         SearcherManager manager = new SearcherManager(writer, new SearcherFactory())) {
-      CountDownLatch start = new CountDownLatch(1);
-      int numDocs = 100 + random().nextInt(500);
-      AtomicLong maxCompletedSeqID = new AtomicLong(-1);
-      Thread[] threads = new Thread[2 + random().nextInt(2)];
-      for (int i = 0; i < threads.length; i++) {
-        int idx = i;
-        threads[i] = new Thread(() -> {
-          try {
-            start.await();
-            for (int j = 0; j < numDocs; j++) {
-              Document doc = new Document();
-              String id = idx +"-"+j;
-              doc.add(new StringField("id", id, Field.Store.NO));
-              long seqNo = writer.addDocument(doc);
-              if (maxCompletedSeqID.get() < seqNo) {
-                long maxCompletedSequenceNumber = writer.getMaxCompletedSequenceNumber();
-                manager.maybeRefreshBlocking();
-                maxCompletedSeqID.updateAndGet(oldVal-> Math.max(oldVal, maxCompletedSequenceNumber));
-              }
-              IndexSearcher acquire = manager.acquire();
-              try {
-                assertEquals(1, acquire.search(new TermQuery(new Term("id", id)), 10).totalHits.value);
-              } finally {
-                manager.release(acquire);
-              }
-            }
-          } catch (Exception e) {
-            throw new AssertionError(e);
-          }
-        });
-        threads[i].start();
-      }
-      start.countDown();
-      for (int i = 0; i < threads.length; i++) {
-        threads[i].join();
-      }
-    }
-  }
-
-  public void testEnsureMaxSeqNoIsAccurateDuringFlush() throws IOException, InterruptedException {
-    AtomicReference<CountDownLatch> waitRef = new AtomicReference<>(new CountDownLatch(0));
-    AtomicReference<CountDownLatch> arrivedRef = new AtomicReference<>(new CountDownLatch(0));
-    InfoStream stream = new InfoStream() {
-      @Override
-      public void message(String component, String message) {
-        if ("TP".equals(component) && "DocumentsWriterPerThread addDocuments start".equals(message)) {
-          try {
-            arrivedRef.get().countDown();
-            waitRef.get().await();
-          } catch (InterruptedException e) {
-            throw new AssertionError(e);
-          }
-        }
-      }
-
-      @Override
-      public boolean isEnabled(String component) {
-        return "TP".equals(component);
-      }
-
-      @Override
-      public void close() throws IOException {
-      }
-    };
-    IndexWriterConfig indexWriterConfig = newIndexWriterConfig();
-    indexWriterConfig.setInfoStream(stream);
-    try (Directory dir = newDirectory();
-         IndexWriter writer = new IndexWriter(dir, indexWriterConfig) {
-           @Override
-           protected boolean isEnableTestPoints() {
-             return true;
-           }
-         }) {
-      // we produce once DWPT with 1 doc
-      writer.addDocument(new Document());
-      assertEquals(1, writer.docWriter.perThreadPool.size());
-      long maxCompletedSequenceNumber = writer.getMaxCompletedSequenceNumber();
-      // safe the seqNo and use the latches to block this DWPT such that a refresh must wait for it
-      waitRef.set(new CountDownLatch(1));
-      arrivedRef.set(new CountDownLatch(1));
-      Thread waiterThread = new Thread(() -> {
-        try {
-          writer.addDocument(new Document());
-        } catch (IOException e) {
-          throw new AssertionError(e);
-        }
-      });
-      waiterThread.start();
-      arrivedRef.get().await();
-      Thread refreshThread = new Thread(() -> {
-        try {
-          writer.getReader().close();
-        } catch (IOException e) {
-          throw new AssertionError(e);
-        }
-      });
-      DocumentsWriterDeleteQueue deleteQueue = writer.docWriter.deleteQueue;
-      refreshThread.start();
-      // now we wait until the refresh has swapped the deleted queue and assert that
-      // we see an accurate seqId
-      while (writer.docWriter.deleteQueue == deleteQueue) {
-        Thread.yield(); // busy wait for refresh to swap the queue
-      }
-      try {
-        assertEquals(maxCompletedSequenceNumber, writer.getMaxCompletedSequenceNumber());
-      } finally {
-        waitRef.get().countDown();
-        waiterThread.join();
-        refreshThread.join();
-      }
-      assertEquals(maxCompletedSequenceNumber+2, writer.getMaxCompletedSequenceNumber());
-    }
-  }
-
-  public void testSegmentCommitInfoId() throws IOException {
-    try (Directory dir = newDirectory()) {
-      SegmentInfos segmentCommitInfos;
-      try (IndexWriter writer = new IndexWriter(dir,
-          new IndexWriterConfig().setMergePolicy(NoMergePolicy.INSTANCE))) {
-        Document doc = new Document();
-        doc.add(new NumericDocValuesField("num", 1));
-        doc.add(new StringField("id", "1", Field.Store.NO));
-        writer.addDocument(doc);
-        doc = new Document();
-        doc.add(new NumericDocValuesField("num", 1));
-        doc.add(new StringField("id", "2", Field.Store.NO));
-        writer.addDocument(doc);
-        writer.commit();
-        segmentCommitInfos = SegmentInfos.readLatestCommit(dir);
-        byte[] id = segmentCommitInfos.info(0).getId();
-        byte[] segInfoId = segmentCommitInfos.info(0).info.getId();
-
-        writer.updateNumericDocValue(new Term("id", "1"), "num", 2);
-        writer.commit();
-        segmentCommitInfos = SegmentInfos.readLatestCommit(dir);
-        assertEquals(1, segmentCommitInfos.size());
-        assertNotEquals(StringHelper.idToString(id), StringHelper.idToString(segmentCommitInfos.info(0).getId()));
-        assertEquals(StringHelper.idToString(segInfoId), StringHelper.idToString(segmentCommitInfos.info(0).info.getId()));
-        id = segmentCommitInfos.info(0).getId();
-        writer.addDocument(new Document()); // second segment
-        writer.commit();
-        segmentCommitInfos = SegmentInfos.readLatestCommit(dir);
-        assertEquals(2, segmentCommitInfos.size());
-        assertEquals(StringHelper.idToString(id), StringHelper.idToString(segmentCommitInfos.info(0).getId()));
-        assertEquals(StringHelper.idToString(segInfoId), StringHelper.idToString(segmentCommitInfos.info(0).info.getId()));
-
-        doc = new Document();
-        doc.add(new NumericDocValuesField("num", 5));
-        doc.add(new StringField("id", "1", Field.Store.NO));
-        writer.updateDocument(new Term("id", "1"), doc);
-        writer.commit();
-        segmentCommitInfos = SegmentInfos.readLatestCommit(dir);
-        assertEquals(3, segmentCommitInfos.size());
-        assertNotEquals(StringHelper.idToString(id), StringHelper.idToString(segmentCommitInfos.info(0).getId()));
-        assertEquals(StringHelper.idToString(segInfoId), StringHelper.idToString(segmentCommitInfos.info(0).info.getId()));
-      }
-
-      try (Directory dir2 = newDirectory();
-           IndexWriter writer2 = new IndexWriter(dir2,
-               new IndexWriterConfig().setMergePolicy(NoMergePolicy.INSTANCE))) {
-        writer2.addIndexes(dir);
-        writer2.commit();
-        SegmentInfos infos2 = SegmentInfos.readLatestCommit(dir2);
-        assertEquals(infos2.size(), segmentCommitInfos.size());
-        for (int i = 0; i < infos2.size(); i++) {
-          assertEquals(StringHelper.idToString(infos2.info(i).getId()), StringHelper.idToString(segmentCommitInfos.info(i).getId()));
-          assertEquals(StringHelper.idToString(infos2.info(i).info.getId()), StringHelper.idToString(segmentCommitInfos.info(i).info.getId()));
-        }
-      }
-    }
-
-    Set<String> ids = new HashSet<>();
-    for (int i = 0; i < 2; i++) {
-      try (Directory dir = newDirectory();
-           IndexWriter writer = new IndexWriter(dir,
-               new IndexWriterConfig().setMergePolicy(NoMergePolicy.INSTANCE))) {
-        Document doc = new Document();
-        doc.add(new NumericDocValuesField("num", 1));
-        doc.add(new StringField("id", "1", Field.Store.NO));
-        writer.addDocument(doc);
-        writer.commit();
-        SegmentInfos segmentCommitInfos = SegmentInfos.readLatestCommit(dir);
-        String id = StringHelper.idToString(segmentCommitInfos.info(0).getId());
-        assertTrue(ids.add(id));
-        writer.updateNumericDocValue(new Term("id", "1"), "num", 2);
-        writer.commit();
-        segmentCommitInfos = SegmentInfos.readLatestCommit(dir);
-        id = StringHelper.idToString(segmentCommitInfos.info(0).getId());
-        assertTrue(ids.add(id));
       }
     }
   }

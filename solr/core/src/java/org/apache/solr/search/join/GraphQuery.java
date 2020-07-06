@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeSet;
 
 import org.apache.lucene.index.LeafReaderContext;
@@ -200,7 +201,7 @@ public class GraphQuery extends Query {
           // Create the graph result collector for this level
           GraphEdgeCollector graphResultCollector = collectSchemaField.getType().isPointField()
               ? new GraphPointsCollector(collectSchemaField, new BitDocSet(resultBits), leafNodes)
-              : new GraphEdgeCollector.GraphTermsCollector(collectSchemaField, new BitDocSet(resultBits), leafNodes);
+              : new GraphTermsCollector(collectSchemaField, new BitDocSet(resultBits), leafNodes);
 
           fromSet = new BitDocSet(new FixedBitSet(capacity));
           graphResultCollector.setCollectDocs(fromSet.getBits());
@@ -281,7 +282,12 @@ public class GraphQuery extends Query {
     public boolean isCacheable(LeafReaderContext ctx) {
       return true;
     }
-    
+
+    @Override
+    public void extractTerms(Set<Term> terms) {
+      // NoOp for now , not used.. / supported
+    }
+
   }
   
   private static class GraphScorer extends Scorer {

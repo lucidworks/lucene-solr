@@ -1057,9 +1057,9 @@ public class TestStressNRTReplication extends LuceneTestCase {
 
     @Override
     public void run() {
-      LineFileDocs docs=null;
+
       try {
-        docs = new LineFileDocs(random());
+        LineFileDocs docs = new LineFileDocs(random());
         int docCount = 0;
 
         // How often we do an update/delete vs add:
@@ -1175,8 +1175,6 @@ public class TestStressNRTReplication extends LuceneTestCase {
         failed.set(true);
         stop.set(true);
         throw new RuntimeException(t);
-      } finally {
-        IOUtils.closeWhileHandlingException(docs);
       }
     }
   }

@@ -56,7 +56,7 @@ import org.apache.solr.core.CoreDescriptor;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.update.UpdateCommand;
-import org.apache.solr.common.util.SolrNamedThreadFactory;
+import org.apache.solr.util.DefaultSolrThreadFactory;
 import org.junit.Ignore;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -120,7 +120,7 @@ public abstract class RoutedAliasUpdateProcessorTest extends SolrCloudTestCase {
 
     // TODO: fix SOLR-13059, a where this wait isn't working ~0.3% of the time without the sleep.
     waitCol(1,configName);
-    Thread.sleep(500); // YUCK but works (beasts 2500x20 ok vs failing in ~500x20 every time)
+    Thread.sleep(500); // because YUCK but works (beasts 2500x20 ok vs failing in ~500x20 every time)
     // manipulate the config...
     checkNoError(getSolrClient().request(new V2Request.Builder("/collections/" + configName + "/config")
         .withMethod(SolrRequest.METHOD.POST)
@@ -273,7 +273,7 @@ public abstract class RoutedAliasUpdateProcessorTest extends SolrCloudTestCase {
       try (CloudSolrClient solrClient = getCloudSolrClient(cluster)) {
         try {
           exec = ExecutorUtil.newMDCAwareFixedThreadPool(1 + random().nextInt(2),
-              new SolrNamedThreadFactory(getSaferTestName()));
+              new DefaultSolrThreadFactory(getSaferTestName()));
           List<Future<UpdateResponse>> futures = new ArrayList<>(solrInputDocuments.length);
           for (SolrInputDocument solrInputDocument : solrInputDocuments) {
             String col = collections.get(random().nextInt(collections.size()));

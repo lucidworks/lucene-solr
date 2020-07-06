@@ -113,8 +113,8 @@ public class DocBuilder {
       VariableResolver resolver = null;
       String epoch = propWriter.convertDateToString(EPOCH);
       if(dataImporter != null && dataImporter.getCore() != null
-          && dataImporter.getCore().getCoreDescriptor().getSubstitutableProperties() != null){
-        resolver =  new VariableResolver(dataImporter.getCore().getCoreDescriptor().getSubstitutableProperties());
+          && dataImporter.getCore().getResourceLoader().getCoreProperties() != null){
+        resolver =  new VariableResolver(dataImporter.getCore().getResourceLoader().getCoreProperties());
       } else {
         resolver = new VariableResolver();
       }
@@ -157,7 +157,7 @@ public class DocBuilder {
 
   private void invokeEventListener(String className, Exception lastException) {
     try {
-      EventListener listener = (EventListener) loadClass(className, dataImporter.getCore()).getConstructor().newInstance();
+      EventListener listener = (EventListener) loadClass(className, dataImporter.getCore()).newInstance();
       notifyListener(listener, lastException);
     } catch (Exception e) {
       wrapAndThrow(SEVERE, e, "Unable to load class : " + className);
@@ -265,9 +265,7 @@ public class DocBuilder {
         statusMessages.put(DataImporter.MSG.TOTAL_FAILED_DOCS, ""+ importStatistics.failedDocCount.get());
 
       statusMessages.put("Time taken", getTimeElapsedSince(startTime.get()));
-      if (log.isInfoEnabled()) {
-        log.info("Time taken = {}", getTimeElapsedSince(startTime.get()));
-      }
+      log.info("Time taken = " + getTimeElapsedSince(startTime.get()));
     } catch(Exception e)
     {
       throw new RuntimeException(e);
@@ -387,7 +385,7 @@ public class DocBuilder {
         key = map.get(keyName);
       }
       if(key == null) {
-        log.warn("no key was available for deleted pk query. keyName = {}", keyName);
+        log.warn("no key was available for deleted pk query. keyName = " + keyName);
         continue;
       }
       writer.deleteDoc(key);
@@ -485,7 +483,7 @@ public class DocBuilder {
             if (seenDocCount <= reqParams.getStart())
               continue;
             if (seenDocCount > reqParams.getStart() + reqParams.getRows()) {
-              log.info("Indexing stopped at docCount = {}", importStatistics.docCount);
+              log.info("Indexing stopped at docCount = " + importStatistics.docCount);
               break;
             }
           }
@@ -723,7 +721,7 @@ public class DocBuilder {
     } else {
       try {
         entityProcessor = (EntityProcessor) loadClass(entity.getProcessorName(), dataImporter.getCore())
-            .getConstructor().newInstance();
+                .newInstance();
       } catch (Exception e) {
         wrapAndThrow (SEVERE,e,
                 "Unable to load EntityProcessor implementation for entity:" + entity.getName());
@@ -761,11 +759,9 @@ public class DocBuilder {
                   "deltaQuery has no column to resolve to declared primary key pk='%s'",
                   pk));
     }
-    if (log.isInfoEnabled()) {
-      log.info(String.format(Locale.ROOT,
-          "Resolving deltaQuery column '%s' to match entity's declared pk '%s'",
-          resolvedPk, pk));
-    }
+    log.info(String.format(Locale.ROOT,
+        "Resolving deltaQuery column '%s' to match entity's declared pk '%s'",
+        resolvedPk, pk));
     return resolvedPk;
   }
 
@@ -800,9 +796,7 @@ public class DocBuilder {
     
     // identifying the modified rows for this entity
     Map<String, Map<String, Object>> deltaSet = new HashMap<>();
-    if (log.isInfoEnabled()) {
-      log.info("Running ModifiedRowKey() for Entity: {}", epw.getEntity().getName());
-    }
+    log.info("Running ModifiedRowKey() for Entity: " + epw.getEntity().getName());
     //get the modified rows in this entity
     String pk = epw.getEntity().getPk();
     while (true) {
@@ -850,10 +844,8 @@ public class DocBuilder {
         return new HashSet();
     }
 
-    if (log.isInfoEnabled()) {
-      log.info("Completed ModifiedRowKey for Entity: {} rows obtained: {}", epw.getEntity().getName(), deltaSet.size());
-      log.info("Completed DeletedRowKey for Entity: {} rows obtained : {}", epw.getEntity().getName(), deletedSet.size()); // logOk
-    }
+    log.info("Completed ModifiedRowKey for Entity: " + epw.getEntity().getName() + " rows obtained : " + deltaSet.size());
+    log.info("Completed DeletedRowKey for Entity: " + epw.getEntity().getName() + " rows obtained : " + deletedSet.size());
 
     myModifiedPks.addAll(deltaSet.values());
     Set<Map<String, Object>> parentKeyList = new HashSet<>();
@@ -878,9 +870,7 @@ public class DocBuilder {
           return new HashSet();
       }
     }
-    if (log.isInfoEnabled()) {
-      log.info("Completed parentDeltaQuery for Entity: {}", epw.getEntity().getName());
-    }
+    log.info("Completed parentDeltaQuery for Entity: " + epw.getEntity().getName());
     if (epw.getEntity().isDocRoot())
       deletedRows.addAll(deletedSet);
 

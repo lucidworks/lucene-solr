@@ -364,9 +364,7 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
       ModifiableSolrParams solrParams = new ModifiableSolrParams();
       solrParams.set(CommonParams.Q, "*:*");
       solrParams.set(ShardParams._ROUTE_, sameShardRoutes.get(random().nextInt(sameShardRoutes.size())));
-      if (log.isInfoEnabled()) {
-        log.info("output: {}", getRandomClient().query("routing_collection", solrParams));
-      }
+      log.info("output: {}", getRandomClient().query("routing_collection", solrParams));
     }
 
     // Request counts increase from expected nodes should aggregate to 1000, while there should be
@@ -465,9 +463,7 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
       assertNotNull(ShardParams.SHARDS_INFO+" did not return 'shardAddress' parameter", shardAddress);
       shardAddresses.add(shardAddress);
     }
-    if (log.isInfoEnabled()) {
-      log.info("Shards giving the response: {}", Arrays.toString(shardAddresses.toArray()));
-    }
+    log.info("Shards giving the response: " + Arrays.toString(shardAddresses.toArray()));
 
     // Make sure the distributed queries were directed to a single node only
     Set<Integer> ports = new HashSet<Integer>();
@@ -603,9 +599,7 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
           for (JettySolrRunner runner : cluster.getJettySolrRunners()) {
             Long numRequests = getNumRequests(runner.getBaseUrl().toString(), "foo", "ADMIN", adminPathToMbean.get(adminPath), adminPath, true);
             errorsBefore += numRequests;
-            if (log.isInfoEnabled()) {
-              log.info("Found {} requests to {} on {}", numRequests, adminPath, runner.getBaseUrl());
-            }
+            log.info("Found {} requests to {} on {}", numRequests, adminPath, runner.getBaseUrl());
           }
 
           ModifiableSolrParams params = new ModifiableSolrParams();
@@ -622,9 +616,7 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
           for (JettySolrRunner runner : cluster.getJettySolrRunners()) {
             Long numRequests = getNumRequests(runner.getBaseUrl().toString(), "foo", "ADMIN", adminPathToMbean.get(adminPath), adminPath, true);
             errorsAfter += numRequests;
-            if (log.isInfoEnabled()) {
-              log.info("Found {} requests to {} on {}", numRequests, adminPath, runner.getBaseUrl());
-            }
+            log.info("Found {} requests to {} on {}", numRequests, adminPath, runner.getBaseUrl());
           }
           assertEquals(errorsBefore + 1, errorsAfter);
         }
@@ -688,19 +680,15 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
     Replica r = coll.getSlices().iterator().next().getReplicas().iterator().next();
 
     SolrQuery q = new SolrQuery().setQuery("*:*");
-    BaseHttpSolrClient.RemoteSolrException sse = null;
+    HttpSolrClient.RemoteSolrException sse = null;
 
     final String url = r.getStr(ZkStateReader.BASE_URL_PROP) + "/" + COLLECTION;
     try (HttpSolrClient solrClient = getHttpSolrClient(url)) {
 
-      if (log.isInfoEnabled()) {
-        log.info("should work query, result {}", solrClient.query(q));
-      }
+      log.info("should work query, result {}", solrClient.query(q));
       //no problem
       q.setParam(CloudSolrClient.STATE_VERSION, COLLECTION + ":" + coll.getZNodeVersion());
-      if (log.isInfoEnabled()) {
-        log.info("2nd query , result {}", solrClient.query(q));
-      }
+      log.info("2nd query , result {}", solrClient.query(q));
       //no error yet good
 
       q.setParam(CloudSolrClient.STATE_VERSION, COLLECTION + ":" + (coll.getZNodeVersion() - 1)); //an older version expect error
@@ -739,7 +727,7 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
       try {
         QueryResponse rsp = solrClient.query(q);
         log.info("error was expected");
-      } catch (BaseHttpSolrClient.RemoteSolrException e) {
+      } catch (HttpSolrClient.RemoteSolrException e) {
         sse = e;
       }
       assertNotNull(sse);
@@ -1034,9 +1022,7 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
       shardAddresses.add(shardAddress);
     }
     assertTrue("No responses", shardAddresses.size() > 0);
-    if (log.isInfoEnabled()) {
-      log.info("Shards giving the response: {}", Arrays.toString(shardAddresses.toArray()));
-    }
+    log.info("Shards giving the response: " + Arrays.toString(shardAddresses.toArray()));
   }
 
   @Test

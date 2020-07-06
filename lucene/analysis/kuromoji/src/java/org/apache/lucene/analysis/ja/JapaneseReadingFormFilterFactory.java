@@ -53,11 +53,6 @@ public class JapaneseReadingFormFilterFactory extends TokenFilterFactory {
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public JapaneseReadingFormFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new JapaneseReadingFormFilter(input, useRomaji);

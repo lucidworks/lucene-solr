@@ -72,10 +72,8 @@ public class DimensionalRoutedAliasUpdateProcessorTest extends RoutedAliasUpdate
     configureCluster(4).configure();
     solrClient = getCloudSolrClient(cluster);
     //log this to help debug potential causes of problems
-    if (log.isInfoEnabled()) {
-      log.info("SolrClient: {}", solrClient);
-      log.info("ClusterStateProvider {}", solrClient.getClusterStateProvider()); // logOk
-    }
+    log.info("SolrClient: {}", solrClient);
+    log.info("ClusterStateProvider {}", solrClient.getClusterStateProvider());
   }
 
   @After

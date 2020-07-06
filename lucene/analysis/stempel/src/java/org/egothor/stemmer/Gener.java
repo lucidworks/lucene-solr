@@ -101,8 +101,8 @@ public class Gener extends Reduce {
    * 
    * @param in the Row to test
    * @param remap Description of the Parameter
-   * @return <code>true</code> if the Row should remain, <code>false
-     *      </code> otherwise
+   * @return <tt>true</tt> if the Row should remain, <tt>false
+     *      </tt> otherwise
    */
   public boolean eat(Row in, int remap[]) {
     int sum = 0;

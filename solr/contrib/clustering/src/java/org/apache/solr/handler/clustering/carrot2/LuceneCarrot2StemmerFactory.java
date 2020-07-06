@@ -29,7 +29,7 @@ import org.carrot2.text.linguistic.IStemmerFactory;
 import org.carrot2.util.ReflectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.tartarus.snowball.SnowballStemmer;
+import org.tartarus.snowball.SnowballProgram;
 import org.tartarus.snowball.ext.DanishStemmer;
 import org.tartarus.snowball.ext.DutchStemmer;
 import org.tartarus.snowball.ext.EnglishStemmer;
@@ -83,7 +83,7 @@ public class LuceneCarrot2StemmerFactory implements IStemmerFactory {
      * This mapping is not dynamic because we want to keep the possibility to
      * obfuscate these classes.
      */
-    private static HashMap<LanguageCode, Class<? extends SnowballStemmer>> snowballStemmerClasses;
+    private static HashMap<LanguageCode, Class<? extends SnowballProgram>> snowballStemmerClasses;
     static {
       snowballStemmerClasses = new HashMap<>();
       snowballStemmerClasses.put(LanguageCode.DANISH, DanishStemmer.class);
@@ -110,9 +110,9 @@ public class LuceneCarrot2StemmerFactory implements IStemmerFactory {
      * An adapter converting Snowball programs into {@link IStemmer} interface.
      */
     private static class SnowballStemmerAdapter implements IStemmer {
-      private final SnowballStemmer snowballStemmer;
+      private final SnowballProgram snowballStemmer;
 
-      public SnowballStemmerAdapter(SnowballStemmer snowballStemmer) {
+      public SnowballStemmerAdapter(SnowballProgram snowballStemmer) {
         this.snowballStemmer = snowballStemmer;
       }
 
@@ -129,25 +129,25 @@ public class LuceneCarrot2StemmerFactory implements IStemmerFactory {
 
     /**
      * Create and return an {@link IStemmer} adapter for a
-     * {@link SnowballStemmer} for a given language code. An identity stemmer is
+     * {@link SnowballProgram} for a given language code. An identity stemmer is
      * returned for unknown languages.
      */
     public static IStemmer createStemmer(LanguageCode language) {
-      final Class<? extends SnowballStemmer> stemmerClazz = snowballStemmerClasses
+      final Class<? extends SnowballProgram> stemmerClazz = snowballStemmerClasses
           .get(language);
 
       if (stemmerClazz == null) {
-        log.warn("No Snowball stemmer class for: {}. "
-            + "Quality of clustering may be degraded.", language.name());
+        log.warn("No Snowball stemmer class for: " + language.name()
+            + ". Quality of clustering may be degraded.");
         return IdentityStemmer.INSTANCE;
       }
 
       try {
-        return new SnowballStemmerAdapter(stemmerClazz.getConstructor().newInstance());
+        return new SnowballStemmerAdapter(stemmerClazz.newInstance());
       } catch (Exception e) {
-        log.warn("Could not instantiate snowball stemmer for language: {}"
-                + ". Quality of clustering may be degraded."
-            , language.name(), e);
+        log.warn("Could not instantiate snowball stemmer"
+            + " for language: " + language.name()
+            + ". Quality of clustering may be degraded.", e);
 
         return IdentityStemmer.INSTANCE;
       }

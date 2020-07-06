@@ -46,11 +46,6 @@ public class ScandinavianNormalizationFilterFactory extends TokenFilterFactory {
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public ScandinavianNormalizationFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public ScandinavianNormalizationFilter create(TokenStream input) {
     return new ScandinavianNormalizationFilter(input);

@@ -408,41 +408,41 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
 
       if (ft instanceof IntValueFieldType) {
         if (reverse) {
-          sortValues[i] = new IntValue(field, new IntComp.IntDesc());
+          sortValues[i] = new IntValue(field, new IntDesc());
         } else {
-          sortValues[i] = new IntValue(field, new IntComp.IntAsc());
+          sortValues[i] = new IntValue(field, new IntAsc());
         }
       } else if (ft instanceof FloatValueFieldType) {
         if (reverse) {
-          sortValues[i] = new FloatValue(field, new FloatComp.FloatDesc());
+          sortValues[i] = new FloatValue(field, new FloatDesc());
         } else {
-          sortValues[i] = new FloatValue(field, new FloatComp.FloatAsc());
+          sortValues[i] = new FloatValue(field, new FloatAsc());
         }
       } else if (ft instanceof DoubleValueFieldType) {
         if (reverse) {
-          sortValues[i] = new DoubleValue(field, new DoubleComp.DoubleDesc());
+          sortValues[i] = new DoubleValue(field, new DoubleDesc());
         } else {
-          sortValues[i] = new DoubleValue(field, new DoubleComp.DoubleAsc());
+          sortValues[i] = new DoubleValue(field, new DoubleAsc());
         }
       } else if (ft instanceof LongValueFieldType) {
         if (reverse) {
-          sortValues[i] = new LongValue(field, new LongComp.LongDesc());
+          sortValues[i] = new LongValue(field, new LongDesc());
         } else {
-          sortValues[i] = new LongValue(field, new LongComp.LongAsc());
+          sortValues[i] = new LongValue(field, new LongAsc());
         }
       } else if (ft instanceof StrField || ft instanceof SortableTextField) {
         LeafReader reader = searcher.getSlowAtomicReader();
         SortedDocValues vals = reader.getSortedDocValues(field);
         if (reverse) {
-          sortValues[i] = new StringValue(vals, field, new IntComp.IntDesc());
+          sortValues[i] = new StringValue(vals, field, new IntDesc());
         } else {
-          sortValues[i] = new StringValue(vals, field, new IntComp.IntAsc());
+          sortValues[i] = new StringValue(vals, field, new IntAsc());
         }
       } else if (ft instanceof DateValueFieldType) {
         if (reverse) {
-          sortValues[i] = new LongValue(field, new LongComp.LongDesc());
+          sortValues[i] = new LongValue(field, new LongDesc());
         } else {
-          sortValues[i] = new LongValue(field, new LongComp.LongAsc());
+          sortValues[i] = new LongValue(field, new LongAsc());
         }
       } else if (ft instanceof BoolField) {
         // This is a bit of a hack, but since the boolean field stores ByteRefs, just like Strings
@@ -451,9 +451,9 @@ public class ExportWriter implements SolrCore.RawWriter, Closeable {
         LeafReader reader = searcher.getSlowAtomicReader();
         SortedDocValues vals = reader.getSortedDocValues(field);
         if (reverse) {
-          sortValues[i] = new StringValue(vals, field, new IntComp.IntDesc());
+          sortValues[i] = new StringValue(vals, field, new IntDesc());
         } else {
-          sortValues[i] = new StringValue(vals, field, new IntComp.IntAsc());
+          sortValues[i] = new StringValue(vals, field, new IntAsc());
         }
       } else {
         throw new IOException("Sort fields must be one of the following types: int,float,long,double,string,date,boolean,SortableText");

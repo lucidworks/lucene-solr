@@ -16,17 +16,19 @@
  */
 package org.apache.lucene.index;
 
+import org.apache.lucene.store.Directory;
+
 /** A {@link ConcurrentMergeScheduler} that ignores AlreadyClosedException. */
 public abstract class SuppressingConcurrentMergeScheduler extends ConcurrentMergeScheduler {
   @Override
-  protected void handleMergeException(Throwable exc) {
+  protected void handleMergeException(Directory dir, Throwable exc) {
     while (true) {
       if (isOK(exc)) {
         return;
       }
       exc = exc.getCause();
       if (exc == null) {
-        super.handleMergeException(exc);
+        super.handleMergeException(dir, exc);
       }
     }
   }

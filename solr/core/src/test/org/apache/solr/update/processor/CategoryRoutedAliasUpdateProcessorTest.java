@@ -64,20 +64,14 @@ public class CategoryRoutedAliasUpdateProcessorTest extends RoutedAliasUpdatePro
   private int lastDocId = 0;
   private static CloudSolrClient solrClient;
   private int numDocsDeletedOrFailed = 0;
-  // uncomment to create pause for attaching profiler.
-//  static {
-//    JOptionPane.showMessageDialog(null,"Ready?");
-//  }
 
   @Before
   public void doBefore() throws Exception {
-    configureCluster(1).configure();
+    configureCluster(4).configure();
     solrClient = getCloudSolrClient(cluster);
     //log this to help debug potential causes of problems
-    if (log.isInfoEnabled()) {
-      log.info("SolrClient: {}", solrClient);
-      log.info("ClusterStateProvider {}", solrClient.getClusterStateProvider()); // logOk
-    }
+    log.info("SolrClient: {}", solrClient);
+    log.info("ClusterStateProvider {}", solrClient.getClusterStateProvider());
   }
 
   @After
@@ -93,8 +87,6 @@ public class CategoryRoutedAliasUpdateProcessorTest extends RoutedAliasUpdatePro
     solrClient = null;
   }
 
-  @Test
-  @Slow
   public void testNonEnglish() throws Exception {
     // test to document the expected behavior with non-english text for categories
     // the present expectation is that non-latin text and many accented latin characters
@@ -138,7 +130,7 @@ public class CategoryRoutedAliasUpdateProcessorTest extends RoutedAliasUpdatePro
 
     CollectionAdminRequest.createCategoryRoutedAlias(getAlias(), categoryField, 20,
         CollectionAdminRequest.createCollection("_unused_", configName, 1, 1)
-            .setMaxShardsPerNode(12))
+            .setMaxShardsPerNode(2))
         .process(solrClient);
     addDocsAndCommit(true,
         newDoc(somethingInChinese),
@@ -198,6 +190,7 @@ public class CategoryRoutedAliasUpdateProcessorTest extends RoutedAliasUpdatePro
 
     // now we index a document
     addDocsAndCommit(true, newDoc(SHIPS[0]));
+    //assertDocRoutedToCol(lastDocId, col23rd);
 
     String uninitialized = getAlias() + "__CRA__" + CategoryRoutedAlias.UNINITIALIZED;
 
@@ -372,7 +365,7 @@ public class CategoryRoutedAliasUpdateProcessorTest extends RoutedAliasUpdatePro
     final int numReplicas = 1 + random().nextInt(3);
     CollectionAdminRequest.createCategoryRoutedAlias(getAlias(), categoryField, 20,
         CollectionAdminRequest.createCollection("_unused_", configName, numShards, numReplicas)
-            .setMaxShardsPerNode(numReplicas*numShards))
+            .setMaxShardsPerNode(numReplicas))
         .process(solrClient);
 
     // cause some collections to be created
@@ -412,42 +405,36 @@ public class CategoryRoutedAliasUpdateProcessorTest extends RoutedAliasUpdatePro
   }
 
 
-  /*
-   * We expect the following invariants:
-   *    1.) to see all the supplied collections
-   *    2.) Independently Querying all collections we can find to yield the same number of docs as querying the alias
-   *    3.) find as many docs as have been added but not deleted/failed
-   */
   private void assertInvariants(String... expectedColls) throws IOException, SolrServerException {
     final int expectNumFound = lastDocId - numDocsDeletedOrFailed; //lastDocId is effectively # generated docs
 
-    List<String> observedCols = new CollectionAdminRequest.ListAliases().process(solrClient).getAliasesAsLists().get(getAlias());
-    observedCols = new ArrayList<>(observedCols);
-    observedCols.sort(String::compareTo); // don't really care about the order here.
-    assert !observedCols.isEmpty();
+    List<String> cols = new CollectionAdminRequest.ListAliases().process(solrClient).getAliasesAsLists().get(getAlias());
+    cols = new ArrayList<>(cols);
+    cols.sort(String::compareTo); // don't really care about the order here.
+    assert !cols.isEmpty();
 
-    int numFoundViaCollections = 0;
-    for (String col : observedCols) {
+    int totalNumFound = 0;
+    for (String col : cols) {
       final QueryResponse colResponse = solrClient.query(col, params(
           "q", "*:*",
           "rows", "0"));
       long numFound = colResponse.getResults().getNumFound();
       if (numFound > 0) {
-        numFoundViaCollections += numFound;
+        totalNumFound += numFound;
       }
     }
     final QueryResponse colResponse = solrClient.query(getAlias(), params(
         "q", "*:*",
         "rows", "0"));
-    long numFoundViaAlias = colResponse.getResults().getNumFound();
-    List<String> expectedList = Arrays.asList(expectedColls);
-    expectedList.sort(String::compareTo);
-    assertArrayEquals("Expected " + expectedColls.length + " collections, found " + observedCols.size() + ":\n" +
-            observedCols + " vs \n" + expectedList, expectedColls, observedCols.toArray());
+    long aliasNumFound = colResponse.getResults().getNumFound();
+    List<String> actual = Arrays.asList(expectedColls);
+    actual.sort(String::compareTo);
+    assertArrayEquals("Expected " + expectedColls.length + " collections, found " + cols.size() + ":\n" +
+            cols + " vs \n" + actual, expectedColls, cols.toArray());
     assertEquals("Expected collections and alias to have same number of documents",
-        numFoundViaAlias, numFoundViaCollections);
-    assertEquals("Expected to find " + expectNumFound + " docs but found " + numFoundViaAlias,
-        expectNumFound, numFoundViaAlias);
+        aliasNumFound, totalNumFound);
+    assertEquals("Expected to find " + expectNumFound + " docs but found " + aliasNumFound,
+        expectNumFound, aliasNumFound);
   }
 
   private SolrInputDocument newDoc(String routedValue) {

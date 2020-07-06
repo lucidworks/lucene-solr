@@ -20,6 +20,7 @@ package org.apache.lucene.search;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Set;
 import java.util.List;
 
 import com.carrotsearch.randomizedtesting.generators.RandomPicks;
@@ -512,6 +513,10 @@ public class TestQueryRescorer extends LuceneTestCase {
     public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
 
       return new Weight(FixedScoreQuery.this) {
+
+        @Override
+        public void extractTerms(Set<Term> terms) {
+        }
 
         @Override
         public Scorer scorer(final LeafReaderContext context) throws IOException {

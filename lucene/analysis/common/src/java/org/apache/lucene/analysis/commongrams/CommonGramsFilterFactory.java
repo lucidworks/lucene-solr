@@ -63,11 +63,6 @@ public class CommonGramsFilterFactory extends TokenFilterFactory implements Reso
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public CommonGramsFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public void inform(ResourceLoader loader) throws IOException {
     if (commonWordFiles != null) {

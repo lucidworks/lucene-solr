@@ -16,7 +16,6 @@
  */
 package org.apache.lucene.util;
 
-import java.util.Arrays;
 
 /** Represents int[], as a slice (offset + length) into an
  *  existing int[].  The {@link #ints} member should never be null; use
@@ -92,14 +91,14 @@ public final class IntsRef implements Comparable<IntsRef>, Cloneable {
   }
 
   public boolean intsEquals(IntsRef other) {
-    return Arrays.equals(this.ints, this.offset, this.offset + this.length, 
+    return FutureArrays.equals(this.ints, this.offset, this.offset + this.length, 
                                other.ints, other.offset, other.offset + other.length);
   }
 
   /** Signed int order comparison */
   @Override
   public int compareTo(IntsRef other) {
-    return Arrays.compare(this.ints, this.offset, this.offset + this.length, 
+    return FutureArrays.compare(this.ints, this.offset, this.offset + this.length, 
                                 other.ints, other.offset, other.offset + other.length);
   }
 

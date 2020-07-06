@@ -19,7 +19,6 @@ package org.apache.lucene.codecs.cranky;
 import java.io.IOException;
 import java.util.Random;
 
-import org.apache.lucene.codecs.CompoundDirectory;
 import org.apache.lucene.codecs.CompoundFormat;
 import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.store.Directory;
@@ -35,7 +34,7 @@ class CrankyCompoundFormat extends CompoundFormat {
   }
   
   @Override
-  public CompoundDirectory getCompoundReader(Directory dir, SegmentInfo si, IOContext context) throws IOException {
+  public Directory getCompoundReader(Directory dir, SegmentInfo si, IOContext context) throws IOException {
     return delegate.getCompoundReader(dir, si, context);
   }
   

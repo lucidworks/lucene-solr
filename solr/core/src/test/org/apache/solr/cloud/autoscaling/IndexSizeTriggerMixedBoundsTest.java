@@ -50,10 +50,12 @@ import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.UpdateParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.Pair;
+import org.apache.solr.common.util.TimeSource;
 import org.apache.solr.common.util.Utils;
 import org.apache.solr.core.SolrResourceLoader;
 import org.apache.solr.util.LogLevel;
-import org.junit.Before;
+import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -69,29 +71,38 @@ public class IndexSizeTriggerMixedBoundsTest extends SolrCloudTestCase {
 
   private static SolrCloudManager cloudManager;
   private static SolrClient solrClient;
+  private static TimeSource timeSource;
 
   private static int SPEED = 1;
 
   static Map<String, List<CapturedEvent>> listenerEvents = new ConcurrentHashMap<>();
-  static CountDownLatch listenerCreated;
-  static CountDownLatch finished;
+  static CountDownLatch listenerCreated = new CountDownLatch(1);
+  static CountDownLatch finished = new CountDownLatch(1);
 
   @BeforeClass
   public static void setupCluster() throws Exception {
     configureCluster(2)
-      .addConfig("conf", configset("cloud-minimal"))
-      .configure();
+    .addConfig("conf", configset("cloud-minimal"))
+    .configure();
     cloudManager = cluster.getJettySolrRunner(0).getCoreContainer().getZkController().getSolrCloudManager();
     solrClient = cluster.getSolrClient();
+    timeSource = cloudManager.getTimeSource();
   }
 
-  @Before
-  public void setDefaults() throws Exception {
+  @After
+  public void restoreDefaults() throws Exception {
     cluster.deleteAllCollections();
     cloudManager.getDistribStateManager().setData(SOLR_AUTOSCALING_CONF_PATH, Utils.toJSON(new ZkNodeProps()), -1);
+    cloudManager.getTimeSource().sleep(5000);
     listenerEvents.clear();
     listenerCreated = new CountDownLatch(1);
     finished = new CountDownLatch(1);
+  }
+
+  @AfterClass
+  public static void teardown() throws Exception {
+    solrClient = null;
+    cloudManager = null;
   }
 
   public static class CapturingTriggerListener extends TriggerListenerBase {
@@ -105,8 +116,8 @@ public class IndexSizeTriggerMixedBoundsTest extends SolrCloudTestCase {
     public synchronized void onEvent(TriggerEvent event, TriggerEventProcessorStage stage, String actionName,
                                      ActionContext context, Throwable error, String message) {
       List<CapturedEvent> lst = listenerEvents.computeIfAbsent(config.name, s -> new ArrayList<>());
-      CapturedEvent ev = new CapturedEvent(cloudManager.getTimeSource().getTimeNs(), context, config, stage, actionName, event, message);
-      log.info("=======> {}", ev);
+      CapturedEvent ev = new CapturedEvent(timeSource.getTimeNs(), context, config, stage, actionName, event, message);
+      log.info("=======> " + ev);
       lst.add(ev);
     }
   }
@@ -224,6 +235,8 @@ public class IndexSizeTriggerMixedBoundsTest extends SolrCloudTestCase {
     response = solrClient.request(req);
     assertEquals(response.get("result").toString(), "success");
 
+    timeSource.sleep(TimeUnit.MILLISECONDS.convert(waitForSeconds + 1, TimeUnit.SECONDS));
+
     boolean await = finished.await(90000 / SPEED, TimeUnit.MILLISECONDS);
     assertTrue("did not finish processing in time", await);
     log.info("-- suspending trigger");
@@ -288,7 +301,7 @@ public class IndexSizeTriggerMixedBoundsTest extends SolrCloudTestCase {
         "}";
     req = AutoScalingRequest.create(SolrRequest.METHOD.POST, suspendTriggerCommand);
     response = solrClient.request(req);
-    assertEquals("success", response.get("result").toString());
+    assertEquals(response.get("result").toString(), "success");
 
     log.info("-- deleting documents");
     for (int j = 0; j < 10; j++) {
@@ -299,6 +312,7 @@ public class IndexSizeTriggerMixedBoundsTest extends SolrCloudTestCase {
       }
       solrClient.request(ureq);
     }
+    cloudManager.getTimeSource().sleep(5000);
     // make sure the actual index size is reduced by deletions, otherwise we may still violate aboveBytes
     UpdateRequest ur = new UpdateRequest();
     ur.setParam(UpdateParams.COMMIT, "true");
@@ -309,6 +323,9 @@ public class IndexSizeTriggerMixedBoundsTest extends SolrCloudTestCase {
     ur.setParam(UpdateParams.OPEN_SEARCHER, "true");
     log.info("-- requesting optimize / expungeDeletes / commit");
     solrClient.request(ur, collectionName);
+
+    // wait for the segments to merge to reduce the index size
+    cloudManager.getTimeSource().sleep(50000);
 
     // add some docs so that every shard gets an update
     // we can reduce the number of docs here but this also works
@@ -330,6 +347,8 @@ public class IndexSizeTriggerMixedBoundsTest extends SolrCloudTestCase {
     req = AutoScalingRequest.create(SolrRequest.METHOD.POST, resumeTriggerCommand);
     response = solrClient.request(req);
     assertEquals(response.get("result").toString(), "success");
+
+    timeSource.sleep(TimeUnit.MILLISECONDS.convert(waitForSeconds + 1, TimeUnit.SECONDS));
 
     await = finished.await(90000 / SPEED, TimeUnit.MILLISECONDS);
     assertTrue("did not finish processing in time", await);

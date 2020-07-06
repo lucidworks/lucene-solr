@@ -110,17 +110,13 @@ public class TestSimComputePlanAction extends SimSolrCloudTestCase {
       // test didn't init, nothing to do
       return;
     }
-
-    if (log.isInfoEnabled()) {
-      log.info("-------------_ FINAL STATE --------------");
-      log.info("* Node values: {}", Utils.toJSONString(cluster.getSimNodeStateProvider().simGetAllNodeValues())); // logOk
-      log.info("* Live nodes: {}", cluster.getClusterStateProvider().getLiveNodes()); // logOk
-    }
+                          
+    log.info("-------------_ FINAL STATE --------------");
+    log.info("* Node values: " + Utils.toJSONString(cluster.getSimNodeStateProvider().simGetAllNodeValues()));
+    log.info("* Live nodes: " + cluster.getClusterStateProvider().getLiveNodes());
     ClusterState state = cluster.getClusterStateProvider().getClusterState();
-    if (log.isInfoEnabled()) {
-      for (String coll : cluster.getSimClusterStateProvider().simListCollections()) {
-        log.info("* Collection {} state: {}", coll, state.getCollection(coll)); // logOk
-      }
+    for (String coll: cluster.getSimClusterStateProvider().simListCollections()) {
+      log.info("* Collection " + coll + " state: " + state.getCollection(coll));
     }
     shutdownCluster();
   }
@@ -253,10 +249,8 @@ public class TestSimComputePlanAction extends SimSolrCloudTestCase {
     assertNotNull(context);
     List<SolrRequest> operations = (List<SolrRequest>) context.get("operations");
     assertNotNull("The operations computed by ComputePlanAction should not be null " + actionContextPropsRef.get() + "\nevent: " + eventRef.get(), operations);
-    if (log.isInfoEnabled()) {
-      operations.forEach(solrRequest -> log.info("{}", solrRequest.getParams()));
-    }
-
+    operations.forEach(solrRequest -> log.info(solrRequest.getParams().toString()));
+    
     // TODO: this can be 3!
     // assertEquals("ComputePlanAction should have computed exactly 2 operation", 2, operations.size());
 
@@ -264,7 +258,7 @@ public class TestSimComputePlanAction extends SimSolrCloudTestCase {
       SolrParams params = solrRequest.getParams();
       assertEquals("Expected MOVEREPLICA action after adding node", MOVEREPLICA, CollectionParams.CollectionAction.get(params.get("action")));
       String moved = params.get("replica");
-
+      
       // TODO: this can fail!
       // assertTrue(replicasToBeMoved.stream().anyMatch(replica -> replica.getName().equals(moved)));
     }
@@ -330,18 +324,14 @@ public class TestSimComputePlanAction extends SimSolrCloudTestCase {
     assertTrue(fired.get());
     Map context = actionContextPropsRef.get();
     assertNotNull(context);
-    if (log.isInfoEnabled()) {
-      log.info("Node values: {}", Utils.toJSONString(cluster.getSimNodeStateProvider().simGetAllNodeValues()));
-      log.info("Live nodes: {}, collection state: {}"
-          , cluster.getClusterStateProvider().getLiveNodes(), cluster.getClusterStateProvider().getClusterState().getCollection("testNodeAdded")); // logOk
-    }
-
+    log.info("Node values: " + Utils.toJSONString(cluster.getSimNodeStateProvider().simGetAllNodeValues()));
+    log.info("Live nodes: " + cluster.getClusterStateProvider().getLiveNodes() + ", collection state: " + cluster.getClusterStateProvider().getClusterState().getCollection("testNodeAdded"));
     List<SolrRequest> operations = (List<SolrRequest>) context.get("operations");
     assertNotNull("The operations computed by ComputePlanAction should not be null" + context, operations);
 
     // TODO: can be 2!
     // assertEquals("ComputePlanAction should have computed exactly 1 operation, but was: " + operations, 1, operations.size());
-
+    
     SolrRequest request = operations.get(0);
     SolrParams params = request.getParams();
     assertEquals("Expected MOVEREPLICA action after adding node", MOVEREPLICA, CollectionParams.CollectionAction.get(params.get("action")));

@@ -44,7 +44,6 @@ public class MemClassLoader extends ClassLoader implements AutoCloseable, Resour
   private boolean allJarsLoaded = false;
   private final SolrResourceLoader parentLoader;
   private List<PluginBag.RuntimeLib> libs = new ArrayList<>();
-  @SuppressWarnings("rawtypes")
   private Map<String, Class> classCache = new HashMap<>();
   private List<String> errors = new ArrayList<>();
 
@@ -98,7 +97,6 @@ public class MemClassLoader extends ClassLoader implements AutoCloseable, Resour
     }
   }
 
-  @SuppressWarnings({"rawtypes"})
   private synchronized  Class<?> loadFromRuntimeLibs(String name) throws ClassNotFoundException {
     Class result = classCache.get(name);
     if(result != null)
@@ -151,12 +149,11 @@ public class MemClassLoader extends ClassLoader implements AutoCloseable, Resour
   }
 
   @Override
-  public void close() {
+  public void close() throws Exception {
     for (PluginBag.RuntimeLib lib : libs) {
       try {
         lib.close();
       } catch (Exception e) {
-        log.error("Error closing lib {}", lib.getName(), e);
       }
     }
   }
@@ -191,7 +188,7 @@ public class MemClassLoader extends ClassLoader implements AutoCloseable, Resour
   @Override
   public <T> T newInstance(String cname, Class<T> expectedType) {
     try {
-      return findClass(cname, expectedType).getConstructor().newInstance();
+      return findClass(cname, expectedType).newInstance();
     } catch (SolrException e) {
       throw e;
     } catch (Exception e) {

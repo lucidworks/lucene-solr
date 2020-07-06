@@ -63,9 +63,7 @@ public class SnapshotDistribStateManager implements DistribStateManager {
    */
   public SnapshotDistribStateManager(DistribStateManager other, AutoScalingConfig config) throws Exception {
     List<String> tree = other.listTree("/");
-    if (log.isDebugEnabled()) {
-      log.debug("- copying {} resources from {}", tree.size(), other.getClass().getSimpleName());
-    }
+    log.debug("- copying {} resources from {}", tree.size(), other.getClass().getSimpleName());
     for (String path : tree) {
       dataMap.put(path, other.getData(path));
     }
@@ -89,7 +87,6 @@ public class SnapshotDistribStateManager implements DistribStateManager {
    */
   public SnapshotDistribStateManager(Map<String, Object> snapshot, AutoScalingConfig config) {
     snapshot.forEach((path, value) -> {
-      @SuppressWarnings({"unchecked"})
       Map<String, Object> map = (Map<String, Object>)value;
       Number version = (Number)map.getOrDefault("version", 0);
       String owner = (String)map.get("owner");
@@ -105,20 +102,19 @@ public class SnapshotDistribStateManager implements DistribStateManager {
       VersionedData vd = new VersionedData(config.getZkVersion(), Utils.toJSON(config), CreateMode.PERSISTENT, "0");
       dataMap.put(ZkStateReader.SOLR_AUTOSCALING_CONF_PATH, vd);
     }
-    if (log.isDebugEnabled()) {
-      log.debug("- loaded snapshot of {} resources", dataMap.size());
-    }
+    log.debug("- loaded snapshot of {} resources", dataMap.size());
   }
 
   // content of these nodes is a UTF-8 String and it needs to be redacted
-  private static final Set<Pattern> REDACTED = new HashSet<>() {{
-    add(Pattern.compile("/aliases\\.json"));
-    add(Pattern.compile("/autoscaling\\.json"));
-    add(Pattern.compile("/clusterstate\\.json"));
-    add(Pattern.compile("/collections/.*?/state\\.json"));
-    add(Pattern.compile("/collections/.*?/leaders/shard.*?/leader"));
-    add(Pattern.compile("/overseer_elect/leader"));
-  }};
+  private static final Set<Pattern> REDACTED = new HashSet<>();
+  static {
+    REDACTED.add(Pattern.compile("/aliases\\.json"));
+    REDACTED.add(Pattern.compile("/autoscaling\\.json"));
+    REDACTED.add(Pattern.compile("/clusterstate\\.json"));
+    REDACTED.add(Pattern.compile("/collections/.*?/state\\.json"));
+    REDACTED.add(Pattern.compile("/collections/.*?/leaders/shard.*?/leader"));
+    REDACTED.add(Pattern.compile("/overseer_elect/leader"));
+  }
   /**
    * Create a snapshot of all content in this instance.
    */
@@ -210,7 +206,6 @@ public class SnapshotDistribStateManager implements DistribStateManager {
   }
 
   @Override
-  @SuppressWarnings({"unchecked"})
   public AutoScalingConfig getAutoScalingConfig(Watcher watcher) throws InterruptedException, IOException {
     VersionedData vd = dataMap.get(ZkStateReader.SOLR_AUTOSCALING_CONF_PATH);
     Map<String, Object> map = new HashMap<>();

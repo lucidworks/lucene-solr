@@ -22,12 +22,12 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.store.BufferedChecksumIndexInput;
-import org.apache.lucene.store.ByteBuffersDataOutput;
-import org.apache.lucene.store.ByteBuffersIndexInput;
-import org.apache.lucene.store.ByteBuffersIndexOutput;
 import org.apache.lucene.store.ChecksumIndexInput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.RAMFile;
+import org.apache.lucene.store.RAMInputStream;
+import org.apache.lucene.store.RAMOutputStream;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.StringHelper;
 
@@ -35,13 +35,13 @@ import org.apache.lucene.util.StringHelper;
 public class TestCodecUtil extends LuceneTestCase {
   
   public void testHeaderLength() throws Exception {
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    IndexOutput output = new RAMOutputStream(file, true);
     CodecUtil.writeHeader(output, "FooBar", 5);
     output.writeString("this is the data");
     output.close();
     
-    IndexInput input = new ByteBuffersIndexInput(out.toDataInput(), "temp");
+    IndexInput input = new RAMInputStream("file", file);
     input.seek(CodecUtil.headerLength("FooBar"));
     assertEquals("this is the data", input.readString());
     input.close();
@@ -52,55 +52,55 @@ public class TestCodecUtil extends LuceneTestCase {
     for (int i = 0; i < 128; i++) {
       tooLong.append('a');
     }
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    IndexOutput output = new RAMOutputStream(file, true);
     expectThrows(IllegalArgumentException.class, () -> {
       CodecUtil.writeHeader(output, tooLong.toString(), 5);
     });
   }
   
   public void testWriteNonAsciiHeader() throws Exception {
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    IndexOutput output = new RAMOutputStream(file, true);
     expectThrows(IllegalArgumentException.class, () -> {
       CodecUtil.writeHeader(output, "\u1234", 5);
     });
   }
   
   public void testReadHeaderWrongMagic() throws Exception {
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    IndexOutput output = new RAMOutputStream(file, true);
     output.writeInt(1234);
     output.close();
     
-    IndexInput input = new ByteBuffersIndexInput(out.toDataInput(), "temp");
+    IndexInput input = new RAMInputStream("file", file);
     expectThrows(CorruptIndexException.class, () -> {
       CodecUtil.checkHeader(input, "bogus", 1, 1);
     });
   }
   
   public void testChecksumEntireFile() throws Exception {
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    IndexOutput output = new RAMOutputStream(file, true);
     CodecUtil.writeHeader(output, "FooBar", 5);
     output.writeString("this is the data");
     CodecUtil.writeFooter(output);
     output.close();
     
-    IndexInput input = new ByteBuffersIndexInput(out.toDataInput(), "temp");
+    IndexInput input = new RAMInputStream("file", file);
     CodecUtil.checksumEntireFile(input);
     input.close();
   }
   
   public void testCheckFooterValid() throws Exception {
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    IndexOutput output = new RAMOutputStream(file, true);
     CodecUtil.writeHeader(output, "FooBar", 5);
     output.writeString("this is the data");
     CodecUtil.writeFooter(output);
     output.close();
     
-    ChecksumIndexInput input = new BufferedChecksumIndexInput(new ByteBuffersIndexInput(out.toDataInput(), "temp"));
+    ChecksumIndexInput input = new BufferedChecksumIndexInput(new RAMInputStream("file", file));
     Exception mine = new RuntimeException("fake exception");
     RuntimeException expected = expectThrows(RuntimeException.class, () -> {
       CodecUtil.checkFooter(input, mine);
@@ -113,14 +113,14 @@ public class TestCodecUtil extends LuceneTestCase {
   }
   
   public void testCheckFooterValidAtFooter() throws Exception {
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    IndexOutput output = new RAMOutputStream(file, true);
     CodecUtil.writeHeader(output, "FooBar", 5);
     output.writeString("this is the data");
     CodecUtil.writeFooter(output);
     output.close();
     
-    ChecksumIndexInput input = new BufferedChecksumIndexInput(new ByteBuffersIndexInput(out.toDataInput(), "temp"));
+    ChecksumIndexInput input = new BufferedChecksumIndexInput(new RAMInputStream("file", file));
     CodecUtil.checkHeader(input, "FooBar", 5, 5);
     assertEquals("this is the data", input.readString());
     Exception mine = new RuntimeException("fake exception");
@@ -135,61 +135,61 @@ public class TestCodecUtil extends LuceneTestCase {
   }
   
   public void testCheckFooterValidPastFooter() throws Exception {
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    IndexOutput output = new RAMOutputStream(file, true);
     CodecUtil.writeHeader(output, "FooBar", 5);
     output.writeString("this is the data");
     CodecUtil.writeFooter(output);
     output.close();
     
-    ChecksumIndexInput input = new BufferedChecksumIndexInput(new ByteBuffersIndexInput(out.toDataInput(), "temp"));
+    ChecksumIndexInput input = new BufferedChecksumIndexInput(new RAMInputStream("file", file));
     CodecUtil.checkHeader(input, "FooBar", 5, 5);
     assertEquals("this is the data", input.readString());
     // bogusly read a byte too far (can happen)
     input.readByte();
     Exception mine = new RuntimeException("fake exception");
-    CorruptIndexException expected = expectThrows(CorruptIndexException.class, () -> {
+    RuntimeException expected = expectThrows(RuntimeException.class, () -> {
       CodecUtil.checkFooter(input, mine);
     });
-    assertTrue(expected.getMessage().contains("checksum status indeterminate"));
+    assertEquals("fake exception", expected.getMessage());
     Throwable suppressed[] = expected.getSuppressed();
     assertEquals(1, suppressed.length);
-    assertEquals("fake exception", suppressed[0].getMessage());
+    assertTrue(suppressed[0].getMessage().contains("checksum status indeterminate"));
     input.close();
   }
   
   public void testCheckFooterInvalid() throws Exception {
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    IndexOutput output = new RAMOutputStream(file, true);
     CodecUtil.writeHeader(output, "FooBar", 5);
     output.writeString("this is the data");
     output.writeInt(CodecUtil.FOOTER_MAGIC);
     output.writeInt(0);
     output.writeLong(1234567); // write a bogus checksum
     output.close();
-
-    ChecksumIndexInput input = new BufferedChecksumIndexInput(new ByteBuffersIndexInput(out.toDataInput(), "temp"));
+    
+    ChecksumIndexInput input = new BufferedChecksumIndexInput(new RAMInputStream("file", file));
     CodecUtil.checkHeader(input, "FooBar", 5, 5);
     assertEquals("this is the data", input.readString());
     Exception mine = new RuntimeException("fake exception");
-    CorruptIndexException expected = expectThrows(CorruptIndexException.class, () -> {
+    RuntimeException expected = expectThrows(RuntimeException.class, () -> {
       CodecUtil.checkFooter(input, mine);
     });
-    assertTrue(expected.getMessage().contains("checksum failed"));
+    assertEquals("fake exception", expected.getMessage());
     Throwable suppressed[] = expected.getSuppressed();
     assertEquals(1, suppressed.length);
-    assertEquals("fake exception", suppressed[0].getMessage());
+    assertTrue(suppressed[0].getMessage().contains("checksum failed"));
     input.close();
   }
   
   public void testSegmentHeaderLength() throws Exception {
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    IndexOutput output = new RAMOutputStream(file, true);
     CodecUtil.writeIndexHeader(output, "FooBar", 5, StringHelper.randomId(), "xyz");
     output.writeString("this is the data");
     output.close();
     
-    IndexInput input = new ByteBuffersIndexInput(out.toDataInput(), "temp");
+    IndexInput input = new RAMInputStream("file", file);
     input.seek(CodecUtil.indexHeaderLength("FooBar", "xyz"));
     assertEquals("this is the data", input.readString());
     input.close();
@@ -200,8 +200,8 @@ public class TestCodecUtil extends LuceneTestCase {
     for (int i = 0; i < 256; i++) {
       tooLong.append('a');
     }
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    IndexOutput output = new RAMOutputStream(file, true);
     expectThrows(IllegalArgumentException.class, () -> {
       CodecUtil.writeIndexHeader(output, "foobar", 5, StringHelper.randomId(), tooLong.toString());
     });
@@ -212,13 +212,13 @@ public class TestCodecUtil extends LuceneTestCase {
     for (int i = 0; i < 255; i++) {
       justLongEnough.append('a');
     }
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    IndexOutput output = new RAMOutputStream(file, true);
     byte[] id = StringHelper.randomId();
     CodecUtil.writeIndexHeader(output, "foobar", 5, id, justLongEnough.toString());
     output.close();
     
-    IndexInput input = new ByteBuffersIndexInput(out.toDataInput(), "temp");
+    IndexInput input = new RAMInputStream("file", file);
     CodecUtil.checkIndexHeader(input, "foobar", 5, 5, id, justLongEnough.toString());
     assertEquals(input.getFilePointer(), input.length());
     assertEquals(input.getFilePointer(), CodecUtil.indexHeaderLength("foobar", justLongEnough.toString()));
@@ -226,22 +226,22 @@ public class TestCodecUtil extends LuceneTestCase {
   }
   
   public void testWriteNonAsciiSuffix() throws Exception {
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    IndexOutput output = new RAMOutputStream(file, true);
     expectThrows(IllegalArgumentException.class, () -> {
       CodecUtil.writeIndexHeader(output, "foobar", 5, StringHelper.randomId(), "\u1234");
     });
   }
   
   public void testReadBogusCRC() throws Exception {
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    IndexOutput output = new RAMOutputStream(file, false);
     output.writeLong(-1L); // bad
     output.writeLong(1L << 32); // bad
     output.writeLong(-(1L << 32)); // bad
     output.writeLong((1L << 32) - 1); // ok
     output.close();
-    IndexInput input = new BufferedChecksumIndexInput(new ByteBuffersIndexInput(out.toDataInput(), "temp"));
+    IndexInput input = new RAMInputStream("file", file);
     // read 3 bogus values
     for (int i = 0; i < 3; i++) {
       expectThrows(CorruptIndexException.class, () -> {
@@ -253,10 +253,9 @@ public class TestCodecUtil extends LuceneTestCase {
   }
   
   public void testWriteBogusCRC() throws Exception {
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    final IndexOutput output = new RAMOutputStream(file, false);
     AtomicLong fakeChecksum = new AtomicLong();
-
     // wrap the index input where we control the checksum for mocking
     IndexOutput fakeOutput = new IndexOutput("fake", "fake") {
       @Override
@@ -305,18 +304,15 @@ public class TestCodecUtil extends LuceneTestCase {
   }
 
   public void testTruncatedFileThrowsCorruptIndexException() throws IOException {
-    ByteBuffersDataOutput out = new ByteBuffersDataOutput();
-    IndexOutput output = new ByteBuffersIndexOutput(out, "temp", "temp");
+    RAMFile file = new RAMFile();
+    IndexOutput output = new RAMOutputStream(file, false);
     output.close();
-
-    IndexInput input = new ByteBuffersIndexInput(out.toDataInput(), "temp");
-    
+    IndexInput input = new RAMInputStream("file", file);
     CorruptIndexException e = expectThrows(CorruptIndexException.class,
         () -> CodecUtil.checksumEntireFile(input));
-    assertTrue(e.getMessage(), e.getMessage().contains("misplaced codec footer (file truncated?): length=0 but footerLength==16 (resource"));
-
+    assertEquals("misplaced codec footer (file truncated?): length=0 but footerLength==16 (resource=RAMInputStream(name=file))", e.getMessage());
     e = expectThrows(CorruptIndexException.class,
         () -> CodecUtil.retrieveChecksum(input));
-    assertTrue(e.getMessage(), e.getMessage().contains("misplaced codec footer (file truncated?): length=0 but footerLength==16 (resource"));
+    assertEquals("misplaced codec footer (file truncated?): length=0 but footerLength==16 (resource=RAMInputStream(name=file))", e.getMessage());
   }
 }

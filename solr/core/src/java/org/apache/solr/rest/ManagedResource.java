@@ -114,9 +114,7 @@ public abstract class ManagedResource {
       NamedList<?> clonedArgs = args.clone();
       observer.onManagedResourceInitialized(clonedArgs,this);
     }
-    if (log.isInfoEnabled()) {
-      log.info("Notified {} observers of {}", observers.size(), getResourceId());
-    }
+    log.info("Notified {} observers of {}", observers.size(), getResourceId());
   }  
   
   /**
@@ -267,7 +265,7 @@ public abstract class ManagedResource {
           // note: the data we're managing now remains in a dubious state
           // however the text analysis component remains unaffected 
           // (at least until core reload)
-          log.error("Failed to load data from storage due to: {}", reloadExc);
+          log.error("Failed to load data from storage due to: "+reloadExc);
         }
       }
       
@@ -362,10 +360,8 @@ public abstract class ManagedResource {
    */
   @SuppressWarnings("unchecked")
   public synchronized void doPut(BaseSolrResource endpoint, Representation entity, Object json) {
-
-    if (log.isInfoEnabled()) {
-      log.info("Processing update to {}: {} is a {}", getResourceId(), json, json.getClass().getName());
-    }
+    
+    log.info("Processing update to {}: {} is a "+json.getClass().getName(), getResourceId(), json);
     
     boolean updatedInitArgs = false;
     Object managedData = null;

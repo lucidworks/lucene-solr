@@ -434,10 +434,8 @@ public class CloneFieldUpdateProcessorFactory
             if (matcher.find()) {
               resolvedDest = matcher.replaceAll(dest);
             } else {
-              if (log.isDebugEnabled()) {
-                log.debug("CloneFieldUpdateProcessor.srcSelector.shouldMutate('{}') returned true, but replacement pattern did not match, field skipped."
-                    , fname);
-              }
+              log.debug("CloneFieldUpdateProcessor.srcSelector.shouldMutate(\"{}\") returned true, " +
+                  "but replacement pattern did not match, field skipped.", fname);
               continue;
             }
           }

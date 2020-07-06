@@ -215,7 +215,10 @@ public final class CompressingStoredFieldsReader extends StoredFieldsReader {
         visitor.binaryField(info, data);
         break;
       case STRING:
-        visitor.stringField(info, in.readString());
+        length = in.readVInt();
+        data = new byte[length];
+        in.readBytes(data, 0, length);
+        visitor.stringField(info, data);
         break;
       case NUMERIC_INT:
         visitor.intField(info, in.readZInt());

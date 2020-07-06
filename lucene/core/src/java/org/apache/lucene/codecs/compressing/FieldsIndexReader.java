@@ -23,7 +23,6 @@ import static org.apache.lucene.codecs.compressing.FieldsIndexWriter.VERSION_STA
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Objects;
 
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.index.IndexFileNames;
@@ -32,6 +31,7 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.RandomAccessInput;
+import org.apache.lucene.util.FutureObjects;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.packed.DirectMonotonicReader;
 
@@ -116,7 +116,7 @@ final class FieldsIndexReader extends FieldsIndex {
 
   @Override
   long getStartPointer(int docID) {
-    Objects.checkIndex(docID, maxDoc);
+    FutureObjects.checkIndex(docID, maxDoc);
     long blockIndex = docs.binarySearch(0, numChunks, docID);
     if (blockIndex < 0) {
       blockIndex = -2 - blockIndex;

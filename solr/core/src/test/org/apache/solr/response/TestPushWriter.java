@@ -50,9 +50,7 @@ public class TestPushWriter extends SolrTestCaseJ4 {
         new LocalSolrQueryRequest(null, new ModifiableSolrParams()), new SolrQueryResponse());
     writeData(pw);
     osw.flush();
-    if (log.isInfoEnabled()) {
-      log.info("{}", new String(baos.toByteArray(), StandardCharsets.UTF_8));
-    }
+    log.info(new String(baos.toByteArray(), StandardCharsets.UTF_8));
     Map m = (Map) Utils.fromJSON(baos.toByteArray());
     checkValues(m);
     try (JavaBinCodec jbc = new JavaBinCodec(baos= new ByteArrayOutputStream(), null)) {

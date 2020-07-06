@@ -93,7 +93,6 @@ public class HaversineFunction extends ValueSource {
 
 
   @Override
-  @SuppressWarnings({"rawtypes"})
   public FunctionValues getValues(Map context, LeafReaderContext readerContext) throws IOException {
     final FunctionValues vals1 = p1.getValues(context, readerContext);
 
@@ -115,7 +114,6 @@ public class HaversineFunction extends ValueSource {
   }
 
   @Override
-  @SuppressWarnings({"rawtypes"})
   public void createWeight(Map context, IndexSearcher searcher) throws IOException {
     p1.createWeight(context, searcher);
     p2.createWeight(context, searcher);

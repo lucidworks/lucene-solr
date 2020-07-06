@@ -19,7 +19,6 @@ package org.apache.solr.cloud.autoscaling.sim;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.PrintStream;
-import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -64,7 +63,6 @@ public class TestSimScenario extends SimSolrCloudTestCase {
 
   String testSuggestionsScenario =
       "create_cluster numNodes=2\n" +
-      "load_autoscaling json={'cluster-policy':[]}\n" +
       "solr_request /admin/collections?action=CREATE&autoAddReplicas=true&name=testCollection&numShards=2&replicationFactor=2&maxShardsPerNode=2\n" +
       "wait_collection collection=testCollection&shards=2&replicas=2\n" +
       "ctx_set key=myNode&value=${_random_node_}\n" +
@@ -88,7 +86,7 @@ public class TestSimScenario extends SimSolrCloudTestCase {
     try (SimScenario scenario = SimScenario.load(testSuggestionsScenario)) {
       scenario.context.put("snapshotPath", snapshotPath);
       ByteArrayOutputStream baos = new ByteArrayOutputStream();
-      PrintStream ps = new PrintStream(baos, true, Charset.forName("UTF-8"));
+      PrintStream ps = new PrintStream(baos, true, "UTF-8");
       scenario.console = ps;
       scenario.context.put("iterative", "0");
       scenario.context.put("justCalc", "1");
@@ -119,7 +117,6 @@ public class TestSimScenario extends SimSolrCloudTestCase {
 
   String indexingScenario =
       "create_cluster numNodes=100\n" +
-      "load_autoscaling json={'cluster-policy':[]}\n" +
       "solr_request /admin/collections?action=CREATE&autoAddReplicas=true&name=testCollection&numShards=2&replicationFactor=2&maxShardsPerNode=2\n" +
       "wait_collection collection=testCollection&shards=2&replicas=2\n" +
       "solr_request /admin/autoscaling?httpMethod=POST&stream.body=" +
@@ -143,7 +140,6 @@ public class TestSimScenario extends SimSolrCloudTestCase {
 
   String splitShardScenario =
       "create_cluster numNodes=2\n" +
-          "load_autoscaling json={'cluster-policy':[]}\n" +
           "solr_request /admin/collections?action=CREATE&name=testCollection&numShards=2&replicationFactor=2&maxShardsPerNode=5\n" +
           "wait_collection collection=testCollection&shards=2&replicas=2\n" +
           "set_shard_metrics collection=testCollection&shard=shard1&INDEX.sizeInBytes=1000000000\n" +

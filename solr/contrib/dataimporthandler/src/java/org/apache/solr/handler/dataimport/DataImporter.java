@@ -125,7 +125,7 @@ public class DataImporter {
         } else if(dataconfigFile!=null) {
           is = new InputSource(core.getResourceLoader().openResource(dataconfigFile));
           is.setSystemId(SystemIdResolver.createSystemIdFromResourceName(dataconfigFile));
-          log.info("Loading DIH Configuration: {}", dataconfigFile);
+          log.info("Loading DIH Configuration: " + dataconfigFile);
         }
         if(is!=null) {          
           config = loadDataConfig(is);
@@ -148,7 +148,7 @@ public class DataImporter {
               for (int i = 0; i < dsConfig.size(); i++) {
                 props.put(dsConfig.getName(i), dsConfig.getVal(i).toString());
               }
-              log.info("Adding properties to datasource: {}", props);
+              log.info("Adding properties to datasource: " + props);
               dsProps.put((String) dsConfig.get("name"), props);
             }
             position++;
@@ -333,7 +333,7 @@ public class DataImporter {
     PropertyWriter configPw = config.getPropertyWriter();
     try {
       Class<DIHProperties> writerClass = DocBuilder.loadClass(configPw.getType(), this.core);
-      propWriter = writerClass.getConstructor().newInstance();
+      propWriter = writerClass.newInstance();
       propWriter.init(this, configPw.getParameters());
     } catch (Exception e) {
       throw new DataImportHandlerException(DataImportHandlerException.SEVERE, "Unable to PropertyWriter implementation:" + configPw.getType(), e);
@@ -378,7 +378,7 @@ public class DataImporter {
       dataSrc = new JdbcDataSource();
     } else {
       try {
-        dataSrc = (DataSource) DocBuilder.loadClass(type, getCore()).getConstructor().newInstance();
+        dataSrc = (DataSource) DocBuilder.loadClass(type, getCore()).newInstance();
       } catch (Exception e) {
         wrapAndThrow(SEVERE, e, "Invalid type for data source: " + type);
       }
@@ -533,7 +533,7 @@ public class DataImporter {
     SolrCore core = docBuilder == null ? null : docBuilder.dataImporter.getCore();
     for (Map<String, String> map : fn) {
       try {
-        evaluators.put(map.get(NAME), (Evaluator) loadClass(map.get(CLASS), core).getConstructor().newInstance());
+        evaluators.put(map.get(NAME), (Evaluator) loadClass(map.get(CLASS), core).newInstance());
       } catch (Exception e) {
         wrapAndThrow(SEVERE, e, "Unable to instantiate evaluator: " + map.get(CLASS));
       }

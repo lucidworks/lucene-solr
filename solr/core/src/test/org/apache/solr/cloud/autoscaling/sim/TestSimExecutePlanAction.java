@@ -74,15 +74,13 @@ public class TestSimExecutePlanAction extends SimSolrCloudTestCase {
       // test didn't init, nothing to do
       return;
     }
-
-    if (log.isInfoEnabled()) {
-      log.info("-------------_ FINAL STATE --------------");
-      log.info("* Node values: {}", Utils.toJSONString(cluster.getSimNodeStateProvider().simGetAllNodeValues())); // logOk
-      log.info("* Live nodes: {}", cluster.getClusterStateProvider().getLiveNodes()); // logOk
-      ClusterState state = cluster.getClusterStateProvider().getClusterState();
-      for (String coll : cluster.getSimClusterStateProvider().simListCollections()) {
-        log.info("* Collection {} state: {}", coll, state.getCollection(coll)); // logOk
-      }
+                          
+    log.info("-------------_ FINAL STATE --------------");
+    log.info("* Node values: " + Utils.toJSONString(cluster.getSimNodeStateProvider().simGetAllNodeValues()));
+    log.info("* Live nodes: " + cluster.getClusterStateProvider().getLiveNodes());
+    ClusterState state = cluster.getClusterStateProvider().getClusterState();
+    for (String coll: cluster.getSimClusterStateProvider().simListCollections()) {
+      log.info("* Collection " + coll + " state: " + state.getCollection(coll));
     }
     shutdownCluster();
   }
@@ -97,10 +95,8 @@ public class TestSimExecutePlanAction extends SimSolrCloudTestCase {
     create.setMaxShardsPerNode(1);
     create.process(solrClient);
 
-    if (log.isInfoEnabled()) {
-      log.info("Collection ready after {} ms", CloudUtil.waitForState(cluster, collectionName, 120, TimeUnit.SECONDS,
-          CloudUtil.clusterShape(1, 2, false, true)));
-    }
+    log.info("Collection ready after " + CloudUtil.waitForState(cluster, collectionName, 120, TimeUnit.SECONDS,
+        CloudUtil.clusterShape(1, 2, false, true)) + "ms");
 
     String sourceNodeName = cluster.getSimClusterStateProvider().simGetRandomNode();
     ClusterState clusterState = cluster.getClusterStateProvider().getClusterState();
@@ -161,10 +157,8 @@ public class TestSimExecutePlanAction extends SimSolrCloudTestCase {
       assertNotNull(response.get("success"));
     }
 
-    if (log.isInfoEnabled()) {
-      log.info("Collection ready after {} ms", CloudUtil.waitForState(cluster, collectionName, 300, TimeUnit.SECONDS,
-          CloudUtil.clusterShape(1, 2, false, true)));
-    }
+    log.info("Collection ready after " + CloudUtil.waitForState(cluster, collectionName, 300, TimeUnit.SECONDS,
+        CloudUtil.clusterShape(1, 2, false, true)) + "ms");
   }
 
   @Test

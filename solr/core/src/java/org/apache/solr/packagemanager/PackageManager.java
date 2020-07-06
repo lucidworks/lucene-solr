@@ -108,7 +108,7 @@ public class PackageManager implements Closeable {
     } catch (Exception e) {
       throw new SolrException(ErrorCode.BAD_REQUEST, e);
     }
-    log.info("Got packages: {}", ret);
+    log.info("Got packages: "+ret);
     return ret;
   }
 
@@ -197,7 +197,7 @@ public class PackageManager implements Closeable {
 
       // If it is a fresh deploy on a collection, run setup commands all the plugins in the package
       if (!isUpdate) {
-        Map<String, String> systemParams = Map.of("collection", collection, "package-name", packageInstance.name, "package-version", packageInstance.version);
+        Map<String, String> systemParams = PackageUtils.map("collection", collection, "package-name", packageInstance.name, "package-version", packageInstance.version);
 
         for (Plugin plugin: packageInstance.plugins) {
           Command cmd = plugin.setupCommand;
@@ -294,7 +294,7 @@ public class PackageManager implements Closeable {
         for (String collection: collections) {
           Map<String, String> collectionParameterOverrides = getPackageParams(pkg.name, collection);
 
-          Map<String, String> systemParams = Map.of("collection", collection, "package-name", pkg.name, "package-version", pkg.version);
+          Map<String, String> systemParams = PackageUtils.map("collection", collection, "package-name", pkg.name, "package-version", pkg.version);
           String url = solrBaseUrl + PackageUtils.resolve(cmd.path, pkg.parameterDefaults, collectionParameterOverrides, systemParams);
           PackageUtils.printGreen("Executing " + url + " for collection:" + collection);
 
@@ -310,7 +310,7 @@ public class PackageManager implements Closeable {
               success = false;
             }
           } else {
-            throw new SolrException(ErrorCode.BAD_REQUEST, "Non-GET method not supported for setup commands");
+            throw new SolrException(ErrorCode.BAD_REQUEST, "Non-GET method not supported for verify commands");
           }
         }
       }
@@ -388,7 +388,7 @@ public class PackageManager implements Closeable {
       Map<String, String> collectionParameterOverrides = getPackageParams(packageName, collection);
 
       // Run the uninstall command for all plugins
-      Map<String, String> systemParams = Map.of("collection", collection, "package-name", deployedPackage.name, "package-version", deployedPackage.version);
+      Map<String, String> systemParams = PackageUtils.map("collection", collection, "package-name", deployedPackage.name, "package-version", deployedPackage.version);
 
       for (Plugin plugin: deployedPackage.plugins) {
         Command cmd = plugin.uninstallCommand;

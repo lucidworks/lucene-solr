@@ -56,11 +56,6 @@ public class JapaneseKatakanaStemFilterFactory extends TokenFilterFactory {
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public JapaneseKatakanaStemFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new JapaneseKatakanaStemFilter(input, minimumLength);

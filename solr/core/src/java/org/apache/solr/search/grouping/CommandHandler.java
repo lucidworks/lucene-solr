@@ -24,6 +24,8 @@ import java.util.List;
 
 import org.apache.lucene.index.ExitableDirectoryReader;
 import org.apache.lucene.queries.function.ValueSource;
+import org.apache.lucene.search.BooleanClause.Occur;
+import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.MultiCollector;
 import org.apache.lucene.search.Query;
@@ -226,8 +228,12 @@ public class CommandHandler {
       collector = MultiCollector.wrap(collector, hitCountCollector);
     }
 
-    query = QueryUtils.combineQueryAndFilter(query, filter.filter);
-
+    if (filter.filter != null) {
+      query = new BooleanQuery.Builder()
+          .add(query, Occur.MUST)
+          .add(filter.filter, Occur.FILTER)
+          .build();
+    }
     if (filter.postFilter != null) {
       filter.postFilter.setLastDelegate(collector);
       collector = filter.postFilter;
@@ -237,7 +243,7 @@ public class CommandHandler {
       searcher.search(query, collector);
     } catch (TimeLimitingCollector.TimeExceededException | ExitableDirectoryReader.ExitingReaderException x) {
       partialResults = true;
-      log.warn("Query: {}; {}", query, x.getMessage());
+      log.warn( "Query: " + query + "; " + x.getMessage() );
     }
 
     if (includeHitCount) {

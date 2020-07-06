@@ -18,16 +18,11 @@ package org.apache.lucene.analysis.snowball;
 
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
 
 import org.apache.lucene.analysis.BaseTokenStreamTestCase;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.Tokenizer;
-import org.apache.lucene.analysis.WordlistLoader;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.core.KeywordTokenizer;
 
@@ -102,14 +97,12 @@ public class TestSnowball extends BaseTokenStreamTestCase {
   }
   
   /** for testing purposes ONLY */
-  public static final List<String> SNOWBALL_LANGS;
-  static {
-    try (InputStream in = TestSnowball.class.getResourceAsStream("languages.txt")) {
-      SNOWBALL_LANGS = WordlistLoader.getLines(in, StandardCharsets.UTF_8);
-    } catch (IOException e) {
-      throw new UncheckedIOException(e);
-    }
-  }
+  public static String SNOWBALL_LANGS[] = {
+    "Armenian", "Basque", "Catalan", "Danish", "Dutch", "English",
+    "Finnish", "French", "German2", "German", "Hungarian", "Irish",
+    "Italian", "Kp", "Lovins", "Norwegian", "Porter", "Portuguese",
+    "Romanian", "Russian", "Spanish", "Swedish", "Turkish"
+  };
   
   public void testEmptyTerm() throws IOException {
     for (final String lang : SNOWBALL_LANGS) {

@@ -16,10 +16,11 @@
  */
 package org.apache.solr.handler.dataimport.config;
 
+import org.apache.solr.handler.dataimport.SolrWriter;
+
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
-
-import org.apache.solr.handler.dataimport.SolrWriter;
 
 public class ConfigNameConstants {
   public static final String SCRIPT = "script";
@@ -54,6 +55,6 @@ public class ConfigNameConstants {
     rw.add("functions");
     rw.add("session");
     rw.add(SolrWriter.LAST_INDEX_KEY);
-    RESERVED_WORDS = Set.copyOf(rw);
-  }
+    RESERVED_WORDS = Collections.unmodifiableSet(rw);
+  } 
 }

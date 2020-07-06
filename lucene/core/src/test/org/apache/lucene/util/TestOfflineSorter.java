@@ -17,6 +17,7 @@
 package org.apache.lucene.util;
 
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -80,17 +81,16 @@ public class TestOfflineSorter extends LuceneTestCase {
     if (random().nextBoolean()) {
       return null;
     } else {
-      int maxThreads = TEST_NIGHTLY ? TestUtil.nextInt(random(), 2, 6) : 2;
-      return new ThreadPoolExecutor(1, maxThreads, Long.MAX_VALUE, TimeUnit.MILLISECONDS,
+      return new ThreadPoolExecutor(1, TestUtil.nextInt(random(), 2, 6), Long.MAX_VALUE, TimeUnit.MILLISECONDS,
                                     new LinkedBlockingQueue<Runnable>(),
-                                    new NamedThreadFactory("TestOfflineSorter"));
+                                    new NamedThreadFactory("TestIndexSearcher"));
     }
   }
 
   @Slow
   public void testIntermediateMerges() throws Exception {
     // Sort 20 mb worth of data with 1mb buffer, binary merging.
-    try (Directory dir = newFSDirectory(createTempDir())) {
+    try (Directory dir = newDirectory()) {
       ExecutorService exec = randomExecutorServiceOrNull();
       SortInfo info = checkSort(dir, new OfflineSorter(dir, "foo", OfflineSorter.DEFAULT_COMPARATOR, BufferSize.megabytes(1), 2, -1, exec, TestUtil.nextInt(random(), 1, 4)),
                                 generateRandom((int)OfflineSorter.MB * 20));
@@ -104,7 +104,7 @@ public class TestOfflineSorter extends LuceneTestCase {
   @Slow
   public void testSmallRandom() throws Exception {
     // Sort 20 mb worth of data with 1mb buffer.
-    try (Directory dir = newFSDirectory(createTempDir())) {
+    try (Directory dir = newDirectory()) {
       ExecutorService exec = randomExecutorServiceOrNull();
       SortInfo sortInfo = checkSort(dir, new OfflineSorter(dir, "foo", OfflineSorter.DEFAULT_COMPARATOR, BufferSize.megabytes(1), OfflineSorter.MAX_TEMPFILES, -1, exec, TestUtil.nextInt(random(), 1, 4)),
                                     generateRandom((int)OfflineSorter.MB * 20));
@@ -350,12 +350,14 @@ public class TestOfflineSorter extends LuceneTestCase {
       IndexOutput unsorted = dir.createTempOutput("unsorted", "tmp", IOContext.DEFAULT);
       writeAll(unsorted, generateFixed(5*1024));
 
-      // This corruption made OfflineSorter fail with its own exception, but we verify and throw a CorruptIndexException
-      // instead when checksums don't match.
-      CorruptIndexException e = expectThrows(CorruptIndexException.class, () -> {
+      // This corruption made OfflineSorter fail with its own exception, but we verify it also went and added (as suppressed) that the
+      // checksum was wrong:
+      EOFException e = expectThrows(EOFException.class, () -> {
           new OfflineSorter(dir, "foo").sort(unsorted.getName());
         });
-      assertTrue(e.getMessage().contains("checksum failed (hardware problem?)"));
+      assertEquals(1, e.getSuppressed().length);
+      assertTrue(e.getSuppressed()[0] instanceof CorruptIndexException);
+      assertTrue(e.getSuppressed()[0].getMessage().contains("checksum failed (hardware problem?)"));
     }
   }
 
@@ -433,10 +435,12 @@ public class TestOfflineSorter extends LuceneTestCase {
       IndexOutput unsorted = dir.createTempOutput("unsorted", "tmp", IOContext.DEFAULT);
       writeAll(unsorted, generateFixed((int) (OfflineSorter.MB * 3)));
 
-      CorruptIndexException e = expectThrows(CorruptIndexException.class, () -> {
+      EOFException e = expectThrows(EOFException.class, () -> {
           new OfflineSorter(dir, "foo", OfflineSorter.DEFAULT_COMPARATOR, BufferSize.megabytes(1), 10, -1, null, 0).sort(unsorted.getName());
         });
-      assertTrue(e.getMessage().contains("checksum failed (hardware problem?)"));
+      assertEquals(1, e.getSuppressed().length);
+      assertTrue(e.getSuppressed()[0] instanceof CorruptIndexException);
+      assertTrue(e.getSuppressed()[0].getMessage().contains("checksum failed (hardware problem?)"));
     }
   }
 

@@ -42,11 +42,6 @@ public class FlattenGraphFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public FlattenGraphFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new FlattenGraphFilter(input);

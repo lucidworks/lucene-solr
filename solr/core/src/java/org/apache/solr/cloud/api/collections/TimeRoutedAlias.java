@@ -29,8 +29,10 @@ import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -96,16 +98,16 @@ public class TimeRoutedAlias extends RoutedAlias {
    * Parameters required for creating a routed alias
    */
   @SuppressWarnings("WeakerAccess")
-  public static final Set<String> REQUIRED_ROUTER_PARAMS = Set.of(
-      CommonParams.NAME, ROUTER_TYPE_NAME, ROUTER_FIELD, ROUTER_START, ROUTER_INTERVAL);
+  public static final Set<String> REQUIRED_ROUTER_PARAMS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+      CommonParams.NAME, ROUTER_TYPE_NAME, ROUTER_FIELD, ROUTER_START, ROUTER_INTERVAL)));
 
   /**
    * Optional parameters for creating a routed alias excluding parameters for collection creation.
    */
   //TODO lets find a way to remove this as it's harder to maintain than required list
   @SuppressWarnings("WeakerAccess")
-  public static final Set<String> OPTIONAL_ROUTER_PARAMS = Set.of(
-      ROUTER_MAX_FUTURE, ROUTER_AUTO_DELETE_AGE, ROUTER_PREEMPTIVE_CREATE_MATH, TZ); // kinda special
+  public static final Set<String> OPTIONAL_ROUTER_PARAMS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+      ROUTER_MAX_FUTURE, ROUTER_AUTO_DELETE_AGE, ROUTER_PREEMPTIVE_CREATE_MATH, TZ))); // kinda special
 
 
   // This format must be compatible with collection name limitations
@@ -249,9 +251,7 @@ public class TimeRoutedAlias extends RoutedAlias {
     final Aliases aliases = zkStateReader.getAliases();
     if (this.parsedCollectionsAliases != aliases) {
       if (this.parsedCollectionsAliases != null) {
-        if (log.isDebugEnabled()) {
-          log.debug("Observing possibly updated alias: {}", getAliasName());
-        }
+        log.debug("Observing possibly updated alias: {}", getAliasName());
       }
       this.parsedCollectionsDesc = parseCollections(aliases);
       this.parsedCollectionsAliases = aliases;
@@ -567,17 +567,13 @@ public class TimeRoutedAlias extends RoutedAlias {
       if (colInstant.isBefore(delBefore) || colInstant.equals(delBefore)) {
         if (log.isDebugEnabled()) { // don't perform formatting unless debugging
           assert dtf != null;
-          if (log.isDebugEnabled()) {
-            log.debug("{} is equal to or before {} deletions may be required", dtf.format(colInstant), dtf.format(delBefore));
-          }
+          log.debug("{} is equal to or before {} deletions may be required", dtf.format(colInstant), dtf.format(delBefore));
         }
         break;
       } else {
         if (log.isDebugEnabled()) { // don't perform formatting unless debugging
           assert dtf != null;
-          if (log.isDebugEnabled()) {
-            log.debug("{} is not before {} and will be retained", dtf.format(colInstant), dtf.format(delBefore));
-          }
+          log.debug("{} is not before {} and will be retained", dtf.format(colInstant), dtf.format(delBefore));
         }
       }
     }

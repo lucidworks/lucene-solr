@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 /**
- * Simulated environment for autoscaling.
+ * <h1>Simulated environment for autoscaling.</h1>
  *
  * <h2>Goals</h2>
  *  <ul>

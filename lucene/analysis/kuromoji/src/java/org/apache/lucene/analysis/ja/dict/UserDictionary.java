@@ -29,7 +29,7 @@ import java.util.TreeMap;
 
 import org.apache.lucene.analysis.ja.util.CSVUtil;
 import org.apache.lucene.util.IntsRefBuilder;
-import org.apache.lucene.util.fst.FSTCompiler;
+import org.apache.lucene.util.fst.Builder;
 import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.PositiveIntOutputs;
 
@@ -65,7 +65,7 @@ public final class UserDictionary implements Dictionary {
     // text, segmentation, readings, POS
     while ((line = br.readLine()) != null) {
       // Remove comments
-      line = line.replaceAll("^#.*$", "");
+      line = line.replaceAll("#.*$", "");
 
       // Skip empty lines or comment lines
       if (line.trim().length() == 0) {
@@ -99,7 +99,7 @@ public final class UserDictionary implements Dictionary {
     List<int[]> segmentations = new ArrayList<>(featureEntries.size());
     
     PositiveIntOutputs fstOutput = PositiveIntOutputs.getSingleton();
-    FSTCompiler<Long> fstCompiler = new FSTCompiler<>(FST.INPUT_TYPE.BYTE2, fstOutput);
+    Builder<Long> fstBuilder = new Builder<>(FST.INPUT_TYPE.BYTE2, fstOutput);
     IntsRefBuilder scratch = new IntsRefBuilder();
     long ord = 0;
     
@@ -116,10 +116,10 @@ public final class UserDictionary implements Dictionary {
                                    " does not the match number of readings (" + readings.length + ")");
       }
 
-      if (!surface.equals(concatenatedSegment)) {
+      if (concatenatedSegment.length() > surface.length()) {
         throw new RuntimeException("Illegal user dictionary entry " + values[0] +
-                                   " - the concatenated segmentation (" + concatenatedSegment + ")" +
-                                   " does not match the surface form (" + surface + ")");
+            " - the concatenated segmentation (" + concatenatedSegment + ")" +
+            " is longer than the surface form (" + surface + ")");
       }
       
       int[] wordIdAndLength = new int[segmentation.length + 1]; // wordId offset, length, length....
@@ -136,11 +136,11 @@ public final class UserDictionary implements Dictionary {
       for (int i = 0; i < token.length(); i++) {
         scratch.setIntAt(i, (int) token.charAt(i));
       }
-      fstCompiler.add(scratch.get(), ord);
+      fstBuilder.add(scratch.get(), ord);
       segmentations.add(wordIdAndLength);
       ord++;
     }
-    this.fst = new TokenInfoFST(fstCompiler.compile(), false);
+    this.fst = new TokenInfoFST(fstBuilder.finish(), false);
     this.data = data.toArray(new String[data.size()]);
     this.segmentations = segmentations.toArray(new int[segmentations.size()][]);
   }

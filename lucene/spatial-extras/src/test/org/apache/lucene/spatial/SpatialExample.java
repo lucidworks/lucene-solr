@@ -40,9 +40,8 @@ import org.apache.lucene.spatial.prefix.tree.SpatialPrefixTree;
 import org.apache.lucene.spatial.query.SpatialArgs;
 import org.apache.lucene.spatial.query.SpatialArgsParser;
 import org.apache.lucene.spatial.query.SpatialOperation;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
-
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.LuceneTestCase;
 import org.locationtech.spatial4j.context.SpatialContext;
 import org.locationtech.spatial4j.distance.DistanceUtils;
@@ -99,7 +98,7 @@ public class SpatialExample extends LuceneTestCase {
 
     this.strategy = new RecursivePrefixTreeStrategy(grid, "myGeoField");
 
-    this.directory = new ByteBuffersDirectory();
+    this.directory = new RAMDirectory();
   }
 
   private void indexPoints() throws Exception {

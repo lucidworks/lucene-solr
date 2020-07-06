@@ -136,7 +136,7 @@ public class TestIndexWriterWithThreads extends LuceneTestCase {
   }
 
   // LUCENE-1130: make sure immediate disk full on creating
-  // an IndexWriter (hit during DWPT#updateDocuments()), with
+  // an IndexWriter (hit during DW.ThreadState.init()), with
   // multiple threads, is OK:
   public void testImmediateDiskFullWithThreads() throws Exception {
 
@@ -180,7 +180,7 @@ public class TestIndexWriterWithThreads extends LuceneTestCase {
         writer.commit();
       } catch (AlreadyClosedException ace) {
         // OK: abort closes the writer
-        assertTrue(writer.isDeleterClosed());
+        assertTrue(writer.deleter.isClosed());
       } finally {
         writer.close();
       }
@@ -317,7 +317,7 @@ public class TestIndexWriterWithThreads extends LuceneTestCase {
         success = true;
       } catch (AlreadyClosedException ace) {
         // OK: abort closes the writer
-        assertTrue(writer.isDeleterClosed());
+        assertTrue(writer.deleter.isClosed());
       } catch (IOException ioe) {
         writer.rollback();
         failure.clearDoFail();
@@ -388,7 +388,7 @@ public class TestIndexWriterWithThreads extends LuceneTestCase {
       writer.close();
     });
 
-    assertTrue(writer.isDeleterClosed());
+    assertTrue(writer.deleter.isClosed());
     dir.close();
   }
 

@@ -886,6 +886,7 @@ public class TestIntervals extends LuceneTestCase {
   }
 
   public void testPrefix() throws IOException {
+
     IntervalsSource source = Intervals.prefix(new BytesRef("p"));
     checkIntervals(source, "field1", 5, new int[][]{
         {},

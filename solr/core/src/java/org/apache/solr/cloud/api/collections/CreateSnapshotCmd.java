@@ -100,9 +100,7 @@ public class CreateSnapshotCmd implements OverseerCollectionMessageHandler.Cmd {
     for (Slice slice : ocmh.zkStateReader.getClusterState().getCollection(collectionName).getSlices()) {
       for (Replica replica : slice.getReplicas()) {
         if (replica.getState() != State.ACTIVE) {
-          if (log.isInfoEnabled()) {
-            log.info("Replica {} is not active. Hence not sending the createsnapshot request", replica.getCoreName());
-          }
+          log.info("Replica {} is not active. Hence not sending the createsnapshot request", replica.getCoreName());
           continue; // Since replica is not active - no point sending a request.
         }
 
@@ -144,9 +142,7 @@ public class CreateSnapshotCmd implements OverseerCollectionMessageHandler.Cmd {
 
         CoreSnapshotMetaData c = new CoreSnapshotMetaData(resp);
         replicas.add(c);
-        if (log.isInfoEnabled()) {
-          log.info("Snapshot with commitName {} is created successfully for core {}", commitName, c.getCoreName());
-        }
+        log.info("Snapshot with commitName {} is created successfully for core {}", commitName, c.getCoreName());
       }
     }
 
@@ -177,10 +173,8 @@ public class CreateSnapshotCmd implements OverseerCollectionMessageHandler.Cmd {
     if (failedShards.isEmpty()) { // No failures.
       CollectionSnapshotMetaData meta = new CollectionSnapshotMetaData(commitName, SnapshotStatus.Successful, creationDate, replicas);
       SolrSnapshotManager.updateCollectionLevelSnapshot(zkClient, collectionName, meta);
-      if (log.isInfoEnabled()) {
-        log.info("Saved following snapshot information for collection={} with commitName={} in Zookeeper : {}", collectionName,
-            commitName, meta.toNamedList());
-      }
+      log.info("Saved following snapshot information for collection={} with commitName={} in Zookeeper : {}", collectionName,
+          commitName, meta.toNamedList());
     } else {
       log.warn("Failed to create a snapshot for collection {} with commitName = {}. Snapshot could not be captured for following shards {}",
           collectionName, commitName, failedShards);
@@ -188,10 +182,8 @@ public class CreateSnapshotCmd implements OverseerCollectionMessageHandler.Cmd {
       // which cores have the named snapshot.
       CollectionSnapshotMetaData meta = new CollectionSnapshotMetaData(commitName, SnapshotStatus.Failed, creationDate, replicas);
       SolrSnapshotManager.updateCollectionLevelSnapshot(zkClient, collectionName, meta);
-      if (log.isInfoEnabled()) {
-        log.info("Saved following snapshot information for collection={} with commitName={} in Zookeeper : {}", collectionName,
-            commitName, meta.toNamedList());
-      }
+      log.info("Saved following snapshot information for collection={} with commitName={} in Zookeeper : {}", collectionName,
+          commitName, meta.toNamedList());
       throw new SolrException(ErrorCode.SERVER_ERROR, "Failed to create snapshot on shards " + failedShards);
     }
   }

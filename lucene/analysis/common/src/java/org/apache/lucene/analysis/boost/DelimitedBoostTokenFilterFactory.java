@@ -55,11 +55,6 @@ public class DelimitedBoostTokenFilterFactory extends TokenFilterFactory {
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public DelimitedBoostTokenFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public DelimitedBoostTokenFilter create(TokenStream input) {
     return new DelimitedBoostTokenFilter(input, delimiter);

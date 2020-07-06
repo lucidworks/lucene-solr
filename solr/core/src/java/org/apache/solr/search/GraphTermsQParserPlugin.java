@@ -22,7 +22,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 import org.apache.lucene.document.DoublePoint;
 import org.apache.lucene.document.FloatPoint;
@@ -41,6 +41,7 @@ import org.apache.lucene.index.TermState;
 import org.apache.lucene.index.TermStates;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.search.BulkScorer;
 import org.apache.lucene.search.ConstantScoreQuery;
 import org.apache.lucene.search.ConstantScoreScorer;
 import org.apache.lucene.search.ConstantScoreWeight;
@@ -56,11 +57,13 @@ import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.ArrayUtil;
+import org.apache.lucene.util.BitDocIdSet;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.BytesRefIterator;
 import org.apache.lucene.util.DocIdSetBuilder;
 import org.apache.lucene.util.FixedBitSet;
+import org.apache.lucene.util.FutureArrays;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.request.SolrQueryRequest;
@@ -73,7 +76,8 @@ import org.apache.solr.schema.SchemaField;
  *  This allows graph traversals to skip traversing high frequency nodes which is often desirable from a performance standpoint.
  *
  *   Syntax: {!graphTerms f=field maxDocFreq=10000}term1,term2,term3
- */
+ **/
+
 public class GraphTermsQParserPlugin extends QParserPlugin {
   public static final String NAME = "graphTerms";
 
@@ -225,7 +229,17 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
 
     @Override
     public String toString(String defaultField) {
-      return Arrays.stream(this.queryTerms).map(Term::toString).collect(Collectors.joining(","));
+      StringBuilder builder = new StringBuilder();
+      boolean first = true;
+      for (Term term : this.queryTerms) {
+        if (!first) {
+          builder.append(',');
+        }
+        first = false;
+        builder.append(term.toString());
+      }
+
+      return builder.toString();
     }
 
     @Override
@@ -233,32 +247,47 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
       visitor.visitLeaf(this);
     }
 
+    private class WeightOrDocIdSet {
+      final Weight weight;
+      final DocIdSet set;
+
+      WeightOrDocIdSet(DocIdSet bitset) {
+        this.set = bitset;
+        this.weight = null;
+      }
+    }
+
     @Override
     public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
 
-      List<TermStates> finalContexts = new ArrayList<>();
-      List<Term> finalTerms = new ArrayList<>();
-      {
-        List<LeafReaderContext> contexts = searcher.getTopReaderContext().leaves();
-        TermStates[] termStates = new TermStates[this.queryTerms.length];
-        collectTermStates(searcher.getIndexReader(), contexts, termStates, this.queryTerms);
-        for(int i=0; i<termStates.length; i++) {
-          TermStates ts = termStates[i];
-          if(ts != null && ts.docFreq() <= this.maxDocFreq) {
-            finalContexts.add(ts);
-            finalTerms.add(queryTerms[i]);
-          }
+      List<TermStates> finalContexts = new ArrayList();
+      List<Term> finalTerms = new ArrayList();
+      List<LeafReaderContext> contexts = searcher.getTopReaderContext().leaves();
+      TermStates[] termStates = new TermStates[this.queryTerms.length];
+      collectTermStates(searcher.getIndexReader(), contexts, termStates, this.queryTerms);
+      for(int i=0; i<termStates.length; i++) {
+        TermStates ts = termStates[i];
+        if(ts != null && ts.docFreq() <= this.maxDocFreq) {
+          finalContexts.add(ts);
+          finalTerms.add(queryTerms[i]);
         }
       }
 
       return new ConstantScoreWeight(this, boost) {
 
         @Override
-        public Scorer scorer(LeafReaderContext context) throws IOException {
+        public void extractTerms(Set<Term> terms) {
+          // no-op
+          // This query is for abuse cases when the number of terms is too high to
+          // run efficiently as a BooleanQuery. So likewise we hide its terms in
+          // order to protect highlighters
+        }
+
+        private WeightOrDocIdSet rewrite(LeafReaderContext context) throws IOException {
           final LeafReader reader = context.reader();
           Terms terms = reader.terms(field);
-          if (terms == null) {
-            return null;
+          if(terms == null) {
+            return new WeightOrDocIdSet(new BitDocIdSet(new FixedBitSet(reader.maxDoc()), 0));
           }
           TermsEnum  termsEnum = terms.iterator();
           PostingsEnum docs = null;
@@ -273,9 +302,42 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
               builder.add(docs);
             }
           }
-          DocIdSet docIdSet = builder.build();
-          DocIdSetIterator disi = docIdSet.iterator();
-          return disi == null ? null : new ConstantScoreScorer(this, score(), scoreMode, disi);
+          return new WeightOrDocIdSet(builder.build());
+        }
+
+        private Scorer scorer(DocIdSet set) throws IOException {
+          if (set == null) {
+            return null;
+          }
+          final DocIdSetIterator disi = set.iterator();
+          if (disi == null) {
+            return null;
+          }
+          return new ConstantScoreScorer(this, score(), scoreMode, disi);
+        }
+
+        @Override
+        public BulkScorer bulkScorer(LeafReaderContext context) throws IOException {
+          final WeightOrDocIdSet weightOrBitSet = rewrite(context);
+          if (weightOrBitSet.weight != null) {
+            return weightOrBitSet.weight.bulkScorer(context);
+          } else {
+            final Scorer scorer = scorer(weightOrBitSet.set);
+            if (scorer == null) {
+              return null;
+            }
+            return new DefaultBulkScorer(scorer);
+          }
+        }
+
+        @Override
+        public Scorer scorer(LeafReaderContext context) throws IOException {
+          final WeightOrDocIdSet weightOrBitSet = rewrite(context);
+          if (weightOrBitSet.weight != null) {
+            return weightOrBitSet.weight.scorer(context);
+          } else {
+            return scorer(weightOrBitSet.set);
+          }
         }
 
         @Override
@@ -504,7 +566,8 @@ abstract class PointSetQuery extends Query implements DocSetProducer, Accountabl
     }
     if (searcher instanceof SolrIndexSearcher) {
       return ((SolrIndexSearcher) searcher).getLiveDocSet().getBits();
-    } else { // could happen in Delete-by-query situation
+    } else {
+      // TODO Does this ever happen?  In Solr should always be SolrIndexSearcher?
       //smallSetSize==0 thus will always produce a BitDocSet (FixedBitSet)
       DocSetCollector docSetCollector = new DocSetCollector(0, searcher.getIndexReader().maxDoc());
       searcher.search(new MatchAllDocsQuery(), docSetCollector);
@@ -648,12 +711,12 @@ abstract class PointSetQuery extends Query implements DocSetProducer, Accountabl
       for(int dim=0;dim<numDims;dim++) {
         int offset = dim*bytesPerDim;
 
-        int cmpMin = Arrays.compareUnsigned(minPackedValue, offset, offset + bytesPerDim, pointBytes, offset, offset + bytesPerDim);
+        int cmpMin = FutureArrays.compareUnsigned(minPackedValue, offset, offset + bytesPerDim, pointBytes, offset, offset + bytesPerDim);
         if (cmpMin > 0) {
           return PointValues.Relation.CELL_OUTSIDE_QUERY;
         }
 
-        int cmpMax = Arrays.compareUnsigned(maxPackedValue, offset, offset + bytesPerDim, pointBytes, offset, offset + bytesPerDim);
+        int cmpMax = FutureArrays.compareUnsigned(maxPackedValue, offset, offset + bytesPerDim, pointBytes, offset, offset + bytesPerDim);
         if (cmpMax < 0) {
           return PointValues.Relation.CELL_OUTSIDE_QUERY;
         }

@@ -277,25 +277,17 @@ public class TestPolygon2D extends LuceneTestCase {
   public void testIntersectsSameEdge() {
     Component2D poly = Polygon2D.create(new Polygon(new double[] { -2, -2, 2, 2, -2 }, new double[] { -2, 2, 2, -2, -2 }));
     // line inside edge
-    assertTrue(poly.containsTriangle(-1, -1, 1, 1, -1, -1));
-    assertTrue(poly.containsTriangle(-2, -2, 2, 2, -2, -2));
-    assertTrue(poly.intersectsTriangle(-1, -1, 1, 1, -1, -1));
-    assertTrue(poly.intersectsTriangle(-2, -2, 2, 2, -2, -2));
+    assertEquals(Relation.CELL_INSIDE_QUERY, poly.relateTriangle(-1, -1, 1, 1, -1, -1));
+    assertEquals(Relation.CELL_INSIDE_QUERY, poly.relateTriangle(-2, -2, 2, 2, -2, -2));
     // line over edge
-    assertFalse(poly.containsTriangle(-4, -4, 4, 4, -4, -4));
-    assertFalse(poly.containsTriangle(-2, -2, 4, 4, 4, 4));
-    assertTrue(poly.intersectsTriangle(-4, -4, 4, 4, -4, -4));
-    assertTrue(poly.intersectsTriangle(-2, -2, 4, 4, 4, 4));
+    assertEquals(Relation.CELL_CROSSES_QUERY, poly.relateTriangle(-4, -4, 4, 4, -4, -4));
+    assertEquals(Relation.CELL_CROSSES_QUERY, poly.relateTriangle(-2, -2, 4, 4, 4, 4));
     // line inside edge
-    assertFalse(poly.containsTriangle(-1, -1, 3, 3, 1, 1));
-    assertFalse(poly.containsTriangle(-2, -2, 3, 3, 2, 2));
-    assertTrue(poly.intersectsTriangle(-1, -1, 3, 3, 1, 1));
-    assertTrue(poly.intersectsTriangle(-2, -2, 3, 3, 2, 2));
+    assertEquals(Relation.CELL_CROSSES_QUERY, poly.relateTriangle(-1, -1, 3, 3, 1, 1));
+    assertEquals(Relation.CELL_CROSSES_QUERY, poly.relateTriangle(-2, -2, 3, 3, 2, 2));
     // line over edge
-    assertFalse(poly.containsTriangle(-4, -4, 7, 7, 4, 4));
-    assertFalse(poly.containsTriangle(-2, -2, 7, 7, 4, 4));
-    assertTrue(poly.intersectsTriangle(-4, -4, 7, 7, 4, 4));
-    assertTrue(poly.intersectsTriangle(-2, -2, 7, 7, 4, 4));
+    assertEquals(Relation.CELL_CROSSES_QUERY, poly.relateTriangle(-4, -4, 7, 7, 4, 4));
+    assertEquals(Relation.CELL_CROSSES_QUERY, poly.relateTriangle(-2, -2, 7, 7, 4, 4));
   }
   
   /** Tests current impl against original algorithm */
@@ -333,7 +325,7 @@ public class TestPolygon2D extends LuceneTestCase {
 
         // if the point is within poly, then triangle should not intersect
         if (impl.contains(a[1], a[0]) || impl.contains(b[1], b[0]) || impl.contains(c[1], c[0])) {
-          assertTrue(impl.intersectsTriangle(a[1], a[0], b[1], b[0], c[1], c[0]));
+          assertTrue(impl.relateTriangle(a[1], a[0], b[1], b[0], c[1], c[0]) != Relation.CELL_OUTSIDE_QUERY);
         }
       }
     }
@@ -342,7 +334,7 @@ public class TestPolygon2D extends LuceneTestCase {
   public void testRelateTriangleContainsPolygon() {
     Polygon polygon = new Polygon(new double[]{0, 0, 1, 1, 0}, new double[]{0, 1, 1, 0, 0});
     Component2D impl = Polygon2D.create(polygon);
-    assertTrue(impl.intersectsTriangle(-10 , -1, 2, -1, 10, 10));
+    assertEquals(Relation.CELL_CROSSES_QUERY, impl.relateTriangle(-10 , -1, 2, -1, 10, 10));
   }
 
   // test
@@ -361,7 +353,7 @@ public class TestPolygon2D extends LuceneTestCase {
         double[] b = new double[] {polygon.getPolyLat(j - 1), polygon.getPolyLon(j - 1)};
         // occassionally test pancake triangles
         double[] c = random().nextBoolean() ? new double[] {polygon.getPolyLat(j), polygon.getPolyLon(j)} : new double[] {a[0], a[1]};
-        assertTrue(impl.intersectsTriangle(a[0], a[1], b[0], b[1], c[0], c[1]));
+        assertTrue(impl.relateTriangle(a[0], a[1], b[0], b[1], c[0], c[1]) != Relation.CELL_OUTSIDE_QUERY);
       }
     }
   }
@@ -369,13 +361,13 @@ public class TestPolygon2D extends LuceneTestCase {
   public void testLineCrossingPolygonPoints() {
     Polygon p = new Polygon(new double[] {0, -1, 0, 1, 0}, new double[] {-1, 0, 1, 0, -1});
     Component2D polygon2D = Polygon2D.create(p);
-    boolean intersects = polygon2D.intersectsTriangle(GeoEncodingUtils.decodeLongitude(GeoEncodingUtils.encodeLongitude(-1.5)),
+    Relation rel = polygon2D.relateTriangle(GeoEncodingUtils.decodeLongitude(GeoEncodingUtils.encodeLongitude(-1.5)),
         GeoEncodingUtils.decodeLatitude(GeoEncodingUtils.encodeLatitude(0)),
         GeoEncodingUtils.decodeLongitude(GeoEncodingUtils.encodeLongitude(1.5)),
         GeoEncodingUtils.decodeLatitude(GeoEncodingUtils.encodeLatitude(0)),
         GeoEncodingUtils.decodeLongitude(GeoEncodingUtils.encodeLongitude(-1.5)),
         GeoEncodingUtils.decodeLatitude(GeoEncodingUtils.encodeLatitude(0)));
-    assertTrue(intersects);
+    assertEquals(Relation.CELL_CROSSES_QUERY, rel);
   }
 
   public void testRandomLineCrossingPolygon() {
@@ -384,14 +376,14 @@ public class TestPolygon2D extends LuceneTestCase {
     for (int i=0; i < 1000; i ++) {
       double longitude = GeoTestUtil.nextLongitude();
       double latitude = GeoTestUtil.nextLatitude();
-      boolean intersects =  polygon2D.intersectsTriangle(
+      Relation rel = polygon2D.relateTriangle(
           GeoEncodingUtils.decodeLongitude(GeoEncodingUtils.encodeLongitude(-longitude)),
           GeoEncodingUtils.decodeLatitude(GeoEncodingUtils.encodeLatitude(-latitude)),
           GeoEncodingUtils.decodeLongitude(GeoEncodingUtils.encodeLongitude(longitude)),
           GeoEncodingUtils.decodeLatitude(GeoEncodingUtils.encodeLatitude(latitude)),
           GeoEncodingUtils.decodeLongitude(GeoEncodingUtils.encodeLongitude(-longitude)),
           GeoEncodingUtils.decodeLatitude(GeoEncodingUtils.encodeLatitude(-latitude)));
-      assertTrue(intersects);
+      assertNotEquals(Relation.CELL_OUTSIDE_QUERY, rel);
     }
   }
 }

@@ -24,7 +24,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.apache.commons.lang3.StringUtils;
@@ -81,23 +80,21 @@ public class ReplicationFactorTest extends AbstractFullDistribZkTestBase {
   // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 20-Jul-2018
   public void test() throws Exception {
     log.info("replication factor test running");
-    waitForThingsToLevelOut(30, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(30000);
 
     // test a 1x3 collection
     log.info("Testing replication factor handling for repfacttest_c8n_1x3");
     testRf3();
 
-    waitForThingsToLevelOut(30, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(30000);
 
     // test handling when not using direct updates
     log.info("Now testing replication factor handling for repfacttest_c8n_2x2");
     testRf2NotUsingDirectUpdates();
         
-    waitForThingsToLevelOut(30, TimeUnit.SECONDS);
-    if (log.isInfoEnabled()) {
-      log.info("replication factor testing complete! final clusterState is: {}",
-          cloudClient.getZkStateReader().getClusterState());
-    }
+    waitForThingsToLevelOut(30000);
+    log.info("replication factor testing complete! final clusterState is: "+
+        cloudClient.getZkStateReader().getClusterState());    
   }
   
   protected void testRf2NotUsingDirectUpdates() throws Exception {

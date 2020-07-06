@@ -24,7 +24,6 @@ import java.util.concurrent.Callable;
 
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.TotalHits;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
 import org.apache.solr.client.solrj.request.QueryRequest;
@@ -55,36 +54,36 @@ import org.apache.solr.search.TermsQParserPlugin;
  * the value of this field is a document list, which is a result of executing subquery using 
  * document fields as an input.
  * 
- * <h2>Subquery Parameters Shift</h2>
+ * <h3>Subquery Parameters Shift</h3>
  * if subquery is declared as <code>fl=*,foo:[subquery]</code>, subquery parameters 
  * are prefixed with the given name and period. eg <br>
  * <code>q=*:*&amp;fl=*,foo:[subquery]&amp;foo.q=to be continued&amp;foo.rows=10&amp;foo.sort=id desc</code>
  * 
- * <h2>Document Field As An Input For Subquery Parameters</h2>
+ * <h3>Document Field As An Input For Subquery Parameters</h3>
  * 
  * It's necessary to pass some document field value as a parameter for subquery. It's supported via 
  * implicit <code>row.<i>fieldname</i></code> parameters, and can be (but might not only) referred via
  *  Local Parameters syntax.<br>
- * <code>q=name:john&amp;fl=name,id,depts:[subquery]&amp;depts.q={!terms f=id v=$row.dept_id}&amp;depts.rows=10</code>
+ * <code>q=namne:john&amp;fl=name,id,depts:[subquery]&amp;depts.q={!terms f=id v=$row.dept_id}&amp;depts.rows=10</code>
  * Here departments are retrieved per every employee in search result. We can say that it's like SQL
  * <code> join ON emp.dept_id=dept.id </code><br>
  * Note, when document field has multiple values they are concatenated with comma by default, it can be changed by
  * <code>foo:[subquery separator=' ']</code> local parameter, this mimics {@link TermsQParserPlugin} to work smoothly with.
  * 
- * <h2>Cores And Collections In SolrCloud</h2>
+ * <h3>Cores And Collections In SolrCloud</h3>
  * use <code>foo:[subquery fromIndex=departments]</code> invoke subquery on another core on the same node, it's like
  *  {@link JoinQParserPlugin} for non SolrCloud mode. <b>But for SolrCloud</b> just (and only) <b>explicitly specify</b> 
  * its' native parameters like <code>collection, shards</code> for subquery, eg<br>
  *  <code>q=*:*&amp;fl=*,foo:[subquery]&amp;foo.q=cloud&amp;foo.collection=departments</code>
  *
- * <h2>When used in Real Time Get</h2>
+ * <h3>When used in Real Time Get</h3>
  * <p>
  * When used in the context of a Real Time Get, the <i>values</i> from each document that are used 
- * in the subquery are the "real time" values (possibly from the transaction log), but the query
+ * in the qubquery are the "real time" values (possibly from the transaction log), but the query 
  * itself is still executed against the currently open searcher.  Note that this means if a 
  * document is updated but not yet committed, an RTG request for that document that uses 
  * <code>[subquery]</code> could include the older (committed) version of that document, 
- * with different field values, in the subquery results.
+ * with differnet field values, in the subquery results.
  * </p>
  */
 public class SubQueryAugmenterFactory extends TransformerFactory{
@@ -94,7 +93,7 @@ public class SubQueryAugmenterFactory extends TransformerFactory{
 
     if (field.contains("[") || field.contains("]")) {
       throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, 
-          "please give an explicit name for [subquery] column ie fl=relation:[subquery ..]");
+          "please give an exlicit name for [subquery] column ie fl=relation:[subquery ..]");
     }
     
     checkThereIsNoDupe(field, req.getContext());
@@ -178,8 +177,7 @@ class SubQueryAugmenter extends DocTransformer {
       return new DocSlice((int)docList.getStart(), 
           docList.size(), new int[0], new float[docList.size()],
           (int) docList.getNumFound(), 
-          docList.getMaxScore() == null ?  Float.NaN : docList.getMaxScore(),
-              docList.getNumFoundExact() ? TotalHits.Relation.EQUAL_TO : TotalHits.Relation.GREATER_THAN_OR_EQUAL_TO);
+          docList.getMaxScore() == null ?  Float.NaN : docList.getMaxScore());
     }
 
     @Override
@@ -315,7 +313,7 @@ class SubQueryAugmenter extends DocTransformer {
   }
   
   /**
-   * Returns false -- this transformer does use an IndexSearcher, but it does not (necessarily) need
+   * Returns false -- this transformer does use an IndexSearcher, but it does not (neccessarily) need 
    * the searcher from the ResultContext of the document being returned.  Instead we use the current 
    * "live" searcher for the specified core.
    */

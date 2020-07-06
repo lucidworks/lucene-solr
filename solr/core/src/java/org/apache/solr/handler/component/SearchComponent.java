@@ -20,10 +20,12 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
+import com.codahale.metrics.MetricRegistry;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.SolrInfoBean;
-import org.apache.solr.metrics.SolrMetricsContext;
 import org.apache.solr.search.facet.FacetModule;
 import org.apache.solr.util.plugin.NamedListInitializedPlugin;
 
@@ -40,7 +42,8 @@ public abstract class SearchComponent implements SolrInfoBean, NamedListInitiali
    */
   private String name = this.getClass().getName();
 
-  protected SolrMetricsContext solrMetricsContext;
+  protected Set<String> metricNames = ConcurrentHashMap.newKeySet();
+  protected MetricRegistry registry;
 
   /**
    * Prepare the response.  Guaranteed to be called before any SearchComponent {@link #process(org.apache.solr.handler.component.ResponseBuilder)} method.
@@ -92,12 +95,12 @@ public abstract class SearchComponent implements SolrInfoBean, NamedListInitiali
 
   //////////////////////// NamedListInitializedPlugin methods //////////////////////
   @Override
-  public void init( @SuppressWarnings({"rawtypes"})NamedList args )
+  public void init( NamedList args )
   {
     // By default do nothing
   }
 
-  //////////////////////// SolrInfoBean methods //////////////////////
+  //////////////////////// SolrInfoMBeans methods //////////////////////
 
   @Override
   public String getName() {
@@ -113,14 +116,13 @@ public abstract class SearchComponent implements SolrInfoBean, NamedListInitiali
   }
 
   @Override
-  public SolrMetricsContext getSolrMetricsContext() {
-    return solrMetricsContext;
+  public Set<String> getMetricNames() {
+    return metricNames;
   }
 
   @Override
-  public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
-    // By default don't register any metrics - but prepare a child context
-    this.solrMetricsContext = parentContext.getChildContext(this);
+  public MetricRegistry getMetricRegistry() {
+    return registry;
   }
 
   public static final Map<String, Class<? extends SearchComponent>> standard_components;

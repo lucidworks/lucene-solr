@@ -28,10 +28,11 @@ package org.apache.lucene.util.compress;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Objects;
 
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
+import org.apache.lucene.util.FutureArrays;
+import org.apache.lucene.util.FutureObjects;
 import org.apache.lucene.util.packed.PackedInts;
 
 /**
@@ -73,7 +74,7 @@ public final class LZ4 {
   private static int commonBytes(byte[] b, int o1, int o2, int limit) {
     assert o1 < o2;
     // never -1 because lengths always differ
-    return Arrays.mismatch(b, o1, limit, b, o2, limit);
+    return FutureArrays.mismatch(b, o1, limit, b, o2, limit);
   }
 
   /**
@@ -226,7 +227,7 @@ public final class LZ4 {
 
     @Override
     void reset(byte[] bytes, int off, int len) {
-      Objects.checkFromIndexSize(off, len, bytes.length);
+      FutureObjects.checkFromIndexSize(off, len, bytes.length);
       this.bytes = bytes;
       this.base = off;
       this.lastOff = off - 1;
@@ -301,7 +302,7 @@ public final class LZ4 {
 
     @Override
     void reset(byte[] bytes, int off, int len) {
-      Objects.checkFromIndexSize(off, len, bytes.length);
+      FutureObjects.checkFromIndexSize(off, len, bytes.length);
       if (end - base < chainTable.length) {
         // The last call to compress was done on less than 64kB, let's not reset
         // the hashTable and only reset the relevant parts of the chainTable.
@@ -394,7 +395,7 @@ public final class LZ4 {
    * but can safely be reused.
    */
   public static void compress(byte[] bytes, int off, int len, DataOutput out, HashTable ht) throws IOException {
-    Objects.checkFromIndexSize(off, len, bytes.length);
+    FutureObjects.checkFromIndexSize(off, len, bytes.length);
 
     final int base = off;
     final int end = off + len;

@@ -133,7 +133,9 @@ public abstract class ByteBufferIndexInput extends IndexInput implements RandomA
         // because #asLongBuffer() has some cost that we don't want to pay on
         // each invocation of #readLELongs.
         if (i < curBuf.limit()) {
-          curLongBufferViews[i] = curBuf.duplicate().position(i).order(ByteOrder.LITTLE_ENDIAN).asLongBuffer();
+          ByteBuffer dup = curBuf.duplicate().order(ByteOrder.LITTLE_ENDIAN);
+          dup.position(i);
+          curLongBufferViews[i] = dup.asLongBuffer();
         } else {
           curLongBufferViews[i] = EMPTY_LONGBUFFER;
         }
@@ -141,7 +143,9 @@ public abstract class ByteBufferIndexInput extends IndexInput implements RandomA
     }
     try {
       final int position = curBuf.position();
-      guard.getLongs(curLongBufferViews[position & 0x07].position(position >>> 3), dst, offset, length);
+      LongBuffer longBuffer = curLongBufferViews[position & 0x07];
+      longBuffer.position(position >>> 3);
+      guard.getLongs(longBuffer, dst, offset, length);
       // if the above call succeeded, then we know the below sum cannot overflow
       curBuf.position(position + (length << 3));
     } catch (BufferUnderflowException e) {

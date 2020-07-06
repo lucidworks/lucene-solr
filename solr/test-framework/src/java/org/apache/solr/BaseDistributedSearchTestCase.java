@@ -64,7 +64,8 @@ import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.common.util.IOUtils;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.SolrNamedThreadFactory;
+import org.apache.solr.common.util.SolrjNamedThreadFactory;
+import org.apache.solr.util.DefaultSolrThreadFactory;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -103,7 +104,7 @@ public abstract class BaseDistributedSearchTestCase extends SolrTestCaseJ4 {
       Integer.MAX_VALUE,
       15, TimeUnit.SECONDS, // terminate idle threads after 15 sec
       new SynchronousQueue<>(),  // directly hand off tasks
-      new SolrNamedThreadFactory("BaseDistributedSearchTestCase"),
+      new DefaultSolrThreadFactory("BaseDistributedSearchTestCase"),
       false
   );
   
@@ -160,7 +161,7 @@ public abstract class BaseDistributedSearchTestCase extends SolrTestCaseJ4 {
     // paranoia, we *really* don't want to ever get "//" in a path...
     final String hc = hostContext.toString().replaceAll("\\/+","/");
 
-    log.info("Setting hostContext system property: {}", hc);
+    log.info("Setting hostContext system property: " + hc);
     System.setProperty("hostContext", hc);
   }
   
@@ -412,7 +413,7 @@ public abstract class BaseDistributedSearchTestCase extends SolrTestCaseJ4 {
   }
 
   protected void destroyServers() throws Exception {
-    ExecutorService customThreadPool = ExecutorUtil.newMDCAwareCachedThreadPool(new SolrNamedThreadFactory("closeThreadPool"));
+    ExecutorService customThreadPool = ExecutorUtil.newMDCAwareCachedThreadPool(new SolrjNamedThreadFactory("closeThreadPool"));
     
     customThreadPool.submit(() -> Collections.singleton(controlClient).parallelStream().forEach(c -> {
       IOUtils.closeQuietly(c);
@@ -994,7 +995,7 @@ public abstract class BaseDistributedSearchTestCase extends SolrTestCaseJ4 {
     handle.put("rf", SKIPVAL);
     String cmp = compare(a.getResponse(), b.getResponse(), flags, handle);
     if (cmp != null) {
-      log.error("Mismatched responses:\n{}\n{}", a, b);
+      log.error("Mismatched responses:\n" + a + "\n" + b);
       Assert.fail(cmp);
     }
   }

@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.apache.solr.client.solrj.io.SolrClientCache;
 import org.apache.solr.client.solrj.io.Tuple;
 import org.apache.solr.client.solrj.io.comp.StreamComparator;
 import org.apache.solr.client.solrj.io.graph.Traversal;
@@ -84,20 +83,17 @@ public class GraphHandler extends RequestHandlerBase implements SolrCoreAware, P
   private StreamFactory streamFactory = new DefaultStreamFactory();
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   private String coreName;
-  private SolrClientCache solrClientCache;
 
   @Override
   public PermissionNameProvider.Name getPermissionName(AuthorizationContext request) {
     return PermissionNameProvider.Name.READ_PERM;
   }
 
-  @SuppressWarnings({"unchecked"})
   public void inform(SolrCore core) {
     String defaultCollection;
     String defaultZkhost;
     CoreContainer coreContainer = core.getCoreContainer();
     this.coreName = core.getName();
-    this.solrClientCache = coreContainer.getSolrClientCache();
 
     if(coreContainer.isZooKeeperAware()) {
       defaultCollection = core.getCoreDescriptor().getCollectionName();
@@ -123,8 +119,7 @@ public class GraphHandler extends RequestHandlerBase implements SolrCoreAware, P
               Expressible.class);
           streamFactory.withFunctionName(key, clazz);
         } else {
-          @SuppressWarnings("resource")
-          StreamHandler.ExpressibleHolder holder = new StreamHandler.ExpressibleHolder(pluginInfo, core, SolrConfig.classVsSolrPluginInfo.get(Expressible.class.getName()));
+          StreamHandler.ExpressibleHolder holder = new StreamHandler.ExpressibleHolder(pluginInfo, core, SolrConfig.classVsSolrPluginInfo.get(Expressible.class));
           streamFactory.withFunctionName(key, () -> holder.getClazz());
         }
 
@@ -133,7 +128,6 @@ public class GraphHandler extends RequestHandlerBase implements SolrCoreAware, P
     }
   }
 
-  @SuppressWarnings({"unchecked"})
   public void handleRequestBody(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
     SolrParams params = req.getParams();
     params = adjustParams(params);
@@ -147,19 +141,17 @@ public class GraphHandler extends RequestHandlerBase implements SolrCoreAware, P
     } catch (Exception e) {
       //Catch exceptions that occur while the stream is being created. This will include streaming expression parse rules.
       SolrException.log(log, e);
-      @SuppressWarnings({"rawtypes"})
       Map requestContext = req.getContext();
       requestContext.put("stream", new DummyErrorStream(e));
       return;
     }
 
     StreamContext context = new StreamContext();
-    context.setSolrClientCache(solrClientCache);
+    context.setSolrClientCache(StreamHandler.clientCache);
     context.put("core", this.coreName);
     Traversal traversal = new Traversal();
     context.put("traversal", traversal);
     tupleStream.setStreamContext(context);
-    @SuppressWarnings({"rawtypes"})
     Map requestContext = req.getContext();
     requestContext.put("stream", new TimerStream(new ExceptionStream(tupleStream)));
     requestContext.put("traversal", traversal);
@@ -206,10 +198,8 @@ public class GraphHandler extends RequestHandlerBase implements SolrCoreAware, P
       return null;
     }
 
-    @SuppressWarnings({"unchecked"})
     public Tuple read() {
       String msg = e.getMessage();
-      @SuppressWarnings({"rawtypes"})
       Map m = new HashMap();
       m.put("EOF", true);
       m.put("EXCEPTION", msg);
@@ -260,7 +250,6 @@ public class GraphHandler extends RequestHandlerBase implements SolrCoreAware, P
       return null;
     }
 
-    @SuppressWarnings({"unchecked"})
     public Tuple read() throws IOException {
       Tuple tuple = this.tupleStream.read();
       if(tuple.EOF) {

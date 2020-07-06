@@ -25,17 +25,17 @@ import org.apache.lucene.util.LuceneTestCase;
 public class TestAbstractAnalysisFactory extends LuceneTestCase {
 
   public void testLookupTokenizerSPIName() throws NoSuchFieldException, IllegalAccessException {
-    assertEquals("whitespace", AnalysisSPILoader.lookupSPIName(WhitespaceTokenizerFactory.class));
+    assertEquals("whitespace", AbstractAnalysisFactory.lookupSPIName(WhitespaceTokenizerFactory.class));
     assertEquals("whitespace", TokenizerFactory.findSPIName(WhitespaceTokenizerFactory.class));
   }
 
   public void testLookupCharFilterSPIName() throws NoSuchFieldException, IllegalAccessException {
-    assertEquals("htmlStrip", AnalysisSPILoader.lookupSPIName(HTMLStripCharFilterFactory.class));
+    assertEquals("htmlStrip", AbstractAnalysisFactory.lookupSPIName(HTMLStripCharFilterFactory.class));
     assertEquals("htmlStrip", CharFilterFactory.findSPIName(HTMLStripCharFilterFactory.class));
   }
 
   public void testLookupTokenFilterSPIName() throws NoSuchFieldException, IllegalAccessException{
-    assertEquals("lowercase", AnalysisSPILoader.lookupSPIName(LowerCaseFilterFactory.class));
+    assertEquals("lowercase", AbstractAnalysisFactory.lookupSPIName(LowerCaseFilterFactory.class));
     assertEquals("lowercase", TokenFilterFactory.findSPIName(LowerCaseFilterFactory.class));
   }
 }

@@ -19,7 +19,6 @@ package org.apache.lucene.index;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.Objects;
 import java.util.Set;
 
 import org.apache.lucene.util.FilterIterator;
@@ -77,8 +76,8 @@ public final class FieldFilterLeafReader extends FilterLeafReader {
       }
 
       @Override
-      public void stringField(FieldInfo fieldInfo, String value) throws IOException {
-        visitor.stringField(fieldInfo, Objects.requireNonNull(value, "String value should not be null"));
+      public void stringField(FieldInfo fieldInfo, byte[] value) throws IOException {
+        visitor.stringField(fieldInfo, value);
       }
 
       @Override

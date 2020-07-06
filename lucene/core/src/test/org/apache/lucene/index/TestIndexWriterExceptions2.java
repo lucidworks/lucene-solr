@@ -143,7 +143,7 @@ public class TestIndexWriterExceptions2 extends LuceneTestCase {
             }
           } catch (AlreadyClosedException ace) {
             // OK: writer was closed by abort; we just reopen now:
-            assertTrue(iw.isDeleterClosed());
+            assertTrue(iw.deleter.isClosed());
             assertTrue(allowAlreadyClosed);
             allowAlreadyClosed = false;
             conf = newIndexWriterConfig(analyzer);
@@ -177,7 +177,7 @@ public class TestIndexWriterExceptions2 extends LuceneTestCase {
             }
           } catch (AlreadyClosedException ace) {
             // OK: writer was closed by abort; we just reopen now:
-            assertTrue(iw.isDeleterClosed());
+            assertTrue(iw.deleter.isClosed());
             assertTrue(allowAlreadyClosed);
             allowAlreadyClosed = false;
             conf = newIndexWriterConfig(analyzer);
@@ -215,7 +215,7 @@ public class TestIndexWriterExceptions2 extends LuceneTestCase {
             }
           } catch (AlreadyClosedException ace) {
             // OK: writer was closed by abort; we just reopen now:
-            assertTrue(iw.isDeleterClosed());
+            assertTrue(iw.deleter.isClosed());
             assertTrue(allowAlreadyClosed);
             allowAlreadyClosed = false;
             conf = newIndexWriterConfig(analyzer);

@@ -387,7 +387,7 @@ class JoinQuery extends Query {
       fromSearcher.search(q, collector);
       Query resultQ = collector.getResultQuery(toSchemaField, false);
       // don't cache the resulting docSet... the query may be very large.  Better to cache the results of the join query itself
-      DocSet result = resultQ==null ? DocSet.empty() : toSearcher.getDocSetNC(resultQ, null);
+      DocSet result = resultQ==null ? DocSet.EMPTY : toSearcher.getDocSetNC(resultQ, null);
       return result;
     }
 
@@ -409,11 +409,10 @@ class JoinQuery extends Query {
       List<DocSet> resultList = new ArrayList<>(10);
 
       // make sure we have a set that is fast for random access, if we will use it for that
-      Bits fastForRandomSet;
-      if (minDocFreqFrom <= 0) {
-        fastForRandomSet = null;
-      } else {
-        fastForRandomSet = fromSet.getBits();
+      DocSet fastForRandomSet = fromSet;
+      if (minDocFreqFrom>0 && fromSet instanceof SortedIntDocSet) {
+        SortedIntDocSet sset = (SortedIntDocSet)fromSet;
+        fastForRandomSet = new HashDocSet(sset.getDocs(), 0, sset.size());
       }
 
 
@@ -421,7 +420,7 @@ class JoinQuery extends Query {
       LeafReader toReader = fromSearcher==toSearcher ? fromReader : toSearcher.getSlowAtomicReader();
       Terms terms = fromReader.terms(fromField);
       Terms toTerms = toReader.terms(toField);
-      if (terms == null || toTerms==null) return DocSet.empty();
+      if (terms == null || toTerms==null) return DocSet.EMPTY;
       String prefixStr = TrieField.getMainValuePrefix(fromSearcher.getSchema().getFieldType(fromField));
       BytesRef prefix = prefixStr == null ? null : new BytesRef(prefixStr);
 
@@ -481,7 +480,7 @@ class JoinQuery extends Query {
               int base = sub.slice.start;
               int docid;
               while ((docid = sub.postingsEnum.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
-                if (fastForRandomSet.get(docid+base)) {
+                if (fastForRandomSet.exists(docid+base)) {
                   intersects = true;
                   break outer;
                 }
@@ -490,7 +489,7 @@ class JoinQuery extends Query {
           } else {
             int docid;
             while ((docid = postingsEnum.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
-              if (fastForRandomSet.get(docid)) {
+              if (fastForRandomSet.exists(docid)) {
                 intersects = true;
                 break;
               }
@@ -522,10 +521,10 @@ class JoinQuery extends Query {
               DocSet toTermSet = toSearcher.getDocSet(toDeState);
               resultListDocs += toTermSet.size();
               if (resultBits != null) {
-                toTermSet.addAllTo(resultBits);
+                toTermSet.addAllTo(new BitDocSet(resultBits));
               } else {
                 if (toTermSet instanceof BitDocSet) {
-                  resultBits = ((BitDocSet)toTermSet).getBits().clone();
+                  resultBits = ((BitDocSet)toTermSet).bits.clone();
                 } else {
                   resultList.add(toTermSet);
                 }
@@ -569,14 +568,15 @@ class JoinQuery extends Query {
       smallSetsDeferred = resultList.size();
 
       if (resultBits != null) {
+        BitDocSet bitSet = new BitDocSet(resultBits);
         for (DocSet set : resultList) {
-          set.addAllTo(resultBits);
+          set.addAllTo(bitSet);
         }
-        return new BitDocSet(resultBits);
+        return bitSet;
       }
 
       if (resultList.size()==0) {
-        return DocSet.empty();
+        return DocSet.EMPTY;
       }
 
       if (resultList.size() == 1) {

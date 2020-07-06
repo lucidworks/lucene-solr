@@ -745,9 +745,7 @@ public class OverseerCollectionConfigSetProcessorTest extends SolrTestCaseJ4 {
         overseerMock, completedMapMock, failureMapMock);
 
 
-    if (log.isInfoEnabled()) {
-      log.info("clusterstate {}", clusterStateMock.hashCode());
-    }
+    log.info("clusterstate " + clusterStateMock.hashCode());
 
     startComponentUnderTest();
     

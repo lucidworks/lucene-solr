@@ -48,9 +48,17 @@ public class
     TestJapaneseTokenizer extends BaseTokenStreamTestCase {
 
   public static UserDictionary readDict() {
-    try (InputStream stream = TestJapaneseTokenizer.class.getResourceAsStream("userdict.txt");
-         Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
-      return UserDictionary.open(reader);
+    InputStream is = TestJapaneseTokenizer.class.getResourceAsStream("userdict.txt");
+    if (is == null) {
+      throw new RuntimeException("Cannot find userdict.txt in test classpath!");
+    }
+    try {
+      try {
+        Reader reader = new InputStreamReader(is, StandardCharsets.UTF_8);
+        return UserDictionary.open(reader);
+      } finally {
+        is.close();
+      }
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
@@ -61,7 +69,7 @@ public class
   private JapaneseTokenizer makeTokenizer(boolean discardPunctuation, Mode mode) {
     return new JapaneseTokenizer(newAttributeFactory(), readDict(), discardPunctuation, mode);
   }
-  
+
   private Analyzer makeAnalyzer(final Tokenizer t) {
     return new Analyzer() {
       @Override
@@ -77,21 +85,21 @@ public class
     analyzer = new Analyzer() {
       @Override
       protected TokenStreamComponents createComponents(String fieldName) {
-        Tokenizer tokenizer = new JapaneseTokenizer(newAttributeFactory(), readDict(), false, false, Mode.SEARCH);
+        Tokenizer tokenizer = new JapaneseTokenizer(newAttributeFactory(), readDict(), false, Mode.SEARCH);
         return new TokenStreamComponents(tokenizer, tokenizer);
       }
     };
     analyzerNormal = new Analyzer() {
       @Override
       protected TokenStreamComponents createComponents(String fieldName) {
-        Tokenizer tokenizer = new JapaneseTokenizer(newAttributeFactory(), readDict(), false, false, Mode.NORMAL);
+        Tokenizer tokenizer = new JapaneseTokenizer(newAttributeFactory(), readDict(), false, Mode.NORMAL);
         return new TokenStreamComponents(tokenizer, tokenizer);
       }
     };
     analyzerNormalNBest = new Analyzer() {
       @Override
       protected TokenStreamComponents createComponents(String fieldName) {
-        JapaneseTokenizer tokenizer = new JapaneseTokenizer(newAttributeFactory(), readDict(), false, false, Mode.NORMAL);
+        JapaneseTokenizer tokenizer = new JapaneseTokenizer(newAttributeFactory(), readDict(), false, Mode.NORMAL);
         tokenizer.setNBestCost(2000);
         return new TokenStreamComponents(tokenizer, tokenizer);
       }
@@ -99,14 +107,14 @@ public class
     analyzerNoPunct = new Analyzer() {
       @Override
       protected TokenStreamComponents createComponents(String fieldName) {
-        Tokenizer tokenizer = new JapaneseTokenizer(newAttributeFactory(), readDict(), true, false, Mode.SEARCH);
+        Tokenizer tokenizer = new JapaneseTokenizer(newAttributeFactory(), readDict(), true, Mode.SEARCH);
         return new TokenStreamComponents(tokenizer, tokenizer);
       }
     };
     extendedModeAnalyzerNoPunct = new Analyzer() {
       @Override
       protected TokenStreamComponents createComponents(String fieldName) {
-        Tokenizer tokenizer = new JapaneseTokenizer(newAttributeFactory(), readDict(), true, false, Mode.EXTENDED);
+        Tokenizer tokenizer = new JapaneseTokenizer(newAttributeFactory(), readDict(), true, Mode.EXTENDED);
         return new TokenStreamComponents(tokenizer, tokenizer);
       }
     };
@@ -190,7 +198,7 @@ public class
     t.setNBestCost(0);
     assertAnalyzesTo(a,
                      "成田空港、米原油流出",
-                     new String[] {"成田", "空港", "米", "原油", "流出"});
+                     new String[] {"成田", "成田空港", "空港", "米", "原油", "流出"});
 
     t.setNBestCost(4000);
     assertAnalyzesTo(a,

@@ -181,17 +181,14 @@ public class TestLRUQueryCache extends LuceneTestCase {
       thread.join();
     }
 
-    try {
-      if (error.get() != null) {
-        throw error.get();
-      }
-      queryCache.assertConsistent();
-    } finally {
-      mgr.close();
-      w.close();
-      dir.close();
-      queryCache.assertConsistent();
+    if (error.get() != null) {
+      throw error.get();
     }
+    queryCache.assertConsistent();
+    mgr.close();
+    w.close();
+    dir.close();
+    queryCache.assertConsistent();
   }
 
   public void testLRUEviction() throws Exception {
@@ -224,50 +221,22 @@ public class TestLRUQueryCache extends LuceneTestCase {
 
     searcher.setQueryCachingPolicy(ALWAYS_CACHE);
     searcher.search(new ConstantScoreQuery(red), 1);
-
-    if (!(queryCache.cachedQueries().equals(Collections.emptyList()))) {
-      assertEquals(Arrays.asList(red), queryCache.cachedQueries());
-    } else {
-      // Let the cache load be completed
-      Thread.sleep(200);
-      assertEquals(Arrays.asList(red), queryCache.cachedQueries());
-    }
+    assertEquals(Collections.singletonList(red), queryCache.cachedQueries());
 
     searcher.search(new ConstantScoreQuery(green), 1);
-
-    if (!(queryCache.cachedQueries().equals(Arrays.asList(red)))) {
-      assertEquals(Arrays.asList(red, green), queryCache.cachedQueries());
-    } else {
-      // Let the cache load be completed
-      Thread.sleep(200);
-      assertEquals(Arrays.asList(red, green), queryCache.cachedQueries());
-    }
+    assertEquals(Arrays.asList(red, green), queryCache.cachedQueries());
 
     searcher.search(new ConstantScoreQuery(red), 1);
     assertEquals(Arrays.asList(green, red), queryCache.cachedQueries());
 
     searcher.search(new ConstantScoreQuery(blue), 1);
-
-    if (!(queryCache.cachedQueries().equals(Arrays.asList(green, red)))) {
-      assertEquals(Arrays.asList(red, blue), queryCache.cachedQueries());
-    } else {
-      // Let the cache load be completed
-      Thread.sleep(200);
-      assertEquals(Arrays.asList(red, blue), queryCache.cachedQueries());
-    }
+    assertEquals(Arrays.asList(red, blue), queryCache.cachedQueries());
 
     searcher.search(new ConstantScoreQuery(blue), 1);
     assertEquals(Arrays.asList(red, blue), queryCache.cachedQueries());
 
     searcher.search(new ConstantScoreQuery(green), 1);
-
-    if (!(queryCache.cachedQueries().equals(Arrays.asList(red, blue)))) {
-      assertEquals(Arrays.asList(blue, green), queryCache.cachedQueries());
-    } else {
-      // Let the cache load be completed
-      Thread.sleep(200);
-      assertEquals(Arrays.asList(blue, green), queryCache.cachedQueries());
-    }
+    assertEquals(Arrays.asList(blue, green), queryCache.cachedQueries());
 
     searcher.setQueryCachingPolicy(NEVER_CACHE);
     searcher.search(new ConstantScoreQuery(red), 1);
@@ -1338,6 +1307,11 @@ public class TestLRUQueryCache extends LuceneTestCase {
     @Override
     public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
       return new Weight(this) {
+        @Override
+        public void extractTerms(Set<Term> terms) {
+
+        }
+
         @Override
         public Explanation explain(LeafReaderContext context, int doc) throws IOException {
           return null;

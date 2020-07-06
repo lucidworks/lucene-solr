@@ -266,7 +266,7 @@ public class DataImportHandler extends RequestHandlerBase implements
           try {
             return super.upload(document);
           } catch (RuntimeException e) {
-            log.error("Exception while adding: {}", document, e);
+            log.error("Exception while adding: " + document, e);
             return false;
           }
         }
@@ -299,7 +299,7 @@ public class DataImportHandler extends RequestHandlerBase implements
         map.put(DataImporter.MSG.TOTAL_DOCS_SKIPPED, cumulative.skipDocCount);
       }
     });
-    solrMetricsContext.gauge(metrics, true, "importer", getCategory().toString(), scope);
+    solrMetricsContext.gauge(this, metrics, true, "importer", getCategory().toString(), scope);
   }
 
   // //////////////////////SolrInfoMBeans methods //////////////////////

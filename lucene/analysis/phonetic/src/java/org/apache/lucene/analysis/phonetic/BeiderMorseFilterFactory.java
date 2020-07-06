@@ -69,11 +69,6 @@ public class BeiderMorseFilterFactory extends TokenFilterFactory {
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public BeiderMorseFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new BeiderMorseFilter(input, engine, languageSet);

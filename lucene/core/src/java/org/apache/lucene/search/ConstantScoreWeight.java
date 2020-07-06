@@ -18,8 +18,10 @@ package org.apache.lucene.search;
 
 
 import java.io.IOException;
+import java.util.Set;
 
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
 
 /**
  * A Weight that has a constant score equal to the boost of the wrapped query.
@@ -35,6 +37,13 @@ public abstract class ConstantScoreWeight extends Weight {
   protected ConstantScoreWeight(Query query, float score) {
     super(query);
     this.score = score;
+  }
+
+  @Override
+  public void extractTerms(Set<Term> terms) {
+    // most constant-score queries don't wrap index terms
+    // eg. geo filters, doc values queries, ...
+    // override if your constant-score query does wrap terms
   }
 
   /** Return the score produced by this {@link Weight}. */

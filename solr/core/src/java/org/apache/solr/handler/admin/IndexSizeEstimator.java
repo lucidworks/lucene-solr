@@ -56,7 +56,6 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.PriorityQueue;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.SuppressForbidden;
-import org.apache.lucene.util.UnicodeUtil;
 import org.apache.solr.common.MapWriter;
 import org.apache.solr.common.util.Utils;
 import org.slf4j.Logger;
@@ -184,9 +183,7 @@ public class IndexSizeEstimator {
     }
     if (reader.maxDoc() > samplingThreshold) {
       samplingStep = Math.round(100.0f / samplingPercent);
-      if (log.isInfoEnabled()) {
-        log.info("- number of documents {} larger than {}, sampling percent is {} and sampling step {}", reader.maxDoc(), samplingThreshold, samplingPercent, samplingStep);
-      }
+      log.info("- number of documents {} larger than {}, sampling percent is {} and sampling step {}", reader.maxDoc(), samplingThreshold, samplingPercent, samplingStep);
       if (reader.maxDoc() / samplingStep < 10) {
         throw new IllegalArgumentException("Out of " + reader.maxDoc() + " less than 10 documents would be sampled, which is too unreliable. Increase the samplingPercent.");
       }
@@ -194,7 +191,6 @@ public class IndexSizeEstimator {
     this.samplingPercent = percent;
   }
 
-  @SuppressWarnings({"unchecked"})
   public Estimate estimate() throws Exception {
     Map<String, Object> details = new LinkedHashMap<>();
     Map<String, Object> summary = new LinkedHashMap<>();
@@ -245,7 +241,6 @@ public class IndexSizeEstimator {
     return new Estimate(fieldsBySize, typesBySize, withSummary ? newSummary : null, withDetails ? details : null);
   }
 
-  @SuppressWarnings({"unchecked"})
   private void convert(Map<String, Object> result) {
     for (Map.Entry<String, Object> entry : result.entrySet()) {
       Object value = entry.getValue();
@@ -268,7 +263,6 @@ public class IndexSizeEstimator {
     }
   }
 
-  @SuppressWarnings({"unchecked"})
   private void estimateSummary(Map<String, Object> details, Map<String, Object> summary) {
     log.info("- preparing summary...");
     details.forEach((type, perType) -> {
@@ -632,13 +626,16 @@ public class IndexSizeEstimator {
     }
 
     /** Process a string field. */
-    public void stringField(FieldInfo fieldInfo, String value) throws IOException {
+    public void stringField(FieldInfo fieldInfo, byte[] value) throws IOException {
       // trim the value if needed
-      int len = value != null ? UnicodeUtil.calcUTF16toUTF8Length(value, 0, value.length()) : 0;
-      if (value.length() > maxLength) {
-        value = value.substring(0, maxLength);
+      int len = value != null ? value.length : 0;
+      if (len > maxLength) {
+        byte[] newValue = new byte[maxLength];
+        System.arraycopy(value, 0, newValue, 0, maxLength);
+        value = newValue;
       }
-      countItem(fieldInfo.name, value, len);
+      String strValue = new String(value, "UTF-8");
+      countItem(fieldInfo.name, strValue, len);
     }
 
     /** Process a int numeric field. */

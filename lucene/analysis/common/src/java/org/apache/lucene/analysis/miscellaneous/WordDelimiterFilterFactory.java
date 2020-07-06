@@ -110,11 +110,6 @@ public class WordDelimiterFilterFactory extends TokenFilterFactory implements Re
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public WordDelimiterFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public void inform(ResourceLoader loader) throws IOException {
     if (wordFiles != null) {  

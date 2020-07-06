@@ -49,7 +49,7 @@ import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.SolrNamedThreadFactory;
+import org.apache.solr.common.util.SolrjNamedThreadFactory;
 
 import static org.apache.solr.common.params.CommonParams.DISTRIB;
 
@@ -233,7 +233,7 @@ public class SignificantTermsStream extends TupleStream implements Expressible{
       isCloseCache = false;
     }
 
-    this.executorService = ExecutorUtil.newMDCAwareCachedThreadPool(new SolrNamedThreadFactory("SignificantTermsStream"));
+    this.executorService = ExecutorUtil.newMDCAwareCachedThreadPool(new SolrjNamedThreadFactory("SignificantTermsStream"));
   }
 
   public List<TupleStream> children() {
@@ -398,9 +398,6 @@ public class SignificantTermsStream extends TupleStream implements Expressible{
       params.add("minTermLength", Integer.toString(minTermLength));
       params.add("field", field);
       params.add("numTerms", String.valueOf(numTerms*5));
-      if (streamContext.isLocal()) {
-        params.add("distrib", "false");
-      }
 
       QueryRequest request= new QueryRequest(params, SolrRequest.METHOD.POST);
       QueryResponse response = request.process(solrClient);

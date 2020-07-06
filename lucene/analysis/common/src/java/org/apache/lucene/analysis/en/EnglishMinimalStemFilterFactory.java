@@ -48,11 +48,6 @@ public class EnglishMinimalStemFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public EnglishMinimalStemFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new EnglishMinimalStemFilter(input);

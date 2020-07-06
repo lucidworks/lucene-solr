@@ -52,7 +52,7 @@ import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.SolrNamedThreadFactory;
+import org.apache.solr.common.util.SolrjNamedThreadFactory;
 import org.slf4j.MDC;
 
 import static org.apache.solr.common.params.CommonParams.ADMIN_PATHS;
@@ -369,7 +369,7 @@ public abstract class LBSolrClient extends SolrClient {
       if (isZombie) {
         zombieServers.remove(baseUrl);
       }
-    } catch (BaseHttpSolrClient.RemoteExecutionException e){
+    } catch (HttpSolrClient.RemoteExecutionException e){
       throw e;
     } catch(SolrException e) {
       // we retry on 404 or 403 or 503 or 500
@@ -442,7 +442,7 @@ public abstract class LBSolrClient extends SolrClient {
       synchronized (this) {
         if (aliveCheckExecutor == null) {
           aliveCheckExecutor = Executors.newSingleThreadScheduledExecutor(
-              new SolrNamedThreadFactory("aliveCheckExecutor"));
+              new SolrjNamedThreadFactory("aliveCheckExecutor"));
           aliveCheckExecutor.scheduleAtFixedRate(
               getAliveCheckRunner(new WeakReference<>(this)),
               this.interval, this.interval, TimeUnit.MILLISECONDS);

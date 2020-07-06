@@ -198,7 +198,6 @@ public class MetricsHandlerTest extends SolrTestCaseJ4 {
     assertNotNull(values.get("metrics"));
     SimpleOrderedMap map = (SimpleOrderedMap) values.get("metrics");
     assertEquals(0, map.size());
-    handler.close();
   }
 
   @Test
@@ -215,7 +214,6 @@ public class MetricsHandlerTest extends SolrTestCaseJ4 {
     Object o = nl.get("SEARCHER.new.errors");
     assertNotNull(o); // counter type
     assertTrue(o instanceof Number);
-    handler.close();
   }
 
   @Test
@@ -255,7 +253,6 @@ public class MetricsHandlerTest extends SolrTestCaseJ4 {
       assertNotNull(map.get("inserts"));
       assertNotNull(map.get("size"));
     });
-    handler.close();
   }
 
   @Test
@@ -341,8 +338,6 @@ public class MetricsHandlerTest extends SolrTestCaseJ4 {
     metrics = (NamedList) values.get("metrics");
     assertEquals(0, metrics.size());
     assertNotNull(values.findRecursive("errors", "solr.jetty:unknown:baz"));
-
-    handler.close();
   }
 
   @Test
@@ -390,7 +385,7 @@ public class MetricsHandlerTest extends SolrTestCaseJ4 {
     assertEquals("v1.1", resp.getValues()._getStr(Arrays.asList("metrics", "solr.core.collection1:QUERY./dumphandler.dumphandlergauge","d_k1"), null));
     assertEquals("v2.1", resp.getValues()._getStr(Arrays.asList("metrics","solr.core.collection1:QUERY./dumphandler.dumphandlergauge","d_k2"), null));
 
-    handler.close();
+
   }
 
   static class RefreshablePluginHolder extends PluginBag.PluginHolder<SolrRequestHandler> {
@@ -448,7 +443,7 @@ public class MetricsHandlerTest extends SolrTestCaseJ4 {
     public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
       super.initializeMetrics(parentContext, scope);
       MetricsMap metrics = new MetricsMap((detailed, map) -> map.putAll(gaugevals));
-      solrMetricsContext.gauge(
+      solrMetricsContext.gauge(this,
            metrics,  true, "dumphandlergauge", getCategory().toString(), scope);
 
     }

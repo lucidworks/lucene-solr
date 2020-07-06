@@ -19,8 +19,10 @@ package org.apache.lucene.queries.function;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
@@ -131,6 +133,11 @@ public class FunctionRangeQuery extends Query {
       super(FunctionRangeQuery.this);
       vsContext = ValueSource.newContext(searcher);
       valueSource.createWeight(vsContext, searcher);//callback on valueSource tree
+    }
+
+    @Override
+    public void extractTerms(Set<Term> terms) {
+      //none
     }
 
     @Override

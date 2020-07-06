@@ -19,7 +19,6 @@ package org.apache.solr.search;
 import java.util.Collection;
 import java.util.Collections;
 
-import com.carrotsearch.hppc.IntHashSet;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.DocIdSet;
@@ -30,9 +29,9 @@ import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.RamUsageEstimator;
 
 /**
- * A simple sorted int[] array implementation of {@link DocSet}, good for small sets.
+ * <code>SortedIntDocSet</code> represents a sorted set of Lucene Document Ids.
  */
-public class SortedIntDocSet extends DocSet {
+public class SortedIntDocSet extends DocSetBase {
   private static final long BASE_RAM_BYTES_USED = RamUsageEstimator.shallowSizeOfInstance(SortedIntDocSet.class) + RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
 
   protected final int[] docs;
@@ -65,6 +64,24 @@ public class SortedIntDocSet extends DocSet {
     int[] newArr = new int[newSize];
     System.arraycopy(arr, 0, newArr, 0, newSize);
     return newArr;
+  }
+
+  /** Returns the index of the first non-sorted element or -1 if they are all sorted */
+  public static int firstNonSorted(int[] arr, int offset, int len) {
+    if (len <= 1) return -1;
+    int lower = arr[offset];
+    int end = offset + len;
+    for(int i=offset+1; i<end; i++) {
+      int next = arr[i];
+      if (next <= lower) {
+        for (int j=i-1; j>offset; j--) {
+          if (arr[j]<next) return j+1;
+        }
+        return offset;
+      }
+      lower = next;
+    }
+    return -1;
   }
 
   public static int intersectionSize(int[] smallerSortedList, int[] biggerSortedList) {
@@ -205,7 +222,8 @@ public class SortedIntDocSet extends DocSet {
   @Override
   public int intersectionSize(DocSet other) {
     if (!(other instanceof SortedIntDocSet)) {
-      // BitDocSet is  better at random access than we are
+      // assume other implementations are better at random access than we are,
+      // true of BitDocSet and HashDocSet.
       int icount = 0;
       for (int i=0; i<docs.length; i++) {
         if (other.exists(docs[i])) icount++;
@@ -254,9 +272,10 @@ public class SortedIntDocSet extends DocSet {
   @Override
   public boolean intersects(DocSet other) {
     if (!(other instanceof SortedIntDocSet)) {
-      // assume BitDocSet is better at random access than we are
-      for (int doc : docs) {
-        if (other.exists(doc)) return true;
+      // assume other implementations are better at random access than we are,
+      // true of BitDocSet and HashDocSet.
+      for (int i=0; i<docs.length; i++) {
+        if (other.exists(docs[i])) return true;
       }
       return false;
     }
@@ -542,9 +561,9 @@ public class SortedIntDocSet extends DocSet {
   }
 
   @Override
-  public void addAllTo(FixedBitSet target) {
+  public void addAllTo(DocSet target) {
     for (int doc : docs) {
-      target.set(doc);
+      target.add(doc);
     }
   }
 
@@ -571,6 +590,7 @@ public class SortedIntDocSet extends DocSet {
     }
     return false;
   }
+  
 
   @Override
   public DocIterator iterator() {
@@ -607,40 +627,13 @@ public class SortedIntDocSet extends DocSet {
   }
   
   @Override
-  public Bits getBits() {
-    IntHashSet hashSet = new IntHashSet(docs.length);
+  public FixedBitSet getBits() {
+    int maxDoc = size() > 0 ? docs[size()-1] : 0;
+    FixedBitSet bs = new FixedBitSet(maxDoc+1);
     for (int doc : docs) {
-      hashSet.add(doc);
+      bs.set(doc);
     }
-
-    return new Bits() {
-      @Override
-      public boolean get(int index) {
-        return hashSet.contains(index);
-      }
-
-      @Override
-      public int length() {
-        return getLength();
-      }
-    };
-  }
-
-  /** the {@link Bits#length()} or maxdoc (1 greater than largest possible doc number) */
-  private int getLength() {
-    return size() == 0 ? 0 : getDocs()[size() - 1] + 1;
-  }
-
-  @Override
-  protected FixedBitSet getFixedBitSet() {
-    return getFixedBitSetClone();
-  }
-
-  @Override
-  protected FixedBitSet getFixedBitSetClone() {
-    FixedBitSet bitSet = new FixedBitSet(getLength());
-    addAllTo(bitSet);
-    return bitSet;
+    return bs;
   }
 
   public static int findIndex(int[] arr, int value, int low, int high) {
@@ -660,15 +653,6 @@ public class SortedIntDocSet extends DocSet {
       }
     }
     return low;
-  }
-
-  @Override
-  public DocSet union(DocSet other) {
-    // TODO could be more efficient if both are SortedIntDocSet
-    FixedBitSet otherBits = other.getFixedBitSet();
-    FixedBitSet newbits = FixedBitSet.ensureCapacity(getFixedBitSetClone(), otherBits.length());
-    newbits.or(otherBits);
-    return new BitDocSet(newbits);
   }
 
   @Override

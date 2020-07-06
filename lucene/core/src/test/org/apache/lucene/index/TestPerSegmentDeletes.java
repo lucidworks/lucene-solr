@@ -23,9 +23,9 @@ import java.util.Random;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.search.DocIdSetIterator;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MockDirectoryWrapper;
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
@@ -35,7 +35,7 @@ import org.apache.lucene.util.TestUtil;
 public class TestPerSegmentDeletes extends LuceneTestCase {
   public void testDeletes1() throws Exception {
     //IndexWriter.debug2 = System.out;
-    Directory dir = new MockDirectoryWrapper(new Random(random().nextLong()), new ByteBuffersDirectory());
+    Directory dir = new MockDirectoryWrapper(new Random(random().nextLong()), new RAMDirectory());
     IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random()));
     iwc.setMergeScheduler(new SerialMergeScheduler());
     iwc.setMaxBufferedDocs(5000);
@@ -49,14 +49,14 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
     }
     //System.out.println("commit1");
     writer.commit();
-    assertEquals(1, writer.cloneSegmentInfos().size());
+    assertEquals(1, writer.listOfSegmentCommitInfos().size());
     for (int x = 5; x < 10; x++) {
       writer.addDocument(DocHelper.createDocument(x, "2", 2));
       //System.out.println("numRamDocs(" + x + ")" + writer.numRamDocs());
     }
     //System.out.println("commit2");
     writer.commit();
-    assertEquals(2, writer.cloneSegmentInfos().size());
+    assertEquals(2, writer.listOfSegmentCommitInfos().size());
 
     for (int x = 10; x < 15; x++) {
       writer.addDocument(DocHelper.createDocument(x, "3", 2));
@@ -71,12 +71,12 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
 
     // deletes are now resolved on flush, so there shouldn't be
     // any deletes after flush
-    assertFalse(writer.hasChangesInRam());
+    assertFalse(writer.bufferedUpdatesStream.any());
 
     // get reader flushes pending deletes
     // so there should not be anymore
     IndexReader r1 = writer.getReader();
-    assertFalse(writer.hasChangesInRam());
+    assertFalse(writer.bufferedUpdatesStream.any());
     r1.close();
 
     // delete id:2 from the first segment
@@ -90,7 +90,7 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
     fsmp.length = 2;
     writer.maybeMerge();
 
-    assertEquals(2, writer.cloneSegmentInfos().size());
+    assertEquals(2, writer.listOfSegmentCommitInfos().size());
 
     // id:2 shouldn't exist anymore because
     // it's been applied in the merge and now it's gone

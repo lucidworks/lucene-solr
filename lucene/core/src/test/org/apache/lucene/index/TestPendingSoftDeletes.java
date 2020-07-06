@@ -29,8 +29,8 @@ import org.apache.lucene.document.Field;
 import org.apache.lucene.document.NumericDocValuesField;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.search.DocIdSetIterator;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
@@ -147,10 +147,10 @@ public class TestPendingSoftDeletes extends TestPendingDeletes {
   }
 
   public void testApplyUpdates() throws IOException {
-    Directory dir = new ByteBuffersDirectory();
+    RAMDirectory dir = new RAMDirectory();
     SegmentInfo si = new SegmentInfo(dir, Version.LATEST, Version.LATEST, "test", 10, false, Codec.getDefault(),
         Collections.emptyMap(), StringHelper.randomId(), new HashMap<>(), null);
-    SegmentCommitInfo commitInfo = new SegmentCommitInfo(si, 0, 0, -1, -1, -1, StringHelper.randomId());
+    SegmentCommitInfo commitInfo = new SegmentCommitInfo(si, 0, 0, -1, -1, -1);
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig());
     for (int i = 0; i < si.maxDoc(); i++) {
       writer.addDocument(new Document());

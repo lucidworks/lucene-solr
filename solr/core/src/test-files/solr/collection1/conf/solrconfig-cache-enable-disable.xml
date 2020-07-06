@@ -37,33 +37,26 @@
       -->
     <filterCache
       enabled="${filterCache.enabled}"
+      class="solr.search.FastLRUCache"
       size="512"
       initialSize="512"
       autowarmCount="2"/>
 
     <queryResultCache
       enabled="${queryResultCache.enabled}"
+      class="solr.search.LRUCache"
       size="512"
       initialSize="512"
       autowarmCount="2"/>
 
     <documentCache
       enabled="${documentCache.enabled}"
+      class="solr.search.LRUCache"
       size="512"
       initialSize="512"
       autowarmCount="0"/>
 
-    <cache
-      name="user_definied_cache_XXX"
-      enabled="${user_definied_cache_XXX.enabled:false}"  
-      />
-    <cache
-      name="user_definied_cache_ZZZ"
-      enabled="${user_definied_cache_ZZZ.enabled:false}"  
-      />
 
-
-    
     <!-- If true, stored fields that are not requested will be loaded lazily.
     -->
     <enableLazyFieldLoading>true</enableLazyFieldLoading>

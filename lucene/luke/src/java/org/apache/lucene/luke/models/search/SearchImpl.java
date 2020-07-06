@@ -277,7 +277,7 @@ public final class SearchImpl extends LukeModel implements Search {
     this.exactHitsCount = exactHitsCount;
     this.query = Objects.requireNonNull(query);
     this.sort = sort;
-    this.fieldsToLoad = fieldsToLoad == null ? null : Set.copyOf(fieldsToLoad);
+    this.fieldsToLoad = fieldsToLoad == null ? null : Collections.unmodifiableSet(fieldsToLoad);
     searcher.setSimilarity(createSimilarity(Objects.requireNonNull(simConfig)));
 
     try {

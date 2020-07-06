@@ -40,7 +40,6 @@ import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BoostQuery;
-import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.similarities.ClassicSimilarity;
@@ -80,7 +79,7 @@ import org.apache.lucene.util.PriorityQueue;
  * 
  * Doug
  * </code></pre>
- * <h2>Initial Usage</h2>
+ * <h3>Initial Usage</h3>
  * <p>
  * This class has lots of options to try to make it efficient and flexible.
  * The simplest possible usage is as follows. The bold
@@ -109,7 +108,7 @@ import org.apache.lucene.util.PriorityQueue;
  * <li> call the searcher to find the similar docs
  * </ol>
  * <br>
- * <h2>More Advanced Usage</h2>
+ * <h3>More Advanced Usage</h3>
  * <p>
  * You may want to use {@link #setFieldNames setFieldNames(...)} so you can examine
  * multiple fields (e.g. body and title) for similarity.
@@ -221,7 +220,7 @@ public final class MoreLikeThis {
   /**
    * Return a Query with no more than this many terms.
    *
-   * @see IndexSearcher#getMaxClauseCount
+   * @see BooleanQuery#getMaxClauseCount
    * @see #getMaxQueryTerms
    * @see #setMaxQueryTerms
    */
@@ -636,7 +635,7 @@ public final class MoreLikeThis {
       try {
         query.add(tq, BooleanClause.Occur.SHOULD);
       }
-      catch (IndexSearcher.TooManyClauses ignore) {
+      catch (BooleanQuery.TooManyClauses ignore) {
         break;
       }
     }

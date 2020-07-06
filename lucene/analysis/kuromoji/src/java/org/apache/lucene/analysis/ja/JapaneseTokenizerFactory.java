@@ -128,17 +128,12 @@ public class JapaneseTokenizerFactory extends TokenizerFactory implements Resour
     userDictionaryPath = args.remove(USER_DICT_PATH);
     userDictionaryEncoding = args.remove(USER_DICT_ENCODING);
     discardPunctuation = getBoolean(args, DISCARD_PUNCTUATION, true);
-    discardCompoundToken = getBoolean(args, DISCARD_COMPOUND_TOKEN, true);
+    discardCompoundToken = getBoolean(args, DISCARD_COMPOUND_TOKEN, false);
     nbestCost = getInt(args, NBEST_COST, 0);
     nbestExamples = args.remove(NBEST_EXAMPLES);
     if (!args.isEmpty()) {
       throw new IllegalArgumentException("Unknown parameters: " + args);
     }
-  }
-
-  /** Default ctor for compatibility with SPI */
-  public JapaneseTokenizerFactory() {
-    throw defaultCtorException();
   }
 
   @Override

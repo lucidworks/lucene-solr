@@ -44,7 +44,7 @@ import org.apache.http.annotation.Experimental;
  *          necessary and to coordinate shutting down cores, manipulating the internal structures and the like..
  *          
  *          The only real action you should _initiate_ is to close a core for whatever reason, and do that by 
- *          calling notifyCoreCloseListener(coreToClose); The observer will call back to removeCore(name) at the appropriate 
+ *          calling notifyObservers(coreToClose); The observer will call back to removeCore(name) at the appropriate 
  *          time. There is no need to directly remove the core _at that time_ from the transientCores list, a call
  *          will come back to this class when CoreContainer is closing this core.
  *          
@@ -114,9 +114,9 @@ public abstract class TransientSolrCoreCache {
   /**
    * Must be called in order to free resources!
    */
-  public  void close(){
-    // Nothing to do currently
-  };
+  public void close() {
+    // Nothing to do for now
+  }
 
 
   // These two methods allow custom implementations to communicate arbitrary information as necessary.

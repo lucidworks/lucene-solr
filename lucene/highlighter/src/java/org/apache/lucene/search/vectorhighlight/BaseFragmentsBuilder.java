@@ -17,6 +17,7 @@
 package org.apache.lucene.search.vectorhighlight;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -24,7 +25,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
@@ -152,8 +152,8 @@ public abstract class BaseFragmentsBuilder implements FragmentsBuilder {
     reader.document(docId, new StoredFieldVisitor() {
         
         @Override
-        public void stringField(FieldInfo fieldInfo, String value) {
-          Objects.requireNonNull(value, "String value should not be null");
+        public void stringField(FieldInfo fieldInfo, byte[] bytes) {
+          String value = new String(bytes, StandardCharsets.UTF_8);
           FieldType ft = new FieldType(TextField.TYPE_STORED);
           ft.setStoreTermVectors(fieldInfo.hasVectors());
           fields.add(new Field(fieldInfo.name, value, ft));

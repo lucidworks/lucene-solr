@@ -339,7 +339,7 @@ public class SimUtils {
         }
         v2v1Mapping.put(key, meta.action.toLower());
       } else {
-        log.warn("V2 action {} has no equivalent V1 action", meta);
+        log.warn("V2 action " + meta + " has no equivalent V1 action");
       }
     }
   }
@@ -349,7 +349,6 @@ public class SimUtils {
    * @param req request
    * @return request payload and parameters converted to V1 params
    */
-  @SuppressWarnings({"unchecked"})
   public static ModifiableSolrParams v2AdminRequestToV1Params(V2Request req) {
     Map<String, Object> reqMap = new HashMap<>();
     req.toMap(reqMap);
@@ -390,11 +389,11 @@ public class SimUtils {
       if (!pathEls[2].equals("shards")) {
         throw new UnsupportedOperationException("Invalid V2 request path: expected 'shards' but was '" + pathEls[2] + "'");
       }
-      if (!pathEls[3].isBlank()) {
+      if (!pathEls[3].trim().isEmpty()) {
         params.set("shard", pathEls[3]);
       }
     }
-    if (pathEls.length > 4 && !pathEls[4].isBlank()) {
+    if (pathEls.length > 4 && !pathEls[4].trim().isEmpty()) {
       params.set("replica", pathEls[4]);
     }
     // re-map from v2 to v1 action
@@ -423,7 +422,7 @@ public class SimUtils {
         // node name format
         ctx.addEquivalentName(hostPort, u.getHost() + "_" + u.getPort() + "_", RedactionUtils.NODE_REDACTION_PREFIX);
       } catch (MalformedURLException e) {
-        log.warn("Invalid URL for node name {}, replacing including protocol and path", nodeName, e);
+        log.warn("Invalid URL for node name " + nodeName + ", replacing including protocol and path", e);
         ctx.addName(urlString, RedactionUtils.NODE_REDACTION_PREFIX);
         ctx.addEquivalentName(urlString, Utils.getBaseUrlForNodeName(nodeName, "https"), RedactionUtils.NODE_REDACTION_PREFIX);
       }

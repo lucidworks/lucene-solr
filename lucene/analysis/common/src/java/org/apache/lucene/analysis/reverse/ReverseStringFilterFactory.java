@@ -48,11 +48,6 @@ public class ReverseStringFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public ReverseStringFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public ReverseStringFilter create(TokenStream in) {
     return new ReverseStringFilter(in);

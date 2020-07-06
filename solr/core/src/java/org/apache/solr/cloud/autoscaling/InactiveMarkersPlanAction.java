@@ -75,9 +75,7 @@ public class InactiveMarkersPlanAction extends TriggerActionBase {
 
   @Override
   public void process(TriggerEvent event, ActionContext context) throws Exception {
-    if (log.isTraceEnabled()) {
-      log.trace("-- {} cleaning markers", getName());
-    }
+    log.trace("-- {} cleaning markers", getName());
     // use epoch time to track this across JVMs and nodes
     long currentTimeNs = cloudManager.getTimeSource().getEpochTimeNs();
     Map<String, Object> results = new LinkedHashMap<>();
@@ -125,7 +123,7 @@ public class InactiveMarkersPlanAction extends TriggerActionBase {
           } catch (BadVersionException be) {
             throw new RuntimeException("should never happen", be);
           } catch (NotEmptyException ne) {
-            log.error("Marker znode should be empty but it's not! Ignoring {} ({})", markerPath, ne);
+            log.error("Marker znode should be empty but it's not! Ignoring {} ({})", markerPath, ne.toString());
           }
         } else {
           log.trace(" -- keep {}, delta={}, ttl={}, active={}", markerPath, delta, cleanupTTL, activeMarker);

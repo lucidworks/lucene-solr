@@ -73,7 +73,7 @@ public class PersistenceTest extends LuceneTestCase {
     } else if (lookupClass == FSTCompletionLookup.class) {
       lookup = new FSTCompletionLookup(tempDir, "suggest");
     } else {
-      lookup = lookupClass.getConstructor().newInstance();
+      lookup = lookupClass.newInstance();
     }
     Input[] keys = new Input[this.keys.length];
     for (int i = 0; i < keys.length; i++)
@@ -85,7 +85,7 @@ public class PersistenceTest extends LuceneTestCase {
     lookup.store(Files.newOutputStream(storeDir.resolve("lookup.dat")));
 
     // Re-read it from disk.
-    lookup = lookupClass.getConstructor().newInstance();
+    lookup = lookupClass.newInstance();
     lookup.load(Files.newInputStream(storeDir.resolve("lookup.dat")));
 
     // Assert validity.

@@ -444,7 +444,6 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
     }
 
     IndexReader r = w.getReader();
-    w.close();
     IndexSearcher s = newSearcher(r);
 
     // Used to match ANY using MultiPhraseQuery:
@@ -562,7 +561,7 @@ public class TestTermAutomatonQuery extends LuceneTestCase {
       }
     }
 
-    IOUtils.close(r, dir, analyzer);
+    IOUtils.close(w, r, dir, analyzer);
   }
 
   private Set<String> toDocIDs(IndexSearcher s, TopDocs hits) throws IOException {

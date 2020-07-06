@@ -93,9 +93,7 @@ public class NodeLostTriggerIntegrationTest extends SolrCloudTestCase {
 
     // clear any persisted auto scaling configuration
     Stat stat = zkClient().setData(SOLR_AUTOSCALING_CONF_PATH, Utils.toJSON(new ZkNodeProps()), true);
-    if (log.isInfoEnabled()) {
-      log.info("{} reset, new znode version {}", SOLR_AUTOSCALING_CONF_PATH, stat.getVersion());
-    }
+    log.info(SOLR_AUTOSCALING_CONF_PATH + " reset, new znode version {}", stat.getVersion());
 
     cluster.getSolrClient().setDefaultCollection(null);
 

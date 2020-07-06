@@ -54,7 +54,7 @@ public class SimpleNaiveBayesDocumentClassifier extends SimpleNaiveBayesClassifi
   /**
    * {@link org.apache.lucene.analysis.Analyzer} to be used for tokenizing document fields
    */
-  protected final Map<String, Analyzer> field2analyzer;
+  protected Map<String, Analyzer> field2analyzer;
 
   /**
    * Creates a new NaiveBayes classifier.
@@ -175,7 +175,7 @@ public class SimpleNaiveBayesDocumentClassifier extends SimpleNaiveBayesClassifi
     }
     tokenizedText.end();
     tokenizedText.close();
-    return tokens.toArray(new String[0]);
+    return tokens.toArray(new String[tokens.size()]);
   }
 
   /**
@@ -205,7 +205,8 @@ public class SimpleNaiveBayesDocumentClassifier extends SimpleNaiveBayesClassifi
     }
 
     // log(P(d|c)) = log(P(w1|c))+...+log(P(wn|c))
-    return result / (tokenizedText.length);
+    double normScore = result / (tokenizedText.length); // this is normalized because if not, long text fields will always be more important than short fields
+    return normScore;
   }
 
   /**

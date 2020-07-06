@@ -45,7 +45,7 @@ import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.common.util.Utils;
 import org.apache.solr.logging.MDCLoggingContext;
-import org.apache.solr.common.util.SolrNamedThreadFactory;
+import org.apache.solr.util.DefaultSolrThreadFactory;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
@@ -196,7 +196,7 @@ public class OverseerTaskProcessor implements Runnable, Closeable {
 
     this.tpe = new ExecutorUtil.MDCAwareThreadPoolExecutor(5, MAX_PARALLEL_TASKS, 0L, TimeUnit.MILLISECONDS,
         new SynchronousQueue<Runnable>(),
-        new SolrNamedThreadFactory("OverseerThreadFactory"));
+        new DefaultSolrThreadFactory("OverseerThreadFactory"));
     try {
       while (!this.isClosed) {
         try {
@@ -208,9 +208,7 @@ public class OverseerTaskProcessor implements Runnable, Closeable {
             continue; // not a no, not a yes, try asking again
           }
 
-          if (log.isDebugEnabled()) {
-            log.debug("Cleaning up work-queue. #Running tasks: {} #Completed tasks: {}", runningTasksSize(), completedTasks.size());
-          }
+          log.debug("Cleaning up work-queue. #Running tasks: {} #Completed tasks: {}",  runningTasksSize(), completedTasks.size());
           cleanUpWorkQueue();
 
           printTrackingMaps();
@@ -238,9 +236,7 @@ public class OverseerTaskProcessor implements Runnable, Closeable {
             //instead of reading MAX_PARALLEL_TASKS items always, we should only fetch as much as we can execute
             int toFetch = Math.min(MAX_BLOCKED_TASKS - heads.size(), MAX_PARALLEL_TASKS - runningTasksSize());
             List<QueueEvent> newTasks = workQueue.peekTopN(toFetch, excludedTasks, 2000L);
-            if (log.isDebugEnabled()) {
-              log.debug("Got {} tasks from work-queue : [{}]", newTasks.size(), newTasks);
-            }
+            log.debug("Got {} tasks from work-queue : [{}]", newTasks.size(), newTasks);
             heads.addAll(newTasks);
           } else {
             // Prevent free-spinning this loop.
@@ -285,16 +281,14 @@ public class OverseerTaskProcessor implements Runnable, Closeable {
             }
             String operation = message.getStr(Overseer.QUEUE_OPERATION);
             if (operation == null) {
-              log.error("Msg does not have required {} : {}", Overseer.QUEUE_OPERATION, message);
+              log.error("Msg does not have required " + Overseer.QUEUE_OPERATION + ": {}", message);
               workQueue.remove(head);
               continue;
             }
             OverseerMessageHandler messageHandler = selector.selectOverseerMessageHandler(message);
             OverseerMessageHandler.Lock lock = messageHandler.lockTask(message, taskBatch);
             if (lock == null) {
-              if (log.isDebugEnabled()) {
-                log.debug("Exclusivity check failed for [{}]", message);
-              }
+              log.debug("Exclusivity check failed for [{}]", message.toString());
               //we may end crossing the size of the MAX_BLOCKED_TASKS. They are fine
               if (blockedTasks.size() < MAX_BLOCKED_TASKS)
                 blockedTasks.put(head.getId(), head);
@@ -302,9 +296,7 @@ public class OverseerTaskProcessor implements Runnable, Closeable {
             }
             try {
               markTaskAsRunning(head, asyncId);
-              if (log.isDebugEnabled()) {
-                log.debug("Marked task [{}] as running", head.getId());
-              }
+              log.debug("Marked task [{}] as running", head.getId());
             } catch (KeeperException.NodeExistsException e) {
               lock.unlock();
               // This should never happen
@@ -316,9 +308,7 @@ public class OverseerTaskProcessor implements Runnable, Closeable {
               Thread.currentThread().interrupt();
               continue;
             }
-            if (log.isDebugEnabled()) {
-              log.debug("{}: Get the message id: {} message: {}", messageHandler.getName(), head.getId(), message);
-            }
+            log.debug(messageHandler.getName() + ": Get the message id:" + head.getId() + " message:" + message.toString());
             Runner runner = new Runner(messageHandler, message,
                 operation, head, lock);
             tpe.execute(runner);
@@ -510,9 +500,7 @@ public class OverseerTaskProcessor implements Runnable, Closeable {
 
       try {
         try {
-          if (log.isDebugEnabled()) {
-            log.debug("Runner processing {}", head.getId());
-          }
+          log.debug("Runner processing {}", head.getId());
           response = messageHandler.processMessage(message, operation);
         } finally {
           timerContext.stop();
@@ -523,31 +511,22 @@ public class OverseerTaskProcessor implements Runnable, Closeable {
           if (response != null && (response.getResponse().get("failure") != null 
               || response.getResponse().get("exception") != null)) {
             failureMap.put(asyncId, OverseerSolrResponseSerializer.serialize(response));
-            if (log.isDebugEnabled()) {
-              log.debug("Updated failed map for task with zkid:[{}]", head.getId());
-            }
+            log.debug("Updated failed map for task with zkid:[{}]", head.getId());
           } else {
             completedMap.put(asyncId, OverseerSolrResponseSerializer.serialize(response));
-            if (log.isDebugEnabled()) {
-              log.debug("Updated completed map for task with zkid:[{}]", head.getId());
-            }
+            log.debug("Updated completed map for task with zkid:[{}]", head.getId());
           }
         } else {
           head.setBytes(OverseerSolrResponseSerializer.serialize(response));
-          if (log.isDebugEnabled()) {
-            log.debug("Completed task:[{}]", head.getId());
-          }
+          log.debug("Completed task:[{}]", head.getId());
         }
 
         markTaskComplete(head.getId(), asyncId);
-        if (log.isDebugEnabled()) {
-          log.debug("Marked task [{}] as completed.", head.getId());
-        }
+        log.debug("Marked task [{}] as completed.", head.getId());
         printTrackingMaps();
 
-        if (log.isDebugEnabled()) {
-          log.debug("{}: Message id: {} complete, response: {}", messageHandler.getName(), head.getId(), response.getResponse());
-        }
+        log.debug(messageHandler.getName() + ": Message id:" + head.getId() +
+            " complete, response:" + response.getResponse().toString());
         success = true;
       } catch (AlreadyClosedException e) {
 
@@ -586,7 +565,7 @@ public class OverseerTaskProcessor implements Runnable, Closeable {
 
       if (asyncId != null) {
         if (!runningMap.remove(asyncId)) {
-          log.warn("Could not find and remove async call [{}] from the running map.", asyncId );
+          log.warn("Could not find and remove async call [" + asyncId + "] from the running map.");
         }
       }
 
@@ -598,7 +577,7 @@ public class OverseerTaskProcessor implements Runnable, Closeable {
       try {
         if (asyncId != null) {
           if (!runningMap.remove(asyncId)) {
-            log.warn("Could not find and remove async call [{}] from the running map.", asyncId);
+            log.warn("Could not find and remove async call [" + asyncId + "] from the running map.");
           }
         }
 
@@ -633,18 +612,14 @@ public class OverseerTaskProcessor implements Runnable, Closeable {
   private void printTrackingMaps() {
     if (log.isDebugEnabled()) {
       synchronized (runningTasks) {
-        log.debug("RunningTasks: {}", runningTasks);
+        log.debug("RunningTasks: {}", runningTasks.toString());
       }
-      if (log.isDebugEnabled()) {
-        log.debug("BlockedTasks: {}", blockedTasks.keySet());
-      }
+      log.debug("BlockedTasks: {}", blockedTasks.keySet().toString());
       synchronized (completedTasks) {
-        if (log.isDebugEnabled()) {
-          log.debug("CompletedTasks: {}", completedTasks.keySet());
-        }
+        log.debug("CompletedTasks: {}", completedTasks.keySet().toString());
       }
       synchronized (runningZKTasks) {
-        log.info("RunningZKTasks: {}", runningZKTasks);
+        log.info("RunningZKTasks: {}", runningZKTasks.toString());
       }
     }
   }

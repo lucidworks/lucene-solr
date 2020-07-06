@@ -18,38 +18,51 @@ package org.apache.lucene.analysis.snowball;
 
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.Tokenizer;
-import org.apache.lucene.analysis.WordlistLoader;
 import org.apache.lucene.analysis.core.KeywordTokenizer;
 import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.util.LuceneTestCase.Nightly;
 
 import static org.apache.lucene.analysis.VocabularyAssert.*;
 
 /**
  * Test the snowball filters against the snowball data tests
  */
+@Nightly
 public class TestSnowballVocab extends LuceneTestCase {
   /**
    * Run all languages against their snowball vocabulary tests.
    */
   public void testStemmers() throws IOException {
-    try (InputStream in = getClass().getResourceAsStream("test_languages.txt")) {
-      for (String datafile : WordlistLoader.getLines(in, StandardCharsets.UTF_8)) {
-        String language = "" + Character.toUpperCase(datafile.charAt(0)) + datafile.substring(1);
-        assertCorrectOutput(language, datafile + ".zip");
-      }
-    }
+    assertCorrectOutput("Arabic", "arabic");
+    assertCorrectOutput("Danish", "danish");
+    assertCorrectOutput("Dutch", "dutch");
+    assertCorrectOutput("English", "english");
+    assertCorrectOutput("Finnish", "finnish");
+    assertCorrectOutput("French", "french");
+    assertCorrectOutput("German", "german");
+    assertCorrectOutput("German2", "german2");
+    assertCorrectOutput("Hungarian", "hungarian");
+    assertCorrectOutput("Italian", "italian");
+    assertCorrectOutput("Kp", "kraaij_pohlmann");
+    assertCorrectOutput("Lovins", "lovins");
+    assertCorrectOutput("Norwegian", "norwegian");
+    assertCorrectOutput("Porter", "porter");
+    assertCorrectOutput("Portuguese", "portuguese");
+    assertCorrectOutput("Romanian", "romanian");
+    assertCorrectOutput("Russian", "russian");
+    assertCorrectOutput("Spanish", "spanish");
+    assertCorrectOutput("Swedish", "swedish");
+    assertCorrectOutput("Turkish", "turkish");
   }
     
   /**
    * For the supplied language, run the stemmer against all strings in voc.txt
    * The output should be the same as the string in output.txt
    */
-  private void assertCorrectOutput(final String snowballLanguage, String zipfile)
+  private void assertCorrectOutput(final String snowballLanguage, String dataDirectory)
       throws IOException {
     if (VERBOSE) System.out.println("checking snowball language: " + snowballLanguage);
     
@@ -61,7 +74,8 @@ public class TestSnowballVocab extends LuceneTestCase {
       }  
     };
     
-    assertVocabulary(a, getDataPath(zipfile), "voc.txt", "output.txt");
+    assertVocabulary(a, getDataPath("TestSnowballVocabData.zip"), 
+        dataDirectory + "/voc.txt", dataDirectory + "/output.txt");
     a.close();
   }
 }

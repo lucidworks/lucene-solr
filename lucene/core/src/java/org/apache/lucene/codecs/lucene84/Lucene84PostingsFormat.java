@@ -96,14 +96,14 @@ import org.apache.lucene.util.packed.PackedInts;
  * <p>
  * Files and detailed format:
  * <ul>
- *   <li><code>.tim</code>: <a href="#Termdictionary">Term Dictionary</a></li>
- *   <li><code>.tip</code>: <a href="#Termindex">Term Index</a></li>
- *   <li><code>.doc</code>: <a href="#Frequencies">Frequencies and Skip Data</a></li>
- *   <li><code>.pos</code>: <a href="#Positions">Positions</a></li>
- *   <li><code>.pay</code>: <a href="#Payloads">Payloads and Offsets</a></li>
+ *   <li><tt>.tim</tt>: <a href="#Termdictionary">Term Dictionary</a></li>
+ *   <li><tt>.tip</tt>: <a href="#Termindex">Term Index</a></li>
+ *   <li><tt>.doc</tt>: <a href="#Frequencies">Frequencies and Skip Data</a></li>
+ *   <li><tt>.pos</tt>: <a href="#Positions">Positions</a></li>
+ *   <li><tt>.pay</tt>: <a href="#Payloads">Payloads and Offsets</a></li>
  * </ul>
  *
- * <a id="Termdictionary"></a>
+ * <a name="Termdictionary"></a>
  * <dl>
  * <dd>
  * <b>Term Dictionary</b>
@@ -163,7 +163,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * </dd>
  * </dl>
  *
- * <a id="Termindex"></a>
+ * <a name="Termindex"></a>
  * <dl>
  * <dd>
  * <b>Term Index</b>
@@ -173,7 +173,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * </dl>
  *
  *
- * <a id="Frequencies"></a>
+ * <a name="Frequencies"></a>
  * <dl>
  * <dd>
  * <b>Frequencies and Skip Data</b>
@@ -261,7 +261,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * </dd>
  * </dl>
  *
- * <a id="Positions"></a>
+ * <a name="Positions"></a>
  * <dl>
  * <dd>
  * <b>Positions</b>
@@ -314,7 +314,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * </dd>
  * </dl>
  *
- * <a id="Payloads"></a>
+ * <a name="Payloads"></a>
  * <dl>
  * <dd>
  * <b>Payloads and Offsets</b>
@@ -393,21 +393,24 @@ public final class Lucene84PostingsFormat extends PostingsFormat {
   private final int minTermBlockSize;
   private final int maxTermBlockSize;
 
+  private final BlockTreeTermsReader.FSTLoadMode fstLoadMode;
+
   /** Creates {@code Lucene84PostingsFormat} with default
    *  settings. */
   public Lucene84PostingsFormat() {
-    this(BlockTreeTermsWriter.DEFAULT_MIN_BLOCK_SIZE, BlockTreeTermsWriter.DEFAULT_MAX_BLOCK_SIZE);
+    this(BlockTreeTermsWriter.DEFAULT_MIN_BLOCK_SIZE, BlockTreeTermsWriter.DEFAULT_MAX_BLOCK_SIZE, BlockTreeTermsReader.FSTLoadMode.AUTO);
   }
 
   /** Creates {@code Lucene84PostingsFormat} with custom
    *  values for {@code minBlockSize} and {@code
    *  maxBlockSize} passed to block terms dictionary.
    *  @see BlockTreeTermsWriter#BlockTreeTermsWriter(SegmentWriteState,PostingsWriterBase,int,int) */
-  public Lucene84PostingsFormat(int minTermBlockSize, int maxTermBlockSize) {
+  public Lucene84PostingsFormat(int minTermBlockSize, int maxTermBlockSize, BlockTreeTermsReader.FSTLoadMode loadMode) {
     super("Lucene84");
     BlockTreeTermsWriter.validateSettings(minTermBlockSize, maxTermBlockSize);
     this.minTermBlockSize = minTermBlockSize;
     this.maxTermBlockSize = maxTermBlockSize;
+    this.fstLoadMode = loadMode;
   }
 
   @Override
@@ -438,7 +441,7 @@ public final class Lucene84PostingsFormat extends PostingsFormat {
     PostingsReaderBase postingsReader = new Lucene84PostingsReader(state);
     boolean success = false;
     try {
-      FieldsProducer ret = new BlockTreeTermsReader(postingsReader, state);
+      FieldsProducer ret = new BlockTreeTermsReader(postingsReader, state, fstLoadMode);
       success = true;
       return ret;
     } finally {

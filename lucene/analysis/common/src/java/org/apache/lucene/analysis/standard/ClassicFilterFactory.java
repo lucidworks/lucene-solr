@@ -48,11 +48,6 @@ public class ClassicFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public ClassicFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenFilter create(TokenStream input) {
     return new ClassicFilter(input);

@@ -151,7 +151,6 @@ public class FirstPassGroupingCollector<T> extends SimpleCollector {
 
   @Override
   public void setScorer(Scorable scorer) throws IOException {
-    groupSelector.setScorer(scorer);
     for (LeafFieldComparator comparator : leafComparators) {
       comparator.setScorer(scorer);
     }

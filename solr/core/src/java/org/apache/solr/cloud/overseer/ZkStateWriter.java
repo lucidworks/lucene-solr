@@ -195,9 +195,7 @@ public class ZkStateWriter {
           } else if (c.getStateFormat() > 1) {
             byte[] data = Utils.toJSON(singletonMap(c.getName(), c));
             if (reader.getZkClient().exists(path, true)) {
-              if (log.isDebugEnabled()) {
-                log.debug("going to update_collection {} version: {}", path, c.getZNodeVersion());
-              }
+              log.debug("going to update_collection {} version: {}", path, c.getZNodeVersion());
               Stat stat = reader.getZkClient().setData(path, data, c.getZNodeVersion(), true);
               DocCollection newCollection = new DocCollection(name, c.getSlicesMap(), c.getProperties(), c.getRouter(), stat.getVersion(), path);
               clusterState = clusterState.copyWith(name, newCollection);

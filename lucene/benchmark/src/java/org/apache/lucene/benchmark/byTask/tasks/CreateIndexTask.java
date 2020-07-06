@@ -29,7 +29,7 @@ import org.apache.lucene.benchmark.byTask.PerfRunData;
 import org.apache.lucene.benchmark.byTask.utils.Config;
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.PostingsFormat;
-import org.apache.lucene.codecs.lucene86.Lucene86Codec;
+import org.apache.lucene.codecs.lucene84.Lucene84Codec;
 import org.apache.lucene.index.ConcurrentMergeScheduler;
 import org.apache.lucene.index.IndexCommit;
 import org.apache.lucene.index.IndexDeletionPolicy;
@@ -80,7 +80,7 @@ public class CreateIndexTask extends PerfTask {
       return NoDeletionPolicy.INSTANCE;
     } else {
       try {
-        return Class.forName(deletionPolicyName).asSubclass(IndexDeletionPolicy.class).getConstructor().newInstance();
+        return Class.forName(deletionPolicyName).asSubclass(IndexDeletionPolicy.class).newInstance();
       } catch (Exception e) {
         throw new RuntimeException("unable to instantiate class '" + deletionPolicyName + "' as IndexDeletionPolicy", e);
       }
@@ -96,6 +96,7 @@ public class CreateIndexTask extends PerfTask {
   }
   
   public static IndexWriterConfig createWriterConfig(Config config, PerfRunData runData, OpenMode mode, IndexCommit commit) {
+    @SuppressWarnings("deprecation")
     IndexWriterConfig iwConf = new IndexWriterConfig(runData.getAnalyzer());
     iwConf.setOpenMode(mode);
     IndexDeletionPolicy indexDeletionPolicy = getIndexDeletionPolicy(config);
@@ -111,7 +112,7 @@ public class CreateIndexTask extends PerfTask {
       iwConf.setMergeScheduler(NoMergeScheduler.INSTANCE);
     } else {
       try {
-        iwConf.setMergeScheduler(Class.forName(mergeScheduler).asSubclass(MergeScheduler.class).getConstructor().newInstance());
+        iwConf.setMergeScheduler(Class.forName(mergeScheduler).asSubclass(MergeScheduler.class).newInstance());
       } catch (Exception e) {
         throw new RuntimeException("unable to instantiate class '" + mergeScheduler + "' as merge scheduler", e);
       }
@@ -128,7 +129,7 @@ public class CreateIndexTask extends PerfTask {
     if (defaultCodec != null) {
       try {
         Class<? extends Codec> clazz = Class.forName(defaultCodec).asSubclass(Codec.class);
-        iwConf.setCodec(clazz.getConstructor().newInstance());
+        iwConf.setCodec(clazz.newInstance());
       } catch (Exception e) {
         throw new RuntimeException("Couldn't instantiate Codec: " + defaultCodec, e);
       }
@@ -138,7 +139,7 @@ public class CreateIndexTask extends PerfTask {
     if (defaultCodec == null && postingsFormat != null) {
       try {
         final PostingsFormat postingsFormatChosen = PostingsFormat.forName(postingsFormat);
-        iwConf.setCodec(new Lucene86Codec() {
+        iwConf.setCodec(new Lucene84Codec() {
           @Override
           public PostingsFormat getPostingsFormatForField(String field) {
             return postingsFormatChosen;
@@ -157,7 +158,7 @@ public class CreateIndexTask extends PerfTask {
       iwConf.setMergePolicy(NoMergePolicy.INSTANCE);
     } else {
       try {
-        iwConf.setMergePolicy(Class.forName(mergePolicy).asSubclass(MergePolicy.class).getConstructor().newInstance());
+        iwConf.setMergePolicy(Class.forName(mergePolicy).asSubclass(MergePolicy.class).newInstance());
       } catch (Exception e) {
         throw new RuntimeException("unable to instantiate class '" + mergePolicy + "' as merge policy", e);
       }

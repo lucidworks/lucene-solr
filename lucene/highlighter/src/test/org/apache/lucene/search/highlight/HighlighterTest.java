@@ -107,7 +107,7 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
   static final String FIELD_NAME = "contents";
   private static final String NUMERIC_FIELD_NAME = "nfield";
   private Query query;
-  Directory dir1;
+  Directory ramDir;
   public IndexSearcher searcher = null;
   int numHighlights = 0;
   MockAnalyzer analyzer;
@@ -336,7 +336,7 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
   }
   
   /**
-   * This method intended for use with <code>testHighlightingWithDefaultField()</code>
+   * This method intended for use with <tt>testHighlightingWithDefaultField()</tt>
    */
   private String highlightField(Query query, String fieldName, String text)
       throws IOException, InvalidTokenOffsetsException {
@@ -1362,25 +1362,24 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
       public void run() throws Exception {
         HashMap<String,String> synonyms = new HashMap<>();
         synonyms.put("football", "soccer,footie");
-        try (Analyzer analyzer = new SynonymAnalyzer(synonyms)) {
+        Analyzer analyzer = new SynonymAnalyzer(synonyms);
 
-          String s = "football-soccer in the euro 2004 footie competition";
+        String s = "football-soccer in the euro 2004 footie competition";
 
-          BooleanQuery.Builder query = new BooleanQuery.Builder();
-          query.add(new TermQuery(new Term("bookid", "football")), Occur.SHOULD);
-          query.add(new TermQuery(new Term("bookid", "soccer")), Occur.SHOULD);
-          query.add(new TermQuery(new Term("bookid", "footie")), Occur.SHOULD);
+        BooleanQuery.Builder query = new BooleanQuery.Builder();
+        query.add(new TermQuery(new Term("bookid", "football")), Occur.SHOULD);
+        query.add(new TermQuery(new Term("bookid", "soccer")), Occur.SHOULD);
+        query.add(new TermQuery(new Term("bookid", "footie")), Occur.SHOULD);
 
-          Highlighter highlighter = getHighlighter(query.build(), null, HighlighterTest.this);
+        Highlighter highlighter = getHighlighter(query.build(), null, HighlighterTest.this);
 
-          // Get 3 best fragments and separate with a "..."
-          TokenStream tokenStream = analyzer.tokenStream(null, s);
+        // Get 3 best fragments and separate with a "..."
+        TokenStream tokenStream = analyzer.tokenStream(null, s);
 
-          String result = highlighter.getBestFragments(tokenStream, s, 3, "...");
-          String expectedResult = "<B>football</B>-<B>soccer</B> in the euro 2004 <B>footie</B> competition";
-          assertTrue("overlapping analyzer should handle highlights OK, expected:" + expectedResult
-              + " actual:" + result, expectedResult.equals(result));
-        }
+        String result = highlighter.getBestFragments(tokenStream, s, 3, "...");
+        String expectedResult = "<B>football</B>-<B>soccer</B> in the euro 2004 <B>footie</B> competition";
+        assertTrue("overlapping analyzer should handle highlights OK, expected:" + expectedResult
+            + " actual:" + result, expectedResult.equals(result));
       }
 
     };
@@ -1936,7 +1935,7 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
     helper.start();
   }
   
-  private Directory dir2;
+  private Directory dir;
   private Analyzer a;
   
   public void testWeightedTermsWithDeletes() throws IOException, InvalidTokenOffsetsException {
@@ -1946,7 +1945,7 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
   }
   
   private void makeIndex() throws IOException {
-    IndexWriter writer = new IndexWriter(dir1, new IndexWriterConfig(new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false)));
+    IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig(new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false)));
     writer.addDocument( doc( "t_text1", "random words for highlighting tests del" ) );
     writer.addDocument( doc( "t_text1", "more random words for second field del" ) );
     writer.addDocument( doc( "t_text1", "random words for highlighting tests del" ) );
@@ -1956,7 +1955,7 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
   }
   
   private void deleteDocument() throws IOException {
-    IndexWriter writer = new IndexWriter(dir1, new IndexWriterConfig(new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false)).setOpenMode(OpenMode.APPEND));
+    IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig(new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false)).setOpenMode(OpenMode.APPEND));
     writer.deleteDocuments( new Term( "t_text1", "del" ) );
     // To see negative idf, keep comment the following line
     //writer.forceMerge(1);
@@ -1965,7 +1964,7 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
   
   private void searchIndex() throws IOException, InvalidTokenOffsetsException {
     Query query = new TermQuery(new Term("t_text1", "random"));
-    IndexReader reader = DirectoryReader.open(dir1);
+    IndexReader reader = DirectoryReader.open(dir);
     IndexSearcher searcher = newSearcher(reader);
     // This scorer can return negative idf -> null fragment
     Scorer scorer = new QueryTermScorer( query, searcher.getIndexReader(), "t_text1" );
@@ -1988,7 +1987,7 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
     final String text = "random words and words";//"words" at positions 1 & 4
 
     Analyzer analyzer = new MockPayloadAnalyzer();//sets payload to "pos: X" (where X is position #)
-    try (IndexWriter writer = new IndexWriter(dir1, new IndexWriterConfig(analyzer))) {
+    try (IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig(analyzer))) {
       writer.deleteAll();
       Document doc = new Document();
 
@@ -1996,7 +1995,7 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
       writer.addDocument(doc);
       writer.commit();
     }
-    try (IndexReader reader = DirectoryReader.open(dir1)) {
+    try (IndexReader reader = DirectoryReader.open(dir)) {
       Query query = new SpanPayloadCheckQuery(new SpanTermQuery(new Term(FIELD_NAME, "words")),
           Collections.singletonList(new BytesRef("pos: 1")));//just match the first "word" occurrence
       IndexSearcher searcher = newSearcher(reader);
@@ -2014,6 +2013,32 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
       assertEquals("random <B>words</B> and words", result);//only highlight first "word"
     }
   }
+  
+  /*
+   * 
+   * public void testBigramAnalyzer() throws IOException, ParseException {
+   * //test to ensure analyzers with none-consecutive start/end offsets //dont
+   * double-highlight text //setup index 1 RAMDirectory ramDir = new
+   * RAMDirectory(); Analyzer bigramAnalyzer=new CJKAnalyzer(); IndexWriter
+   * writer = new IndexWriter(ramDir,bigramAnalyzer , true); Document d = new
+   * Document(); Field f = new Field(FIELD_NAME, "java abc def", true, true,
+   * true); d.add(f); writer.addDocument(d); writer.close(); IndexReader reader =
+   * DirectoryReader.open(ramDir);
+   * 
+   * IndexSearcher searcher=new IndexSearcher(reader); query =
+   * QueryParser.parse("abc", FIELD_NAME, bigramAnalyzer);
+   * System.out.println("Searching for: " + query.toString(FIELD_NAME)); hits =
+   * searcher.search(query);
+   * 
+   * Highlighter highlighter = new Highlighter(this,new
+   * QueryFragmentScorer(query));
+   * 
+   * for (int i = 0; i < hits.totalHits.value; i++) { String text =
+   * searcher.doc2(hits.scoreDocs[i].doc).get(FIELD_NAME); TokenStream
+   * tokenStream=bigramAnalyzer.tokenStream(FIELD_NAME,text);
+   * String highlightedText = highlighter.getBestFragment(tokenStream,text);
+   * System.out.println(highlightedText); } }
+   */
 
   @Override
   public String highlightTerm(String originalText, TokenGroup group) {
@@ -2058,13 +2083,13 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
 
     //Not many use this setup:
     a = new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false);
-    dir1 = newDirectory();
+    dir = newDirectory();
 
     //Most tests use this setup:
     analyzer = new MockAnalyzer(random(), MockTokenizer.SIMPLE, true, MockTokenFilter.ENGLISH_STOPSET);
-    dir2 = newDirectory();
+    ramDir = newDirectory();
     fieldType = random().nextBoolean() ? FIELD_TYPE_TV : TextField.TYPE_STORED;
-    IndexWriter writer = new IndexWriter(dir2, newIndexWriterConfig(analyzer).setMergePolicy(newLogMergePolicy()));
+    IndexWriter writer = new IndexWriter(ramDir, newIndexWriterConfig(analyzer).setMergePolicy(newLogMergePolicy()));
 
     for (String text : texts) {
       writer.addDocument(doc(FIELD_NAME, text));
@@ -2097,7 +2122,7 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
     
     writer.forceMerge(1);
     writer.close();
-    reader = DirectoryReader.open(dir2);
+    reader = DirectoryReader.open(ramDir);
 
     //Misc:
     numHighlights = 0;
@@ -2106,8 +2131,8 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
   @Override
   public void tearDown() throws Exception {
     reader.close();
-    dir1.close();
-    dir2.close();
+    dir.close();
+    ramDir.close();
     super.tearDown();
   }
 

@@ -78,7 +78,6 @@ public class SecondPassGroupingCollector<T> extends SimpleCollector {
 
   @Override
   public void setScorer(Scorable scorer) throws IOException {
-    groupSelector.setScorer(scorer);
     groupReducer.setScorer(scorer);
   }
 

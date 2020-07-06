@@ -42,8 +42,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.ExecutorUtil;
-import org.apache.solr.common.util.SolrNamedThreadFactory;
+import org.apache.solr.common.util.SolrjNamedThreadFactory;
 import org.apache.solr.core.SolrInfoBean;
+import org.apache.solr.metrics.SolrMetricProducer;
 import org.apache.solr.metrics.SolrMetricsContext;
 import org.apache.solr.security.AuditEvent.EventType;
 import org.slf4j.Logger;
@@ -55,7 +56,7 @@ import org.slf4j.LoggerFactory;
  * @since 8.1.0
  * @lucene.experimental
  */
-public abstract class AuditLoggerPlugin implements Closeable, Runnable, SolrInfoBean {
+public abstract class AuditLoggerPlugin implements Closeable, Runnable, SolrInfoBean, SolrMetricProducer {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   private static final String PARAM_EVENT_TYPES = "eventTypes";
   static final String PARAM_ASYNC = "async";
@@ -117,7 +118,7 @@ public abstract class AuditLoggerPlugin implements Closeable, Runnable, SolrInfo
     pluginConfig.remove(PARAM_NUM_THREADS);
     if (async) {
       queue = new ArrayBlockingQueue<>(blockingQueueSize);
-      executorService = ExecutorUtil.newMDCAwareFixedThreadPool(numThreads, new SolrNamedThreadFactory("audit"));
+      executorService = ExecutorUtil.newMDCAwareFixedThreadPool(numThreads, new SolrjNamedThreadFactory("audit"));
       executorService.submit(this);
     }
     pluginConfig.remove("class");
@@ -180,7 +181,7 @@ public abstract class AuditLoggerPlugin implements Closeable, Runnable, SolrInfo
       }
     } else {
       if (!queue.offer(event)) {
-        log.warn("Audit log async queue is full (size={}), not blocking since {}==false", blockingQueueSize, PARAM_BLOCKASYNC);
+        log.warn("Audit log async queue is full (size={}), not blocking since {}", blockingQueueSize, PARAM_BLOCKASYNC + "==false");
         numLost.mark();
       }
     }
@@ -225,9 +226,7 @@ public abstract class AuditLoggerPlugin implements Closeable, Runnable, SolrInfo
   public boolean shouldLog(EventType eventType) {
     boolean shouldLog = eventTypes.contains(eventType.name()); 
     if (!shouldLog) {
-      if (log.isDebugEnabled()) {
-        log.debug("Event type {} is not configured for audit logging", eventType.name());
-      }
+      log.debug("Event type {} is not configured for audit logging", eventType.name());
     }
     return shouldLog;
   }
@@ -241,17 +240,17 @@ public abstract class AuditLoggerPlugin implements Closeable, Runnable, SolrInfo
     solrMetricsContext = parentContext.getChildContext(this);
     String className = this.getClass().getSimpleName();
     log.debug("Initializing metrics for {}", className);
-    numErrors = solrMetricsContext.meter("errors", getCategory().toString(), scope, className);
-    numLost = solrMetricsContext.meter("lost", getCategory().toString(), scope, className);
-    numLogged = solrMetricsContext.meter("count", getCategory().toString(), scope, className);
-    requestTimes = solrMetricsContext.timer("requestTimes", getCategory().toString(), scope, className);
-    totalTime = solrMetricsContext.counter("totalTime", getCategory().toString(), scope, className);
+    numErrors = solrMetricsContext.meter(this, "errors", getCategory().toString(), scope, className);
+    numLost = solrMetricsContext.meter(this, "lost", getCategory().toString(), scope, className);
+    numLogged = solrMetricsContext.meter(this, "count", getCategory().toString(), scope, className);
+    requestTimes = solrMetricsContext.timer(this, "requestTimes", getCategory().toString(), scope, className);
+    totalTime = solrMetricsContext.counter(this, "totalTime", getCategory().toString(), scope, className);
     if (async) {
-      solrMetricsContext.gauge(() -> blockingQueueSize, true, "queueCapacity", getCategory().toString(), scope, className);
-      solrMetricsContext.gauge(() -> blockingQueueSize - queue.remainingCapacity(), true, "queueSize", getCategory().toString(), scope, className);
-      queuedTime = solrMetricsContext.timer("queuedTime", getCategory().toString(), scope, className);
+      solrMetricsContext.gauge(this, () -> blockingQueueSize, true, "queueCapacity", getCategory().toString(), scope, className);
+      solrMetricsContext.gauge(this, () -> blockingQueueSize - queue.remainingCapacity(), true, "queueSize", getCategory().toString(), scope, className);
+      queuedTime = solrMetricsContext.timer(this, "queuedTime", getCategory().toString(), scope, className);
     }
-    solrMetricsContext.gauge(() -> async, true, "async", getCategory().toString(), scope, className);
+    solrMetricsContext.gauge(this, () -> async, true, "async", getCategory().toString(), scope, className);
   }
   
   @Override
@@ -269,6 +268,11 @@ public abstract class AuditLoggerPlugin implements Closeable, Runnable, SolrInfo
     return Category.SECURITY;
   }
   
+  @Override
+  public Set<String> getMetricNames() {
+    return metricNames;
+  }
+
   @Override
   public SolrMetricsContext getSolrMetricsContext() {
     return solrMetricsContext;
@@ -317,7 +321,7 @@ public abstract class AuditLoggerPlugin implements Closeable, Runnable, SolrInfo
       log.info("Shutting down async Auditlogger background thread(s)");
       executorService.shutdownNow();
       try {
-        SolrInfoBean.super.close();
+        SolrMetricProducer.super.close();
       } catch (Exception e) {
         throw new IOException("Exception closing", e);
       }
@@ -333,9 +337,7 @@ public abstract class AuditLoggerPlugin implements Closeable, Runnable, SolrInfo
       int timeSlept = 0;
       while ((!queue.isEmpty() || auditsInFlight.get() > 0) && timeSlept < timeoutSeconds) {
         try {
-          if (log.isInfoEnabled()) {
-            log.info("Async auditlogger queue still has {} elements and {} audits in-flight, sleeping to drain...", queue.size(), auditsInFlight.get());
-          }
+          log.info("Async auditlogger queue still has {} elements and {} audits in-flight, sleeping to drain...", queue.size(), auditsInFlight.get());
           Thread.sleep(1000);
           timeSlept ++;
         } catch (InterruptedException ignored) {}

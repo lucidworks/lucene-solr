@@ -21,10 +21,12 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.Set;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.codecs.DocValuesConsumer;
@@ -38,6 +40,8 @@ import org.apache.lucene.document.FieldType;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
+import org.apache.lucene.search.SortedNumericSortField;
+import org.apache.lucene.search.SortedSetSortField;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.util.ArrayUtil;
@@ -72,7 +76,9 @@ final class DefaultIndexingChain extends DocConsumer {
   // Holds fields seen in each document
   private PerField[] fields = new PerField[1];
 
-  public DefaultIndexingChain(DocumentsWriterPerThread docWriter) {
+  private final Set<String> finishedDocValues = new HashSet<>();
+
+  public DefaultIndexingChain(DocumentsWriterPerThread docWriter) throws IOException {
     this.docWriter = docWriter;
     this.fieldInfos = docWriter.getFieldInfosBuilder();
     this.docState = docWriter.docState;
@@ -89,96 +95,29 @@ final class DefaultIndexingChain extends DocConsumer {
     termsHash = new FreqProxTermsWriter(docWriter, termVectorsWriter);
   }
 
-  private LeafReader getDocValuesLeafReader() {
-    return new DocValuesLeafReader() {
-      @Override
-      public NumericDocValues getNumericDocValues(String field) throws IOException {
-        PerField pf = getPerField(field);
-        if (pf == null) {
-          return null;
-        }
-        if (pf.fieldInfo.getDocValuesType() == DocValuesType.NUMERIC) {
-          return (NumericDocValues) pf.docValuesWriter.getDocValues();
-        }
-        return null;
-      }
-
-      @Override
-      public BinaryDocValues getBinaryDocValues(String field) throws IOException {
-        PerField pf = getPerField(field);
-        if (pf == null) {
-          return null;
-        }
-        if (pf.fieldInfo.getDocValuesType() == DocValuesType.BINARY) {
-          return (BinaryDocValues) pf.docValuesWriter.getDocValues();
-        }
-        return null;
-      }
-
-      @Override
-      public SortedDocValues getSortedDocValues(String field) throws IOException {
-        PerField pf = getPerField(field);
-        if (pf == null) {
-          return null;
-        }
-        if (pf.fieldInfo.getDocValuesType() == DocValuesType.SORTED) {
-          return (SortedDocValues) pf.docValuesWriter.getDocValues();
-        }
-        return null;
-      }
-
-      @Override
-      public SortedNumericDocValues getSortedNumericDocValues(String field) throws IOException {
-        PerField pf = getPerField(field);
-        if (pf == null) {
-          return null;
-        }
-        if (pf.fieldInfo.getDocValuesType() == DocValuesType.SORTED_NUMERIC) {
-          return (SortedNumericDocValues) pf.docValuesWriter.getDocValues();
-        }
-        return null;
-      }
-
-      @Override
-      public SortedSetDocValues getSortedSetDocValues(String field) throws IOException {
-        PerField pf = getPerField(field);
-        if (pf == null) {
-          return null;
-        }
-        if (pf.fieldInfo.getDocValuesType() == DocValuesType.SORTED_SET) {
-          return (SortedSetDocValues) pf.docValuesWriter.getDocValues();
-        }
-        return null;
-      }
-
-      @Override
-      public FieldInfos getFieldInfos() {
-        return fieldInfos.finish();
-      }
-
-    };
-  }
-
   private Sorter.DocMap maybeSortSegment(SegmentWriteState state) throws IOException {
     Sort indexSort = state.segmentInfo.getIndexSort();
     if (indexSort == null) {
       return null;
     }
 
-    LeafReader docValuesReader = getDocValuesLeafReader();
-
-    List<IndexSorter.DocComparator> comparators = new ArrayList<>();
+    List<Sorter.DocComparator> comparators = new ArrayList<>();
     for (int i = 0; i < indexSort.getSort().length; i++) {
       SortField sortField = indexSort.getSort()[i];
-      IndexSorter sorter = sortField.getIndexSorter();
-      if (sorter == null) {
-        throw new UnsupportedOperationException("Cannot sort index using sort field " + sortField);
+      PerField perField = getPerField(sortField.getField());
+      if (perField != null && perField.docValuesWriter != null &&
+          finishedDocValues.contains(perField.fieldInfo.name) == false) {
+          perField.docValuesWriter.finish(state.segmentInfo.maxDoc());
+          Sorter.DocComparator cmp = perField.docValuesWriter.getDocComparator(state.segmentInfo.maxDoc(), sortField);
+          comparators.add(cmp);
+          finishedDocValues.add(perField.fieldInfo.name);
+      } else {
+        // safe to ignore, sort field with no values or already seen before
       }
-      comparators.add(sorter.getDocComparator(docValuesReader, state.segmentInfo.maxDoc()));
     }
     Sorter sorter = new Sorter(indexSort);
     // returns null if the documents are already sorted
-    return sorter.sort(state.segmentInfo.maxDoc(), comparators.toArray(IndexSorter.DocComparator[]::new));
+    return sorter.sort(state.segmentInfo.maxDoc(), comparators.toArray(new Sorter.DocComparator[comparators.size()]));
   }
 
   @Override
@@ -193,7 +132,7 @@ final class DefaultIndexingChain extends DocConsumer {
     if (docState.infoStream.isEnabled("IW")) {
       docState.infoStream.message("IW", ((System.nanoTime()-t0)/1000000) + " msec to write norms");
     }
-    SegmentReadState readState = new SegmentReadState(state.directory, state.segmentInfo, state.fieldInfos, IOContext.READ, state.segmentSuffix);
+    SegmentReadState readState = new SegmentReadState(state.directory, state.segmentInfo, state.fieldInfos, true, IOContext.READ, state.segmentSuffix, Collections.emptyMap());
     
     t0 = System.nanoTime();
     writeDocValues(state, sortMap);
@@ -316,6 +255,10 @@ final class DefaultIndexingChain extends DocConsumer {
               // lazy init
               DocValuesFormat fmt = state.segmentInfo.getCodec().docValuesFormat();
               dvConsumer = fmt.fieldsConsumer(state);
+            }
+
+            if (finishedDocValues.contains(perField.fieldInfo.name) == false) {
+              perField.docValuesWriter.finish(maxDoc);
             }
             perField.docValuesWriter.flush(state, sortMap, dvConsumer);
             perField.docValuesWriter = null;
@@ -585,58 +528,45 @@ final class DefaultIndexingChain extends DocConsumer {
     fp.pointValuesWriter.addPackedValue(docState.docID, field.binaryValue());
   }
 
-  private void validateIndexSortDVType(Sort indexSort, String fieldToValidate, DocValuesType dvType) throws IOException {
+  private void validateIndexSortDVType(Sort indexSort, String fieldName, DocValuesType dvType) {
     for (SortField sortField : indexSort.getSort()) {
-      IndexSorter sorter = sortField.getIndexSorter();
-      if (sorter == null) {
-        throw new IllegalStateException("Cannot sort index with sort order " + sortField);
+      if (sortField.getField().equals(fieldName)) {
+        switch (dvType) {
+          case NUMERIC:
+            if (sortField.getType().equals(SortField.Type.INT) == false &&
+                  sortField.getType().equals(SortField.Type.LONG) == false &&
+                  sortField.getType().equals(SortField.Type.FLOAT) == false &&
+                  sortField.getType().equals(SortField.Type.DOUBLE) == false) {
+              throw new IllegalArgumentException("invalid doc value type:" + dvType + " for sortField:" + sortField);
+            }
+            break;
+
+          case BINARY:
+            throw new IllegalArgumentException("invalid doc value type:" + dvType + " for sortField:" + sortField);
+
+          case SORTED:
+            if (sortField.getType().equals(SortField.Type.STRING) == false) {
+              throw new IllegalArgumentException("invalid doc value type:" + dvType + " for sortField:" + sortField);
+            }
+            break;
+
+          case SORTED_NUMERIC:
+            if (sortField instanceof SortedNumericSortField == false) {
+              throw new IllegalArgumentException("invalid doc value type:" + dvType + " for sortField:" + sortField);
+            }
+            break;
+
+          case SORTED_SET:
+            if (sortField instanceof SortedSetSortField == false) {
+              throw new IllegalArgumentException("invalid doc value type:" + dvType + " for sortField:" + sortField);
+            }
+            break;
+
+          default:
+            throw new IllegalArgumentException("invalid doc value type:" + dvType + " for sortField:" + sortField);
+        }
+        break;
       }
-      sorter.getDocComparator(new DocValuesLeafReader() {
-        @Override
-        public NumericDocValues getNumericDocValues(String field) {
-          if (Objects.equals(field, fieldToValidate) && dvType != DocValuesType.NUMERIC) {
-            throw new IllegalArgumentException("SortField " + sortField + " expected field [" + field + "] to be NUMERIC but it is [" + dvType + "]");
-          }
-          return DocValues.emptyNumeric();
-        }
-
-        @Override
-        public BinaryDocValues getBinaryDocValues(String field) {
-          if (Objects.equals(field, fieldToValidate) && dvType != DocValuesType.BINARY) {
-            throw new IllegalArgumentException("SortField " + sortField + " expected field [" + field + "] to be BINARY but it is [" + dvType + "]");
-          }
-          return DocValues.emptyBinary();
-        }
-
-        @Override
-        public SortedDocValues getSortedDocValues(String field) {
-          if (Objects.equals(field, fieldToValidate) && dvType != DocValuesType.SORTED) {
-            throw new IllegalArgumentException("SortField " + sortField + " expected field [" + field + "] to be SORTED but it is [" + dvType + "]");
-          }
-          return DocValues.emptySorted();
-        }
-
-        @Override
-        public SortedNumericDocValues getSortedNumericDocValues(String field) {
-          if (Objects.equals(field, fieldToValidate) && dvType != DocValuesType.SORTED_NUMERIC) {
-            throw new IllegalArgumentException("SortField " + sortField + " expected field [" + field + "] to be SORTED_NUMERIC but it is [" + dvType + "]");
-          }
-          return DocValues.emptySortedNumeric();
-        }
-
-        @Override
-        public SortedSetDocValues getSortedSetDocValues(String field) {
-          if (Objects.equals(field, fieldToValidate) && dvType != DocValuesType.SORTED_SET) {
-            throw new IllegalArgumentException("SortField " + sortField + " expected field [" + field + "] to be SORTED_SET but it is [" + dvType + "]");
-          }
-          return DocValues.emptySortedSet();
-        }
-
-        @Override
-        public FieldInfos getFieldInfos() {
-          throw new UnsupportedOperationException();
-        }
-      }, 0);
     }
   }
 
@@ -652,8 +582,8 @@ final class DefaultIndexingChain extends DocConsumer {
         validateIndexSortDVType(indexSort, fp.fieldInfo.name, dvType);
       }
       fieldInfos.globalFieldNumbers.setDocValuesType(fp.fieldInfo.number, fp.fieldInfo.name, dvType);
-    }
 
+    }
     fp.fieldInfo.setDocValuesType(dvType);
 
     int docID = docState.docID;
@@ -784,7 +714,7 @@ final class DefaultIndexingChain extends DocConsumer {
 
     // Non-null if this field ever had doc values in this
     // segment:
-    DocValuesWriter<?> docValuesWriter;
+    DocValuesWriter docValuesWriter;
 
     // Non-null if this field ever had points in this segment:
     PointValuesWriter pointValuesWriter;
@@ -978,7 +908,7 @@ final class DefaultIndexingChain extends DocConsumer {
           return null;
         }
 
-        return perField.docValuesWriter.getDocValues();
+        return perField.docValuesWriter.getDocIdSet();
       }
     }
     return null;

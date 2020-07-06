@@ -24,11 +24,11 @@ import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.text.ParseException;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.Set;
 
-import org.apache.lucene.codecs.CompoundDirectory;
 import org.apache.lucene.codecs.CompoundFormat;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.IndexFileNames;
@@ -37,6 +37,7 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.Lock;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.StringHelper;
@@ -54,7 +55,7 @@ public class SimpleTextCompoundFormat extends CompoundFormat {
   }
 
   @Override
-  public CompoundDirectory getCompoundReader(Directory dir, SegmentInfo si, IOContext context) throws IOException {
+  public Directory getCompoundReader(Directory dir, SegmentInfo si, IOContext context) throws IOException {
     String dataFile = IndexFileNames.segmentFileName(si.name, "", DATA_EXTENSION);
     final IndexInput in = dir.openInput(dataFile, context);
     
@@ -102,7 +103,7 @@ public class SimpleTextCompoundFormat extends CompoundFormat {
       endOffsets[i] = Long.parseLong(stripPrefix(scratch, TABLEEND));
     }
 
-    return new CompoundDirectory() {
+    return new Directory() {
 
       private int getIndex(String name) throws IOException {
         int index = Arrays.binarySearch(fileNames, name);
@@ -142,10 +143,28 @@ public class SimpleTextCompoundFormat extends CompoundFormat {
         return Collections.emptySet();
       }
 
+      // write methods: disabled
+      
       @Override
-      public void checkIntegrity() throws IOException {
-        // No checksums for SimpleText
-      }
+      public IndexOutput createOutput(String name, IOContext context) { throw new UnsupportedOperationException(); }
+
+      @Override
+      public IndexOutput createTempOutput(String prefix, String suffix, IOContext context) { throw new UnsupportedOperationException(); }
+      
+      @Override
+      public void sync(Collection<String> names) { throw new UnsupportedOperationException(); }
+      
+      @Override
+      public void deleteFile(String name) { throw new UnsupportedOperationException(); }
+      
+      @Override
+      public void rename(String source, String dest) { throw new UnsupportedOperationException(); }
+
+      @Override
+      public void syncMetaData() { throw new UnsupportedOperationException(); }
+      
+      @Override
+      public Lock obtainLock(String name) { throw new UnsupportedOperationException(); }
     };
   }
 

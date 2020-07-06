@@ -47,11 +47,6 @@ public class SoraniNormalizationFilterFactory extends TokenFilterFactory {
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public SoraniNormalizationFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new SoraniNormalizationFilter(input);

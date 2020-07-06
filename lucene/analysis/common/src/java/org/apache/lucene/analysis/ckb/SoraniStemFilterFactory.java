@@ -48,11 +48,6 @@ public class SoraniStemFilterFactory extends TokenFilterFactory {
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public SoraniStemFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public SoraniStemFilter create(TokenStream input) {
     return new SoraniStemFilter(input);

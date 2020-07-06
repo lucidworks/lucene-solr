@@ -69,13 +69,11 @@ public class SaslZkACLProviderTest extends SolrTestCaseJ4 {
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    if (log.isInfoEnabled()) {
-      log.info("####SETUP_START {}", getTestName());
-    }
+    log.info("####SETUP_START " + getTestName());
     createTempDir();
 
     Path zkDir = createTempDir().resolve("zookeeper/server1/data");
-    log.info("ZooKeeper dataDir:{}", zkDir);
+    log.info("ZooKeeper dataDir:" + zkDir);
     zkServer = new SaslZkTestServer(zkDir, createTempDir().resolve("miniKdc"));
     zkServer.run();
 
@@ -86,9 +84,7 @@ public class SaslZkACLProviderTest extends SolrTestCaseJ4 {
     }
     setupZNodes();
 
-    if (log.isInfoEnabled()) {
-      log.info("####SETUP_END {}", getTestName());
-    }
+    log.info("####SETUP_END " + getTestName());
   }
 
   protected void setupZNodes() throws Exception {

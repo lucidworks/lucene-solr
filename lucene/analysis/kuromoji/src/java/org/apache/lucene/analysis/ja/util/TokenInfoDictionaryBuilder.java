@@ -31,7 +31,7 @@ import java.util.stream.Stream;
 
 import org.apache.lucene.analysis.ja.util.DictionaryBuilder.DictionaryFormat;
 import org.apache.lucene.util.IntsRefBuilder;
-import org.apache.lucene.util.fst.FSTCompiler;
+import org.apache.lucene.util.fst.Builder;
 import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.PositiveIntOutputs;
 
@@ -97,7 +97,7 @@ class TokenInfoDictionaryBuilder {
     lines.sort(Comparator.comparing(entry -> entry[0]));
 
     PositiveIntOutputs fstOutput = PositiveIntOutputs.getSingleton();
-    FSTCompiler<Long> fstCompiler = new FSTCompiler<>(FST.INPUT_TYPE.BYTE2, fstOutput);
+    Builder<Long> fstBuilder = new Builder<>(FST.INPUT_TYPE.BYTE2, 0, 0, true, true, Integer.MAX_VALUE, fstOutput, true, 15);
     IntsRefBuilder scratch = new IntsRefBuilder();
     long ord = -1; // first ord will be 0
     String lastValue = null;
@@ -120,12 +120,12 @@ class TokenInfoDictionaryBuilder {
         for (int i = 0; i < token.length(); i++) {
           scratch.setIntAt(i, (int) token.charAt(i));
         }
-        fstCompiler.add(scratch.get(), ord);
+        fstBuilder.add(scratch.get(), ord);
       }
       dictionary.addMapping((int) ord, offset);
       offset = next;
     }
-    dictionary.setFST(fstCompiler.compile());
+    dictionary.setFST(fstBuilder.finish());
     return dictionary;
   }
   

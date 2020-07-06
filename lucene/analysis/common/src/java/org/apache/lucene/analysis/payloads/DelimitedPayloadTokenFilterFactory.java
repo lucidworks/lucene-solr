@@ -60,11 +60,6 @@ public class DelimitedPayloadTokenFilterFactory extends TokenFilterFactory imple
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public DelimitedPayloadTokenFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public DelimitedPayloadTokenFilter create(TokenStream input) {
     return new DelimitedPayloadTokenFilter(input, delimiter, encoder);

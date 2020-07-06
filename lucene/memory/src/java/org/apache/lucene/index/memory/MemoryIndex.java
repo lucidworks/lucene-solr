@@ -42,7 +42,7 @@ import org.apache.lucene.search.Scorable;
 import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.SimpleCollector;
 import org.apache.lucene.search.similarities.Similarity;
-import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.ByteBlockPool;
@@ -52,6 +52,7 @@ import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.BytesRefHash;
 import org.apache.lucene.util.BytesRefHash.DirectBytesStartArray;
 import org.apache.lucene.util.Counter;
+import org.apache.lucene.util.FutureArrays;
 import org.apache.lucene.util.IntBlockPool;
 import org.apache.lucene.util.IntBlockPool.SliceReader;
 import org.apache.lucene.util.IntBlockPool.SliceWriter;
@@ -64,8 +65,8 @@ import org.apache.lucene.util.Version;
  * <p>
  * <b>Overview</b>
  * <p>
- * This class is a replacement/substitute for RAM-resident {@link Directory} implementations.
- * It is designed to
+ * This class is a replacement/substitute for a large subset of
+ * {@link RAMDirectory} functionality. It is designed to
  * enable maximum efficiency for on-the-fly matchmaking combining structured and 
  * fuzzy fulltext search in realtime streaming applications such as Nux XQuery based XML 
  * message queues, publish-subscribe systems for Blogs/newsfeeds, text chat, data acquisition and 
@@ -155,12 +156,11 @@ import org.apache.lucene.util.Version;
  * <p>
  * This class performs very well for very small texts (e.g. 10 chars) 
  * as well as for large texts (e.g. 10 MB) and everything in between. 
- * Typically, it is about 10-100 times faster than RAM-resident directory.
- *
- * Note that other <code>Directory</code> implementations have particularly
+ * Typically, it is about 10-100 times faster than <code>RAMDirectory</code>.
+ * Note that <code>RAMDirectory</code> has particularly 
  * large efficiency overheads for small to medium sized texts, both in time and space.
  * Indexing a field with N tokens takes O(N) in the best case, and O(N logN) in the worst 
- * case.
+ * case. Memory consumption is probably larger than for <code>RAMDirectory</code>.
  * <p>
  * Example throughput of many simple term queries over a single MemoryIndex: 
  * ~500000 queries/sec on a MacBook Pro, jdk 1.5.0_06, server VM. 
@@ -707,7 +707,7 @@ public class MemoryIndex {
       });
       float score = scores[0];
       return score;
-    } catch (IOException e) {
+    } catch (IOException e) { // can never happen (RAMDirectory)
       throw new RuntimeException(e);
     }
   }
@@ -888,10 +888,10 @@ public class MemoryIndex {
               assert pointValue.bytes.length == pointValue.length : "BytesRef should wrap a precise byte[], BytesRef.deepCopyOf() should take care of this";
               for (int dim = 0; dim < numDimensions; ++dim) {
                 int offset = dim * numBytesPerDimension;
-                if (Arrays.compareUnsigned(pointValue.bytes, offset, offset + numBytesPerDimension, minPackedValue, offset, offset + numBytesPerDimension) < 0) {
+                if (FutureArrays.compareUnsigned(pointValue.bytes, offset, offset + numBytesPerDimension, minPackedValue, offset, offset + numBytesPerDimension) < 0) {
                   System.arraycopy(pointValue.bytes, offset, minPackedValue, offset, numBytesPerDimension);
                 }
-                if (Arrays.compareUnsigned(pointValue.bytes, offset, offset + numBytesPerDimension, maxPackedValue, offset, offset + numBytesPerDimension) > 0) {
+                if (FutureArrays.compareUnsigned(pointValue.bytes, offset, offset + numBytesPerDimension, maxPackedValue, offset, offset + numBytesPerDimension) > 0) {
                   System.arraycopy(pointValue.bytes, offset, maxPackedValue, offset, numBytesPerDimension);
                 }
               }

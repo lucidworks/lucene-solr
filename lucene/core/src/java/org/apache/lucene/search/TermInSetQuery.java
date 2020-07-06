@@ -23,6 +23,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.SortedSet;
 
 import org.apache.lucene.index.IndexReader;
@@ -43,11 +44,6 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.DocIdSetBuilder;
 import org.apache.lucene.util.RamUsageEstimator;
-import org.apache.lucene.util.automaton.Automata;
-import org.apache.lucene.util.automaton.Automaton;
-import org.apache.lucene.util.automaton.ByteRunAutomaton;
-import org.apache.lucene.util.automaton.CompiledAutomaton;
-import org.apache.lucene.util.automaton.Operations;
 
 /**
  * Specialization for a disjunction over many terms that behaves like a
@@ -114,7 +110,7 @@ public class TermInSetQuery extends Query implements Accountable {
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
-    final int threshold = Math.min(BOOLEAN_REWRITE_TERM_COUNT_THRESHOLD, IndexSearcher.getMaxClauseCount());
+    final int threshold = Math.min(BOOLEAN_REWRITE_TERM_COUNT_THRESHOLD, BooleanQuery.getMaxClauseCount());
     if (termData.size() <= threshold) {
       BooleanQuery.Builder bq = new BooleanQuery.Builder();
       TermIterator iterator = termData.iterator();
@@ -131,22 +127,13 @@ public class TermInSetQuery extends Query implements Accountable {
     if (visitor.acceptField(field) == false) {
       return;
     }
-    if (termData.size() == 1) {
-      visitor.consumeTerms(this, new Term(field, termData.iterator().next()));
-    }
-    if (termData.size() > 1) {
-      visitor.consumeTermsMatching(this, field, this::asByteRunAutomaton);
-    }
-  }
-
-  private ByteRunAutomaton asByteRunAutomaton() {
+    QueryVisitor v = visitor.getSubVisitor(Occur.SHOULD, this);
+    List<Term> terms = new ArrayList<>();
     TermIterator iterator = termData.iterator();
-    List<Automaton> automata = new ArrayList<>();
     for (BytesRef term = iterator.next(); term != null; term = iterator.next()) {
-      automata.add(Automata.makeBinary(term));
+      terms.add(new Term(field, BytesRef.deepCopyOf(term)));
     }
-    return new CompiledAutomaton(Operations.union(automata)).runAutomaton;
-
+    v.consumeTerms(this, terms.toArray(new Term[0]));
   }
 
   @Override
@@ -240,6 +227,14 @@ public class TermInSetQuery extends Query implements Accountable {
     return new ConstantScoreWeight(this, boost) {
 
       @Override
+      public void extractTerms(Set<Term> terms) {
+        // no-op
+        // This query is for abuse cases when the number of terms is too high to
+        // run efficiently as a BooleanQuery. So likewise we hide its terms in
+        // order to protect highlighters
+      }
+
+      @Override
       public Matches matches(LeafReaderContext context, int doc) throws IOException {
         Terms terms = context.reader().terms(field);
         if (terms == null || terms.hasPositions() == false) {
@@ -265,7 +260,7 @@ public class TermInSetQuery extends Query implements Accountable {
 
         // We will first try to collect up to 'threshold' terms into 'matchingTerms'
         // if there are two many terms, we will fall back to building the 'builder'
-        final int threshold = Math.min(BOOLEAN_REWRITE_TERM_COUNT_THRESHOLD, IndexSearcher.getMaxClauseCount());
+        final int threshold = Math.min(BOOLEAN_REWRITE_TERM_COUNT_THRESHOLD, BooleanQuery.getMaxClauseCount());
         assert termData.size() > threshold : "Query should have been rewritten";
         List<TermAndState> matchingTerms = new ArrayList<>(threshold);
         DocIdSetBuilder builder = null;

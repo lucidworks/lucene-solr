@@ -52,14 +52,13 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.BaseDirectoryWrapper;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.store.MockDirectoryWrapper.FakeIOException;
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOSupplier;
@@ -341,7 +340,7 @@ public class TestIndexWriterExceptions extends LuceneTestCase {
 
     @Override
     public void apply(String name) {
-      if (doFail && name.equals("DocumentsWriterPerThread addDocuments start"))
+      if (doFail && name.equals("DocumentsWriterPerThread addDocument start"))
         throw new RuntimeException("intentionally failing");
     }
   }
@@ -597,7 +596,7 @@ public class TestIndexWriterExceptions extends LuceneTestCase {
     // only one flush should fail:
     assertFalse(hitError);
     hitError = true;
-    assertTrue(writer.isDeleterClosed());
+    assertTrue(writer.deleter.isClosed());
     assertTrue(writer.isClosed());
     assertFalse(DirectoryReader.indexExists(dir));
 
@@ -1292,7 +1291,7 @@ public class TestIndexWriterExceptions extends LuceneTestCase {
           } catch (RuntimeException e) {
             assertTrue(e.getMessage().startsWith(FailOnTermVectors.EXC_MSG));
             // This is an aborting exception, so writer is closed:
-            assertTrue(w.isDeleterClosed());
+            assertTrue(w.deleter.isClosed());
             assertTrue(w.isClosed());
             dir.close();
             continue iters;
@@ -1672,14 +1671,8 @@ public class TestIndexWriterExceptions extends LuceneTestCase {
   
   // TODO: we could also check isValid, to catch "broken" bytesref values, might be too much?
   
-  static class UOEDirectory extends FilterDirectory {
+  static class UOEDirectory extends RAMDirectory {
     boolean doFail = false;
-
-    /**
-     */
-    protected UOEDirectory() {
-      super(new ByteBuffersDirectory());
-    }
 
     @Override
     public IndexInput openInput(String name, IOContext context) throws IOException {

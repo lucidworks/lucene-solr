@@ -282,7 +282,6 @@ public class SpellCheckComponentTest extends SolrTestCaseJ4 {
     }
 
     rb.req.close();
-    checker.close();
   }
   
     @SuppressWarnings("unchecked")

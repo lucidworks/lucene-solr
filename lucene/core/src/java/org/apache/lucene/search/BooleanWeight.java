@@ -23,8 +23,10 @@ import java.util.Collection;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.util.Bits;
@@ -60,6 +62,15 @@ final class BooleanWeight extends Weight {
     for (BooleanClause c : query) {
       Weight w = searcher.createWeight(c.getQuery(), c.isScoring() ? scoreMode : ScoreMode.COMPLETE_NO_SCORES, boost);
       weightedClauses.add(new WeightedBooleanClause(c, w));
+    }
+  }
+
+  @Override
+  public void extractTerms(Set<Term> terms) {
+    for (WeightedBooleanClause wc : weightedClauses) {
+      if (wc.clause.isScoring() || (scoreMode.needsScores() == false && wc.clause.isProhibited() == false)) {
+        wc.weight.extractTerms(terms);
+      }
     }
   }
 

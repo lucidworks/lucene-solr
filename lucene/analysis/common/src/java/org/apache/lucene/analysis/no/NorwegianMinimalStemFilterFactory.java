@@ -63,11 +63,6 @@ public class NorwegianMinimalStemFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public NorwegianMinimalStemFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new NorwegianMinimalStemFilter(input, flags);

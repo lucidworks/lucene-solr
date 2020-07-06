@@ -234,7 +234,9 @@ public abstract class PointField extends NumericFieldType {
     boolean docValues = field.hasDocValues();
 
     if (!indexed && !stored && !docValues) {
-      log.trace("Ignoring unindexed/unstored field: {}", field);
+      if (log.isTraceEnabled()) {
+        log.trace("Ignoring unindexed/unstored field: " + field);
+      }
       return false;
     }
     return true;

@@ -80,7 +80,7 @@ public class DirectoryFactoryTest extends SolrTestCase {
     NodeConfig config = loadNodeConfig("/solr/solr-solrDataHome.xml");
     CoreContainer cc = new CoreContainer(config);
     Properties cp = cc.getContainerProperties();
-    DirectoryFactory df = directoryFactoryClass.getConstructor().newInstance();
+    DirectoryFactory df = directoryFactoryClass.newInstance();
     df.initCoreContainer(cc);
     df.init(new NamedList());
 
@@ -97,7 +97,7 @@ public class DirectoryFactoryTest extends SolrTestCase {
     System.setProperty("solr.data.home", "solrdata");
     config = loadNodeConfig("/solr/solr-solrDataHome.xml");
     cc = new CoreContainer(config);
-    df = directoryFactoryClass.getConstructor().newInstance();
+    df = directoryFactoryClass.newInstance();
     df.initCoreContainer(cc);
     df.init(new NamedList());
     assertDataHome(solrHome.resolve("solrdata/inst_dir/data").toAbsolutePath().toString(), "inst_dir", df, cc);
@@ -107,7 +107,7 @@ public class DirectoryFactoryTest extends SolrTestCase {
     System.setProperty("test.solr.data.home", "/foo");
     config = loadNodeConfig("/solr/solr-solrDataHome.xml");
     cc = new CoreContainer(config);
-    df = directoryFactoryClass.getConstructor().newInstance();
+    df = directoryFactoryClass.newInstance();
     df.initCoreContainer(cc);
     df.init(new NamedList());
     assertDataHome("/foo/inst_dir/data", "inst_dir", df, cc);
@@ -121,6 +121,6 @@ public class DirectoryFactoryTest extends SolrTestCase {
 
   private NodeConfig loadNodeConfig(String config) throws Exception {
     InputStream is = DirectoryFactoryTest.class.getResourceAsStream(config);
-    return SolrXmlConfig.fromInputStream(solrHome, is, new Properties());
+    return SolrXmlConfig.fromInputStream(loader, is);
   }
 }

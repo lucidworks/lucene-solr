@@ -81,9 +81,7 @@ public class TestSimDistribStateManager extends SolrTestCaseJ4 {
       solrZkClient = new SolrZkClient(zkTestServer.getZkHost(), 30000);
       stateManager = new ZkDistribStateManager(solrZkClient);
     }
-    if (log.isInfoEnabled()) {
-      log.info("Using {}", stateManager.getClass().getName());
-    }
+    log.info("Using " + stateManager.getClass().getName());
   }
 
   private DistribStateManager createDistribStateManager() {

@@ -22,8 +22,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.apache.lucene.util.ArrayUtil;
-import org.apache.lucene.util.LuceneTestCase;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -123,12 +123,7 @@ public final class TestByteBuffersDataOutput extends BaseDataOutputTestCase<Byte
   public void testLargeArrayAdd() {
     ByteBuffersDataOutput o = new ByteBuffersDataOutput();
     int MB = 1024 * 1024;
-    final byte [] bytes;
-    if (LuceneTestCase.TEST_NIGHTLY) {
-      bytes = randomBytesOfLength(5 * MB, 15 * MB);
-    } else {
-      bytes = randomBytesOfLength(MB/2, MB);
-    }
+    byte [] bytes = randomBytesOfLength(5 * MB, 15 * MB);
     int offset = randomIntBetween(0, 100);
     int len = bytes.length - offset;
     o.writeBytes(bytes, offset, len);

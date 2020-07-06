@@ -24,7 +24,6 @@ import java.util.concurrent.TimeUnit;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.impl.BaseHttpSolrClient;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
@@ -94,7 +93,7 @@ public class MigrateRouteKeyTest extends SolrCloudTestCase {
     CollectionAdminRequest.createCollection(targetCollection, "conf", 1, 1)
         .process(cluster.getSolrClient());
 
-    BaseHttpSolrClient.RemoteSolrException remoteSolrException = expectThrows(BaseHttpSolrClient.RemoteSolrException.class,
+    HttpSolrClient.RemoteSolrException remoteSolrException = expectThrows(HttpSolrClient.RemoteSolrException.class,
         "Expected an exception in case split.key is not specified", () -> {
           CollectionAdminRequest.migrateData(sourceCollection, targetCollection, "")
               .setForwardTimeout(45)
@@ -153,14 +152,14 @@ public class MigrateRouteKeyTest extends SolrCloudTestCase {
         cluster.getSolrClient().deleteById("a/" + BIT_SEP + "!104");
         splitKeyCount[0]--;
       } catch (Exception e) {
-        log.warn("Error deleting document a/{}!104", BIT_SEP, e);
+        log.warn("Error deleting document a/" + BIT_SEP + "!104", e);
       }
       cluster.getSolrClient().commit();
       collectionClient.commit();
 
       solrQuery = new SolrQuery("*:*").setRows(1000);
       QueryResponse response = collectionClient.query(solrQuery);
-      log.info("Response from target collection: {}", response);
+      log.info("Response from target collection: " + response);
       assertEquals("DocCount on target collection does not match", splitKeyCount[0], response.getResults().getNumFound());
 
       waitForState("Expected to find routing rule for split key " + splitKey, "sourceCollection", (n, c) -> {
@@ -208,7 +207,7 @@ public class MigrateRouteKeyTest extends SolrCloudTestCase {
           if (splitKey.equals(shardKey))
             splitKeyCount++;
         } catch (Exception e) {
-          log.error("Exception while adding document id: {}", doc.getField("id"), e);
+          log.error("Exception while adding document id: " + doc.getField("id"), e);
         }
         try {
           Thread.sleep(50);

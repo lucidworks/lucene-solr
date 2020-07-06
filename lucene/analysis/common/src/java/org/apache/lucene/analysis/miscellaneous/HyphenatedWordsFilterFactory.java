@@ -48,12 +48,7 @@ public class HyphenatedWordsFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public HyphenatedWordsFilterFactory() {
-    throw defaultCtorException();
-  }
-
-@Override
+  @Override
   public HyphenatedWordsFilter create(TokenStream input) {
     return new HyphenatedWordsFilter(input);
   }

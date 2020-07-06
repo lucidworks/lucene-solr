@@ -29,8 +29,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.GZIPInputStream;
@@ -62,7 +60,7 @@ public class LineFileDocs implements Closeable {
   public LineFileDocs(Random random, String path) throws IOException {
     this.path = path;
     this.random = new Random(random.nextLong());
-    open();
+    open(random);
   }
 
   public LineFileDocs(Random random) throws IOException {
@@ -76,30 +74,24 @@ public class LineFileDocs implements Closeable {
   }
   
   private long randomSeekPos(Random random, long size) {
-    if (random == null || size <= 3L) {
+    if (random == null || size <= 3L)
       return 0L;
-    } else {
-      return (random.nextLong()&Long.MAX_VALUE) % (size/3);
-    }
+    return (random.nextLong()&Long.MAX_VALUE) % (size/3);
   }
 
-  private synchronized void open() throws IOException {
+  private synchronized void open(Random random) throws IOException {
     InputStream is = getClass().getResourceAsStream(path);
-
-    // true if the InputStream is not already randomly seek'd after the if/else block below:
-    boolean needSkip;
-    
+    boolean needSkip = true;
     long size = 0L, seekTo = 0L;
     if (is == null) {
-      // if it's not in classpath, we load it as absolute filesystem path (e.g. Jenkins' home dir)
+      // if it's not in classpath, we load it as absolute filesystem path (e.g. Hudson's home dir)
       Path file = Paths.get(path);
       size = Files.size(file);
       if (path.endsWith(".gz")) {
-        // if it is a gzip file, we need to use InputStream and seek to one of the pre-computed skip points:
+        // if it is a gzip file, we need to use InputStream and slowly skipTo:
         is = Files.newInputStream(file);
-        needSkip = true;
       } else {
-        // file is not compressed: optimized seek using SeekableByteChannel
+        // optimized seek using SeekableByteChannel
         seekTo = randomSeekPos(random, size);
         final SeekableByteChannel channel = Files.newByteChannel(file);
         if (LuceneTestCase.VERBOSE) {
@@ -107,80 +99,52 @@ public class LineFileDocs implements Closeable {
         }
         channel.position(seekTo);
         is = Channels.newInputStream(channel);
-
-        // read until newline char, otherwise we may hit "java.nio.charset.MalformedInputException: Input length = 1"
-        // exception in readline() below, because we seeked part way through a multi-byte (in UTF-8) encoded
-        // unicode character:
-        if (seekTo > 0L) {
-          int b;
-          do {
-            b = is.read();
-          } while (b >= 0 && b != 13 && b != 10);
-        }
-
         needSkip = false;
       }
     } else {
       // if the file comes from Classpath:
       size = is.available();
-      needSkip = true;
     }
-
+    
+    if (path.endsWith(".gz")) {
+      is = new GZIPInputStream(is);
+      // guestimate:
+      size *= 2.8;
+    }
+    
+    // If we only have an InputStream, we need to seek now,
+    // but this seek is a scan, so very inefficient!!!
     if (needSkip) {
-
-      // LUCENE-9191: use the optimized (pre-computed, using dev-tools/scripts/create_line_file_docs.py)
-      // seek file, so we can seek in a gzip'd file
-
-      int index = path.lastIndexOf('.');
-      if (index == -1) {
-        throw new IllegalArgumentException("could not determine extension for path \"" + path + "\"");
+      seekTo = randomSeekPos(random, size);
+      if (LuceneTestCase.VERBOSE) {
+        System.out.println("TEST: LineFileDocs: stream skip to fp=" + seekTo + " on open");
       }
-
-      // e.g. foo.txt --> foo.seek, foo.txt.gz --> foo.txt.seek
-      String seekFilePath = path.substring(0, index) + ".seek";
-      InputStream seekIS = getClass().getResourceAsStream(seekFilePath);
-      if (seekIS == null) {
-        seekIS = Files.newInputStream(Paths.get(seekFilePath));
-      }
-
-      try (BufferedReader reader = new BufferedReader(new InputStreamReader(seekIS,
-                                                                    StandardCharsets.UTF_8))) {
-        List<Long> skipPoints = new ArrayList<>();
-
-        // explicitly insert implicit 0 as the first skip point:
-        skipPoints.add(0L);
-        
-        while (true) {
-          String line = reader.readLine();
-          if (line == null) {
-            break;
-          }
-          skipPoints.add(Long.parseLong(line.trim()));
-        }
-
-        seekTo = skipPoints.get(random.nextInt(skipPoints.size()));
-
-        // dev-tools/scripts/create_line_file_docs.py ensures this is a "safe" skip point, and we
-        // can begin gunziping from here:
-        is.skip(seekTo);
-        is = new GZIPInputStream(is);
-
-        if (LuceneTestCase.VERBOSE) {
-          System.out.println("TEST: LineFileDocs: stream skip to fp=" + seekTo + " on open");
-        }
-      }
+      is.skip(seekTo);
+    }
+    
+    // if we seeked somewhere, read until newline char
+    if (seekTo > 0L) {
+      int b;
+      do {
+        b = is.read();
+      } while (b >= 0 && b != 13 && b != 10);
     }
     
     CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
         .onMalformedInput(CodingErrorAction.REPORT)
         .onUnmappableCharacter(CodingErrorAction.REPORT);
     reader = new BufferedReader(new InputStreamReader(is, decoder), BUFFER_SIZE);
+    
+    if (seekTo > 0L) {
+      // read one more line, to make sure we are not inside a Windows linebreak (\r\n):
+      reader.readLine();
+    }
   }
 
-  public synchronized void reset() throws IOException {
+  public synchronized void reset(Random random) throws IOException {
     reader.close();
     reader = null;
-    open();
+    open(random);
     id.set(0);
   }
 
@@ -245,7 +209,7 @@ public class LineFileDocs implements Closeable {
         }
         reader.close();
         reader = null;
-        open();
+        open(null);
         line = reader.readLine();
       }
     }

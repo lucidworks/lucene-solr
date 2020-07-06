@@ -33,8 +33,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.TreeSet;
 
-import static org.apache.lucene.util.fst.FST.Arc.BitTable;
-
 /** Static helper methods.
  *
  * @lucene.experimental */
@@ -480,7 +478,6 @@ public final class Util {
 
           // For each arc leaving this node:
           boolean foundZero = false;
-          boolean arcCopyIsPending = false;
           while(true) {
             // tricky: instead of comparing output == 0, we must
             // express it via the comparator compare(output, 0) == 0
@@ -489,7 +486,7 @@ public final class Util {
                 foundZero = true;
                 break;
               } else if (!foundZero) {
-                arcCopyIsPending = true;
+                scratchArc.copyFrom(path.arc);
                 foundZero = true;
               } else {
                 addIfCompetitive(path);
@@ -500,16 +497,16 @@ public final class Util {
             if (path.arc.isLast()) {
               break;
             }
-            if (arcCopyIsPending) {
-              scratchArc.copyFrom(path.arc);
-              arcCopyIsPending = false;
-            }
             fst.readNextArc(path.arc, fstReader);
           }
 
           assert foundZero;
 
-          if (queue != null && !arcCopyIsPending) {
+          if (queue != null) {
+            // TODO: maybe we can save this copyFrom if we
+            // are more clever above... eg on finding the
+            // first NO_OUTPUT arc we'd switch to using
+            // scratchArc
             path.arc.copyFrom(scratchArc);
           }
 
@@ -951,11 +948,11 @@ public final class Util {
         } else if (targetIndex < 0) {
           return arc;
         } else {
-          if (BitTable.isBitSet(targetIndex, arc, in)) {
+          if (arc.bitTable().isBitSet(targetIndex)) {
             fst.readArcByDirectAddressing(arc, in, targetIndex);
             assert arc.label() == label;
           } else {
-            int ceilIndex = BitTable.nextBitSet(targetIndex, arc, in);
+            int ceilIndex = arc.bitTable().nextBitSet(targetIndex);
             assert ceilIndex != -1;
             fst.readArcByDirectAddressing(arc, in, ceilIndex);
             assert arc.label() > label;

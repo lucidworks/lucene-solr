@@ -63,11 +63,6 @@ public class LetterTokenizerFactory extends TokenizerFactory {
     }
   }
 
-  /** Default ctor for compatibility with SPI */
-  public LetterTokenizerFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public LetterTokenizer create(AttributeFactory factory) {
     return new LetterTokenizer(factory, maxTokenLen);

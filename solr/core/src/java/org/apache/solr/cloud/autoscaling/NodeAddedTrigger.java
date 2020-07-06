@@ -85,7 +85,7 @@ public class NodeAddedTrigger extends TriggerBase {
             return;
           }
         } catch (InterruptedException | IOException | KeeperException e) {
-          log.debug("-- ignoring marker {} state due to error{}", markerPath, e);
+          log.debug("-- ignoring marker " + markerPath + " state due to error", e);
         }
         // don't add nodes that have since gone away
         if (lastLiveNodes.contains(n) && !nodeNameVsTimeAdded.containsKey(n)) {
@@ -153,12 +153,10 @@ public class NodeAddedTrigger extends TriggerBase {
   protected void setState(Map<String, Object> state) {
     this.lastLiveNodes.clear();
     this.nodeNameVsTimeAdded.clear();
-    @SuppressWarnings({"unchecked"})
     Collection<String> lastLiveNodes = (Collection<String>)state.get("lastLiveNodes");
     if (lastLiveNodes != null) {
       this.lastLiveNodes.addAll(lastLiveNodes);
     }
-    @SuppressWarnings({"unchecked"})
     Map<String,Long> nodeNameVsTimeAdded = (Map<String,Long>)state.get("nodeNameVsTimeAdded");
     if (nodeNameVsTimeAdded != null) {
       this.nodeNameVsTimeAdded.putAll(nodeNameVsTimeAdded);
@@ -177,9 +175,7 @@ public class NodeAddedTrigger extends TriggerBase {
       log.debug("Running NodeAddedTrigger {}", name);
 
       Set<String> newLiveNodes = new HashSet<>(cloudManager.getClusterStateProvider().getLiveNodes());
-      if (log.isDebugEnabled()) {
-        log.debug("Found livenodes: {}", newLiveNodes.size());
-      }
+      log.debug("Found livenodes: {}", newLiveNodes.size());
 
       // have any nodes that we were tracking been removed from the cluster?
       // if so, remove them from the tracking map
@@ -211,10 +207,8 @@ public class NodeAddedTrigger extends TriggerBase {
       AutoScaling.TriggerEventProcessor processor = processorRef.get();
       if (!nodeNames.isEmpty()) {
         if (processor != null) {
-          if (log.isDebugEnabled()) {
-            log.debug("NodeAddedTrigger {} firing registered processor for nodes: {} added at times {}, now={}", name,
-                nodeNames, times, cloudManager.getTimeSource().getTimeNs());
-          }
+          log.debug("NodeAddedTrigger {} firing registered processor for nodes: {} added at times {}, now={}", name,
+              nodeNames, times, cloudManager.getTimeSource().getTimeNs());
           if (processor.process(new NodeAddedEvent(getEventType(), getName(), times, nodeNames, preferredOp, replicaType))) {
             // remove from tracking set only if the fire was accepted
             nodeNames.forEach(n -> {

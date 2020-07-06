@@ -49,11 +49,6 @@ public class KStemFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public KStemFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenFilter create(TokenStream input) {
     return new KStemFilter(input);

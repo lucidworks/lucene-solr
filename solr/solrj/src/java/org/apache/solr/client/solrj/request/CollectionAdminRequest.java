@@ -1842,12 +1842,12 @@ public abstract class CollectionAdminRequest<T extends CollectionAdminResponse> 
 
     @Override
     public java.util.List<String> getParamNames() {
-      return java.util.List.of(ROUTER_TYPE_NAME, ROUTER_FIELD, ROUTER_START, ROUTER_INTERVAL,ROUTER_MAX_FUTURE, ROUTER_PREEMPTIVE_CREATE_WINDOW, ROUTER_AUTO_DELETE_AGE, CommonParams.TZ);
+      return Arrays.asList(ROUTER_TYPE_NAME, ROUTER_FIELD, ROUTER_START, ROUTER_INTERVAL,ROUTER_MAX_FUTURE, ROUTER_PREEMPTIVE_CREATE_WINDOW, ROUTER_AUTO_DELETE_AGE, CommonParams.TZ);
     }
 
     @Override
     public java.util.List<String> getRequiredParamNames() {
-      return java.util.List.of(ROUTER_TYPE_NAME, ROUTER_FIELD,ROUTER_START, ROUTER_INTERVAL);
+      return Arrays.asList(ROUTER_TYPE_NAME, ROUTER_FIELD,ROUTER_START, ROUTER_INTERVAL);
     }
   }
   /**
@@ -1920,12 +1920,12 @@ public abstract class CollectionAdminRequest<T extends CollectionAdminResponse> 
 
     @Override
     public java.util.List<String> getParamNames() {
-      return java.util.List.of(ROUTER_TYPE_NAME, ROUTER_FIELD,ROUTER_MAX_CARDINALITY, ROUTER_MUST_MATCH);
+      return Arrays.asList(ROUTER_TYPE_NAME, ROUTER_FIELD,ROUTER_MAX_CARDINALITY, ROUTER_MUST_MATCH);
     }
 
     @Override
     public java.util.List<String> getRequiredParamNames() {
-      return java.util.List.of(ROUTER_TYPE_NAME, ROUTER_FIELD,ROUTER_MAX_CARDINALITY);
+      return Arrays.asList(ROUTER_TYPE_NAME, ROUTER_FIELD,ROUTER_MAX_CARDINALITY);
     }
   }
 

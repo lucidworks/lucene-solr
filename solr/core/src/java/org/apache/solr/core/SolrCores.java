@@ -21,7 +21,7 @@ import org.apache.http.annotation.Experimental;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.logging.MDCLoggingContext;
-import org.apache.solr.common.util.SolrNamedThreadFactory;
+import org.apache.solr.util.DefaultSolrThreadFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -130,7 +130,7 @@ class SolrCores {
       }
       
       ExecutorService coreCloseExecutor = ExecutorUtil.newMDCAwareFixedThreadPool(Integer.MAX_VALUE,
-          new SolrNamedThreadFactory("coreCloseExecutor"));
+          new DefaultSolrThreadFactory("coreCloseExecutor"));
       try {
         for (SolrCore core : coreList) {
           coreCloseExecutor.submit(() -> {
@@ -531,6 +531,7 @@ class SolrCores {
     return false;
   }
 
+  // Let transient cache implementation tell us when it ages out a core
   public void queueCoreToClose(SolrCore coreToClose) {
     synchronized (modifyLock) {
       pendingCloses.add(coreToClose); // Essentially just queue this core up for closing.
@@ -541,11 +542,12 @@ class SolrCores {
   public TransientSolrCoreCache getTransientCacheHandler() {
 
     if (transientCoreCache == null) {
-      log.error("No transient handler has been defined. Check solr.xml to see if an attempt to provide a custom {}"
-          , "TransientSolrCoreCacheFactory was done incorrectly since the default should have been used otherwise.");
+      log.error("No transient handler has been defined. Check solr.xml to see if an attempt to provide a custom " +
+          "TransientSolrCoreCacheFactory was done incorrectly since the default should have been used otherwise.");
       return null;
     }
     return transientCoreCache.getTransientSolrCoreCache();
   }
+
 
 }

@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.util.Collection;
 
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.search.Scorable;
 
 /**
  * Defines a group, for use by grouping collectors
@@ -45,11 +44,6 @@ public abstract class GroupSelector<T> {
   public abstract void setNextReader(LeafReaderContext readerContext) throws IOException;
 
   /**
-   * Set the current Scorer
-   */
-  public abstract void setScorer(Scorable scorer) throws IOException;
-
-  /**
    * Advance the GroupSelector's iterator to the given document
    */
   public abstract State advanceTo(int doc) throws IOException;
@@ -59,12 +53,12 @@ public abstract class GroupSelector<T> {
    *
    * N.B. this object may be reused, for a persistent version use {@link #copyValue()}
    */
-  public abstract T currentValue() throws IOException;
+  public abstract T currentValue();
 
   /**
    * @return a copy of the group value of the current document
    */
-  public abstract T copyValue() throws IOException;
+  public abstract T copyValue();
 
   /**
    * Set a restriction on the group values returned by this selector

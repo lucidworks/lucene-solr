@@ -69,11 +69,6 @@ public class CJKBigramFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public CJKBigramFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new CJKBigramFilter(input, flags, outputUnigrams);

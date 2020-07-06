@@ -22,6 +22,9 @@ import java.util.Arrays;
 
 import org.apache.lucene.codecs.DocValuesConsumer;
 import org.apache.lucene.search.DocIdSetIterator;
+import org.apache.lucene.search.SortField;
+import org.apache.lucene.search.SortedNumericSelector;
+import org.apache.lucene.search.SortedNumericSortField;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.Counter;
 import org.apache.lucene.util.RamUsageEstimator;
@@ -31,7 +34,7 @@ import org.apache.lucene.util.packed.PackedLongValues;
 import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
 
 /** Buffers up pending long[] per doc, sorts, then flushes when segment flushes. */
-class SortedNumericDocValuesWriter extends DocValuesWriter<SortedNumericDocValues> {
+class SortedNumericDocValuesWriter extends DocValuesWriter {
   private PackedLongValues.Builder pending; // stream of all values
   private PackedLongValues.Builder pendingCounts; // count of values per doc
   private DocsWithFieldSet docsWithField;
@@ -82,6 +85,11 @@ class SortedNumericDocValuesWriter extends DocValuesWriter<SortedNumericDocValue
     docsWithField.add(currentDoc);
   }
 
+  @Override
+  public void finish(int maxDoc) {
+    finishCurrentDoc();
+  }
+
   private void addOneValue(long value) {
     if (currentUpto == currentValues.length) {
       currentValues = ArrayUtil.grow(currentValues, currentValues.length+1);
@@ -98,14 +106,16 @@ class SortedNumericDocValuesWriter extends DocValuesWriter<SortedNumericDocValue
   }
 
   @Override
-  SortedNumericDocValues getDocValues() {
-    if (finalValues == null) {
-      assert finalValuesCount == null;
-      finishCurrentDoc();
-      finalValues = pending.build();
-      finalValuesCount = pendingCounts.build();
-    }
-    return new BufferedSortedNumericDocValues(finalValues, finalValuesCount, docsWithField.iterator());
+  Sorter.DocComparator getDocComparator(int maxDoc, SortField sortField) throws IOException {
+    assert sortField instanceof SortedNumericSortField;
+    assert finalValues == null && finalValuesCount == null;
+    finalValues = pending.build();
+    finalValuesCount = pendingCounts.build();
+    final SortedNumericDocValues docValues =
+        new BufferedSortedNumericDocValues(finalValues, finalValuesCount, docsWithField.iterator());
+    SortedNumericSortField sf = (SortedNumericSortField) sortField;
+    return Sorter.getDocComparator(maxDoc, sf, () -> null,
+        () -> SortedNumericSelector.wrap(docValues, sf.getSelector(), sf.getNumericType()));
   }
 
   private long[][] sortDocValues(int maxDoc, Sorter.DocMap sortMap, SortedNumericDocValues oldValues) throws IOException {
@@ -127,7 +137,6 @@ class SortedNumericDocValuesWriter extends DocValuesWriter<SortedNumericDocValue
     final PackedLongValues values;
     final PackedLongValues valueCounts;
     if (finalValues == null) {
-      finishCurrentDoc();
       values = pending.build();
       valueCounts = pendingCounts.build();
     } else {
@@ -223,4 +232,8 @@ class SortedNumericDocValuesWriter extends DocValuesWriter<SortedNumericDocValue
     }
   }
 
+  @Override
+  DocIdSetIterator getDocIdSet() {
+    return docsWithField.iterator();
+  }
 }

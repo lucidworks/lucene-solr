@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafReaderContext;
@@ -99,6 +100,11 @@ public class SpanTermQuery extends SpanQuery {
       super(SpanTermQuery.this, searcher, terms, boost);
       this.termStates = termStates;
       assert termStates != null : "TermStates must not be null";
+    }
+
+    @Override
+    public void extractTerms(Set<Term> terms) {
+      terms.add(term);
     }
 
     @Override

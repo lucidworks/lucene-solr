@@ -192,7 +192,6 @@ public class TestFreeTextSuggester extends LuceneTestCase {
       }
     }
     analyzer.close();
-    lfd.close();
   }
 
   // Make sure you can suggest based only on unigram model:

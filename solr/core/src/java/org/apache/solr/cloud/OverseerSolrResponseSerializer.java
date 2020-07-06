@@ -19,6 +19,7 @@ package org.apache.solr.cloud;
 import java.io.IOException;
 import java.util.Objects;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.solr.client.solrj.SolrResponse;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
@@ -41,7 +42,7 @@ public class OverseerSolrResponseSerializer {
       return SolrResponse.serializable(responseObject);
     }
     try {
-      return Utils.toJavabin(responseObject.getResponse()).readAllBytes();
+      return IOUtils.toByteArray(Utils.toJavabin(responseObject.getResponse()));
     } catch (IOException|RuntimeException e) {
       throw new SolrException(ErrorCode.SERVER_ERROR, "Exception serializing response to Javabin", e);
     }

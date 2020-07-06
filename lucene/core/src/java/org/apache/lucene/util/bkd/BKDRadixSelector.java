@@ -21,6 +21,7 @@ import java.util.Arrays;
 
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.FutureArrays;
 import org.apache.lucene.util.IntroSelector;
 import org.apache.lucene.util.IntroSorter;
 import org.apache.lucene.util.MSBRadixSorter;
@@ -167,13 +168,13 @@ public final class BKDRadixSelector {
           final int startIndex = (dimCommonPrefix > bytesPerDim) ? bytesPerDim : dimCommonPrefix;
           final int endIndex = (commonPrefixPosition > bytesPerDim) ? bytesPerDim : commonPrefixPosition;
           packedValueDocID = pointValue.packedValueDocIDBytes();
-          int j = Arrays.mismatch(scratch, startIndex, endIndex, packedValueDocID.bytes, packedValueDocID.offset + offset + startIndex, packedValueDocID.offset + offset + endIndex);
+          int j = FutureArrays.mismatch(scratch, startIndex, endIndex, packedValueDocID.bytes, packedValueDocID.offset + offset + startIndex, packedValueDocID.offset + offset + endIndex);
           if (j == -1) {
             if (commonPrefixPosition > bytesPerDim) {
               //tie-break on data dimensions + docID
               final int startTieBreak = numIndexDims * bytesPerDim;
               final int endTieBreak = startTieBreak + commonPrefixPosition - bytesPerDim;
-              int k = Arrays.mismatch(scratch, bytesPerDim, commonPrefixPosition,
+              int k = FutureArrays.mismatch(scratch, bytesPerDim, commonPrefixPosition,
                   packedValueDocID.bytes, packedValueDocID.offset + startTieBreak, packedValueDocID.offset + endTieBreak);
               if (k != -1) {
                 commonPrefixPosition = bytesPerDim + k;
@@ -372,27 +373,27 @@ public final class BKDRadixSelector {
             if (skypedBytes < bytesPerDim) {
               int iOffset = i * packedBytesDocIDLength;
               int jOffset = j * packedBytesDocIDLength;
-              int cmp = Arrays.compareUnsigned(points.block, iOffset + dimStart, iOffset + dimEnd, points.block, jOffset + dimStart, jOffset + dimEnd);
+              int cmp = FutureArrays.compareUnsigned(points.block, iOffset + dimStart, iOffset + dimEnd, points.block, jOffset + dimStart, jOffset + dimEnd);
               if (cmp != 0) {
                 return cmp;
               }
             }
             int iOffset = i * packedBytesDocIDLength + dataOffset;
             int jOffset = j * packedBytesDocIDLength + dataOffset;
-            return Arrays.compareUnsigned(points.block, iOffset, iOffset + dataLength, points.block, jOffset, jOffset + dataLength);
+            return FutureArrays.compareUnsigned(points.block, iOffset, iOffset + dataLength, points.block, jOffset, jOffset + dataLength);
           }
 
           @Override
           protected int comparePivot(int j) {
             if (skypedBytes < bytesPerDim) {
               int jOffset = j * packedBytesDocIDLength;
-              int cmp = Arrays.compareUnsigned(scratch, skypedBytes, bytesPerDim, points.block, jOffset + dimStart, jOffset + dimEnd);
+              int cmp = FutureArrays.compareUnsigned(scratch, skypedBytes, bytesPerDim, points.block, jOffset + dimStart, jOffset + dimEnd);
               if (cmp != 0) {
                 return cmp;
               }
             }
             int jOffset = j * packedBytesDocIDLength + dataOffset;
-            return Arrays.compareUnsigned(scratch, bytesPerDim, bytesPerDim + dataLength, points.block, jOffset, jOffset + dataLength);
+            return FutureArrays.compareUnsigned(scratch, bytesPerDim, bytesPerDim + dataLength, points.block, jOffset, jOffset + dataLength);
           }
         };
       }
@@ -457,27 +458,27 @@ public final class BKDRadixSelector {
             if (skypedBytes < bytesPerDim) {
               int iOffset = i * packedBytesDocIDLength;
               int jOffset = j * packedBytesDocIDLength;
-              int cmp = Arrays.compareUnsigned(points.block, iOffset + dimStart, iOffset + dimEnd, points.block, jOffset + dimStart, jOffset + dimEnd);
+              int cmp = FutureArrays.compareUnsigned(points.block, iOffset + dimStart, iOffset + dimEnd, points.block, jOffset + dimStart, jOffset + dimEnd);
               if (cmp != 0) {
                 return cmp;
               }
             }
             int iOffset = i * packedBytesDocIDLength + dataOffset;
             int jOffset = j * packedBytesDocIDLength + dataOffset;
-            return Arrays.compareUnsigned(points.block, iOffset, iOffset + dataLength, points.block, jOffset, jOffset + dataLength);
+            return FutureArrays.compareUnsigned(points.block, iOffset, iOffset + dataLength, points.block, jOffset, jOffset + dataLength);
           }
 
           @Override
           protected int comparePivot(int j) {
             if (skypedBytes < bytesPerDim) {
               int jOffset = j * packedBytesDocIDLength;
-              int cmp = Arrays.compareUnsigned(scratch, skypedBytes, bytesPerDim, points.block, jOffset + dimStart, jOffset + dimEnd);
+              int cmp = FutureArrays.compareUnsigned(scratch, skypedBytes, bytesPerDim, points.block, jOffset + dimStart, jOffset + dimEnd);
               if (cmp != 0) {
                 return cmp;
               }
             }
             int jOffset = j * packedBytesDocIDLength + dataOffset;
-            return Arrays.compareUnsigned(scratch, bytesPerDim, bytesPerDim + dataLength, points.block, jOffset, jOffset + dataLength);
+            return FutureArrays.compareUnsigned(scratch, bytesPerDim, bytesPerDim + dataLength, points.block, jOffset, jOffset + dataLength);
           }
         };
       }

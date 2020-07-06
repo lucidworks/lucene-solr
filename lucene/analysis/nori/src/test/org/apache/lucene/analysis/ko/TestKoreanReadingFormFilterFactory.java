@@ -41,7 +41,7 @@ public class TestKoreanReadingFormFilterFactory extends BaseTokenStreamTestCase 
   /** Test that bogus arguments result in exception */
   public void testBogusArguments() {
     IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () ->
-        new KoreanReadingFormFilterFactory(new HashMap<>() {{
+        new KoreanReadingFormFilterFactory(new HashMap<String, String>() {{
           put("bogusArg", "bogusValue");
         }})
     );

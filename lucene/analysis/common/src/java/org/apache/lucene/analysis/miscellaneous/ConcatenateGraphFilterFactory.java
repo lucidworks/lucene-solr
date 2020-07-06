@@ -27,23 +27,23 @@ import org.apache.lucene.util.automaton.TooComplexToDeterminizeException;
  * Factory for {@link ConcatenateGraphFilter}.
  *
  * <ul>
- *   <li><code>preserveSep</code>:
+ *   <li><tt>preserveSep</tt>:
  *                            For lucene versions lesser than {@link org.apache.lucene.util.Version#LUCENE_8_4_0}
  *                            Whether {@link ConcatenateGraphFilter#SEP_LABEL}
  *                            should separate the input tokens in the concatenated token
  *                            </li>
- *   <li><code>tokenSeparator</code>:
+ *   <li><tt>tokenSeparator</tt>:
  *                            Separator to use for concatenation. If not present,
  *                            {@link ConcatenateGraphFilter#DEFAULT_TOKEN_SEPARATOR} will be used.
  *                            If empty, tokens will be concatenated without any separators.
  *                            </li>
- *   <li><code>preservePositionIncrements</code>:
+ *   <li><tt>preservePositionIncrements</tt>:
  *                                       Whether to add an empty token for missing positions.
  *                                       The effect is a consecutive {@link ConcatenateGraphFilter#SEP_LABEL}.
  *                                       When false, it's as if there were no missing positions
  *                                         (we pretend the surrounding tokens were adjacent).
  *                                       </li>
- *   <li><code>maxGraphExpansions</code>:
+ *   <li><tt>maxGraphExpansions</tt>:
  *                            If the tokenStream graph has more than this many possible paths through, then we'll throw
  *                            {@link TooComplexToDeterminizeException} to preserve the stability and memory of the
  *                            machine.
@@ -77,11 +77,6 @@ public class ConcatenateGraphFilterFactory extends TokenFilterFactory {
     if (!args.isEmpty()) {
       throw new IllegalArgumentException("Unknown parameters: " + args);
     }
-  }
-
-  /** Default ctor for compatibility with SPI */
-  public ConcatenateGraphFilterFactory() {
-    throw defaultCtorException();
   }
 
   @Override
