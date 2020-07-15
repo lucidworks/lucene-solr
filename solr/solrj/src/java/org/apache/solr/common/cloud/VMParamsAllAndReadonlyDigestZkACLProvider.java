@@ -3,7 +3,7 @@ package org.apache.solr.common.cloud;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
-
+import java.util.Properties;
 import org.apache.solr.common.StringUtils;
 import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.data.ACL;
@@ -59,18 +59,21 @@ public class VMParamsAllAndReadonlyDigestZkACLProvider extends DefaultZkACLProvi
   protected List<ACL> createGlobalACLsToAdd() {
     try {
       List<ACL> result = new ArrayList<ACL>();
+
+      Properties props = VMParamsSingleSetCredentialsDigestZkCredentialsProvider.readCredentialsFile
+      (System.getProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_FILE_VM_PARAM_NAME));
   
       // Not to have to provide too much credentials and ACL information to the process it is assumed that you want "ALL"-acls
       // added to the user you are using to connect to ZK (if you are using VMParamsSingleSetCredentialsDigestZkCredentialsProvider)
-      String digestAllUsername = System.getProperty(zkDigestAllUsernameVMParamName);
-      String digestAllPassword = System.getProperty(zkDigestAllPasswordVMParamName);
+      String digestAllUsername = props.getProperty(zkDigestAllUsernameVMParamName);
+      String digestAllPassword = props.getProperty(zkDigestAllPasswordVMParamName);
       if (!StringUtils.isEmpty(digestAllUsername) && !StringUtils.isEmpty(digestAllPassword)) {
         result.add(new ACL(ZooDefs.Perms.ALL, new Id("digest", DigestAuthenticationProvider.generateDigest(digestAllUsername + ":" + digestAllPassword))));
       }
   
       // Besides that support for adding additional "READONLY"-acls for another user
-      String digestReadonlyUsername = System.getProperty(zkDigestReadonlyUsernameVMParamName);
-      String digestReadonlyPassword = System.getProperty(zkDigestReadonlyPasswordVMParamName);
+      String digestReadonlyUsername = props.getProperty(zkDigestReadonlyUsernameVMParamName);
+      String digestReadonlyPassword = props.getProperty(zkDigestReadonlyPasswordVMParamName);
       if (!StringUtils.isEmpty(digestReadonlyUsername) && !StringUtils.isEmpty(digestReadonlyPassword)) {
         result.add(new ACL(ZooDefs.Perms.READ, new Id("digest", DigestAuthenticationProvider.generateDigest(digestReadonlyUsername + ":" + digestReadonlyPassword))));
       }
