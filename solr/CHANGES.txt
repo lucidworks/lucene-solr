@@ -273,6 +273,8 @@ Bug Fixes
 
 * SOLR-12765: Incorrect format of JMX cache stats. (Bojan Smid, ab)
 
+* SOLR-14677: Improve DIH termination logic to close all DataSources, EntityProcessors (Jason Gerlowski)
+
 Optimizations
 ----------------------
 
