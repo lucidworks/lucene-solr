@@ -1,0 +1,4 @@
+* SOLR-14365: CollapsingQParser - Avoiding always allocate int[] and float[] with size equals to number of unique values
+
+* SOLR-14948: Autoscaling maxComputeOperations override causes exceptions
+
