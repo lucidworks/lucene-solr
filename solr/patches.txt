@@ -2,3 +2,5 @@
 
 * SOLR-14948: Autoscaling maxComputeOperations override causes exceptions
 
+* SOLR-14471: base replica selection strategy not applied to "last place" shards.preference matches
+
