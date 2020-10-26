@@ -64,7 +64,7 @@ public class CollectionReloadTest extends SolrCloudTestCase {
       try {
         restartTime = getCoreStatus(leader).getCoreStartTime().getTime();
       } catch (Exception e) {
-        log.warn("Exception getting core start time: ", e);
+        log.warn("Exception getting core start time: {}", e.getMessage());
         return false;
       }
       return restartTime > coreStartTime;

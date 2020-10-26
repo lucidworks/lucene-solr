@@ -36,12 +36,14 @@ public class NestableJsonFacet {
   private long domainCount;
   private final Map<String, NestableJsonFacet> queryFacetsByName;
   private final Map<String, BucketBasedJsonFacet> bucketBasedFacetByName;
+  private final Map<String, Number> statFacetsByName;
   private final Map<String, Object> statsByName;
   private final Map<String, HeatmapJsonFacet> heatmapFacetsByName;
 
   public NestableJsonFacet(NamedList<Object> facetNL) {
     queryFacetsByName = new HashMap<>();
     bucketBasedFacetByName = new HashMap<>();
+    statFacetsByName = new HashMap<>();
     heatmapFacetsByName = new HashMap<>();
     statsByName = new HashMap<>();
 
@@ -51,9 +53,10 @@ public class NestableJsonFacet {
         continue;
       } else if ("count".equals(key)) {
         domainCount = ((Number) entry.getValue()).longValue();
-      } else  if (entry.getValue() instanceof Number || entry.getValue() instanceof String ||
-          entry.getValue() instanceof Date) {
-        // Stat/agg facet value
+      } else if(entry.getValue() instanceof Number) { // Stat/agg facet value
+        statFacetsByName.put(key, (Number)entry.getValue());
+        statsByName.put(key, (Number) entry.getValue());
+      } else  if (entry.getValue() instanceof String || entry.getValue() instanceof Date) {
         statsByName.put(key, entry.getValue());
       } else if(entry.getValue() instanceof NamedList) { // Either heatmap/query/range/terms facet
         @SuppressWarnings({"unchecked"})
@@ -107,10 +110,26 @@ public class NestableJsonFacet {
   }
 
   /**
+   * Retrieve the value for a stat or agg facet with the provided name
+   * @deprecated this method works only for numeric value stats, instead use {@link #getStatValue(String)}
+   */
+  public Number getStatFacetValue(String name) {
+    return statFacetsByName.get(name);
+  }
+
+  /**
    * Retrieve the value for a stat or agg with the provided name
    */
   public Object getStatValue(String name) {
     return statsByName.get(name);
+  }
+
+  /**
+   * @return the names of any stat or agg facets that are direct descendants of this facet
+   * @deprecated this method returns only stats names with numeric value, instead use {@link #getStatNames()}
+   */
+  public Set<String> getStatFacetNames() {
+    return statFacetsByName.keySet();
   }
 
   /**

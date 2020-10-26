@@ -17,6 +17,7 @@
 
 package org.apache.lucene.luke.models.search;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -172,7 +173,7 @@ public final class QueryParserConfig {
     this.autoGenerateMultiTermSynonymsPhraseQuery = builder.autoGenerateMultiTermSynonymsPhraseQuery;
     this.autoGeneratePhraseQueries = builder.autoGeneratePhraseQueries;
     this.splitOnWhitespace = builder.splitOnWhitespace;
-    this.typeMap = Map.copyOf(builder.typeMap);
+    this.typeMap = Collections.unmodifiableMap(builder.typeMap);
   }
 
   public boolean isUseClassicParser() {

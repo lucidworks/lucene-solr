@@ -107,15 +107,10 @@ public abstract class BaseCloudSolrClient extends SolrClient {
   private ExecutorService threadPool = ExecutorUtil
       .newMDCAwareCachedThreadPool(new SolrNamedThreadFactory(
           "CloudSolrClient ThreadPool"));
-
-  // We can figure this out from the collection,
-  // there's no need to let this get out of sync.
-  @Deprecated(since = "8.7")
-  private String routeFieldDeprecated = null;
+  private String idField = ID;
   public static final String STATE_VERSION = "_stateVer_";
   private long retryExpiryTime = TimeUnit.NANOSECONDS.convert(3, TimeUnit.SECONDS);//3 seconds or 3 million nanos
   private final Set<String> NON_ROUTABLE_PARAMS;
-
   {
     NON_ROUTABLE_PARAMS = new HashSet<>();
     NON_ROUTABLE_PARAMS.add(UpdateParams.EXPUNGE_DELETES);
@@ -232,7 +227,7 @@ public abstract class BaseCloudSolrClient extends SolrClient {
     this.requestRLTGenerator = new RequestReplicaListTransformerGenerator();
   }
 
-  /** Sets the cache ttl for DocCollection Objects cached.
+  /** Sets the cache ttl for DocCollection Objects cached  . This is only applicable for collections which are persisted outside of clusterstate.json
    * @param seconds ttl value in seconds
    */
   public void setCollectionCacheTTl(int seconds){
@@ -294,25 +289,17 @@ public abstract class BaseCloudSolrClient extends SolrClient {
   }
 
   /**
-   * @param routeField the field to route documents on.
-   *                   <p>
-   *                   deprecated, the field is automatically determined from Zookeeper
+   * @param idField the field to route documents on.
    */
-  @Deprecated(since = "8.7")
-  public void setIdField(String routeField) {
-    log.warn("setIdField is deprecated, route field inferred from cluster state");
-    this.routeFieldDeprecated = routeField;
+  public void setIdField(String idField) {
+    this.idField = idField;
   }
 
   /**
    * @return the field that updates are routed on.
-   *
-   * deprecated, the field is automatically determined from Zookeeper
    */
-  @Deprecated (since = "8.7")
   public String getIdField() {
-    log.warn("getIdField is deprecated, route field is in cluster state");
-    return routeFieldDeprecated;
+    return idField;
   }
 
   /** Sets the default collection for request */
@@ -521,12 +508,10 @@ public abstract class BaseCloudSolrClient extends SolrClient {
     //Create the URL map, which is keyed on slice name.
     //The value is a list of URLs for each replica in the slice.
     //The first value in the list is the leader for the slice.
-    final Map<String, List<String>> urlMap = buildUrlMap(col, replicaListTransformer);
-    String routeField = (routeFieldDeprecated != null) ? routeFieldDeprecated :
-        (col.getRouter().getRouteField(col) == null) ? ID : col.getRouter().getRouteField(col);
-    final Map<String, ? extends LBSolrClient.Req> routes = createRoutes(updateRequest, routableParams, col, router, urlMap, routeField);
+    final Map<String,List<String>> urlMap = buildUrlMap(col, replicaListTransformer);
+    final Map<String, ? extends LBSolrClient.Req> routes = createRoutes(updateRequest, routableParams, col, router, urlMap, idField);
     if (routes == null) {
-      if (directUpdatesToLeadersOnly && hasInfoToFindLeaders(updateRequest, routeField)) {
+      if (directUpdatesToLeadersOnly && hasInfoToFindLeaders(updateRequest, idField)) {
         // we have info (documents with ids and/or ids to delete) with
         // which to find the leaders but we could not find (all of) them
         throw new SolrException(SolrException.ErrorCode.SERVICE_UNAVAILABLE,
@@ -641,9 +626,9 @@ public abstract class BaseCloudSolrClient extends SolrClient {
   }
 
   protected Map<String, ? extends LBSolrClient.Req> createRoutes(UpdateRequest updateRequest, ModifiableSolrParams routableParams,
-                                                                 DocCollection col, DocRouter router, Map<String, List<String>> urlMap,
-                                                                 String routeField) {
-    return urlMap == null ? null : updateRequest.getRoutesToCollection(router, col, urlMap, routableParams, routeField);
+                                                       DocCollection col, DocRouter router, Map<String, List<String>> urlMap,
+                                                       String idField) {
+    return urlMap == null ? null : updateRequest.getRoutesToCollection(router, col, urlMap, routableParams, idField);
   }
 
   private Map<String,List<String>> buildUrlMap(DocCollection col, ReplicaListTransformer replicaListTransformer) {
@@ -900,16 +885,18 @@ public abstract class BaseCloudSolrClient extends SolrClient {
           throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Collection not found: " + requestedCollection);
         }
         int collVer = coll.getZNodeVersion();
-        if(requestedCollections == null) requestedCollections = new ArrayList<>(requestedCollectionNames.size());
-        requestedCollections.add(coll);
+        if (coll.getStateFormat()>1) {
+          if(requestedCollections == null) requestedCollections = new ArrayList<>(requestedCollectionNames.size());
+          requestedCollections.add(coll);
 
-        if (stateVerParamBuilder == null) {
-          stateVerParamBuilder = new StringBuilder();
-        } else {
-          stateVerParamBuilder.append("|"); // hopefully pipe is not an allowed char in a collection name
+          if (stateVerParamBuilder == null) {
+            stateVerParamBuilder = new StringBuilder();
+          } else {
+            stateVerParamBuilder.append("|"); // hopefully pipe is not an allowed char in a collection name
+          }
+
+          stateVerParamBuilder.append(coll.getName()).append(":").append(collVer);
         }
-
-        stateVerParamBuilder.append(coll.getName()).append(":").append(collVer);
       }
 
       if (stateVerParamBuilder != null) {
@@ -970,6 +957,9 @@ public abstract class BaseCloudSolrClient extends SolrClient {
               rootCause instanceof SocketException ||
               wasCommError(rootCause));
 
+      log.error("Request to collection {} failed due to ({}) {}, retry={} commError={} errorCode={} ",
+          inputCollections, errorCode, rootCause, retryCount, wasCommError, errorCode);
+
       if (wasCommError
           || (exc instanceof RouteException && (errorCode == 503)) // 404 because the core does not exist 503 service unavailable
         //TODO there are other reasons for 404. We need to change the solr response format from HTML to structured data to know that
@@ -991,15 +981,12 @@ public abstract class BaseCloudSolrClient extends SolrClient {
           // and we could not get any information from the server
           //it is probably not worth trying again and again because
           // the state would not have been updated
-          log.info("Request to collection {} failed due to ({}) {}, retry={} maxRetries={} commError={} errorCode={} - retrying",
-              inputCollections, errorCode, rootCause, retryCount, MAX_STALE_RETRIES, wasCommError, errorCode);
+          log.info("trying request again");
           return requestWithRetryOnStaleState(request, retryCount + 1, inputCollections);
         }
       } else {
         log.info("request was not communication error it seems");
       }
-      log.info("Request to collection {} failed due to ({}) {}, retry={} maxRetries={} commError={} errorCode={} ",
-          inputCollections, errorCode, rootCause, retryCount, MAX_STALE_RETRIES, wasCommError, errorCode);
 
       boolean stateWasStale = false;
       if (retryCount < MAX_STALE_RETRIES  &&
@@ -1250,7 +1237,8 @@ public abstract class BaseCloudSolrClient extends SolrClient {
         cacheEntry.setRetriedAt();//we retried and found that it is the same version
         cacheEntry.maybeStale = false;
       } else {
-        collectionStateCache.put(collection, new ExpiringCachedDocCollection(fetchedCol));
+        if (fetchedCol.getStateFormat() > 1)
+          collectionStateCache.put(collection, new ExpiringCachedDocCollection(fetchedCol));
       }
       return fetchedCol;
     }

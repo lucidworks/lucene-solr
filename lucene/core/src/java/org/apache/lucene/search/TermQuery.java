@@ -19,6 +19,7 @@ package org.apache.lucene.search;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.Set;
 
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafReader;
@@ -75,10 +76,18 @@ public class TermQuery extends Query {
     }
 
     @Override
+    public void extractTerms(Set<Term> terms) {
+      terms.add(getTerm());
+    }
+
+    @Override
     public Matches matches(LeafReaderContext context, int doc) throws IOException {
       TermsEnum te = getTermsEnum(context);
       if (te == null) {
         return null;
+      }
+      if (context.reader().terms(term.field()).hasPositions() == false) {
+        return super.matches(context, doc);
       }
       return MatchesUtils.forField(term.field(), () -> {
         PostingsEnum pe = te.postings(null, PostingsEnum.OFFSETS);

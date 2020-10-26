@@ -24,19 +24,18 @@ import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
-import java.util.Objects;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.CharFilterFactory;
-import org.apache.lucene.analysis.TokenFilterFactory;
-import org.apache.lucene.analysis.TokenizerFactory;
 import org.apache.lucene.analysis.core.KeywordAnalyzer;
+import org.apache.lucene.analysis.util.CharFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenizerFactory;
 import org.apache.lucene.util.Version;
 import org.apache.solr.analysis.TokenizerChain;
 import org.apache.solr.common.SolrException;
-import org.apache.solr.common.cloud.SolrClassLoader;
-import org.apache.solr.common.util.DOMUtil;
 import org.apache.solr.core.SolrConfig;
+import org.apache.solr.core.SolrResourceLoader;
+import org.apache.solr.util.DOMUtil;
 import org.apache.solr.util.plugin.AbstractPluginLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,7 +77,7 @@ public final class FieldTypePluginLoader
 
 
   @Override
-  protected FieldType create( SolrClassLoader loader,
+  protected FieldType create( SolrResourceLoader loader, 
                               String name, 
                               String className,
                               Node node ) throws Exception {
@@ -189,7 +188,7 @@ public final class FieldTypePluginLoader
   //
   private Analyzer readAnalyzer(Node node) throws XPathExpressionException {
                                 
-    final SolrClassLoader loader = schema.getSolrClassLoader();
+    final SolrResourceLoader loader = schema.getResourceLoader();
 
     // parent node used to be passed in as "fieldtype"
     // if (!fieldtype.hasChildNodes()) return null;
@@ -225,7 +224,7 @@ public final class FieldTypePluginLoader
       try {
         // No need to be core-aware as Analyzers are not in the core-aware list
         final Class<? extends Analyzer> clazz = loader.findClass(analyzerName, Analyzer.class);
-        Analyzer analyzer = clazz.getConstructor().newInstance();
+        Analyzer analyzer = clazz.newInstance();
 
         final String matchVersionStr = DOMUtil.getAttr(attrs, LUCENE_MATCH_VERSION_PARAM);
         final Version luceneMatchVersion = (matchVersionStr == null) ?
@@ -255,25 +254,11 @@ public final class FieldTypePluginLoader
 
       @Override
       @SuppressWarnings({"rawtypes"})
-      protected CharFilterFactory create(SolrClassLoader loader, String name, String className, Node node) throws Exception {
+      protected CharFilterFactory create(SolrResourceLoader loader, String name, String className, Node node) throws Exception {
         final Map<String,String> params = DOMUtil.toMap(node.getAttributes());
         String configuredVersion = params.remove(LUCENE_MATCH_VERSION_PARAM);
         params.put(LUCENE_MATCH_VERSION_PARAM, parseConfiguredVersion(configuredVersion, CharFilterFactory.class.getSimpleName()).toString());
-        CharFilterFactory factory;
-        if (Objects.nonNull(name)) {
-          factory = CharFilterFactory.forName(name, params);
-          if (Objects.nonNull(className)) {
-            log.error("Both of name: {} and className: {} are specified for charFilter.", name, className);
-            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
-                "Cannot create charFilter: Both of name and className are specified.");
-          }
-        } else if (Objects.nonNull(className)) {
-          factory = loader.newInstance(className, CharFilterFactory.class, getDefaultPackages(), new Class[]{Map.class}, new Object[]{params});
-        } else {
-          log.error("Neither of name or className is specified for charFilter.");
-          throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
-              "Cannot create charFilter: Neither of name or className is specified.");
-        }
+        CharFilterFactory factory = loader.newInstance(className, CharFilterFactory.class, getDefaultPackages(), new Class[] { Map.class }, new Object[] { params });
         factory.setExplicitLuceneMatchVersion(null != configuredVersion);
         return factory;
       }
@@ -306,25 +291,11 @@ public final class FieldTypePluginLoader
       
       @Override
       @SuppressWarnings({"rawtypes"})
-      protected TokenizerFactory create(SolrClassLoader loader, String name, String className, Node node) throws Exception {
+      protected TokenizerFactory create(SolrResourceLoader loader, String name, String className, Node node) throws Exception {
         final Map<String,String> params = DOMUtil.toMap(node.getAttributes());
         String configuredVersion = params.remove(LUCENE_MATCH_VERSION_PARAM);
         params.put(LUCENE_MATCH_VERSION_PARAM, parseConfiguredVersion(configuredVersion, TokenizerFactory.class.getSimpleName()).toString());
-        TokenizerFactory factory;
-        if (Objects.nonNull(name)) {
-          factory = TokenizerFactory.forName(name, params);
-          if (Objects.nonNull(className)) {
-            log.error("Both of name: {} and className: {} are specified for tokenizer.", name, className);
-            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
-                "Cannot create tokenizer: Both of name and className are specified.");
-          }
-        } else if (Objects.nonNull(className)) {
-          factory = loader.newInstance(className, TokenizerFactory.class, getDefaultPackages(), new Class[]{Map.class}, new Object[]{params});
-        } else {
-          log.error("Neither of name or className is specified for tokenizer.");
-          throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
-              "Cannot create tokenizer: Neither of name or className is specified.");
-        }
+        TokenizerFactory factory = loader.newInstance(className, TokenizerFactory.class, getDefaultPackages(), new Class[] { Map.class }, new Object[] { params });
         factory.setExplicitLuceneMatchVersion(null != configuredVersion);
         return factory;
       }
@@ -361,25 +332,12 @@ public final class FieldTypePluginLoader
     {
       @Override
       @SuppressWarnings({"rawtypes"})
-      protected TokenFilterFactory create(SolrClassLoader loader, String name, String className, Node node) throws Exception {
+      protected TokenFilterFactory create(SolrResourceLoader loader, String name, String className, Node node) throws Exception {
         final Map<String,String> params = DOMUtil.toMap(node.getAttributes());
         String configuredVersion = params.remove(LUCENE_MATCH_VERSION_PARAM);
         params.put(LUCENE_MATCH_VERSION_PARAM, parseConfiguredVersion(configuredVersion, TokenFilterFactory.class.getSimpleName()).toString());
-        TokenFilterFactory factory;
-        if (Objects.nonNull(name)) {
-          factory = TokenFilterFactory.forName(name, params);
-          if (Objects.nonNull(className)) {
-            log.error("Both of name: {} and className: {} are specified for tokenFilter.", name, className);
-            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
-                "Cannot create tokenFilter: Both of name and className are specified.");
-          }
-        } else if (Objects.nonNull(className)) {
-          factory = loader.newInstance(className, TokenFilterFactory.class, getDefaultPackages(), new Class[]{Map.class}, new Object[]{params});
-        } else {
-          log.error("Neither of name or className is specified for tokenFilter.");
-          throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
-              "Cannot create tokenFilter: Neither of name or className is specified.");
-        }
+        TokenFilterFactory factory = loader.newInstance
+            (className, TokenFilterFactory.class, getDefaultPackages(), new Class[] { Map.class }, new Object[] { params });
         factory.setExplicitLuceneMatchVersion(null != configuredVersion);
         return factory;
       }
@@ -406,12 +364,13 @@ public final class FieldTypePluginLoader
     Version version = (configuredVersion != null) ?
             SolrConfig.parseLuceneVersionString(configuredVersion) : schema.getDefaultLuceneMatchVersion();
 
-    if (!version.onOrAfter(Version.LUCENE_8_0_0)) {
-      log.warn("{} is using deprecated {}"
-          + " emulation. You should at some point declare and reindex to at least 8.0, because "
-          + "7.x emulation is deprecated and will be removed in 9.0"
-          , pluginClassName
-          , version);
+    if (!version.onOrAfter(Version.LUCENE_7_0_0)) {
+      if (log.isWarnEnabled()) {
+        log.warn("{} is using deprecated {} "
+            + "emulation. You should at some point declare and reindex to at least 7.0, because "
+            + "6.x emulation is deprecated and will be removed in 8.0"
+            , pluginClassName, version);
+      }
     }
     return version;
   }

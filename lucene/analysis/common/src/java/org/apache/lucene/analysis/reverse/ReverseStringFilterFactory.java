@@ -20,7 +20,7 @@ package org.apache.lucene.analysis.reverse;
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
  * Factory for {@link ReverseStringFilter}.
@@ -48,11 +48,6 @@ public class ReverseStringFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public ReverseStringFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public ReverseStringFilter create(TokenStream in) {
     return new ReverseStringFilter(in);

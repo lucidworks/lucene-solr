@@ -37,14 +37,13 @@ import java.util.Set;
 
 /**
  * Provides the ability to specify multiple field types and field names in the same request. Expected parameters:
- * <table style="border: 1px solid">
- * <caption>table of parameters</caption>
+ * <table border="1" summary="table of parameters">
  * <tr>
- * <th style="text-align:left">Name</th>
- * <th style="text-align:left">Type</th>
- * <th style="text-align:left">required</th>
- * <th style="text-align:left">Description</th>
- * <th style="text-align:left">Multi-valued</th>
+ * <th align="left">Name</th>
+ * <th align="left">Type</th>
+ * <th align="left">required</th>
+ * <th align="left">Description</th>
+ * <th align="left">Multi-valued</th>
  * </tr>
  * <tr>
  * <td>analysis.fieldname</td>

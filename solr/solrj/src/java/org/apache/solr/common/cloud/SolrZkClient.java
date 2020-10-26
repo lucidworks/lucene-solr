@@ -149,7 +149,7 @@ public class SolrZkClient implements Closeable {
     this.zkClientTimeout = zkClientTimeout;
     // we must retry at least as long as the session timeout
     zkCmdExecutor = new ZkCmdExecutor(zkClientTimeout, new IsClosed() {
-
+      
       @Override
       public boolean isClosed() {
         return SolrZkClient.this.isClosed();
@@ -157,7 +157,7 @@ public class SolrZkClient implements Closeable {
     });
     connManager = new ConnectionManager("ZooKeeperConnection Watcher:"
         + zkServerAddress, this, zkServerAddress, strat, onReconnect, beforeReconnect, new IsClosed() {
-
+          
           @Override
           public boolean isClosed() {
             return SolrZkClient.this.isClosed();
@@ -472,7 +472,7 @@ public class SolrZkClient implements Closeable {
       Watcher watcher, boolean retryOnConnLoss) throws KeeperException, InterruptedException {
     makePath(path, data, createMode, watcher, true, retryOnConnLoss, 0);
   }
-
+  
   /**
    * Creates the path in ZooKeeper, creating each node as necessary.
    *
@@ -491,7 +491,7 @@ public class SolrZkClient implements Closeable {
    *
    * e.g. If <code>path=/solr/group/node</code> and none of the nodes, solr,
    * group, node exist, each will be created.
-   *
+   * 
    * skipPathParts will force the call to fail if the first skipPathParts do not exist already.
    *
    * Note: retryOnConnLoss is only respected for the final node - nodes
@@ -536,7 +536,7 @@ public class SolrZkClient implements Closeable {
       } catch (NoAuthException e) {
         // in auth cases, we may not have permission for an earlier part of a path, which is fine
         if (i == paths.length - 1 || !exists(currentPath, retryOnConnLoss)) {
-
+ 
           throw e;
         }
       } catch (NodeExistsException e) {
@@ -608,7 +608,12 @@ public class SolrZkClient implements Closeable {
     string.append(dent).append(path).append(" (").append(children.size()).append(")").append(NEWL);
     if (data != null) {
       String dataString = new String(data, StandardCharsets.UTF_8);
-      if (!path.endsWith(".txt") && !path.endsWith(".xml")) {
+      if ((!path.endsWith(".txt") && !path.endsWith(".xml")) || path.endsWith(ZkStateReader.CLUSTER_STATE)) {
+        if (path.endsWith(".xml")) {
+          // this is the cluster state in xml format - lets pretty print
+          dataString = prettyPrint(dataString);
+        }
+
         string.append(dent).append("DATA:\n").append(dent).append("    ").append(dataString.replaceAll("\n", "\n" + dent + "    ")).append(NEWL);
       } else {
         string.append(dent).append("DATA: ...supressed...").append(NEWL);
@@ -628,6 +633,13 @@ public class SolrZkClient implements Closeable {
 
   }
 
+  /**
+   * Prints current ZooKeeper layout to stdout.
+   */
+  public void printLayoutToStdOut() throws KeeperException,
+      InterruptedException {
+    printLayoutToStream(System.out);
+  }
   public void printLayoutToStream(PrintStream out) throws KeeperException,
       InterruptedException {
     StringBuilder sb = new StringBuilder();
@@ -825,7 +837,7 @@ public class SolrZkClient implements Closeable {
     ZkMaintenanceUtils.downConfig(this, confName, confPath);
   }
 
-  public void zkTransfer(String src, Boolean srcIsZk,
+  public void zkTransfer(String src, Boolean srcIsZk, 
                          String dst, Boolean dstIsZk,
                          Boolean recurse) throws SolrServerException, KeeperException, InterruptedException, IOException {
     ZkMaintenanceUtils.zkTransfer(this, src, srcIsZk, dst, dstIsZk, recurse);

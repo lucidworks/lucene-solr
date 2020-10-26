@@ -18,6 +18,7 @@ package org.apache.lucene.index;
 
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -129,7 +130,7 @@ final class DocumentsWriterFlushControl implements Accountable, Closeable {
          * several DWPT in flight indexing large documents (compared to the ram
          * buffer). This means that those DWPT and their threads will not hit
          * the stall control before asserting the memory which would in turn
-         * fail. To prevent this we only assert if the largest document seen
+         * fail. To prevent this we only assert if the the largest document seen
          * is smaller than the 1/2 of the maxRamBufferMB
          */
         assert ram <= expected : "actual mem: " + ram + " byte, expected mem: " + expected
@@ -145,6 +146,20 @@ final class DocumentsWriterFlushControl implements Accountable, Closeable {
     return true;
   }
 
+  private synchronized void commitPerThreadBytes(DocumentsWriterPerThread perThread) {
+    final long delta = perThread.commitLastBytesUsed();
+    /*
+     * We need to differentiate here if we are pending since setFlushPending
+     * moves the perThread memory to the flushBytes and we could be set to
+     * pending during a delete
+     */
+    if (perThread.isFlushPending()) {
+      flushBytes += delta;
+    } else {
+      activeBytes += delta;
+    }
+    assert updatePeaks(delta);
+  }
 
   // only for asserts
   private boolean updatePeaks(long delta) {
@@ -156,42 +171,25 @@ final class DocumentsWriterFlushControl implements Accountable, Closeable {
     return true;
   }
 
-  DocumentsWriterPerThread doAfterDocument(DocumentsWriterPerThread perThread, boolean isUpdate) {
-    final long delta = perThread.getCommitLastBytesUsedDelta();
-    synchronized (this) {
-      // we need to commit this under lock but calculate it outside of the lock to minimize the time this lock is held
-      // per document. The reason we update this under lock is that we mark DWPTs as pending without acquiring it's
-      // lock in #setFlushPending and this also reads the committed bytes and modifies the flush/activeBytes.
-      // In the future we can clean this up to be more intuitive.
-      perThread.commitLastBytesUsed(delta);
-      try {
-        /*
-         * We need to differentiate here if we are pending since setFlushPending
-         * moves the perThread memory to the flushBytes and we could be set to
-         * pending during a delete
-         */
-        if (perThread.isFlushPending()) {
-          flushBytes += delta;
-          assert updatePeaks(delta);
+  synchronized DocumentsWriterPerThread doAfterDocument(DocumentsWriterPerThread perThread, boolean isUpdate) {
+    try {
+      commitPerThreadBytes(perThread);
+      if (!perThread.isFlushPending()) {
+        if (isUpdate) {
+          flushPolicy.onUpdate(this, perThread);
         } else {
-          activeBytes += delta;
-          assert updatePeaks(delta);
-          if (isUpdate) {
-            flushPolicy.onUpdate(this, perThread);
-          } else {
-            flushPolicy.onInsert(this, perThread);
-          }
-          if (!perThread.isFlushPending() && perThread.ramBytesUsed() > hardMaxBytesPerDWPT) {
-            // Safety check to prevent a single DWPT exceeding its RAM limit. This
-            // is super important since we can not address more than 2048 MB per DWPT
-            setFlushPending(perThread);
-          }
+          flushPolicy.onInsert(this, perThread);
         }
-        return checkout(perThread, false);
-      } finally {
-        boolean stalled = updateStallState();
-        assert assertNumDocsSinceStalled(stalled) && assertMemory();
+        if (!perThread.isFlushPending() && perThread.bytesUsed() > hardMaxBytesPerDWPT) {
+          // Safety check to prevent a single DWPT exceeding its RAM limit. This
+          // is super important since we can not address more than 2048 MB per DWPT
+          setFlushPending(perThread);
+        }
       }
+      return checkout(perThread, false);
+    } finally {
+      boolean stalled = updateStallState();
+      assert assertNumDocsSinceStalled(stalled) && assertMemory();
     }
   }
 
@@ -326,16 +324,12 @@ final class DocumentsWriterFlushControl implements Accountable, Closeable {
     }
   }
 
-  /**
-   * To be called only by the owner of this object's monitor lock
-   */
   private void checkoutAndBlock(DocumentsWriterPerThread perThread) {
-    assert Thread.holdsLock(this);
     assert perThreadPool.isRegistered(perThread);
     assert perThread.isHeldByCurrentThread();
     assert perThread.isFlushPending() : "can not block non-pending threadstate";
     assert fullFlush : "can not block if fullFlush == false";
-    numPending--; // write access synced
+    numPending--;
     blockedFlushes.add(perThread);
     boolean checkedOut = perThreadPool.checkout(perThread);
     assert checkedOut;
@@ -442,7 +436,7 @@ final class DocumentsWriterFlushControl implements Accountable, Closeable {
     flushDeletes.set(true);
   }
   
-  DocumentsWriterPerThread obtainAndLock() {
+  DocumentsWriterPerThread obtainAndLock() throws IOException {
     while (closed == false) {
       final DocumentsWriterPerThread perThread = perThreadPool.getAndLock();
       if (perThread.deleteQueue == documentsWriter.deleteQueue) {
@@ -676,7 +670,7 @@ final class DocumentsWriterFlushControl implements Accountable, Closeable {
     int count = 0;
     for (DocumentsWriterPerThread next : perThreadPool) {
       if (next.isFlushPending() == false && next.getNumDocsInRAM() > 0) {
-        final long nextRam = next.getLastCommittedBytesUsed();
+        final long nextRam = next.bytesUsed();
         if (infoStream.isEnabled("FP")) {
           infoStream.message("FP", "thread state has " + nextRam + " bytes; docInRAM=" + next.getNumDocsInRAM());
         }

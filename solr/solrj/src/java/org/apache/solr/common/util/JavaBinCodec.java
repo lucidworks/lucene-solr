@@ -970,7 +970,7 @@ public class JavaBinCodec implements PushWriter {
 
   private Function<ByteArrayUtf8CharSequence, String> getStringProvider() {
     if (stringProvider == null) {
-      stringProvider = new Function<>() {
+      stringProvider = new Function<ByteArrayUtf8CharSequence,String>() {
         final CharArr charArr = new CharArr(8);
         @Override
         public String apply(ByteArrayUtf8CharSequence butf8cs) {

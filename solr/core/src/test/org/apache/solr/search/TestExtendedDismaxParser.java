@@ -18,7 +18,6 @@ package org.apache.solr.search;
 
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -40,7 +39,6 @@ import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.Utils;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.util.SolrPluginUtils;
-import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -966,62 +964,6 @@ public class TestExtendedDismaxParser extends SolrTestCaseJ4 {
     );
   }
 
-    @Test
-    public void testWhitespaceCharacters() throws Exception {
-        assertU(adoc("id", "whitespaceChars",
-                "cat_s", "foo\nfoo"));
-        assertU(commit());
-
-        assertQ(req("q", "(\"foo\nfoo\")",
-                        "qf", "cat_s",
-                        "defType", "edismax")
-                , "*[count(//doc)=1]");
-
-        assertQ(req("q", "cat_s:[\"foo\nfoo\" TO \"foo\nfoo\"]",
-                        "qf", "name",
-                        "defType", "edismax")
-                , "*[count(//doc)=1]");
-
-        assertQ(req("q", "cat_s:[ \"foo\nfoo\" TO \"foo\nfoo\"]",
-                        "qf", "name",
-                        "defType", "edismax")
-                , "*[count(//doc)=1]");
-
-        assertQ(req("q", "{!edismax qf=cat_s v='[\"foo\nfoo\" TO \"foo\nfoo\"]'}")
-                , "*[count(//doc)=1]");
-
-        assertQ(req("q", "{!edismax qf=cat_s v='[ \"foo\nfoo\" TO \"foo\nfoo\"]'}")
-                , "*[count(//doc)=1]");
-
-    }
-
-    @Test
-    public void testDoubleQuoteCharacters() throws Exception {
-        assertU(adoc("id", "doubleQuote",
-                "cat_s", "foo\"foo"));
-        assertU(commit());
-
-        assertQ(req("q", "cat_s:[\"foo\\\"foo\" TO \"foo\\\"foo\"]",
-                        "qf", "name",
-                        "defType", "edismax")
-                , "*[count(//doc)=1]");
-
-        assertQ(req("q", "cat_s:\"foo\\\"foo\"",
-                        "qf", "name",
-                        "defType", "edismax")
-                , "*[count(//doc)=1]");
-
-        assertQ(req("q", "cat_s:foo\\\"foo",
-                        "qf", "name",
-                        "defType", "edismax")
-                , "*[count(//doc)=1]");
-
-        assertQ(req("q", "cat_s:foo\"foo",
-                        "qf", "name",
-                        "defType", "edismax")
-                , "*[count(//doc)=1]");
-    }
-
   /**
    * verify that all reserved characters are properly escaped when being set in
    * {@link org.apache.solr.search.ExtendedDismaxQParser.Clause#val}.
@@ -1069,92 +1011,8 @@ public class TestExtendedDismaxParser extends SolrTestCaseJ4 {
         "*[count(//doc)=3]");    
     
   }
-
-
-    /**
-     * Repeating some of test cases as direct calls to splitIntoClauses
-     */
-    @Test
-    public void testSplitIntoClauses() throws Exception {
-        String query = "(\"foo\nfoo\")";
-        SolrQueryRequest request = req("q", query,
-                "qf", "cat_s",
-                "defType", "edismax");
-        ExtendedDismaxQParser parser = new ExtendedDismaxQParser(query, null, request.getParams(), request);
-        List<ExtendedDismaxQParser.Clause> clauses = parser.splitIntoClauses(query, false);
-        Assert.assertEquals(3, clauses.size());
-        assertClause(clauses.get(0), "\\(", false, true);
-        assertClause(clauses.get(1), "foo\nfoo", true, false);
-        assertClause(clauses.get(2), "\\)", false, true);
-
-        query = "cat_s:[\"foo\nfoo\" TO \"foo\nfoo\"]";
-        request = req("q", query,
-                "qf", "cat_s",
-                "defType", "edismax");
-        parser = new ExtendedDismaxQParser(query, null, request.getParams(), request);
-        clauses = parser.splitIntoClauses(query, false);
-        Assert.assertEquals(5, clauses.size());
-        assertClause(clauses.get(0), "\\[", false, true, "cat_s");
-        assertClause(clauses.get(1), "foo\nfoo", true, false);
-        assertClause(clauses.get(2), "TO", true, false);
-        assertClause(clauses.get(3), "foo\nfoo", true, false);
-        assertClause(clauses.get(4), "\\]", false, true);
-
-        query = "cat_s:[ \"foo\nfoo\" TO \"foo\nfoo\"]";
-        request = req("q", query,
-                "qf", "cat_s",
-                "defType", "edismax");
-        parser = new ExtendedDismaxQParser(query, null, request.getParams(), request);
-        clauses = parser.splitIntoClauses(query, false);
-        Assert.assertEquals(5, clauses.size());
-        assertClause(clauses.get(0), "\\[", true, true, "cat_s");
-        assertClause(clauses.get(1), "foo\nfoo", true, false);
-        assertClause(clauses.get(2), "TO", true, false);
-        assertClause(clauses.get(3), "foo\nfoo", true, false);
-        assertClause(clauses.get(4), "\\]", false, true);
-
-        String allReservedCharacters = "!():^[]{}~*?\"+-\\|&/";
-        // the backslash needs to be manually escaped (the query parser sees the raw backslash as an escape the subsequent
-        // character)
-        query = allReservedCharacters.replace("\\", "\\\\");
-
-        request = req("q", query,
-                "qf", "name",
-                "mm", "100%",
-                "defType", "edismax");
-
-        parser = new ExtendedDismaxQParser(query, null, request.getParams(), request);
-        clauses = parser.splitIntoClauses(query, false);
-        Assert.assertEquals(1, clauses.size());
-        assertClause(clauses.get(0), "\\!\\(\\)\\:\\^\\[\\]\\{\\}\\~\\*\\?\\\"\\+\\-\\\\\\|\\&\\/", false, true);
-
-        query = "foo/";
-        request = req("q", query,
-                "qf", "name",
-                "mm", "100%",
-                "defType", "edismax");
-
-        parser = new ExtendedDismaxQParser(query, null, request.getParams(), request);
-        clauses = parser.splitIntoClauses(query, false);
-        Assert.assertEquals(1, clauses.size());
-        assertClause(clauses.get(0), "foo\\/", false, true);
-    }
-
-    private static void assertClause(ExtendedDismaxQParser.Clause clause, String value, boolean hasWhitespace,
-                                     boolean hasSpecialSyntax, String field) {
-        Assert.assertEquals(value, clause.val);
-        Assert.assertEquals(hasWhitespace, clause.hasWhitespace);
-        Assert.assertEquals(hasSpecialSyntax, clause.hasSpecialSyntax);
-        Assert.assertEquals(field, clause.field);
-    }
-
-    private static void assertClause(ExtendedDismaxQParser.Clause clause, String value, boolean hasWhitespace,
-                                     boolean hasSpecialSyntax) {
-        assertClause(clause, value, hasWhitespace, hasSpecialSyntax, null);
-
-    }
-
-    /**
+  
+  /**
    * SOLR-3589: Edismax parser does not honor mm parameter if analyzer splits a token
    */
   public void testCJK() throws Exception {
@@ -2076,7 +1934,7 @@ public class TestExtendedDismaxParser extends SolrTestCaseJ4 {
     try (SolrQueryRequest req = req(sowTrueParams)) {
       QParser qParser = QParser.getParser("text:grackle", "edismax", req);
       Query q = qParser.getQuery();
-      assertEquals("+(text:\"crow blackbird\" text:grackl)", q.toString());
+      assertEquals("+spanOr([spanNear([text:crow, text:blackbird], 0, true), text:grackl])", q.toString());
     }
     for (SolrParams params : Arrays.asList(noSowParams, sowTrueParams, sowFalseParams)) {
       try (SolrQueryRequest req = req(params)) {
@@ -2107,13 +1965,13 @@ public class TestExtendedDismaxParser extends SolrTestCaseJ4 {
     try (SolrQueryRequest req = req(sowTrueParams)) {
       QParser qParser = QParser.getParser("grackle", "edismax", req);
       Query q = qParser.getQuery();
-      assertEquals("+((text:\"crow blackbird\" text:grackl)"
+      assertEquals("+(spanOr([spanNear([text:crow, text:blackbird], 0, true), text:grackl])"
               + " | (((+text_sw:crow +text_sw:blackbird) text_sw:grackl)))",
           q.toString());
 
       qParser = QParser.getParser("grackle wi fi", "edismax", req);
       q = qParser.getQuery();
-      assertEquals("+(((text:\"crow blackbird\" text:grackl)"
+      assertEquals("+((spanOr([spanNear([text:crow, text:blackbird], 0, true), text:grackl])"
               + " | (((+text_sw:crow +text_sw:blackbird) text_sw:grackl))) (text:wi | text_sw:wi) (text:fi | text_sw:fi))",
           q.toString());
     }

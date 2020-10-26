@@ -21,11 +21,13 @@ package org.apache.solr.handler.admin;
 import java.util.Map;
 
 import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.api.Api;
 import org.apache.solr.api.ApiBag;
 import org.apache.solr.common.cloud.ZkNodeProps;
-import org.apache.solr.handler.ClusterAPI;
 import org.apache.solr.response.SolrQueryResponse;
+import org.apache.zookeeper.KeeperException;
 
+import static java.util.Collections.EMPTY_MAP;
 import static org.apache.solr.client.solrj.SolrRequest.METHOD.DELETE;
 import static org.apache.solr.cloud.Overseer.QUEUE_OPERATION;
 import static org.apache.solr.handler.admin.TestCollectionAPIs.compareOutput;
@@ -33,30 +35,24 @@ import static org.apache.solr.handler.admin.TestCollectionAPIs.compareOutput;
 public class TestConfigsApi extends SolrTestCaseJ4 {
 
 
+  @SuppressWarnings({"unchecked"})
   public void testCommands() throws Exception {
 
     try (ConfigSetsHandler handler = new ConfigSetsHandler(null) {
-
-      @Override
-      protected void checkErrors() {
-      }
-
       @Override
       protected void sendToZk(SolrQueryResponse rsp,
                               ConfigSetOperation operation,
-                              Map<String, Object> result) {
+                              Map<String, Object> result)
+          throws KeeperException, InterruptedException {
         result.put(QUEUE_OPERATION, operation.action.toLower());
         rsp.add(ZkNodeProps.class.getName(), new ZkNodeProps(result));
       }
     }) {
       ApiBag apiBag = new ApiBag(false);
-
-      ClusterAPI o = new ClusterAPI(null, handler);
-      apiBag.registerObject(o);
-      apiBag.registerObject(o.configSetCommands);
-//      for (Api api : handler.getApis()) apiBag.register(api, EMPTY_MAP);
+      for (Api api : handler.getApis()) apiBag.register(api, EMPTY_MAP);
       compareOutput(apiBag, "/cluster/configs/sample", DELETE, null, null,
           "{name :sample, operation:delete}");
+
     }
   }
 }

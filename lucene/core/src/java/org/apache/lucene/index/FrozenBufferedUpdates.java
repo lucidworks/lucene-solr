@@ -18,6 +18,8 @@ package org.apache.lucene.index;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -103,7 +105,7 @@ final class FrozenBufferedUpdates {
     // that Term only once, applying the update to all fields that still need to be
     // updated.
     updates.fieldUpdates.values().forEach(FieldUpdatesBuffer::finish);
-    this.fieldUpdates = Map.copyOf(updates.fieldUpdates);
+    this.fieldUpdates = Collections.unmodifiableMap(new HashMap<>(updates.fieldUpdates));
     this.fieldUpdatesCount = updates.numFieldUpdates.get();
 
     bytesUsed = (int) ((deleteTerms.ramBytesUsed() + deleteQueries.length * BYTES_PER_DEL_QUERY)

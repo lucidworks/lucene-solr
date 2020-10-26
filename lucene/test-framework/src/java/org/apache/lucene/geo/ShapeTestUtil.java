@@ -71,11 +71,7 @@ public class ShapeTestUtil {
     Random random = random();
     float x = nextFloat(random);
     float y = nextFloat(random);
-    float radius = 0;
-    while (radius == 0) {
-      radius = random().nextFloat() * Float.MAX_VALUE / 2;
-    }
-    assert radius != 0;
+    float radius = random().nextFloat() * Float.MAX_VALUE / 2;
     return new XYCircle(x, y, radius);
   }
 
@@ -159,8 +155,8 @@ public class ShapeTestUtil {
 
         len = StrictMath.min(len, StrictMath.min(maxX, maxY));
 
-        float x = (float)(centerX + len * Math.cos(Math.toRadians(angle)));
-        float y = (float)(centerY + len * Math.sin(Math.toRadians(angle)));
+        float x = (float)(centerX + len * Math.cos(StrictMath.toRadians(angle)));
+        float y = (float)(centerY + len * Math.sin(StrictMath.toRadians(angle)));
 
         xList.add(x);
         yList.add(y);

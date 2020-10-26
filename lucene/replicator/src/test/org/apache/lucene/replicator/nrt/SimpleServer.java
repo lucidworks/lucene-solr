@@ -220,7 +220,6 @@ public class SimpleServer extends LuceneTestCase {
     return new CopyState(files, version, gen, infosBytes, completedMergeFiles, primaryGen, null);
   }
 
-  @SuppressWarnings("try")
   public void test() throws Exception {
 
     int id = Integer.parseInt(System.getProperty("tests.nrtreplication.nodeid"));

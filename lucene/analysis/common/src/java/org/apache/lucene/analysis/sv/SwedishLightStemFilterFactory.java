@@ -20,7 +20,7 @@ package org.apache.lucene.analysis.sv;
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
  * Factory for {@link SwedishLightStemFilter}.
@@ -48,11 +48,6 @@ public class SwedishLightStemFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public SwedishLightStemFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new SwedishLightStemFilter(input);

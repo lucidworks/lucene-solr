@@ -456,10 +456,6 @@ public class TernaryTree implements Cloneable {
     return new Iterator();
   }
 
-  /**
-   * Enumeration over TST keys
-   * @lucene.internal
-   */
   public class Iterator implements Enumeration<String> {
 
     /**

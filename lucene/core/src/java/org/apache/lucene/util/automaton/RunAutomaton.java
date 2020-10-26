@@ -32,7 +32,6 @@ package org.apache.lucene.util.automaton;
 import java.util.Arrays;
 
 import org.apache.lucene.util.Accountable;
-import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.RamUsageEstimator;
 
 /**
@@ -46,7 +45,7 @@ public abstract class RunAutomaton implements Accountable {
   final Automaton automaton;
   final int alphabetSize;
   final int size;
-  final FixedBitSet accept;
+  final boolean[] accept;
   final int[] transitions; // delta(state,c) = transitions[state*points.length +
                      // getCharClass(c)]
   final int[] points; // char interval start points
@@ -76,14 +75,12 @@ public abstract class RunAutomaton implements Accountable {
     this.automaton = a;
     points = a.getStartPoints();
     size = Math.max(1,a.getNumStates());
-    accept = new FixedBitSet(size);
+    accept = new boolean[size];
     transitions = new int[size * points.length];
     Arrays.fill(transitions, -1);
     Transition transition = new Transition();
     for (int n=0;n<size;n++) {
-      if (a.isAccept(n)) {
-        accept.set(n);
-      }
+      accept[n] = a.isAccept(n);
       transition.source = n;
       transition.transitionUpto = -1;
       for (int c = 0; c < points.length; c++) {
@@ -115,7 +112,7 @@ public abstract class RunAutomaton implements Accountable {
     b.append("initial state: 0\n");
     for (int i = 0; i < size; i++) {
       b.append("state ").append(i);
-      if (accept.get(i)) b.append(" [accept]:\n");
+      if (accept[i]) b.append(" [accept]:\n");
       else b.append(" [reject]:\n");
       for (int j = 0; j < points.length; j++) {
         int k = transitions[i * points.length + j];
@@ -148,7 +145,7 @@ public abstract class RunAutomaton implements Accountable {
    * Returns acceptance status for given state.
    */
   public final boolean isAccept(int state) {
-    return accept.get(state);
+    return accept[state];
   }
   
   /**
@@ -211,7 +208,7 @@ public abstract class RunAutomaton implements Accountable {
     if (alphabetSize != other.alphabetSize) return false;
     if (size != other.size) return false;
     if (!Arrays.equals(points, other.points)) return false;
-    if (!accept.equals(other.accept)) return false;
+    if (!Arrays.equals(accept, other.accept)) return false;
     if (!Arrays.equals(transitions, other.transitions)) return false;
     return true;
   }
@@ -219,7 +216,7 @@ public abstract class RunAutomaton implements Accountable {
   @Override
   public long ramBytesUsed() {
     return BASE_RAM_BYTES +
-        accept.ramBytesUsed() +
+        RamUsageEstimator.sizeOfObject(accept) +
         RamUsageEstimator.sizeOfObject(automaton) +
         RamUsageEstimator.sizeOfObject(classmap) +
         RamUsageEstimator.sizeOfObject(points) +

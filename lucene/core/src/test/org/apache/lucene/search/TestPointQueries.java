@@ -64,11 +64,12 @@ import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.FutureArrays;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.NumericUtils;
 import org.apache.lucene.util.TestUtil;
-import org.apache.lucene.util.bkd.BKDConfig;
+import org.apache.lucene.util.bkd.BKDWriter;
 import org.junit.BeforeClass;
 
 @LuceneTestCase.SuppressCodecs("SimpleText")
@@ -782,7 +783,7 @@ public class TestPointQueries extends LuceneTestCase {
                 upper[dim] = new byte[bytesPerDim];
                 random().nextBytes(upper[dim]);
 
-                if (Arrays.compareUnsigned(lower[dim], 0, bytesPerDim, upper[dim], 0, bytesPerDim) > 0) {
+                if (FutureArrays.compareUnsigned(lower[dim], 0, bytesPerDim, upper[dim], 0, bytesPerDim) > 0) {
                   byte[] x = lower[dim];
                   lower[dim] = upper[dim];
                   upper[dim] = x;
@@ -882,12 +883,12 @@ public class TestPointQueries extends LuceneTestCase {
     int numDims = lower.length;
     for(int dim=0;dim<numDims;dim++) {
 
-      if (Arrays.compareUnsigned(value[dim], 0, bytesPerDim, lower[dim], 0, bytesPerDim) < 0) {
+      if (FutureArrays.compareUnsigned(value[dim], 0, bytesPerDim, lower[dim], 0, bytesPerDim) < 0) {
         // Value is below the lower bound, on this dim
         return false;
       }
 
-      if (Arrays.compareUnsigned(value[dim], 0, bytesPerDim, upper[dim], 0, bytesPerDim) > 0) {
+      if (FutureArrays.compareUnsigned(value[dim], 0, bytesPerDim, upper[dim], 0, bytesPerDim) > 0) {
         // Value is above the upper bound, on this dim
         return false;
       }
@@ -1417,7 +1418,7 @@ public class TestPointQueries extends LuceneTestCase {
                 new Comparator<byte[]>() {
                   @Override
                   public int compare(byte[] a, byte[] b) {
-                    return Arrays.compareUnsigned(a, 0, a.length, b, 0, a.length);
+                    return FutureArrays.compareUnsigned(a, 0, a.length, b, 0, a.length);
                   }
                 });
 
@@ -2180,7 +2181,7 @@ public class TestPointQueries extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriter w = new IndexWriter(dir, newIndexWriterConfig());
     final int numDims = TestUtil.nextInt(random(), 1, 3);
-    final int numDocs = atLeast(10 * BKDConfig.DEFAULT_MAX_POINTS_IN_LEAF_NODE); // we need multiple leaves to enable this optimization
+    final int numDocs = atLeast(10 * BKDWriter.DEFAULT_MAX_POINTS_IN_LEAF_NODE); // we need multiple leaves to enable this optimization
     for (int i = 0; i < numDocs; ++i) {
       Document doc = new Document();
       int[] values = new int[numDims];
@@ -2201,9 +2202,9 @@ public class TestPointQueries extends LuceneTestCase {
     assertEquals(high[0] - low[0] + 1, searcher.count(IntPoint.newRangeQuery("f", low, high)));
     Arrays.fill(high, numDocs - 1);
     assertEquals(high[0] - low[0] + 1, searcher.count(IntPoint.newRangeQuery("f", low, high)));
-    Arrays.fill(low, BKDConfig.DEFAULT_MAX_POINTS_IN_LEAF_NODE + 1);
+    Arrays.fill(low, BKDWriter.DEFAULT_MAX_POINTS_IN_LEAF_NODE + 1);
     assertEquals(high[0] - low[0] + 1, searcher.count(IntPoint.newRangeQuery("f", low, high)));
-    Arrays.fill(high, numDocs - BKDConfig.DEFAULT_MAX_POINTS_IN_LEAF_NODE);
+    Arrays.fill(high, numDocs - BKDWriter.DEFAULT_MAX_POINTS_IN_LEAF_NODE);
     assertEquals(high[0] - low[0] + 1, searcher.count(IntPoint.newRangeQuery("f", low, high)));
 
     r.close();

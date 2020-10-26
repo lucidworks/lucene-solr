@@ -48,11 +48,6 @@ abstract class DocValuesLeafReader extends LeafReader {
   }
 
   @Override
-  public final VectorValues getVectorValues(String field) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
   public final void checkIntegrity() throws IOException {
     throw new UnsupportedOperationException();
   }

@@ -259,7 +259,7 @@ public class LeaderElectionTest extends SolrTestCaseJ4 {
         Thread.sleep(500);
       }
     }
-    zkClient.printLayoutToStream(System.out);
+    zkClient.printLayoutToStdOut();
     throw new RuntimeException("Could not get leader props for " + collection + " " + slice);
   }
 
@@ -548,6 +548,6 @@ public class LeaderElectionTest extends SolrTestCaseJ4 {
   }
 
   private void printLayout() throws Exception {
-    zkClient.printLayoutToStream(System.out);
+    zkClient.printLayoutToStdOut();
   }
 }

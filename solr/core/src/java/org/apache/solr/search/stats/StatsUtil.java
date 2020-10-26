@@ -17,11 +17,11 @@
 package org.apache.solr.search.stats;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.lang.invoke.MethodHandles;
 
 import java.net.URLDecoder;
 import java.net.URLEncoder;
-import java.nio.charset.Charset;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -95,7 +95,7 @@ public class StatsUtil {
 
   public static Set<Term> termsFromEncodedString(String data) {
     Set<Term> terms = new HashSet<>();
-    if (data == null || data.isBlank()) {
+    if (data == null || data.trim().isEmpty()) {
       return terms;
     }
     String[] items = data.split(ENTRY_SEPARATOR);
@@ -110,12 +110,12 @@ public class StatsUtil {
 
   public static Set<String> fieldsFromString(String data) {
     Set<String> fields = new HashSet<>();
-    if (data == null || data.isBlank()) {
+    if (data == null || data.trim().isEmpty()) {
       return fields;
     }
     String[] items = data.split(ENTRY_SEPARATOR);
     for (String item : items) {
-      if (!item.isBlank()) {
+      if (!item.trim().isEmpty()) {
         fields.add(item);
       }
     }
@@ -125,7 +125,7 @@ public class StatsUtil {
   public static String fieldsToString(Collection<String> fields) {
     StringBuilder sb = new StringBuilder();
     for (String field : fields) {
-      if (field.isBlank()) {
+      if (field.trim().isEmpty()) {
         continue;
       }
       if (sb.length() > 0) {
@@ -202,11 +202,15 @@ public class StatsUtil {
           output.append(c);
       }
     }
-    return URLEncoder.encode(output.toString(), Charset.forName("UTF-8"));
+    try {
+      return URLEncoder.encode(output.toString(), "UTF-8");
+    } catch (UnsupportedEncodingException e) {
+      throw new RuntimeException("Apparently your JVM doesn't support UTF-8 encoding?", e);
+    }
   }
 
   public static String decode(String value) throws IOException {
-    value = URLDecoder.decode(value, Charset.forName("UTF-8"));
+    value = URLDecoder.decode(value, "UTF-8");
     StringBuilder output = new StringBuilder(value.length());
     for (int i = 0; i < value.length(); i++) {
       char c = value.charAt(i);

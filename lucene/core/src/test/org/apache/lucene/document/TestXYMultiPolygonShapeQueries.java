@@ -101,7 +101,6 @@ public class TestXYMultiPolygonShapeQueries extends BaseXYShapeTestCase {
 
   protected class MultiPolygonValidator extends Validator {
     TestXYPolygonShapeQueries.PolygonValidator POLYGONVALIDATOR;
-
     MultiPolygonValidator(Encoder encoder) {
       super(encoder);
       POLYGONVALIDATOR = new TestXYPolygonShapeQueries.PolygonValidator(encoder);
@@ -122,13 +121,12 @@ public class TestXYMultiPolygonShapeQueries extends BaseXYShapeTestCase {
 
     @Override
     public boolean testComponentQuery(Component2D query, Object shape) {
-      XYPolygon[] polygons = (XYPolygon[]) shape;
-      if (queryRelation == QueryRelation.CONTAINS) {
-        return testWithinPolygon(query, polygons);
-      }
+      XYPolygon[] polygons = (XYPolygon[])shape;
       for (XYPolygon p : polygons) {
         boolean b = POLYGONVALIDATOR.testComponentQuery(query, p);
         if (b == true && queryRelation == QueryRelation.INTERSECTS) {
+          return true;
+        } else if (b == true && queryRelation == QueryRelation.CONTAINS) {
           return true;
         } else if (b == false && queryRelation == QueryRelation.DISJOINT) {
           return false;
@@ -137,19 +135,6 @@ public class TestXYMultiPolygonShapeQueries extends BaseXYShapeTestCase {
         }
       }
       return queryRelation != QueryRelation.INTERSECTS && queryRelation != QueryRelation.CONTAINS;
-    }
-
-    private boolean testWithinPolygon(Component2D query, XYPolygon[] polygons) {
-      Component2D.WithinRelation answer = Component2D.WithinRelation.DISJOINT;
-      for (XYPolygon p : polygons) {
-        Component2D.WithinRelation relation = POLYGONVALIDATOR.testWithinQuery(query, XYShape.createIndexableFields("dummy", p));
-        if (relation == Component2D.WithinRelation.NOTWITHIN) {
-          return false;
-        } else if (relation == Component2D.WithinRelation.CANDIDATE) {
-          answer = relation;
-        }
-      }
-      return answer == Component2D.WithinRelation.CANDIDATE;
     }
   }
 

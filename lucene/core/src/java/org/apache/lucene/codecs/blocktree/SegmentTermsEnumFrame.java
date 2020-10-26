@@ -27,6 +27,7 @@ import org.apache.lucene.index.TermsEnum.SeekStatus;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.FutureArrays;
 import org.apache.lucene.util.fst.FST;
 
 final class SegmentTermsEnumFrame {
@@ -608,7 +609,7 @@ final class SegmentTermsEnumFrame {
       suffixesReader.skipBytes(suffix);
 
       // Loop over bytes in the suffix, comparing to the target
-      final int cmp = Arrays.compareUnsigned(
+      final int cmp = FutureArrays.compareUnsigned(
           suffixBytes, startBytePos, startBytePos + suffix,
           target.bytes, target.offset + prefix, target.offset + target.length);
 
@@ -702,7 +703,7 @@ final class SegmentTermsEnumFrame {
         lastSubFP = fp - subCode;
       }
 
-      final int cmp = Arrays.compareUnsigned(
+      final int cmp = FutureArrays.compareUnsigned(
           suffixBytes, startBytePos, startBytePos + suffix,
           target.bytes, target.offset + prefix, target.offset + target.length);
 

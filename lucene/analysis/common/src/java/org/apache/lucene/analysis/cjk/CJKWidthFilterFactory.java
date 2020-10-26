@@ -20,7 +20,7 @@ package org.apache.lucene.analysis.cjk;
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
  * Factory for {@link CJKWidthFilter}.
@@ -49,11 +49,6 @@ public class CJKWidthFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public CJKWidthFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new CJKWidthFilter(input);

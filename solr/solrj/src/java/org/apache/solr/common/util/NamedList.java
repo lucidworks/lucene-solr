@@ -30,11 +30,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Function;
 
-import org.apache.solr.cluster.api.SimpleMap;
 import org.apache.solr.common.MapWriter;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.MultiMapSolrParams;
@@ -67,7 +63,7 @@ import org.apache.solr.common.params.SolrParams;
  *
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
-public class NamedList<T> implements Cloneable, Serializable, Iterable<Map.Entry<String,T>> , MapWriter, SimpleMap<T> {
+public class NamedList<T> implements Cloneable, Serializable, Iterable<Map.Entry<String,T>> , MapWriter {
 
   private static final long serialVersionUID = 1957981902839867821L;
   protected final List<Object> nvPairs;
@@ -303,7 +299,7 @@ public class NamedList<T> implements Cloneable, Serializable, Iterable<Map.Entry
   }
 
   /**
-   * Gets the values for the specified name
+   * Gets the values for the the specified name
    *
    * @param name Name
    * @return List of values
@@ -407,7 +403,7 @@ public class NamedList<T> implements Cloneable, Serializable, Iterable<Map.Entry
     sb.append('{');
     int sz = size();
     for (int i=0; i<sz; i++) {
-      if (i != 0) sb.append(", ");
+      if (i != 0) sb.append(',');
       sb.append(getName(i));
       sb.append('=');
       sb.append(getVal(i));
@@ -513,7 +509,7 @@ public class NamedList<T> implements Cloneable, Serializable, Iterable<Map.Entry
 
       @Override
       public void forEach(BiConsumer action) {
-        NamedList.this.forEachEntry(action);
+        NamedList.this.forEach(action);
       }
     };
   }
@@ -858,44 +854,10 @@ public class NamedList<T> implements Cloneable, Serializable, Iterable<Map.Entry
     return this.nvPairs.equals(nl.nvPairs);
   }
 
-
-  @Override
-  public void abortableForEach(BiFunction<String, ? super T, Boolean> fun) {
-    int sz = size();
-    for (int i = 0; i < sz; i++) {
-      if(!fun.apply(getName(i), getVal(i))) break;
-    }
-  }
-
-  @Override
-  public void abortableForEachKey(Function<String, Boolean> fun) {
-    int sz = size();
-    for (int i = 0; i < sz; i++) {
-      if(!fun.apply(getName(i))) break;
-    }
-  }
-
-  @Override
-  public void forEachKey(Consumer<String> fun) {
-    int sz = size();
-    for (int i = 0; i < sz; i++) {
-      fun.accept(getName(i));
-    }
-  }
-  public void forEach(BiConsumer<String, ? super T> action) {
+  public void forEach(BiConsumer<String, T> action) {
     int sz = size();
     for (int i = 0; i < sz; i++) {
       action.accept(getName(i), getVal(i));
     }
-  }
-
-  @Override
-  public int _size() {
-    return size();
-  }
-
-  @Override
-  public void forEachEntry(BiConsumer<String, ? super T> fun) {
-    forEach(fun);
   }
 }

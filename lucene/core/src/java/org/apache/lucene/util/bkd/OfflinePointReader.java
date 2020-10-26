@@ -37,30 +37,32 @@ public final class OfflinePointReader implements PointReader {
   final IndexInput in;
   byte[] onHeapBuffer;
   int offset;
+  final int bytesPerDoc;
   private boolean checked;
-  private final BKDConfig config;
+  private final int packedValueLength;
   private int pointsInBuffer;
   private final int maxPointOnHeap;
   // File name we are reading
   final String name;
   private final OfflinePointValue pointValue;
 
-  public OfflinePointReader(BKDConfig config, Directory tempDir, String tempFileName, long start, long length, byte[] reusableBuffer) throws IOException {
-    this.config = config;
+  public OfflinePointReader(Directory tempDir, String tempFileName, int packedBytesLength, long start, long length, byte[] reusableBuffer) throws IOException {
+    this.bytesPerDoc = packedBytesLength + Integer.BYTES;
+    this.packedValueLength = packedBytesLength;
 
-    if ((start + length) * config.bytesPerDoc + CodecUtil.footerLength() > tempDir.fileLength(tempFileName)) {
-      throw new IllegalArgumentException("requested slice is beyond the length of this file: start=" + start + " length=" + length + " bytesPerDoc=" + config.bytesPerDoc + " fileLength=" + tempDir.fileLength(tempFileName) + " tempFileName=" + tempFileName);
+    if ((start + length) * bytesPerDoc + CodecUtil.footerLength() > tempDir.fileLength(tempFileName)) {
+      throw new IllegalArgumentException("requested slice is beyond the length of this file: start=" + start + " length=" + length + " bytesPerDoc=" + bytesPerDoc + " fileLength=" + tempDir.fileLength(tempFileName) + " tempFileName=" + tempFileName);
     }
     if (reusableBuffer == null) {
       throw new IllegalArgumentException("[reusableBuffer] cannot be null");
     }
-    if (reusableBuffer.length < config.bytesPerDoc) {
-      throw new IllegalArgumentException("Length of [reusableBuffer] must be bigger than " + config.bytesPerDoc);
+    if (reusableBuffer.length < bytesPerDoc) {
+      throw new IllegalArgumentException("Length of [reusableBuffer] must be bigger than " + bytesPerDoc);
     }
 
-    this.maxPointOnHeap =  reusableBuffer.length / config.bytesPerDoc;
+    this.maxPointOnHeap =  reusableBuffer.length / bytesPerDoc;
     // Best-effort checksumming:
-    if (start == 0 && length*config.bytesPerDoc == tempDir.fileLength(tempFileName) - CodecUtil.footerLength()) {
+    if (start == 0 && length*bytesPerDoc == tempDir.fileLength(tempFileName) - CodecUtil.footerLength()) {
       // If we are going to read the entire file, e.g. because BKDWriter is now
       // partitioning it, we open with checksums:
       in = tempDir.openChecksumInput(tempFileName, IOContext.READONCE);
@@ -74,11 +76,11 @@ public final class OfflinePointReader implements PointReader {
 
     name = tempFileName;
 
-    long seekFP = start * config.bytesPerDoc;
+    long seekFP = start * bytesPerDoc;
     in.seek(seekFP);
     countLeft = length;
     this.onHeapBuffer = reusableBuffer;
-    this.pointValue = new OfflinePointValue(config, onHeapBuffer);
+    this.pointValue = new OfflinePointValue(onHeapBuffer, packedValueLength);
   }
 
   @Override
@@ -91,11 +93,11 @@ public final class OfflinePointReader implements PointReader {
       }
       try {
         if (countLeft > maxPointOnHeap) {
-          in.readBytes(onHeapBuffer, 0, maxPointOnHeap * config.bytesPerDoc);
+          in.readBytes(onHeapBuffer, 0, maxPointOnHeap * bytesPerDoc);
           pointsInBuffer = maxPointOnHeap - 1;
           countLeft -= maxPointOnHeap;
         } else {
-          in.readBytes(onHeapBuffer, 0, (int) countLeft * config.bytesPerDoc);
+          in.readBytes(onHeapBuffer, 0, (int) countLeft * bytesPerDoc);
           pointsInBuffer = Math.toIntExact(countLeft - 1);
           countLeft = 0;
         }
@@ -106,7 +108,7 @@ public final class OfflinePointReader implements PointReader {
       }
     } else {
       this.pointsInBuffer--;
-      this.offset += config.bytesPerDoc;
+      this.offset += bytesPerDoc;
     }
     return true;
   }
@@ -139,10 +141,10 @@ public final class OfflinePointReader implements PointReader {
     final BytesRef packedValueDocID;
     final int packedValueLength;
 
-    OfflinePointValue(BKDConfig config, byte[] value) {
-      this.packedValueLength = config.packedBytesLength;
+    OfflinePointValue(byte[] value, int packedValueLength) {
+      this.packedValueLength = packedValueLength;
       this.packedValue = new BytesRef(value, 0, packedValueLength);
-      this.packedValueDocID = new BytesRef(value, 0, config.bytesPerDoc);
+      this.packedValueDocID = new BytesRef(value, 0, packedValueLength + Integer.BYTES);
     }
 
     /**

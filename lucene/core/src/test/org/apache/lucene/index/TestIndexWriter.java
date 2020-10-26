@@ -89,7 +89,6 @@ import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.BaseDirectoryWrapper;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.store.FilterDirectory;
@@ -101,6 +100,8 @@ import org.apache.lucene.store.MMapDirectory;
 import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.store.NIOFSDirectory;
 import org.apache.lucene.store.NoLockFactory;
+import org.apache.lucene.store.RAMDirectory;
+import org.apache.lucene.store.SimpleFSDirectory;
 import org.apache.lucene.store.SimpleFSLockFactory;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
@@ -877,7 +878,7 @@ public class TestIndexWriter extends LuceneTestCase {
       this.random = new Random(random().nextLong());
       // make a little directory for addIndexes
       // LUCENE-2239: won't work with NIOFS/MMAP
-      adder = new MockDirectoryWrapper(random, new ByteBuffersDirectory());
+      adder = new MockDirectoryWrapper(random, new RAMDirectory());
       IndexWriterConfig conf = newIndexWriterConfig(random, new MockAnalyzer(random));
       if (conf.getMergeScheduler() instanceof ConcurrentMergeScheduler) {
         conf.setMergeScheduler(new SuppressingConcurrentMergeScheduler() {
@@ -918,7 +919,7 @@ public class TestIndexWriter extends LuceneTestCase {
     @Override
     public void run() {
       // LUCENE-2239: won't work with NIOFS/MMAP
-      MockDirectoryWrapper dir = new MockDirectoryWrapper(random, new ByteBuffersDirectory());
+      MockDirectoryWrapper dir = new MockDirectoryWrapper(random, new RAMDirectory());
 
       // open/close slowly sometimes
       dir.setUseSlowOpenClosers(true);
@@ -1414,7 +1415,7 @@ public class TestIndexWriter extends LuceneTestCase {
           IndexFileNames.CODEC_FILE_PATTERN.matcher(file).matches()) {
         if (file.lastIndexOf('.') < 0
             // don't count stored fields and term vectors in, or any temporary files they might
-            || !Arrays.asList("fdm", "fdt", "tvm", "tvd", "tmp").contains(file.substring(file.lastIndexOf('.') + 1))) {
+            || !Arrays.asList("fdt", "tvd", "tmp").contains(file.substring(file.lastIndexOf('.') + 1))) {
           ++computedExtraFileCount;
         }
       }
@@ -1533,7 +1534,7 @@ public class TestIndexWriter extends LuceneTestCase {
     Directory dir = newDirectory();
     RandomIndexWriter w = new RandomIndexWriter(random(), dir, new StringSplitAnalyzer());
 
-    char[] chars = new char[IndexWriter.MAX_TERM_LENGTH];
+    char[] chars = new char[DocumentsWriterPerThread.MAX_TERM_LENGTH_UTF8];
     Arrays.fill(chars, 'x');
     Document hugeDoc = new Document();
     final String bigTerm = new String(chars);
@@ -1604,7 +1605,7 @@ public class TestIndexWriter extends LuceneTestCase {
 
   public void testDeleteAllNRTLeftoverFiles() throws Exception {
 
-    MockDirectoryWrapper d = new MockDirectoryWrapper(random(), new ByteBuffersDirectory());
+    MockDirectoryWrapper d = new MockDirectoryWrapper(random(), new RAMDirectory());
     IndexWriter w = new IndexWriter(d, new IndexWriterConfig(new MockAnalyzer(random())));
     Document doc = new Document();
     for(int i = 0; i < 20; i++) {
@@ -1626,7 +1627,7 @@ public class TestIndexWriter extends LuceneTestCase {
   }
 
   public void testNRTReaderVersion() throws Exception {
-    Directory d = new MockDirectoryWrapper(random(), new ByteBuffersDirectory());
+    Directory d = new MockDirectoryWrapper(random(), new RAMDirectory());
     IndexWriter w = new IndexWriter(d, new IndexWriterConfig(new MockAnalyzer(random())));
     Document doc = new Document();
     doc.add(newStringField("id", "0", Field.Store.YES));
@@ -2692,7 +2693,7 @@ public class TestIndexWriter extends LuceneTestCase {
 
     // MMapDirectory doesn't work because it closes its file handles after mapping!
     List<Closeable> toClose = new ArrayList<>();
-    try (FSDirectory dir = new NIOFSDirectory(root);
+    try (FSDirectory dir = new SimpleFSDirectory(root);
          Closeable closeable = () -> IOUtils.close(toClose)) {
       assert closeable != null;
       IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random()))
@@ -2758,7 +2759,7 @@ public class TestIndexWriter extends LuceneTestCase {
     // Use WindowsFS to prevent open files from being deleted:
     FileSystem fs = new WindowsFS(path.getFileSystem()).getFileSystem(URI.create("file:///"));
     Path root = new FilterPath(path, fs);
-    try (FSDirectory _dir = new NIOFSDirectory(root)) {
+    try (FSDirectory _dir = new SimpleFSDirectory(root)) {
       Directory dir = new FilterDirectory(_dir) {};
 
       IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random()));
@@ -2800,7 +2801,7 @@ public class TestIndexWriter extends LuceneTestCase {
     IndexCommit indexCommit;
     DirectoryReader reader;
     // MMapDirectory doesn't work because it closes its file handles after mapping!
-    try (FSDirectory dir = new NIOFSDirectory(root)) {
+    try (FSDirectory dir = new SimpleFSDirectory(root)) {
       IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random())).setIndexDeletionPolicy(NoDeletionPolicy.INSTANCE);
       IndexWriter w = new IndexWriter(dir, iwc);
       w.commit();
@@ -2842,7 +2843,7 @@ public class TestIndexWriter extends LuceneTestCase {
     Path root = new FilterPath(path, fs);
     DirectoryReader reader;
     // MMapDirectory doesn't work because it closes its file handles after mapping!
-    try (FSDirectory dir = new NIOFSDirectory(root)) {
+    try (FSDirectory dir = new SimpleFSDirectory(root)) {
       IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random()));
       IndexWriter w = new IndexWriter(dir, iwc);
       w.commit();
@@ -3385,7 +3386,7 @@ public class TestIndexWriter extends LuceneTestCase {
     try (Directory dir = new FilterDirectory(newDirectory()) {
       @Override
       public IndexOutput createOutput(String name, IOContext context) throws IOException {
-        if (callStackContains(IndexingChain.class, "flush")) {
+        if (callStackContains(DefaultIndexingChain.class, "flush")) {
           try {
             inFlush.countDown();
             latch.await();
@@ -3717,6 +3718,8 @@ public class TestIndexWriter extends LuceneTestCase {
           states.add(state::unlock);
           state.deleteQueue.getNextSequenceNumber();
         }
+      } catch (IOException e) {
+        throw new AssertionError(e);
       } finally {
         IOUtils.closeWhileHandlingException(states);
       }
@@ -4204,7 +4207,7 @@ public class TestIndexWriter extends LuceneTestCase {
   public void testMergeOnCommitKeepFullyDeletedSegments() throws Exception {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = newIndexWriterConfig();
-    iwc.setMaxFullFlushMergeWaitMillis(30 * 1000);
+    iwc.setMaxCommitMergeWaitMillis(30 * 1000);
     iwc.mergePolicy = new FilterMergePolicy(newMergePolicy()) {
       @Override
       public boolean keepFullyDeletedSegment(IOSupplier<CodecReader> readerIOSupplier) {
@@ -4237,25 +4240,5 @@ public class TestIndexWriter extends LuceneTestCase {
       assertEquals(1, reader.numDocs());
     }
     IOUtils.close(w, dir);
-  }
-
-  public void testPendingNumDocs() throws Exception {
-    try (Directory dir = newDirectory()) {
-      int numDocs = random().nextInt(100);
-      try (IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig())) {
-        for (int i = 0; i < numDocs; i++) {
-          Document d = new Document();
-          d.add(new StringField("id", Integer.toString(i), Field.Store.YES));
-          writer.addDocument(d);
-          assertEquals(i + 1L, writer.getPendingNumDocs());
-        }
-        assertEquals(numDocs, writer.getPendingNumDocs());
-        writer.flush();
-        assertEquals(numDocs, writer.getPendingNumDocs());
-      }
-      try (IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig())) {
-        assertEquals(numDocs, writer.getPendingNumDocs());
-      }
-    }
   }
 }

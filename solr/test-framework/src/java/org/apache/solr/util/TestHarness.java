@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -192,10 +191,7 @@ public class TestHarness extends BaseTestHarness {
     attributes.put("class", SolrJmxReporter.class.getName());
     PluginInfo defaultPlugin = new PluginInfo("reporter", attributes);
     MetricsConfig metricsConfig = new MetricsConfig.MetricsConfigBuilder()
-        .setMetricReporterPlugins(new PluginInfo[]{defaultPlugin})
-        .setHistoryHandler(
-            Boolean.getBoolean("metricsHistory")
-                ? null : new PluginInfo("typeUnused", Collections.singletonMap("enable", "false")))
+        .setMetricReporterPlugins(new PluginInfo[] {defaultPlugin})
         .build();
 
     return new NodeConfig.NodeConfigBuilder("testNode", solrHome)

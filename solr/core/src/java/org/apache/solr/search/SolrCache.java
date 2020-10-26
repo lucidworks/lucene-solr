@@ -17,6 +17,7 @@
 package org.apache.solr.search;
 
 import org.apache.solr.core.SolrInfoBean;
+import org.apache.solr.metrics.SolrMetricProducer;
 
 import java.io.IOException;
 import java.util.Map;
@@ -26,7 +27,7 @@ import java.util.function.Function;
 /**
  * Primary API for dealing with Solr's internal caches.
  */
-public interface SolrCache<K,V> extends SolrInfoBean {
+public interface SolrCache<K,V> extends SolrInfoBean, SolrMetricProducer {
 
   String HIT_RATIO_PARAM = "hitratio";
   String HITS_PARAM = "hits";
@@ -152,7 +153,7 @@ public interface SolrCache<K,V> extends SolrInfoBean {
 
   /** Frees any non-memory resources */
   default void close() throws IOException {
-    SolrInfoBean.super.close();
+    SolrMetricProducer.super.close();
   }
 
   /** Returns maximum size limit (number of items) if set and supported, -1 otherwise. */

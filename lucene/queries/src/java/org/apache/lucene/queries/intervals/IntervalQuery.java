@@ -19,8 +19,10 @@ package org.apache.lucene.queries.intervals;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.Set;
 
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.FilterMatchesIterator;
 import org.apache.lucene.search.IndexSearcher;
@@ -152,6 +154,11 @@ public final class IntervalQuery extends Query {
       super(query);
       this.scoreMode = scoreMode;
       this.boost = boost;
+    }
+
+    @Override
+    public void extractTerms(Set<Term> terms) {
+      intervalsSource.visit(field, QueryVisitor.termCollector(terms));
     }
 
     @Override

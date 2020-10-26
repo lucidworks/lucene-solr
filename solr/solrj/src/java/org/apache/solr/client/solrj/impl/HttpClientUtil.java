@@ -21,6 +21,7 @@ import java.io.InputStream;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -168,9 +169,9 @@ public class HttpClientUtil {
     if (factoryClassName != null) {
       log.debug ("Using {}", factoryClassName);
       try {
-        HttpClientBuilderFactory factory = (HttpClientBuilderFactory)Class.forName(factoryClassName).getConstructor().newInstance();
-        httpClientBuilder = factory.getHttpClientBuilder(SolrHttpClientBuilder.create());
-      } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | InvocationTargetException | NoSuchMethodException e) {
+        HttpClientBuilderFactory factory = (HttpClientBuilderFactory)Class.forName(factoryClassName).newInstance();
+        httpClientBuilder = factory.getHttpClientBuilder(Optional.of(SolrHttpClientBuilder.create()));
+      } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
         throw new RuntimeException("Unable to instantiate Solr HttpClientBuilderFactory", e);
       }
     }

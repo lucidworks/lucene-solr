@@ -25,15 +25,18 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.collect.Lists;
+import org.apache.solr.client.solrj.impl.BaseHttpSolrClient.RemoteSolrException;
+import org.apache.solr.cloud.ZkTestServer;
+import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.impl.BaseHttpSolrClient;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
+import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.QueryRequest;
-import org.apache.solr.client.solrj.request.V2Request;
 import org.apache.solr.client.solrj.response.CollectionAdminResponse;
-import org.apache.solr.cloud.ZkTestServer;
+import org.apache.solr.client.solrj.request.V2Request;
+import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.cloud.ClusterState;
@@ -69,10 +72,11 @@ public class TestCollectionAPI extends ReplicaPropertiesBase {
       } else {
         req = CollectionAdminRequest.createCollection(COLLECTION_NAME, "conf1",2, 1, 0, 1);
       }
+      req.setMaxShardsPerNode(2);
       setV2(req);
       client.request(req);
       assertV2CallsCount();
-      createCollection(null, COLLECTION_NAME1, 1, 1, client, null, "conf1");
+      createCollection(null, COLLECTION_NAME1, 1, 1, 1, client, null, "conf1");
     }
 
     waitForCollection(cloudClient.getZkStateReader(), COLLECTION_NAME, 2);
@@ -91,13 +95,40 @@ public class TestCollectionAPI extends ReplicaPropertiesBase {
     clusterStatusBadCollectionTest();
     replicaPropTest();
     clusterStatusZNodeVersion();
+    testClusterStateMigration();
     testCollectionCreationCollectionNameValidation();
+    testCollectionCreationTooManyShards();
     testReplicationFactorValidaton();
     testCollectionCreationShardNameValidation();
     testAliasCreationNameValidation();
     testShardCreationNameValidation();
     testNoConfigset();
     testModifyCollection(); // deletes replicationFactor property from collections, be careful adding new tests after this one!
+  }
+
+  private void testCollectionCreationTooManyShards() throws Exception {
+    try (CloudSolrClient client = createCloudClient(null)) {
+      ModifiableSolrParams params = new ModifiableSolrParams();
+      params.set("action", CollectionParams.CollectionAction.CREATE.toString());
+      params.set("name", "collection_too_many");
+      params.set("router.name", "implicit");
+      params.set("numShards", "10");
+      params.set("maxShardsPerNode", 1);
+      params.set("shards", "b0,b1,b2,b3,b4,b5,b6,b7,b8,b9");
+      @SuppressWarnings({"rawtypes"})
+      SolrRequest request = new QueryRequest(params);
+      request.setPath("/admin/collections");
+
+      try {
+        client.request(request);
+        fail("A collection creation request with too many shards than allowed by maxShardsPerNode should not have succeeded");
+      } catch (RemoteSolrException e) {
+        final String errorMessage = e.getMessage();
+        assertTrue(errorMessage.contains("Cannot create collection"));
+        assertTrue(errorMessage.contains("This requires 10 shards to be created (higher than the allowed number)"));
+        assertMissingCollection(client, "collection_too_many");
+      }
+    }
   }
 
   private void assertMissingCollection(CloudSolrClient client, String collectionName) throws Exception {
@@ -158,7 +189,7 @@ public class TestCollectionAPI extends ReplicaPropertiesBase {
       try {
         client.request(request);
         fail("Trying to unset an unknown property should have failed");
-      } catch (BaseHttpSolrClient.RemoteSolrException e) {
+      } catch (RemoteSolrException e) {
         // expected
         assertTrue(e.getMessage().contains("no supported values provided"));
       }
@@ -181,7 +212,7 @@ public class TestCollectionAPI extends ReplicaPropertiesBase {
       try {
         client.request(request);
         fail();
-      } catch (BaseHttpSolrClient.RemoteSolrException e) {
+      } catch (RemoteSolrException e) {
         final String errorMessage = e.getMessage();
         assertTrue(errorMessage.contains("Cannot specify both replicationFactor and nrtReplicas as they mean the same thing"));
       }
@@ -414,7 +445,7 @@ public class TestCollectionAPI extends ReplicaPropertiesBase {
   private void clusterStatusZNodeVersion() throws Exception {
     String cname = "clusterStatusZNodeVersion";
     try (CloudSolrClient client = createCloudClient(null)) {
-      setV2(CollectionAdminRequest.createCollection(cname, "conf1", 1, 1)).process(client);
+      setV2(CollectionAdminRequest.createCollection(cname, "conf1", 1, 1).setMaxShardsPerNode(1)).process(client);
       assertV2CallsCount();
       waitForRecoveriesToFinish(cname, true);
 
@@ -914,6 +945,34 @@ public class TestCollectionAPI extends ReplicaPropertiesBase {
     }
   }
 
+  private void testClusterStateMigration() throws Exception {
+    try (CloudSolrClient client = createCloudClient(null)) {
+      client.connect();
+
+      CollectionAdminRequest.createCollection("testClusterStateMigration","conf1",1,1).setStateFormat(1).process(client);
+
+      waitForRecoveriesToFinish("testClusterStateMigration", true);
+
+      assertEquals(1, client.getZkStateReader().getClusterState().getCollection("testClusterStateMigration").getStateFormat());
+
+      for (int i = 0; i < 10; i++) {
+        SolrInputDocument doc = new SolrInputDocument();
+        doc.addField("id", "id_" + i);
+        client.add("testClusterStateMigration", doc);
+      }
+      client.commit("testClusterStateMigration");
+
+      CollectionAdminRequest.migrateCollectionFormat("testClusterStateMigration").process(client);
+
+      client.getZkStateReader().forceUpdateCollection("testClusterStateMigration");
+
+      assertEquals(2, client.getZkStateReader().getClusterState().getCollection("testClusterStateMigration").getStateFormat());
+
+      QueryResponse response = client.query("testClusterStateMigration", new SolrQuery("*:*"));
+      assertEquals(10, response.getResults().getNumFound());
+    }
+  }
+  
   private void testCollectionCreationCollectionNameValidation() throws Exception {
     try (CloudSolrClient client = createCloudClient(null)) {
       ModifiableSolrParams params = new ModifiableSolrParams();
@@ -926,7 +985,7 @@ public class TestCollectionAPI extends ReplicaPropertiesBase {
       try {
         client.request(request);
         fail();
-      } catch (BaseHttpSolrClient.RemoteSolrException e) {
+      } catch (RemoteSolrException e) {
         final String errorMessage = e.getMessage();
         assertTrue(errorMessage.contains("Invalid collection"));
         assertTrue(errorMessage.contains("invalid@name#with$weird%characters"));
@@ -950,7 +1009,7 @@ public class TestCollectionAPI extends ReplicaPropertiesBase {
       try {
         client.request(request);
         fail();
-      } catch (BaseHttpSolrClient.RemoteSolrException e) {
+      } catch (RemoteSolrException e) {
         final String errorMessage = e.getMessage();
         assertTrue(errorMessage.contains("Invalid shard"));
         assertTrue(errorMessage.contains("invalid@name#with$weird%characters"));
@@ -972,7 +1031,7 @@ public class TestCollectionAPI extends ReplicaPropertiesBase {
       try {
         client.request(request);
         fail();
-      } catch (BaseHttpSolrClient.RemoteSolrException e) {
+      } catch (RemoteSolrException e) {
         final String errorMessage = e.getMessage();
         assertTrue(errorMessage.contains("Invalid alias"));
         assertTrue(errorMessage.contains("invalid@name#with$weird%characters"));
@@ -1006,7 +1065,7 @@ public class TestCollectionAPI extends ReplicaPropertiesBase {
       try {
         client.request(request);
         fail();
-      } catch (BaseHttpSolrClient.RemoteSolrException e) {
+      } catch (RemoteSolrException e) {
         final String errorMessage = e.getMessage();
         assertTrue(errorMessage.contains("Invalid shard"));
         assertTrue(errorMessage.contains("invalid@name#with$weird%characters"));
@@ -1064,7 +1123,7 @@ public class TestCollectionAPI extends ReplicaPropertiesBase {
 
     try (CloudSolrClient client = createCloudClient(null)) {
       // first, try creating a collection with badconf
-      BaseHttpSolrClient.RemoteSolrException rse = expectThrows(BaseHttpSolrClient.RemoteSolrException.class, () -> {
+      HttpSolrClient.RemoteSolrException rse = expectThrows(HttpSolrClient.RemoteSolrException.class, () -> {
           CollectionAdminResponse rsp = CollectionAdminRequest.createCollection
               ("testcollection", "badconf", 1, 2).process(client);
       });

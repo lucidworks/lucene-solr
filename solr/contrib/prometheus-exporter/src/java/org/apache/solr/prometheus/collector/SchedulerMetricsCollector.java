@@ -19,20 +19,20 @@ package org.apache.solr.prometheus.collector;
 
 import java.io.Closeable;
 import java.lang.invoke.MethodHandles;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import io.prometheus.client.Collector;
 import io.prometheus.client.Histogram;
 import org.apache.solr.prometheus.exporter.SolrExporter;
+import org.apache.solr.prometheus.scraper.Async;
 import org.apache.solr.common.util.SolrNamedThreadFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,7 +53,7 @@ public class SchedulerMetricsCollector implements Closeable {
       1,
       new SolrNamedThreadFactory("scheduled-metrics-collector"));
 
-  private final ExecutorService executor;
+  private final Executor executor;
 
   private final List<Observer> observers = new CopyOnWriteArrayList<>();
 
@@ -63,7 +63,7 @@ public class SchedulerMetricsCollector implements Closeable {
       .register(SolrExporter.defaultRegistry);
 
   public SchedulerMetricsCollector(
-      ExecutorService executor,
+      Executor executor,
       int duration,
       TimeUnit timeUnit,
       List<MetricCollector> metricCollectors) {
@@ -83,27 +83,31 @@ public class SchedulerMetricsCollector implements Closeable {
     try (Histogram.Timer timer = metricsCollectionTime.startTimer()) {
       log.info("Beginning metrics collection");
 
-      final List<Future<MetricSamples>> futures = executor.invokeAll(
-          metricCollectors.stream()
-              .map(metricCollector -> (Callable<MetricSamples>) metricCollector::collect)
-              .collect(Collectors.toList())
-      );
-      MetricSamples metricSamples = new MetricSamples();
-      for (Future<MetricSamples> future : futures) {
-        try {
-          metricSamples.addAll(future.get());
-        } catch (ExecutionException e) {
-          log.error("Error occurred during metrics collection", e.getCause());//nowarn
-          // continue any ways; do not fail
-        }
+      List<CompletableFuture<MetricSamples>> futures = new ArrayList<>();
+
+      for (MetricCollector metricsCollector : metricCollectors) {
+        futures.add(CompletableFuture.supplyAsync(() -> {
+          try {
+            return metricsCollector.collect();
+          } catch (Exception e) {
+            throw new RuntimeException(e);
+          }
+        }, executor));
       }
 
-      notifyObservers(metricSamples.asList());
+      try {
+        CompletableFuture<List<MetricSamples>> sampleFuture = Async.waitForAllSuccessfulResponses(futures);
+        List<MetricSamples> samples = sampleFuture.get();
 
-      log.info("Completed metrics collection");
-    } catch (InterruptedException e) {
-      log.warn("Interrupted waiting for metric collection to complete", e);
-      Thread.currentThread().interrupt();
+        MetricSamples metricSamples = new MetricSamples();
+        samples.forEach(metricSamples::addAll);
+
+        notifyObservers(metricSamples.asList());
+
+        log.info("Completed metrics collection");
+      } catch (InterruptedException | ExecutionException e) {
+        log.error("Error while waiting for metric collection to complete", e);
+      }
     }
 
   }

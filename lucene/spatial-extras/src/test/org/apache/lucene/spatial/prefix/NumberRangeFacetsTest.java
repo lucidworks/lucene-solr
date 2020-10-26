@@ -42,6 +42,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.locationtech.spatial4j.shape.Shape;
 
+import static com.carrotsearch.randomizedtesting.RandomizedTest.randomInt;
 import static com.carrotsearch.randomizedtesting.RandomizedTest.randomIntBetween;
 
 public class NumberRangeFacetsTest extends StrategyTestCase {
@@ -54,7 +55,7 @@ public class NumberRangeFacetsTest extends StrategyTestCase {
   @Before
   public void setUp() throws Exception {
     super.setUp();
-    tree = new DateRangePrefixTree(DateRangePrefixTree.DEFAULT_CAL);
+    tree = DateRangePrefixTree.INSTANCE;
     strategy = new NumberRangePrefixTreeStrategy(tree, "dateRange");
     Calendar tmpCal = tree.newCal();
     randomCalWindowField = randomIntBetween(1, Calendar.ZONE_OFFSET - 1);//we're not allowed to add zone offset
@@ -103,9 +104,9 @@ public class NumberRangeFacetsTest extends StrategyTestCase {
         calFieldFacet--;
       }
       final Calendar leftCal = randomCalendar();
-      leftCal.add(calFieldFacet, -1 * randomIntBetween(0, 1000));
+      leftCal.add(calFieldFacet, -1 * randomInt(1000));
       Calendar rightCal = (Calendar) leftCal.clone();
-      rightCal.add(calFieldFacet, randomIntBetween(0, 2000));
+      rightCal.add(calFieldFacet, randomInt(2000));
       // Pick facet detail level based on cal field.
       int detailLevel = tree.getTreeLevelForCalendarField(calFieldFacet);
       if (detailLevel < 0) {//no exact match
@@ -125,7 +126,7 @@ public class NumberRangeFacetsTest extends StrategyTestCase {
           acceptFieldIds.add(i);
         }
         Collections.shuffle(acceptFieldIds, random());
-        acceptFieldIds = acceptFieldIds.subList(0, randomIntBetween(0, acceptFieldIds.size()));
+        acceptFieldIds = acceptFieldIds.subList(0, randomInt(acceptFieldIds.size()));
         if (!acceptFieldIds.isEmpty()) {
           List<BytesRef> terms = new ArrayList<>();
           for (Integer acceptDocId : acceptFieldIds) {
@@ -236,7 +237,7 @@ public class NumberRangeFacetsTest extends StrategyTestCase {
   private void preQueryHavoc() {
     if (strategy instanceof RecursivePrefixTreeStrategy) {
       RecursivePrefixTreeStrategy rpts = (RecursivePrefixTreeStrategy) strategy;
-      int scanLevel = randomIntBetween(0, rpts.getGrid().getMaxLevels());
+      int scanLevel = randomInt(rpts.getGrid().getMaxLevels());
       rpts.setPrefixGridScanLevel(scanLevel);
     }
   }

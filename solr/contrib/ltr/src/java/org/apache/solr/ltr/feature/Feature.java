@@ -19,8 +19,10 @@ package org.apache.solr.ltr.feature;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
@@ -298,6 +300,11 @@ public abstract class Feature extends Query implements Accountable {
     @Override
     public String toString() {
       return Feature.this.toString();
+    }
+
+    @Override
+    public void extractTerms(Set<Term> terms) {
+      // no-op
     }
 
     /**

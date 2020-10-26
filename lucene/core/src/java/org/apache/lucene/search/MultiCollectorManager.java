@@ -58,7 +58,6 @@ public class MultiCollectorManager implements CollectorManager<MultiCollectorMan
     return results;
   }
 
-  /** Wraps multiple collectors for processing */
   public class Collectors implements Collector {
 
     private final Collector[] collectors;
@@ -87,10 +86,6 @@ public class MultiCollectorManager implements CollectorManager<MultiCollectorMan
       return scoreMode;
     }
 
-    /**
-     * Wraps multiple leaf collectors and delegates collection across each one
-     * @lucene.internal
-     */
     public class LeafCollectors implements LeafCollector {
 
       private final LeafCollector[] leafCollectors;

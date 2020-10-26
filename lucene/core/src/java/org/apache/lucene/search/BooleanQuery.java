@@ -41,32 +41,35 @@ import org.apache.lucene.search.BooleanClause.Occur;
   */
 public class BooleanQuery extends Query implements Iterable<BooleanClause> {
 
+  private static int maxClauseCount = 1024;
+
   /** Thrown when an attempt is made to add more than {@link
    * #getMaxClauseCount()} clauses. This typically happens if
-   * a PrefixQuery, FuzzyQuery, WildcardQuery, or TermRangeQuery
-   * is expanded to many terms during search.
-   * @deprecated use {@link IndexSearcher.TooManyClauses}
+   * a PrefixQuery, FuzzyQuery, WildcardQuery, or TermRangeQuery 
+   * is expanded to many terms during search. 
    */
-  @Deprecated // Remove in Lucene 10
-  public static class TooManyClauses extends IndexSearcher.TooManyClauses { }
+  public static class TooManyClauses extends RuntimeException {
+    public TooManyClauses() {
+      super("maxClauseCount is set to " + maxClauseCount);
+    }
+  }
 
   /** Return the maximum number of clauses permitted, 1024 by default.
    * Attempts to add more than the permitted number of clauses cause {@link
    * TooManyClauses} to be thrown.
-   * @see IndexSearcher#setMaxClauseCount(int)
-   * @deprecated use {@link IndexSearcher#getMaxClauseCount()}
+   * @see #setMaxClauseCount(int)
    */
-  @Deprecated // Remove in Lucene 10
-  public static int getMaxClauseCount() { return IndexSearcher.getMaxClauseCount(); }
+  public static int getMaxClauseCount() { return maxClauseCount; }
 
-  /**
+  /** 
    * Set the maximum number of clauses permitted per BooleanQuery.
    * Default value is 1024.
-   * @deprecated use {@link IndexSearcher#setMaxClauseCount(int)}
    */
-  @Deprecated // Remove in Lucene 10
   public static void setMaxClauseCount(int maxClauseCount) {
-    IndexSearcher.setMaxClauseCount(maxClauseCount);
+    if (maxClauseCount < 1) {
+      throw new IllegalArgumentException("maxClauseCount must be >= 1");
+    }
+    BooleanQuery.maxClauseCount = maxClauseCount;
   }
 
   /** A builder for boolean queries. */
@@ -104,14 +107,11 @@ public class BooleanQuery extends Query implements Iterable<BooleanClause> {
      * Add a new clause to this {@link Builder}. Note that the order in which
      * clauses are added does not have any impact on matching documents or query
      * performance.
-     * @throws IndexSearcher.TooManyClauses if the new number of clauses exceeds the maximum clause number
+     * @throws TooManyClauses if the new number of clauses exceeds the maximum clause number
      */
     public Builder add(BooleanClause clause) {
-      // We do the final deep check for max clauses count limit during
-      //<code>IndexSearcher.rewrite</code> but do this check to short
-      // circuit in case a single query holds more than numClauses
-      if (clauses.size() >= IndexSearcher.maxClauseCount) {
-        throw new IndexSearcher.TooManyClauses();
+      if (clauses.size() >= maxClauseCount) {
+        throw new TooManyClauses();
       }
       clauses.add(clause);
       return this;
@@ -121,7 +121,7 @@ public class BooleanQuery extends Query implements Iterable<BooleanClause> {
      * Add a new clause to this {@link Builder}. Note that the order in which
      * clauses are added does not have any impact on matching documents or query
      * performance.
-     * @throws IndexSearcher.TooManyClauses if the new number of clauses exceeds the maximum clause number
+     * @throws TooManyClauses if the new number of clauses exceeds the maximum clause number
      */
     public Builder add(Query query, Occur occur) {
       return add(new BooleanClause(query, occur));
@@ -315,13 +315,11 @@ public class BooleanQuery extends Query implements Iterable<BooleanClause> {
       }
     }
 
-    // remove FILTER clauses that are also MUST clauses or that match all documents
-    if (clauseSets.get(Occur.FILTER).size() > 0) {
-      final Set<Query> filters = new HashSet<>(clauseSets.get(Occur.FILTER));
-      boolean modified = false;
-      if (filters.size() > 1 || clauseSets.get(Occur.MUST).isEmpty() == false) {
-        modified = filters.remove(new MatchAllDocsQuery());
-      }
+    // remove FILTER clauses that are also MUST clauses
+    // or that match all documents
+    if (clauseSets.get(Occur.MUST).size() > 0 && clauseSets.get(Occur.FILTER).size() > 0) {
+      final Set<Query> filters = new HashSet<Query>(clauseSets.get(Occur.FILTER));
+      boolean modified = filters.remove(new MatchAllDocsQuery());
       modified |= filters.removeAll(clauseSets.get(Occur.MUST));
       if (modified) {
         BooleanQuery.Builder builder = new BooleanQuery.Builder();
@@ -483,23 +481,27 @@ public class BooleanQuery extends Query implements Iterable<BooleanClause> {
       BooleanQuery.Builder builder = new BooleanQuery.Builder();
       builder.setMinimumNumberShouldMatch(minimumNumberShouldMatch);
       boolean actuallyRewritten = false;
-      for (BooleanClause clause : clauses) {
-        if (clause.getOccur() == Occur.SHOULD && clause.getQuery() instanceof BooleanQuery) {
-          BooleanQuery innerQuery = (BooleanQuery) clause.getQuery();
-          if (innerQuery.isPureDisjunction()) {
-            actuallyRewritten = true;
-            for (BooleanClause innerClause : innerQuery.clauses()) {
-              builder.add(innerClause);
+      try {
+        for (BooleanClause clause : clauses) {
+          if (clause.getOccur() == Occur.SHOULD && clause.getQuery() instanceof BooleanQuery) {
+            BooleanQuery innerQuery = (BooleanQuery) clause.getQuery();
+            if (innerQuery.isPureDisjunction()) {
+              actuallyRewritten = true;
+              for (BooleanClause innerClause : innerQuery.clauses()) {
+                builder.add(innerClause);
+              }
+            } else {
+              builder.add(clause);
             }
           } else {
             builder.add(clause);
           }
-        } else {
-          builder.add(clause);
         }
-      }
-      if (actuallyRewritten) {
-        return builder.build();
+        if (actuallyRewritten) {
+          return builder.build();
+        }
+      } catch (TooManyClauses exception) {
+        // No-op : Do not flatten when the new query will violate max clause count
       }
     }
 

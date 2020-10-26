@@ -16,6 +16,7 @@
  */
 package org.apache.solr.search.grouping;
 
+import org.apache.lucene.search.Sort;
 import org.apache.solr.search.Grouping;
 import org.apache.solr.search.SortSpec;
 
@@ -71,6 +72,50 @@ public class GroupingSpecification {
     }
 
     this.functions = functions;
+  }
+
+  @Deprecated
+  public int getWithinGroupOffset() {
+    return withinGroupSortSpec.getOffset();
+  }
+  @Deprecated
+  public int getGroupOffset() {
+    return getWithinGroupOffset();
+  }
+
+
+  @Deprecated
+  public int getWithinGroupLimit() {
+    return withinGroupSortSpec.getCount();
+  }
+
+  @Deprecated
+  public int getGroupLimit() {
+    return getWithinGroupLimit();
+  }
+
+
+  @Deprecated
+  public int getOffset() {
+    return groupSortSpec.getOffset();
+  }
+
+
+  @Deprecated
+  public int getLimit() {
+    return groupSortSpec.getCount();
+  }
+
+
+  @Deprecated
+  public Sort getGroupSort() {
+    return groupSortSpec.getSort();
+  }
+
+
+  @Deprecated
+  public Sort getSortWithinGroup() {
+    return withinGroupSortSpec.getSort();
   }
 
   public boolean isIncludeGroupCount() {

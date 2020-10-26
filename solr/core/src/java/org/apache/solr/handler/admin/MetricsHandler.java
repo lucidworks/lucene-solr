@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
-import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -37,7 +36,6 @@ import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import org.apache.solr.common.MapWriter;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.CommonTestInjection;
@@ -71,24 +69,20 @@ public class MetricsHandler extends RequestHandlerBase implements PermissionName
   public static final String ALL = "all";
 
   private static final Pattern KEY_REGEX = Pattern.compile("(?<!" + Pattern.quote("\\") + ")" + Pattern.quote(":"));
-  private final CoreContainer cc;
+  private CoreContainer cc;
   private final Map<String, String> injectedSysProps = CommonTestInjection.injectAdditionalProps();
-  private final boolean enabled;
+
+  public MetricsHandler() {
+    this.metricManager = null;
+  }
 
   public MetricsHandler(CoreContainer coreContainer) {
     this.metricManager = coreContainer.getMetricManager();
     this.cc = coreContainer;
-    this.enabled = coreContainer.getConfig().getMetricsConfig().isEnabled();
   }
 
   public MetricsHandler(SolrMetricManager metricManager) {
     this.metricManager = metricManager;
-    this.cc = null;
-    this.enabled = true;
-  }
-
-  public boolean isEnabled() {
-    return enabled;
   }
 
   @Override
@@ -111,10 +105,6 @@ public class MetricsHandler extends RequestHandlerBase implements PermissionName
   
   @SuppressWarnings({"unchecked"})
   public void handleRequest(SolrParams params, BiConsumer<String, Object> consumer) throws Exception {
-    if (!enabled) {
-      consumer.accept("error", "metrics collection is disabled");
-      return;
-    }
     boolean compact = params.getBool(COMPACT_PARAM, true);
     String[] keys = params.getParams(KEY_PARAM);
     if (keys != null && keys.length > 0) {
@@ -122,15 +112,17 @@ public class MetricsHandler extends RequestHandlerBase implements PermissionName
       return;
     }
     MetricFilter mustMatchFilter = parseMustMatchFilter(params);
-    Predicate<CharSequence> propertyFilter = parsePropertyFilter(params);
+    MetricUtils.PropertyFilter propertyFilter = parsePropertyFilter(params);
     List<MetricType> metricTypes = parseMetricTypes(params);
     List<MetricFilter> metricFilters = metricTypes.stream().map(MetricType::asMetricFilter).collect(Collectors.toList());
     Set<String> requestedRegistries = parseRegistries(params);
 
-    NamedList<Object> response = new SimpleOrderedMap<>();
+    @SuppressWarnings({"rawtypes"})
+    NamedList response = new SimpleOrderedMap();
     for (String registryName : requestedRegistries) {
       MetricRegistry registry = metricManager.registry(registryName);
-      SimpleOrderedMap<Object> result = new SimpleOrderedMap<>();
+      @SuppressWarnings({"rawtypes"})
+      SimpleOrderedMap result = new SimpleOrderedMap();
       MetricUtils.toMaps(registry, metricFilters, mustMatchFilter, propertyFilter, false,
           false, compact, false, (k, v) -> result.add(k, v));
       if (result.size() > 0) {
@@ -142,8 +134,8 @@ public class MetricsHandler extends RequestHandlerBase implements PermissionName
 
   @SuppressWarnings({"unchecked", "rawtypes"})
   public void handleKeyRequest(String[] keys, BiConsumer<String, Object> consumer) throws Exception {
-    SimpleOrderedMap<Object> result = new SimpleOrderedMap<>();
-    SimpleOrderedMap<Object> errors = new SimpleOrderedMap<>();
+    SimpleOrderedMap result = new SimpleOrderedMap();
+    SimpleOrderedMap errors = new SimpleOrderedMap();
     for (String key : keys) {
       if (key == null || key.isEmpty()) {
         continue;
@@ -166,7 +158,7 @@ public class MetricsHandler extends RequestHandlerBase implements PermissionName
         errors.add(key, "metric '" + metricName + "' not found");
         continue;
       }
-      Predicate<CharSequence> propertyFilter = MetricUtils.ALL_PROPERTIES;
+      MetricUtils.PropertyFilter propertyFilter = MetricUtils.PropertyFilter.ALL;
       if (propertyName != null) {
         propertyFilter = (name) -> name.equals(propertyName);
         // use escaped versions
@@ -181,8 +173,6 @@ public class MetricsHandler extends RequestHandlerBase implements PermissionName
       MetricUtils.convertMetric(key, m, propertyFilter, false, true, true, false, ":", (k, v) -> {
         if ((v instanceof Map) && propertyName != null) {
           ((Map)v).forEach((k1, v1) -> result.add(k + ":" + k1, v1));
-        } else if ((v instanceof MapWriter) && propertyName != null) {
-          ((MapWriter) v)._forEachEntry((k1, v1) -> result.add(k + ":" + k1, v1));
         } else {
           result.add(k, v);
         }
@@ -239,10 +229,10 @@ public class MetricsHandler extends RequestHandlerBase implements PermissionName
     return mustMatchFilter;
   }
 
-  private Predicate<CharSequence> parsePropertyFilter(SolrParams params) {
+  private MetricUtils.PropertyFilter parsePropertyFilter(SolrParams params) {
     String[] props = params.getParams(PROPERTY_PARAM);
     if (props == null || props.length == 0) {
-      return MetricUtils.ALL_PROPERTIES;
+      return MetricUtils.PropertyFilter.ALL;
     }
     final Set<String> filter = new HashSet<>();
     for (String prop : props) {
@@ -251,7 +241,7 @@ public class MetricsHandler extends RequestHandlerBase implements PermissionName
       }
     }
     if (filter.isEmpty()) {
-      return MetricUtils.ALL_PROPERTIES;
+      return MetricUtils.PropertyFilter.ALL;
     } else {
       return (name) -> filter.contains(name);
     }

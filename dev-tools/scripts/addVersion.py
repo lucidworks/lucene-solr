@@ -105,16 +105,17 @@ def add_constant(new_version, deprecate):
   changed = update_file(filename, matcher, Edit())
   print('done' if changed else 'uptodate')
 
+version_prop_re = re.compile('version\.base=(.*)')
 def update_build_version(new_version):
-  print('  changing baseVersion...', end='', flush=True)
-  filename = 'build.gradle'
+  print('  changing version.base...', end='', flush=True)
+  filename = 'lucene/version.properties'
   def edit(buffer, match, line):
     if new_version.dot in line:
       return None
-    buffer.append('  baseVersion = \'' + new_version.dot + '\'\n')
+    buffer.append('version.base=' + new_version.dot + '\n')
     return True 
 
-  changed = update_file(filename, scriptutil.version_prop_re, edit)
+  changed = update_file(filename, version_prop_re, edit)
   print('done' if changed else 'uptodate')
 
 def update_latest_constant(new_version):
@@ -137,7 +138,7 @@ def update_example_solrconfigs(new_version):
   print('  updating example solrconfig.xml files')
   matcher = re.compile('<luceneMatchVersion>')
 
-  paths = ['solr/server/solr/configsets', 'solr/example', 'solr/core/src/test-files/solr/configsets/_default']
+  paths = ['solr/server/solr/configsets', 'solr/example']
   for path in paths:
     if not os.path.isdir(path):
       raise RuntimeError("Can't locate configset dir (layout change?) : " + path)
@@ -162,16 +163,22 @@ def update_solrconfig(filename, matcher, new_version):
 
 def check_lucene_version_tests():
   print('  checking lucene version tests...', end='', flush=True)
-  run('./gradlew -p lucene/core test --tests TestVersion')
+  base_dir = os.getcwd()
+  os.chdir('lucene/core') 
+  run('ant test -Dtestcase=TestVersion')
+  os.chdir(base_dir)
   print('ok')
 
 def check_solr_version_tests():
   print('  checking solr version tests...', end='', flush=True)
-  run('./gradlew -p solr/core test --tests TestLuceneMatchVersion')
+  base_dir = os.getcwd()
+  os.chdir('solr/core') 
+  run('ant test -Dtestcase=TestLuceneMatchVersion')
+  os.chdir(base_dir)
   print('ok')
 
 def read_config(current_version):
-  parser = argparse.ArgumentParser(description='Add a new version to CHANGES, to Version.java, build.gradle and solrconfig.xml files')
+  parser = argparse.ArgumentParser(description='Add a new version to CHANGES, to Version.java, lucene/version.properties and solrconfig.xml files')
   parser.add_argument('version', type=Version.parse)
   newconf = parser.parse_args()
 
@@ -196,7 +203,7 @@ def get_solr_init_changes():
     ''')
   
 def main():
-  if not os.path.exists('build.gradle'):
+  if not os.path.exists('lucene/version.properties'):
     sys.exit("Tool must be run from the root of a source checkout.")
   current_version = Version.parse(find_current_version())
   newconf = read_config(current_version)

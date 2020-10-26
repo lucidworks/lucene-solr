@@ -20,7 +20,7 @@ package org.apache.lucene.analysis.el;
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
  * Factory for {@link GreekStemFilter}. 
@@ -48,11 +48,6 @@ public class GreekStemFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public GreekStemFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new GreekStemFilter(input);

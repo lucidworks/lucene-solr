@@ -22,6 +22,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -412,19 +414,18 @@ public class TestCoreContainer extends SolrTestCaseJ4 {
     assertPathBlocked("\\\\unc-server\\share\\path");
   }
 
-  private static Set<Path> ALLOWED_PATHS = Set.of(Path.of("/var/solr"));
-  private static Set<Path> ALLOWED_PATHS_WIN = Set.of(Path.of("C:\\var\\solr"));
+  private static final Set<Path> ALLOWED_PATHS = new HashSet<>(Collections.singletonList(Paths.get("/var/solr")));
+  private static final Set<Path> ALLOWED_PATHS_WIN = new HashSet<>(Collections.singletonList(Paths.get("C:\\var\\solr")));
 
   private void assertPathBlocked(String path) {
     try {
-
-      SolrPaths.assertPathAllowed(Path.of(path), OS.isFamilyWindows() ? ALLOWED_PATHS_WIN : ALLOWED_PATHS);
+      SolrPaths.assertPathAllowed(Paths.get(path), OS.isFamilyWindows() ? ALLOWED_PATHS_WIN : ALLOWED_PATHS);
       fail("Path " + path + " sould have been blocked.");
     } catch (SolrException e) { /* Expected */ }
   }
 
   private void assertPathAllowed(String path) {
-    SolrPaths.assertPathAllowed(Path.of(path), OS.isFamilyWindows() ? ALLOWED_PATHS_WIN : ALLOWED_PATHS);
+    SolrPaths.assertPathAllowed(Paths.get(path), OS.isFamilyWindows() ? ALLOWED_PATHS_WIN : ALLOWED_PATHS);
   }
 
   @Test

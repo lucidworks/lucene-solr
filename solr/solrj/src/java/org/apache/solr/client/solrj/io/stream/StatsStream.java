@@ -68,10 +68,10 @@ public class StatsStream extends TupleStream implements Expressible  {
   private StreamContext context;
 
   public StatsStream(String zkHost,
-                          String collection,
-                          SolrParams params,
-                          Metric[] metrics
-                          ) throws IOException {
+                     String collection,
+                     SolrParams params,
+                     Metric[] metrics
+  ) throws IOException {
     init(collection, params, metrics, zkHost);
   }
 
@@ -284,7 +284,7 @@ public class StatsStream extends TupleStream implements Expressible  {
 
   private void appendJson(StringBuilder buf,
                           Metric[] _metrics) {
-    
+
     int metricCount = 0;
     for(Metric metric : _metrics) {
       String identifier = metric.getIdentifier();

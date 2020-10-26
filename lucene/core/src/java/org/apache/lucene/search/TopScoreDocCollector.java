@@ -244,7 +244,7 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
    */
   public static CollectorManager<TopScoreDocCollector, TopDocs> createSharedManager(int numHits, FieldDoc after,
                                                                                       int totalHitsThreshold) {
-    return new CollectorManager<>() {
+    return new CollectorManager<TopScoreDocCollector, TopDocs>() {
 
       private final HitsThresholdChecker hitsThresholdChecker = HitsThresholdChecker.createShared(Math.max(totalHitsThreshold, numHits));
       private final MaxScoreAccumulator minScoreAcc = new MaxScoreAccumulator();
@@ -261,7 +261,7 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
         for (TopScoreDocCollector collector : collectors) {
           topDocs[i++] = collector.topDocs();
         }
-        return TopDocs.merge(0, numHits, topDocs);
+        return TopDocs.merge(numHits, topDocs);
       }
 
     };

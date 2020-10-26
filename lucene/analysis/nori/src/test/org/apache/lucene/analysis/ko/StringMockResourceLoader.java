@@ -22,7 +22,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
-import org.apache.lucene.util.ResourceLoader;
+import org.apache.lucene.analysis.util.ResourceLoader;
 
 /** Fake resource loader for tests: works if you want to fake reading a single file */
 class StringMockResourceLoader implements ResourceLoader {
@@ -45,7 +45,7 @@ class StringMockResourceLoader implements ResourceLoader {
   public <T> T newInstance(String cname, Class<T> expectedType) {
     Class<? extends T> clazz = findClass(cname, expectedType);
     try {
-      return clazz.getConstructor().newInstance();
+      return clazz.newInstance();
     } catch (Exception e) {
       throw new RuntimeException("Cannot create instance: " + cname, e);
     }

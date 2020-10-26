@@ -100,11 +100,6 @@ public abstract class ConfigSetAdminRequest
     }
   }
 
-  @Override
-  public String getRequestType() {
-    return SolrRequestType.ADMIN.toString();
-  }
-
   // CREATE request
   public static class Create extends ConfigSetSpecificAdminRequest<Create> {
     protected static String PROPERTY_PREFIX = "configSetProp";

@@ -54,7 +54,7 @@ import org.apache.lucene.util.Version;
  * segments in relation to the file system.
  * <p>
  * The active segments in the index are stored in the segment info file,
- * <code>segments_N</code>. There may be one or more <code>segments_N</code> files in
+ * <tt>segments_N</tt>. There may be one or more <tt>segments_N</tt> files in
  * the index; however, the one with the largest generation is the active one
  * (when older segments_N files are present it's because they temporarily cannot
  * be deleted, or a custom {@link IndexDeletionPolicy} is in
@@ -64,7 +64,7 @@ import org.apache.lucene.util.Version;
  * <p>
  * Files:
  * <ul>
- * <li><code>segments_N</code>: Header, LuceneVersion, Version, NameCounter, SegCount, MinSegmentLuceneVersion, &lt;SegName,
+ * <li><tt>segments_N</tt>: Header, LuceneVersion, Version, NameCounter, SegCount, MinSegmentLuceneVersion, &lt;SegName,
  * SegID, SegCodec, DelGen, DeletionCount, FieldInfosGen, DocValuesGen,
  * UpdatesFiles&gt;<sup>SegCount</sup>, CommitUserData, Footer
  * </ul>
@@ -128,9 +128,6 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
   public static final int VERSION_86 = 10;
   static final int VERSION_CURRENT = VERSION_86;
 
-  /** Name of the generation reference file name */
-  private static final String OLD_SEGMENTS_GEN = "segments.gen";
-
   /** Used to name new segments. */
   public long counter;
   
@@ -192,9 +189,7 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
   public static long getLastCommitGeneration(String[] files) {
     long max = -1;
     for (String file : files) {
-      if (file.startsWith(IndexFileNames.SEGMENTS) &&
-          // skipping this file here helps deliver the right exception when opening an old index
-          file.startsWith(OLD_SEGMENTS_GEN) == false) {
+      if (file.startsWith(IndexFileNames.SEGMENTS) && !file.equals(IndexFileNames.OLD_SEGMENTS_GEN)) {
         long gen = generationFromSegmentsFileName(file);
         if (gen > max) {
           max = gen;
@@ -253,9 +248,7 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
    * return it.
    */
   public static long generationFromSegmentsFileName(String fileName) {
-    if (fileName.equals(OLD_SEGMENTS_GEN)) {
-      throw new IllegalArgumentException("\"" + OLD_SEGMENTS_GEN + "\" is not a valid segment file name since 4.0");
-    } else if (fileName.equals(IndexFileNames.SEGMENTS)) {
+    if (fileName.equals(IndexFileNames.SEGMENTS)) {
       return 0;
     } else if (fileName.startsWith(IndexFileNames.SEGMENTS)) {
       return Long.parseLong(fileName.substring(1+IndexFileNames.SEGMENTS.length()),
@@ -668,8 +661,8 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
 
     final Directory directory;
 
-    /** Sole constructor. */
-    protected FindSegmentsFile(Directory directory) {
+    /** Sole constructor. */ 
+    public FindSegmentsFile(Directory directory) {
       this.directory = directory;
     }
 
@@ -786,6 +779,7 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
       // Must carefully compute fileName from "generation"
       // since lastGeneration isn't incremented:
       final String pending = IndexFileNames.fileNameFromGeneration(IndexFileNames.PENDING_SEGMENTS, "", generation);
+
       // Suppress so we keep throwing the original exception
       // in our caller
       IOUtils.deleteFilesIgnoringExceptions(dir, pending);
@@ -835,24 +829,16 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentCommitInfo
     if (pendingCommit == false) {
       throw new IllegalStateException("prepareCommit was not called");
     }
-    boolean successRenameAndSync = false;
+    boolean success = false;
     final String dest;
     try {
       final String src = IndexFileNames.fileNameFromGeneration(IndexFileNames.PENDING_SEGMENTS, "", generation);
       dest = IndexFileNames.fileNameFromGeneration(IndexFileNames.SEGMENTS, "", generation);
       dir.rename(src, dest);
-      try {
-        dir.syncMetaData();
-        successRenameAndSync = true;
-      } finally {
-        if (successRenameAndSync == false) {
-          // at this point we already created the file but missed to sync directory let's also remove the
-          // renamed file
-          IOUtils.deleteFilesIgnoringExceptions(dir, dest);
-        }
-      }
+      dir.syncMetaData();
+      success = true;
     } finally {
-      if (successRenameAndSync == false) {
+      if (!success) {
         // deletes pending_segments_N:
         rollbackCommit(dir);
       }

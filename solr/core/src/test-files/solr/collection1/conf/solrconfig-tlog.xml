@@ -49,6 +49,10 @@
 
   <requestHandler name="/select" class="solr.SearchHandler" />
   
+  <peerSync>
+    <useRangeVersions>${solr.peerSync.useRangeVersions:true}</useRangeVersions>
+  </peerSync>
+
   <updateHandler class="solr.DirectUpdateHandler2">
     <!-- autocommit pending docs if certain criteria are met -->
     <autoCommit>
@@ -136,23 +140,23 @@
 
 
   <query>
-    <filterCache
+    <filterCache class="solr.FastLRUCache"
       size="512"
       initialSize="512"
       autowarmCount="0" />
 
-    <queryResultCache
+    <queryResultCache class="solr.LRUCache"
       size="512"
       initialSize="512"
       autowarmCount="0" />
 
-    <documentCache
+    <documentCache class="solr.LRUCache"
       size="512"
       initialSize="512"
       autowarmCount="0" />
 
     <cache name="perSegFilter"
-      class="solr.CaffeineCache"
+      class="solr.search.LRUCache"
       size="10"
       initialSize="0"
       autowarmCount="10"

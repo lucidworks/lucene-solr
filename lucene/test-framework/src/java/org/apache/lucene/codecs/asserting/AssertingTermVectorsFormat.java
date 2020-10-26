@@ -18,7 +18,6 @@ package org.apache.lucene.codecs.asserting;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Collections;
 
 import org.apache.lucene.codecs.TermVectorsFormat;
 import org.apache.lucene.codecs.TermVectorsReader;
@@ -211,14 +210,5 @@ public class AssertingTermVectorsFormat extends TermVectorsFormat {
       in.close(); // close again
     }
 
-    @Override
-    public long ramBytesUsed() {
-      return in.ramBytesUsed();
-    }
-
-    @Override
-    public Collection<Accountable> getChildResources() {
-      return Collections.singleton(in);
-    }
   }
 }

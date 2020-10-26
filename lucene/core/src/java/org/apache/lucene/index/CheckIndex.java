@@ -59,6 +59,7 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.CommandLineUtil;
 import org.apache.lucene.util.FixedBitSet;
+import org.apache.lucene.util.FutureArrays;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LongBitSet;
 import org.apache.lucene.util.StringHelper;
@@ -220,9 +221,6 @@ public final class CheckIndex implements Closeable {
 
       /** Status of index sort */
       public IndexSortStatus indexSortStatus;
-
-      /** Status of vectors */
-      public VectorValuesStatus vectorValuesStatus;
     }
     
     /**
@@ -377,25 +375,7 @@ public final class CheckIndex implements Closeable {
       /** Total number of fields with points. */
       public int totalValueFields;
       
-      /** Exception thrown during point values test (null on success) */
-      public Throwable error = null;
-    }
-
-    /**
-     * Status from testing VectorValues
-     */
-    public static final class VectorValuesStatus {
-
-      VectorValuesStatus() {
-      }
-
-      /** Total number of vector values tested. */
-      public long totalVectorValues;
-
-      /** Total number of fields with vectors. */
-      public int totalVectorFields;
-
-      /** Exception thrown during vector values test (null on success) */
+      /** Exception thrown during doc values test (null on success) */
       public Throwable error = null;
     }
 
@@ -751,9 +731,6 @@ public final class CheckIndex implements Closeable {
 
           // Test PointValues
           segInfoStat.pointsStatus = testPoints(reader, infoStream, failFast);
-
-          // Test VectorValues
-          segInfoStat.vectorValuesStatus = testVectors(reader, infoStream, failFast);
 
           // Test index sort
           segInfoStat.indexSortStatus = testSort(reader, indexSort, infoStream, failFast);
@@ -1695,7 +1672,7 @@ public final class CheckIndex implements Closeable {
             }
             final long norm = norms.longValue();
             if (norm != 0 && visitedDocs.get(doc) == false) {
-              throw new RuntimeException("Document " + doc + " doesn't have terms according to postings but has a norm value that is not zero: " + Long.toUnsignedString(norm));
+              throw new RuntimeException("Document " + doc + " doesn't have terms according to postings but has a norm value that is not zero: " + norm);
             } else if (norm == 0 && visitedDocs.get(doc)) {
               throw new RuntimeException("Document " + doc + " has terms according to postings but its norm value is 0, which may only be used on documents that have no terms");
             }
@@ -1979,65 +1956,6 @@ public final class CheckIndex implements Closeable {
     return status;
   }
 
-  /**
-   * Test the vectors index
-   * @lucene.experimental
-   */
-  public static Status.VectorValuesStatus testVectors(CodecReader reader, PrintStream infoStream, boolean failFast) throws IOException {
-    if (infoStream != null) {
-      infoStream.print("    test: vectors..............");
-    }
-    long startNS = System.nanoTime();
-    FieldInfos fieldInfos = reader.getFieldInfos();
-    Status.VectorValuesStatus status = new Status.VectorValuesStatus();
-    try {
-
-      if (fieldInfos.hasVectorValues()) {
-        for (FieldInfo fieldInfo : fieldInfos) {
-          if (fieldInfo.hasVectorValues()) {
-            int dimension = fieldInfo.getVectorDimension();
-            if (dimension <= 0) {
-              throw new RuntimeException("Field \"" + fieldInfo.name + "\" has vector values but dimension is " + dimension);
-            }
-            VectorValues values = reader.getVectorValues(fieldInfo.name);
-            if (values == null) {
-              continue;
-            }
-
-            status.totalVectorFields++;
-
-            int docCount = 0;
-            while (values.nextDoc() != NO_MORE_DOCS) {
-              int valueLength = values.vectorValue().length;
-              if (valueLength != dimension) {
-                throw new RuntimeException("Field \"" + fieldInfo.name + "\" has a value whose dimension=" + valueLength + " not matching the field's dimension=" + dimension);
-              }
-              ++docCount;
-            }
-            if (docCount != values.size()) {
-              throw new RuntimeException("Field \"" + fieldInfo.name + "\" has size=" + values.size() + " but when iterated, returns " + docCount + " docs with values");
-            }
-            status.totalVectorValues += docCount;
-          }
-        }
-      }
-
-      msg(infoStream, String.format(Locale.ROOT, "OK [%d fields, %d vectors] [took %.3f sec]", status.totalVectorFields, status.totalVectorValues, nsToSec(System.nanoTime()-startNS)));
-
-    } catch (Throwable e) {
-      if (failFast) {
-        throw IOUtils.rethrowAlways(e);
-      }
-      msg(infoStream, "ERROR: " + e);
-      status.error = e;
-      if (infoStream != null) {
-        e.printStackTrace(infoStream);
-      }
-    }
-
-    return status;
-  }
-
   /** Walks the entire N-dimensional points space, verifying that all points fall within the last cell's boundaries.
    *
    * @lucene.internal */
@@ -2123,12 +2041,12 @@ public final class CheckIndex implements Closeable {
         int offset = bytesPerDim * dim;
 
         // Compare to last cell:
-        if (Arrays.compareUnsigned(packedValue, offset, offset + bytesPerDim, lastMinPackedValue, offset, offset + bytesPerDim) < 0) {
+        if (FutureArrays.compareUnsigned(packedValue, offset, offset + bytesPerDim, lastMinPackedValue, offset, offset + bytesPerDim) < 0) {
           // This doc's point, in this dimension, is lower than the minimum value of the last cell checked:
           throw new RuntimeException("packed points value " + Arrays.toString(packedValue) + " for field=\"" + fieldName + "\", docID=" + docID + " is out-of-bounds of the last cell min=" + Arrays.toString(lastMinPackedValue) + " max=" + Arrays.toString(lastMaxPackedValue) + " dim=" + dim);
         }
 
-        if (Arrays.compareUnsigned(packedValue, offset, offset + bytesPerDim, lastMaxPackedValue, offset, offset + bytesPerDim) > 0) {
+        if (FutureArrays.compareUnsigned(packedValue, offset, offset + bytesPerDim, lastMaxPackedValue, offset, offset + bytesPerDim) > 0) {
           // This doc's point, in this dimension, is greater than the maximum value of the last cell checked:
           throw new RuntimeException("packed points value " + Arrays.toString(packedValue) + " for field=\"" + fieldName + "\", docID=" + docID + " is out-of-bounds of the last cell min=" + Arrays.toString(lastMinPackedValue) + " max=" + Arrays.toString(lastMaxPackedValue) + " dim=" + dim);
         }
@@ -2138,7 +2056,7 @@ public final class CheckIndex implements Closeable {
       // increasing docID:
       // for data dimension > 1, leaves are sorted by the dimension with the lowest cardinality to improve block compression
       if (numDataDims == 1) {
-        int cmp = Arrays.compareUnsigned(lastPackedValue, 0, bytesPerDim, packedValue, 0, bytesPerDim);
+        int cmp = FutureArrays.compareUnsigned(lastPackedValue, 0, bytesPerDim, packedValue, 0, bytesPerDim);
         if (cmp > 0) {
           throw new RuntimeException("packed points value " + Arrays.toString(packedValue) + " for field=\"" + fieldName + "\", for docID=" + docID + " is out-of-order vs the previous document's value " + Arrays.toString(lastPackedValue));
         } else if (cmp == 0) {
@@ -2161,27 +2079,27 @@ public final class CheckIndex implements Closeable {
       for(int dim=0;dim<numIndexDims;dim++) {
         int offset = bytesPerDim * dim;
 
-        if (Arrays.compareUnsigned(minPackedValue, offset, offset + bytesPerDim, maxPackedValue, offset, offset + bytesPerDim) > 0) {
+        if (FutureArrays.compareUnsigned(minPackedValue, offset, offset + bytesPerDim, maxPackedValue, offset, offset + bytesPerDim) > 0) {
           throw new RuntimeException("packed points cell minPackedValue " + Arrays.toString(minPackedValue) +
                                      " is out-of-bounds of the cell's maxPackedValue " + Arrays.toString(maxPackedValue) + " dim=" + dim + " field=\"" + fieldName + "\"");
         }
 
         // Make sure this cell is not outside of the global min/max:
-        if (Arrays.compareUnsigned(minPackedValue, offset, offset + bytesPerDim, globalMinPackedValue, offset, offset + bytesPerDim) < 0) {
+        if (FutureArrays.compareUnsigned(minPackedValue, offset, offset + bytesPerDim, globalMinPackedValue, offset, offset + bytesPerDim) < 0) {
           throw new RuntimeException("packed points cell minPackedValue " + Arrays.toString(minPackedValue) +
                                      " is out-of-bounds of the global minimum " + Arrays.toString(globalMinPackedValue) + " dim=" + dim + " field=\"" + fieldName + "\"");
         }
 
-        if (Arrays.compareUnsigned(maxPackedValue, offset, offset + bytesPerDim, globalMinPackedValue, offset, offset + bytesPerDim) < 0) {
+        if (FutureArrays.compareUnsigned(maxPackedValue, offset, offset + bytesPerDim, globalMinPackedValue, offset, offset + bytesPerDim) < 0) {
           throw new RuntimeException("packed points cell maxPackedValue " + Arrays.toString(maxPackedValue) +
                                      " is out-of-bounds of the global minimum " + Arrays.toString(globalMinPackedValue) + " dim=" + dim + " field=\"" + fieldName + "\"");
         }
 
-        if (Arrays.compareUnsigned(minPackedValue, offset, offset + bytesPerDim, globalMaxPackedValue, offset, offset + bytesPerDim) > 0) {
+        if (FutureArrays.compareUnsigned(minPackedValue, offset, offset + bytesPerDim, globalMaxPackedValue, offset, offset + bytesPerDim) > 0) {
           throw new RuntimeException("packed points cell minPackedValue " + Arrays.toString(minPackedValue) +
                                      " is out-of-bounds of the global maximum " + Arrays.toString(globalMaxPackedValue) + " dim=" + dim + " field=\"" + fieldName + "\"");
         }
-        if (Arrays.compareUnsigned(maxPackedValue, offset, offset + bytesPerDim, globalMaxPackedValue, offset, offset + bytesPerDim) > 0) {
+        if (FutureArrays.compareUnsigned(maxPackedValue, offset, offset + bytesPerDim, globalMaxPackedValue, offset, offset + bytesPerDim) > 0) {
           throw new RuntimeException("packed points cell maxPackedValue " + Arrays.toString(maxPackedValue) +
                                      " is out-of-bounds of the global maximum " + Arrays.toString(globalMaxPackedValue) + " dim=" + dim + " field=\"" + fieldName + "\"");
         }

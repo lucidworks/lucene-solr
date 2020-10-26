@@ -26,7 +26,6 @@ import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrResponse;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.embedded.JettySolrRunner;
-import org.apache.solr.client.solrj.impl.BaseHttpSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.GenericSolrRequest;
@@ -100,7 +99,7 @@ public class HealthCheckHandlerTest extends SolrCloudTestCase {
       newJetty.getCoreContainer().getZkController().getZkClient().close();
 
       // negative check of our (new) "broken" node that we deliberately put into an unhealth state
-      BaseHttpSolrClient.RemoteSolrException e = expectThrows(BaseHttpSolrClient.RemoteSolrException.class, () ->
+      HttpSolrClient.RemoteSolrException e = expectThrows(HttpSolrClient.RemoteSolrException.class, () ->
       {
         req.process(httpSolrClient);
       });
@@ -177,7 +176,7 @@ public class HealthCheckHandlerTest extends SolrCloudTestCase {
       newJetty.getCoreContainer().getZkController().getZkClient().close();
 
       // negative check of our (new) "broken" node that we deliberately put into an unhealth state
-      BaseHttpSolrClient.RemoteSolrException e = expectThrows(BaseHttpSolrClient.RemoteSolrException.class, () ->
+      HttpSolrClient.RemoteSolrException e = expectThrows(HttpSolrClient.RemoteSolrException.class, () ->
       {
         new V2Request.Builder("/node/health").build().process(httpSolrClient);
       });
@@ -196,7 +195,7 @@ public class HealthCheckHandlerTest extends SolrCloudTestCase {
     //  node2: collection1 -> shard1: [ replica2 (active), replica4 (down) ]
     //         collection2 -> shard1: [ replica1 (active) ]
     try (ZkStateReader reader = ClusterStateMockUtil.buildClusterState(
-        "csrr2rDr2Dcsr2FrR", 1, "node1", "node2")) {
+        "csrr2rDr2Dcsr2FrR", 1, 1, "node1", "node2")) {
       ClusterState clusterState = reader.getClusterState();
 
       // Node 1

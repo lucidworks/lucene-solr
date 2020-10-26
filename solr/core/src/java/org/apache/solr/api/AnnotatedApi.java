@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
@@ -37,11 +38,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SpecProvider;
-import org.apache.solr.common.util.CommandOperation;
-import org.apache.solr.common.util.ContentStream;
-import org.apache.solr.common.util.JsonSchemaCreator;
-import org.apache.solr.common.util.Utils;
-import org.apache.solr.common.util.ValidatingJsonMap;
+import org.apache.solr.common.util.*;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.security.AuthorizationContext;
@@ -87,12 +84,9 @@ public class AnnotatedApi extends Api implements PermissionNameProvider , Closea
   public static List<Api> getApis(Object obj) {
     return getApis(obj.getClass(), obj);
   }
-  public static List<Api> getApis(Class<? extends Object> theClass , Object obj)  {
-    Class<?> klas = null;
-    try {
-      klas = MethodHandles.publicLookup().accessClass(theClass);
-    } catch (IllegalAccessException e) {
-      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Method may be non-public/inaccessible", e);
+  public static List<Api> getApis(final Class<? extends Object> klas , Object obj) {
+    if (!Modifier.isPublic(klas.getModifiers())) {
+      throw new RuntimeException(klas.getName() + " is not public");
     }
     if (klas.getAnnotation(EndPoint.class) != null) {
       EndPoint endPoint = klas.getAnnotation(EndPoint.class);
@@ -271,7 +265,6 @@ public class AnnotatedApi extends Api implements PermissionNameProvider , Closea
 
     @SuppressWarnings({"unchecked"})
     void invoke(SolrQueryRequest req, SolrQueryResponse rsp, CommandOperation cmd) {
-      Object original = null;
       try {
         Object o = null;
         String commandName = null;
@@ -287,13 +280,12 @@ public class AnnotatedApi extends Api implements PermissionNameProvider , Closea
             }
           } else {
             commandName = cmd.name;
-            original = cmd.getCommandData();
-            o = original;
+            o = cmd.getCommandData();
             if (o instanceof Map && parameterClass != null && parameterClass != Map.class) {
               o = mapper.readValue(Utils.toJSONString(o), parameterClass);
             }
           }
-          PayloadObj<Object> payloadObj = new PayloadObj<>(commandName, original, o, req, rsp);
+          PayloadObj<Object> payloadObj = new PayloadObj<>(commandName, o, o, req, rsp);
           cmd = payloadObj;
           method.invoke(obj, payloadObj);
           checkForErrorInPayload(cmd);

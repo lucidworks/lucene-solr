@@ -30,7 +30,7 @@ import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.IntsRefBuilder;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util.fst.FSTCompiler;
+import org.apache.lucene.util.fst.Builder;
 import org.apache.lucene.util.fst.CharSequenceOutputs;
 import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.Outputs;
@@ -196,26 +196,26 @@ public class TestDictionary extends LuceneTestCase {
   
   public void testReplacements() throws Exception {
     Outputs<CharsRef> outputs = CharSequenceOutputs.getSingleton();
-    FSTCompiler<CharsRef> fstCompiler = new FSTCompiler<>(FST.INPUT_TYPE.BYTE2, outputs);
+    Builder<CharsRef> builder = new Builder<>(FST.INPUT_TYPE.BYTE2, outputs);
     IntsRefBuilder scratchInts = new IntsRefBuilder();
     
     // a -> b
     Util.toUTF16("a", scratchInts);
-    fstCompiler.add(scratchInts.get(), new CharsRef("b"));
+    builder.add(scratchInts.get(), new CharsRef("b"));
     
     // ab -> c
     Util.toUTF16("ab", scratchInts);
-    fstCompiler.add(scratchInts.get(), new CharsRef("c"));
+    builder.add(scratchInts.get(), new CharsRef("c"));
     
     // c -> de
     Util.toUTF16("c", scratchInts);
-    fstCompiler.add(scratchInts.get(), new CharsRef("de"));
+    builder.add(scratchInts.get(), new CharsRef("de"));
     
     // def -> gh
     Util.toUTF16("def", scratchInts);
-    fstCompiler.add(scratchInts.get(), new CharsRef("gh"));
+    builder.add(scratchInts.get(), new CharsRef("gh"));
     
-    FST<CharsRef> fst = fstCompiler.compile();
+    FST<CharsRef> fst = builder.finish();
     
     StringBuilder sb = new StringBuilder("atestanother");
     Dictionary.applyMappings(fst, sb);

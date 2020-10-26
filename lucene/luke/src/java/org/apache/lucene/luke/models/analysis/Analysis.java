@@ -18,14 +18,15 @@
 package org.apache.lucene.luke.models.analysis;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.CharFilterFactory;
-import org.apache.lucene.analysis.TokenFilterFactory;
-import org.apache.lucene.analysis.TokenizerFactory;
+import org.apache.lucene.analysis.util.CharFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenizerFactory;
 import org.apache.lucene.luke.models.LukeException;
 
 /**
@@ -56,7 +57,7 @@ public interface Analysis {
      * Returns attributes of this token.
      */
     public List<TokenAttribute> getAttributes() {
-      return List.copyOf(attributes);
+      return Collections.unmodifiableList(attributes);
     }
   }
 
@@ -83,7 +84,7 @@ public interface Analysis {
      * Returns value of this attribute.
      */
     public Map<String, String> getAttValues() {
-      return Map.copyOf(attValues);
+      return Collections.unmodifiableMap(attValues);
     }
   }
 

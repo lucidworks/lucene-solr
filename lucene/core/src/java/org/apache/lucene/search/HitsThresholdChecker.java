@@ -47,7 +47,7 @@ abstract class HitsThresholdChecker {
 
     @Override
     public boolean isThresholdReached(){
-      return globalHitCount.getAcquire() > totalHitsThreshold;
+      return globalHitCount.get() > totalHitsThreshold;
     }
 
     @Override

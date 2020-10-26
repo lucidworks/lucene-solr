@@ -50,7 +50,11 @@ public class CollectionPropsTest extends SolrCloudTestCase {
 
   @BeforeClass
   public static void setupClass() throws Exception {
+    Boolean useLegacyCloud = rarely();
+    log.info("Using legacyCloud?: {}", useLegacyCloud);
+
     configureCluster(4)
+        .withProperty(ZkStateReader.LEGACY_CLOUD, String.valueOf(useLegacyCloud))
         .addConfig("conf", configset("cloud-minimal"))
         .configure();
   }

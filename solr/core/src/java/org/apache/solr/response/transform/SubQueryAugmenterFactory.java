@@ -51,12 +51,12 @@ import org.apache.solr.search.TermsQParserPlugin;
  * the value of this field is a document list, which is a result of executing subquery using 
  * document fields as an input.
  * 
- * <h2>Subquery Parameters Shift</h2>
+ * <h3>Subquery Parameters Shift</h3>
  * if subquery is declared as <code>fl=*,foo:[subquery]</code>, subquery parameters 
  * are prefixed with the given name and period. eg <br>
  * <code>q=*:*&amp;fl=*,foo:[subquery]&amp;foo.q=to be continued&amp;foo.rows=10&amp;foo.sort=id desc</code>
  * 
- * <h2>Document Field As An Input For Subquery Parameters</h2>
+ * <h3>Document Field As An Input For Subquery Parameters</h3>
  * 
  * It's necessary to pass some document field value as a parameter for subquery. It's supported via 
  * implicit <code>row.<i>fieldname</i></code> parameters, and can be (but might not only) referred via
@@ -67,13 +67,13 @@ import org.apache.solr.search.TermsQParserPlugin;
  * Note, when document field has multiple values they are concatenated with comma by default, it can be changed by
  * <code>foo:[subquery separator=' ']</code> local parameter, this mimics {@link TermsQParserPlugin} to work smoothly with.
  * 
- * <h2>Cores And Collections In SolrCloud</h2>
+ * <h3>Cores And Collections In SolrCloud</h3>
  * use <code>foo:[subquery fromIndex=departments]</code> invoke subquery on another core on the same node, it's like
  *  {@link JoinQParserPlugin} for non SolrCloud mode. <b>But for SolrCloud</b> just (and only) <b>explicitly specify</b> 
  * its' native parameters like <code>collection, shards</code> for subquery, eg<br>
  *  <code>q=*:*&amp;fl=*,foo:[subquery]&amp;foo.q=cloud&amp;foo.collection=departments</code>
  *
- * <h2>When used in Real Time Get</h2>
+ * <h3>When used in Real Time Get</h3>
  * <p>
  * When used in the context of a Real Time Get, the <i>values</i> from each document that are used 
  * in the subquery are the "real time" values (possibly from the transaction log), but the query

@@ -133,7 +133,7 @@ public class TestKoreanTokenizerFactory extends BaseTokenStreamTestCase {
   /** Test that bogus arguments result in exception */
   public void testBogusArguments() {
     IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () ->
-        new KoreanTokenizerFactory(new HashMap<>() {{
+        new KoreanTokenizerFactory(new HashMap<String, String>() {{
           put("bogusArg", "bogusValue");
         }})
     );

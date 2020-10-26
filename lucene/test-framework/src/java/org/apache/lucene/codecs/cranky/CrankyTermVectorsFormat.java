@@ -17,8 +17,6 @@
 package org.apache.lucene.codecs.cranky;
 
 import java.io.IOException;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Random;
 
 import org.apache.lucene.codecs.TermVectorsFormat;
@@ -31,7 +29,6 @@ import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
-import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.BytesRef;
 
 class CrankyTermVectorsFormat extends TermVectorsFormat {
@@ -153,16 +150,6 @@ class CrankyTermVectorsFormat extends TermVectorsFormat {
         throw new IOException("Fake IOException from TermVectorsWriter.addProx()");
       }
       super.addProx(numProx, positions, offsets);
-    }
-
-    @Override
-    public long ramBytesUsed() {
-      return delegate.ramBytesUsed();
-    }
-
-    @Override
-    public Collection<Accountable> getChildResources() {
-      return Collections.singleton(delegate);
     }
   }
 }

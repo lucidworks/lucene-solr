@@ -55,23 +55,23 @@
 
     <maxBooleanClauses>1024</maxBooleanClauses>
 
-    <filterCache class="solr.CaffeineCache"
+    <filterCache class="solr.FastLRUCache"
                  size="512"
                  initialSize="512"
                  autowarmCount="0"/>
 
-    <queryResultCache class="solr.CaffeineCache"
+    <queryResultCache class="solr.LRUCache"
                       size="512"
                       initialSize="512"
                       autowarmCount="0"/>
 
-    <documentCache class="solr.CaffeineCache"
+    <documentCache class="solr.LRUCache"
                    size="512"
                    initialSize="512"
                    autowarmCount="0"/>
 
     <cache name="perSegFilter"
-           class="solr.search.CaffeineCache"
+           class="solr.search.LRUCache"
            size="10"
            initialSize="0"
            autowarmCount="10"

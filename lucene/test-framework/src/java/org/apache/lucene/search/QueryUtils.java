@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Random;
 
+import junit.framework.Assert;
 import org.apache.lucene.index.BinaryDocValues;
 import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.Fields;
@@ -35,15 +36,13 @@ import org.apache.lucene.index.SortedNumericDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.index.StoredFieldVisitor;
 import org.apache.lucene.index.Terms;
-import org.apache.lucene.index.VectorValues;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.Version;
-import org.junit.Assert;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static junit.framework.Assert.assertEquals;
+import static junit.framework.Assert.assertFalse;
+import static junit.framework.Assert.assertTrue;
 
 /**
  * Utility class for sanity-checking queries.
@@ -205,11 +204,6 @@ public class QueryUtils {
 
       @Override
       public NumericDocValues getNormValues(String field) throws IOException {
-        return null;
-      }
-
-      @Override
-      public VectorValues getVectorValues(String field) throws IOException {
         return null;
       }
 
@@ -430,7 +424,7 @@ public class QueryUtils {
                 break;
               }
             }
-            assertFalse("query's last doc was "+ lastDoc[0] +" but advance("+(lastDoc[0]+1)+") got to "+scorer.docID(),more);
+            Assert.assertFalse("query's last doc was "+ lastDoc[0] +" but advance("+(lastDoc[0]+1)+") got to "+scorer.docID(),more);
           }
         }
       }
@@ -459,11 +453,11 @@ public class QueryUtils {
           for (int i=lastDoc[0]+1; i<=doc; i++) {
             Weight w = s.createWeight(rewritten, ScoreMode.COMPLETE, 1);
             Scorer scorer = w.scorer(context.get(leafPtr));
-            assertTrue("query collected "+doc+" but advance("+i+") says no more docs!",scorer.iterator().advance(i) != DocIdSetIterator.NO_MORE_DOCS);
-            assertEquals("query collected "+doc+" but advance("+i+") got to "+scorer.docID(),doc,scorer.docID());
+            Assert.assertTrue("query collected "+doc+" but advance("+i+") says no more docs!",scorer.iterator().advance(i) != DocIdSetIterator.NO_MORE_DOCS);
+            Assert.assertEquals("query collected "+doc+" but advance("+i+") got to "+scorer.docID(),doc,scorer.docID());
             float advanceScore = scorer.score();
-            assertEquals("unstable advance("+i+") score!",advanceScore,scorer.score(),maxDiff);
-            assertEquals("query assigned doc "+doc+" a score of <"+score+"> but advance("+i+") has <"+advanceScore+">!",score,advanceScore,maxDiff);
+            Assert.assertEquals("unstable advance("+i+") score!",advanceScore,scorer.score(),maxDiff);
+            Assert.assertEquals("query assigned doc "+doc+" a score of <"+score+"> but advance("+i+") has <"+advanceScore+">!",score,advanceScore,maxDiff);
 
             // Hurry things along if they are going slow (eg
             // if you got SimpleText codec this will kick in):
@@ -502,7 +496,7 @@ public class QueryUtils {
                 break;
               }
             }
-            assertFalse("query's last doc was "+ lastDoc[0] +" but advance("+(lastDoc[0]+1)+") got to "+scorer.docID(),more);
+            Assert.assertFalse("query's last doc was "+ lastDoc[0] +" but advance("+(lastDoc[0]+1)+") got to "+scorer.docID(),more);
           }
           leafPtr++;
         }
@@ -530,7 +524,7 @@ public class QueryUtils {
             break;
           }
         }
-        assertFalse("query's last doc was "+ lastDoc[0] +" but advance("+(lastDoc[0]+1)+") got to "+scorer.docID(),more);
+        Assert.assertFalse("query's last doc was "+ lastDoc[0] +" but advance("+(lastDoc[0]+1)+") got to "+scorer.docID(),more);
       }
     }
   }
@@ -567,8 +561,8 @@ public class QueryUtils {
           public void collect(int doc) throws IOException {
             assert doc >= min;
             assert doc < max;
-            assertEquals(scorer.docID(), doc);
-            assertEquals(scorer.score(), scorer2.score(), 0.01f);
+            Assert.assertEquals(scorer.docID(), doc);
+            Assert.assertEquals(scorer.score(), scorer2.score(), 0.01f);
             iterator.nextDoc();
           }
         }, null, min, max);

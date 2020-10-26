@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.cloud.ClusterProperties;
+import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.common.cloud.ZkConfigManager;
 import org.apache.solr.common.cloud.ZkNodeProps;
@@ -193,7 +194,15 @@ public class ZkControllerTest extends SolrTestCaseJ4 {
       cc = getCoreContainer();
 
       CloudConfig cloudConfig = new CloudConfig.CloudConfigBuilder("127.0.0.1", 8983, "solr").build();
-      ZkController zkController = new ZkController(cc, server.getZkAddress(), TIMEOUT, cloudConfig, () -> null);
+      ZkController zkController = new ZkController(cc, server.getZkAddress(), TIMEOUT, cloudConfig,
+          new CurrentCoreDescriptorProvider() {
+            
+            @Override
+            public List<CoreDescriptor> getCurrentDescriptors() {
+              // do nothing
+              return null;
+            }
+          });
       try {
         String configName = zkController.getZkStateReader().readConfigName(COLLECTION_NAME);
         assertEquals(configName, actualConfigName);
@@ -222,7 +231,14 @@ public class ZkControllerTest extends SolrTestCaseJ4 {
 
       try {
         CloudConfig cloudConfig = new CloudConfig.CloudConfigBuilder("127.0.0.1", 8983, "solr").build();
-        zkController = new ZkController(cc, server.getZkAddress(), TIMEOUT, cloudConfig, () -> null);
+        zkController = new ZkController(cc, server.getZkAddress(), TIMEOUT, cloudConfig, new CurrentCoreDescriptorProvider() {
+
+          @Override
+          public List<CoreDescriptor> getCurrentDescriptors() {
+            // do nothing
+            return null;
+          }
+        });
       } catch (IllegalArgumentException e) {
         fail("ZkController did not normalize host name correctly");
       } finally {
@@ -276,14 +292,21 @@ public class ZkControllerTest extends SolrTestCaseJ4 {
 
       try {
         CloudConfig cloudConfig = new CloudConfig.CloudConfigBuilder("127.0.0.1", 8983, "solr").build();
-        zkController = new ZkController(cc, server.getZkAddress(), TIMEOUT, cloudConfig, () -> null);
+        zkController = new ZkController(cc, server.getZkAddress(), TIMEOUT, cloudConfig, new CurrentCoreDescriptorProvider() {
+
+          @Override
+          public List<CoreDescriptor> getCurrentDescriptors() {
+            // do nothing
+            return null;
+          }
+        });
         zkControllerRef.set(zkController);
 
         zkController.getZkClient().makePath(ZkStateReader.getCollectionPathRoot(collectionName), new byte[0], CreateMode.PERSISTENT, true);
 
         ZkNodeProps m = new ZkNodeProps(Overseer.QUEUE_OPERATION,
             CollectionParams.CollectionAction.CREATE.toLower(), ZkStateReader.NODE_NAME_PROP, nodeName, ZkStateReader.NUM_SHARDS_PROP, "1",
-            "name", collectionName);
+            "name", collectionName, DocCollection.STATE_FORMAT, "2");
         zkController.getOverseerJobQueue().offer(Utils.toJSON(m));
 
         HashMap<String, Object> propMap = new HashMap<>();

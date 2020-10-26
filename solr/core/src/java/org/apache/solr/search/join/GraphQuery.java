@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeSet;
 
 import org.apache.lucene.index.LeafReaderContext;
@@ -281,7 +282,12 @@ public class GraphQuery extends Query {
     public boolean isCacheable(LeafReaderContext ctx) {
       return true;
     }
-    
+
+    @Override
+    public void extractTerms(Set<Term> terms) {
+      // NoOp for now , not used.. / supported
+    }
+
   }
   
   private static class GraphScorer extends Scorer {

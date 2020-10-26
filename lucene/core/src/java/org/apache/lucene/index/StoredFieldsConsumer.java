@@ -19,34 +19,25 @@ package org.apache.lucene.index;
 
 import java.io.IOException;
 
-import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.StoredFieldsWriter;
-import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
-import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.IOUtils;
 
 class StoredFieldsConsumer {
-  final Codec codec;
-  final Directory directory;
-  final SegmentInfo info;
+  final DocumentsWriterPerThread docWriter;
   StoredFieldsWriter writer;
-  // this accountable either holds the writer or one that returns null.
-  // it's cleaner than checking if the writer is null all over the place
-  Accountable accountable = Accountable.NULL_ACCOUNTABLE;
-  private int lastDoc;
+  int lastDoc;
 
-  StoredFieldsConsumer(Codec codec, Directory directory, SegmentInfo info) {
-    this.codec = codec;
-    this.directory = directory;
-    this.info = info;
+  StoredFieldsConsumer(DocumentsWriterPerThread docWriter) {
+    this.docWriter = docWriter;
     this.lastDoc = -1;
   }
 
   protected void initStoredFieldsWriter() throws IOException {
-    if (writer == null) { // TODO can we allocate this in the ctor? we call start document for every doc anyway
-      this.writer = codec.storedFieldsFormat().fieldsWriter(directory, info, IOContext.DEFAULT);
-      accountable = writer;
+    if (writer == null) {
+      this.writer =
+          docWriter.codec.storedFieldsFormat().fieldsWriter(docWriter.directory, docWriter.getSegmentInfo(),
+              IOContext.DEFAULT);
     }
   }
 
@@ -81,10 +72,14 @@ class StoredFieldsConsumer {
       writer.finish(state.fieldInfos, state.segmentInfo.maxDoc());
     } finally {
       IOUtils.close(writer);
+      writer = null;
     }
   }
 
   void abort() {
-    IOUtils.closeWhileHandlingException(writer);
+    if (writer != null) {
+      IOUtils.closeWhileHandlingException(writer);
+      writer = null;
+    }
   }
 }

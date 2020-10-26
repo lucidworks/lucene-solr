@@ -23,7 +23,6 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
-import org.apache.lucene.search.IndexSearcher;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.logging.LogWatcherConfig;
 import org.apache.solr.update.UpdateShardHandlerConfig;
@@ -84,10 +83,6 @@ public class NodeConfig {
 
   private final PluginInfo tracerConfig;
 
-  // Track if this config was loaded from zookeeper so that we can skip validating the zookeeper connection later
-  // If it becomes necessary to track multiple potential sources in the future, replace this with an Enum
-  private final boolean fromZookeeper;
-
   private NodeConfig(String nodeName, Path coreRootDirectory, Path solrDataHome, Integer booleanQueryMaxClauseCount,
                      Path configSetBaseDirectory, String sharedLibDirectory,
                      PluginInfo shardHandlerFactoryConfig, UpdateShardHandlerConfig updateShardHandlerConfig,
@@ -98,7 +93,7 @@ public class NodeConfig {
                      Path solrHome, SolrResourceLoader loader,
                      Properties solrProperties, PluginInfo[] backupRepositoryPlugins,
                      MetricsConfig metricsConfig, PluginInfo transientCacheConfig, PluginInfo tracerConfig,
-                     boolean fromZookeeper, Set<Path> allowPaths) {
+                     Set<Path> allowPaths) {
     // all Path params here are absolute and normalized.
     this.nodeName = nodeName;
     this.coreRootDirectory = coreRootDirectory;
@@ -127,7 +122,6 @@ public class NodeConfig {
     this.metricsConfig = metricsConfig;
     this.transientCacheConfig = transientCacheConfig;
     this.tracerConfig = tracerConfig;
-    this.fromZookeeper = fromZookeeper;
     this.allowPaths = allowPaths;
 
     if (this.cloudConfig != null && this.getCoreLoadThreadCount(false) < 2) {
@@ -153,7 +147,7 @@ public class NodeConfig {
   /** 
    * If null, the lucene default will not be overridden
    *
-   * @see IndexSearcher#setMaxClauseCount
+   * @see org.apache.lucene.search.BooleanQuery#setMaxClauseCount
    */
   public Integer getBooleanQueryMaxClauseCount() {
     return booleanQueryMaxClauseCount;
@@ -263,10 +257,6 @@ public class NodeConfig {
     return tracerConfig;
   }
 
-  public boolean isFromZookeeper() {
-    return fromZookeeper;
-  }
-
   /**
    * Extra file paths that will be allowed for core creation, in addition to
    * SOLR_HOME, SOLR_DATA_HOME and coreRootDir
@@ -302,7 +292,6 @@ public class NodeConfig {
     private MetricsConfig metricsConfig;
     private PluginInfo transientCacheConfig;
     private PluginInfo tracerConfig;
-    private boolean fromZookeeper = false;
     private Set<Path> allowPaths = Collections.emptySet();
 
     private final Path solrHome;
@@ -463,12 +452,7 @@ public class NodeConfig {
       return this;
     }
 
-    public NodeConfigBuilder setFromZookeeper(boolean fromZookeeper) {
-      this.fromZookeeper = fromZookeeper;
-      return this;
-    }
-
-    public NodeConfigBuilder setAllowPaths(Set<Path> paths) {
+   public NodeConfigBuilder setAllowPaths(Set<Path> paths) {
       this.allowPaths = paths;
       return this;
     }
@@ -483,7 +467,7 @@ public class NodeConfig {
                             updateShardHandlerConfig, coreAdminHandlerClass, collectionsAdminHandlerClass, healthCheckHandlerClass, infoHandlerClass, configSetsHandlerClass,
                             logWatcherConfig, cloudConfig, coreLoadThreads, replayUpdatesThreads, transientCacheSize, useSchemaCache, managementPath,
                             solrHome, loader, solrProperties,
-                            backupRepositoryPlugins, metricsConfig, transientCacheConfig, tracerConfig, fromZookeeper, allowPaths);
+                            backupRepositoryPlugins, metricsConfig, transientCacheConfig, tracerConfig, allowPaths);
     }
 
     public NodeConfigBuilder setSolrResourceLoader(SolrResourceLoader resourceLoader) {

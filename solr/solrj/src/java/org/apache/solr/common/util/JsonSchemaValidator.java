@@ -17,7 +17,15 @@
 
 package org.apache.solr.common.util;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 /**
@@ -38,16 +46,15 @@ public class JsonSchemaValidator {
     this((Map) Utils.fromJSONString(jsonString));
   }
 
-  public JsonSchemaValidator(Map<?, ?> jsonSchema) {
+  public JsonSchemaValidator(Map jsonSchema) {
     this.validators = new LinkedList<>();
-    for (Map.Entry<?, ?> entry : jsonSchema.entrySet()) {
-      Object fname = entry.getKey();
+    for (Object fname : jsonSchema.keySet()) {
       if (KNOWN_FNAMES.contains(fname.toString())) continue;
 
       Function<Pair<Map, Object>, Validator> initializeFunction = VALIDATORS.get(fname.toString());
       if (initializeFunction == null) throw new RuntimeException("Unknown key : " + fname);
 
-      this.validators.add(initializeFunction.apply(new Pair<>(jsonSchema, entry.getValue())));
+      this.validators.add(initializeFunction.apply(new Pair<>(jsonSchema, jsonSchema.get(fname))));
     }
   }
 
@@ -269,17 +276,18 @@ class PropertiesValidator extends Validator<Map<String, Map>> {
   }
 
   @Override
+  @SuppressWarnings({"rawtypes"})
   boolean validate(Object o, List<String> errs) {
     if (o instanceof Map) {
-      Map<?, ?> map = (Map) o;
-      for (Map.Entry<?,?> entry : map.entrySet()) {
-        Object key = entry.getKey();
+      @SuppressWarnings({"rawtypes"})
+      Map map = (Map) o;
+      for (Object key : map.keySet()) {
         JsonSchemaValidator jsonSchema = jsonSchemas.get(key.toString());
         if (jsonSchema == null && !additionalProperties) {
           errs.add("Unknown field '" + key + "' in object : " + Utils.toJSONString(o));
           return false;
         }
-        if (jsonSchema != null && !jsonSchema.validate(entry.getValue(), errs)) {
+        if (jsonSchema != null && !jsonSchema.validate(map.get(key), errs)) {
           return false;
         }
       }

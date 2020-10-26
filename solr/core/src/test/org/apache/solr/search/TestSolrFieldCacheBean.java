@@ -21,7 +21,6 @@ import org.apache.solr.SolrTestCaseJ4;
 
 import org.apache.solr.metrics.MetricsMap;
 import org.apache.solr.metrics.SolrMetricManager;
-import org.apache.solr.metrics.SolrMetricsContext;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -75,8 +74,7 @@ public class TestSolrFieldCacheBean extends SolrTestCaseJ4 {
     Random r = random();
     String registryName = TestUtil.randomSimpleString(r, 1, 10);
     SolrMetricManager metricManager = h.getCoreContainer().getMetricManager();
-    SolrMetricsContext solrMetricsContext = new SolrMetricsContext(metricManager, registryName, "foo");
-    mbean.initializeMetrics(solrMetricsContext, null);
+    mbean.initializeMetrics(metricManager, registryName, "foo", null);
     MetricsMap metricsMap = (MetricsMap)((SolrMetricManager.GaugeWrapper)metricManager.registry(registryName).getMetrics().get("CACHE.fieldCache")).getGauge();
     Map<String, Object> metrics = checkJmx ? metricsMap.getValue(true) : metricsMap.getValue();
     assertTrue(((Number)metrics.get("entries_count")).longValue() > 0);
@@ -89,8 +87,7 @@ public class TestSolrFieldCacheBean extends SolrTestCaseJ4 {
     Random r = random();
     String registryName = TestUtil.randomSimpleString(r, 1, 10);
     SolrMetricManager metricManager = h.getCoreContainer().getMetricManager();
-    SolrMetricsContext solrMetricsContext = new SolrMetricsContext(metricManager, registryName, "foo");
-    mbean.initializeMetrics(solrMetricsContext, null);
+    mbean.initializeMetrics(metricManager, registryName, "foo", null);
     MetricsMap metricsMap = (MetricsMap)((SolrMetricManager.GaugeWrapper)metricManager.registry(registryName).getMetrics().get("CACHE.fieldCache")).getGauge();
     Map<String, Object> metrics = checkJmx ? metricsMap.getValue(true) : metricsMap.getValue();
     assertTrue(((Number)metrics.get("entries_count")).longValue() > 0);

@@ -408,6 +408,26 @@ public class HttpSolrCall {
   protected void extractHandlerFromURLPath(SolrRequestParsers parser) throws Exception {
     if (handler == null && path.length() > 1) { // don't match "" or "/" as valid path
       handler = core.getRequestHandler(path);
+
+      if (handler == null) {
+        //may be a restlet path
+        // Handle /schema/* paths via Restlet
+        if (path.equals("/schema") || path.startsWith("/schema/")) {
+          solrReq = parser.parse(core, path, req);
+          SolrRequestInfo.setRequestInfo(new SolrRequestInfo(solrReq, new SolrQueryResponse()));
+          mustClearSolrRequestInfo = true;
+          if (path.equals(req.getServletPath())) {
+            // avoid endless loop - pass through to Restlet via webapp
+            action = PASSTHROUGH;
+          } else {
+            // forward rewritten URI (without path prefix and core/collection name) to Restlet
+            action = FORWARD;
+          }
+          SolrRequestInfo.getRequestInfo().setAction(action);
+          return;
+        }
+      }
+
       // no handler yet but <requestDispatcher> allows us to handle /select with a 'qt' param
       if (handler == null && parser.isHandleSelect()) {
         if ("/select".equals(path) || "/select/".equals(path)) {
@@ -473,7 +493,7 @@ public class HttpSolrCall {
     }
     if (statusCode == AuthorizationResponse.FORBIDDEN.statusCode) {
       if (log.isDebugEnabled()) {
-        log.debug("UNAUTHORIZED auth header {} context : {}, msg: {}", req.getHeader("Authorization"), context, authResponse.getMessage()); // nowarn
+        log.debug("UNAUTHORIZED auth header {} context : {}, msg: {}", req.getHeader("Authorization"), context, authResponse.getMessage());
       }
       sendError(statusCode,
           "Unauthorized request, Response code: " + statusCode);
@@ -483,7 +503,7 @@ public class HttpSolrCall {
       return RETURN;
     }
     if (!(statusCode == HttpStatus.SC_ACCEPTED) && !(statusCode == HttpStatus.SC_OK)) {
-      log.warn("ERROR {} during authentication: {}", statusCode, authResponse.getMessage()); // nowarn
+      log.warn("ERROR {} during authentication: {}", statusCode, authResponse.getMessage());
       sendError(statusCode,
           "ERROR during authorization, Response code: " + statusCode);
       if (shouldAudit(EventType.ERROR)) {
@@ -591,7 +611,7 @@ public class HttpSolrCall {
         cores.getAuditLoggerPlugin().doAudit(new AuditEvent(EventType.ERROR, ex, req));
       }
       sendError(ex);
-      // walk the entire cause chain to search for an Error
+      // walk the the entire cause chain to search for an Error
       Throwable t = ex;
       while (t != null) {
         if (t instanceof Error) {
@@ -1117,11 +1137,6 @@ public class HttpSolrCall {
       }
 
       @Override
-      public String getUserName() {
-        return getReq().getRemoteUser();
-      }
-
-      @Override
       public String getHttpHeader(String s) {
         return getReq().getHeader(s);
       }
@@ -1188,10 +1203,11 @@ public class HttpSolrCall {
   static final String CONTENT_LENGTH_HEADER = "Content-Length";
   List<CommandOperation> parsedCommands;
 
+  @SuppressWarnings({"unchecked"})
   public List<CommandOperation> getCommands(boolean validateInput) {
     if (parsedCommands == null) {
       Iterable<ContentStream> contentStreams = solrReq.getContentStreams();
-      if (contentStreams == null) parsedCommands = Collections.emptyList();
+      if (contentStreams == null) parsedCommands = Collections.EMPTY_LIST;
       else {
         parsedCommands = ApiBag.getCommandOperations(contentStreams.iterator().next(), getValidators(), validateInput);
       }

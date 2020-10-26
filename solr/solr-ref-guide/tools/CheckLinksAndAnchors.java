@@ -20,19 +20,29 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.MalformedURLException;
+import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
+import org.jsoup.parser.Parser;
 import org.jsoup.parser.Tag;
 import org.jsoup.select.Elements;
+import org.jsoup.select.NodeVisitor;
 
 /**
  * Check various things regarding anchors, links &amp; general doc structure in the generated HTML site.
@@ -68,7 +78,7 @@ import org.jsoup.select.Elements;
  * This tool supports 2 command line options:
  * </p>
  * <ul>
- *  <li><b>-check-all-relative-links</b>
+ *  <li><b>-check-all-relative-links</b><br />
  *    <p>By default, only relative links to files in the same directory (ie: not startin with
  *       <code>"../"</code> are checked for existence.  This means that we can do a "quick" validatation of
  *       links to other ref-guide files, but ignore relative links to things outside of the ref-guide --
@@ -76,7 +86,7 @@ import org.jsoup.select.Elements;
  *       <em>also</em> check relative links where the path starts with <code>"../"</code>
  *    </p>
  *  </li>
- *  <li><b>-bare-bones</b>
+ *  <li><b>-bare-bones</b><br/>
  *    <p>By default, this tool assumes it is analyzing Jekyll generated files.  If this option is specified,
  *       then it instead assumes it's checking "bare bones" HTML files...
  *    </p>
@@ -104,14 +114,14 @@ import org.jsoup.select.Elements;
  *
  * TODO: build a list of all known external links so that some other tool could (optionally) ping them all for 200 status?
  *
- * @see "https://github.com/asciidoctor/asciidoctor/issues/1865"
- * @see "https://github.com/asciidoctor/asciidoctor/issues/1866"
+ * @see https://github.com/asciidoctor/asciidoctor/issues/1865
+ * @see https://github.com/asciidoctor/asciidoctor/issues/1866
  */
 public class CheckLinksAndAnchors { // TODO: rename this class now that it does more then just links & anchors
 
   public static final class HtmlFileFilter implements FileFilter {
     public boolean accept(File pathname) {
-      return pathname.getName().toLowerCase(Locale.ROOT).endsWith("html");
+      return pathname.getName().toLowerCase().endsWith("html");
     }
   }
 
@@ -412,4 +422,5 @@ public class CheckLinksAndAnchors { // TODO: rename this class now that it does 
     }
     return s.substring(0, 17) + "...";
   }
+
 }

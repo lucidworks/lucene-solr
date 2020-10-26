@@ -33,7 +33,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.core.StopFilterFactory;
-import org.apache.lucene.analysis.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queries.function.FunctionQuery;
 import org.apache.lucene.queries.function.FunctionScoreQuery;
@@ -49,6 +49,7 @@ import org.apache.lucene.search.MultiPhraseQuery;
 import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.spans.SpanQuery;
+import org.apache.lucene.util.Version;
 import org.apache.solr.analysis.TokenizerChain;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
@@ -799,12 +800,6 @@ public class ExtendedDismaxQParser extends QParser {
         }
         
         if (inString == 0) {
-          if (!ignoreQuote && ch == '"') {
-            // end of the token if we aren't in a string, backing
-            // up the position.
-            pos--;
-            break;
-          }
           switch (ch) {
             case '!':
             case '(':
@@ -1527,7 +1522,7 @@ public class ExtendedDismaxQParser extends QParser {
     private DynamicField[] dynamicUserFields;
     private DynamicField[] negativeDynamicUserFields;
     
-    UserFields(Map<String, Float> ufm) {
+    UserFields(Map<String, Float> ufm, boolean forbidSubQueryByDefault) {
       userFieldsMap = ufm;
       if (0 == userFieldsMap.size()) {
         userFieldsMap.put("*", null);
@@ -1545,7 +1540,7 @@ public class ExtendedDismaxQParser extends QParser {
         }
       }
       // unless "_query_" was expressly allowed, we forbid it.
-      if (!userFieldsMap.containsKey(MagicFieldName.QUERY.field)) {
+      if (forbidSubQueryByDefault && !userFieldsMap.containsKey(MagicFieldName.QUERY.field)) {
         userFieldsMap.put("-" + MagicFieldName.QUERY.field, null);
       }
       Collections.sort(dynUserFields);
@@ -1699,7 +1694,8 @@ public class ExtendedDismaxQParser extends QParser {
       solrParams = SolrParams.wrapDefaults(localParams, params);
       schema = req.getSchema();
       minShouldMatch = DisMaxQParser.parseMinShouldMatch(schema, solrParams); // req.getSearcher() here causes searcher refcount imbalance
-      userFields = new UserFields(U.parseFieldBoosts(solrParams.getParams(DMP.UF)));
+      final boolean forbidSubQueryByDefault = req.getCore().getSolrConfig().luceneMatchVersion.onOrAfter(Version.LUCENE_7_2_0);
+      userFields = new UserFields(U.parseFieldBoosts(solrParams.getParams(DMP.UF)), forbidSubQueryByDefault);
       try {
         queryFields = DisMaxQParser.parseQueryFields(schema, solrParams);  // req.getSearcher() here causes searcher refcount imbalance
       } catch (SyntaxError e) {
@@ -1730,7 +1726,9 @@ public class ExtendedDismaxQParser extends QParser {
       
       altQ = solrParams.get( DisMaxParams.ALTQ );
 
-      lowercaseOperators = solrParams.getBool(DMP.LOWERCASE_OPS, false);
+      // lowercaseOperators defaults to true for luceneMatchVersion < 7.0 and to false for >= 7.0
+      lowercaseOperators = solrParams.getBool(DMP.LOWERCASE_OPS,
+          !req.getCore().getSolrConfig().luceneMatchVersion.onOrAfter(Version.LUCENE_7_0_0));
       
       /* * * Boosting Query * * */
       boostParams = solrParams.getParams(DisMaxParams.BQ);

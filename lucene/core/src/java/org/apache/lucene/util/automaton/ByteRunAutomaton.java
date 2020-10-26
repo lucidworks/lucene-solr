@@ -41,6 +41,6 @@ public class ByteRunAutomaton extends RunAutomaton {
       p = step(p, s[i] & 0xFF);
       if (p == -1) return false;
     }
-    return accept.get(p);
+    return accept[p];
   }
 }

@@ -76,12 +76,11 @@ import org.apache.solr.cloud.ZkController;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.QueryElevationParams;
 import org.apache.solr.common.params.SolrParams;
-import org.apache.solr.common.util.DOMUtil;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.common.util.StrUtils;
-import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.XmlConfigFile;
+import org.apache.solr.core.SolrCore;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.transform.ElevatedMarkerFactory;
 import org.apache.solr.response.transform.ExcludedMarkerFactory;
@@ -91,6 +90,7 @@ import org.apache.solr.search.QueryParsing;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.apache.solr.search.SortSpec;
 import org.apache.solr.search.grouping.GroupingSpecification;
+import org.apache.solr.util.DOMUtil;
 import org.apache.solr.util.RefCounted;
 import org.apache.solr.util.VersionedFile;
 import org.apache.solr.util.plugin.SolrCoreAware;
@@ -1150,7 +1150,7 @@ public class QueryElevationComponent extends SearchComponent implements SolrCore
 
     @Override
     public FieldComparator<Integer> newComparator(String fieldName, final int numHits, int sortPos, boolean reversed) {
-      return new SimpleFieldComparator<>() {
+      return new SimpleFieldComparator<Integer>() {
         final int[] values = new int[numHits];
         int bottomVal;
         int topVal;

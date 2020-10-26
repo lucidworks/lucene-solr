@@ -28,6 +28,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -43,9 +44,9 @@ import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.custom.CustomAnalyzer;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
-import org.apache.lucene.analysis.CharFilterFactory;
-import org.apache.lucene.analysis.TokenFilterFactory;
-import org.apache.lucene.analysis.TokenizerFactory;
+import org.apache.lucene.analysis.util.CharFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenizerFactory;
 import org.apache.lucene.luke.models.LukeException;
 import org.apache.lucene.luke.util.reflection.ClassScanner;
 import org.apache.lucene.util.AttributeImpl;
@@ -96,7 +97,7 @@ public final class AnalysisImpl implements Analysis {
         } catch (NoSuchMethodException e) {
         }
       }
-      presetAnalyzerTypes = List.copyOf(types);
+      presetAnalyzerTypes = Collections.unmodifiableList(types);
     }
     return presetAnalyzerTypes;
   }
@@ -175,7 +176,7 @@ public final class AnalysisImpl implements Analysis {
 
     try {
       Class<? extends Analyzer> clazz = Class.forName(analyzerType).asSubclass(Analyzer.class);
-      this.analyzer = clazz.getConstructor().newInstance();
+      this.analyzer = clazz.newInstance();
       return analyzer;
     } catch (ReflectiveOperationException e) {
       throw new LukeException(String.format(Locale.ENGLISH, "Failed to instantiate class: %s", analyzerType), e);

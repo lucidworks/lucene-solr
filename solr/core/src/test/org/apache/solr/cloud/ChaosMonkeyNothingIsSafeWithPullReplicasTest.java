@@ -250,7 +250,7 @@ public class ChaosMonkeyNothingIsSafeWithPullReplicasTest extends AbstractFullDi
       ChaosMonkey.wait(2000, DEFAULT_COLLECTION, zkStateReader);
       
       // wait until there are no recoveries...
-      waitForThingsToLevelOut();
+      waitForThingsToLevelOut(Integer.MAX_VALUE);//Math.round((runLength / 1000.0f / 3.0f)));
       
       // make sure we again have leaders for each shard
       for (int j = 1; j < sliceCount; j++) {
@@ -308,8 +308,9 @@ public class ChaosMonkeyNothingIsSafeWithPullReplicasTest extends AbstractFullDi
       }
 
       try (CloudSolrClient client = createCloudClient("collection1", 30000)) {
+        // We don't really know how many live nodes we have at this point, so "maxShardsPerNode" needs to be > 1
         createCollection(null, "testcollection",
-              1, 1, client, null, "conf1");
+              1, 1, 10, client, null, "conf1"); 
       }
       List<Integer> numShardsNumReplicas = new ArrayList<>(2);
       numShardsNumReplicas.add(1);

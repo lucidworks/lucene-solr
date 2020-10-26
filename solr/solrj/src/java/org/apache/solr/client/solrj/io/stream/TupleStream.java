@@ -22,6 +22,7 @@ import java.io.PrintWriter;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.Map;
@@ -50,7 +51,7 @@ import org.apache.solr.common.params.SolrParams;
 public abstract class TupleStream implements Closeable, Serializable, MapWriter {
 
   private static final long serialVersionUID = 1;
-
+  
   private UUID streamNodeId = UUID.randomUUID();
 
   public TupleStream() {
@@ -67,9 +68,9 @@ public abstract class TupleStream implements Closeable, Serializable, MapWriter 
   public abstract Tuple read() throws IOException;
 
   public abstract StreamComparator getStreamSort();
-
+  
   public abstract Explanation toExplanation(StreamFactory factory) throws IOException;
-
+  
   public int getCost() {
     return 0;
   }
@@ -140,33 +141,19 @@ public abstract class TupleStream implements Closeable, Serializable, MapWriter 
       shards = shardsMap.get(collection);
     } else {
       //SolrCloud Sharding
-      SolrClientCache solrClientCache = (streamContext != null ? streamContext.getSolrClientCache() : null);
-      final SolrClientCache localSolrClientCache; // tracks any locally allocated cache that needs to be closed locally
-      if (solrClientCache == null) { // streamContext was null OR streamContext.getSolrClientCache() returned null
-        solrClientCache = localSolrClientCache = new SolrClientCache();
-      } else {
-        localSolrClientCache = null;
-      }
-      CloudSolrClient cloudSolrClient = solrClientCache.getCloudSolrClient(zkHost);
+      CloudSolrClient cloudSolrClient =
+          Optional.ofNullable(streamContext.getSolrClientCache()).orElseGet(SolrClientCache::new).getCloudSolrClient(zkHost);
       ZkStateReader zkStateReader = cloudSolrClient.getZkStateReader();
       ClusterState clusterState = zkStateReader.getClusterState();
       Slice[] slices = CloudSolrStream.getSlices(collection, zkStateReader, true);
       Set<String> liveNodes = clusterState.getLiveNodes();
 
 
-      RequestReplicaListTransformerGenerator requestReplicaListTransformerGenerator;
-      final ModifiableSolrParams solrParams;
-      if (streamContext != null) {
-        solrParams = new ModifiableSolrParams(streamContext.getRequestParams());
-        requestReplicaListTransformerGenerator = streamContext.getRequestReplicaListTransformerGenerator();
-      } else {
-        solrParams = new ModifiableSolrParams();
-        requestReplicaListTransformerGenerator = null;
-      }
-      if (requestReplicaListTransformerGenerator == null) {
-        requestReplicaListTransformerGenerator = new RequestReplicaListTransformerGenerator();
-      }
+      ModifiableSolrParams solrParams = new ModifiableSolrParams(streamContext.getRequestParams());
       solrParams.add(requestParams);
+
+      RequestReplicaListTransformerGenerator requestReplicaListTransformerGenerator =
+          Optional.ofNullable(streamContext.getRequestReplicaListTransformerGenerator()).orElseGet(RequestReplicaListTransformerGenerator::new);
 
       ReplicaListTransformer replicaListTransformer = requestReplicaListTransformerGenerator.getReplicaListTransformer(solrParams);
 
@@ -182,15 +169,6 @@ public abstract class TupleStream implements Closeable, Serializable, MapWriter 
         if (sortedReplicas.size() > 0) {
           shards.add(sortedReplicas.get(0).getCoreUrl());
         }
-      }
-      if (localSolrClientCache != null) {
-        localSolrClientCache.close();
-      }
-    }
-    if (streamContext != null) {
-      Object core = streamContext.get("core");
-      if (streamContext.isLocal() && core != null) {
-        shards.removeIf(shardUrl -> !shardUrl.contains((CharSequence) core));
       }
     }
 

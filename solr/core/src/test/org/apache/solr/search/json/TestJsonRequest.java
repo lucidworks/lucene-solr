@@ -26,8 +26,8 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.search.CaffeineCache;
 import org.apache.solr.search.DocSet;
+import org.apache.solr.search.FastLRUCache;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -35,12 +35,12 @@ import org.junit.Test;
 import static org.hamcrest.core.StringContains.containsString;
 
 
+@SuppressWarnings("deprecation")
 @LuceneTestCase.SuppressCodecs({"Lucene3x","Lucene40","Lucene41","Lucene42","Lucene45","Appending"})
 public class TestJsonRequest extends SolrTestCaseHS {
 
   private static SolrInstances servers;  // for distributed testing
 
-  @SuppressWarnings("deprecation")
   @BeforeClass
   public static void beforeTests() throws Exception {
     systemSetPropertySolrDisableShardsWhitelist("true");
@@ -54,7 +54,6 @@ public class TestJsonRequest extends SolrTestCaseHS {
     }
   }
 
-  @SuppressWarnings("deprecation")
   @AfterClass
   public static void afterTests() throws Exception {
     JSONTestUtil.failRepeatedKeys = false;
@@ -449,7 +448,7 @@ public class TestJsonRequest extends SolrTestCaseHS {
     if(client.getClientProvider()==null) {
       final SolrQueryRequest request = req();
       try {
-        final CaffeineCache<Query,DocSet> filterCache = (CaffeineCache<Query,DocSet>) request.getSearcher().getFilterCache();
+        final FastLRUCache<Query,DocSet> filterCache = (FastLRUCache<Query,DocSet>) request.getSearcher().getFilterCache();
         filterCache.clear();
         final TermQuery catA = new TermQuery(new Term("cat_s", "A"));
         assertNull("cache is empty",filterCache.get(catA));

@@ -39,6 +39,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
@@ -48,7 +49,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.Adler32;
@@ -69,6 +69,7 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.RateLimiter;
+import org.apache.lucene.util.Version;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.params.CommonParams;
@@ -96,6 +97,7 @@ import org.apache.solr.metrics.SolrMetricsContext;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.search.SolrIndexSearcher;
+import org.apache.solr.update.CdcrUpdateLog;
 import org.apache.solr.update.SolrIndexWriter;
 import org.apache.solr.update.VersionInfo;
 import org.apache.solr.common.util.SolrNamedThreadFactory;
@@ -108,17 +110,18 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 import static org.apache.solr.common.params.CommonParams.NAME;
+import static org.apache.solr.core.XmlConfigFile.assertWarnOrFail;
 
 /**
- * <p> A Handler which provides a REST API for replication and serves replication requests from Followers. </p>
- * <p>When running on the leader, it provides the following commands <ol> <li>Get the current replicable index version
+ * <p> A Handler which provides a REST API for replication and serves replication requests from Slaves. </p>
+ * <p>When running on the master, it provides the following commands <ol> <li>Get the current replicable index version
  * (command=indexversion)</li> <li>Get the list of files for a given index version
  * (command=filelist&amp;indexversion=&lt;VERSION&gt;)</li> <li>Get full or a part (chunk) of a given index or a config
  * file (command=filecontent&amp;file=&lt;FILE_NAME&gt;) You can optionally specify an offset and length to get that
  * chunk of the file. You can request a configuration file by using "cf" parameter instead of the "file" parameter.</li>
- * <li>Get status/statistics (command=details)</li> </ol> <p>When running on the follower, it provides the following
+ * <li>Get status/statistics (command=details)</li> </ol> <p>When running on the slave, it provides the following
  * commands <ol> <li>Perform an index fetch now (command=snappull)</li> <li>Get status/statistics (command=details)</li>
- * <li>Abort an index fetch (command=abort)</li> <li>Enable/Disable polling the leader for new versions (command=enablepoll
+ * <li>Abort an index fetch (command=abort)</li> <li>Enable/Disable polling the master for new versions (command=enablepoll
  * or command=disablepoll)</li> </ol>
  *
  *
@@ -184,9 +187,9 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
 
   private NamedList<String> confFileNameAlias = new NamedList<>();
 
-  private boolean isLeader = false;
+  private boolean isMaster = false;
 
-  private boolean isFollower = false;
+  private boolean isSlave = false;
 
   private boolean replicateOnOptimize = false;
 
@@ -239,7 +242,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
     final SolrParams solrParams = req.getParams();
     String command = solrParams.required().get(COMMAND);
 
-    // This command does not give the current index version of the leader
+    // This command does not give the current index version of the master
     // It gives the current 'replicateable' index version
     if (command.equals(CMD_INDEX_VERSION)) {
       IndexCommit commitPoint = indexCommitPoint;  // make a copy so it won't change
@@ -290,12 +293,12 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
       if (abortFetch()) {
         rsp.add(STATUS, OK_STATUS);
       } else {
-        reportErrorOnResponse(rsp, "No follower configured", null);
+        reportErrorOnResponse(rsp, "No slave configured", null);
       }
     } else if (command.equals(CMD_SHOW_COMMITS)) {
       populateCommitInfo(rsp);
     } else if (command.equals(CMD_DETAILS)) {
-      getReplicationDetails(rsp, getBoolWithBackwardCompatibility(solrParams, "follower", "slave", true));
+      getReplicationDetails(rsp, solrParams.getBool("slave", true));
     } else if (CMD_ENABLE_REPL.equalsIgnoreCase(command)) {
       replicationEnabled.set(true);
       rsp.add(STATUS, OK_STATUS);
@@ -303,36 +306,6 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
       replicationEnabled.set(false);
       rsp.add(STATUS, OK_STATUS);
     }
-  }
-  
-  static boolean getBoolWithBackwardCompatibility(SolrParams params, String preferredKey, String alternativeKey, boolean defaultValue) {
-    Boolean value = params.getBool(preferredKey);
-    if (value != null) {
-      return value;
-    }
-    return params.getBool(alternativeKey, defaultValue);
-  }
-  
-  @SuppressWarnings("unchecked")
-  static <T> T getObjectWithBackwardCompatibility(SolrParams params, String preferredKey, String alternativeKey, T defaultValue) {
-    Object value = params.get(preferredKey);
-    if (value != null) {
-      return (T) value;
-    }
-    value = params.get(alternativeKey);
-    if (value != null) {
-      return (T) value;
-    }
-    return defaultValue;
-  }
-  
-  @SuppressWarnings("unchecked")
-  static <T> T getObjectWithBackwardCompatibility(NamedList<?> params, String preferredKey, String alternativeKey) {
-    Object value = params.get(preferredKey);
-    if (value != null) {
-      return (T) value;
-    }
-    return (T) params.get(alternativeKey);
   }
 
   private void reportErrorOnResponse(SolrQueryResponse response, String message, Exception e) {
@@ -358,7 +331,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
     params.required().get(NAME);
 
     String location = params.get(CoreAdminParams.BACKUP_LOCATION);
-    core.getCoreContainer().assertPathAllowed(location == null ? null : Path.of(location));
+    core.getCoreContainer().assertPathAllowed(location == null ? null : Paths.get(location));
     SnapShooter snapShooter = new SnapShooter(core, location, params.get(NAME));
     snapShooter.validateDeleteSnapshot();
     snapShooter.deleteSnapAsync(this);
@@ -366,9 +339,9 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
   }
 
   private void fetchIndex(SolrParams solrParams, SolrQueryResponse rsp) throws InterruptedException {
-    String leaderUrl = getObjectWithBackwardCompatibility(solrParams, LEADER_URL, LEGACY_LEADER_URL, null);
-    if (!isFollower && leaderUrl == null) {
-      reportErrorOnResponse(rsp, "No follower configured or no 'leaderUrl' specified", null);
+    String masterUrl = solrParams.get(MASTER_URL);
+    if (!isSlave && masterUrl == null) {
+      reportErrorOnResponse(rsp, "No slave configured or no 'masterUrl' specified", null);
       return;
     }
     final SolrParams paramsCopy = new ModifiableSolrParams(solrParams);
@@ -435,7 +408,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
   private volatile IndexFetcher currentIndexFetcher;
 
   public IndexFetchResult doFetch(SolrParams solrParams, boolean forceReplication) {
-    String leaderUrl = solrParams == null ? null : ReplicationHandler.getObjectWithBackwardCompatibility(solrParams, LEADER_URL, LEGACY_LEADER_URL, null);
+    String masterUrl = solrParams == null ? null : solrParams.get(MASTER_URL);
     if (!indexFetchLock.tryLock())
       return IndexFetchResult.LOCK_OBTAIN_FAILED;
     if (core.getCoreContainer().isShutDown()) {
@@ -443,7 +416,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
       return IndexFetchResult.CONTAINER_IS_SHUTTING_DOWN; 
     }
     try {
-      if (leaderUrl != null) {
+      if (masterUrl != null) {
         if (currentIndexFetcher != null && currentIndexFetcher != pollingIndexFetcher) {
           currentIndexFetcher.destroy();
         }
@@ -484,7 +457,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
     CoreContainer cc = core.getCoreContainer();
     BackupRepository repo = null;
     if (repoName != null) {
-      repo = cc.newBackupRepository(repoName);
+      repo = cc.newBackupRepository(Optional.of(repoName));
       location = repo.getBackupLocation(location);
       if (location == null) {
         throw new IllegalArgumentException("location is required");
@@ -593,7 +566,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
       CoreContainer cc = core.getCoreContainer();
       BackupRepository repo = null;
       if (repoName != null) {
-        repo = cc.newBackupRepository(repoName);
+        repo = cc.newBackupRepository(Optional.of(repoName));
         location = repo.getBackupLocation(location);
         if (location == null) {
           throw new IllegalArgumentException("location is required");
@@ -648,6 +621,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
     rsp.add(STATUS, OK_STATUS);
   }
 
+  @SuppressWarnings("unchecked")
   private void getFileList(SolrParams solrParams, SolrQueryResponse rsp) {
     final IndexDeletionPolicyWrapper delPol = core.getDeletionPolicy();
     final long gen = Long.parseLong(solrParams.required().get(GENERATION));
@@ -657,7 +631,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
       if (gen == -1) {
         commit = delPol.getAndSaveLatestCommit();
         if (null == commit) {
-          rsp.add(CMD_GET_FILE_LIST, Collections.emptyList());
+          rsp.add(CMD_GET_FILE_LIST, Collections.EMPTY_LIST);
           return;
         }
       } else {
@@ -730,6 +704,19 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
       }
       rsp.add(CMD_GET_FILE_LIST, result);
       
+      if (solrParams.getBool(TLOG_FILES, false)) {
+        try {
+          List<Map<String, Object>> tlogfiles = getTlogFileList(commit);
+          log.info("Adding tlog files to list: {}", tlogfiles);
+          rsp.add(TLOG_FILES, tlogfiles);
+        }
+        catch (IOException e) {
+          log.error("Unable to get tlog file names for indexCommit generation: {}", commit.getGeneration(), e);
+          reportErrorOnResponse(rsp, "unable to get tlog file names for given index generation", e);
+          return;
+        }
+      }
+      
       if (confFileNameAlias.size() < 1 || core.getCoreContainer().isZooKeeperAware())
         return;
       log.debug("Adding config files to list: {}", includeConfFiles);
@@ -746,6 +733,29 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
         delPol.releaseCommitPoint(commit);
       }
     }
+  }
+
+  /**
+   * Retrieves the list of tlog files associated to a commit point.
+   * NOTE: The commit <b>MUST</b> be reserved before calling this method
+   */
+  List<Map<String, Object>> getTlogFileList(IndexCommit commit) throws IOException {
+    long maxVersion = this.getMaxVersion(commit);
+    CdcrUpdateLog ulog = (CdcrUpdateLog) core.getUpdateHandler().getUpdateLog();
+    String[] logList = ulog.getLogList(new File(ulog.getLogDir()));
+    List<Map<String, Object>> tlogFiles = new ArrayList<>();
+    for (String fileName : logList) {
+      // filter out tlogs that are older than the current index commit generation, so that the list of tlog files is
+      // in synch with the latest index commit point
+      long startVersion = Math.abs(Long.parseLong(fileName.substring(fileName.lastIndexOf('.') + 1)));
+      if (startVersion < maxVersion) {
+        Map<String, Object> fileMeta = new HashMap<>();
+        fileMeta.put(NAME, fileName);
+        fileMeta.put(SIZE, new File(ulog.getLogDir(), fileName).length());
+        tlogFiles.add(fileMeta);
+      }
+    }
+    return tlogFiles;
   }
 
   /**
@@ -819,7 +829,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
       log.info("inside disable poll, value of pollDisabled = {}", pollDisabled);
       rsp.add(STATUS, OK_STATUS);
     } else {
-      reportErrorOnResponse(rsp, "No follower configured", null);
+      reportErrorOnResponse(rsp, "No slave configured", null);
     }
   }
 
@@ -829,7 +839,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
       log.info("inside enable poll, value of pollDisabled = {}", pollDisabled);
       rsp.add(STATUS, OK_STATUS);
     } else {
-      reportErrorOnResponse(rsp, "No follower configured", null);
+      reportErrorOnResponse(rsp, "No slave configured", null);
     }
   }
 
@@ -864,7 +874,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
 
   @Override
   public String getDescription() {
-    return "ReplicationHandler provides replication of index and configuration files from Leader to Followers";
+    return "ReplicationHandler provides replication of index and configuration files from Master to Slaves";
   }
 
   /**
@@ -879,26 +889,25 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
     }
   }
 
-  //TODO: Handle compatibility in 8.x
   @Override
   public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
     super.initializeMetrics(parentContext, scope);
-    solrMetricsContext.gauge(() -> (core != null && !core.isClosed() ? NumberUtils.readableSize(core.getIndexSize()) : ""),
+    solrMetricsContext.gauge(this,  () -> (core != null && !core.isClosed() ? NumberUtils.readableSize(core.getIndexSize()) : ""),
         true, "indexSize", getCategory().toString(), scope);
-    solrMetricsContext.gauge(() -> (core != null && !core.isClosed() ? getIndexVersion().toString() : ""),
+    solrMetricsContext.gauge(this, () -> (core != null && !core.isClosed() ? getIndexVersion().toString() : ""),
          true, "indexVersion", getCategory().toString(), scope);
-    solrMetricsContext.gauge(() -> (core != null && !core.isClosed() ? getIndexVersion().generation : 0),
+    solrMetricsContext.gauge(this, () -> (core != null && !core.isClosed() ? getIndexVersion().generation : 0),
         true, GENERATION, getCategory().toString(), scope);
-    solrMetricsContext.gauge(() -> (core != null && !core.isClosed() ? core.getIndexDir() : ""),
+    solrMetricsContext.gauge(this, () -> (core != null && !core.isClosed() ? core.getIndexDir() : ""),
         true, "indexPath", getCategory().toString(), scope);
-    solrMetricsContext.gauge(() -> isLeader,
-         true, "isLeader", getCategory().toString(), scope);
-    solrMetricsContext.gauge(() -> isFollower,
-         true, "isFollower", getCategory().toString(), scope);
-    final MetricsMap fetcherMap = new MetricsMap(map -> {
+    solrMetricsContext.gauge(this, () -> isMaster,
+         true, "isMaster", getCategory().toString(), scope);
+    solrMetricsContext.gauge(this, () -> isSlave,
+         true, "isSlave", getCategory().toString(), scope);
+    final MetricsMap fetcherMap = new MetricsMap((detailed, map) -> {
       IndexFetcher fetcher = currentIndexFetcher;
       if (fetcher != null) {
-        map.put(LEADER_URL, fetcher.getLeaderUrl());
+        map.put(MASTER_URL, fetcher.getMasterUrl());
         if (getPollInterval() != null) {
           map.put(POLL_INTERVAL, getPollInterval());
         }
@@ -912,15 +921,23 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
           map.put("downloadSpeed", val / elapsed);
         }
         Properties props = loadReplicationProperties();
-        addReplicationProperties(map::putNoEx, props);
+        addVal(map, IndexFetcher.PREVIOUS_CYCLE_TIME_TAKEN, props, Long.class);
+        addVal(map, IndexFetcher.INDEX_REPLICATED_AT, props, Date.class);
+        addVal(map, IndexFetcher.CONF_FILES_REPLICATED_AT, props, Date.class);
+        addVal(map, IndexFetcher.REPLICATION_FAILED_AT, props, Date.class);
+        addVal(map, IndexFetcher.TIMES_FAILED, props, Integer.class);
+        addVal(map, IndexFetcher.TIMES_INDEX_REPLICATED, props, Integer.class);
+        addVal(map, IndexFetcher.LAST_CYCLE_BYTES_DOWNLOADED, props, Long.class);
+        addVal(map, IndexFetcher.TIMES_CONFIG_REPLICATED, props, Integer.class);
+        addVal(map, IndexFetcher.CONF_FILES_REPLICATED, props, String.class);
       }
     });
-    solrMetricsContext.gauge(fetcherMap, true, "fetcher", getCategory().toString(), scope);
-    solrMetricsContext.gauge(() -> isLeader && includeConfFiles != null ? includeConfFiles : "",
+    solrMetricsContext.gauge(this , fetcherMap, true, "fetcher", getCategory().toString(), scope);
+    solrMetricsContext.gauge(this, () -> isMaster && includeConfFiles != null ? includeConfFiles : "",
          true, "confFilesToReplicate", getCategory().toString(), scope);
-    solrMetricsContext.gauge(() -> isLeader ? getReplicateAfterStrings() : Collections.<String>emptyList(),
+    solrMetricsContext.gauge(this, () -> isMaster ? getReplicateAfterStrings() : Collections.<String>emptyList(),
         true, REPLICATE_AFTER, getCategory().toString(), scope);
-    solrMetricsContext.gauge( () -> isLeader && replicationEnabled.get(),
+    solrMetricsContext.gauge(this,  () -> isMaster && replicationEnabled.get(),
         true, "replicationEnabled", getCategory().toString(), scope);
   }
 
@@ -928,65 +945,76 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
   /**
    * Used for showing statistics and progress information.
    */
-  private NamedList<Object> getReplicationDetails(SolrQueryResponse rsp, boolean showFollowerDetails) {
+  private NamedList<Object> getReplicationDetails(SolrQueryResponse rsp, boolean showSlaveDetails) {
     NamedList<Object> details = new SimpleOrderedMap<>();
-    NamedList<Object> leader = new SimpleOrderedMap<>();
-    NamedList<Object> follower = new SimpleOrderedMap<>();
+    NamedList<Object> master = new SimpleOrderedMap<>();
+    NamedList<Object> slave = new SimpleOrderedMap<>();
 
     details.add("indexSize", NumberUtils.readableSize(core.getIndexSize()));
     details.add("indexPath", core.getIndexDir());
     details.add(CMD_SHOW_COMMITS, getCommits());
-    details.add("isLeader", String.valueOf(isLeader));
-    details.add("isFollower", String.valueOf(isFollower));
+    details.add("isMaster", String.valueOf(isMaster));
+    details.add("isSlave", String.valueOf(isSlave));
     CommitVersionInfo vInfo = getIndexVersion();
     details.add("indexVersion", null == vInfo ? 0 : vInfo.version);
     details.add(GENERATION, null == vInfo ? 0 : vInfo.generation);
 
     IndexCommit commit = indexCommitPoint;  // make a copy so it won't change
 
-    if (isLeader) {
-      if (includeConfFiles != null) leader.add(CONF_FILES, includeConfFiles);
-      leader.add(REPLICATE_AFTER, getReplicateAfterStrings());
-      leader.add("replicationEnabled", String.valueOf(replicationEnabled.get()));
+    if (isMaster) {
+      if (includeConfFiles != null) master.add(CONF_FILES, includeConfFiles);
+      master.add(REPLICATE_AFTER, getReplicateAfterStrings());
+      master.add("replicationEnabled", String.valueOf(replicationEnabled.get()));
     }
 
-    if (isLeader && commit != null) {
+    if (isMaster && commit != null) {
       CommitVersionInfo repCommitInfo = CommitVersionInfo.build(commit);
-      leader.add("replicableVersion", repCommitInfo.version);
-      leader.add("replicableGeneration", repCommitInfo.generation);
+      master.add("replicableVersion", repCommitInfo.version);
+      master.add("replicableGeneration", repCommitInfo.generation);
     }
 
     IndexFetcher fetcher = currentIndexFetcher;
     if (fetcher != null) {
       Properties props = loadReplicationProperties();
-      if (showFollowerDetails) {
+      if (showSlaveDetails) {
         try {
           @SuppressWarnings({"rawtypes"})
           NamedList nl = fetcher.getDetails();
-          follower.add("leaderDetails", nl.get(CMD_DETAILS));
+          slave.add("masterDetails", nl.get(CMD_DETAILS));
         } catch (Exception e) {
           log.warn(
-              "Exception while invoking 'details' method for replication on leader ",
+              "Exception while invoking 'details' method for replication on master ",
               e);
-          follower.add(ERR_STATUS, "invalid_leader");
+          slave.add(ERR_STATUS, "invalid_master");
         }
       }
-      follower.add(LEADER_URL, fetcher.getLeaderUrl());
+      slave.add(MASTER_URL, fetcher.getMasterUrl());
       if (getPollInterval() != null) {
-        follower.add(POLL_INTERVAL, getPollInterval());
+        slave.add(POLL_INTERVAL, getPollInterval());
       }
       Date nextScheduled = getNextScheduledExecTime();
       if (nextScheduled != null && !isPollingDisabled()) {
-        follower.add(NEXT_EXECUTION_AT, nextScheduled.toString());
+        slave.add(NEXT_EXECUTION_AT, nextScheduled.toString());
       } else if (isPollingDisabled()) {
-        follower.add(NEXT_EXECUTION_AT, "Polling disabled");
+        slave.add(NEXT_EXECUTION_AT, "Polling disabled");
       }
-      addReplicationProperties(follower::add, props);
+      addVal(slave, IndexFetcher.INDEX_REPLICATED_AT, props, Date.class);
+      addVal(slave, IndexFetcher.INDEX_REPLICATED_AT_LIST, props, List.class);
+      addVal(slave, IndexFetcher.REPLICATION_FAILED_AT_LIST, props, List.class);
+      addVal(slave, IndexFetcher.TIMES_INDEX_REPLICATED, props, Integer.class);
+      addVal(slave, IndexFetcher.CONF_FILES_REPLICATED, props, Integer.class);
+      addVal(slave, IndexFetcher.TIMES_CONFIG_REPLICATED, props, Integer.class);
+      addVal(slave, IndexFetcher.CONF_FILES_REPLICATED_AT, props, Integer.class);
+      addVal(slave, IndexFetcher.LAST_CYCLE_BYTES_DOWNLOADED, props, Long.class);
+      addVal(slave, IndexFetcher.TIMES_FAILED, props, Integer.class);
+      addVal(slave, IndexFetcher.REPLICATION_FAILED_AT, props, Date.class);
+      addVal(slave, IndexFetcher.PREVIOUS_CYCLE_TIME_TAKEN, props, Long.class);
+      addVal(slave, IndexFetcher.CLEARED_LOCAL_IDX, props, Long.class);
 
-      follower.add("currentDate", new Date().toString());
-      follower.add("isPollingDisabled", String.valueOf(isPollingDisabled()));
+      slave.add("currentDate", new Date().toString());
+      slave.add("isPollingDisabled", String.valueOf(isPollingDisabled()));
       boolean isReplicating = isReplicating();
-      follower.add("isReplicating", String.valueOf(isReplicating));
+      slave.add("isReplicating", String.valueOf(isReplicating));
       if (isReplicating) {
         try {
           long bytesToDownload = 0;
@@ -1002,9 +1030,9 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
             bytesToDownload += (Long) file.get(SIZE);
           }
 
-          follower.add("filesToDownload", filesToDownload);
-          follower.add("numFilesToDownload", String.valueOf(filesToDownload.size()));
-          follower.add("bytesToDownload", NumberUtils.readableSize(bytesToDownload));
+          slave.add("filesToDownload", filesToDownload);
+          slave.add("numFilesToDownload", String.valueOf(filesToDownload.size()));
+          slave.add("bytesToDownload", NumberUtils.readableSize(bytesToDownload));
 
           long bytesDownloaded = 0;
           List<String> filesDownloaded = new ArrayList<>();
@@ -1033,17 +1061,17 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
                 percentDownloaded = (currFileSizeDownloaded * 100) / currFileSize;
             }
           }
-          follower.add("filesDownloaded", filesDownloaded);
-          follower.add("numFilesDownloaded", String.valueOf(filesDownloaded.size()));
+          slave.add("filesDownloaded", filesDownloaded);
+          slave.add("numFilesDownloaded", String.valueOf(filesDownloaded.size()));
 
           long estimatedTimeRemaining = 0;
 
           Date replicationStartTimeStamp = fetcher.getReplicationStartTimeStamp();
           if (replicationStartTimeStamp != null) {
-            follower.add("replicationStartTime", replicationStartTimeStamp.toString());
+            slave.add("replicationStartTime", replicationStartTimeStamp.toString());
           }
           long elapsed = fetcher.getReplicationTimeElapsed();
-          follower.add("timeElapsed", String.valueOf(elapsed) + "s");
+          slave.add("timeElapsed", String.valueOf(elapsed) + "s");
 
           if (bytesDownloaded > 0)
             estimatedTimeRemaining = ((bytesToDownload - bytesDownloaded) * elapsed) / bytesDownloaded;
@@ -1054,24 +1082,24 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
           if (elapsed > 0)
             downloadSpeed = (bytesDownloaded / elapsed);
           if (currFile != null)
-            follower.add("currentFile", currFile);
-          follower.add("currentFileSize", NumberUtils.readableSize(currFileSize));
-          follower.add("currentFileSizeDownloaded", NumberUtils.readableSize(currFileSizeDownloaded));
-          follower.add("currentFileSizePercent", String.valueOf(percentDownloaded));
-          follower.add("bytesDownloaded", NumberUtils.readableSize(bytesDownloaded));
-          follower.add("totalPercent", String.valueOf(totalPercent));
-          follower.add("timeRemaining", String.valueOf(estimatedTimeRemaining) + "s");
-          follower.add("downloadSpeed", NumberUtils.readableSize(downloadSpeed));
+            slave.add("currentFile", currFile);
+          slave.add("currentFileSize", NumberUtils.readableSize(currFileSize));
+          slave.add("currentFileSizeDownloaded", NumberUtils.readableSize(currFileSizeDownloaded));
+          slave.add("currentFileSizePercent", String.valueOf(percentDownloaded));
+          slave.add("bytesDownloaded", NumberUtils.readableSize(bytesDownloaded));
+          slave.add("totalPercent", String.valueOf(totalPercent));
+          slave.add("timeRemaining", String.valueOf(estimatedTimeRemaining) + "s");
+          slave.add("downloadSpeed", NumberUtils.readableSize(downloadSpeed));
         } catch (Exception e) {
           log.error("Exception while writing replication details: ", e);
         }
       }
     }
 
-    if (isLeader)
-      details.add("leader", leader);
-    if (follower.size() > 0)
-      details.add("follower", follower);
+    if (isMaster)
+      details.add("master", master);
+    if (slave.size() > 0)
+      details.add("slave", slave);
 
     @SuppressWarnings({"rawtypes"})
     NamedList snapshotStats = snapShootDetails;
@@ -1085,25 +1113,17 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
     return details;
   }
 
-  private void addReplicationProperties(BiConsumer<String, Object> consumer, Properties props) {
-    addVal(consumer, IndexFetcher.INDEX_REPLICATED_AT, props, Date.class);
-    addVal(consumer, IndexFetcher.INDEX_REPLICATED_AT_LIST, props, List.class);
-    addVal(consumer, IndexFetcher.REPLICATION_FAILED_AT_LIST, props, List.class);
-    addVal(consumer, IndexFetcher.TIMES_INDEX_REPLICATED, props, Integer.class);
-    addVal(consumer, IndexFetcher.CONF_FILES_REPLICATED, props, String.class);
-    addVal(consumer, IndexFetcher.TIMES_CONFIG_REPLICATED, props, Integer.class);
-    addVal(consumer, IndexFetcher.CONF_FILES_REPLICATED_AT, props, Date.class);
-    addVal(consumer, IndexFetcher.LAST_CYCLE_BYTES_DOWNLOADED, props, Long.class);
-    addVal(consumer, IndexFetcher.TIMES_FAILED, props, Integer.class);
-    addVal(consumer, IndexFetcher.REPLICATION_FAILED_AT, props, Date.class);
-    addVal(consumer, IndexFetcher.PREVIOUS_CYCLE_TIME_TAKEN, props, Long.class);
-    addVal(consumer, IndexFetcher.CLEARED_LOCAL_IDX, props, Boolean.class);
-  }
-
-  private void addVal(BiConsumer<String, Object> consumer, String key, Properties props, @SuppressWarnings({"rawtypes"})Class clzz) {
+  private void addVal(NamedList<Object> nl, String key, Properties props, @SuppressWarnings({"rawtypes"})Class clzz) {
     Object val = formatVal(key, props, clzz);
     if (val != null) {
-      consumer.accept(key, val);
+      nl.add(key, val);
+    }
+  }
+
+  private void addVal(Map<String, Object> map, String key, Properties props, @SuppressWarnings({"rawtypes"})Class clzz) {
+    Object val = formatVal(key, props, clzz);
+    if (val != null) {
+      map.put(key, val);
     }
   }
 
@@ -1124,22 +1144,6 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
         l.add(new Date(Long.parseLong(s1)).toString());
       }
       return l;
-    } else if (clzz == Long.class) {
-      try {
-        Long l = Long.parseLong(s);
-        return l;
-      } catch (NumberFormatException e) {
-        return null;
-      }
-    } else if (clzz == Integer.class) {
-      try {
-        Integer i = Integer.parseInt(s);
-        return i;
-      } catch (NumberFormatException e) {
-        return null;
-      }
-    } else if (clzz == Boolean.class) {
-      return Boolean.parseBoolean(s);
     } else {
       return s;
     }
@@ -1223,16 +1227,17 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
     // Randomize initial delay, with a minimum of 1ms
     long initialDelayNs = new Random().nextLong() % pollIntervalNs
         + TimeUnit.NANOSECONDS.convert(1, TimeUnit.MILLISECONDS);
-    executorService.scheduleWithFixedDelay(task, initialDelayNs, pollIntervalNs, TimeUnit.NANOSECONDS);
+    executorService.scheduleAtFixedRate(task, initialDelayNs, pollIntervalNs, TimeUnit.NANOSECONDS);
     log.info("Poll scheduled at an interval of {}ms",
         TimeUnit.MILLISECONDS.convert(pollIntervalNs, TimeUnit.NANOSECONDS));
   }
 
   @Override
-  @SuppressWarnings({"resource"})
+  @SuppressWarnings({"unchecked", "resource"})
   public void inform(SolrCore core) {
     this.core = core;
     registerCloseHook();
+    Long deprecatedReserveCommitDuration = null;
     Object nbtk = initArgs.get(NUMBER_BACKUPS_TO_KEEP_INIT_PARAM);
     if(nbtk!=null) {
       numberBackupsToKeep = Integer.parseInt(nbtk.toString());
@@ -1240,33 +1245,33 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
       numberBackupsToKeep = 0;
     }
     @SuppressWarnings({"rawtypes"})
-    NamedList follower = getObjectWithBackwardCompatibility(initArgs,  "follower",  "slave");
-    boolean enableFollower = isEnabled( follower );
-    if (enableFollower) {
-      currentIndexFetcher = pollingIndexFetcher = new IndexFetcher(follower, this, core);
-      setupPolling((String) follower.get(POLL_INTERVAL));
-      isFollower = true;
+    NamedList slave = (NamedList) initArgs.get("slave");
+    boolean enableSlave = isEnabled( slave );
+    if (enableSlave) {
+      currentIndexFetcher = pollingIndexFetcher = new IndexFetcher(slave, this, core);
+      setupPolling((String) slave.get(POLL_INTERVAL));
+      isSlave = true;
     }
     @SuppressWarnings({"rawtypes"})
-    NamedList leader = getObjectWithBackwardCompatibility(initArgs, "leader", "master");
-    boolean enableLeader = isEnabled( leader );
+    NamedList master = (NamedList) initArgs.get("master");
+    boolean enableMaster = isEnabled( master );
 
-    if (enableLeader || (enableFollower && !currentIndexFetcher.fetchFromLeader)) {
+    if (enableMaster || (enableSlave && !currentIndexFetcher.fetchFromLeader)) {
       if (core.getCoreContainer().getZkController() != null) {
         log.warn("SolrCloud is enabled for core {} but so is old-style replication. "
                 + "Make sure you intend this behavior, it usually indicates a mis-configuration. "
-                + "Leader setting is {} and follower setting is {}"
-        , core.getName(), enableLeader, enableFollower);
+                + "Master setting is {} and slave setting is {}"
+        , core.getName(), enableMaster, enableSlave);
       }
     }
 
-    if (!enableFollower && !enableLeader) {
-      enableLeader = true;
-      leader = new NamedList<>();
+    if (!enableSlave && !enableMaster) {
+      enableMaster = true;
+      master = new NamedList<>();
     }
 
-    if (enableLeader) {
-      includeConfFiles = (String) leader.get(CONF_FILES);
+    if (enableMaster) {
+      includeConfFiles = (String) master.get(CONF_FILES);
       if (includeConfFiles != null && includeConfFiles.trim().length() > 0) {
         List<String> files = Arrays.asList(includeConfFiles.split(","));
         for (String file : files) {
@@ -1278,11 +1283,11 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
         log.info("Replication enabled for following config files: {}", includeConfFiles);
       }
       @SuppressWarnings({"rawtypes"})
-      List backup = leader.getAll("backupAfter");
+      List backup = master.getAll("backupAfter");
       boolean backupOnCommit = backup.contains("commit");
       boolean backupOnOptimize = !backupOnCommit && backup.contains("optimize");
       @SuppressWarnings({"rawtypes"})
-      List replicateAfter = leader.getAll(REPLICATE_AFTER);
+      List replicateAfter = master.getAll(REPLICATE_AFTER);
       replicateOnCommit = replicateAfter.contains("commit");
       replicateOnOptimize = !replicateOnCommit && replicateAfter.contains("optimize");
 
@@ -1350,19 +1355,32 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
           if (s!=null) s.decref();
         }
       }
-      isLeader = true;
+      String reserve = (String) master.get(RESERVE);
+      if (reserve != null && !reserve.trim().equals("")) {
+        reserveCommitDuration = readIntervalMs(reserve);
+        deprecatedReserveCommitDuration = reserveCommitDuration;
+        // remove this error check & backcompat logic when Version.LUCENE_7_1_0 is removed
+        assertWarnOrFail(
+          "Beginning with Solr 7.1, master."+RESERVE + " is deprecated and should now be configured directly on the ReplicationHandler.",
+          (null == reserve),
+          core.getSolrConfig().luceneMatchVersion.onOrAfter(Version.LUCENE_7_1_0));
+      }
+      isMaster = true;
     }
 
     {
       final String reserve = (String) initArgs.get(RESERVE);
       if (reserve != null && !reserve.trim().equals("")) {
         reserveCommitDuration = readIntervalMs(reserve);
+        if (deprecatedReserveCommitDuration != null) {
+          throw new IllegalArgumentException("'master."+RESERVE+"' and '"+RESERVE+"' are mutually exclusive.");
+        }
       }
     }
     log.info("Commits will be reserved for {} ms", reserveCommitDuration);
   }
 
-  // check leader or follower is enabled
+  // check master or slave is enabled
   private boolean isEnabled( @SuppressWarnings({"rawtypes"})NamedList params ){
     if( params == null ) return false;
     Object enable = params.get( "enable" );
@@ -1612,7 +1630,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
           }
           fos.write(buf, 0, read);
           fos.flush();
-          log.debug("Wrote {} bytes for file {}", offset + read, fileName); // nowarn
+          log.debug("Wrote {} bytes for file {}", offset + read, fileName); // logOK
 
           //Pause if necessary
           maxBytesBeforePause += read;
@@ -1767,19 +1785,13 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
 
   private static final String EXCEPTION = "exception";
 
-  public static final String LEADER_URL = "leaderUrl";
-  @Deprecated
-  /** @deprecated: Only used for backwards compatibility. Use {@link #LEADER_URL} */
-  public static final String LEGACY_LEADER_URL = "masterUrl";
+  public static final String MASTER_URL = "masterUrl";
 
   public static final String FETCH_FROM_LEADER = "fetchFromLeader";
 
-  // in case of TLOG replica, if leaderVersion = zero, don't do commit
+  // in case of TLOG replica, if masterVersion = zero, don't do commit
   // otherwise updates from current tlog won't copied over properly to the new tlog, leading to data loss
-  public static final String SKIP_COMMIT_ON_LEADER_VERSION_ZERO = "skipCommitOnLeaderVersionZero";
-  @Deprecated
-  /** @deprecated: Only used for backwards compatibility. Use {@link #SKIP_COMMIT_ON_LEADER_VERSION_ZERO} */
-  public static final String LEGACY_SKIP_COMMIT_ON_LEADER_VERSION_ZERO = "skipCommitOnMasterVersionZero";
+  public static final String SKIP_COMMIT_ON_MASTER_VERSION_ZERO = "skipCommitOnMasterVersionZero";
 
   public static final String STATUS = "status";
 
@@ -1841,6 +1853,8 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
 
   public static final String CONF_FILES = "confFiles";
 
+  public static final String TLOG_FILES = "tlogFiles";
+
   public static final String REPLICATE_AFTER = "replicateAfter";
 
   public static final String FILE_STREAM = "filestream";
@@ -1875,7 +1889,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
    * Boolean param for tests that can be specified when using
    * {@link #CMD_FETCH_INDEX} to force the current request to block until
    * the fetch is complete.  <b>NOTE:</b> This param is not advised for
-   * non-test code, since the duration of the fetch for non-trivial
+   * non-test code, since the the duration of the fetch for non-trivial
    * indexes will likeley cause the request to time out.
    *
    * @lucene.internal

@@ -125,7 +125,6 @@ public class LazyDocument {
 
 
   /** 
-   * Lazy-loaded field
    * @lucene.internal 
    */
   public class LazyField implements IndexableField {

@@ -35,7 +35,6 @@ import org.apache.lucene.util.fst.ByteSequenceOutputs;
 import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.FST.Arc;
 import org.apache.lucene.util.fst.FST.BytesReader;
-import org.apache.lucene.util.fst.FSTCompiler;
 
 /**
  * Provides the ability to override any {@link KeywordAttribute} aware stemmer
@@ -204,7 +203,7 @@ public final class StemmerOverrideFilter extends TokenFilter {
      */
     public StemmerOverrideMap build() throws IOException {
       ByteSequenceOutputs outputs = ByteSequenceOutputs.getSingleton();
-      FSTCompiler<BytesRef> fstCompiler = new FSTCompiler<>(
+      org.apache.lucene.util.fst.Builder<BytesRef> builder = new org.apache.lucene.util.fst.Builder<>(
           FST.INPUT_TYPE.BYTE4, outputs);
       final int[] sort = hash.sort();
       IntsRefBuilder intsSpare = new IntsRefBuilder();
@@ -214,9 +213,9 @@ public final class StemmerOverrideFilter extends TokenFilter {
         int id = sort[i];
         BytesRef bytesRef = hash.get(id, spare);
         intsSpare.copyUTF8Bytes(bytesRef);
-        fstCompiler.add(intsSpare.get(), new BytesRef(outputValues.get(id)));
+        builder.add(intsSpare.get(), new BytesRef(outputValues.get(id)));
       }
-      return new StemmerOverrideMap(fstCompiler.compile(), ignoreCase);
+      return new StemmerOverrideMap(builder.finish(), ignoreCase);
     }
     
   }

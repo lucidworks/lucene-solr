@@ -26,17 +26,19 @@ import org.apache.lucene.util.BytesRef;
 public final class HeapPointReader implements PointReader {
   private int curRead;
   final byte[] block;
-  final BKDConfig config;
+  final int packedBytesLength;
+  final int packedBytesDocIDLength;
   final int end;
   private final HeapPointValue pointValue;
 
-  public HeapPointReader(BKDConfig config, byte[] block, int start, int end) {
+  public HeapPointReader(byte[] block, int packedBytesLength, int start, int end) {
     this.block = block;
     curRead = start-1;
     this.end = end;
-    this.config = config;
+    this.packedBytesLength = packedBytesLength;
+    this.packedBytesDocIDLength = packedBytesLength + Integer.BYTES;
     if (start < end) {
-      this.pointValue = new HeapPointValue(config, block);
+      this.pointValue = new HeapPointValue(block, packedBytesLength);
     } else {
       //no values
       this.pointValue = null;
@@ -51,7 +53,7 @@ public final class HeapPointReader implements PointReader {
 
   @Override
   public PointValue pointValue() {
-    pointValue.setOffset(curRead * config.bytesPerDoc);
+    pointValue.setOffset(curRead * packedBytesDocIDLength);
     return pointValue;
   }
 
@@ -68,10 +70,10 @@ public final class HeapPointReader implements PointReader {
     final BytesRef packedValueDocID;
     final int packedValueLength;
 
-    HeapPointValue(BKDConfig config, byte[] value) {
-      this.packedValueLength = config.packedBytesLength;
+    HeapPointValue(byte[] value, int packedValueLength) {
+      this.packedValueLength = packedValueLength;
       this.packedValue = new BytesRef(value, 0, packedValueLength);
-      this.packedValueDocID = new BytesRef(value, 0, config.bytesPerDoc);
+      this.packedValueDocID = new BytesRef(value, 0, packedValueLength + Integer.BYTES);
     }
 
     /**

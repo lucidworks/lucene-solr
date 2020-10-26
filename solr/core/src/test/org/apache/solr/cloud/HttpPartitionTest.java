@@ -127,14 +127,14 @@ public class HttpPartitionTest extends AbstractFullDistribZkTestBase {
   @Test
   // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028")
   public void test() throws Exception {
-    waitForThingsToLevelOut(30, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(30000);
 
     testDoRecoveryOnRestart();
 
     // test a 1x2 collection
     testRf2();
 
-    waitForThingsToLevelOut(30, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(30000);
 
     // now do similar for a 1x3 collection while taking 2 replicas on-and-off
     if (TEST_NIGHTLY) {
@@ -142,12 +142,12 @@ public class HttpPartitionTest extends AbstractFullDistribZkTestBase {
       testRf3();
     }
 
-    waitForThingsToLevelOut(30, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(30000);
 
     // have the leader lose its Zk session temporarily
     testLeaderZkSessionLoss();
 
-    waitForThingsToLevelOut(30, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(30000);
 
     log.info("HttpPartitionTest succeeded ... shutting down now!");
   }
@@ -159,7 +159,7 @@ public class HttpPartitionTest extends AbstractFullDistribZkTestBase {
 
       TestInjection.prepRecoveryOpPauseForever = "true:100";
       
-      createCollection(testCollectionName, "conf1", 1, 2);
+      createCollection(testCollectionName, "conf1", 1, 2, 1);
       cloudClient.setDefaultCollection(testCollectionName);
 
       sendDoc(1, 2);
@@ -211,7 +211,7 @@ public class HttpPartitionTest extends AbstractFullDistribZkTestBase {
   protected void testRf2() throws Exception {
     // create a collection that has 1 shard but 2 replicas
     String testCollectionName = "c8n_1x2";
-    createCollectionRetry(testCollectionName, "conf1", 1, 2);
+    createCollectionRetry(testCollectionName, "conf1", 1, 2, 1);
     cloudClient.setDefaultCollection(testCollectionName);
     
     sendDoc(1);
@@ -330,7 +330,7 @@ public class HttpPartitionTest extends AbstractFullDistribZkTestBase {
   protected void testRf3() throws Exception {
     // create a collection that has 1 shard but 2 replicas
     String testCollectionName = "c8n_1x3";
-    createCollectionRetry(testCollectionName, "conf1", 1, 3);
+    createCollectionRetry(testCollectionName, "conf1", 1, 3, 1);
     
     cloudClient.setDefaultCollection(testCollectionName);
     
@@ -385,7 +385,7 @@ public class HttpPartitionTest extends AbstractFullDistribZkTestBase {
   protected void testLeaderZkSessionLoss() throws Exception {
 
     String testCollectionName = "c8n_1x2_leader_session_loss";
-    createCollectionRetry(testCollectionName, "conf1", 1, 2);
+    createCollectionRetry(testCollectionName, "conf1", 1, 2, 1);
     cloudClient.setDefaultCollection(testCollectionName);
 
     sendDoc(1);
@@ -582,7 +582,7 @@ public class HttpPartitionTest extends AbstractFullDistribZkTestBase {
   }
 
   protected int getReplicaPort(Replica replica) {
-    String replicaNode = replica.getNodeName();
+    String replicaNode = replica.getNodeName();    
     String tmp = replicaNode.substring(replicaNode.indexOf(':')+1);
     if (tmp.indexOf('_') != -1)
       tmp = tmp.substring(0,tmp.indexOf('_'));

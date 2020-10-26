@@ -16,8 +16,6 @@
  */
 package org.apache.lucene.analysis.miscellaneous;
 
-import java.util.Locale;
-
 /**
  * A BreakIterator-like API for iterating over subwords in text, according to WordDelimiterGraphFilter rules.
  * @lucene.internal
@@ -115,17 +113,7 @@ public final class WordDelimiterIterator {
     this.splitOnNumerics = splitOnNumerics;
     this.stemEnglishPossessive = stemEnglishPossessive;
   }
-
-  @Override
-  public String toString() {
-    if (end == DONE) {
-      return "DONE";
-    }
-    return new String(text, current, end - current)
-        + " [" + current + "-" + end + "]"
-        + " type=" + String.format(Locale.ROOT, "%#02x", type());
-  }
-
+  
   /**
    * Advance to the next subword in the string.
    *

@@ -24,9 +24,7 @@ import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.HOUR;
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.HOUR_ENCODING;
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.INDEX_CODEC_NAME;
-import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.INDEX_EXTENSION;
-import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.META_EXTENSION;
-import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.META_VERSION_START;
+import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.INDEX_EXTENSION_PREFIX;
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.NUMERIC_DOUBLE;
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.NUMERIC_FLOAT;
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.NUMERIC_INT;
@@ -37,7 +35,6 @@ import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.TYPE_BITS;
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.TYPE_MASK;
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.VERSION_CURRENT;
-import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.VERSION_META;
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.VERSION_OFFHEAP_INDEX;
 import static org.apache.lucene.codecs.compressing.CompressingStoredFieldsWriter.VERSION_START;
 
@@ -69,7 +66,7 @@ import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BitUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IOUtils;
-import org.apache.lucene.util.LongsRef;
+import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.packed.PackedInts;
 
 /**
@@ -90,8 +87,8 @@ public final class CompressingStoredFieldsReader extends StoredFieldsReader {
   private final int numDocs;
   private final boolean merging;
   private final BlockState state;
+  private final long numChunks; // number of compressed blocks written
   private final long numDirtyChunks; // number of incomplete compressed blocks written
-  private final long numDirtyDocs; // cumulative number of missing docs in incomplete chunks
   private boolean closed;
 
   // used by clone
@@ -106,8 +103,8 @@ public final class CompressingStoredFieldsReader extends StoredFieldsReader {
     this.compressionMode = reader.compressionMode;
     this.decompressor = reader.decompressor.clone();
     this.numDocs = reader.numDocs;
+    this.numChunks = reader.numChunks;
     this.numDirtyChunks = reader.numDirtyChunks;
-    this.numDirtyDocs = reader.numDirtyDocs;
     this.merging = merging;
     this.state = new BlockState();
     this.closed = false;
@@ -123,26 +120,14 @@ public final class CompressingStoredFieldsReader extends StoredFieldsReader {
     numDocs = si.maxDoc();
 
     final String fieldsStreamFN = IndexFileNames.segmentFileName(segment, segmentSuffix, FIELDS_EXTENSION);
-    ChecksumIndexInput metaIn = null;
     try {
-      // Open the data file
+      // Open the data file and read metadata
       fieldsStream = d.openInput(fieldsStreamFN, context);
       version = CodecUtil.checkIndexHeader(fieldsStream, formatName, VERSION_START, VERSION_CURRENT, si.getId(), segmentSuffix);
       assert CodecUtil.indexHeaderLength(formatName, segmentSuffix) == fieldsStream.getFilePointer();
 
-      if (version >= VERSION_OFFHEAP_INDEX) {
-        final String metaStreamFN = IndexFileNames.segmentFileName(segment, segmentSuffix, META_EXTENSION);
-        metaIn = d.openChecksumInput(metaStreamFN, IOContext.READONCE);
-        CodecUtil.checkIndexHeader(metaIn, INDEX_CODEC_NAME + "Meta", META_VERSION_START, version, si.getId(), segmentSuffix);
-      }
-      if (version >= VERSION_META) {
-        chunkSize = metaIn.readVInt();
-        packedIntsVersion = metaIn.readVInt();
-      } else {
-        chunkSize = fieldsStream.readVInt();
-        packedIntsVersion = fieldsStream.readVInt();
-      }
-
+      chunkSize = fieldsStream.readVInt();
+      packedIntsVersion = fieldsStream.readVInt();
       decompressor = compressionMode.newDecompressor();
       this.merging = false;
       this.state = new BlockState();
@@ -178,7 +163,7 @@ public final class CompressingStoredFieldsReader extends StoredFieldsReader {
           }
         }
       } else {
-        FieldsIndexReader fieldsIndexReader = new FieldsIndexReader(d, si.name, segmentSuffix, INDEX_EXTENSION, INDEX_CODEC_NAME, si.getId(), metaIn);
+        FieldsIndexReader fieldsIndexReader = new FieldsIndexReader(d, si.name, segmentSuffix, INDEX_EXTENSION_PREFIX, INDEX_CODEC_NAME, si.getId());
         indexReader = fieldsIndexReader;
         maxPointer = fieldsIndexReader.getMaxPointer();
       }
@@ -186,32 +171,17 @@ public final class CompressingStoredFieldsReader extends StoredFieldsReader {
       this.maxPointer = maxPointer;
       this.indexReader = indexReader;
 
-      if (version >= VERSION_META) {
-        numDirtyChunks = metaIn.readVLong();
-        numDirtyDocs = metaIn.readVLong();
-      } else {
-        // Old versions of this format did not record numDirtyDocs. Since bulk
-        // merges are disabled on version increments anyway, we make no effort
-        // to get valid values of numDirtyChunks and numDirtyDocs.
-        numDirtyChunks = numDirtyDocs = -1;
-      }
-
-      if (metaIn != null) {
-        CodecUtil.checkFooter(metaIn, null);
-        metaIn.close();
+      fieldsStream.seek(maxPointer);
+      numChunks = fieldsStream.readVLong();
+      numDirtyChunks = fieldsStream.readVLong();
+      if (numDirtyChunks > numChunks) {
+        throw new CorruptIndexException("invalid chunk counts: dirty=" + numDirtyChunks + ", total=" + numChunks, fieldsStream);
       }
 
       success = true;
-    } catch (Throwable t) {
-      if (metaIn != null) {
-        CodecUtil.checkFooter(metaIn, t);
-        throw new AssertionError("unreachable");
-      } else {
-        throw t;
-      }
     } finally {
       if (!success) {
-        IOUtils.closeWhileHandlingException(this, metaIn);
+        IOUtils.closeWhileHandlingException(this);
       }
     }
   }
@@ -245,7 +215,10 @@ public final class CompressingStoredFieldsReader extends StoredFieldsReader {
         visitor.binaryField(info, data);
         break;
       case STRING:
-        visitor.stringField(info, in.readString());
+        length = in.readVInt();
+        data = new byte[length];
+        in.readBytes(data, 0, length);
+        visitor.stringField(info, data);
         break;
       case NUMERIC_INT:
         visitor.intField(info, in.readZInt());
@@ -397,23 +370,14 @@ public final class CompressingStoredFieldsReader extends StoredFieldsReader {
     // whether the block has been sliced, this happens for large documents
     private boolean sliced;
 
-    private long[] offsets = LongsRef.EMPTY_LONGS;
-    private long[] numStoredFields = LongsRef.EMPTY_LONGS;
+    private int[] offsets = IntsRef.EMPTY_INTS;
+    private int[] numStoredFields = IntsRef.EMPTY_INTS;
 
     // the start pointer at which you can read the compressed documents
     private long startPointer;
 
-    private final BytesRef spare;
-    private final BytesRef bytes;
-
-    BlockState() {
-      if (merging) {
-        spare = new BytesRef();
-        bytes = new BytesRef();
-      } else {
-        spare = bytes = null;
-      }
-    }
+    private final BytesRef spare = new BytesRef();
+    private final BytesRef bytes = new BytesRef();
 
     boolean contains(int docID) {
       return docID >= docBase && docID < docBase + chunkDocs;
@@ -467,11 +431,9 @@ public final class CompressingStoredFieldsReader extends StoredFieldsReader {
         } else if (bitsPerStoredFields > 31) {
           throw new CorruptIndexException("bitsPerStoredFields=" + bitsPerStoredFields, fieldsStream);
         } else {
-          final PackedInts.ReaderIterator it = PackedInts.getReaderIteratorNoHeader(fieldsStream, PackedInts.Format.PACKED, packedIntsVersion, chunkDocs, bitsPerStoredFields, 1024);
-          for (int i = 0; i < chunkDocs; ) {
-            final LongsRef next = it.next(Integer.MAX_VALUE);
-            System.arraycopy(next.longs, next.offset, numStoredFields, i, next.length);
-            i += next.length;
+          final PackedInts.ReaderIterator it = PackedInts.getReaderIteratorNoHeader(fieldsStream, PackedInts.Format.PACKED, packedIntsVersion, chunkDocs, bitsPerStoredFields, 1);
+          for (int i = 0; i < chunkDocs; ++i) {
+            numStoredFields[i] = (int) it.next();
           }
         }
 
@@ -486,11 +448,9 @@ public final class CompressingStoredFieldsReader extends StoredFieldsReader {
         } else if (bitsPerStoredFields > 31) {
           throw new CorruptIndexException("bitsPerLength=" + bitsPerLength, fieldsStream);
         } else {
-          final PackedInts.ReaderIterator it = PackedInts.getReaderIteratorNoHeader(fieldsStream, PackedInts.Format.PACKED, packedIntsVersion, chunkDocs, bitsPerLength, 1024);
-          for (int i = 0; i < chunkDocs; ) {
-            final LongsRef next = it.next(Integer.MAX_VALUE);
-            System.arraycopy(next.longs, next.offset, offsets, i + 1, next.length);
-            i += next.length;
+          final PackedInts.ReaderIterator it = PackedInts.getReaderIteratorNoHeader(fieldsStream, PackedInts.Format.PACKED, packedIntsVersion, chunkDocs, bitsPerLength, 1);
+          for (int i = 0; i < chunkDocs; ++i) {
+            offsets[i + 1] = (int) it.next();
           }
           for (int i = 0; i < chunkDocs; ++i) {
             offsets[i + 1] += offsets[i];
@@ -499,8 +459,8 @@ public final class CompressingStoredFieldsReader extends StoredFieldsReader {
 
         // Additional validation: only the empty document has a serialized length of 0
         for (int i = 0; i < chunkDocs; ++i) {
-          final long len = offsets[i + 1] - offsets[i];
-          final long storedFields = numStoredFields[i];
+          final int len = offsets[i + 1] - offsets[i];
+          final int storedFields = numStoredFields[i];
           if ((len == 0) != (storedFields == 0)) {
             throw new CorruptIndexException("length=" + len + ", numStoredFields=" + storedFields, fieldsStream);
           }
@@ -511,7 +471,7 @@ public final class CompressingStoredFieldsReader extends StoredFieldsReader {
       startPointer = fieldsStream.getFilePointer();
 
       if (merging) {
-        final int totalLength = Math.toIntExact(offsets[chunkDocs]);
+        final int totalLength = offsets[chunkDocs];
         // decompress eagerly
         if (sliced) {
           bytes.offset = bytes.length = 0;
@@ -542,17 +502,10 @@ public final class CompressingStoredFieldsReader extends StoredFieldsReader {
       }
 
       final int index = docID - docBase;
-      final int offset = Math.toIntExact(offsets[index]);
-      final int length = Math.toIntExact(offsets[index+1]) - offset;
-      final int totalLength = Math.toIntExact(offsets[chunkDocs]);
-      final int numStoredFields = Math.toIntExact(this.numStoredFields[index]);
-
-      final BytesRef bytes;
-      if (merging) {
-        bytes = this.bytes;
-      } else {
-        bytes = new BytesRef();
-      }
+      final int offset = offsets[index];
+      final int length = offsets[index+1] - offset;
+      final int totalLength = offsets[chunkDocs];
+      final int numStoredFields = this.numStoredFields[index];
 
       final DataInput documentInput;
       if (length == 0) {
@@ -688,24 +641,12 @@ public final class CompressingStoredFieldsReader extends StoredFieldsReader {
     return chunkSize;
   }
   
-  long getNumDirtyDocs() {
-    if (version != VERSION_CURRENT) {
-      throw new IllegalStateException("getNumDirtyDocs should only ever get called when the reader is on the current version");
-    }
-    assert numDirtyDocs >= 0;
-    return numDirtyDocs;
+  long getNumChunks() {
+    return numChunks;
   }
   
   long getNumDirtyChunks() {
-    if (version != VERSION_CURRENT) {
-      throw new IllegalStateException("getNumDirtyChunks should only ever get called when the reader is on the current version");
-    }
-    assert numDirtyChunks >= 0;
     return numDirtyChunks;
-  }
-
-  int getNumDocs() {
-    return numDocs;
   }
 
   int getPackedIntsVersion() {

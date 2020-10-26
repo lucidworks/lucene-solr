@@ -87,7 +87,7 @@ public class TestLatLonShape extends LuceneTestCase {
 
     Polygon polygon;
     Document document;
-    for (int i = 0; i < numPolys; i++) {
+    for (int i = 0; i < numPolys;) {
       document = new Document();
       numVertices = TestUtil.nextInt(random(), 100000, 200000);
       polygon = GeoTestUtil.createRegularPolygon(0, 0, atLeast(1000000), numVertices);

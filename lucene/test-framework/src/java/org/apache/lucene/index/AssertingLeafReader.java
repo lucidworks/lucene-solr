@@ -17,7 +17,6 @@
 package org.apache.lucene.index;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -27,6 +26,7 @@ import org.apache.lucene.index.PointValues.Relation;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.FutureArrays;
 import org.apache.lucene.util.VirtualMethod;
 import org.apache.lucene.util.automaton.CompiledAutomaton;
 
@@ -827,7 +827,7 @@ public class AssertingLeafReader extends FilterLeafReader {
       return result;
     }
   }
-
+  
   /** Wraps a SortedNumericDocValues but with additional asserts */
   public static class AssertingSortedNumericDocValues extends SortedNumericDocValues {
     private final Thread creationThread = Thread.currentThread();
@@ -836,20 +836,10 @@ public class AssertingLeafReader extends FilterLeafReader {
     private int lastDocID = -1;
     private int valueUpto;
     private boolean exists;
-
-    private AssertingSortedNumericDocValues(SortedNumericDocValues in, int maxDoc) {
+    
+    public AssertingSortedNumericDocValues(SortedNumericDocValues in, int maxDoc) {
       this.in = in;
       this.maxDoc = maxDoc;
-    }
-
-    public static SortedNumericDocValues create(SortedNumericDocValues in, int maxDoc) {
-      NumericDocValues singleDocValues = DocValues.unwrapSingleton(in);
-      if (singleDocValues == null) {
-        return new AssertingSortedNumericDocValues(in, maxDoc);
-      } else {
-        NumericDocValues assertingDocValues = new AssertingNumericDocValues(singleDocValues, maxDoc);
-        return DocValues.singleton(assertingDocValues);
-      }
     }
 
     @Override
@@ -934,21 +924,11 @@ public class AssertingLeafReader extends FilterLeafReader {
     private long lastOrd = NO_MORE_ORDS;
     private boolean exists;
     
-    private AssertingSortedSetDocValues(SortedSetDocValues in, int maxDoc) {
+    public AssertingSortedSetDocValues(SortedSetDocValues in, int maxDoc) {
       this.in = in;
       this.maxDoc = maxDoc;
       this.valueCount = in.getValueCount();
       assert valueCount >= 0;
-    }
-
-    public static SortedSetDocValues create(SortedSetDocValues in, int maxDoc) {
-      SortedDocValues singleDocValues = DocValues.unwrapSingleton(in);
-      if (singleDocValues == null) {
-        return new AssertingSortedSetDocValues(in, maxDoc);
-      } else {
-        SortedDocValues assertingDocValues = new AssertingSortedDocValues(singleDocValues, maxDoc);
-        return DocValues.singleton(assertingDocValues);
-      }
     }
 
     @Override
@@ -1169,14 +1149,14 @@ public class AssertingLeafReader extends FilterLeafReader {
 
       // This doc's packed value should be contained in the last cell passed to compare:
       for(int dim=0;dim<numIndexDims;dim++) {
-        assert Arrays.compareUnsigned(lastMinPackedValue, dim * bytesPerDim, dim * bytesPerDim + bytesPerDim, packedValue, dim * bytesPerDim, dim * bytesPerDim + bytesPerDim) <= 0: "dim=" + dim + " of " +  numDataDims + " value=" + new BytesRef(packedValue);
-        assert Arrays.compareUnsigned(lastMaxPackedValue, dim * bytesPerDim, dim * bytesPerDim + bytesPerDim, packedValue, dim * bytesPerDim, dim * bytesPerDim + bytesPerDim) >= 0: "dim=" + dim + " of " +  numDataDims + " value=" + new BytesRef(packedValue);
+        assert FutureArrays.compareUnsigned(lastMinPackedValue, dim * bytesPerDim, dim * bytesPerDim + bytesPerDim, packedValue, dim * bytesPerDim, dim * bytesPerDim + bytesPerDim) <= 0: "dim=" + dim + " of " +  numDataDims + " value=" + new BytesRef(packedValue);
+        assert FutureArrays.compareUnsigned(lastMaxPackedValue, dim * bytesPerDim, dim * bytesPerDim + bytesPerDim, packedValue, dim * bytesPerDim, dim * bytesPerDim + bytesPerDim) >= 0: "dim=" + dim + " of " +  numDataDims + " value=" + new BytesRef(packedValue);
       }
 
       // TODO: we should assert that this "matches" whatever relation the last call to compare had returned
       assert packedValue.length == numDataDims * bytesPerDim;
       if (numDataDims == 1) {
-        int cmp = Arrays.compareUnsigned(lastDocValue, 0, bytesPerDim, packedValue, 0, bytesPerDim);
+        int cmp = FutureArrays.compareUnsigned(lastDocValue, 0, bytesPerDim, packedValue, 0, bytesPerDim);
         if (cmp < 0) {
           // ok
         } else if (cmp == 0) {
@@ -1200,7 +1180,7 @@ public class AssertingLeafReader extends FilterLeafReader {
     @Override
     public Relation compare(byte[] minPackedValue, byte[] maxPackedValue) {
       for(int dim=0;dim<numIndexDims;dim++) {
-        assert Arrays.compareUnsigned(minPackedValue, dim * bytesPerDim, dim * bytesPerDim + bytesPerDim, maxPackedValue, dim * bytesPerDim, dim * bytesPerDim + bytesPerDim) <= 0;
+        assert FutureArrays.compareUnsigned(minPackedValue, dim * bytesPerDim, dim * bytesPerDim + bytesPerDim, maxPackedValue, dim * bytesPerDim, dim * bytesPerDim + bytesPerDim) <= 0;
       }
       System.arraycopy(maxPackedValue, 0, lastMaxPackedValue, 0, numIndexDims*bytesPerDim);
       System.arraycopy(minPackedValue, 0, lastMinPackedValue, 0, numIndexDims*bytesPerDim);
@@ -1253,12 +1233,12 @@ public class AssertingLeafReader extends FilterLeafReader {
   
   @Override
   public SortedNumericDocValues getSortedNumericDocValues(String field) throws IOException {
-    FieldInfo fi = getFieldInfos().fieldInfo(field);
     SortedNumericDocValues dv = super.getSortedNumericDocValues(field);
+    FieldInfo fi = getFieldInfos().fieldInfo(field);
     if (dv != null) {
       assert fi != null;
       assert fi.getDocValuesType() == DocValuesType.SORTED_NUMERIC;
-      return AssertingSortedNumericDocValues.create(dv, maxDoc());
+      return new AssertingSortedNumericDocValues(dv, maxDoc());
     } else {
       assert fi == null || fi.getDocValuesType() != DocValuesType.SORTED_NUMERIC;
       return null;

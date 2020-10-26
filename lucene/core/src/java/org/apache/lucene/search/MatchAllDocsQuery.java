@@ -46,7 +46,7 @@ public final class MatchAllDocsQuery extends Query {
 
       @Override
       public BulkScorer bulkScorer(LeafReaderContext context) throws IOException {
-        if (scoreMode.isExhaustive() == false) {
+        if (scoreMode == ScoreMode.TOP_SCORES) {
           return super.bulkScorer(context);
         }
         final float score = score();

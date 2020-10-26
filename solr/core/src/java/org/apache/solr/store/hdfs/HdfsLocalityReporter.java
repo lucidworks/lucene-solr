@@ -26,11 +26,13 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import com.codahale.metrics.MetricRegistry;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.solr.core.SolrInfoBean;
 import org.apache.solr.metrics.MetricsMap;
+import org.apache.solr.metrics.SolrMetricProducer;
 import org.apache.solr.metrics.SolrMetricsContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +41,7 @@ import org.slf4j.LoggerFactory;
  * @deprecated since 8.6
  */
 @Deprecated
-public class HdfsLocalityReporter implements SolrInfoBean {
+public class HdfsLocalityReporter implements SolrInfoBean, SolrMetricProducer {
   public static final String LOCALITY_BYTES_TOTAL = "locality.bytes.total";
   public static final String LOCALITY_BYTES_LOCAL = "locality.bytes.local";
   public static final String LOCALITY_BYTES_RATIO = "locality.bytes.ratio";
@@ -83,6 +85,16 @@ public class HdfsLocalityReporter implements SolrInfoBean {
   }
 
   @Override
+  public Set<String> getMetricNames() {
+    return metricNames;
+  }
+
+  @Override
+  public MetricRegistry getMetricRegistry() {
+    return solrMetricsContext != null ? solrMetricsContext.getMetricRegistry() : null;
+  }
+
+  @Override
   public SolrMetricsContext getSolrMetricsContext() {
     return solrMetricsContext;
   }
@@ -93,7 +105,7 @@ public class HdfsLocalityReporter implements SolrInfoBean {
   @Override
   public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
     solrMetricsContext = parentContext.getChildContext(this);
-    MetricsMap metricsMap = new MetricsMap(map -> {
+    MetricsMap metricsMap = new MetricsMap((detailed, map) -> {
       long totalBytes = 0;
       long localBytes = 0;
       int totalCount = 0;
@@ -142,7 +154,7 @@ public class HdfsLocalityReporter implements SolrInfoBean {
         map.put(LOCALITY_BLOCKS_RATIO, localCount / (double) totalCount);
       }
     });
-    solrMetricsContext.gauge(metricsMap, true, "hdfsLocality", getCategory().toString(), scope);
+    solrMetricsContext.gauge(this, metricsMap, true, "hdfsLocality", getCategory().toString(), scope);
   }
 
   /**

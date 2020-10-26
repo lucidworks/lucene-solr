@@ -22,7 +22,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
 
-import org.apache.lucene.mockfile.FilterPath;
 import org.apache.solr.SolrTestCase;
 import org.apache.solr.common.util.NamedList;
 import org.junit.After;
@@ -38,7 +37,7 @@ public class DirectoryFactoryTest extends SolrTestCase {
 
   @BeforeClass
   public static void setupLoader() throws Exception {
-    solrHome = FilterPath.unwrap(createTempDir()); // FilterPath can interfere
+    solrHome = Paths.get(createTempDir().toAbsolutePath().toString());
     loader = new SolrResourceLoader(solrHome);
   }
 
@@ -82,7 +81,7 @@ public class DirectoryFactoryTest extends SolrTestCase {
     NodeConfig config = loadNodeConfig("/solr/solr-solrDataHome.xml");
     CoreContainer cc = new CoreContainer(config);
     Properties cp = cc.getContainerProperties();
-    DirectoryFactory df = directoryFactoryClass.getConstructor().newInstance();
+    DirectoryFactory df = directoryFactoryClass.newInstance();
     df.initCoreContainer(cc);
     df.init(new NamedList());
 
@@ -99,7 +98,7 @@ public class DirectoryFactoryTest extends SolrTestCase {
     System.setProperty("solr.data.home", "solrdata");
     config = loadNodeConfig("/solr/solr-solrDataHome.xml");
     cc = new CoreContainer(config);
-    df = directoryFactoryClass.getConstructor().newInstance();
+    df = directoryFactoryClass.newInstance();
     df.initCoreContainer(cc);
     df.init(new NamedList());
     assertDataHome(solrHome.resolve("solrdata/inst_dir/data").toAbsolutePath().toString(), "inst_dir", df, cc);
@@ -109,15 +108,14 @@ public class DirectoryFactoryTest extends SolrTestCase {
     System.setProperty("test.solr.data.home", "/foo");
     config = loadNodeConfig("/solr/solr-solrDataHome.xml");
     cc = new CoreContainer(config);
-    df = directoryFactoryClass.getConstructor().newInstance();
+    df = directoryFactoryClass.newInstance();
     df.initCoreContainer(cc);
     df.init(new NamedList());
     assertDataHome("/foo/inst_dir/data", "inst_dir", df, cc);
   }
 
   private void assertDataHome(String expected, String instanceDir, DirectoryFactory df, CoreContainer cc, String... properties) throws IOException {
-    String dataHome = df.getDataHome(
-            new CoreDescriptor("core_name", Paths.get(instanceDir).toAbsolutePath(), cc, properties));
+    String dataHome = df.getDataHome(new CoreDescriptor("core_name", Paths.get(instanceDir), cc, properties));
     assertEquals(Paths.get(expected).toAbsolutePath(), Paths.get(dataHome).toAbsolutePath());
   }
 

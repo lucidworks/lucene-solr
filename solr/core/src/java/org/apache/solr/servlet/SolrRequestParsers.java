@@ -768,7 +768,8 @@ public class SolrRequestParsers {
 
       // According to previous StandardRequestParser logic (this is a re-written version),
       // POST was handled normally, but other methods (PUT/DELETE)
-      // were handled by the RestManager classes if the URI contained /schema or /config
+      // were handled by restlet if the URI contained /schema or /config
+      // "handled by restlet" means that we don't attempt to handle any request body here.
       if (!isPost) {
         if (isV2) {
           return raw.parseParamsAndFillStreams(req, streams);
@@ -779,14 +780,14 @@ public class SolrRequestParsers {
 
         // OK, we have a BODY at this point
 
-        boolean schemaRestPath = false;
+        boolean restletPath = false;
         int idx = uri.indexOf("/schema");
         if (idx >= 0 && uri.endsWith("/schema") || uri.contains("/schema/")) {
-          schemaRestPath = true;
+          restletPath = true;
         }
 
-        if (schemaRestPath) {
-          return raw.parseParamsAndFillStreams(req, streams);
+        if (restletPath) {
+          return parseQueryString(req.getQueryString());
         }
 
         if ("PUT".equals(method) || "DELETE".equals(method)) {

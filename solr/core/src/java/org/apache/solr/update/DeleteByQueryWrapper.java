@@ -18,10 +18,12 @@ package org.apache.solr.update;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.Set;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
@@ -71,6 +73,11 @@ final class DeleteByQueryWrapper extends Query {
     privateContext.setQueryCache(searcher.getQueryCache());
     final Weight inner = in.createWeight(privateContext, scoreMode, boost);
     return new Weight(DeleteByQueryWrapper.this) {
+      @Override
+      public void extractTerms(Set<Term> terms) {
+        throw new UnsupportedOperationException();
+      }
+
       @Override
       public Explanation explain(LeafReaderContext context, int doc) throws IOException { throw new UnsupportedOperationException(); }
 

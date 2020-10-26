@@ -51,8 +51,10 @@ public final class SolrPaths {
    * <li>Look in the current working directory for a solr/ directory</li>
    * </ol>
    * <p>
+   * The return value is normalized.  Normalization essentially means it ends in a trailing slash.
    *
-   * @return the Solr home, absolute and normalized.
+   * @return A normalized solrhome
+   * @see #normalizeDir(String)
    */
   public static Path locateSolrHome() {
 
@@ -67,7 +69,7 @@ public final class SolrPaths {
     } catch (NamingException e) {
       log.debug("No /solr/home in JNDI");
     } catch (RuntimeException ex) {
-      log.warn("Odd RuntimeException while testing for JNDI: ", ex);
+      log.warn("Odd RuntimeException while testing for JNDI: {}", ex.getMessage());
     }
 
     // Now try system property
@@ -84,7 +86,7 @@ public final class SolrPaths {
       home = "solr/";
       logOnceInfo("home_default", "solr home defaulted to '" + home + "' (could not find system property or JNDI)");
     }
-    return Paths.get(home).toAbsolutePath().normalize();
+    return Paths.get(home);
   }
 
   /**
@@ -123,14 +125,14 @@ public final class SolrPaths {
           "Path " + pathToAssert + " disallowed. UNC paths not supported. Please use drive letter instead.");
     }
     // Conversion Path -> String -> Path is to be able to compare against org.apache.lucene.mockfile.FilterPath instances
-    final Path path = Path.of(pathToAssert.toString()).normalize();
+    final Path path = Paths.get(pathToAssert.toString()).normalize();
     if (path.startsWith("..")) {
       throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
           "Path " + pathToAssert + " disallowed due to path traversal..");
     }
     if (!path.isAbsolute()) return; // All relative paths are accepted
     if (allowPaths.contains(Paths.get("_ALL_"))) return; // Catch-all path "*"/"_ALL_" will allow all other paths
-    if (allowPaths.stream().noneMatch(p -> path.startsWith(Path.of(p.toString())))) {
+    if (allowPaths.stream().noneMatch(p -> path.startsWith(Paths.get(p.toString())))) {
       throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
           "Path " + path + " must be relative to SOLR_HOME, SOLR_DATA_HOME coreRootDirectory. Set system property 'solr.allowPaths' to add other allowed paths.");
     }

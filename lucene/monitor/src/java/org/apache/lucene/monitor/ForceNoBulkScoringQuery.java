@@ -19,9 +19,11 @@ package org.apache.lucene.monitor;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.Set;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.*;
 import org.apache.lucene.search.Matches;
 
@@ -87,6 +89,11 @@ class ForceNoBulkScoringQuery extends Query {
       @Override
       public Scorer scorer(LeafReaderContext leafReaderContext) throws IOException {
         return innerWeight.scorer(leafReaderContext);
+      }
+
+      @Override
+      public void extractTerms(Set<Term> terms) {
+        innerWeight.extractTerms(terms);
       }
 
       @Override

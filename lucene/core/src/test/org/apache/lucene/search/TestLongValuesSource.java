@@ -17,7 +17,6 @@
 
 package org.apache.lucene.search;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 
@@ -128,11 +127,6 @@ public class TestLongValuesSource extends LuceneTestCase {
       checkSorts(new MatchAllDocsQuery(), sort);
       checkSorts(new TermQuery(new Term("english", "one")), sort);
     }
-  }
-
-  public void testRewriteSame() throws IOException {
-    SortField longField = LongValuesSource.constant(1L).getSortField(false);
-    assertSame(longField, longField.rewrite(searcher));
   }
 
   Sort randomSort() throws Exception {

@@ -188,12 +188,13 @@ public class CompositeIdRouter extends HashBasedRouter {
   }
 
   @Override
+  @SuppressWarnings({"unchecked"})
   public List<Range> partitionRange(int partitions, Range range) {
     int min = range.min;
     int max = range.max;
 
     assert max >= min;
-    if (partitions == 0) return Collections.emptyList();
+    if (partitions == 0) return Collections.EMPTY_LIST;
     long rangeSize = (long) max - (long) min;
     long rangeStep = Math.max(1, rangeSize / partitions);
 

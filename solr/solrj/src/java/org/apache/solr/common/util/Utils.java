@@ -16,6 +16,34 @@
  */
 package org.apache.solr.common.util;
 
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.util.EntityUtils;
+import org.apache.solr.client.solrj.cloud.DistribStateManager;
+import org.apache.solr.client.solrj.cloud.autoscaling.VersionedData;
+import org.apache.solr.client.solrj.impl.BinaryRequestWriter;
+import org.apache.solr.common.IteratorWriter;
+import org.apache.solr.common.LinkedHashMapWriter;
+import org.apache.solr.common.MapWriter;
+import org.apache.solr.common.MapWriterMap;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.SpecProvider;
+import org.apache.solr.common.cloud.SolrZkClient;
+import org.apache.solr.common.cloud.ZkOperation;
+import org.apache.solr.common.cloud.ZkStateReader;
+import org.apache.solr.common.params.CommonParams;
+import org.apache.zookeeper.KeeperException;
+import org.apache.zookeeper.server.ByteBufferInputStream;
+import org.noggit.CharArr;
+import org.noggit.JSONParser;
+import org.noggit.JSONWriter;
+import org.noggit.ObjectBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -23,11 +51,9 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.StringReader;
+import java.io.UnsupportedEncodingException;
 import java.io.Writer;
-import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.BufferOverflowException;
@@ -50,42 +76,12 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpRequestBase;
-import org.apache.http.util.EntityUtils;
-import org.apache.solr.client.solrj.cloud.DistribStateManager;
-import org.apache.solr.client.solrj.cloud.VersionedData;
-import org.apache.solr.client.solrj.impl.BinaryRequestWriter;
-import org.apache.solr.common.IteratorWriter;
-import org.apache.solr.common.LinkedHashMapWriter;
-import org.apache.solr.common.MapWriter;
-import org.apache.solr.common.MapWriterMap;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.SpecProvider;
-import org.apache.solr.common.annotation.JsonProperty;
-import org.apache.solr.common.cloud.SolrZkClient;
-import org.apache.solr.common.cloud.ZkOperation;
-import org.apache.solr.common.cloud.ZkStateReader;
-import org.apache.solr.common.params.CommonParams;
-import org.apache.zookeeper.KeeperException;
-import org.apache.zookeeper.server.ByteBufferInputStream;
-import org.noggit.CharArr;
-import org.noggit.JSONParser;
-import org.noggit.JSONWriter;
-import org.noggit.ObjectBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Collections.singletonList;
@@ -93,9 +89,19 @@ import static java.util.Collections.unmodifiableList;
 import static java.util.Collections.unmodifiableSet;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
-
 public class Utils {
-
+  @SuppressWarnings({"rawtypes"})
+  public static final Function NEW_HASHMAP_FUN = o -> new HashMap<>();
+  @SuppressWarnings({"rawtypes"})
+  public static final Function NEW_LINKED_HASHMAP_FUN = o -> new LinkedHashMap<>();
+  @SuppressWarnings({"rawtypes"})
+  public static final Function NEW_ATOMICLONG_FUN = o -> new AtomicLong();
+  @SuppressWarnings({"rawtypes"})
+  public static final Function NEW_ARRAYLIST_FUN = o -> new ArrayList<>();
+  @SuppressWarnings({"rawtypes"})
+  public static final Function NEW_SYNCHRONIZED_ARRAYLIST_FUN = o -> Collections.synchronizedList(new ArrayList<>());
+  @SuppressWarnings({"rawtypes"})
+  public static final Function NEW_HASHSET_FUN = o -> new HashSet<>();
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   @SuppressWarnings({"rawtypes"})
@@ -225,51 +231,11 @@ public class Utils {
     }
 
     @Override
-    @SuppressWarnings({"rawtypes"})
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public void handleUnknownClass(Object o) {
-      // avoid materializing MapWriter / IteratorWriter to Map / List
-      // instead serialize them directly
       if (o instanceof MapWriter) {
-        MapWriter mapWriter = (MapWriter) o;
-        startObject();
-        final boolean[] first = new boolean[1];
-        first[0] = true;
-        int sz = mapWriter._size();
-        mapWriter._forEachEntry((k, v) -> {
-          if (first[0]) {
-            first[0] = false;
-          } else {
-            writeValueSeparator();
-          }
-          if (sz > 1) indent();
-          writeString(k.toString());
-          writeNameSeparator();
-          write(v);
-        });
-        endObject();
-      } else if (o instanceof IteratorWriter) {
-        IteratorWriter iteratorWriter = (IteratorWriter) o;
-        startArray();
-        final boolean[] first = new boolean[1];
-        first[0] = true;
-        try {
-          iteratorWriter.writeIter(new IteratorWriter.ItemWriter() {
-            @Override
-            public IteratorWriter.ItemWriter add(Object o) throws IOException {
-              if (first[0]) {
-                first[0] = false;
-              } else {
-                writeValueSeparator();
-              }
-              indent();
-              write(o);
-              return this;
-            }
-          });
-        } catch (IOException e) {
-          throw new RuntimeException("this should never happen", e);
-        }
-        endArray();
+        Map m = ((MapWriter) o).toMap(new LinkedHashMap<>());
+        write(m);
       } else {
         super.handleUnknownClass(o);
       }
@@ -279,13 +245,13 @@ public class Utils {
   public static byte[] toJSON(Object o) {
     if (o == null) return new byte[0];
     CharArr out = new CharArr();
-//    if (!(o instanceof List) && !(o instanceof Map)) {
-//      if (o instanceof MapWriter) {
-//        o = ((MapWriter) o).toMap(new LinkedHashMap<>());
-//      } else if (o instanceof IteratorWriter) {
-//        o = ((IteratorWriter) o).toList(new ArrayList<>());
-//      }
-//    }
+    if (!(o instanceof List) && !(o instanceof Map)) {
+      if (o instanceof MapWriter) {
+        o = ((MapWriter) o).toMap(new LinkedHashMap<>());
+      } else if (o instanceof IteratorWriter) {
+        o = ((IteratorWriter) o).toList(new ArrayList<>());
+      }
+    }
     new MapWriterJSONWriter(out, 2).write(o); // indentation by default
     return toUTF8(out);
   }
@@ -433,6 +399,7 @@ public class Utils {
     return getObjectByPath(root, onlyPrimitive, parts);
   }
 
+  @SuppressWarnings({"unchecked"})
   public static boolean setObjectByPath(Object root, String hierarchy, Object value) {
     List<String> parts = StrUtils.splitSmart(hierarchy, '/', true);
     return setObjectByPath(root, parts, value);
@@ -721,7 +688,7 @@ public class Utils {
    * @param input the json with new values
    * @return whether there was any change made to sink or not.
    */
-  @SuppressWarnings({"unchecked"})
+  @SuppressWarnings({"unchecked", "rawtypes"})
   public static boolean mergeJson(Map<String, Object> sink, Map<String, Object> input) {
     boolean isModified = false;
     for (Map.Entry<String, Object> e : input.entrySet()) {
@@ -756,16 +723,17 @@ public class Utils {
   }
 
   public static String getBaseUrlForNodeName(final String nodeName, String urlScheme) {
-    return getBaseUrlForNodeName(nodeName, urlScheme, false);
-  }
-  public static String getBaseUrlForNodeName(final String nodeName, String urlScheme,  boolean isV2) {
     final int _offset = nodeName.indexOf("_");
     if (_offset < 0) {
       throw new IllegalArgumentException("nodeName does not contain expected '_' separator: " + nodeName);
     }
     final String hostAndPort = nodeName.substring(0, _offset);
-    final String path = URLDecoder.decode(nodeName.substring(1 + _offset), UTF_8);
-    return urlScheme + "://" + hostAndPort + (path.isEmpty() ? "" : ("/" + (isV2? "api": path)));
+    try {
+      final String path = URLDecoder.decode(nodeName.substring(1 + _offset), "UTF-8");
+      return urlScheme + "://" + hostAndPort + (path.isEmpty() ? "" : ("/" + path));
+    } catch (UnsupportedEncodingException e) {
+      throw new IllegalStateException("JVM Does not seem to support UTF-8", e);
+    }
   }
 
   public static long time(TimeSource timeSource, TimeUnit unit) {
@@ -825,22 +793,19 @@ public class Utils {
 
 
   public static <T> T executeGET(HttpClient client, String url, InputStreamConsumer<T> consumer) throws SolrException {
-    return executeHttpMethod(client, url, consumer, new HttpGet(url));
-  }
-
-  public static <T> T executeHttpMethod(HttpClient client, String url, InputStreamConsumer<T> consumer, HttpRequestBase httpMethod) {
     T result = null;
+    HttpGet httpGet = new HttpGet(url);
     HttpResponse rsp = null;
     try {
-      rsp = client.execute(httpMethod);
+      rsp = client.execute(httpGet);
     } catch (IOException e) {
       log.error("Error in request to url : {}", url, e);
-      throw new SolrException(SolrException.ErrorCode.UNKNOWN, "Error sending request");
+      throw new SolrException(SolrException.ErrorCode.UNKNOWN, "error sending request");
     }
     int statusCode = rsp.getStatusLine().getStatusCode();
     if (statusCode != 200) {
       try {
-        log.error("Failed a request to: {}, status: {}, body: {}", url, rsp.getStatusLine(), EntityUtils.toString(rsp.getEntity(), StandardCharsets.UTF_8)); // nowarn
+        log.error("Failed a request to: {}, status: {}, body: {}", url, rsp.getStatusLine(), EntityUtils.toString(rsp.getEntity(), StandardCharsets.UTF_8)); // logOk
       } catch (IOException e) {
         log.error("could not print error", e);
       }
@@ -861,78 +826,5 @@ public class Utils {
     return result;
   }
 
-  public static void reflectWrite(MapWriter.EntryWriter ew, Object o) throws IOException{
-    List<FieldWriter> fieldWriters = null;
-    try {
-      fieldWriters = getReflectData(o.getClass());
-    } catch (IllegalAccessException e) {
-      throw new RuntimeException(e);
-    }
-    for (FieldWriter fieldWriter : fieldWriters) {
-      try {
-        fieldWriter.write(ew, o);
-      } catch( Throwable e) {
-        throw new RuntimeException(e);
-        //should not happen
-      }
-    }
-  }
-
-  @SuppressWarnings("rawtypes")
-  private static List<FieldWriter> getReflectData(Class c) throws IllegalAccessException {
-    boolean sameClassLoader = c.getClassLoader() == Utils.class.getClassLoader();
-    //we should not cache the class references of objects loaded from packages because they will not get garbage collected
-    //TODO fix that later
-    List<FieldWriter> reflectData = sameClassLoader ? storedReflectData.get(c): null;
-    if(reflectData == null) {
-      ArrayList<FieldWriter> l = new ArrayList<>();
-      MethodHandles.Lookup lookup = MethodHandles.publicLookup();
-      for (Field field : lookup.accessClass(c).getFields()) {
-        JsonProperty prop = field.getAnnotation(JsonProperty.class);
-        if (prop == null) continue;
-        int modifiers = field.getModifiers();
-        if (Modifier.isPublic(modifiers) && !Modifier.isStatic(modifiers)) {
-          String fname = prop.value().isEmpty() ? field.getName() : prop.value();
-          try {
-            if (field.getType() == int.class) {
-              MethodHandle mh = lookup.findGetter(c, field.getName(), int.class);
-              l.add((ew, inst) -> ew.put(fname, (int) mh.invoke(inst)));
-            } else if (field.getType() == long.class) {
-              MethodHandle mh = lookup.findGetter(c, field.getName(), long.class);
-              l.add((ew, inst) -> ew.put(fname, (long) mh.invoke(inst)));
-            } else if (field.getType() == boolean.class) {
-              MethodHandle mh = lookup.findGetter(c, field.getName(), boolean.class);
-              l.add((ew, inst) -> ew.put(fname, (boolean) mh.invoke(inst)));
-            } else if (field.getType() == double.class) {
-              MethodHandle mh = lookup.findGetter(c, field.getName(), double.class);
-              l.add((ew, inst) -> ew.put(fname, (double) mh.invoke(inst)));
-            } else if (field.getType() == float.class) {
-              MethodHandle mh = lookup.findGetter(c, field.getName(), float.class);
-              l.add((ew, inst) -> ew.put(fname, (float) mh.invoke(inst)));
-            } else {
-              MethodHandle mh = lookup.findGetter(c, field.getName(), field.getType());
-              l.add((ew, inst) -> ew.putIfNotNull(fname, mh.invoke(inst)));
-            }
-          } catch (NoSuchFieldException e) {
-            //this is unlikely
-            throw new RuntimeException(e);
-          }
-        }}
-
-      if(sameClassLoader){
-        storedReflectData.put(c, reflectData = Collections.unmodifiableList(new ArrayList<>(l)));
-      }
-    }
-    return reflectData;
-  }
-
-
-
-  @SuppressWarnings("rawtypes")
-  private static Map<Class, List<FieldWriter>> storedReflectData =   new ConcurrentHashMap<>();
-
-  interface FieldWriter {
-    void write(MapWriter.EntryWriter ew, Object inst) throws Throwable;
-  }
 
 }

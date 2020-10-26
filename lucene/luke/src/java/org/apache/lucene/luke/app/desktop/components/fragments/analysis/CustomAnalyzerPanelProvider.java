@@ -667,7 +667,7 @@ public final class CustomAnalyzerPanelProvider implements CustomAnalyzerPanelOpe
     if (index < 0 || index > cfParamsList.size()) {
       throw new IllegalArgumentException();
     }
-    return Map.copyOf(cfParamsList.get(index));
+    return Collections.unmodifiableMap(cfParamsList.get(index));
   }
 
   @Override
@@ -693,7 +693,7 @@ public final class CustomAnalyzerPanelProvider implements CustomAnalyzerPanelOpe
     if (index < 0 || index > tfParamsList.size()) {
       throw new IllegalArgumentException();
     }
-    return Map.copyOf(tfParamsList.get(index));
+    return Collections.unmodifiableMap(tfParamsList.get(index));
   }
 
   @Override

@@ -32,7 +32,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.lucene.util.TestUtil;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrInputDocument;
-import org.apache.solr.common.params.StreamParams;
 import org.apache.solr.common.util.SuppressForbidden;
 import org.apache.solr.common.util.Utils;
 import org.apache.solr.index.LogDocMergePolicyFactory;
@@ -710,16 +709,18 @@ public class TestExportWriter extends SolrTestCaseJ4 {
   }
 
   private void createLargeIndex() throws Exception {
-    int BATCH_SIZE = 5000;
-    int NUM_BATCHES = 20;
+    int BATCH_SIZE = 1000;
+    int NUM_BATCHES = 100;
     SolrInputDocument[] docs = new SolrInputDocument[BATCH_SIZE];
     for (int i = 0; i < NUM_BATCHES; i++) {
       for (int j = 0; j < BATCH_SIZE; j++) {
         docs[j] = new SolrInputDocument(
             "id", String.valueOf(i * BATCH_SIZE + j),
+            "batch_i_p", String.valueOf(i),
+            "random_i_p", String.valueOf(random().nextInt(BATCH_SIZE)),
             "sortabledv", TestUtil.randomSimpleString(random(), 2, 3),
-            "sortabledv_udvas", String.valueOf((i + j) % 101),
-            "small_i_p", String.valueOf((i + j) % 37)
+            "sortabledv_udvas", String.valueOf(random().nextInt(100)),
+            "small_i_p", String.valueOf((i + j) % 7)
             );
       }
       updateJ(jsonAdd(docs), null);
@@ -727,7 +728,6 @@ public class TestExportWriter extends SolrTestCaseJ4 {
     assertU(commit());
   }
 
-  @SuppressWarnings("unchecked")
   @Test
   public void testExpr() throws Exception {
     assertU(delQ("*:*"));
@@ -741,11 +741,13 @@ public class TestExportWriter extends SolrTestCaseJ4 {
         );
     req = req("q", "*:*", "qt", "/export", "fl", "id,sortabledv_udvas", "sort", "sortabledv_udvas asc", "expr", "unique(input(),over=\"sortabledv_udvas\")");
     String rsp = h.query(req);
+    @SuppressWarnings({"unchecked"})
     Map<String, Object> rspMap = mapper.readValue(rsp, HashMap.class);
+    @SuppressWarnings({"unchecked"})
     List<Map<String, Object>> docs = (List<Map<String, Object>>) Utils.getObjectByPath(rspMap, false, "/response/docs");
     assertNotNull("missing document results: " + rspMap, docs);
-    assertEquals("wrong number of unique docs", 101, docs.size());
-    for (int i = 0; i < 100; i++) {
+    assertEquals("wrong number of unique docs", 100, docs.size());
+    for (int i = 0; i < 99; i++) {
       boolean found = false;
       String si = String.valueOf(i);
       for (int j = 0; j < docs.size(); j++) {
@@ -756,33 +758,8 @@ public class TestExportWriter extends SolrTestCaseJ4 {
       }
       assertTrue("missing value " + i + " in results", found);
     }
-    req = req("q", "*:*", "qt", "/export", "fl", "id,sortabledv_udvas,small_i_p", "sort", "sortabledv_udvas asc", "expr", "rollup(input(),over=\"sortabledv_udvas\", sum(small_i_p),avg(small_i_p),min(small_i_p),count(*))");
-    rsp = h.query(req);
-    rspMap = mapper.readValue(rsp, HashMap.class);
-    docs = (List<Map<String, Object>>) Utils.getObjectByPath(rspMap, false, "/response/docs");
-    assertNotNull("missing document results: " + rspMap, docs);
-    assertEquals("wrong number of unique docs", 101, docs.size());
-    for (Map<String, Object> doc : docs) {
-      assertNotNull("missing sum: " + doc, doc.get("sum(small_i_p)"));
-      assertEquals(18000.0, ((Number)doc.get("sum(small_i_p)")).doubleValue(), 1000.0);
-      assertNotNull("missing avg: " + doc, doc.get("avg(small_i_p)"));
-      assertEquals(18.0, ((Number)doc.get("avg(small_i_p)")).doubleValue(), 1.0);
-      assertNotNull("missing count: " + doc, doc.get("count(*)"));
-      assertEquals(1000.0, ((Number)doc.get("count(*)")).doubleValue(), 100.0);
-    }
-    // try invalid field types
-    req = req("q", "*:*", "qt", "/export", "fl", "id,sortabledv,small_i_p", "sort", "sortabledv asc", "expr", "unique(input(),over=\"sortabledv\")");
-    rsp = h.query(req);
-    rspMap = mapper.readValue(rsp, HashMap.class);
-    assertEquals("wrong response status", 400, ((Number)Utils.getObjectByPath(rspMap, false, "/responseHeader/status")).intValue());
-    docs = (List<Map<String, Object>>) Utils.getObjectByPath(rspMap, false, "/response/docs");
-    assertEquals("wrong number of docs", 1, docs.size());
-    Map<String, Object> doc = docs.get(0);
-    assertTrue("doc doesn't have exception", doc.containsKey(StreamParams.EXCEPTION));
-    assertTrue("wrong exception message", doc.get(StreamParams.EXCEPTION).toString().contains("Must have useDocValuesAsStored='true'"));
   }
 
-  @SuppressWarnings("rawtypes")
   private void validateSort(int numDocs) throws Exception {
     // 10 fields
     List<String> fieldNames = new ArrayList<>(Arrays.asList("floatdv", "intdv", "stringdv", "longdv", "doubledv",
@@ -804,18 +781,22 @@ public class TestExportWriter extends SolrTestCaseJ4 {
     String fieldsStr = String.join(",", fieldStrs); // fl :  field1, field2
 
     String resp = h.query(req("q", "*:*", "qt", "/export", "fl", "id," + fieldsStr, "sort", sortStr));
+    @SuppressWarnings({"rawtypes"})
     HashMap respMap = mapper.readValue(resp, HashMap.class);
+    @SuppressWarnings({"rawtypes"})
     List docs = (ArrayList) ((HashMap) respMap.get("response")).get("docs");
 
     SolrQueryRequest selectReq = req("q", "*:*", "qt", "/select", "fl", "id," + fieldsStr, "sort", sortStr, "rows", Integer.toString(numDocs), "wt", "json");
     String response = h.query(selectReq);
+    @SuppressWarnings({"rawtypes"})
     Map rsp = (Map)Utils.fromJSONString(response);
+    @SuppressWarnings({"rawtypes"})
     List doclist = (List)(((Map)rsp.get("response")).get("docs"));
 
     assert docs.size() == numDocs;
 
     for (int i = 0; i < docs.size() - 1; i++) { // docs..
-      assertEquals("Position:" + i + " has different id value" , ((LinkedHashMap)doclist.get(i)).get("id"), String.valueOf(((HashMap<?,?>) docs.get(i)).get("id")));
+      assertEquals("Position:" + i + " has different id value" , ((LinkedHashMap)doclist.get(i)).get("id"), String.valueOf(((HashMap) docs.get(i)).get("id")));
 
       for (int j = 0; j < fieldSorts.length; j++) { // fields ..
         String field = fieldSorts[j].getField();

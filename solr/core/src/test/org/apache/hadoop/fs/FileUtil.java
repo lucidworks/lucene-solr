@@ -52,7 +52,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 
-import org.apache.commons.collections4.map.CaseInsensitiveMap;
+import org.apache.commons.collections.map.CaseInsensitiveMap;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -76,8 +76,7 @@ import org.slf4j.LoggerFactory;
 public class FileUtil {
   public static final Object SOLR_HACK_FOR_CLASS_VERIFICATION = new Object();
 
-  // Apparently the Hadoop code expectes upper-case LOG, so...
-  private static final Logger LOG = LoggerFactory.getLogger(FileUtil.class); //nowarn
+  private static final Logger LOG = LoggerFactory.getLogger(FileUtil.class);
 
   /* The error code is defined in winutils to indicate insufficient
    * privilege to create symbolic links. This value need to keep in
@@ -598,7 +597,12 @@ public class FileUtil {
       File[] allFiles = dir.listFiles();
       if(allFiles != null) {
         for (int i = 0; i < allFiles.length; i++) {
-          boolean isSymLink = org.apache.commons.io.FileUtils.isSymlink(allFiles[i]);
+          boolean isSymLink;
+          try {
+            isSymLink = org.apache.commons.io.FileUtils.isSymlink(allFiles[i]);
+          } catch(IOException ioe) {
+            isSymLink = true;
+          }
           if(!isSymLink) {
             size += getDU(allFiles[i]);
           }
@@ -1485,7 +1489,8 @@ public class FileUtil {
                                                 Path targetDir,
                                                 Map<String, String> callerEnv) throws IOException {
     // Replace environment variables, case-insensitive on Windows
-    Map<String, String> env = Shell.WINDOWS ? new CaseInsensitiveMap<>(callerEnv) :
+    @SuppressWarnings("unchecked")
+    Map<String, String> env = Shell.WINDOWS ? new CaseInsensitiveMap(callerEnv) :
         callerEnv;
     String[] classPathEntries = inputClassPath.split(File.pathSeparator);
     for (int i = 0; i < classPathEntries.length; ++i) {

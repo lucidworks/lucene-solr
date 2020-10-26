@@ -49,7 +49,7 @@ public class TestKoreanPartOfSpeechStopFilterFactory extends BaseTokenStreamTest
   /** Test that bogus arguments result in exception */
   public void testBogusArguments() {
     IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () ->
-        new KoreanPartOfSpeechStopFilterFactory(new HashMap<>() {{
+        new KoreanPartOfSpeechStopFilterFactory(new HashMap<String, String>() {{
           put("luceneMatchVersion", Version.LATEST.toString());
           put("bogusArg", "bogusValue");
         }})

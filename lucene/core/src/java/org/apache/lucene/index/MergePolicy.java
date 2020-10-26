@@ -19,6 +19,7 @@ package org.apache.lucene.index;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -240,10 +241,10 @@ public abstract class MergePolicy {
         throw new RuntimeException("segments must include at least one segment");
       }
       // clone the list, as the in list may be based off original SegmentInfos and may be modified
-      this.segments = List.copyOf(segments);
+      this.segments = new ArrayList<>(segments);
       totalMaxDoc = segments.stream().mapToInt(i -> i.info.maxDoc()).sum();
       mergeProgress = new OneMergeProgress();
-      mergeReaders = List.of();
+      mergeReaders = Collections.emptyList();
     }
 
     /** 
@@ -273,7 +274,7 @@ public abstract class MergePolicy {
         mergeFinished(success, segmentDropped);
       } finally {
         final List<MergeReader> readers = mergeReaders;
-        mergeReaders = List.of();
+        mergeReaders = Collections.emptyList();
         IOUtils.applyToAll(readers, readerConsumer);
       }
     }
@@ -421,7 +422,7 @@ public abstract class MergePolicy {
     /**
      * Called just before the merge is applied to IndexWriter's SegmentInfos
      */
-    void onMergeComplete() throws IOException {
+    void onMergeComplete() {
     }
 
     /**
@@ -439,7 +440,7 @@ public abstract class MergePolicy {
         }
       } finally {
         // ensure we assign this to close them in the case of an exception
-        this.mergeReaders = List.copyOf(readers); // we do a copy here to ensure that mergeReaders are an immutable list
+        this.mergeReaders = Collections.unmodifiableList(readers);
       }
     }
 
@@ -494,7 +495,7 @@ public abstract class MergePolicy {
     boolean await(long timeout, TimeUnit unit) {
       try {
         CompletableFuture<Void> future = CompletableFuture.allOf(merges.stream()
-            .map(m -> m.mergeCompleted).collect(Collectors.toList()).toArray(CompletableFuture<?>[]::new));
+            .map(m -> m.mergeCompleted).collect(Collectors.toList()).toArray(new CompletableFuture<?>[merges.size()]));
         future.get(timeout, unit);
         return true;
       } catch (InterruptedException e) {
@@ -536,7 +537,7 @@ public abstract class MergePolicy {
   }
   
   /**
-   * Default ratio for compound file system usage. Set to <code>1.0</code>, always use 
+   * Default ratio for compound file system usage. Set to <tt>1.0</tt>, always use 
    * compound file system.
    */
   protected static final double DEFAULT_NO_CFS_RATIO = 1.0;
@@ -558,7 +559,7 @@ public abstract class MergePolicy {
   /**
    * Creates a new merge policy instance.
    */
-  protected MergePolicy() {
+  public MergePolicy() {
     this(DEFAULT_NO_CFS_RATIO, DEFAULT_MAX_CFS_SEGMENT_SIZE);
   }
   
@@ -623,20 +624,19 @@ public abstract class MergePolicy {
   /**
    * Identifies merges that we want to execute (synchronously) on commit. By default, this will do no merging on commit.
    * If you implement this method in your {@code MergePolicy} you must also set a non-zero timeout using
-   * {@link IndexWriterConfig#setMaxFullFlushMergeWaitMillis}.
+   * {@link IndexWriterConfig#setMaxCommitMergeWaitMillis}.
    *
-   * Any merges returned here will make {@link IndexWriter#commit()}, {@link IndexWriter#prepareCommit()}
-   * or {@link IndexWriter#getReader(boolean, boolean)} block until
-   * the merges complete or until {@link IndexWriterConfig#getMaxFullFlushMergeWaitMillis()} has elapsed. This may be
-   * used to merge small segments that have just been flushed, reducing the number of segments in
-   * the point in time snapshot. If a merge does not complete in the allotted time, it will continue to execute, and eventually finish and
-   * apply to future point in time snapshot, but will not be reflected in the current one.
+   * Any merges returned here will make {@link IndexWriter#commit()} or {@link IndexWriter#prepareCommit()} block until
+   * the merges complete or until {@link IndexWriterConfig#getMaxCommitMergeWaitMillis()} has elapsed. This may be
+   * used to merge small segments that have just been flushed as part of the commit, reducing the number of segments in
+   * the commit. If a merge does not complete in the allotted time, it will continue to execute, and eventually finish and
+   * apply to future commits, but will not be reflected in the current commit.
    *
    * If a {@link OneMerge} in the returned {@link MergeSpecification} includes a segment already included in a registered
    * merge, then {@link IndexWriter#commit()} or {@link IndexWriter#prepareCommit()} will throw a {@link IllegalStateException}.
    * Use {@link MergeContext#getMergingSegments()} to determine which segments are currently registered to merge.
    *
-   * @param mergeTrigger the event that triggered the merge (COMMIT or GET_READER).
+   * @param mergeTrigger the event that triggered the merge (COMMIT or FULL_FLUSH).
    * @param segmentInfos the total set of segments in the index (while preparing the commit)
    * @param mergeContext the MergeContext to find the merges on, which should be used to determine which segments are
  *                     already in a registered merge (see {@link MergeContext#getMergingSegments()}).

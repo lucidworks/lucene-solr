@@ -32,7 +32,6 @@ import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.TestUtil;
 import org.apache.solr.SolrTestCase;
 import org.apache.solr.metrics.SolrMetricManager;
-import org.apache.solr.metrics.SolrMetricsContext;
 import org.junit.Test;
 
 import com.github.benmanes.caffeine.cache.Cache;
@@ -50,11 +49,10 @@ public class TestCaffeineCache extends SolrTestCase {
   @Test
   public void testSimple() throws IOException {
     CaffeineCache<Integer, String> lfuCache = new CaffeineCache<>();
-    SolrMetricsContext solrMetricsContext = new SolrMetricsContext(metricManager, registry, "foo");
-    lfuCache.initializeMetrics(solrMetricsContext, scope + "-1");
+    lfuCache.initializeMetrics(metricManager, registry, "foo", scope + "-1");
 
     CaffeineCache<Integer, String> newLFUCache = new CaffeineCache<>();
-    newLFUCache.initializeMetrics(solrMetricsContext, scope + "-2");
+    newLFUCache.initializeMetrics(metricManager, registry, "foo2", scope + "-2");
 
     Map<String, String> params = new HashMap<>();
     params.put("size", "100");
@@ -151,7 +149,7 @@ public class TestCaffeineCache extends SolrTestCase {
     int IDLE_TIME_SEC = 5;
     CountDownLatch removed = new CountDownLatch(1);
     AtomicReference<RemovalCause> removalCause = new AtomicReference<>();
-    CaffeineCache<String, String> cache = new CaffeineCache<>() {
+    CaffeineCache<String, String> cache = new CaffeineCache<String, String>() {
       @Override
       public void onRemoval(String key, String value, RemovalCause cause) {
         super.onRemoval(key, value, cause);
@@ -182,7 +180,7 @@ public class TestCaffeineCache extends SolrTestCase {
     List<RemovalCause> removalCauses = new ArrayList<>();
     List<String> removedKeys = new ArrayList<>();
     Set<String> allKeys = new HashSet<>();
-    CaffeineCache<String, Accountable> cache = new CaffeineCache<>() {
+    CaffeineCache<String, Accountable> cache = new CaffeineCache<String, Accountable>() {
       @Override
       public Accountable put(String key, Accountable val) {
         allKeys.add(key);

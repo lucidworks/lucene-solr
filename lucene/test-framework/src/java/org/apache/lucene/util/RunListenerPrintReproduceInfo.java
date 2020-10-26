@@ -154,17 +154,11 @@ public final class RunListenerPrintReproduceInfo extends RunListener {
     }
 
     final StringBuilder b = new StringBuilder();
-    b.append("NOTE: reproduce with: gradlew test ");
+    b.append("NOTE: reproduce with: ant test ");
 
-    // Figure out the test case name and method, if any.
-    String testClass = RandomizedContext.current().getTargetClass().getSimpleName();
-    b.append("--tests ");
-    b.append(testClass);
-    if (testName != null) {
-      b.append(".").append(testName);
-    }
-
-    // Pass the master seed.
+    // Test case, method, seed.
+    addVmOpt(b, "testcase", RandomizedContext.current().getTargetClass().getSimpleName());
+    addVmOpt(b, "tests.method", testName);
     addVmOpt(b, "tests.seed", RandomizedContext.current().getRunnerSeedAsString());
 
     // Test groups and multipliers.

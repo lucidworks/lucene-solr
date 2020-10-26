@@ -24,7 +24,6 @@ import java.util.Locale;
 
 import org.apache.lucene.codecs.DocValuesProducer;
 import org.apache.lucene.codecs.FieldsProducer;
-import org.apache.lucene.codecs.VectorReader;
 import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PointsReader;
 import org.apache.lucene.codecs.StoredFieldsReader;
@@ -78,9 +77,6 @@ public class MergeState {
   /** Point readers to merge */
   public final PointsReader[] pointsReaders;
 
-  /** Vector readers to merge */
-  public final VectorReader[] vectorReaders;
-
   /** Max docs per reader */
   public final int[] maxDocs;
 
@@ -107,7 +103,6 @@ public class MergeState {
     termVectorsReaders = new TermVectorsReader[numReaders];
     docValuesProducers = new DocValuesProducer[numReaders];
     pointsReaders = new PointsReader[numReaders];
-    vectorReaders = new VectorReader[numReaders];
     fieldInfos = new FieldInfos[numReaders];
     liveDocs = new Bits[numReaders];
 
@@ -144,12 +139,6 @@ public class MergeState {
       if (pointsReaders[i] != null) {
         pointsReaders[i] = pointsReaders[i].getMergeInstance();
       }
-
-      vectorReaders[i] = reader.getVectorReader();
-      if (vectorReaders[i] != null) {
-        vectorReaders[i] = vectorReaders[i].getMergeInstance();
-      }
-
       numDocs += reader.numDocs();
     }
 
@@ -252,9 +241,9 @@ public class MergeState {
 
   /** A map of doc IDs. */
   public static abstract class DocMap {
-    /** Sole constructor. (For invocation by subclass constructors, typically implicit.) */
-    // Explicitly declared so that we have non-empty javadoc
-    protected DocMap() {}
+    /** Sole constructor */
+    public DocMap() {
+    }
 
     /** Return the mapped docID or -1 if the given doc is not mapped. */
     public abstract int get(int docID);

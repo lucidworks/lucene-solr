@@ -39,7 +39,6 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Test sync phase that occurs when Leader goes down and a new Leader is
@@ -69,7 +68,7 @@ public class SyncSliceTest extends AbstractFullDistribZkTestBase {
     handle.clear();
     handle.put("timestamp", SKIPVAL);
     
-    waitForThingsToLevelOut(30, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(30);
 
     del("*:*");
     List<CloudJettyRunner> skipServers = new ArrayList<>();
@@ -115,7 +114,7 @@ public class SyncSliceTest extends AbstractFullDistribZkTestBase {
       baseClient.request(request);
     }
 
-    waitForThingsToLevelOut(15, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(15);
     
     checkShardConsistency(false, true);
     

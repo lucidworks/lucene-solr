@@ -17,9 +17,10 @@
 
 /**
  * Pluggable term index / block terms dictionary implementations.
- * <p>
+ *
  * Structure similar to {@link org.apache.lucene.codecs.blockterms.VariableGapTermsIndexWriter}
  * with additional optimizations.
+ *
  *   <ul>
  *     <li>Designed to be extensible</li>
  *     <li>Reduced on-heap memory usage.</li>

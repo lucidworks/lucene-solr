@@ -102,7 +102,6 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
 
   @Before
   public void setupCluster() throws Exception {
-    System.setProperty("metricsEnabled", "true");
     configureCluster(NODE_COUNT)
         .addConfig("conf", getFile("solrj").toPath().resolve("solr").resolve("configsets").resolve("streaming").resolve("conf"))
         .configure();
@@ -414,6 +413,7 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
     // all its cores on the same node.
     // Hence the below configuration for our collection
     CollectionAdminRequest.createCollection(collectionName, "conf", liveNodes, liveNodes)
+        .setMaxShardsPerNode(liveNodes * liveNodes)
         .processAndWait(cluster.getSolrClient(), TIMEOUT);
     cluster.waitForActiveCollection(collectionName, liveNodes, liveNodes * liveNodes);
     // Add some new documents
@@ -493,6 +493,7 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
 
     // For testing replica.type, we want to have all replica types available for the collection
     CollectionAdminRequest.createCollection(collectionName, "conf", 1, liveNodes/3, liveNodes/3, liveNodes/3)
+        .setMaxShardsPerNode(liveNodes)
         .processAndWait(cluster.getSolrClient(), TIMEOUT);
     cluster.waitForActiveCollection(collectionName, 1, liveNodes);
 
@@ -690,7 +691,7 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
     Replica r = coll.getSlices().iterator().next().getReplicas().iterator().next();
 
     SolrQuery q = new SolrQuery().setQuery("*:*");
-    BaseHttpSolrClient.RemoteSolrException sse = null;
+    HttpSolrClient.RemoteSolrException sse = null;
 
     final String url = r.getStr(ZkStateReader.BASE_URL_PROP) + "/" + COLLECTION;
     try (HttpSolrClient solrClient = getHttpSolrClient(url)) {
@@ -742,7 +743,7 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
       try {
         QueryResponse rsp = solrClient.query(q);
         log.info("error was expected");
-      } catch (BaseHttpSolrClient.RemoteSolrException e) {
+      } catch (HttpSolrClient.RemoteSolrException e) {
         sse = e;
       }
       assertNotNull(sse);
@@ -942,6 +943,7 @@ public class CloudSolrClientTest extends SolrCloudTestCase {
     // Hence the below configuration for our collection
     int pullReplicas = Math.max(1, liveNodes - 2);
     CollectionAdminRequest.createCollection(collectionName, "conf", liveNodes, 1, 1, pullReplicas)
+        .setMaxShardsPerNode(liveNodes)
         .processAndWait(cluster.getSolrClient(), TIMEOUT);
     cluster.waitForActiveCollection(collectionName, liveNodes, liveNodes * (2 + pullReplicas));
     

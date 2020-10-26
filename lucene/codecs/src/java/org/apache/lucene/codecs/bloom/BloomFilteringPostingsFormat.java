@@ -454,7 +454,7 @@ public final class BloomFilteringPostingsFormat extends PostingsFormat {
               // Field not bloom'd
               break;
             }
-            assert bloomFilters.containsKey(fieldInfo) == false;
+            assert bloomFilters.containsKey(field) == false;
             bloomFilters.put(fieldInfo, bloomFilter);
           }
           // Make sure there's at least one doc for this term:

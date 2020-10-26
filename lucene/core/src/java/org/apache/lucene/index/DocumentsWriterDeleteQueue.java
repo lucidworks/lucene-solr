@@ -509,18 +509,27 @@ final class DocumentsWriterDeleteQueue implements Accountable, Closeable {
     }
   }
   
-  public int getBufferedUpdatesTermsSize() {
-    final ReentrantLock lock = globalBufferLock; // Trusted final
-    lock.lock();
+  private boolean forceApplyGlobalSlice() {
+    globalBufferLock.lock();
+    final Node<?> currentTail = tail;
     try {
-      final Node<?> currentTail = tail;
       if (globalSlice.sliceTail != currentTail) {
         globalSlice.sliceTail = currentTail;
         globalSlice.apply(globalBufferedUpdates, BufferedUpdates.MAX_INT);
       }
+      return globalBufferedUpdates.any();
+    } finally {
+      globalBufferLock.unlock();
+    }
+  }
+
+  public int getBufferedUpdatesTermsSize() {
+    globalBufferLock.lock();
+    try {
+      forceApplyGlobalSlice();
       return globalBufferedUpdates.deleteTerms.size();
     } finally {
-      lock.unlock();
+      globalBufferLock.unlock();
     }
   }
 

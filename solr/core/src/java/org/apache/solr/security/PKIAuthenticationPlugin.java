@@ -17,8 +17,10 @@
 package org.apache.solr.security;
 
 import javax.servlet.FilterChain;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpServletRequestWrapper;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.nio.ByteBuffer;
@@ -83,16 +85,16 @@ public class PKIAuthenticationPlugin extends AuthenticationPlugin implements Htt
 
   @SuppressForbidden(reason = "Needs currentTimeMillis to compare against time in header")
   @Override
-  public boolean doAuthenticate(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws Exception {
+  public boolean doAuthenticate(ServletRequest request, ServletResponse response, FilterChain filterChain) throws Exception {
 
-    String requestURI = request.getRequestURI();
+    String requestURI = ((HttpServletRequest) request).getRequestURI();
     if (requestURI.endsWith(PublicKeyHandler.PATH)) {
       numPassThrough.inc();
       filterChain.doFilter(request, response);
       return true;
     }
     long receivedTime = System.currentTimeMillis();
-    String header = request.getHeader(HEADER);
+    String header = ((HttpServletRequest) request).getHeader(HEADER);
     if (header == null) {
       //this must not happen
       log.error("No SolrAuth header present");
@@ -131,8 +133,17 @@ public class PKIAuthenticationPlugin extends AuthenticationPlugin implements Htt
         new BasicUserPrincipal(decipher.userName);
 
     numAuthenticated.inc();
-    filterChain.doFilter(wrapWithPrincipal(request, principal), response);
+    filterChain.doFilter(getWrapper((HttpServletRequest) request, principal), response);
     return true;
+  }
+
+  private static HttpServletRequestWrapper getWrapper(final HttpServletRequest request, final Principal principal) {
+    return new HttpServletRequestWrapper(request) {
+      @Override
+      public Principal getUserPrincipal() {
+        return principal;
+      }
+    };
   }
 
   public static class PKIHeaderData {

@@ -41,7 +41,7 @@ public class DateNRStrategyTest extends RandomSpatialOpStrategyTestCase {
   @Before
   public void setUp() throws Exception {
     super.setUp();
-    tree = new DateRangePrefixTree(DateRangePrefixTree.DEFAULT_CAL);
+    tree = DateRangePrefixTree.INSTANCE;
     strategy = new NumberRangePrefixTreeStrategy(tree, "dateRange");
     ((NumberRangePrefixTreeStrategy)strategy).setPointsOnly(randomInt() % 5 == 0);
     Calendar tmpCal = tree.newCal();

@@ -160,6 +160,8 @@ This command moves a replica from one node to another node by executing ADDREPLI
 
 If this command is used on a collection where more than one replica from the same shard exists on the same node, and the `shard` and `sourceNode` parameters match more than one replica, the replica selected is not deterministic (currently it's random).
 
+WARNING: MOVERREPLICA does not check the maxShardsPerNode setting, and may produce a collection that is in violation of the maxShardsPerNode.
+
 === MOVEREPLICA Parameters
 
 `collection`::

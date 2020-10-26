@@ -115,12 +115,6 @@ public class TestDrillSideways extends FacetTestCase {
     };
   }
 
-  private IndexSearcher getNewSearcher(IndexReader reader) {
-    // Do not wrap with an asserting searcher, since DrillSidewaysQuery doesn't
-    // implement all the required components like Weight#scorer.
-    return newSearcher(reader, true, false);
-  }
-
   public void testBasic() throws Exception {
     Directory dir = newDirectory();
     Directory taxoDir = newDirectory();
@@ -160,7 +154,7 @@ public class TestDrillSideways extends FacetTestCase {
     writer.addDocument(config.build(taxoWriter, doc));
 
     // NRT open
-    IndexSearcher searcher = getNewSearcher(writer.getReader());
+    IndexSearcher searcher = newSearcher(writer.getReader());
 
     //System.out.println("searcher=" + searcher);
 
@@ -345,7 +339,7 @@ public class TestDrillSideways extends FacetTestCase {
     writer.addDocument(config.build(taxoWriter, doc));
 
     // NRT open
-    IndexSearcher searcher = getNewSearcher(writer.getReader());
+    IndexSearcher searcher = newSearcher(writer.getReader());
 
     //System.out.println("searcher=" + searcher);
 
@@ -408,7 +402,7 @@ public class TestDrillSideways extends FacetTestCase {
     writer.addDocument(config.build(taxoWriter, doc));
 
     // NRT open
-    IndexSearcher searcher = getNewSearcher(writer.getReader());
+    IndexSearcher searcher = newSearcher(writer.getReader());
 
     //System.out.println("searcher=" + searcher);
 
@@ -635,7 +629,7 @@ public class TestDrillSideways extends FacetTestCase {
     IndexReader r = w.getReader();
 
     final SortedSetDocValuesReaderState sortedSetDVState;
-    IndexSearcher s = getNewSearcher(r);
+    IndexSearcher s = newSearcher(r);
 
     if (doUseDV) {
       sortedSetDVState = new DefaultSortedSetDocValuesReaderState(s.getIndexReader());
@@ -1145,7 +1139,7 @@ public class TestDrillSideways extends FacetTestCase {
     Directory taxoDir = newDirectory();
     RandomIndexWriter writer = new RandomIndexWriter(random(), dir);
     DirectoryTaxonomyWriter taxoWriter = new DirectoryTaxonomyWriter(taxoDir, IndexWriterConfig.OpenMode.CREATE);
-    IndexSearcher searcher = getNewSearcher(writer.getReader());
+    IndexSearcher searcher = newSearcher(writer.getReader());
     TaxonomyReader taxoReader = new DirectoryTaxonomyReader(taxoWriter);
 
     // Count "Author"
@@ -1184,7 +1178,7 @@ public class TestDrillSideways extends FacetTestCase {
     writer.addDocument(config.build(taxoWriter, doc));
 
     // NRT open
-    IndexSearcher searcher = getNewSearcher(writer.getReader());
+    IndexSearcher searcher = newSearcher(writer.getReader());
 
     // NRT open
     TaxonomyReader taxoReader = new DirectoryTaxonomyReader(taxoWriter);

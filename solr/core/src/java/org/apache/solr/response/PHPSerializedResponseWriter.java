@@ -86,7 +86,15 @@ class PHPSerializedWriter extends JSONWriter {
   
   @Override
   public void writeNamedList(String name, @SuppressWarnings({"rawtypes"})NamedList val) throws IOException {
-    writeNamedListAsMapMangled(name, val);
+    writeNamedListAsMapMangled(name,val);
+  }
+  
+  @Deprecated
+  @Override
+  public void writeStartDocumentList(String name, 
+      long start, int size, long numFound, Float maxScore) throws IOException
+  {
+    throw new UnsupportedOperationException();
   }
 
   @Override

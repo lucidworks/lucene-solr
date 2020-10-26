@@ -21,8 +21,6 @@ import static java.lang.System.nanoTime;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.lucene.index.QueryTimeout;
-import org.apache.solr.common.params.CommonParams;
-import org.apache.solr.request.SolrQueryRequest;
 
 /**
  * Implementation of {@link QueryTimeout} that is used by Solr. 
@@ -33,11 +31,10 @@ public class SolrQueryTimeoutImpl implements QueryTimeout {
   /**
    * The ThreadLocal variable to store the time beyond which, the processing should exit.
    */
-  private static final ThreadLocal<Long> timeoutAt = new ThreadLocal<>();
-
-  private static final SolrQueryTimeoutImpl instance = new SolrQueryTimeoutImpl();
+  public static ThreadLocal<Long> timeoutAt = new ThreadLocal<Long>();
 
   private SolrQueryTimeoutImpl() { }
+  private static SolrQueryTimeoutImpl instance = new SolrQueryTimeoutImpl();
 
   /** Return singleton instance */
   public static SolrQueryTimeoutImpl getInstance() { 
@@ -45,15 +42,15 @@ public class SolrQueryTimeoutImpl implements QueryTimeout {
   }
 
   /**
-   * The time (nanoseconds) at which the request should be considered timed out.
+   * Get the current value of timeoutAt.
    */
-  public static Long getTimeoutAtNs() {
+  public static Long get() {
     return timeoutAt.get();
   }
 
   @Override
   public boolean isTimeoutEnabled() {
-    return getTimeoutAtNs() != null;
+    return get() != null;
   }
 
   /**
@@ -61,7 +58,7 @@ public class SolrQueryTimeoutImpl implements QueryTimeout {
    */
   @Override
   public boolean shouldExit() {
-    Long timeoutAt = getTimeoutAtNs();
+    Long timeoutAt = get();
     if (timeoutAt == null) {
       // timeout unset
       return false;
@@ -70,23 +67,10 @@ public class SolrQueryTimeoutImpl implements QueryTimeout {
   }
 
   /**
-   * Sets or clears the time allowed based on how much time remains from the start of the request plus the configured
-   * {@link CommonParams#TIME_ALLOWED}.
+   * Method to set the time at which the timeOut should happen.
+   * @param timeAllowed set the time at which this thread should timeout.
    */
-  public static void set(SolrQueryRequest req) {
-    long timeAllowed = req.getParams().getLong(CommonParams.TIME_ALLOWED, -1L);
-    if (timeAllowed >= 0L) {
-      set(timeAllowed - (long)req.getRequestTimer().getTime()); // reduce by time already spent
-    } else {
-      reset();
-    }
-  }
-
-  /**
-   * Sets the time allowed (milliseconds), assuming we start a timer immediately.
-   * You should probably invoke {@link #set(SolrQueryRequest)} instead.
-   */
-  public static void set(long timeAllowed) {
+  public static void set(Long timeAllowed) {
     long time = nanoTime() + TimeUnit.NANOSECONDS.convert(timeAllowed, TimeUnit.MILLISECONDS);
     timeoutAt.set(time);
   }
@@ -100,7 +84,7 @@ public class SolrQueryTimeoutImpl implements QueryTimeout {
 
   @Override
   public String toString() {
-    return "timeoutAt: " + getTimeoutAtNs() + " (System.nanoTime(): " + nanoTime() + ")";
+    return "timeoutAt: " + get() + " (System.nanoTime(): " + nanoTime() + ")";
   }
 }
 

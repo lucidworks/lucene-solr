@@ -781,6 +781,15 @@ public class FastJavaBinDecoder implements DataEntry.FastDecoder {
     }
   }
 
+  public static void main(String[] args) {
+    for (int i = 0; i < lower5BitTags.length; i++) {
+      Tag tag = lower5BitTags[i];
+      if (tag == null) continue;
+      System.out.println(tag.name() + " : " + tag.code + (tag.isLower5Bits ? " lower" : " upper"));
+    }
+  }
+
+
   @SuppressWarnings({"unchecked", "rawtypes"})
   private static void addObj(DataEntry e) {
     if (e.type().isContainer) {

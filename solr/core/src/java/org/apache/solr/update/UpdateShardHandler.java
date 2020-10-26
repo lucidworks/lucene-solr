@@ -38,6 +38,7 @@ import org.apache.solr.common.util.IOUtils;
 import org.apache.solr.common.util.SolrNamedThreadFactory;
 import org.apache.solr.core.SolrInfoBean;
 import org.apache.solr.metrics.SolrMetricManager;
+import org.apache.solr.metrics.SolrMetricProducer;
 import org.apache.solr.metrics.SolrMetricsContext;
 import org.apache.solr.security.HttpClientBuilderPlugin;
 import org.apache.solr.update.processor.DistributedUpdateProcessor;
@@ -52,7 +53,7 @@ import org.slf4j.LoggerFactory;
 
 import static org.apache.solr.util.stats.InstrumentedHttpRequestExecutor.KNOWN_METRIC_NAME_STRATEGIES;
 
-public class UpdateShardHandler implements SolrInfoBean {
+public class UpdateShardHandler implements SolrMetricProducer, SolrInfoBean {
   
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -202,6 +203,11 @@ public class UpdateShardHandler implements SolrInfoBean {
   }
 
   @Override
+  public Set<String> getMetricNames() {
+    return metricNames;
+  }
+
+  @Override
   public SolrMetricsContext getSolrMetricsContext() {
     return solrMetricsContext;
   }
@@ -256,7 +262,7 @@ public class UpdateShardHandler implements SolrInfoBean {
       throw new RuntimeException(e);
     } finally {
       try {
-        SolrInfoBean.super.close();
+        SolrMetricProducer.super.close();
       } catch (Exception e) {
         // do nothing
       }

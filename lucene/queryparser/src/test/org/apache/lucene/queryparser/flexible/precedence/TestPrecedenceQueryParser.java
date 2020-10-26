@@ -38,7 +38,6 @@ import org.apache.lucene.queryparser.util.QueryParserTestBase; // javadocs
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BoostQuery;
 import org.apache.lucene.search.FuzzyQuery;
-import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.search.PrefixQuery;
@@ -142,7 +141,7 @@ public class TestPrecedenceQueryParser extends LuceneTestCase {
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    originalMaxClauses = IndexSearcher.getMaxClauseCount();
+    originalMaxClauses = BooleanQuery.getMaxClauseCount();
   }
 
   public PrecedenceQueryParser getParser(Analyzer a) throws Exception {
@@ -301,6 +300,7 @@ public class TestPrecedenceQueryParser extends LuceneTestCase {
     assertQueryEquals("term~", null, "term~2");
     assertQueryEquals("term~0.7", null, "term~1");
     assertQueryEquals("term~^3", null, "(term~2)^3.0");
+    assertQueryEquals("term^3~", null, "(term~2)^3.0");
     assertQueryEquals("term*germ", null, "term*germ");
     assertQueryEquals("term*germ^3", null, "(term*germ)^3.0");
 
@@ -572,7 +572,7 @@ public class TestPrecedenceQueryParser extends LuceneTestCase {
 
   // ParseException expected due to too many boolean clauses
   public void testBooleanQuery() throws Exception {
-    IndexSearcher.setMaxClauseCount(2);
+    BooleanQuery.setMaxClauseCount(2);
     expectThrows(QueryNodeException.class, () -> {
       getParser(new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false)).parse("one two three", "field");
     });
@@ -639,7 +639,7 @@ public class TestPrecedenceQueryParser extends LuceneTestCase {
 
   @Override
   public void tearDown() throws Exception {
-    IndexSearcher.setMaxClauseCount(originalMaxClauses);
+    BooleanQuery.setMaxClauseCount(originalMaxClauses);
     super.tearDown();
   }
 

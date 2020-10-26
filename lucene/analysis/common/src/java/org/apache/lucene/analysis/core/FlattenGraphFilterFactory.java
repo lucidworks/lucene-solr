@@ -20,7 +20,7 @@ package org.apache.lucene.analysis.core;
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
  * Factory for {@link FlattenGraphFilter}. 
@@ -42,11 +42,6 @@ public class FlattenGraphFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public FlattenGraphFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenStream create(TokenStream input) {
     return new FlattenGraphFilter(input);

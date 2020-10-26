@@ -16,6 +16,6 @@
  */
  
 /** 
- * Near-real-time replication framework
+ * <h1>Near-real-time replication framework</h1>
  */
 package org.apache.lucene.replicator.nrt;

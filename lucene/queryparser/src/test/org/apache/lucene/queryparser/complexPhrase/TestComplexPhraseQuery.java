@@ -169,14 +169,12 @@ public class TestComplexPhraseQuery extends LuceneTestCase {
   }
 
   public void testToStringContainsSlop() throws Exception {
-    ComplexPhraseQueryParser qp = new ComplexPhraseQueryParser("", analyzer);
+    ComplexPhraseQueryParser qp = new ComplexPhraseQueryParser(defaultFieldName, analyzer);
     int slop = random().nextInt(31) + 1;
 
     String qString = "name:\"j* smyth~\"~" + slop;
     Query query = qp.parse(qString);
-    String actualQStr = query.toString();
-    assertTrue("Slop is not shown in toString()", actualQStr.endsWith("~" + slop));
-    assertEquals(qString, actualQStr);
+    assertTrue("Slop is not shown in toString()", query.toString().endsWith("~" + slop));
 
     String string = "\"j* smyth~\"";
     Query q = qp.parse(string);

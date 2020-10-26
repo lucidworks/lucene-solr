@@ -31,7 +31,6 @@ import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.IndexFileNames;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.SegmentInfo;
-import org.apache.lucene.index.VectorValues;
 import org.apache.lucene.store.ChecksumIndexInput;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.store.Directory;
@@ -41,7 +40,7 @@ import org.apache.lucene.store.IndexOutput;
 
 /**
  * Lucene 6.0 Field Infos format.
- * <p>Field names are stored in the field info file, with suffix <code>.fnm</code>.
+ * <p>Field names are stored in the field info file, with suffix <tt>.fnm</tt>.
  * <p>FieldInfos (.fnm) --&gt; Header,FieldsCount, &lt;FieldName,FieldNumber,
  * FieldBits,DocValuesBits,DocValuesGen,Attributes,DimensionCount,DimensionNumBytes&gt; <sup>FieldsCount</sup>,Footer
  * <p>Data types:
@@ -165,8 +164,8 @@ public final class Lucene60FieldInfosFormat extends FieldInfosFormat {
           try {
             infos[i] = new FieldInfo(name, fieldNumber, storeTermVector, omitNorms, storePayloads, 
                                      indexOptions, docValuesType, dvGen, attributes,
-                                     pointDataDimensionCount, pointIndexDimensionCount, pointNumBytes,
-                                     0, VectorValues.ScoreFunction.NONE, isSoftDeletesField);
+                                     pointDataDimensionCount, pointIndexDimensionCount, pointNumBytes, isSoftDeletesField);
+            infos[i].checkConsistency();
           } catch (IllegalStateException e) {
             throw new CorruptIndexException("invalid fieldinfo for field: " + name + ", fieldNumber=" + fieldNumber, input, e);
           }

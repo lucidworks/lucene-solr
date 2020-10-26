@@ -300,11 +300,10 @@ public class TestIndexWriterDelete extends LuceneTestCase {
     modifier.close();
     dir.close();
   }
-
+  
   public void testDeleteAllNoDeadLock() throws IOException, InterruptedException {
     Directory dir = newDirectory();
-    final RandomIndexWriter modifier = new RandomIndexWriter(random(), dir,
-        newIndexWriterConfig().setMergePolicy(new MockRandomMergePolicy(random())));
+    final RandomIndexWriter modifier = new RandomIndexWriter(random(), dir); 
     int numThreads = atLeast(2);
     Thread[] threads = new Thread[numThreads];
     final CountDownLatch latch = new CountDownLatch(1);
@@ -342,7 +341,7 @@ public class TestIndexWriterDelete extends LuceneTestCase {
       threads[i].start();
     }
     latch.countDown();
-    while (!doneLatch.await(1, TimeUnit.MILLISECONDS)) {
+    while(!doneLatch.await(1, TimeUnit.MILLISECONDS)) {
       if (VERBOSE) {
         System.out.println("\nTEST: now deleteAll");
       }

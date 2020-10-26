@@ -68,4 +68,7 @@
       "enableRemoteStreaming":10,
       "enableStreamBody":10,
       "addHttpRequestToContext":0}},
+  "peerSync":{
+    "useRangeVersions":11
+  }
 }

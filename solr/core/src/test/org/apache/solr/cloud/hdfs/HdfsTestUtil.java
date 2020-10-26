@@ -19,7 +19,6 @@ package org.apache.solr.cloud.hdfs;
 import java.io.File;
 import java.lang.invoke.MethodHandles;
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -42,6 +41,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.MiniDFSNNTopology;
+import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.BlockPoolSlice;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeAdapter;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeResourceChecker;
 import org.apache.hadoop.hdfs.server.namenode.ha.HATestUtil;
@@ -122,21 +122,8 @@ public class HdfsTestUtil {
    * Ensure that the tests are picking up the modified Hadoop classes
    */
   private static void checkOverriddenHadoopClasses() {
-    List<Class<?>> modifiedHadoopClasses = new ArrayList<>(Arrays.asList(
-        DiskChecker.class,
-        FileUtil.class,
-        HardLink.class,
-        HttpServer2.class,
-        NameNodeResourceChecker.class,
-        RawLocalFileSystem.class));
-    // Dodge weird scope errors from the compiler (SOLR-14417)
-    try {
-      modifiedHadoopClasses.add(
-          Class.forName("org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.BlockPoolSlice"));
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-
+    List<Class<?>> modifiedHadoopClasses = Arrays.asList(BlockPoolSlice.class, DiskChecker.class,
+        FileUtil.class, HardLink.class, HttpServer2.class, NameNodeResourceChecker.class, RawLocalFileSystem.class);
     for (Class<?> clazz : modifiedHadoopClasses) {
       try {
         LuceneTestCase.assertNotNull("Field on " + clazz.getCanonicalName() + " should not have been null",

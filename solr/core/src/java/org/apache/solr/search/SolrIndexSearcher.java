@@ -35,9 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import com.codahale.metrics.Gauge;
 import com.google.common.collect.Iterables;
-
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.ExitableDirectoryReader;
@@ -53,7 +51,6 @@ import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.*;
 import org.apache.lucene.search.TotalHits.Relation;
-import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
@@ -70,6 +67,7 @@ import org.apache.solr.core.SolrInfoBean;
 import org.apache.solr.index.SlowCompositeReaderWrapper;
 import org.apache.solr.metrics.MetricsMap;
 import org.apache.solr.metrics.SolrMetricManager;
+import org.apache.solr.metrics.SolrMetricProducer;
 import org.apache.solr.metrics.SolrMetricsContext;
 import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
@@ -91,7 +89,7 @@ import org.slf4j.LoggerFactory;
  *
  * @since solr 0.9
  */
-public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrInfoBean {
+public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrInfoBean, SolrMetricProducer {
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -209,7 +207,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
     try {
       super.search(query, collector);
     } catch (TimeLimitingCollector.TimeExceededException | ExitableDirectoryReader.ExitingReaderException x) {
-      log.warn("Query: [{}]; ", query, x);
+      log.warn("Query: [{}]; {}", query, x.getMessage());
       qr.setPartialResults(true);
     } catch (EarlyTerminatingCollectorException etce) {
       if (collector instanceof DelegatingCollector) {
@@ -442,7 +440,9 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
     }
     this.solrMetricsContext = core.getSolrMetricsContext().getChildContext(this);
     for (@SuppressWarnings({"rawtypes"})SolrCache cache : cacheList) {
-      cache.initializeMetrics(solrMetricsContext, SolrMetricManager.mkName(cache.name(), STATISTICS_KEY));
+      // XXX use the deprecated method for back-compat. remove in 9.0
+      cache.initializeMetrics(solrMetricsContext.metricManager,
+          solrMetricsContext.registry, solrMetricsContext.tag, SolrMetricManager.mkName(cache.name(), STATISTICS_KEY));
     }
     initializeMetrics(solrMetricsContext, STATISTICS_KEY);
     registerTime = new Date();
@@ -498,12 +498,6 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
       directoryFactory.release(getIndexReader().directory());
     }
 
-    try {
-      SolrInfoBean.super.close();
-    } catch (Exception e) {
-      log.warn("Exception closing", e);
-    }
-
     // do this at the end so it only gets done if there are no exceptions
     numCloses.incrementAndGet();
     assert ObjectReleaseTracker.release(this);
@@ -547,7 +541,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
     if (solrConfig.filterCacheConfig != null && solrConfig.filterCacheConfig.getRegenerator() == null) {
       solrConfig.filterCacheConfig.setRegenerator(new CacheRegenerator() {
         @Override
-        @SuppressWarnings({"rawtypes"})public boolean regenerateItem(SolrIndexSearcher newSearcher
+        public boolean regenerateItem(SolrIndexSearcher newSearcher
                 , @SuppressWarnings({"rawtypes"})SolrCache newCache
                 , @SuppressWarnings({"rawtypes"})SolrCache oldCache,
             Object oldKey, Object oldVal) throws IOException {
@@ -1158,7 +1152,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
       bitsSet += upto;
       result = new BitDocSet(fbs, bitsSet);
     } else {
-      result = upto == 0 ? DocSet.empty() : new SortedIntDocSet(Arrays.copyOf(docs, upto));
+      result = upto == 0 ? DocSet.EMPTY : new SortedIntDocSet(Arrays.copyOf(docs, upto));
     }
 
     if (useCache) {
@@ -2265,26 +2259,31 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
   }
 
   @Override
+  public Set<String> getMetricNames() {
+    return metricNames;
+  }
+
+  @Override
   public SolrMetricsContext getSolrMetricsContext() {
     return solrMetricsContext;
   }
 
   @Override
   public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
-    parentContext.gauge(() -> name, true, "searcherName", Category.SEARCHER.toString(), scope);
-    parentContext.gauge(() -> cachingEnabled, true, "caching", Category.SEARCHER.toString(), scope);
-    parentContext.gauge(() -> openTime, true, "openedAt", Category.SEARCHER.toString(), scope);
-    parentContext.gauge(() -> warmupTime, true, "warmupTime", Category.SEARCHER.toString(), scope);
-    parentContext.gauge(() -> registerTime, true, "registeredAt", Category.SEARCHER.toString(), scope);
+    parentContext.gauge(this, () -> name, true, "searcherName", Category.SEARCHER.toString(), scope);
+    parentContext.gauge(this, () -> cachingEnabled, true, "caching", Category.SEARCHER.toString(), scope);
+    parentContext.gauge(this, () -> openTime, true, "openedAt", Category.SEARCHER.toString(), scope);
+    parentContext.gauge(this, () -> warmupTime, true, "warmupTime", Category.SEARCHER.toString(), scope);
+    parentContext.gauge(this, () -> registerTime, true, "registeredAt", Category.SEARCHER.toString(), scope);
     // reader stats
-    parentContext.gauge(rgauge(-1, () -> reader.numDocs()), true, "numDocs", Category.SEARCHER.toString(), scope);
-    parentContext.gauge(rgauge(-1, () -> reader.maxDoc()), true, "maxDoc", Category.SEARCHER.toString(), scope);
-    parentContext.gauge(rgauge(-1, () -> reader.maxDoc() - reader.numDocs()), true, "deletedDocs", Category.SEARCHER.toString(), scope);
-    parentContext.gauge(rgauge(-1, () -> reader.toString()), true, "reader", Category.SEARCHER.toString(), scope);
-    parentContext.gauge(rgauge("", () -> reader.directory().toString()), true, "readerDir", Category.SEARCHER.toString(), scope);
-    parentContext.gauge(rgauge(-1, () -> reader.getVersion()), true, "indexVersion", Category.SEARCHER.toString(), scope);
+    parentContext.gauge(this, () -> reader.numDocs(), true, "numDocs", Category.SEARCHER.toString(), scope);
+    parentContext.gauge(this, () -> reader.maxDoc(), true, "maxDoc", Category.SEARCHER.toString(), scope);
+    parentContext.gauge(this, () -> reader.maxDoc() - reader.numDocs(), true, "deletedDocs", Category.SEARCHER.toString(), scope);
+    parentContext.gauge(this, () -> reader.toString(), true, "reader", Category.SEARCHER.toString(), scope);
+    parentContext.gauge(this, () -> reader.directory().toString(), true, "readerDir", Category.SEARCHER.toString(), scope);
+    parentContext.gauge(this, () -> reader.getVersion(), true, "indexVersion", Category.SEARCHER.toString(), scope);
     // size of the currently opened commit
-    parentContext.gauge(() -> {
+    parentContext.gauge(this, () -> {
       try {
         Collection<String> files = reader.getIndexCommit().getFileNames();
         long total = 0;
@@ -2297,27 +2296,13 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
       }
     }, true, "indexCommitSize", Category.SEARCHER.toString(), scope);
     // statsCache metrics
-    parentContext.gauge(
-        new MetricsMap(map -> {
-          statsCache.getCacheMetrics().getSnapshot(map::putNoEx);
+    parentContext.gauge(this,
+        new MetricsMap((detailed, map) -> {
+          statsCache.getCacheMetrics().getSnapshot(map::put);
           map.put("statsCacheImpl", statsCache.getClass().getSimpleName());
         }), true, "statsCache", Category.CACHE.toString(), scope);
   }
 
-  /** 
-   * wraps a gauge (related to an IndexReader) and swallows any {@link AlreadyClosedException} that 
-   * might be thrown, returning the specified default in it's place. 
-   */
-  private <T> Gauge<T> rgauge(T closedDefault, Gauge<T> g) {
-    return () -> {
-      try {
-        return g.getValue();
-      } catch (AlreadyClosedException ignore) {
-        return closedDefault;
-      }
-    };
-  }
-  
   private static class FilterImpl extends Filter {
     private final Filter topFilter;
     private final List<Weight> weights;

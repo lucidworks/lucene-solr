@@ -18,7 +18,10 @@ package org.apache.solr.security;
 
 import javax.security.auth.Subject;
 import javax.servlet.FilterChain;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletRequestWrapper;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.Serializable;
@@ -59,7 +62,7 @@ public class BasicAuthPlugin extends AuthenticationPlugin implements ConfigEdita
   private AuthenticationProvider authenticationProvider;
   private final static ThreadLocal<Header> authHeader = new ThreadLocal<>();
   private static final String X_REQUESTED_WITH_HEADER = "X-Requested-With";
-  private boolean blockUnknown = true;
+  private boolean blockUnknown = false;
   private boolean forwardCredentials = false;
 
   public boolean authenticate(String username, String pwd) {
@@ -121,7 +124,11 @@ public class BasicAuthPlugin extends AuthenticationPlugin implements ConfigEdita
   }
 
   @Override
-  public boolean doAuthenticate(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws Exception {
+  public boolean doAuthenticate(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws Exception {
+
+    HttpServletRequest request = (HttpServletRequest) servletRequest;
+    HttpServletResponse response = (HttpServletResponse) servletResponse;
+
     String authHeader = request.getHeader("Authorization");
     boolean isAjaxRequest = isAjaxRequest(request);
     
@@ -144,10 +151,14 @@ public class BasicAuthPlugin extends AuthenticationPlugin implements ConfigEdita
                   authenticationFailure(response, isAjaxRequest, "Bad credentials");
                   return false;
                 } else {
-                  Principal principal = new BasicAuthUserPrincipal(username, pwd);
-                  request = wrapWithPrincipal(request, principal, username);
+                  HttpServletRequestWrapper wrapper = new HttpServletRequestWrapper(request) {
+                    @Override
+                    public Principal getUserPrincipal() {
+                      return new BasicAuthUserPrincipal(username, pwd);
+                    }
+                  };
                   numAuthenticated.inc();
-                  filterChain.doFilter(request, response);
+                  filterChain.doFilter(wrapper, response);
                   return true;
                 }
               } else {

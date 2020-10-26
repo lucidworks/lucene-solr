@@ -20,21 +20,25 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.codahale.metrics.Counter;
+import com.codahale.metrics.MetricRegistry;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.SolrInfoBean;
-import org.apache.solr.metrics.SolrMetricsContext;
+import org.apache.solr.metrics.SolrMetricManager;
+import org.apache.solr.metrics.SolrMetricProducer;
 
 /**
  * 
  * @since solr 1.3
  */
-public abstract class HighlightingPluginBase implements SolrInfoBean
+public abstract class HighlightingPluginBase implements SolrInfoBean, SolrMetricProducer
 {
   protected Counter numRequests;
   protected SolrParams defaults;
   protected Set<String> metricNames = ConcurrentHashMap.newKeySet(1);
-  protected SolrMetricsContext solrMetricsContext;
+  protected MetricRegistry registry;
+  protected SolrMetricManager metricManager;
+  protected String registryName;
 
   public void init(@SuppressWarnings({"rawtypes"})NamedList args) {
     if( args != null ) {
@@ -62,14 +66,21 @@ public abstract class HighlightingPluginBase implements SolrInfoBean
   }
 
   @Override
-  public SolrMetricsContext getSolrMetricsContext() {
-    return solrMetricsContext;
+  public Set<String> getMetricNames() {
+    return metricNames;
   }
 
   @Override
-  public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
-    solrMetricsContext = parentContext.getChildContext(this);
-    numRequests = solrMetricsContext.counter("requests", getCategory().toString(), scope);
+  public MetricRegistry getMetricRegistry() {
+    return registry;
+  }
+
+  @Override
+  public void initializeMetrics(SolrMetricManager manager, String registryName, String tag, String scope) {
+    this.registryName = registryName;
+    this.metricManager = manager;
+    registry = manager.registry(registryName);
+    numRequests = manager.counter(this, registryName, "requests", getCategory().toString(), scope);
   }
 }
 

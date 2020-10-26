@@ -52,9 +52,9 @@ public class TestFileSwitchDirectory extends BaseDirectoryTestCase {
     fileExtensions.add("fdx");
     fileExtensions.add("fdm");
     
-    MockDirectoryWrapper primaryDir = new MockDirectoryWrapper(random(), new ByteBuffersDirectory());
+    MockDirectoryWrapper primaryDir = new MockDirectoryWrapper(random(), new RAMDirectory());
     primaryDir.setCheckIndexOnClose(false); // only part of an index
-    MockDirectoryWrapper secondaryDir = new MockDirectoryWrapper(random(), new ByteBuffersDirectory());
+    MockDirectoryWrapper secondaryDir = new MockDirectoryWrapper(random(), new RAMDirectory());
     secondaryDir.setCheckIndexOnClose(false); // only part of an index
     
     FileSwitchDirectory fsd = new FileSwitchDirectory(fileExtensions, primaryDir, secondaryDir, true);
@@ -99,8 +99,8 @@ public class TestFileSwitchDirectory extends BaseDirectoryTestCase {
   }
 
   private Directory newFSSwitchDirectory(Path aDir, Path bDir, Set<String> primaryExtensions) throws IOException {
-    Directory a = new NIOFSDirectory(aDir);
-    Directory b = new NIOFSDirectory(bDir);
+    Directory a = new SimpleFSDirectory(aDir);
+    Directory b = new SimpleFSDirectory(bDir);
     return new FileSwitchDirectory(primaryExtensions, a, b, true);
   }
   
@@ -173,7 +173,7 @@ public class TestFileSwitchDirectory extends BaseDirectoryTestCase {
     FileSystem fs = new WindowsFS(path.getFileSystem()).getFileSystem(URI.create("file:///"));
     Path indexPath = new FilterPath(path, fs);
     try (final FileSwitchDirectory dir = new FileSwitchDirectory(Collections.singleton("tim"),
-        new NIOFSDirectory(indexPath), new NIOFSDirectory(indexPath), true)) {
+        new SimpleFSDirectory(indexPath), new SimpleFSDirectory(indexPath), true)) {
       dir.createOutput("foo.tim", IOContext.DEFAULT).close();
       Function<String[], Long> stripExtra = array -> Arrays.asList(array).stream()
           .filter(f -> f.startsWith("extra") == false).count();

@@ -17,7 +17,6 @@
 @echo off
 
 REM Settings here will override settings in existing env vars or in bin/solr.  The default shipped state
-
 REM of this file is completely commented.
 
 REM By default the script will use JAVA_HOME to determine which java
@@ -56,7 +55,7 @@ REM Leave empty if not using SolrCloud
 REM set ZK_HOST=
 
 REM Set the ZooKeeper client timeout (for SolrCloud mode)
-REM set ZK_CLIENT_TIMEOUT=30000
+REM set ZK_CLIENT_TIMEOUT=15000
 
 REM By default the start script uses "localhost"; override the hostname here
 REM for production SolrCloud environments to control the hostname exposed to cluster state
@@ -106,16 +105,12 @@ REM set SOLR_LOG_PRESTART_ROTATION=false
 REM Enables jetty request log for all requests
 REM set SOLR_REQUESTLOG_ENABLED=false
 
+REM Set the host interface to listen on. Jetty will listen on all interfaces (0.0.0.0) by default.
+REM This must be an IPv4 ("a.b.c.d") or bracketed IPv6 ("[x::y]") address, not a hostname!
+REM set SOLR_JETTY_HOST=0.0.0.0
+
 REM Sets the port Solr binds to, default is 8983
 REM set SOLR_PORT=8983
-
-REM Sets the network interface the Solr binds to. To prevent administrators from
-REM accidentally exposing Solr more widely than intended, this defaults to 127.0.0.1.
-REM Administrators should think carefully about their deployment environment and
-REM set this value as narrowly as required before going to production. In
-REM environments where security is not a concern, 0.0.0.0 can be used to allow
-REM Solr to accept connections on all network interfaces.
-REM set SOLR_JETTY_HOST=127.0.0.1
 
 REM Restrict access to solr by IP address.
 REM Specify a comma-separated list of addresses or networks, for example:
@@ -203,11 +198,7 @@ REM Runs solr in a java security manager sandbox. This can protect against some 
 REM Runtime properties are passed to the security policy file (server\etc\security.policy)
 REM You can also tweak via standard JDK files such as ~\.java.policy, see https://s.apache.org/java8policy
 REM This is experimental! It may not work at all with Hadoop/HDFS features.
-REM set SOLR_SECURITY_MANAGER_ENABLED=true
-REM This variable provides you with the option to disable the Admin UI. if you uncomment the variable below and
-REM change the value to true. The option is configured as a system property as defined in SOLR_START_OPTS in the start
-REM scripts.
-REM set SOLR_ADMIN_UI_DISABLED=false
+REM set SOLR_SECURITY_MANAGER_ENABLED=false
 
 REM Solr is by default allowed to read and write data from/to SOLR_HOME and a few other well defined locations
 REM Sometimes it may be necessary to place a core or a backup on a different location or a different disk

@@ -59,7 +59,7 @@ public abstract class FilterLeafReader extends LeafReader {
      * Creates a new FilterFields.
      * @param in the underlying Fields instance.
      */
-    protected FilterFields(Fields in) {
+    public FilterFields(Fields in) {
       if (in == null) {
         throw new NullPointerException("incoming Fields must not be null");
       }
@@ -95,7 +95,7 @@ public abstract class FilterLeafReader extends LeafReader {
      * Creates a new FilterTerms
      * @param in the underlying Terms instance.
      */
-    protected FilterTerms(Terms in) {
+    public FilterTerms(Terms in) {
       if (in == null) {
         throw new NullPointerException("incoming Terms must not be null");
       }
@@ -162,7 +162,7 @@ public abstract class FilterLeafReader extends LeafReader {
      * Creates a new FilterTermsEnum
      * @param in the underlying TermsEnum instance.
      */
-    protected FilterTermsEnum(TermsEnum in) {
+    public FilterTermsEnum(TermsEnum in) {
       if (in == null) {
         throw new NullPointerException("incoming TermsEnum must not be null");
       }
@@ -244,7 +244,7 @@ public abstract class FilterLeafReader extends LeafReader {
      * Create a new FilterPostingsEnum
      * @param in the underlying PostingsEnum instance.
      */
-    protected FilterPostingsEnum(PostingsEnum in) {
+    public FilterPostingsEnum(PostingsEnum in) {
       if (in == null) {
         throw new NullPointerException("incoming PostingsEnum must not be null");
       }
@@ -305,7 +305,7 @@ public abstract class FilterLeafReader extends LeafReader {
    * <p>Note that base reader is closed if this FilterLeafReader is closed.</p>
    * @param in specified base reader.
    */
-  protected FilterLeafReader(LeafReader in) {
+  public FilterLeafReader(LeafReader in) {
     super();
     if (in == null) {
       throw new NullPointerException("incoming LeafReader must not be null");
@@ -328,11 +328,6 @@ public abstract class FilterLeafReader extends LeafReader {
   @Override
   public PointValues getPointValues(String field) throws IOException {
     return in.getPointValues(field);
-  }
-
-  @Override
-  public VectorValues getVectorValues(String field) throws IOException {
-    return in.getVectorValues(field);
   }
 
   @Override

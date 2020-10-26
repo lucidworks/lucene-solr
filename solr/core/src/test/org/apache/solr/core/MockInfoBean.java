@@ -19,13 +19,16 @@ package org.apache.solr.core;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.codahale.metrics.MetricRegistry;
 import org.apache.solr.metrics.MetricsMap;
+import org.apache.solr.metrics.SolrMetricManager;
 import org.apache.solr.metrics.SolrMetricProducer;
-import org.apache.solr.metrics.SolrMetricsContext;
 
 class MockInfoBean implements SolrInfoBean, SolrMetricProducer {
   Set<String> metricNames = ConcurrentHashMap.newKeySet();
-  SolrMetricsContext solrMetricsContext;
+  MetricRegistry registry;
+  SolrMetricManager metricManager;
+  String registryName;
 
   @Override
   public String getName() {
@@ -43,14 +46,21 @@ class MockInfoBean implements SolrInfoBean, SolrMetricProducer {
   }
 
   @Override
-  public SolrMetricsContext getSolrMetricsContext() {
-    return solrMetricsContext;
+  public Set<String> getMetricNames() {
+    return metricNames;
   }
 
   @Override
-  public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
-    solrMetricsContext = parentContext.getChildContext(this);
-    MetricsMap metricsMap = new MetricsMap(map -> {
+  public MetricRegistry getMetricRegistry() {
+    return registry;
+  }
+
+  @Override
+  public void initializeMetrics(SolrMetricManager manager, String registryName, String tag, String scope) {
+    this.metricManager = manager;
+    this.registryName = registryName;
+    registry = manager.registry(registryName);
+    MetricsMap metricsMap = new MetricsMap((detailed, map) -> {
       map.put("Integer", 123);
       map.put("Double",567.534);
       map.put("Long", 32352463l);
@@ -60,6 +70,6 @@ class MockInfoBean implements SolrInfoBean, SolrMetricProducer {
       map.put("String","testing");
       map.put("Object", new Object());
     });
-    solrMetricsContext.gauge(metricsMap, true, getClass().getSimpleName(), getCategory().toString(), scope);
+    manager.registerGauge(this, registryName, metricsMap, tag, true, getClass().getSimpleName(), getCategory().toString(), scope);
   }
 }

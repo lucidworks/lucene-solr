@@ -18,19 +18,24 @@ package org.apache.solr.handler.component;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.lucene.search.Query;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.params.CommonParams;
+import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
+import org.apache.solr.common.util.SuppressForbidden;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.search.DocList;
 import org.apache.solr.search.QueryParsing;
@@ -51,6 +56,11 @@ import static org.apache.solr.common.params.CommonParams.JSON;
 public class DebugComponent extends SearchComponent
 {
   public static final String COMPONENT_NAME = "debug";
+  
+  /**
+   * A counter to ensure that no RID is equal, even if they fall in the same millisecond
+   */
+  private static final AtomicLong ridCounter = new AtomicLong();
   
   /**
    * Map containing all the possible stages as key and
@@ -140,9 +150,29 @@ public class DebugComponent extends SearchComponent
     }
   }
 
+
   private void doDebugTrack(ResponseBuilder rb) {
-    final String rid = rb.req.getParams().get(CommonParams.REQUEST_ID);
+    String rid = getRequestId(rb.req);
     rb.addDebug(rid, "track", CommonParams.REQUEST_ID);//to see it in the response
+    rb.rsp.addToLog(CommonParams.REQUEST_ID, rid); //to see it in the logs of the landing core
+    
+  }
+
+  public static String getRequestId(SolrQueryRequest req) {
+    String rid = req.getParams().get(CommonParams.REQUEST_ID);
+    if(rid == null || "".equals(rid)) {
+      rid = generateRid(req);
+      ModifiableSolrParams params = new ModifiableSolrParams(req.getParams());
+      params.add(CommonParams.REQUEST_ID, rid);//add rid to the request so that shards see it
+      req.setParams(params);
+    }
+    return rid;
+  }
+
+  @SuppressForbidden(reason = "Need currentTimeMillis, only used for naming")
+  private static String generateRid(SolrQueryRequest req) {
+    String hostName = req.getCore().getCoreContainer().getHostName();
+    return hostName + "-" + req.getCore().getName() + "-" + System.currentTimeMillis() + "-" + ridCounter.getAndIncrement();
   }
 
   @Override
@@ -196,7 +226,7 @@ public class DebugComponent extends SearchComponent
     }
   }
 
-  private final static Set<String> EXCLUDE_SET = Set.of("explain");
+  private final static Set<String> EXCLUDE_SET = Collections.unmodifiableSet(new HashSet<>(Arrays.asList("explain")));
 
   @Override
   @SuppressWarnings({"unchecked"})

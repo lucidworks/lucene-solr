@@ -108,9 +108,4 @@ public abstract class FilterCodec extends Codec {
   public PointsFormat pointsFormat() {
     return delegate.pointsFormat();
   }
-
-  @Override
-  public VectorFormat vectorFormat() {
-    return delegate.vectorFormat();
-  }
 }

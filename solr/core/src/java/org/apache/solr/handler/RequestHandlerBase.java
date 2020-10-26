@@ -19,6 +19,7 @@ package org.apache.solr.handler;
 import java.lang.invoke.MethodHandles;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.codahale.metrics.Counter;
@@ -38,6 +39,7 @@ import org.apache.solr.core.PluginBag;
 import org.apache.solr.core.PluginInfo;
 import org.apache.solr.core.SolrInfoBean;
 import org.apache.solr.metrics.MetricsMap;
+import org.apache.solr.metrics.SolrMetricProducer;
 import org.apache.solr.metrics.SolrMetricsContext;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestHandler;
@@ -52,7 +54,7 @@ import static org.apache.solr.core.RequestParams.USEPARAM;
 /**
  *
  */
-public abstract class RequestHandlerBase implements SolrRequestHandler, SolrInfoBean, NestedRequestHandler, ApiSupport {
+public abstract class RequestHandlerBase implements SolrRequestHandler, SolrInfoBean, SolrMetricProducer, NestedRequestHandler, ApiSupport {
 
   @SuppressWarnings({"rawtypes"})
   protected NamedList initArgs = null;
@@ -81,6 +83,7 @@ public abstract class RequestHandlerBase implements SolrRequestHandler, SolrInfo
 
   private PluginInfo pluginInfo;
 
+  private Set<String> metricNames = ConcurrentHashMap.newKeySet();
   protected SolrMetricsContext solrMetricsContext;
 
 
@@ -91,8 +94,7 @@ public abstract class RequestHandlerBase implements SolrRequestHandler, SolrInfo
 
   /**
    * Initializes the {@link org.apache.solr.request.SolrRequestHandler} by creating three {@link org.apache.solr.common.params.SolrParams} named.
-   * <table style="border: 1px solid">
-   * <caption>table of parameters</caption>
+   * <table border="1" summary="table of parameters">
    * <tr><th>Name</th><th>Description</th></tr>
    * <tr><td>defaults</td><td>Contains all of the named arguments contained within the list element named "defaults".</td></tr>
    * <tr><td>appends</td><td>Contains all of the named arguments contained within the list element named "appends".</td></tr>
@@ -152,21 +154,21 @@ public abstract class RequestHandlerBase implements SolrRequestHandler, SolrInfo
   @Override
   public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
     this.solrMetricsContext = parentContext.getChildContext(this);
-    numErrors = solrMetricsContext.meter("errors", getCategory().toString(), scope);
-    numServerErrors = solrMetricsContext.meter("serverErrors", getCategory().toString(), scope);
-    numClientErrors = solrMetricsContext.meter("clientErrors", getCategory().toString(), scope);
-    numTimeouts = solrMetricsContext.meter("timeouts", getCategory().toString(), scope);
-    requests = solrMetricsContext.counter("requests", getCategory().toString(), scope);
-    MetricsMap metricsMap = new MetricsMap(map ->
-        shardPurposes.forEach((k, v) -> map.putNoEx(k, v.getCount())));
-    solrMetricsContext.gauge(metricsMap, true, "shardRequests", getCategory().toString(), scope);
-    requestTimes = solrMetricsContext.timer("requestTimes", getCategory().toString(), scope);
-    distribRequestTimes = solrMetricsContext.timer("requestTimes", getCategory().toString(), scope, "distrib");
-    localRequestTimes = solrMetricsContext.timer("requestTimes", getCategory().toString(), scope, "local");
-    totalTime = solrMetricsContext.counter("totalTime", getCategory().toString(), scope);
-    distribTotalTime = solrMetricsContext.counter("totalTime", getCategory().toString(), scope, "distrib");
-    localTotalTime = solrMetricsContext.counter("totalTime", getCategory().toString(), scope, "local");
-    solrMetricsContext.gauge(() -> handlerStart, true, "handlerStart", getCategory().toString(), scope);
+    numErrors = solrMetricsContext.meter(this, "errors", getCategory().toString(), scope);
+    numServerErrors = solrMetricsContext.meter(this, "serverErrors", getCategory().toString(), scope);
+    numClientErrors = solrMetricsContext.meter(this, "clientErrors", getCategory().toString(), scope);
+    numTimeouts = solrMetricsContext.meter(this, "timeouts", getCategory().toString(), scope);
+    requests = solrMetricsContext.counter(this, "requests", getCategory().toString(), scope);
+    MetricsMap metricsMap = new MetricsMap((detail, map) ->
+        shardPurposes.forEach((k, v) -> map.put(k, v.getCount())));
+    solrMetricsContext.gauge(this, metricsMap, true, "shardRequests", getCategory().toString(), scope);
+    requestTimes = solrMetricsContext.timer(this, "requestTimes", getCategory().toString(), scope);
+    distribRequestTimes = solrMetricsContext.timer(this, "requestTimes", getCategory().toString(), scope, "distrib");
+    localRequestTimes = solrMetricsContext.timer(this, "requestTimes", getCategory().toString(), scope, "local");
+    totalTime = solrMetricsContext.counter(this, "totalTime", getCategory().toString(), scope);
+    distribTotalTime = solrMetricsContext.counter(this, "totalTime", getCategory().toString(), scope, "distrib");
+    localTotalTime = solrMetricsContext.counter(this, "totalTime", getCategory().toString(), scope, "local");
+    solrMetricsContext.gauge(this, () -> handlerStart, true, "handlerStart", getCategory().toString(), scope);
   }
 
   public static SolrParams getSolrParamsFromNamedList(@SuppressWarnings({"rawtypes"})NamedList args, String key) {
@@ -286,6 +288,11 @@ public abstract class RequestHandlerBase implements SolrRequestHandler, SolrInfo
   @Override
   public Category getCategory() {
     return Category.QUERY;
+  }
+
+  @Override
+  public Set<String> getMetricNames() {
+    return metricNames;
   }
 
   @Override

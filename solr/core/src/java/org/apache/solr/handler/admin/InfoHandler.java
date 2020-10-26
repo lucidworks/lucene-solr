@@ -50,10 +50,7 @@ public class InfoHandler extends RequestHandlerBase  {
     handlers.put("properties", new PropertiesRequestHandler());
     handlers.put("logging", new LoggingHandler(coreContainer));
     handlers.put("system", new SystemInfoHandler(coreContainer));
-    if (coreContainer.getHealthCheckHandler() == null) {
-      throw new IllegalStateException("HealthCheckHandler needs to be initialized before creating InfoHandler");
-    }
-    handlers.put("health", coreContainer.getHealthCheckHandler());
+    handlers.put("health", new HealthCheckHandler(coreContainer));
 
   }
 

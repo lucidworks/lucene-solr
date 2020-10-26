@@ -272,26 +272,27 @@ public class FSTTester<T> {
       System.out.println("\nTEST: prune1=" + prune1 + " prune2=" + prune2);
     }
 
-    final FSTCompiler<T> fstCompiler = new FSTCompiler.Builder<>(inputMode == 0 ? FST.INPUT_TYPE.BYTE1 : FST.INPUT_TYPE.BYTE4, outputs)
-        .minSuffixCount1(prune1)
-        .minSuffixCount2(prune2)
-        .shouldShareSuffix(prune1==0 && prune2==0)
-        .shouldShareNonSingletonNodes(allowRandomSuffixSharing ? random.nextBoolean() : true)
-        .shareMaxTailLength(allowRandomSuffixSharing ? TestUtil.nextInt(random, 1, 10) : Integer.MAX_VALUE)
-        .build();
+    final Builder<T> builder = new Builder<>(inputMode == 0 ? FST.INPUT_TYPE.BYTE1 : FST.INPUT_TYPE.BYTE4,
+                                              prune1, prune2,
+                                              prune1==0 && prune2==0,
+                                              allowRandomSuffixSharing ? random.nextBoolean() : true,
+                                              allowRandomSuffixSharing ? TestUtil.nextInt(random, 1, 10) : Integer.MAX_VALUE,
+                                              outputs,
+                                              true,
+                                              15);
 
     for(InputOutput<T> pair : pairs) {
       if (pair.output instanceof List) {
         @SuppressWarnings("unchecked") List<Long> longValues = (List<Long>) pair.output;
-        @SuppressWarnings("unchecked") final FSTCompiler<Object> fstCompilerObject = (FSTCompiler<Object>) fstCompiler;
+        @SuppressWarnings("unchecked") final Builder<Object> builderObject = (Builder<Object>) builder;
         for(Long value : longValues) {
-          fstCompilerObject.add(pair.input, value);
+          builderObject.add(pair.input, value);
         }
       } else {
-        fstCompiler.add(pair.input, pair.output);
+        builder.add(pair.input, pair.output);
       }
     }
-    FST<T> fst = fstCompiler.compile();
+    FST<T> fst = builder.finish();
 
     if (random.nextBoolean() && fst != null) {
       IOContext context = LuceneTestCase.newIOContext(random);
@@ -319,7 +320,7 @@ public class FSTTester<T> {
       if (fst == null) {
         System.out.println("  fst has 0 nodes (fully pruned)");
       } else {
-        System.out.println("  fst has " + fstCompiler.getNodeCount() + " nodes and " + fstCompiler.getArcCount() + " arcs");
+        System.out.println("  fst has " + builder.getNodeCount() + " nodes and " + builder.getArcCount() + " arcs");
       }
     }
 
@@ -329,8 +330,8 @@ public class FSTTester<T> {
       verifyPruned(inputMode, fst, prune1, prune2);
     }
 
-    nodeCount = fstCompiler.getNodeCount();
-    arcCount = fstCompiler.getArcCount();
+    nodeCount = builder.getNodeCount();
+    arcCount = builder.getArcCount();
 
     return fst;
   }
@@ -340,7 +341,6 @@ public class FSTTester<T> {
   }
 
   // FST is complete
-  @SuppressWarnings("deprecation")
   private void verifyUnPruned(int inputMode, FST<T> fst) throws IOException {
 
     final FST<Long> fstLong;

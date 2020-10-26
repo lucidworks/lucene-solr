@@ -35,7 +35,8 @@
 
     <queryResultMaxDocsCached>200</queryResultMaxDocsCached>
 
-    <documentCache size="512"
+    <documentCache class="solr.LRUCache"
+                   size="512"
                    initialSize="512"
                    autowarmCount="0"/>
   </query>

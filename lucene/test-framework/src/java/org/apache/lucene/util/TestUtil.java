@@ -46,8 +46,6 @@ import java.util.regex.PatternSyntaxException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import com.carrotsearch.randomizedtesting.generators.RandomNumbers;
-import com.carrotsearch.randomizedtesting.generators.RandomPicks;
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.DocValuesFormat;
 import org.apache.lucene.codecs.PostingsFormat;
@@ -56,7 +54,7 @@ import org.apache.lucene.codecs.blockterms.LuceneFixedGap;
 import org.apache.lucene.codecs.blocktreeords.BlockTreeOrdsPostingsFormat;
 import org.apache.lucene.codecs.lucene80.Lucene80DocValuesFormat;
 import org.apache.lucene.codecs.lucene84.Lucene84PostingsFormat;
-import org.apache.lucene.codecs.lucene90.Lucene90Codec;
+import org.apache.lucene.codecs.lucene86.Lucene86Codec;
 import org.apache.lucene.codecs.perfield.PerFieldDocValuesFormat;
 import org.apache.lucene.codecs.perfield.PerFieldPostingsFormat;
 import org.apache.lucene.document.BinaryDocValuesField;
@@ -95,13 +93,16 @@ import org.apache.lucene.search.FieldDoc;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.TotalHits;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.NoLockFactory;
+import org.apache.lucene.store.RAMDirectory;
 import org.junit.Assert;
+
+import com.carrotsearch.randomizedtesting.generators.RandomNumbers;
+import com.carrotsearch.randomizedtesting.generators.RandomPicks;
 
 /**
  * General utility methods for Lucene unit tests. 
@@ -918,7 +919,7 @@ public final class TestUtil {
    * This may be different than {@link Codec#getDefault()} because that is randomized. 
    */
   public static Codec getDefaultCodec() {
-    return new Lucene90Codec();
+    return new Lucene86Codec();
   }
   
   /** 
@@ -1302,12 +1303,9 @@ public final class TestUtil {
     }
   }
   
-  /**
-   * Returns a copy of the source directory, with file contents stored
-   * in RAM.
-   */
-  public static Directory ramCopyOf(Directory dir) throws IOException {
-    Directory ram = new ByteBuffersDirectory();
+  /** Returns a copy of directory, entirely in RAM */
+  public static RAMDirectory ramCopyOf(Directory dir) throws IOException {
+    RAMDirectory ram = new RAMDirectory();
     for (String file : dir.listAll()) {
       if (file.startsWith(IndexFileNames.SEGMENTS) || IndexFileNames.CODEC_FILE_PATTERN.matcher(file).matches()) {
         ram.copyFrom(dir, file, file, IOContext.DEFAULT);

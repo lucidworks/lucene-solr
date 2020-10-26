@@ -20,7 +20,7 @@ package org.apache.lucene.analysis.id;
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
  * Factory for {@link IndonesianStemFilter}. 
@@ -49,11 +49,6 @@ public class IndonesianStemFilterFactory extends TokenFilterFactory {
     if (!args.isEmpty()) {
       throw new IllegalArgumentException("Unknown parameters: " + args);
     }
-  }
-
-  /** Default ctor for compatibility with SPI */
-  public IndonesianStemFilterFactory() {
-    throw defaultCtorException();
   }
 
   @Override

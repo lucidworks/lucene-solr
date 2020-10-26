@@ -29,7 +29,7 @@ import org.apache.solr.cloud.ZkSolrResourceLoader;
 import org.apache.solr.common.MapSerializable;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.SolrZkClient;
-import org.apache.solr.common.params.MultiMapSolrParams;
+import org.apache.solr.common.params.MapSolrParams;
 import org.apache.solr.common.util.Utils;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.data.Stat;
@@ -85,27 +85,32 @@ public class RequestParams implements MapSerializable {
    * This converts Lists to arrays of strings. Because Solr expects
    * params to be String[]
    */
-  private static Map<String,String[]> getMapCopy(Map<String,?> value) {
-    Map<String, String[]> copy = new LinkedHashMap<>();
-    for (Map.Entry<String, ?> entry : value.entrySet()) {
+
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private static Map getMapCopy(Map value) {
+    @SuppressWarnings({"rawtypes"})
+    Map copy = new LinkedHashMap<>();
+    for (Object o1 : value.entrySet()) {
+      @SuppressWarnings({"rawtypes"})
+      Map.Entry entry = (Map.Entry) o1;
       if ("".equals(entry.getKey())) {
-        // Why is this a special case?
-        if (entry.getValue() instanceof String[]) {
-          copy.put("", (String[]) entry.getValue());
+        copy.put(entry.getKey(), entry.getValue());
+        continue;
+      }
+      if (entry.getValue() != null) {
+        if (entry.getValue() instanceof List) {
+          @SuppressWarnings({"rawtypes"})
+          List l = (List) entry.getValue();
+          String[] sarr = new String[l.size()];
+          for (int i = 0; i < l.size(); i++) {
+            if (l.get(i) != null) sarr[i] = String.valueOf(l.get(i));
+          }
+          copy.put(entry.getKey(), sarr);
         } else {
-          throw new IllegalArgumentException();
+          copy.put(entry.getKey(), String.valueOf(entry.getValue()));
         }
-      } else if (entry.getValue() == null) {
-        copy.put(entry.getKey(), null);
-      } else if (entry.getValue() instanceof List) {
-        List<?> l = (List<?>) entry.getValue();
-        String[] sarr = new String[l.size()];
-        for (int i = 0; i < l.size(); i++) {
-          if (l.get(i) != null) sarr[i] = String.valueOf(l.get(i));
-        }
-        copy.put(entry.getKey(), sarr);
       } else {
-        copy.put(entry.getKey(), new String[] { entry.getValue().toString() });
+        copy.put(entry.getKey(), entry.getValue());
       }
     }
     return copy;
@@ -283,10 +288,11 @@ public class RequestParams implements MapSerializable {
     }
   }
 
-  public static class VersionedParams extends MultiMapSolrParams {
+  public static class VersionedParams extends MapSolrParams {
     final ParamSet paramSet;
 
-    public VersionedParams(Map<String,?> map, ParamSet paramSet) {
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public VersionedParams(Map map, ParamSet paramSet) {
       super(getMapCopy(map));
       this.paramSet = paramSet;
     }

@@ -31,7 +31,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -51,8 +50,6 @@ import static org.apache.lucene.util.IOUtils.closeWhileHandlingException;
  */
 public class PackageLoader implements Closeable {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-  public static final String LATEST = "$LATEST";
-
 
   private final CoreContainer coreContainer;
   private final Map<String, Package> packageClassLoaders = new ConcurrentHashMap<>();
@@ -61,12 +58,6 @@ public class PackageLoader implements Closeable {
 
   private PackageAPI packageAPI;
 
-
-  public Optional<Package.Version> getPackageVersion(String pkg, String version) {
-    Package p = packageClassLoaders.get(pkg);
-    if(p == null) return Optional.empty();
-    return Optional.ofNullable(p.getVersion(version));
-  }
 
   public PackageLoader(CoreContainer coreContainer) {
     this.coreContainer = coreContainer;
@@ -234,7 +225,6 @@ public class PackageLoader implements Closeable {
     }
 
     public Version getVersion(String version) {
-      if(version == null) return getLatest();
       return myVersions.get(version);
     }
 
@@ -298,9 +288,6 @@ public class PackageLoader implements Closeable {
 
       public String getVersion() {
         return version.version;
-      }
-      public PackageAPI.PkgVersion getPkgVersion(){
-        return version.copy();
       }
 
       @SuppressWarnings({"rawtypes"})

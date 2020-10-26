@@ -16,6 +16,9 @@
  */
 package org.apache.solr.common.params;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
@@ -159,7 +162,7 @@ public interface CommonParams {
   boolean SEGMENT_TERMINATE_EARLY_DEFAULT = false;
 
   /**
-   * Timeout value in milliseconds.  If not set, or the value is &gt; 0, there is no timeout.
+   * Timeout value in milliseconds.  If not set, or the value is &gt;= 0, there is no timeout.
    */
   String TIME_ALLOWED = "timeAllowed";
 
@@ -189,13 +192,17 @@ public interface CommonParams {
   String SYSTEM_INFO_PATH = "/admin/info/system";
   String METRICS_PATH = "/admin/metrics";
   String METRICS_HISTORY_PATH = "/admin/metrics/history";
+  String AUTOSCALING_PATH = "/admin/autoscaling";
+  String AUTOSCALING_HISTORY_PATH = "/admin/autoscaling/history";
+  String AUTOSCALING_DIAGNOSTICS_PATH = "/admin/autoscaling/diagnostics";
+  String AUTOSCALING_SUGGESTIONS_PATH = "/admin/autoscaling/suggestions";
 
   String STATUS = "status";
 
   String OK = "OK";
   String FAILURE = "FAILURE";
 
-  Set<String> ADMIN_PATHS = Set.of(
+  Set<String> ADMIN_PATHS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
       CORES_HANDLER_PATH,
       COLLECTIONS_HANDLER_PATH,
       HEALTH_CHECK_HANDLER_PATH,
@@ -204,7 +211,11 @@ public interface CommonParams {
       AUTHC_PATH,
       AUTHZ_PATH,
       METRICS_PATH,
-      METRICS_HISTORY_PATH);
+      METRICS_HISTORY_PATH,
+      AUTOSCALING_PATH,
+      AUTOSCALING_HISTORY_PATH,
+      AUTOSCALING_DIAGNOSTICS_PATH,
+      AUTOSCALING_SUGGESTIONS_PATH)));
   String APISPEC_LOCATION = "apispec/";
   String INTROSPECT = "/_introspect";
 
@@ -258,20 +269,9 @@ public interface CommonParams {
   String COST = "cost";
 
   /**
-   * Request ID parameter added to all distributed queries (that do not opt out)
-   *
-   * @see #DISABLE_REQUEST_ID
+   * Request ID parameter added to the request when using debug=track
    */
   String REQUEST_ID = "rid";
-
-  /**
-   * An opt-out flag to prevent the addition of {@link #REQUEST_ID} tracing on distributed queries
-   *
-   * Defaults to 'false' if not specified.
-   *
-   * @see #REQUEST_ID
-   */
-  String DISABLE_REQUEST_ID = "disableRequestId";
 
   /**
    * Request Purpose parameter added to each internal shard request when using debug=track
@@ -293,10 +293,6 @@ public interface CommonParams {
 
   String NAME = "name";
   String VALUE_LONG = "val";
-
-  String SOLR_REQUEST_CONTEXT_PARAM = "Solr-Request-Context";
-
-  String SOLR_REQUEST_TYPE_PARAM = "Solr-Request-Type";
 
   String VERSION_FIELD="_version_";
 

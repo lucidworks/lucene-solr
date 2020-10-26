@@ -319,11 +319,13 @@ public class SignificantTermsStream extends TupleStream implements Expressible{
           }
         }
 
-        List<Map<String, Object>> maps = new ArrayList<>();
+        @SuppressWarnings({"rawtypes"})
+        List<Map> maps = new ArrayList<>();
 
         for(Map.Entry<String, int[]> entry : mergeFreqs.entrySet()) {
           int[] freqs = entry.getValue();
-          Map<String, Object> map = new HashMap<>();
+          @SuppressWarnings({"rawtypes"})
+          Map map = new HashMap();
           map.put("term", entry.getKey());
           map.put("background", freqs[0]);
           map.put("foreground", freqs[1]);
@@ -336,7 +338,7 @@ public class SignificantTermsStream extends TupleStream implements Expressible{
 
         Collections.sort(maps, new ScoreComp());
         List<Tuple> tuples = new ArrayList<>();
-        for (Map<String, Object> map : maps) {
+        for (@SuppressWarnings({"rawtypes"})Map map : maps) {
           if (tuples.size() == numTerms) break;
           tuples.add(new Tuple(map));
         }
@@ -405,9 +407,6 @@ public class SignificantTermsStream extends TupleStream implements Expressible{
       params.add("minTermLength", Integer.toString(minTermLength));
       params.add("field", field);
       params.add("numTerms", String.valueOf(numTerms*5));
-      if (streamContext.isLocal()) {
-        params.add("distrib", "false");
-      }
 
       QueryRequest request= new QueryRequest(params, SolrRequest.METHOD.POST);
       QueryResponse response = request.process(solrClient);

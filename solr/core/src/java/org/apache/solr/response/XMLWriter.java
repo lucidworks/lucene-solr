@@ -18,14 +18,11 @@ package org.apache.solr.response;
 
 import java.io.IOException;
 import java.io.Writer;
-import java.lang.invoke.MethodHandles;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.solr.common.IteratorWriter;
-import org.apache.solr.common.MapWriter;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.CommonParams;
@@ -34,8 +31,6 @@ import org.apache.solr.common.util.XML;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.search.ReturnFields;
 import org.apache.solr.search.SolrReturnFields;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static org.apache.solr.common.params.CommonParams.NAME;
 
@@ -44,7 +39,6 @@ import static org.apache.solr.common.params.CommonParams.NAME;
  * @lucene.internal
  */
 public class XMLWriter extends TextResponseWriter {
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   public static float CURRENT_VERSION=2.2f;
 
@@ -187,6 +181,26 @@ public class XMLWriter extends TextResponseWriter {
 
     incLevel();
   }
+  
+  @Override
+  @Deprecated
+  public void writeStartDocumentList(String name,
+      long start, int size, long numFound, Float maxScore) throws IOException
+  {
+    if (doIndent) indent();
+
+    writer.write("<result");
+    writeAttr(NAME, name);
+    writeAttr("numFound",Long.toString(numFound));
+    writeAttr("start",Long.toString(start));
+    if(maxScore!=null) {
+      writeAttr("maxScore",Float.toString(maxScore));
+    }
+    writer.write(">");
+
+    incLevel();
+  }
+
 
   /**
    * The SolrDocument should already have multivalued fields implemented as
@@ -204,10 +218,8 @@ public class XMLWriter extends TextResponseWriter {
 
       Object val = doc.getFieldValue(fname);
       if( "_explain_".equals( fname ) ) {
-        if (log.isDebugEnabled()) {
-          log.debug(String.valueOf(val));
+        System.out.println( val );
         }
-      }
       writeVal(fname, val);
     }
 
@@ -250,28 +262,6 @@ public class XMLWriter extends TextResponseWriter {
       if (doIndent) indent();
       writer.write("</lst>");
     }
-  }
-
-  @Override
-  public void writeMap(String name, MapWriter val) throws IOException {
-    // As the size is not known. So, always both startTag and endTag is written
-    // irrespective of number of entries in MapWriter
-    startTag("lst", name, false);
-    incLevel();
-
-    val.writeMap(new MapWriter.EntryWriter() {
-      @Override
-      public MapWriter.EntryWriter put(CharSequence k, Object v) throws IOException {
-        writeVal( null == k ? null : k.toString(), v);
-        return this;
-      }
-    });
-
-    decLevel();
-    if (doIndent) {
-      indent();
-    }
-    writer.write("</lst>");
   }
 
   @Override
@@ -320,28 +310,6 @@ public class XMLWriter extends TextResponseWriter {
     else {
       startTag("arr", name, true );
     }
-  }
-
-  @Override
-  public void writeIterator(String name, IteratorWriter val) throws IOException {
-    // As the size is not known. So, always both startTag and endTag is written
-    // irrespective of number of entries in IteratorWriter
-    startTag("arr", name, false );
-    incLevel();
-
-    val.writeIter(new IteratorWriter.ItemWriter() {
-      @Override
-      public IteratorWriter.ItemWriter add(Object o) throws IOException {
-        writeVal(null, o);
-        return this;
-      }
-    });
-
-    decLevel();
-    if (doIndent) {
-      indent();
-    }
-    writer.write("</arr>");
   }
 
   //

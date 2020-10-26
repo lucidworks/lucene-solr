@@ -197,7 +197,6 @@ public class Geo3dShapeFactory implements S2ShapeFactory {
   }
 
   @Override
-  @SuppressWarnings("deprecation")
   public Shape lineString(List<Point> list, double distance) {
     LineStringBuilder builder = lineString();
     for (Point point : list) {
@@ -208,7 +207,6 @@ public class Geo3dShapeFactory implements S2ShapeFactory {
   }
 
   @Override
-  @SuppressWarnings("deprecation")
   public <S extends Shape> ShapeCollection<S> multiShape(List<S> list) {
     throw new UnsupportedOperationException();
   }

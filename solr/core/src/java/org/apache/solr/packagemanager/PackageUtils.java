@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -253,6 +254,18 @@ public class PackageUtils {
     return collections;
   }
   
+  /**
+   * Replacement for Java 11's Map.of(). Borrowed from SolrTestCaseJ4's map().
+   */
+  public static Map map(Object... params) {
+    LinkedHashMap ret = new LinkedHashMap();
+    for (int i=0; i<params.length; i+=2) {
+      Object o = ret.put(params[i], params[i+1]);
+      // TODO: handle multi-valued map?
+    }
+    return ret;
+  }
+
   public static String getCollectionParamsPath(String collection) {
     return "/api/collections/" + collection + "/config/params";
   }

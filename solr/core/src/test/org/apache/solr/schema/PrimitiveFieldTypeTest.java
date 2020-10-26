@@ -75,7 +75,7 @@ public class PrimitiveFieldTypeTest extends SolrTestCaseJ4 {
 
 
     for (Class<? extends FieldType> clazz : types) {
-      FieldType ft = clazz.getConstructor().newInstance();
+      FieldType ft = clazz.newInstance();
       ft.init(schema, initMap);
       assertFalse(ft.getClass().getName(), ft.hasProperty(FieldType.OMIT_NORMS));
     }
@@ -86,7 +86,7 @@ public class PrimitiveFieldTypeTest extends SolrTestCaseJ4 {
     schema = IndexSchemaFactory.buildIndexSchema(testConfHome + "schema15.xml", config);
 
     for (Class<? extends FieldType> clazz : types) {
-      FieldType ft = clazz.getConstructor().newInstance();
+      FieldType ft = clazz.newInstance();
       ft.init(schema, initMap);
       assertEquals(ft.getClass().getName(),
                    ft instanceof PrimitiveFieldType,

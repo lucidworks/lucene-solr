@@ -168,7 +168,7 @@ public class CrossCollectionJoinQuery extends Query {
     public DocSet getDocSet() throws IOException {
       Query query = getResultQuery(searcher.getSchema().getField(toField), false);
       if (query == null) {
-        return DocSet.empty();
+        return DocSet.EMPTY;
       }
       return DocSetUtil.createDocSet(searcher, query, null);
     }
@@ -277,7 +277,7 @@ public class CrossCollectionJoinQuery extends Query {
       } else {
         Terms terms = searcher.getSlowAtomicReader().terms(toField);
         if (terms == null) {
-          return DocSet.empty();
+          return DocSet.EMPTY;
         }
         collector = new TermsJoinKeyCollector(fieldType, terms, searcher);
       }

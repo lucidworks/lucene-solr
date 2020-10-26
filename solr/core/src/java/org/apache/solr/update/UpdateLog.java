@@ -63,8 +63,8 @@ import org.apache.solr.common.util.TimeSource;
 import org.apache.solr.core.PluginInfo;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SolrInfoBean;
+import org.apache.solr.metrics.SolrMetricManager;
 import org.apache.solr.metrics.SolrMetricProducer;
-import org.apache.solr.metrics.SolrMetricsContext;
 import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestInfo;
@@ -250,7 +250,8 @@ public class UpdateLog implements PluginInfoInitialized, SolrMetricProducer {
   protected Meter applyingBufferedOpsMeter;
   protected Meter replayOpsMeter;
   protected Meter copyOverOldUpdatesMeter;
-  protected SolrMetricsContext solrMetricsContext;
+  protected SolrMetricManager metricManager;
+  protected String registryName;
 
   public static class LogPtr {
     final long pointer;
@@ -402,7 +403,7 @@ public class UpdateLog implements PluginInfoInitialized, SolrMetricProducer {
     try {
       versionInfo = new VersionInfo(this, numVersionBuckets);
     } catch (SolrException e) {
-      log.error("Unable to use updateLog: ", e);
+      log.error("Unable to use updateLog: {}", e.getMessage(), e);
       throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
                               "Unable to use updateLog: " + e.getMessage(), e);
     }
@@ -432,8 +433,9 @@ public class UpdateLog implements PluginInfoInitialized, SolrMetricProducer {
   }
 
   @Override
-  public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
-    solrMetricsContext = parentContext.getChildContext(this);
+  public void initializeMetrics(SolrMetricManager manager, String registry, String tag, String scope) {
+    this.metricManager = manager;
+    this.registryName = registry;
     bufferedOpsGauge = () -> {
       if (state == State.BUFFERING) {
         if (bufferTlog == null) return  0;
@@ -450,18 +452,13 @@ public class UpdateLog implements PluginInfoInitialized, SolrMetricProducer {
       }
     };
 
-    solrMetricsContext.gauge(bufferedOpsGauge, true, "ops", scope, "buffered");
-    solrMetricsContext.gauge(() -> logs.size(), true, "logs", scope, "replay", "remaining");
-    solrMetricsContext.gauge(() -> getTotalLogsSize(), true, "bytes", scope, "replay", "remaining");
-    applyingBufferedOpsMeter = solrMetricsContext.meter("ops", scope, "applyingBuffered");
-    replayOpsMeter = solrMetricsContext.meter("ops", scope, "replay");
-    copyOverOldUpdatesMeter = solrMetricsContext.meter("ops", scope, "copyOverOldUpdates");
-    solrMetricsContext.gauge(() -> state.getValue(), true, "state", scope);
-  }
-
-  @Override
-  public SolrMetricsContext getSolrMetricsContext() {
-    return solrMetricsContext;
+    manager.registerGauge(null, registry, bufferedOpsGauge, tag, true, "ops", scope, "buffered");
+    manager.registerGauge(null, registry, () -> logs.size(), tag, true, "logs", scope, "replay", "remaining");
+    manager.registerGauge(null, registry, () -> getTotalLogsSize(), tag, true, "bytes", scope, "replay", "remaining");
+    applyingBufferedOpsMeter = manager.meter(null, registry, "ops", scope, "applyingBuffered");
+    replayOpsMeter = manager.meter(null, registry, "ops", scope, "replay");
+    copyOverOldUpdatesMeter = manager.meter(null, registry, "ops", scope, "copyOverOldUpdates");
+    manager.registerGauge(null, registry, () -> state.getValue(), tag, true, "state", scope);
   }
 
   /**
@@ -1517,7 +1514,8 @@ public class UpdateLog implements PluginInfoInitialized, SolrMetricProducer {
                   update.version = version;
 
                   if (oper == UpdateLog.UPDATE_INPLACE) {
-                    if (entry.size() == 5) {
+                    if ((update.log instanceof CdcrTransactionLog && entry.size() == 6) ||
+                        (!(update.log instanceof CdcrTransactionLog) && entry.size() == 5)) {
                       update.previousVersion = (Long) entry.get(UpdateLog.PREV_VERSION_IDX);
                     }
                   }

@@ -18,6 +18,7 @@
 package org.apache.lucene.luke.models.analysis;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -99,14 +100,14 @@ public final class CustomAnalyzerConfig {
    * Returns CharFilters configurations.
    */
   List<ComponentConfig> getCharFilterConfigs() {
-    return List.copyOf(charFilterConfigs);
+    return Collections.unmodifiableList(charFilterConfigs);
   }
 
   /**
    * Returns TokenFilters configurations.
    */
   List<ComponentConfig> getTokenFilterConfigs() {
-    return List.copyOf(tokenFilterConfigs);
+    return Collections.unmodifiableList(tokenFilterConfigs);
   }
 
   static class ComponentConfig {

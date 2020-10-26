@@ -184,8 +184,6 @@ public class TestConfig extends SolrTestCaseJ4 {
 
     ++numDefaultsTested; assertNotNull("default metrics", sic.metricsInfo);
 
-    ++numDefaultsTested; assertEquals("default maxCommitMergeWaitTime", -1, sic.maxCommitMergeWaitMillis);
-
     ++numDefaultsTested; ++numNullDefaults;
     assertNull("default mergePolicyFactoryInfo", sic.mergePolicyFactoryInfo);
 

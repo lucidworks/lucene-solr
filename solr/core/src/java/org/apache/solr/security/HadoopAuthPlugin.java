@@ -38,6 +38,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import com.fasterxml.jackson.core.JsonGenerator;
+import org.apache.commons.collections.iterators.IteratorEnumeration;
 import org.apache.hadoop.security.authentication.server.AuthenticationFilter;
 import org.apache.hadoop.security.token.delegation.web.DelegationTokenAuthenticationHandler;
 import org.apache.solr.client.solrj.impl.Krb5HttpClientBuilder;
@@ -209,7 +210,7 @@ public class HadoopAuthPlugin extends AuthenticationPlugin {
 
       @Override
       public Enumeration<String> getInitParameterNames() {
-        return Collections.enumeration(params.keySet());
+        return new IteratorEnumeration(params.keySet().iterator());
       }
 
       @Override
@@ -227,19 +228,22 @@ public class HadoopAuthPlugin extends AuthenticationPlugin {
   }
 
   @Override
-  public boolean doAuthenticate(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+  public boolean doAuthenticate(ServletRequest request, ServletResponse response, FilterChain filterChain)
       throws Exception {
+    final HttpServletResponse frsp = (HttpServletResponse)response;
+
     if (TRACE_HTTP) {
+      HttpServletRequest req = (HttpServletRequest) request;
       log.info("----------HTTP Request---------");
       if (log.isInfoEnabled()) {
-        log.info("{} : {}", request.getMethod(), request.getRequestURI());
-        log.info("Query : {}", request.getQueryString()); // nowarn
+        log.info("{} : {}", req.getMethod(), req.getRequestURI());
+        log.info("Query : {}", req.getQueryString()); // logOk
       }
       log.info("Headers :");
-      Enumeration<String> headers = request.getHeaderNames();
+      Enumeration<String> headers = req.getHeaderNames();
       while (headers.hasMoreElements()) {
         String name = headers.nextElement();
-        Enumeration<String> hvals = request.getHeaders(name);
+        Enumeration<String> hvals = req.getHeaders(name);
         while (hvals.hasMoreElements()) {
           if (log.isInfoEnabled()) {
             log.info("{} : {}", name, hvals.nextElement());
@@ -249,9 +253,9 @@ public class HadoopAuthPlugin extends AuthenticationPlugin {
       log.info("-------------------------------");
     }
 
-    authFilter.doFilter(request, response, filterChain);
+    authFilter.doFilter(request, frsp, filterChain);
 
-    switch (response.getStatus()) {
+    switch (frsp.getStatus()) {
       case HttpServletResponse.SC_UNAUTHORIZED:
         // Cannot tell whether the 401 is due to wrong or missing credentials
         numWrongCredentials.inc();
@@ -262,7 +266,7 @@ public class HadoopAuthPlugin extends AuthenticationPlugin {
         numErrors.mark();
         break;
       default:
-        if (response.getStatus() >= 200 && response.getStatus() <= 299) {
+        if (frsp.getStatus() >= 200 && frsp.getStatus() <= 299) {
           numAuthenticated.inc();
         } else {
           numErrors.mark();
@@ -272,11 +276,11 @@ public class HadoopAuthPlugin extends AuthenticationPlugin {
     if (TRACE_HTTP) {
       log.info("----------HTTP Response---------");
       if (log.isInfoEnabled()) {
-        log.info("Status : {}", response.getStatus());
+        log.info("Status : {}", frsp.getStatus());
       }
       log.info("Headers :");
-      for (String name : response.getHeaderNames()) {
-        for (String value : response.getHeaders(name)) {
+      for (String name : frsp.getHeaderNames()) {
+        for (String value : frsp.getHeaders(name)) {
           log.info("{} : {}", name, value);
         }
       }

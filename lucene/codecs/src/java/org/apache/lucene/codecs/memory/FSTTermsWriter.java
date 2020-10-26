@@ -26,22 +26,22 @@ import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.NormsProducer;
 import org.apache.lucene.codecs.PostingsWriterBase;
+import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.IndexFileNames;
-import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.store.ByteBuffersDataOutput;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.RAMOutputStream;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.IntsRefBuilder;
-import org.apache.lucene.util.fst.FSTCompiler;
+import org.apache.lucene.util.fst.Builder;
 import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.Util;
 
@@ -58,12 +58,12 @@ import org.apache.lucene.util.fst.Util;
  * <p>
  * File:
  * <ul>
- *   <li><code>.tst</code>: <a href="#Termdictionary">Term Dictionary</a></li>
+ *   <li><tt>.tst</tt>: <a href="#Termdictionary">Term Dictionary</a></li>
  * </ul>
  * <p>
  *
- * <a id="Termdictionary"></a>
- * <h2>Term Dictionary</h2>
+ * <a name="Termdictionary"></a>
+ * <h3>Term Dictionary</h3>
  * <p>
  *  The .tst contains a list of FSTs, one for each field.
  *  The FST maps a term to its corresponding statistics (e.g. docfreq) 
@@ -244,20 +244,20 @@ public class FSTTermsWriter extends FieldsConsumer {
   }
 
   final class TermsWriter {
-    private final FSTCompiler<FSTTermOutputs.TermData> fstCompiler;
+    private final Builder<FSTTermOutputs.TermData> builder;
     private final FSTTermOutputs outputs;
     private final FieldInfo fieldInfo;
     private long numTerms;
 
     private final IntsRefBuilder scratchTerm = new IntsRefBuilder();
-    private final ByteBuffersDataOutput metaWriter = ByteBuffersDataOutput.newResettableInstance();
+    private final RAMOutputStream metaWriter = new RAMOutputStream();
 
     TermsWriter(FieldInfo fieldInfo) {
       this.numTerms = 0;
       this.fieldInfo = fieldInfo;
       postingsWriter.setField(fieldInfo);
       this.outputs = new FSTTermOutputs(fieldInfo);
-      this.fstCompiler = new FSTCompiler<>(FST.INPUT_TYPE.BYTE1, outputs);
+      this.builder = new Builder<>(FST.INPUT_TYPE.BYTE1, outputs);
     }
 
     public void finishTerm(BytesRef text, BlockTermState state) throws IOException {
@@ -267,18 +267,20 @@ public class FSTTermsWriter extends FieldsConsumer {
       meta.docFreq = state.docFreq;
       meta.totalTermFreq = state.totalTermFreq;
       postingsWriter.encodeTerm(metaWriter, fieldInfo, state, true);
-      if (metaWriter.size() > 0) {
-        meta.bytes = metaWriter.toArrayCopy();
+      final int bytesSize = (int)metaWriter.getFilePointer();
+      if (bytesSize > 0) {
+        meta.bytes = new byte[bytesSize];
+        metaWriter.writeTo(meta.bytes, 0);
         metaWriter.reset();
       }
-      fstCompiler.add(Util.toIntsRef(text, scratchTerm), meta);
+      builder.add(Util.toIntsRef(text, scratchTerm), meta);
       numTerms++;
     }
 
     public void finish(long sumTotalTermFreq, long sumDocFreq, int docCount) throws IOException {
       // save FST dict
       if (numTerms > 0) {
-        final FST<FSTTermOutputs.TermData> fst = fstCompiler.compile();
+        final FST<FSTTermOutputs.TermData> fst = builder.finish();
         fields.add(new FieldMetaData(fieldInfo, numTerms, sumTotalTermFreq, sumDocFreq, docCount, fst));
       }
     }

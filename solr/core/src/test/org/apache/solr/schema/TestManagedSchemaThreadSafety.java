@@ -175,7 +175,7 @@ public class TestManagedSchemaThreadSafety extends SolrTestCaseJ4 {
   private Runnable indexSchemaLoader(String configsetName, final ZkController zkController) {
     return () -> {
       try {
-        SolrResourceLoader loader = new ZkSolrResourceLoader(loaderPath, configsetName, null, zkController);
+        SolrResourceLoader loader = new ZkSolrResourceLoader(loaderPath, configsetName, null, null, zkController);
         SolrConfig solrConfig = SolrConfig.readFromResourceLoader(loader, "solrconfig.xml", true, null);
 
         ManagedIndexSchemaFactory factory = new ManagedIndexSchemaFactory();

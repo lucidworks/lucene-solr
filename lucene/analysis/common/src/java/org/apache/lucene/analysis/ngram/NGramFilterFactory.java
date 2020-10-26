@@ -21,7 +21,7 @@ import java.util.Map;
 
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
  * Factory for {@link NGramTokenFilter}.
@@ -51,15 +51,13 @@ public class NGramFilterFactory extends TokenFilterFactory {
     minGramSize = requireInt(args, "minGramSize");
     maxGramSize = requireInt(args, "maxGramSize");
 
-    preserveOriginal = getBoolean(args, "preserveOriginal", NGramTokenFilter.DEFAULT_PRESERVE_ORIGINAL);
+    // First check for the old accidental used option name. It was the only way to configure preserve original
+    // for NGramFilter and ignoring it would unnecessary break existing configs.
+    boolean preserve = getBoolean(args, "keepShortTerm", NGramTokenFilter.DEFAULT_PRESERVE_ORIGINAL);
+    preserveOriginal = getBoolean(args, "preserveOriginal", preserve);
     if (!args.isEmpty()) {
       throw new IllegalArgumentException("Unknown parameters: " + args);
     }
-  }
-
-  /** Default ctor for compatibility with SPI */
-  public NGramFilterFactory() {
-    throw defaultCtorException();
   }
 
   @Override

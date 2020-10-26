@@ -38,7 +38,6 @@ import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.embedded.JettySolrRunner;
-import org.apache.solr.client.solrj.impl.BaseHttpSolrClient;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
@@ -75,6 +74,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.apache.solr.common.cloud.ZkStateReader.BASE_URL_PROP;
+import static org.apache.solr.common.cloud.ZkStateReader.MAX_SHARDS_PER_NODE;
 import static org.apache.solr.common.cloud.ZkStateReader.REPLICATION_FACTOR;
 
 @Slow
@@ -100,8 +100,13 @@ public class ShardSplitTest extends BasicDistributedZkTest {
   @Nightly
   public void test() throws Exception {
 
-    waitForThingsToLevelOut(15, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(15);
 
+    if (usually()) {
+      log.info("Using legacyCloud=false for cluster");
+      CollectionAdminRequest.setClusterProperty(ZkStateReader.LEGACY_CLOUD, "false")
+          .process(cloudClient);
+    }
     incompleteOrOverlappingCustomRangeTest();
     splitByUniqueKeyTest();
     splitByRouteFieldTest();
@@ -128,7 +133,7 @@ public class ShardSplitTest extends BasicDistributedZkTest {
   }
 
   private void doSplitStaticIndexReplication(SolrIndexSplitter.SplitMethod splitMethod) throws Exception {
-    waitForThingsToLevelOut(15, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(15);
 
     DocCollection defCol = cloudClient.getZkStateReader().getClusterState().getCollection(AbstractDistribZkTestBase.DEFAULT_COLLECTION);
     Replica replica = defCol.getReplicas().get(0);
@@ -136,6 +141,7 @@ public class ShardSplitTest extends BasicDistributedZkTest {
 
     String collectionName = "testSplitStaticIndexReplication_" + splitMethod.toLower();
     CollectionAdminRequest.Create create = CollectionAdminRequest.createCollection(collectionName, "conf1", 1, 1);
+    create.setMaxShardsPerNode(5); // some high number so we can create replicas without hindrance
     create.setCreateNodeSet(nodeName); // we want to create the leader on a fixed node so that we know which one to restart later
     create.process(cloudClient);
     
@@ -279,7 +285,7 @@ public class ShardSplitTest extends BasicDistributedZkTest {
   //05-Jul-2018 @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028")
   // commented out on: 24-Dec-2018   @BadApple(bugUrl="https://issues.apache.org/jira/browse/SOLR-12028") // added 15-Sep-2018
   public void testSplitAfterFailedSplit() throws Exception {
-    waitForThingsToLevelOut(15, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(15);
 
     TestInjection.splitFailureBeforeReplicaCreation = "true:100"; // we definitely want split to fail
     try {
@@ -328,7 +334,7 @@ public class ShardSplitTest extends BasicDistributedZkTest {
   @Test
   @Nightly
   public void testSplitAfterFailedSplit2() throws Exception {
-    waitForThingsToLevelOut(15, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(15);
 
     TestInjection.splitFailureAfterReplicaCreation = "true:100"; // we definitely want split to fail
     try {
@@ -351,9 +357,10 @@ public class ShardSplitTest extends BasicDistributedZkTest {
   }
 
   private void doSplitMixedReplicaTypes(SolrIndexSplitter.SplitMethod splitMethod) throws Exception {
-    waitForThingsToLevelOut(15, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(15);
     String collectionName = "testSplitMixedReplicaTypes_" + splitMethod.toLower();
     CollectionAdminRequest.Create create = CollectionAdminRequest.createCollection(collectionName, "conf1", 1, 2, 0, 2); // TODO tlog replicas disabled right now.
+    create.setMaxShardsPerNode(5); // some high number so we can create replicas without hindrance
     create.process(cloudClient);
     
     cloudClient.waitForState(collectionName, 30, TimeUnit.SECONDS, SolrCloudTestCase.activeClusterShape(1, 4));
@@ -369,7 +376,7 @@ public class ShardSplitTest extends BasicDistributedZkTest {
     splitShard.setShardName(SHARD1);
     splitShard.setSplitMethod(splitMethod.toLower());
     CollectionAdminResponse rsp = splitShard.process(cloudClient);
-    waitForThingsToLevelOut(30, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(30);
    
     cloudClient.waitForState(collectionName, 30, TimeUnit.SECONDS, SolrCloudTestCase.activeClusterShape(2, 12));
 
@@ -406,7 +413,11 @@ public class ShardSplitTest extends BasicDistributedZkTest {
   @Test
   @Nightly
   public void testSplitWithChaosMonkey() throws Exception {
-    waitForThingsToLevelOut(15, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(15);
+
+    log.info("Using legacyCloud=false for cluster");
+    CollectionAdminRequest.setClusterProperty(ZkStateReader.LEGACY_CLOUD, "false")
+        .process(cloudClient);
 
     List<StoppableIndexingThread> indexers = new ArrayList<>();
     try {
@@ -561,9 +572,10 @@ public class ShardSplitTest extends BasicDistributedZkTest {
 
   @Test
   public void testSplitLocking() throws Exception {
-    waitForThingsToLevelOut(15, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(15);
     String collectionName = "testSplitLocking";
     CollectionAdminRequest.Create create = CollectionAdminRequest.createCollection(collectionName, "conf1", 1, 2);
+    create.setMaxShardsPerNode(5); // some high number so we can create replicas without hindrance
     create.process(cloudClient);
     
     cloudClient.waitForState(collectionName, 30, TimeUnit.SECONDS, SolrCloudTestCase.activeClusterShape(1, 2));
@@ -630,7 +642,13 @@ public class ShardSplitTest extends BasicDistributedZkTest {
   }
 
   private void doSplitShardWithRule(SolrIndexSplitter.SplitMethod splitMethod) throws Exception {
-    waitForThingsToLevelOut(15, TimeUnit.SECONDS);
+    waitForThingsToLevelOut(15);
+
+    if (usually()) {
+      log.info("Using legacyCloud=false for cluster");
+      CollectionAdminRequest.setClusterProperty(ZkStateReader.LEGACY_CLOUD, "false")
+          .process(cloudClient);
+    }
 
     log.info("Starting testSplitShardWithRule");
     String collectionName = "shardSplitWithRule_" + splitMethod.toLower();
@@ -666,7 +684,7 @@ public class ShardSplitTest extends BasicDistributedZkTest {
     try {
       splitShard(AbstractDistribZkTestBase.DEFAULT_COLLECTION, SHARD1, subRanges, null, false);
       fail("Shard splitting with just one custom hash range should not succeed");
-    } catch (BaseHttpSolrClient.RemoteSolrException e) {
+    } catch (HttpSolrClient.RemoteSolrException e) {
       log.info("Expected exception:", e);
     }
     subRanges.clear();
@@ -677,7 +695,7 @@ public class ShardSplitTest extends BasicDistributedZkTest {
     try {
       splitShard(AbstractDistribZkTestBase.DEFAULT_COLLECTION, SHARD1, subRanges, null, false);
       fail("Shard splitting with missing hashes in between given ranges should not succeed");
-    } catch (BaseHttpSolrClient.RemoteSolrException e) {
+    } catch (HttpSolrClient.RemoteSolrException e) {
       log.info("Expected exception:", e);
     }
     subRanges.clear();
@@ -690,7 +708,7 @@ public class ShardSplitTest extends BasicDistributedZkTest {
     try {
       splitShard(AbstractDistribZkTestBase.DEFAULT_COLLECTION, SHARD1, subRanges, null, false);
       fail("Shard splitting with overlapping ranges should not succeed");
-    } catch (BaseHttpSolrClient.RemoteSolrException e) {
+    } catch (HttpSolrClient.RemoteSolrException e) {
       log.info("Expected exception:", e);
     }
     subRanges.clear();
@@ -764,7 +782,7 @@ public class ShardSplitTest extends BasicDistributedZkTest {
           log.info("Layout after split: \n");
           printLayout();
           break;
-        } catch (BaseHttpSolrClient.RemoteSolrException e) {
+        } catch (HttpSolrClient.RemoteSolrException e) {
           if (e.code() != 500)  {
             throw e;
           }
@@ -792,12 +810,15 @@ public class ShardSplitTest extends BasicDistributedZkTest {
     String collectionName = "routeFieldColl";
     int numShards = 4;
     int replicationFactor = 2;
+    int maxShardsPerNode = (((numShards * replicationFactor) / getCommonCloudSolrClient()
+        .getZkStateReader().getClusterState().getLiveNodes().size())) + 1;
 
     HashMap<String, List<Integer>> collectionInfos = new HashMap<>();
     String shard_fld = "shard_s";
     try (CloudSolrClient client = createCloudClient(null)) {
       Map<String, Object> props = Utils.makeMap(
           REPLICATION_FACTOR, replicationFactor,
+          MAX_SHARDS_PER_NODE, maxShardsPerNode,
           OverseerCollectionMessageHandler.NUM_SLICES, numShards,
           "router.field", shard_fld);
 
@@ -851,12 +872,15 @@ public class ShardSplitTest extends BasicDistributedZkTest {
     String collectionName = "splitByRouteKeyTest";
     int numShards = 4;
     int replicationFactor = 2;
+    int maxShardsPerNode = (((numShards * replicationFactor) / getCommonCloudSolrClient()
+        .getZkStateReader().getClusterState().getLiveNodes().size())) + 1;
 
     HashMap<String, List<Integer>> collectionInfos = new HashMap<>();
 
     try (CloudSolrClient client = createCloudClient(null)) {
       Map<String, Object> props = Utils.makeMap(
           REPLICATION_FACTOR, replicationFactor,
+          MAX_SHARDS_PER_NODE, maxShardsPerNode,
           OverseerCollectionMessageHandler.NUM_SLICES, numShards);
 
       createCollection(collectionInfos, collectionName,props,client);
@@ -923,7 +947,7 @@ public class ShardSplitTest extends BasicDistributedZkTest {
       try {
         splitShard(collectionName, shardId, null, splitKey, false);
         break;
-      } catch (BaseHttpSolrClient.RemoteSolrException e) {
+      } catch (HttpSolrClient.RemoteSolrException e) {
         if (e.code() != 500) {
           throw e;
         }

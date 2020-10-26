@@ -80,7 +80,7 @@ import org.apache.lucene.util.Version;
 /**
  * Common tests to all index formats.
  */
-abstract class BaseIndexFileFormatTestCase extends LuceneTestCase {
+public abstract class BaseIndexFileFormatTestCase extends LuceneTestCase {
 
   // metadata or Directory-level objects
   private static final Set<Class<?>> EXCLUDED_CLASSES = Collections.newSetFromMap(new IdentityHashMap<Class<?>,Boolean>());
@@ -354,8 +354,7 @@ abstract class BaseIndexFileFormatTestCase extends LuceneTestCase {
     FieldInfo proto = oneDocReader.getFieldInfos().fieldInfo("field");
     FieldInfo field = new FieldInfo(proto.name, proto.number, proto.hasVectors(), proto.omitsNorms(), proto.hasPayloads(), 
                                     proto.getIndexOptions(), proto.getDocValuesType(), proto.getDocValuesGen(), new HashMap<>(),
-                                    proto.getPointDimensionCount(), proto.getPointIndexDimensionCount(), proto.getPointNumBytes(),
-                                    proto.getVectorDimension(), proto.getVectorScoreFunction(), proto.isSoftDeletesField());
+                                    proto.getPointDimensionCount(), proto.getPointIndexDimensionCount(), proto.getPointNumBytes(), proto.isSoftDeletesField());
 
     FieldInfos fieldInfos = new FieldInfos(new FieldInfo[] { field } );
 
@@ -743,7 +742,7 @@ abstract class BaseIndexFileFormatTestCase extends LuceneTestCase {
 
     /** Get the set of created files. */
     public Set<String> getFiles() {
-      return Set.copyOf(files);
+      return Collections.unmodifiableSet(new HashSet<>(files));
     }
 
     @Override
@@ -838,7 +837,7 @@ abstract class BaseIndexFileFormatTestCase extends LuceneTestCase {
 
     /** Get information about which bytes have been read. */
     public Map<String, FixedBitSet> getReadBytes() {
-      return Map.copyOf(readBytes);
+      return Collections.unmodifiableMap(new HashMap<>(readBytes));
     }
 
     @Override

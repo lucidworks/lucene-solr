@@ -31,25 +31,6 @@ Protects words from being modified by stemmers. A customized protected word list
 
 A sample Solr `protwords.txt` with comments can be found in the `sample_techproducts_configs` <<config-sets.adoc#config-sets,configset>> directory:
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-filter-keywordmarker]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<fieldtype name="myfieldtype" class="solr.TextField">
-  <analyzer>
-    <tokenizer name="whitespace"/>
-    <filter name="keywordMarker" protected="protwords.txt" />
-    <filter name="porterStem" />
-  </analyzer>
-</fieldtype>
-----
-====
-[example.tab-pane#byclass-filter-keywordmarker]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <fieldtype name="myfieldtype" class="solr.TextField">
@@ -60,8 +41,6 @@ A sample Solr `protwords.txt` with comments can be found in the `sample_techprod
   </analyzer>
 </fieldtype>
 ----
-====
---
 
 == KeywordRepeatFilterFactory
 
@@ -73,26 +52,6 @@ To configure, add the `KeywordRepeatFilterFactory` early in the analysis chain. 
 
 A sample fieldType configuration could look like this:
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-filter-keywordrepeat]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<fieldtype name="english_stem_preserve_original" class="solr.TextField">
-  <analyzer>
-    <tokenizer name="standard"/>
-    <filter name="keywordRepeat" />
-    <filter name="porterStem" />
-    <filter name="removeDuplicates" />
-  </analyzer>
-</fieldtype>
-----
-====
-[example.tab-pane#byclass-filter-keywordrepeat]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <fieldtype name="english_stem_preserve_original" class="solr.TextField">
@@ -104,8 +63,6 @@ A sample fieldType configuration could look like this:
   </analyzer>
 </fieldtype>
 ----
-====
---
 
 IMPORTANT: When adding the same token twice, it will also score twice (double), so you may have to re-tune your ranking rules.
 
@@ -115,25 +72,7 @@ Overrides stemming algorithms by applying a custom mapping, then protecting thes
 
 A customized mapping of words to stems, in a tab-separated file, can be specified to the `dictionary` attribute in the schema. Words in this mapping will be stemmed to the stems from the file, and will not be further changed by any stemmer.
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-filter-stemmeroverride]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<fieldtype name="myfieldtype" class="solr.TextField">
-  <analyzer>
-    <tokenizer name="whitespace"/>
-    <filter name="stemmerOverride" dictionary="stemdict.txt" />
-    <filter name="porterStem" />
-  </analyzer>
-</fieldtype>
-----
-====
-[example.tab-pane#byclass-filter-stemmeroverride]
-====
-[.tab-label]*With class name (legacy)*
+
 [source,xml]
 ----
 <fieldtype name="myfieldtype" class="solr.TextField">
@@ -144,8 +83,6 @@ A customized mapping of words to stems, in a tab-separated file, can be specifie
   </analyzer>
 </fieldtype>
 ----
-====
---
 
 A sample `stemdict.txt` file is shown below:
 
@@ -180,22 +117,6 @@ Compound words are most commonly found in Germanic languages.
 
 Assume that `germanwords.txt` contains at least the following words: `dumm kopf donau dampf schiff`
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-filter-dictionarycompoundword]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="dictionaryCompoundWord" dictionary="germanwords.txt"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-filter-dictionarycompoundword]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -203,8 +124,6 @@ Assume that `germanwords.txt` contains at least the following words: `dumm kopf 
   <filter class="solr.DictionaryCompoundWordTokenFilterFactory" dictionary="germanwords.txt"/>
 </analyzer>
 ----
-====
---
 
 *In:* "Donaudampfschiff dummkopf"
 
@@ -220,7 +139,7 @@ Unicode Collation in Solr is fast, because all the work is done at index time.
 
 Rather than specifying an analyzer within `<fieldtype ... class="solr.TextField">`, the `solr.CollationField` and `solr.ICUCollationField` field type classes provide this functionality. `solr.ICUCollationField`, which is backed by http://site.icu-project.org[the ICU4J library], provides more flexible configuration, has more locales, is significantly faster, and requires less memory and less index space, since its keys are smaller than those produced by the JDK implementation that backs `solr.CollationField`.
 
-To use `solr.ICUCollationField`, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>).  See `solr/contrib/analysis-extras/README.md` for instructions on which jars you need to add.
+To use `solr.ICUCollationField`, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>).  See `solr/contrib/analysis-extras/README.txt` for instructions on which jars you need to add.
 
 `solr.ICUCollationField` and `solr.CollationField` fields can be created in two ways:
 
@@ -411,22 +330,6 @@ This can increase recall by causing more matches. On the other hand, it can redu
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-filter-lang-asciifolding]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="asciiFolding"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-filter-lang-asciifolding]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -434,8 +337,6 @@ This can increase recall by causing more matches. On the other hand, it can redu
   <filter class="solr.ASCIIFoldingFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 *In:* "Björn Ångström"
 
@@ -455,22 +356,6 @@ This can increase recall by causing more matches. On the other hand, it can redu
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-filter-decimaldigit]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="decimalDigit"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-filter-decimaldigit]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -478,8 +363,6 @@ This can increase recall by causing more matches. On the other hand, it can redu
   <filter class="solr.DecimalDigitFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 == OpenNLP Integration
 
@@ -487,7 +370,7 @@ The `lucene/analysis/opennlp` module provides OpenNLP integration via several an
 
 NOTE: The <<OpenNLP Tokenizer>> must be used with all other OpenNLP analysis components, for two reasons: first, the OpenNLP Tokenizer detects and marks the sentence boundaries required by all the OpenNLP filters; and second, since the pre-trained OpenNLP models used by these filters were trained using the corresponding language-specific sentence-detection/tokenization models, the same tokenization, using the same models, must be used at runtime for optimal performance.
 
-To use the OpenNLP components, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>). See `solr/contrib/analysis-extras/README.md` for instructions on which jars you need to add.
+To use the OpenNLP components, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>). See `solr/contrib/analysis-extras/README.txt` for instructions on which jars you need to add.
 
 === OpenNLP Tokenizer
 
@@ -503,23 +386,6 @@ The OpenNLP Tokenizer takes two language-specific binary model files as paramete
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-tokenizer-opennlp]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="openNLP"
-             sentenceModel="en-sent.bin"
-             tokenizerModel="en-tokenizer.bin"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-tokenizer-opennlp]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -528,8 +394,6 @@ The OpenNLP Tokenizer takes two language-specific binary model files as paramete
              tokenizerModel="en-tokenizer.bin"/>
 </analyzer>
 ----
-====
---
 
 === OpenNLP Part-Of-Speech Filter
 
@@ -563,26 +427,6 @@ $
 
 Index the POS for each token as a payload:
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-filter-opennlppos]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="openNLP"
-             sentenceModel="en-sent.bin"
-             tokenizerModel="en-tokenizer.bin"/>
-  <filter name="openNLPPOS" posTaggerModel="en-pos-maxent.bin"/>
-  <filter name="typeAsPayload"/>
-  <filter name="type" types="stop.pos.txt"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-filter-opennlppos]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -594,20 +438,18 @@ Index the POS for each token as a payload:
   <filter class="solr.TypeTokenFilterFactory" types="stop.pos.txt"/>
 </analyzer>
 ----
-====
---
 
 Index the POS for each token as a synonym, after prefixing the POS with "@" (see the <<filter-descriptions.adoc#type-as-synonym-filter,TypeAsSynonymFilter description>>):
 
 [source,xml]
 ----
 <analyzer>
-  <tokenizer name="openNLP"
+  <tokenizer class="solr.OpenNLPTokenizerFactory"
              sentenceModel="en-sent.bin"
              tokenizerModel="en-tokenizer.bin"/>
-  <filter name="openNLPPOS" posTaggerModel="en-pos-maxent.bin"/>
-  <filter name="typeAsSynonym" prefix="@"/>
-  <filter name="type" types="stop.pos.txt"/>
+  <filter class="solr.OpenNLPPOSFilterFactory" posTaggerModel="en-pos-maxent.bin"/>
+  <filter class="solr.TypeAsSynonymFilterFactory" prefix="@"/>
+  <filter class="solr.TypeTokenFilterFactory" types="stop.pos.txt"/>
 </analyzer>
 ----
 
@@ -616,11 +458,11 @@ Only index nouns - the `keep.pos.txt` file contains lines `NN`, `NNS`, `NNP` and
 [source,xml]
 ----
 <analyzer>
-  <tokenizer name="openNLP"
+  <tokenizer class="solr.OpenNLPTokenizerFactory"
              sentenceModel="en-sent.bin"
              tokenizerModel="en-tokenizer.bin"/>
-  <filter name="openNLPPOS" posTaggerModel="en-pos-maxent.bin"/>
-  <filter name="type" types="keep.pos.txt" useWhitelist="true"/>
+  <filter class="solr.OpenNLPPOSFilterFactory" posTaggerModel="en-pos-maxent.bin"/>
+  <filter class="solr.TypeTokenFilterFactory" types="keep.pos.txt" useWhitelist="true"/>
 </analyzer>
 ----
 
@@ -642,26 +484,6 @@ NOTE: Lucene currently does not index token types, so if you want to keep this i
 
 Index the phrase chunk label for each token as a payload:
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-filter-opennlpchunker]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="openNLP"
-             sentenceModel="en-sent.bin"
-             tokenizerModel="en-tokenizer.bin"/>
-  <filter name="openNLPPOS" posTaggerModel="en-pos-maxent.bin"/>
-  <filter name="openNLPChunker" chunkerModel="en-chunker.bin"/>
-  <filter name="typeAsPayload"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-filter-opennlpchunker]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -673,20 +495,18 @@ Index the phrase chunk label for each token as a payload:
   <filter class="solr.TypeAsPayloadFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 Index the phrase chunk label for each token as a synonym, after prefixing it with "#" (see the <<filter-descriptions.adoc#type-as-synonym-filter,TypeAsSynonymFilter description>>):
 
 [source,xml]
 ----
 <analyzer>
-  <tokenizer name="openNLP"
+  <tokenizer class="solr.OpenNLPTokenizerFactory"
              sentenceModel="en-sent.bin"
              tokenizerModel="en-tokenizer.bin"/>
-  <filter name="openNLPPOS" posTaggerModel="en-pos-maxent.bin"/>
-  <filter name="openNLPChunker" chunkerModel="en-chunker.bin"/>
-  <filter name="typeAsSynonym" prefix="#"/>
+  <filter class="solr.OpenNLPPOSFilterFactory" posTaggerModel="en-pos-maxent.bin"/>
+  <filter class="solr.OpenNLPChunkerFactory" chunkerModel="en-chunker.bin"/>
+  <filter class="solr.TypeAsSynonymFilterFactory" prefix="#"/>
 </analyzer>
 ----
 
@@ -708,28 +528,6 @@ Either `dictionary` or `lemmatizerModel` must be provided, and both may be provi
 
 Perform dictionary-based lemmatization, and fall back to model-based lemmatization for out-of-vocabulary tokens (see the <<OpenNLP Part-Of-Speech Filter>> section above for information about using `TypeTokenFilter` to avoid indexing punctuation):
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-filter-opennlplemmatizer]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="openNLP"
-             sentenceModel="en-sent.bin"
-             tokenizerModel="en-tokenizer.bin"/>
-  <filter name="openNLPPOS" posTaggerModel="en-pos-maxent.bin"/>
-  <filter name="oenNLPLemmatizer"
-          dictionary="lemmas.txt"
-          lemmatizerModel="en-lemmatizer.bin"/>
-  <filter name="type" types="stop.pos.txt"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-filter-opennlplemmatizer]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -743,20 +541,18 @@ Perform dictionary-based lemmatization, and fall back to model-based lemmatizati
   <filter class="solr.TypeTokenFilterFactory" types="stop.pos.txt"/>
 </analyzer>
 ----
-====
---
 
 Perform dictionary-based lemmatization only:
 
 [source,xml]
 ----
 <analyzer>
-  <tokenizer name="openNLP"
+  <tokenizer class="solr.OpenNLPTokenizerFactory"
              sentenceModel="en-sent.bin"
              tokenizerModel="en-tokenizer.bin"/>
-  <filter name="openNLPPOS" posTaggerModel="en-pos-maxent.bin"/>
-  <filter name="openNLPLemmatizer" dictionary="lemmas.txt"/>
-  <filter name="type" types="stop.pos.txt"/>
+  <filter class="solr.OpenNLPPOSFilterFactory" posTaggerModel="en-pos-maxent.bin"/>
+  <filter class="solr.OpenNLPLemmatizerFilterFactory" dictionary="lemmas.txt"/>
+  <filter class="solr.TypeTokenFilterFactory" types="stop.pos.txt"/>
 </analyzer>
 ----
 
@@ -765,14 +561,14 @@ Perform model-based lemmatization only, preserving the original token and emitti
 [source,xml]
 ----
 <analyzer>
-  <tokenizer name="openNLP"
+  <tokenizer class="solr.OpenNLPTokenizerFactory"
              sentenceModel="en-sent.bin"
              tokenizerModel="en-tokenizer.bin"/>
-  <filter name="openNLPPOS" posTaggerModel="en-pos-maxent.bin"/>
-  <filter name="keywordRepeat"/>
-  <filter name="openNLPLemmatizer" lemmatizerModel="en-lemmatizer.bin"/>
-  <filter name="removeDuplicates"/>
-  <filter name="type" types="stop.pos.txt"/>
+  <filter class="solr.OpenNLPPOSFilterFactory" posTaggerModel="en-pos-maxent.bin"/>
+  <filter class="solr.KeywordRepeatFilterFactory"/>
+  <filter class="solr.OpenNLPLemmatizerFilterFactory" lemmatizerModel="en-lemmatizer.bin"/>
+  <filter class="solr.RemoveDuplicatesTokenFilterFactory"/>
+  <filter class="solr.TypeTokenFilterFactory" types="stop.pos.txt"/>
 </analyzer>
 ----
 
@@ -830,23 +626,6 @@ This algorithm defines both character normalization and stemming, so these are s
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-arabic]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="arabicNormalization"/>
-  <filter name="arabicStem"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-arabic]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -855,8 +634,6 @@ This algorithm defines both character normalization and stemming, so these are s
   <filter class="solr.ArabicStemFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 === Bengali
 
@@ -868,23 +645,6 @@ There are two filters written specifically for dealing with Bengali language. Th
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-bengali]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="bengaliNormalization"/>
-  <filter name="bengaliStem"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-bengali]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -892,9 +652,8 @@ There are two filters written specifically for dealing with Bengali language. Th
   <filter class="solr.BengaliNormalizationFilterFactory"/>
   <filter class="solr.BengaliStemFilterFactory"/>
 </analyzer>
+
 ----
-====
---
 
 *Normalisation* - `মানুষ` \-> `মানুস`
 
@@ -911,22 +670,6 @@ This is a Java filter written specifically for stemming the Brazilian dialect of
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-brazilian]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer type="index">
-  <tokenizer name="standard"/>
-  <filter name="brazilianStem"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-brazilian]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer type="index">
@@ -934,8 +677,6 @@ This is a Java filter written specifically for stemming the Brazilian dialect of
   <filter class="solr.BrazilianStemFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 *In:* "praia praias"
 
@@ -953,23 +694,6 @@ Solr includes a light stemmer for Bulgarian, following http://members.unine.ch/j
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-bulgarian]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="bulgarianStem"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-bulgarian]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -978,8 +702,6 @@ Solr includes a light stemmer for Bulgarian, following http://members.unine.ch/j
   <filter class="solr.BulgarianStemFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 === Catalan
 
@@ -993,25 +715,6 @@ Solr can stem Catalan using the Snowball Porter Stemmer with an argument of `lan
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-catalan]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="elision"
-          articles="lang/contractions_ca.txt"/>
-  <filter class="solr.SnowballPorterFilterFactory" language="Catalan" />
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-catalan]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -1022,8 +725,6 @@ Solr can stem Catalan using the Snowball Porter Stemmer with an argument of `lan
   <filter class="solr.SnowballPorterFilterFactory" language="Catalan" />
 </analyzer>
 ----
-====
---
 
 *In:* "llengües llengua"
 
@@ -1033,7 +734,7 @@ Solr can stem Catalan using the Snowball Porter Stemmer with an argument of `lan
 
 === Traditional Chinese
 
-The default configuration of the <<tokenizers.adoc#icu-tokenizer,ICU Tokenizer>> is suitable for Traditional Chinese text.  It follows the Word Break rules from the Unicode Text Segmentation algorithm for non-Chinese text, and uses a dictionary to segment Chinese words.  To use this tokenizer, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>). See the `solr/contrib/analysis-extras/README.md` for information on which jars you need to add.
+The default configuration of the <<tokenizers.adoc#icu-tokenizer,ICU Tokenizer>> is suitable for Traditional Chinese text.  It follows the Word Break rules from the Unicode Text Segmentation algorithm for non-Chinese text, and uses a dictionary to segment Chinese words.  To use this tokenizer, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>). See the `solr/contrib/analysis-extras/README.txt` for information on which jars you need to add.
 
 <<tokenizers.adoc#standard-tokenizer,Standard Tokenizer>> can also be used to tokenize Traditional Chinese text.  Following the Word Break rules from the Unicode Text Segmentation algorithm, it produces one token per Chinese character.  When combined with <<CJK Bigram Filter>>, overlapping bigrams of Chinese characters are formed.
 
@@ -1041,23 +742,6 @@ The default configuration of the <<tokenizers.adoc#icu-tokenizer,ICU Tokenizer>>
 
 *Examples:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-trd-chinese]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="icu"/>
-  <filter name="cjkWidth"/>
-  <filter name="lowercase"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-trad-chinese]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -1066,16 +750,14 @@ The default configuration of the <<tokenizers.adoc#icu-tokenizer,ICU Tokenizer>>
   <filter class="solr.LowerCaseFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 [source,xml]
 ----
 <analyzer>
-  <tokenizer name="standard"/>
-  <filter name="cjkBigram"/>
-  <filter name="cjkWidth"/>
-  <filter name="lowercase"/>
+  <tokenizer class="solr.StandardTokenizerFactory"/>
+  <filter class="solr.CJKBigramFilterFactory"/>
+  <filter class="solr.CJKWidthFilterFactory"/>
+  <filter class="solr.LowerCaseFilterFactory"/>
 </analyzer>
 ----
 
@@ -1105,9 +787,9 @@ See the example under <<Traditional Chinese>>.
 
 === Simplified Chinese
 
-For Simplified Chinese, Solr provides support for Chinese sentence and word segmentation with the <<HMM Chinese Tokenizer>>. This component includes a large dictionary and segments Chinese text into words with the Hidden Markov Model. To use this tokenizer, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>). See the `solr/contrib/analysis-extras/README.md` for information on which jars you need to add.
+For Simplified Chinese, Solr provides support for Chinese sentence and word segmentation with the <<HMM Chinese Tokenizer>>. This component includes a large dictionary and segments Chinese text into words with the Hidden Markov Model. To use this tokenizer, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>). See the `solr/contrib/analysis-extras/README.txt` for information on which jars you need to add.
 
-The default configuration of the <<tokenizers.adoc#icu-tokenizer,ICU Tokenizer>> is also suitable for Simplified Chinese text.  It follows the Word Break rules from the Unicode Text Segmentation algorithm for non-Chinese text, and uses a dictionary to segment Chinese words.  To use this tokenizer, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>). See the `solr/contrib/analysis-extras/README.md` for information on which jars you need to add.
+The default configuration of the <<tokenizers.adoc#icu-tokenizer,ICU Tokenizer>> is also suitable for Simplified Chinese text.  It follows the Word Break rules from the Unicode Text Segmentation algorithm for non-Chinese text, and uses a dictionary to segment Chinese words.  To use this tokenizer, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>). See the `solr/contrib/analysis-extras/README.txt` for information on which jars you need to add.
 
 Also useful for Chinese analysis:
 
@@ -1115,26 +797,6 @@ Also useful for Chinese analysis:
 
 *Examples:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-chinese]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="hmmChinese"/>
-  <filter name="cjkWidth"/>
-  <filter name="stop"
-          words="org/apache/lucene/analysis/cn/smart/stopwords.txt"/>
-  <filter name="porterStem"/>
-  <filter name="lowercase"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-chinese]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -1146,23 +808,21 @@ Also useful for Chinese analysis:
   <filter class="solr.LowerCaseFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 [source,xml]
 ----
 <analyzer>
-  <tokenizer name="icu"/>
-  <filter name="cjkWidth"/>
-  <filter name="stop"
+  <tokenizer class="solr.ICUTokenizerFactory"/>
+  <filter class="solr.CJKWidthFilterFactory"/>
+  <filter class="solr.StopFilterFactory"
           words="org/apache/lucene/analysis/cn/smart/stopwords.txt"/>
-  <filter name="lowercase"/>
+  <filter class="solr.LowerCaseFilterFactory"/>
 </analyzer>
 ----
 
 === HMM Chinese Tokenizer
 
-For Simplified Chinese, Solr provides support for Chinese sentence and word segmentation with the `solr.HMMChineseTokenizerFactory` in the `analysis-extras` contrib module. This component includes a large dictionary and segments Chinese text into words with the Hidden Markov Model. To use this tokenizer, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>).  See `solr/contrib/analysis-extras/README.md` for instructions on which jars you need to add.
+For Simplified Chinese, Solr provides support for Chinese sentence and word segmentation with the `solr.HMMChineseTokenizerFactory` in the `analysis-extras` contrib module. This component includes a large dictionary and segments Chinese text into words with the Hidden Markov Model. To use this tokenizer, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>).  See `solr/contrib/analysis-extras/README.txt` for instructions on which jars you need to add.
 
 *Factory class:* `solr.HMMChineseTokenizerFactory`
 
@@ -1186,23 +846,6 @@ Solr includes a light stemmer for Czech, following https://dl.acm.org/citation.c
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-czech]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="czechStem"/>
-<analyzer>
-----
-====
-[example.tab-pane#byclass-lang-czech]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -1211,8 +854,6 @@ Solr includes a light stemmer for Czech, following https://dl.acm.org/citation.c
   <filter class="solr.CzechStemFilterFactory"/>
 <analyzer>
 ----
-====
---
 
 *In:* "prezidenští, prezidenta, prezidentského"
 
@@ -1234,23 +875,6 @@ Also relevant are the <<Scandinavian,Scandinavian normalization filters>>.
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-danish]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="snowballPorter" language="Danish" />
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-danish]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -1259,8 +883,6 @@ Also relevant are the <<Scandinavian,Scandinavian normalization filters>>.
   <filter class="solr.SnowballPorterFilterFactory" language="Danish" />
 </analyzer>
 ----
-====
---
 
 *In:* "undersøg undersøgelse"
 
@@ -1280,23 +902,6 @@ Solr can stem Dutch using the Snowball Porter Stemmer with an argument of `langu
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-dutch]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer type="index">
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="snowballPorter" language="Dutch"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-dutch]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer type="index">
@@ -1305,8 +910,6 @@ Solr can stem Dutch using the Snowball Porter Stemmer with an argument of `langu
   <filter class="solr.SnowballPorterFilterFactory" language="Dutch"/>
 </analyzer>
 ----
-====
---
 
 *In:* "kanaal kanalen"
 
@@ -1326,23 +929,6 @@ Solr can stem Estonian using the Snowball Porter Stemmer with an argument of `la
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-estonian]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer type="index">
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="snowballPorter" language="Estonian"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-estonian]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer type="index">
@@ -1351,8 +937,6 @@ Solr can stem Estonian using the Snowball Porter Stemmer with an argument of `la
   <filter class="solr.SnowballPorterFilterFactory" language="Estonian"/>
 </analyzer>
 ----
-====
---
 
 *In:* "Taevani tõustes"
 
@@ -1370,22 +954,6 @@ Solr includes support for stemming Finnish, and Lucene includes an example stopw
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-finnish]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer type="index">
-  <tokenizer name="standard"/>
-  <filter name="finnishLightStem"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-finnish]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer type="index">
@@ -1393,8 +961,6 @@ Solr includes support for stemming Finnish, and Lucene includes an example stopw
   <filter class="solr.FinnishLightStemFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 *In:* "kala kalat"
 
@@ -1419,24 +985,6 @@ Removes article elisions from a token stream. This filter can be useful for lang
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-french]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="elision"
-          ignoreCase="true"
-          articles="lang/contractions_fr.txt"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-french]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -1446,8 +994,6 @@ Removes article elisions from a token stream. This filter can be useful for lang
           articles="lang/contractions_fr.txt"/>
 </analyzer>
 ----
-====
---
 
 *In:* "L'histoire d'art"
 
@@ -1468,22 +1014,22 @@ Solr includes three stemmers for French: one in the `solr.SnowballPorterFilterFa
 [source,xml]
 ----
 <analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="elision"
+  <tokenizer class="solr.StandardTokenizerFactory"/>
+  <filter class="solr.LowerCaseFilterFactory"/>
+  <filter class="solr.ElisionFilterFactory"
           articles="lang/contractions_fr.txt"/>
-  <filter name="frenchLightStem"/>
+  <filter class="solr.FrenchLightStemFilterFactory"/>
 </analyzer>
 ----
 
 [source,xml]
 ----
 <analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="elision"
+  <tokenizer class="solr.StandardTokenizerFactory"/>
+  <filter class="solr.LowerCaseFilterFactory"/>
+  <filter class="solr.ElisionFilterFactory"
           articles="lang/contractions_fr.txt"/>
-  <filter name="frenchMinimalStem"/>
+  <filter class="solr.FrenchMinimalStemFilterFactory"/>
 </analyzer>
 ----
 
@@ -1504,23 +1050,6 @@ Solr includes a stemmer for Galician following http://bvg.udc.es/recursos_lingua
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-galician]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="galicianStem"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-galician]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -1529,8 +1058,6 @@ Solr includes a stemmer for Galician following http://bvg.udc.es/recursos_lingua
   <filter class="solr.GalicianStemFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 *In:* "felizmente Luzes"
 
@@ -1548,45 +1075,27 @@ Solr includes four stemmers for German: one in the `solr.SnowballPorterFilterFac
 
 *Examples:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-german]
-====
-[.tab-label]*With name*
 [source,xml]
 ----
 <analyzer type="index">
-  <tokenizer name="standard"/>
-  <filter name="germanStem"/>
+  <tokenizer class="solr.StandardTokenizerFactory "/>
+  <filter class="solr.GermanStemFilterFactory"/>
 </analyzer>
 ----
-====
-[example.tab-pane#byclass-lang-german]
-====
-[.tab-label]*With class name (legacy)*
+
 [source,xml]
 ----
 <analyzer type="index">
   <tokenizer class="solr.StandardTokenizerFactory"/>
-  <filter class="solr.GermanStemFilterFactory"/>
-</analyzer>
-----
-====
---
-
-[source,xml]
-----
-<analyzer type="index">
-  <tokenizer name="standard"/>
-  <filter name="germanLightStem"/>
+  <filter class="solr.GermanLightStemFilterFactory"/>
 </analyzer>
 ----
 
 [source,xml]
 ----
 <analyzer type="index">
-  <tokenizer name="standard"/>
-  <filter name="germanMinimalStem"/>
+  <tokenizer class="solr.StandardTokenizerFactory "/>
+  <filter class="solr.GermanMinimalStemFilterFactory"/>
 </analyzer>
 ----
 
@@ -1611,22 +1120,6 @@ Use of custom charsets is no longer supported as of Solr 3.1. If you need to ind
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-greek]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer type="index">
-  <tokenizer name="standard"/>
-  <filter name="greekLowercase"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-greek]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer type="index">
@@ -1634,8 +1127,6 @@ Use of custom charsets is no longer supported as of Solr 3.1. If you need to ind
   <filter class="solr.GreekLowerCaseFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 === Hindi
 
@@ -1647,24 +1138,6 @@ Solr includes support for stemming Hindi following http://computing.open.ac.uk/S
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-hindi]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer type="index">
-  <tokenizer name="standard"/>
-  <filter name="indicNormalization"/>
-  <filter name="hindiNormalization"/>
-  <filter name="hindiStem"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-hindi]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer type="index">
@@ -1674,8 +1147,6 @@ Solr includes support for stemming Hindi following http://computing.open.ac.uk/S
   <filter class="solr.HindiStemFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 === Indonesian
 
@@ -1687,23 +1158,6 @@ Solr includes support for stemming Indonesian (Bahasa Indonesia) following http:
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-indonesian]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="indonesianStem" stemDerivational="true" />
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-indonesian]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -1712,8 +1166,6 @@ Solr includes support for stemming Indonesian (Bahasa Indonesia) following http:
   <filter class="solr.IndonesianStemFilterFactory" stemDerivational="true" />
 </analyzer>
 ----
-====
---
 
 *In:* "sebagai sebagainya"
 
@@ -1731,25 +1183,6 @@ Solr includes two stemmers for Italian: one in the `solr.SnowballPorterFilterFac
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-italian]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="elision"
-          articles="lang/contractions_it.txt"/>
-  <filter name="italianLightStem"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-italian]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -1760,8 +1193,6 @@ Solr includes two stemmers for Italian: one in the `solr.SnowballPorterFilterFac
   <filter class="solr.ItalianLightStemFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 *In:* "propaga propagare propagamento"
 
@@ -1781,25 +1212,6 @@ Solr can stem Irish using the Snowball Porter Stemmer with an argument of `langu
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-irish]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="elision"
-          articles="lang/contractions_ga.txt"/>
-  <filter name="irishLowercase"/>
-  <filter name="snowballPorter" language="Irish" />
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-irish]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -1810,8 +1222,6 @@ Solr can stem Irish using the Snowball Porter Stemmer with an argument of `langu
   <filter class="solr.SnowballPorterFilterFactory" language="Irish" />
 </analyzer>
 ----
-====
---
 
 *In:* "siopadóireacht síceapatacha b'fhearr m'athair"
 
@@ -1913,31 +1323,6 @@ Folds fullwidth ASCII variants into the equivalent Basic Latin forms, and folds 
 
 Example:
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-japanese]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<fieldType name="text_ja" positionIncrementGap="100" autoGeneratePhraseQueries="false">
-  <analyzer>
-    <!-- Uncomment if you need to handle iteration marks: -->
-    <!-- <charFilter name="japaneseIterationMark" /> -->
-    <tokenizer name="japanese" mode="search" userDictionary="lang/userdict_ja.txt"/>
-    <filter name="japaneseBaseForm"/>
-    <filter name="japanesePartOfSpeechStop" tags="lang/stoptags_ja.txt"/>
-    <filter name="cjkWidth"/>
-    <filter name="stop" ignoreCase="true" words="lang/stopwords_ja.txt"/>
-    <filter name="japaneseKatakanaStem" minimumLength="4"/>
-    <filter name="lowercase"/>
-  </analyzer>
-</fieldType>
-----
-====
-[example.tab-pane#byclass-lang-japanese]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <fieldType name="text_ja" positionIncrementGap="100" autoGeneratePhraseQueries="false">
@@ -1954,13 +1339,11 @@ Example:
   </analyzer>
 </fieldType>
 ----
-====
---
 
 [[hebrew-lao-myanmar-khmer]]
 === Hebrew, Lao, Myanmar, Khmer
 
-Lucene provides support, in addition to UAX#29 word break rules, for Hebrew's use of the double and single quote characters, and for segmenting Lao, Myanmar, and Khmer into syllables with the `solr.ICUTokenizerFactory` in the `analysis-extras` contrib module. To use this tokenizer, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>).  See `solr/contrib/analysis-extras/README.md` for instructions on which jars you need to add.
+Lucene provides support, in addition to UAX#29 word break rules, for Hebrew's use of the double and single quote characters, and for segmenting Lao, Myanmar, and Khmer into syllables with the `solr.ICUTokenizerFactory` in the `analysis-extras` contrib module. To use this tokenizer, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>).  See `solr/contrib/analysis-extras/README.txt for` instructions on which jars you need to add.
 
 See <<tokenizers.adoc#icu-tokenizer,the ICUTokenizer>> for more information.
 
@@ -1974,25 +1357,6 @@ Solr includes support for stemming Latvian, and Lucene includes an example stopw
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-latvian]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<fieldType name="text_lvstem" class="solr.TextField" positionIncrementGap="100">
-  <analyzer>
-    <tokenizer name="standard"/>
-    <filter name="lowercase"/>
-    <filter name="latvianStem"/>
-  </analyzer>
-</fieldType>
-----
-====
-[example.tab-pane#byclass-lang-latvian]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <fieldType name="text_lvstem" class="solr.TextField" positionIncrementGap="100">
@@ -2003,8 +1367,6 @@ Solr includes support for stemming Latvian, and Lucene includes an example stopw
   </analyzer>
 </fieldType>
 ----
-====
---
 
 *In:* "tirgiem tirgus"
 
@@ -2051,26 +1413,6 @@ The second pass is to pick up -dom and -het endings. Consider this example:
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-norweigian]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<fieldType name="text_no" class="solr.TextField" positionIncrementGap="100">
-  <analyzer>
-    <tokenizer name="standard"/>
-    <filter name="lowercase"/>
-    <filter name="stop" ignoreCase="true" words="lang/stopwords_no.txt" format="snowball"/>
-    <filter name="norwegianLightStem"/>
-  </analyzer>
-</fieldType>
-----
-====
-[example.tab-pane#byclass-lang-norweigian]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <fieldType name="text_no" class="solr.TextField" positionIncrementGap="100">
@@ -2082,8 +1424,6 @@ The second pass is to pick up -dom and -het endings. Consider this example:
   </analyzer>
 </fieldType>
 ----
-====
---
 
 *In:* "Forelskelsen"
 
@@ -2111,10 +1451,10 @@ The `NorwegianMinimalStemFilterFactory` stems plural forms of Norwegian nouns on
 ----
 <fieldType name="text_no" class="solr.TextField" positionIncrementGap="100">
   <analyzer>
-    <tokenizer name="standard"/>
-    <filter name="lowercase"/>
-    <filter name="stop" ignoreCase="true" words="lang/stopwords_no.txt" format="snowball"/>
-    <filter name="norwegianMinimalStem"/>
+    <tokenizer class="solr.StandardTokenizerFactory"/>
+    <filter class="solr.LowerCaseFilterFactory"/>
+    <filter class="solr.StopFilterFactory" ignoreCase="true" words="lang/stopwords_no.txt" format="snowball"/>
+    <filter class="solr.NorwegianMinimalStemFilterFactory"/>
   </analyzer>
 </fieldType>
 ----
@@ -2137,37 +1477,18 @@ Solr includes support for normalizing Persian, and Lucene includes an example st
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-persian]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="arabicNormalization"/>
-  <filter name="persianNormalization"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-persian]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
   <tokenizer class="solr.StandardTokenizerFactory"/>
   <filter class="solr.ArabicNormalizationFilterFactory"/>
-  <filter class="solr.PersianNormalizationFilterFactory"/>
+  <filter class="solr.PersianNormalizationFilterFactory">
 </analyzer>
 ----
-====
---
 
 === Polish
 
-Solr provides support for Polish stemming with the `solr.StempelPolishStemFilterFactory`, and `solr.MorphologikFilterFactory` for lemmatization, in the `contrib/analysis-extras` module. The `solr.StempelPolishStemFilterFactory` component includes an algorithmic stemmer with tables for Polish. To use either of these filters, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>). See `solr/contrib/analysis-extras/README.md` for instructions on which jars you need to add.
+Solr provides support for Polish stemming with the `solr.StempelPolishStemFilterFactory`, and `solr.MorphologikFilterFactory` for lemmatization, in the `contrib/analysis-extras` module. The `solr.StempelPolishStemFilterFactory` component includes an algorithmic stemmer with tables for Polish. To use either of these filters, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>). See `solr/contrib/analysis-extras/README.txt` for instructions on which jars you need to add.
 
 *Factory class:* `solr.StempelPolishStemFilterFactory` and `solr.MorfologikFilterFactory`
 
@@ -2175,23 +1496,6 @@ Solr provides support for Polish stemming with the `solr.StempelPolishStemFilter
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-polish]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="stempelPolishStem"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-polish]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -2200,15 +1504,13 @@ Solr provides support for Polish stemming with the `solr.StempelPolishStemFilter
   <filter class="solr.StempelPolishStemFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 [source,xml]
 ----
 <analyzer>
-  <tokenizer name="standard"/>
-  <filter name="morfologik" dictionary="morfologik/stemming/polish/polish.dict"/>
-  <filter name="lowercase"/>
+  <tokenizer class="solr.StandardTokenizerFactory"/>
+  <filter class="solr.MorfologikFilterFactory" dictionary="morfologik/stemming/polish/polish.dict"/>
+  <filter class="solr.LowerCaseFilterFactory"/>
 </analyzer>
 ----
 
@@ -2218,7 +1520,7 @@ Solr provides support for Polish stemming with the `solr.StempelPolishStemFilter
 
 *Out:* "student", "student"
 
-More information about the Stempel stemmer is available in {lucene-javadocs}/analysis/stempel/index.html[the Lucene javadocs].
+More information about the Stempel stemmer is available in {lucene-javadocs}/analyzers-stempel/index.html[the Lucene javadocs].
 
 Note the lower case filter is applied _after_ the Morfologik stemmer; this is because the Polish dictionary contains proper names and then proper term case may be important to resolve disambiguities (or even lookup the correct lemma at all).
 
@@ -2234,23 +1536,6 @@ Solr includes four stemmers for Portuguese: one in the `solr.SnowballPorterFilte
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-portuguese]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="portugueseStem"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-portuguese]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -2259,24 +1544,22 @@ Solr includes four stemmers for Portuguese: one in the `solr.SnowballPorterFilte
   <filter class="solr.PortugueseStemFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 [source,xml]
 ----
 <analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="portugueseLightStem"/>
+  <tokenizer class="solr.StandardTokenizerFactory"/>
+  <filter class="solr.LowerCaseFilterFactory"/>
+  <filter class="solr.PortugueseLightStemFilterFactory"/>
 </analyzer>
 ----
 
 [source,xml]
 ----
 <analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="portugueseMinimalStem"/>
+  <tokenizer class="solr.StandardTokenizerFactory"/>
+  <filter class="solr.LowerCaseFilterFactory"/>
+  <filter class="solr.PortugueseMinimalStemFilterFactory"/>
 </analyzer>
 ----
 
@@ -2298,23 +1581,6 @@ Solr can stem Romanian using the Snowball Porter Stemmer with an argument of `la
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-romanian]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="wnowballPorter" language="Romanian" />
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-romanian]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -2323,8 +1589,6 @@ Solr can stem Romanian using the Snowball Porter Stemmer with an argument of `la
   <filter class="solr.SnowballPorterFilterFactory" language="Romanian" />
 </analyzer>
 ----
-====
---
 
 === Russian
 
@@ -2338,23 +1602,6 @@ Solr includes two stemmers for Russian: one in the `solr.SnowballPorterFilterFac
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-russian]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer type="index">
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="russianLightStem"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-russian]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer type="index">
@@ -2363,8 +1610,6 @@ Solr includes two stemmers for Russian: one in the `solr.SnowballPorterFilterFac
   <filter class="solr.RussianLightStemFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 === Scandinavian
 
@@ -2390,23 +1635,6 @@ It's a semantically less destructive solution than `ScandinavianFoldingFilter`, 
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-scandinavian]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="scandinavianNormalization"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-scandinavian]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -2415,8 +1643,6 @@ It's a semantically less destructive solution than `ScandinavianFoldingFilter`, 
   <filter class="solr.ScandinavianNormalizationFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 *In:* "blåbærsyltetøj blåbärsyltetöj blaabaarsyltetoej blabarsyltetoj"
 
@@ -2439,9 +1665,9 @@ It's a semantically more destructive solution than `ScandinavianNormalizationFil
 [source,xml]
 ----
 <analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="scandinavianFolding"/>
+  <tokenizer class="solr.StandardTokenizerFactory"/>
+  <filter class="solr.LowerCaseFilterFactory"/>
+  <filter class="solr.ScandinavianFoldingFilterFactory"/>
 </analyzer>
 ----
 
@@ -2470,23 +1696,6 @@ For user tips & advice on using this filter, see https://cwiki.apache.org/conflu
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-serbian]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="serbianNormalization" haircut="bald"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-serbian]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -2495,8 +1704,6 @@ For user tips & advice on using this filter, see https://cwiki.apache.org/conflu
   <filter class="solr.SerbianNormalizationFilterFactory" haircut="bald"/>
 </analyzer>
 ----
-====
---
 
 === Spanish
 
@@ -2508,23 +1715,6 @@ Solr includes two stemmers for Spanish: one in the `solr.SnowballPorterFilterFac
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-spanish]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="spanishLightStem"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-spanish]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -2533,8 +1723,6 @@ Solr includes two stemmers for Spanish: one in the `solr.SnowballPorterFilterFac
   <filter class="solr.SpanishLightStemFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 *In:* "torear toreara torearlo"
 
@@ -2557,23 +1745,6 @@ Also relevant are the <<Scandinavian,Scandinavian normalization filters>>.
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-swedish]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="lowercase"/>
-  <filter name="swedishLightStem"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-swedish]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -2582,8 +1753,6 @@ Also relevant are the <<Scandinavian,Scandinavian normalization filters>>.
   <filter class="solr.SwedishLightStemFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 *In:* "kloke klokhet klokheten"
 
@@ -2601,22 +1770,6 @@ This filter converts sequences of Thai characters into individual Thai words. Un
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-thai]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer type="index">
-  <tokenizer name="thai"/>
-  <filter name="lowercase"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-thai]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer type="index">
@@ -2624,8 +1777,6 @@ This filter converts sequences of Thai characters into individual Thai words. Un
   <filter class="solr.LowerCaseFilterFactory"/>
 </analyzer>
 ----
-====
---
 
 === Turkish
 
@@ -2637,24 +1788,6 @@ Solr includes support for stemming Turkish with the `solr.SnowballPorterFilterFa
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-turkish]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="apostrophe"/>
-  <filter name="turkishLowercase"/>
-  <filter name="snowballPorter" language="Turkish"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-turkish]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -2664,27 +1797,25 @@ Solr includes support for stemming Turkish with the `solr.SnowballPorterFilterFa
   <filter class="solr.SnowballPorterFilterFactory" language="Turkish"/>
 </analyzer>
 ----
-====
---
 
 *Another example, illustrating diacritics-insensitive search:*
 
 [source,xml]
 ----
 <analyzer>
-  <tokenizer name="standard"/>
-  <filter name="apostrophe"/>
-  <filter name="turkishLowercase"/>
-  <filter name="asciiFoldingFilterFactory" preserveOriginal="true"/>
-  <filter name="keywordRepeat"/>
-  <filter name="truncate" prefixLength="5"/>
-  <filter name="removeDuplicates"/>
+  <tokenizer class="solr.StandardTokenizerFactory"/>
+  <filter class="solr.ApostropheFilterFactory"/>
+  <filter class="solr.TurkishLowerCaseFilterFactory"/>
+  <filter class="solr.ASCIIFoldingFilterFactory" preserveOriginal="true"/>
+  <filter class="solr.KeywordRepeatFilterFactory"/>
+  <filter class="solr.TruncateTokenFilterFactory" prefixLength="5"/>
+  <filter class="solr.RemoveDuplicatesTokenFilterFactory"/>
 </analyzer>
 ----
 
 === Ukrainian
 
-Solr provides support for Ukrainian lemmatization with the `solr.MorphologikFilterFactory`, in the `contrib/analysis-extras` module. To use this filter, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>). See `solr/contrib/analysis-extras/README.md` for instructions on which jars you need to add.
+Solr provides support for Ukrainian lemmatization with the `solr.MorphologikFilterFactory`, in the `contrib/analysis-extras` module. To use this filter, you must add additional .jars to Solr's classpath (as described in the section <<solr-plugins.adoc#installing-plugins,Solr Plugins>>). See `solr/contrib/analysis-extras/README.txt` for instructions on which jars you need to add.
 
 Lucene also includes an example Ukrainian stopword list, in the `lucene-analyzers-morfologik` jar.
 
@@ -2696,24 +1827,6 @@ Lucene also includes an example Ukrainian stopword list, in the `lucene-analyzer
 
 *Example:*
 
-[.dynamic-tabs]
---
-[example.tab-pane#byname-lang-ukranian]
-====
-[.tab-label]*With name*
-[source,xml]
-----
-<analyzer>
-  <tokenizer name="standard"/>
-  <filter name="stop" words="org/apache/lucene/analysis/uk/stopwords.txt"/>
-  <filter name="lowercase"/>
-  <filter name="morfologik" dictionary="org/apache/lucene/analysis/uk/ukrainian.dict"/>
-</analyzer>
-----
-====
-[example.tab-pane#byclass-lang-ukranian]
-====
-[.tab-label]*With class name (legacy)*
 [source,xml]
 ----
 <analyzer>
@@ -2723,7 +1836,5 @@ Lucene also includes an example Ukrainian stopword list, in the `lucene-analyzer
   <filter class="solr.MorfologikFilterFactory" dictionary="org/apache/lucene/analysis/uk/ukrainian.dict"/>
 </analyzer>
 ----
-====
---
 
 The Morfologik `dictionary` parameter value is a constant specifying which dictionary to choose. The dictionary resource must be named `path/to/_language_.dict` and have an associated `.info` metadata file. See http://morfologik.blogspot.com/[the Morfologik project] for details. If the dictionary attribute is not provided, the Polish dictionary is loaded and used by default.

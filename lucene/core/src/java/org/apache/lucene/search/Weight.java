@@ -18,11 +18,12 @@ package org.apache.lucene.search;
 
 
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.Set;
 
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.util.Bits;
 
 /**
@@ -59,6 +60,17 @@ public abstract class Weight implements SegmentCacheable {
   protected Weight(Query query) {
     this.parentQuery = query;
   }
+
+  /**
+   * Expert: adds all terms occurring in this query to the terms set. If the
+   * {@link Weight} was created with {@code needsScores == true} then this
+   * method will only extract terms which are used for scoring, otherwise it
+   * will extract all terms which are used for matching.
+   *
+   * @deprecated Use {@link Query#visit(QueryVisitor)} with {@link QueryVisitor#termCollector(Set)}
+   */
+  @Deprecated
+  public abstract void extractTerms(Set<Term> terms);
 
   /**
    * Returns {@link Matches} for a specific document, or {@code null} if the document
@@ -202,28 +214,19 @@ public abstract class Weight implements SegmentCacheable {
     @Override
     public int score(LeafCollector collector, Bits acceptDocs, int min, int max) throws IOException {
       collector.setScorer(scorer);
-      DocIdSetIterator scorerIterator = twoPhase == null ? iterator : twoPhase.approximation();
-      DocIdSetIterator collectorIterator = collector.competitiveIterator();
-      DocIdSetIterator filteredIterator;
-      if (collectorIterator == null) {
-        filteredIterator = scorerIterator;
-      } else {
-        if (scorerIterator.docID() != -1) {
-          // Wrap ScorerIterator to start from -1 for conjunction 
-          scorerIterator = new StartDISIWrapper(scorerIterator);
-        }
-        // filter scorerIterator to keep only competitive docs as defined by collector
-        filteredIterator = ConjunctionDISI.intersectIterators(Arrays.asList(scorerIterator, collectorIterator));
-      }
-      if (filteredIterator.docID() == -1 && min == 0 && max == DocIdSetIterator.NO_MORE_DOCS) {
-        scoreAll(collector, filteredIterator, twoPhase, acceptDocs);
+      if (scorer.docID() == -1 && min == 0 && max == DocIdSetIterator.NO_MORE_DOCS) {
+        scoreAll(collector, iterator, twoPhase, acceptDocs);
         return DocIdSetIterator.NO_MORE_DOCS;
       } else {
-        int doc = filteredIterator.docID();
+        int doc = scorer.docID();
         if (doc < min) {
-          doc = filteredIterator.advance(min);
+          if (twoPhase == null) {
+            doc = iterator.advance(min);
+          } else {
+            doc = twoPhase.approximation().advance(min);
+          }
         }
-        return scoreRange(collector, filteredIterator, twoPhase, acceptDocs, doc, max);
+        return scoreRange(collector, iterator, twoPhase, acceptDocs, doc, max);
       }
     }
 
@@ -242,16 +245,17 @@ public abstract class Weight implements SegmentCacheable {
         }
         return currentDoc;
       } else {
+        final DocIdSetIterator approximation = twoPhase.approximation();
         while (currentDoc < end) {
           if ((acceptDocs == null || acceptDocs.get(currentDoc)) && twoPhase.matches()) {
             collector.collect(currentDoc);
           }
-          currentDoc = iterator.nextDoc();
+          currentDoc = approximation.nextDoc();
         }
         return currentDoc;
       }
     }
-
+    
     /** Specialized method to bulk-score all hits; we
      *  separate this from {@link #scoreRange} to help out
      *  hotspot.
@@ -265,51 +269,14 @@ public abstract class Weight implements SegmentCacheable {
         }
       } else {
         // The scorer has an approximation, so run the approximation first, then check acceptDocs, then confirm
-        for (int doc = iterator.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = iterator.nextDoc()) {
+        final DocIdSetIterator approximation = twoPhase.approximation();
+        for (int doc = approximation.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = approximation.nextDoc()) {
           if ((acceptDocs == null || acceptDocs.get(doc)) && twoPhase.matches()) {
             collector.collect(doc);
           }
         }
       }
     }
-  }
-
-  /**
-   * Wraps an internal docIdSetIterator for it to start with docID = -1
-   */
-  protected static class StartDISIWrapper extends DocIdSetIterator {
-    private final DocIdSetIterator in;
-    private final int min;
-    private int docID = -1;
-
-    public StartDISIWrapper(DocIdSetIterator in) {
-      this.in = in;
-      this.min = in.docID();
-    }
-
-    @Override
-    public int docID() {
-      return docID;
-    }
-
-    @Override
-    public int nextDoc() throws IOException {
-      return advance(docID + 1);
-    }
-
-    @Override
-    public int advance(int target) throws IOException {
-      if (target <= min) {
-        return docID = min;
-      }
-      return docID = in.advance(target);
-    }
-
-    @Override
-    public long cost() {
-      return in.cost();
-    }
-
   }
 
 }

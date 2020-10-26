@@ -40,8 +40,8 @@ import org.apache.lucene.index.SlowImpactsEnum;
 import org.apache.lucene.index.TermState;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.store.ByteBuffersDataOutput;
 import org.apache.lucene.store.IOContext;
+import org.apache.lucene.store.RAMOutputStream;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.Accountables;
 import org.apache.lucene.util.ArrayUtil;
@@ -334,7 +334,7 @@ public final class DirectPostingsFormat extends PostingsFormat {
       final IntArrayWriter scratch = new IntArrayWriter();
 
       // Used for payloads, if any:
-      final ByteBuffersDataOutput ros = ByteBuffersDataOutput.newResettableInstance();
+      final RAMOutputStream ros = new RAMOutputStream();
 
       // if (DEBUG) {
       //   System.out.println("\nLOAD terms seg=" + state.segmentInfo.name + " field=" + field + " hasOffsets=" + hasOffsets + " hasFreq=" + hasFreq + " hasPos=" + hasPos + " hasPayloads=" + hasPayloads);
@@ -375,6 +375,7 @@ public final class DirectPostingsFormat extends PostingsFormat {
         int docID;
 
         if (docFreq <= lowFreqCutoff) {
+
           ros.reset();
 
           // Pack postings for low-freq terms into a single int[]:
@@ -404,7 +405,14 @@ public final class DirectPostingsFormat extends PostingsFormat {
             }
           }
 
-          final byte[] payloads = hasPayloads ? ros.toArrayCopy() : null;
+          final byte[] payloads;
+          if (hasPayloads) {
+            payloads = new byte[(int) ros.getFilePointer()];
+            ros.writeTo(payloads, 0);
+          } else {
+            payloads = null;
+          }
+
           final int[] postings = scratch.get();
 
           ent = new LowFreqTerm(postings, payloads, docFreq, (int) totalTermFreq);

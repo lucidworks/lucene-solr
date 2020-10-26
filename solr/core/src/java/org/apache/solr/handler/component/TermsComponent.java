@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -40,13 +41,17 @@ import org.apache.lucene.util.StringHelper;
 import org.apache.lucene.util.mutable.MutableValue;
 import org.apache.solr.client.solrj.response.TermsResponse;
 import org.apache.solr.common.SolrException;
+import org.apache.solr.common.SolrException.ErrorCode;
+import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.params.ShardParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.params.TermsParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.common.util.Utils;
+import org.apache.solr.handler.component.HttpShardHandlerFactory.WhitelistHostChecker;
 import org.apache.solr.request.SimpleFacets.CountPair;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.SchemaField;
@@ -78,12 +83,20 @@ public class TermsComponent extends SearchComponent {
   public static final int UNLIMITED_MAX_COUNT = -1;
   public static final String COMPONENT_NAME = "terms";
 
+  // This needs to be created here too, because Solr doesn't call init(...) on default components. Bug?
+  private WhitelistHostChecker whitelistHostChecker = new WhitelistHostChecker(
+      null, 
+      !HttpShardHandlerFactory.doGetDisableShardsWhitelist());
+
   @Override
   public void init( @SuppressWarnings({"rawtypes"})NamedList args )
   {
     super.init(args);
+    whitelistHostChecker = new WhitelistHostChecker(
+        (String) args.get(HttpShardHandlerFactory.INIT_SHARDS_WHITELIST), 
+        !HttpShardHandlerFactory.doGetDisableShardsWhitelist());
   }
-
+  
   @Override
   public void prepare(ResponseBuilder rb) throws IOException {
     SolrParams params = rb.req.getParams();
@@ -91,6 +104,39 @@ public class TermsComponent extends SearchComponent {
     //the terms parameter is also used by json facet API. So we will get errors if we try to parse as boolean
     if (params.get(TermsParams.TERMS, "false").equals("true")) {
       rb.doTerms = true;
+    } else {
+      return;
+    }
+
+    // TODO: temporary... this should go in a different component.
+    String shards = params.get(ShardParams.SHARDS);
+    if (shards != null) {
+      rb.isDistrib = true;
+      if (params.get(ShardParams.SHARDS_QT) == null) {
+        throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "No shards.qt parameter specified");
+      }
+      List<String> lst = StrUtils.splitSmart(shards, ",", true);
+      checkShardsWhitelist(rb, lst);
+      rb.shards = lst.toArray(new String[lst.size()]);
+    }
+  }
+
+  protected void checkShardsWhitelist(final ResponseBuilder rb, final List<String> lst) {
+    final List<String> urls = new LinkedList<String>();
+    for (final String ele : lst) {
+      urls.addAll(StrUtils.splitSmart(ele, '|'));
+    }
+    
+    if (whitelistHostChecker.isWhitelistHostCheckingEnabled() && rb.req.getCore().getCoreContainer().getZkController() == null && !whitelistHostChecker.hasExplicitWhitelist()) {
+      throw new SolrException(ErrorCode.FORBIDDEN, "TermsComponent "+HttpShardHandlerFactory.INIT_SHARDS_WHITELIST
+          +" not configured but required when using the '"+ShardParams.SHARDS+"' parameter with the TermsComponent."
+          +HttpShardHandlerFactory.SET_SOLR_DISABLE_SHARDS_WHITELIST_CLUE);
+    } else {
+      ClusterState cs = null;
+      if (rb.req.getCore().getCoreContainer().getZkController() != null) {
+        cs = rb.req.getCore().getCoreContainer().getZkController().getClusterState();
+      }
+      whitelistHostChecker.checkWhitelist(cs, urls.toString(), urls);
     }
   }
 
@@ -229,6 +275,7 @@ public class TermsComponent extends SearchComponent {
         // If no lower bound was specified, use the prefix
         lowerBytes = prefixBytes;
       } else {
+        lowerBytes = new BytesRef();
         if (raw) {
           // TODO: how to handle binary? perhaps we don't for "raw"... or if the field exists
           // perhaps we detect if the FieldType is non-character and expect hex if so?
@@ -508,7 +555,7 @@ public class TermsComponent extends SearchComponent {
 
       // loop through each field we want terms from
       for (Map.Entry<String, HashMap<String, TermsResponse.Term>> entry : fieldmap.entrySet()) {
-        NamedList<Object> fieldTerms = new NamedList<>();
+        NamedList<Object> fieldterms = new SimpleOrderedMap<>();
         TermsResponse.Term[] data = null;
         if (sort) {
           data = getCountSorted(entry.getValue());
@@ -521,7 +568,7 @@ public class TermsComponent extends SearchComponent {
         int cnt = 0;
         for (TermsResponse.Term tc : data) {
           if (tc.getFrequency() >= freqmin && tc.getFrequency() <= freqmax) {
-            addTermToNamedList(fieldTerms, tc.getTerm(), tc.getFrequency(), tc.getTotalTermFreq(), includeTotalTermFreq);
+            addTermToNamedList(fieldterms, tc.getTerm(), tc.getFrequency(), tc.getTotalTermFreq(), includeTotalTermFreq);
             cnt++;
           }
 
@@ -530,7 +577,7 @@ public class TermsComponent extends SearchComponent {
           }
         }
 
-        response.add(entry.getKey(), fieldTerms);
+        response.add(entry.getKey(), fieldterms);
       }
 
       return response;
@@ -575,8 +622,8 @@ public class TermsComponent extends SearchComponent {
     for (String field : fields) {
       SchemaField sf = indexSearcher.getSchema().getField(field);
       FieldType fieldType = sf.getType();
-      NamedList<Object> termsMap = new NamedList<>();
-
+      NamedList<Object> termsMap = new SimpleOrderedMap<>();
+      
       if (fieldType.isPointField()) {
         for (String term : splitTerms) {
           Query q = fieldType.getFieldQuery(null, sf, term);
@@ -590,10 +637,10 @@ public class TermsComponent extends SearchComponent {
         for (int i = 0; i < splitTerms.length; i++) {
           terms[i] = new Term(field, fieldType.readableToIndexed(splitTerms[i]));
         }
-
+  
         TermStates[] termStates = new TermStates[terms.length];
         collectTermStates(topReaderContext, termStates, terms);
-
+  
         for (int i = 0; i < terms.length; i++) {
           if (termStates[i] != null) {
             String outTerm = fieldType.indexedToReadable(terms[i].bytes().utf8ToString());

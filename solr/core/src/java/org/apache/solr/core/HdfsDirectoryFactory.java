@@ -517,11 +517,6 @@ public class HdfsDirectoryFactory extends CachingDirectoryFactory implements Sol
   }
 
   @Override
-  public SolrMetricsContext getSolrMetricsContext() {
-    return null;
-  }
-
-  @Override
   public void inform(SolrCore core) {
     setHost(core.getCoreContainer().getHostName());
   }

@@ -29,7 +29,6 @@ import org.apache.lucene.util.IntsRefBuilder;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.fst.BytesRefFSTEnum;
 import org.apache.lucene.util.fst.FST;
-import org.apache.lucene.util.fst.FSTCompiler;
 import org.apache.lucene.util.fst.OffHeapFSTStore;
 import org.apache.lucene.util.fst.PositiveIntOutputs;
 import org.apache.lucene.util.fst.Util;
@@ -175,23 +174,23 @@ public class FSTDictionary implements IndexDictionary {
    */
   public static class Builder implements IndexDictionary.Builder {
 
-    protected final FSTCompiler<Long> fstCompiler;
+    protected final org.apache.lucene.util.fst.Builder<Long> fstBuilder;
     protected final IntsRefBuilder scratchInts;
 
     public Builder() {
       PositiveIntOutputs outputs = PositiveIntOutputs.getSingleton();
-      fstCompiler = new FSTCompiler<>(FST.INPUT_TYPE.BYTE1, outputs);
+      fstBuilder = new org.apache.lucene.util.fst.Builder<>(FST.INPUT_TYPE.BYTE1, outputs);
       scratchInts = new IntsRefBuilder();
     }
 
     @Override
     public void add(BytesRef blockKey, long blockFilePointer) throws IOException {
-      fstCompiler.add(Util.toIntsRef(blockKey, scratchInts), blockFilePointer);
+      fstBuilder.add(Util.toIntsRef(blockKey, scratchInts), blockFilePointer);
     }
 
     @Override
     public FSTDictionary build() throws IOException {
-      return new FSTDictionary(fstCompiler.compile());
+      return new FSTDictionary(fstBuilder.finish());
     }
   }
 }

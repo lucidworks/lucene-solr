@@ -99,7 +99,7 @@ import org.slf4j.LoggerFactory;
  * </pre>
  */
 public class URLClassifyProcessor extends UpdateRequestProcessor {
-
+  
   private static final String INPUT_FIELD_PARAM = "inputField";
   private static final String OUTPUT_LENGTH_FIELD_PARAM = "lengthOutputField";
   private static final String OUTPUT_LEVELS_FIELD_PARAM = "levelsOutputField";
@@ -140,16 +140,16 @@ public class URLClassifyProcessor extends UpdateRequestProcessor {
       "welcome.asp",
       "welcome.aspx"
   };
-
+  
   public URLClassifyProcessor(SolrParams parameters,
       SolrQueryRequest request,
       SolrQueryResponse response,
       UpdateRequestProcessor nextProcessor) {
     super(nextProcessor);
-
+    
     this.initParameters(parameters);
   }
-
+  
   private void initParameters(SolrParams parameters) {
     if (parameters != null) {
       this.setEnabled(parameters.getBool("enabled", true));
@@ -162,7 +162,7 @@ public class URLClassifyProcessor extends UpdateRequestProcessor {
       this.canonicalUrlFieldname = parameters.get(OUTPUT_CANONICALURL_FIELD_PARAM);
     }
   }
-
+  
   @Override
   public void processAdd(AddUpdateCommand command) throws IOException {
     if (isEnabled()) {
@@ -183,25 +183,30 @@ public class URLClassifyProcessor extends UpdateRequestProcessor {
           }
           log.debug("{}", document);
         } catch (MalformedURLException | URISyntaxException e) {
-          log.warn("cannot get the normalized url for '{}' due to ", url, e);
+          log.warn("cannot get the normalized url for '{}' due to {}", url, e.getMessage());
         }
       }
     }
     super.processAdd(command);
   }
-
+  
   /**
    * Gets a canonical form of the URL for use as main URL
    * @param url The input url
    * @return The URL object representing the canonical URL
    */
-  public URL getCanonicalUrl(URL url) throws MalformedURLException {
+  public URL getCanonicalUrl(URL url) {
     // NOTE: Do we want to make sure this URL is normalized? (Christian thinks we should)
     String urlString = url.toString();
-    String lps = landingPageSuffix(url);
-    return new URL(urlString.replaceFirst("/" + lps + "$", "/"));
+    try {
+      String lps = landingPageSuffix(url);
+      return new URL(urlString.replaceFirst("/"+lps+"$", "/"));
+    } catch (MalformedURLException e) {
+      e.printStackTrace();
+    }
+    return url;
   }
-
+  
   /**
    * Calculates the length of the URL in characters
    * @param url The input URL
@@ -210,7 +215,7 @@ public class URLClassifyProcessor extends UpdateRequestProcessor {
   public int length(URL url) {
     return url.toString().length();
   }
-
+  
   /**
    * Calculates the number of path levels in the given URL
    * @param url The input URL
@@ -227,7 +232,7 @@ public class URLClassifyProcessor extends UpdateRequestProcessor {
     }
     return levels;
   }
-
+  
   /**
    * Calculates whether a URL is a top level page
    * @param url The input URL
@@ -238,7 +243,7 @@ public class URLClassifyProcessor extends UpdateRequestProcessor {
     String path = getPathWithoutSuffix(url).replaceAll("/+$", "");
     return path.length() == 0 && url.getQuery() == null;
   }
-
+  
   /**
    * Calculates whether the URL is a landing page or not
    * @param url The input URL
@@ -251,19 +256,19 @@ public class URLClassifyProcessor extends UpdateRequestProcessor {
       return landingPageSuffix(url) != "";
     }
   }
-
+  
   public URL getNormalizedURL(String url) throws MalformedURLException, URISyntaxException {
     return new URI(url).normalize().toURL();
   }
-
+  
   public boolean isEnabled() {
     return enabled;
   }
-
+  
   public void setEnabled(boolean enabled) {
     this.enabled = enabled;
   }
-
+  
   private String landingPageSuffix(URL url) {
     String path = url.getPath().toLowerCase(Locale.ROOT);
     for(String suffix : landingPageSuffixes) {
@@ -273,7 +278,7 @@ public class URLClassifyProcessor extends UpdateRequestProcessor {
     }
     return "";
   }
-
+  
   private String getPathWithoutSuffix(URL url) {
     return url.getPath().toLowerCase(Locale.ROOT).replaceFirst(landingPageSuffix(url)+"$", "");
   }

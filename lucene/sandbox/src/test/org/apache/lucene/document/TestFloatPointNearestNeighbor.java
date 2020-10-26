@@ -18,6 +18,7 @@ package org.apache.lucene.document;
 
 import java.util.Arrays;
 
+import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -242,7 +243,7 @@ public class TestFloatPointNearestNeighbor extends LuceneTestCase {
 
   private IndexWriterConfig getIndexWriterConfig() {
     IndexWriterConfig iwc = newIndexWriterConfig();
-    iwc.setCodec(TestUtil.getDefaultCodec());
+    iwc.setCodec(Codec.forName("Lucene86"));
     return iwc;
   }
 }

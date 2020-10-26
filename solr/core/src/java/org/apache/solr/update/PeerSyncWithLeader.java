@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Timer;
@@ -36,8 +37,8 @@ import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SolrInfoBean;
+import org.apache.solr.metrics.SolrMetricManager;
 import org.apache.solr.metrics.SolrMetricProducer;
-import org.apache.solr.metrics.SolrMetricsContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,7 +69,6 @@ public class PeerSyncWithLeader implements SolrMetricProducer {
   private Timer syncTime;
   private Counter syncErrors;
   private Counter syncSkipped;
-  private SolrMetricsContext solrMetricsContext;
 
   public PeerSyncWithLeader(SolrCore core, String leaderUrl, int nUpdates) {
     this.core = core;
@@ -89,16 +89,10 @@ public class PeerSyncWithLeader implements SolrMetricProducer {
   public static final String METRIC_SCOPE = "peerSync";
 
   @Override
-  public SolrMetricsContext getSolrMetricsContext() {
-    return solrMetricsContext;
-  }
-
-  @Override
-  public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
-    this.solrMetricsContext = parentContext.getChildContext(this);
-    syncTime = solrMetricsContext.timer("time", scope, METRIC_SCOPE);
-    syncErrors = solrMetricsContext.counter("errors", scope, METRIC_SCOPE);
-    syncSkipped = solrMetricsContext.counter("skipped", scope, METRIC_SCOPE);
+  public void initializeMetrics(SolrMetricManager manager, String registry, String tag, String scope) {
+    syncTime = manager.timer(null, registry, "time", scope, METRIC_SCOPE);
+    syncErrors = manager.counter(null, registry, "errors", scope, METRIC_SCOPE);
+    syncSkipped = manager.counter(null, registry, "skipped", scope, METRIC_SCOPE);
   }
 
   // start of peersync related debug messages.  includes the core name for correlation.
@@ -237,7 +231,7 @@ public class PeerSyncWithLeader implements SolrMetricProducer {
       return MissedUpdatesRequest.UNABLE_TO_SYNC;
     }
 
-    MissedUpdatesRequest updatesRequest = missedUpdatesFinder.find(otherVersions, leaderUrl);
+    MissedUpdatesRequest updatesRequest = missedUpdatesFinder.find(otherVersions, leaderUrl, () -> core.getSolrConfig().useRangeVersionsForPeerSync && canHandleVersionRanges());
     if (updatesRequest == MissedUpdatesRequest.EMPTY) {
       if (doFingerprint) return MissedUpdatesRequest.UNABLE_TO_SYNC;
       return MissedUpdatesRequest.ALREADY_IN_SYNC;
@@ -310,6 +304,19 @@ public class PeerSyncWithLeader implements SolrMetricProducer {
       return false;
     }
     return true;
+  }
+
+  // determine if leader can handle version ranges
+  private boolean canHandleVersionRanges() {
+    ModifiableSolrParams params = new ModifiableSolrParams();
+    params.set("qt", "/get");
+    params.set(DISTRIB, false);
+    params.set("checkCanHandleVersionRanges", false);
+
+    NamedList<Object> rsp = request(params, "Failed on determine if leader can handle version ranges");
+    Boolean canHandleVersionRanges = rsp.getBooleanArg("canHandleVersionRanges");
+
+    return canHandleVersionRanges != null && canHandleVersionRanges;
   }
 
   private NamedList<Object> request(ModifiableSolrParams params, String onFail) {
@@ -390,7 +397,7 @@ public class PeerSyncWithLeader implements SolrMetricProducer {
       this.nUpdates = nUpdates;
     }
 
-    public MissedUpdatesRequest find(List<Long> leaderVersions, Object updateFrom) {
+    public MissedUpdatesRequest find(List<Long> leaderVersions, Object updateFrom, Supplier<Boolean> canHandleVersionRanges) {
       leaderVersions.sort(absComparator);
       log.debug("{} sorted versions from {} = {}", logPrefix, leaderVersions, updateFrom);
 
@@ -404,7 +411,12 @@ public class PeerSyncWithLeader implements SolrMetricProducer {
       // In that case, we will fail on compute fingerprint with the current leader and start segments replication
 
       boolean completeList = leaderVersions.size() < nUpdates;
-      MissedUpdatesRequest updatesRequest = handleVersionsWithRanges(leaderVersions, completeList);
+      MissedUpdatesRequest updatesRequest;
+      if (canHandleVersionRanges.get()) {
+        updatesRequest = handleVersionsWithRanges(leaderVersions, completeList);
+      } else {
+        updatesRequest = handleIndividualVersions(leaderVersions, completeList);
+      }
 
       if (updatesRequest.totalRequestedUpdates > nUpdates) {
         log.info("{} PeerSync will fail because number of missed updates is more than:{}", logPrefix, nUpdates);

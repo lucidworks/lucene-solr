@@ -24,7 +24,7 @@ import java.util.Locale;
 /**
  * Use by certain classes to match version compatibility
  * across releases of Lucene.
- * 
+ *
  * <p><b>WARNING</b>: When changing the version parameter
  * that you supply to components in Lucene, do not simply
  * change the version at search-time, but instead also adjust
@@ -33,15 +33,121 @@ import java.util.Locale;
 public final class Version {
 
   /**
+   * Match settings and bugs in Lucene's 7.0.0 release.
+   * @deprecated (8.0.0) Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_0_0 = new Version(7, 0, 0);
+
+  /**
+   * Match settings and bugs in Lucene's 7.0.1 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_0_1 = new Version(7, 0, 1);
+
+  /**
+   * Match settings and bugs in Lucene's 7.1.0 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_1_0 = new Version(7, 1, 0);
+
+  /**
+   * Match settings and bugs in Lucene's 7.2.0 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_2_0 = new Version(7, 2, 0);
+
+  /**
+   * Match settings and bugs in Lucene's 7.2.1 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_2_1 = new Version(7, 2, 1);
+
+
+  /**
+   * Match settings and bugs in Lucene's 7.3.0 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_3_0 = new Version(7, 3, 0);
+
+  /**
+   * Match settings and bugs in Lucene's 7.3.1 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_3_1 = new Version(7, 3, 1);
+
+  /**
+   * Match settings and bugs in Lucene's 7.4.0 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_4_0 = new Version(7, 4, 0);
+
+  /**
+   * Match settings and bugs in Lucene's 7.5.0 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_5_0 = new Version(7, 5, 0);
+
+  /**
+   * Match settings and bugs in Lucene's 7.6.0 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_6_0 = new Version(7, 6, 0);
+
+  /**
+   * Match settings and bugs in Lucene's 7.7.0 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_7_0 = new Version(7, 7, 0);
+
+  /**
+   * Match settings and bugs in Lucene's 7.7.1 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_7_1 = new Version(7, 7, 1);
+
+  /**
+   * Match settings and bugs in Lucene's 7.7.2 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_7_2 = new Version(7, 7, 2);
+
+  /**
+   * Match settings and bugs in Lucene's 7.7.2 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_7_3 = new Version(7, 7, 3);
+
+  /**
+   * Match settings and bugs in Lucene's 7.8.0 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_8_0 = new Version(7, 8, 0);
+
+  /**
    * Match settings and bugs in Lucene's 8.0.0 release.
-   * @deprecated (9.0.0) Use latest
+   * @deprecated (8.1.0) Use latest
    */
   @Deprecated
   public static final Version LUCENE_8_0_0 = new Version(8, 0, 0);
 
   /**
    * Match settings and bugs in Lucene's 8.1.0 release.
-   * @deprecated Use latest
+   * @deprecated (8.2.0) Use latest
    */
   @Deprecated
   public static final Version LUCENE_8_1_0 = new Version(8, 1, 0);
@@ -55,14 +161,14 @@ public final class Version {
 
   /**
    * Match settings and bugs in Lucene's 8.2.0 release.
-   * @deprecated Use latest
+   * @deprecated (8.3.0) Use latest
    */
   @Deprecated
   public static final Version LUCENE_8_2_0 = new Version(8, 2, 0);
 
   /**
    * Match settings and bugs in Lucene's 8.3.0 release.
-   * @deprecated Use latest
+   * @deprecated (8.4.0) Use latest
    */
   @Deprecated
   public static final Version LUCENE_8_3_0 = new Version(8, 3, 0);
@@ -76,7 +182,7 @@ public final class Version {
 
   /**
    * Match settings and bugs in Lucene's 8.4.0 release.
-   * @deprecated Use latest
+   * @deprecated (8.5.0) Use latest
    */
   @Deprecated
   public static final Version LUCENE_8_4_0 = new Version(8, 4, 0);
@@ -90,7 +196,7 @@ public final class Version {
 
   /**
    * Match settings and bugs in Lucene's 8.5.0 release.
-   * @deprecated Use latest
+   * @deprecated (8.6.0) Use latest
    */
   @Deprecated
   public static final Version LUCENE_8_5_0 = new Version(8, 5, 0);
@@ -111,39 +217,32 @@ public final class Version {
 
   /**
    * Match settings and bugs in Lucene's 8.6.0 release.
-   * @deprecated Use latest
+   * @deprecated (8.6.1) Use latest
    */
   @Deprecated
   public static final Version LUCENE_8_6_0 = new Version(8, 6, 0);
 
   /**
    * Match settings and bugs in Lucene's 8.6.1 release.
-   * @deprecated Use latest
+   * @deprecated (8.6.2) Use latest
    */
   @Deprecated
   public static final Version LUCENE_8_6_1 = new Version(8, 6, 1);
 
   /**
    * Match settings and bugs in Lucene's 8.6.2 release.
-   * @deprecated Use latest
+   * @deprecated (8.6.3) Use latest
    */
   @Deprecated
   public static final Version LUCENE_8_6_2 = new Version(8, 6, 2);
 
   /**
    * Match settings and bugs in Lucene's 8.6.3 release.
-   * @deprecated Use latest
-   */
-  @Deprecated
-  public static final Version LUCENE_8_6_3 = new Version(8, 6, 3);
-
-  /**
-   * Match settings and bugs in Lucene's 9.0.0 release.
    * <p>
    * Use this to get the latest &amp; greatest settings, bug
    * fixes, etc, for Lucene.
    */
-  public static final Version LUCENE_9_0_0 = new Version(9, 0, 0);
+  public static final Version LUCENE_8_6_3 = new Version(8, 6, 3);
 
   // To add a new version:
   //  * Only add above this comment
@@ -156,15 +255,15 @@ public final class Version {
    * then you should instead explicitly specify an actual
    * version.
    * <p>
-   * If you use this constant then you  may need to 
+   * If you use this constant then you  may need to
    * <b>re-index all of your documents</b> when upgrading
-   * Lucene, as the way text is indexed may have changed. 
+   * Lucene, as the way text is indexed may have changed.
    * Additionally, you may need to <b>re-test your entire
-   * application</b> to ensure it behaves as expected, as 
-   * some defaults may have changed and may break functionality 
+   * application</b> to ensure it behaves as expected, as
+   * some defaults may have changed and may break functionality
    * in your application.
    */
-  public static final Version LATEST = LUCENE_9_0_0;
+  public static final Version LATEST = LUCENE_8_6_3;
 
   /**
    * Constant for backwards compatibility.
@@ -271,9 +370,9 @@ public final class Version {
         return LATEST;
       default:
         version = version
-          .replaceFirst("^LUCENE_(\\d+)_(\\d+)_(\\d+)$", "$1.$2.$3")
-          .replaceFirst("^LUCENE_(\\d+)_(\\d+)$", "$1.$2.0")
-          .replaceFirst("^LUCENE_(\\d)(\\d)$", "$1.$2.0");
+                .replaceFirst("^LUCENE_(\\d+)_(\\d+)_(\\d+)$", "$1.$2.$3")
+                .replaceFirst("^LUCENE_(\\d+)_(\\d+)$", "$1.$2.0")
+                .replaceFirst("^LUCENE_(\\d)(\\d)$", "$1.$2.0");
         try {
           return parse(version);
         } catch (ParseException pe) {
@@ -283,7 +382,7 @@ public final class Version {
         }
     }
   }
-  
+
   /** Returns a new version based on raw numbers
    *
    *  @lucene.internal */

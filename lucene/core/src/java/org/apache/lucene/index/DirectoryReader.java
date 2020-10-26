@@ -41,7 +41,7 @@ import org.apache.lucene.store.Directory;
  rely on a given document having the same number between sessions.
 
  <p>
- <a id="thread-safety"></a><p><b>NOTE</b>: {@link
+ <a name="thread-safety"></a><p><b>NOTE</b>: {@link
  IndexReader} instances are completely thread
  safe, meaning multiple threads can call any of its methods,
  concurrently.  If your application requires external
@@ -267,6 +267,7 @@ public abstract class DirectoryReader extends BaseCompositeReader<LeafReader> {
       final String fileName = files[i];
 
       if (fileName.startsWith(IndexFileNames.SEGMENTS) &&
+          !fileName.equals(IndexFileNames.OLD_SEGMENTS_GEN) &&
           SegmentInfos.generationFromSegmentsFileName(fileName) < currentGen) {
 
         SegmentInfos sis = null;

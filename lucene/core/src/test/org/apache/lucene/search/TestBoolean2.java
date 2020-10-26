@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.Random;
 
 import org.apache.lucene.analysis.MockAnalyzer;
+import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
@@ -95,7 +96,7 @@ public class TestBoolean2 extends LuceneTestCase {
 
     IndexWriterConfig iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     // randomized codecs are sometimes too costly for this test:
-    iwc.setCodec(TestUtil.getDefaultCodec());
+    iwc.setCodec(Codec.forName("Lucene86"));
     iwc.setMergePolicy(newLogMergePolicy());
     RandomIndexWriter writer= new RandomIndexWriter(random(), directory, iwc);
     // we'll make a ton of docs, disable store/norms/vectors
@@ -140,7 +141,7 @@ public class TestBoolean2 extends LuceneTestCase {
     iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     // we need docID order to be preserved:
     // randomized codecs are sometimes too costly for this test:
-    iwc.setCodec(TestUtil.getDefaultCodec());
+    iwc.setCodec(Codec.forName("Lucene86"));
     iwc.setMergePolicy(newLogMergePolicy());
     try (IndexWriter w = new IndexWriter(singleSegmentDirectory, iwc)) {
       w.forceMerge(1, true);
@@ -166,7 +167,7 @@ public class TestBoolean2 extends LuceneTestCase {
 
       iwc = newIndexWriterConfig(new MockAnalyzer(random()));
       // randomized codecs are sometimes too costly for this test:
-      iwc.setCodec(TestUtil.getDefaultCodec());
+      iwc.setCodec(Codec.forName("Lucene86"));
       RandomIndexWriter w = new RandomIndexWriter(random(), dir2, iwc);
       w.addIndexes(copy);
       copy.close();
@@ -178,7 +179,7 @@ public class TestBoolean2 extends LuceneTestCase {
     iwc = newIndexWriterConfig(new MockAnalyzer(random()));
     iwc.setMaxBufferedDocs(TestUtil.nextInt(random(), 50, 1000));
     // randomized codecs are sometimes too costly for this test:
-    iwc.setCodec(TestUtil.getDefaultCodec());
+    iwc.setCodec(Codec.forName("Lucene86"));
     RandomIndexWriter w = new RandomIndexWriter(random(), dir2, iwc);
 
     doc = new Document();

@@ -22,6 +22,7 @@ import java.util.Set;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.codecs.Codec;
+import org.apache.lucene.index.DocumentsWriterPerThread.IndexingChain;
 import org.apache.lucene.index.IndexWriter.IndexReaderWarmer;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.search.IndexSearcher;
@@ -66,6 +67,10 @@ public class LiveIndexWriterConfig {
   /** {@link MergeScheduler} to use for running merges. */
   protected volatile MergeScheduler mergeScheduler;
 
+  /** {@link IndexingChain} that determines how documents are
+   *  indexed. */
+  protected volatile IndexingChain indexingChain;
+
   /** {@link Codec} used to write new segments. */
   protected volatile Codec codec;
 
@@ -105,7 +110,7 @@ public class LiveIndexWriterConfig {
   protected String softDeletesField = null;
 
   /** Amount of time to wait for merges returned by MergePolicy.findFullFlushMerges(...) */
-  protected volatile long maxFullFlushMergeWaitMillis;
+  protected volatile long maxCommitMergeWaitMillis;
 
   // used by IndexWriterConfig
   LiveIndexWriterConfig(Analyzer analyzer) {
@@ -119,6 +124,7 @@ public class LiveIndexWriterConfig {
     openMode = OpenMode.CREATE_OR_APPEND;
     similarity = IndexSearcher.getDefaultSimilarity();
     mergeScheduler = new ConcurrentMergeScheduler();
+    indexingChain = DocumentsWriterPerThread.defaultIndexingChain;
     codec = Codec.getDefault();
     if (codec == null) {
       throw new NullPointerException();
@@ -128,7 +134,7 @@ public class LiveIndexWriterConfig {
     flushPolicy = new FlushByRamOrCountsPolicy();
     readerPooling = IndexWriterConfig.DEFAULT_READER_POOLING;
     perThreadHardLimitMB = IndexWriterConfig.DEFAULT_RAM_PER_THREAD_HARD_LIMIT_MB;
-    maxFullFlushMergeWaitMillis = IndexWriterConfig.DEFAULT_MAX_FULL_FLUSH_MERGE_WAIT_MILLIS;
+    maxCommitMergeWaitMillis = IndexWriterConfig.DEFAULT_MAX_COMMIT_MERGE_WAIT_MILLIS;
   }
   
   /** Returns the default analyzer to use for indexing documents. */
@@ -348,6 +354,13 @@ public class LiveIndexWriterConfig {
   }
 
   /**
+   * Returns the indexing chain.
+   */
+  IndexingChain getIndexingChain() {
+    return indexingChain;
+  }
+
+  /**
    * Returns the max amount of memory each {@link DocumentsWriterPerThread} can
    * consume until forcefully flushed.
    * 
@@ -456,8 +469,8 @@ public class LiveIndexWriterConfig {
    * If this time is reached, we proceed with the commit based on segments merged up to that point.
    * The merges are not cancelled, and may still run to completion independent of the commit.
    */
-  public long getMaxFullFlushMergeWaitMillis() {
-    return maxFullFlushMergeWaitMillis;
+  public long getMaxCommitMergeWaitMillis() {
+    return maxCommitMergeWaitMillis;
   }
 
   @Override
@@ -483,7 +496,7 @@ public class LiveIndexWriterConfig {
     sb.append("indexSort=").append(getIndexSort()).append("\n");
     sb.append("checkPendingFlushOnUpdate=").append(isCheckPendingFlushOnUpdate()).append("\n");
     sb.append("softDeletesField=").append(getSoftDeletesField()).append("\n");
-    sb.append("maxFullFlushMergeWaitMillis=").append(getMaxFullFlushMergeWaitMillis()).append("\n");
+    sb.append("maxCommitMergeWaitMillis=").append(getMaxCommitMergeWaitMillis()).append("\n");
     return sb.toString();
   }
 }

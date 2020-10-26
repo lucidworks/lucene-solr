@@ -93,15 +93,10 @@ The <<config-api.adoc#config-api,Config API>> allows you to use an API to modify
 
 [source,json]
 ----
-{
-  "userProps":{"update.autoCreateFields":"false"},
-  "requestHandler":{"/myterms":{
-      "name":"/myterms",
-      "class":"solr.SearchHandler",
-      "defaults":{
-        "terms":true,
-        "distrib":false},
-      "components":["terms"]}}}
+{"userProps": {
+    "dih.db.url": "jdbc:oracle:thin:@localhost:1521",
+    "dih.db.user": "username",
+    "dih.db.pass": "password"}}
 ----
 
 For more details, see the section <<config-api.adoc#config-api,Config API>>.

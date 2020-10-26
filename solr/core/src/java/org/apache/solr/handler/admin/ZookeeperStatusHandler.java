@@ -156,8 +156,8 @@ public class ZookeeperStatusHandler extends RequestHandlerBase {
         } else if ("leader".equals(state)) {
           leaders++;
           reportedFollowers = Math.max(
-              (int) Float.parseFloat((String) stat.getOrDefault("zk_followers", "0")),
-              (int) Float.parseFloat((String) stat.getOrDefault("zk_synced_followers", "0"))
+              Integer.parseInt((String) stat.getOrDefault("zk_followers", "0")),
+              Integer.parseInt((String) stat.getOrDefault("zk_synced_followers", "0"))
           );
         } else if ("standalone".equals(state)) {
           standalone++;
@@ -304,7 +304,7 @@ public class ZookeeperStatusHandler extends RequestHandlerBase {
    * @throws SolrException if validation fails
    */
   protected boolean validateZkRawResponse(List<String> response, String zkHostPort, String fourLetterWordCommand) {
-    if (response == null || response.isEmpty() || (response.size() == 1 && response.get(0).isBlank())) {
+    if (response == null || response.isEmpty() || (response.size() == 1 && response.get(0).trim().isEmpty())) {
       throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Empty response from Zookeeper " + zkHostPort);
     }
     if (response.size() == 1 && response.get(0).contains("not in the whitelist")) {

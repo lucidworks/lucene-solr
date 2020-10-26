@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.function.UnaryOperator;
 
 import org.apache.solr.SolrTestCaseJ4.SuppressSSL;
 import org.apache.solr.client.solrj.SolrClient;
@@ -31,9 +32,11 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.util.BaseTestHarness;
+import org.apache.solr.util.RestTestHarness;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.junit.After;
 import org.junit.Test;
+import org.restlet.ext.servlet.ServerServlet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,6 +68,9 @@ public class TestCloudSchemaless extends AbstractFullDistribZkTestBase {
   @Override
   public SortedMap<ServletHolder,String> getExtraServlets() {
     final SortedMap<ServletHolder,String> extraServlets = new TreeMap<>();
+    final ServletHolder solrRestApi = new ServletHolder("SolrSchemaRestApi", ServerServlet.class);
+    solrRestApi.setInitParameter("org.restlet.application", "org.apache.solr.rest.SolrSchemaRestApi");
+    extraServlets.put(solrRestApi, "/schema/*");  // '/schema/*' matches '/schema', '/schema/', and '/schema/whatever...'
     return extraServlets;
   }
 
@@ -112,18 +118,22 @@ public class TestCloudSchemaless extends AbstractFullDistribZkTestBase {
 
     String [] expectedFields = getExpectedFieldResponses(docNumber);
     // Check that all the fields were added
-    forAllRestTestHarnesses(client -> {
-      try {
-        String request = "/schema/fields?wt=xml";
-        String response = client.query(request);
-        String result = BaseTestHarness.validateXPath(response, expectedFields);
-        if (result != null) {
-          String msg = "QUERY FAILED: xpath=" + result + "  request=" + request + "  response=" + response;
-          log.error(msg);
-          fail(msg);
+    forAllRestTestHarnesses( new UnaryOperator<RestTestHarness>() {
+      @Override
+      public RestTestHarness apply(RestTestHarness client) {
+        try {
+          String request = "/schema/fields?wt=xml";
+          String response = client.query(request);
+          String result = BaseTestHarness.validateXPath(response, expectedFields);
+          if (result != null) {
+            String msg = "QUERY FAILED: xpath=" + result + "  request=" + request + "  response=" + response;
+            log.error(msg);
+            fail(msg);
+          }
+        } catch (Exception ex) {
+          fail("Caught exception: "+ex);
         }
-      } catch (Exception ex) {
-        fail("Caught exception: "+ex);
+        return client;
       }
     });
 

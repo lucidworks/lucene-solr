@@ -38,7 +38,7 @@ import com.google.common.io.CharStreams;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.core.StopFilterFactory;
-import org.apache.lucene.analysis.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.ReaderUtil;
 import org.apache.lucene.index.Terms;
@@ -63,6 +63,7 @@ import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.SchemaField;
+import org.apache.solr.search.BitDocSet;
 import org.apache.solr.search.DocList;
 import org.apache.solr.search.DocSet;
 import org.apache.solr.search.DocSlice;
@@ -326,8 +327,23 @@ public class TaggerRequestHandler extends RequestHandlerBase {
       }
 
       final DocSet docSet = searcher.getDocSet(filterQueries);//hopefully in the cache
+      //note: before Solr 4.7 we could call docSet.getBits() but no longer.
+      if (docSet instanceof BitDocSet) {
+        docBits = ((BitDocSet)docSet).getBits();
+      } else {
+        docBits = new Bits() {
 
-      docBits = docSet.getBits();
+          @Override
+          public boolean get(int index) {
+            return docSet.exists(index);
+          }
+
+          @Override
+          public int length() {
+            return searcher.maxDoc();
+          }
+        };
+      }
     } else {
       docBits = searcher.getSlowAtomicReader().getLiveDocs();
     }

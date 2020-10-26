@@ -21,6 +21,7 @@ import com.google.common.util.concurrent.AtomicLongMap;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.common.cloud.ZkNodeProps;
+import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.util.IOUtils;
 import org.apache.solr.common.util.ObjectReleaseTracker;
 import org.apache.solr.common.util.TimeSource;
@@ -73,7 +74,7 @@ import java.util.concurrent.TimeUnit;
 public class ZkTestServer {
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-
+  
   public static File SOLRHOME;
   static {
     try {
@@ -84,10 +85,10 @@ public class ZkTestServer {
       // must override getSolrHome
     }
   }
-
+  
   public static final int TIMEOUT = 45000;
   public static final int TICK_TIME = 1000;
-
+  
   protected final ZKServerMain zkServer = new ZKServerMain();
 
   private volatile Path zkDir;
@@ -95,12 +96,12 @@ public class ZkTestServer {
   private volatile int clientPort;
 
   private volatile Thread zooThread;
-
+  
   private volatile int theTickTime = TICK_TIME;
   // SOLR-12101 - provide defaults to avoid max timeout 20 enforced by our server instance when tick time is 1000
   private volatile int maxSessionTimeout = 90000;
   private volatile int minSessionTimeout = 3000;
-
+  
   protected volatile SolrZkClient rootClient;
   protected volatile SolrZkClient chRootClient;
 
@@ -255,8 +256,6 @@ public class ZkTestServer {
             break;
           case DataWatchRemoved:
             break;
-          case PersistentWatchRemoved:
-            break;
         }
       }
     }
@@ -338,8 +337,7 @@ public class ZkTestServer {
 
         zooKeeperServer = new ZooKeeperServer(ftxn, config.getTickTime(),
             config.getMinSessionTimeout(), config.getMaxSessionTimeout(),
-            config.getClientPortListenBacklog(),
-            new TestZKDatabase(ftxn, limiter), "");
+            new TestZKDatabase(ftxn, limiter));
         cnxnFactory = new TestServerCnxnFactory(limiter);
         cnxnFactory.configure(config.getClientPortAddress(),
             config.getMaxClientCnxns());
@@ -439,7 +437,7 @@ public class ZkTestServer {
       log.info("Overriding limiter action to: {}", limiterAction);
       getLimiter().setAction(LimitViolationAction.valueOf(limiterAction));
     }
-
+    
     ObjectReleaseTracker.track(this);
   }
 
@@ -450,12 +448,12 @@ public class ZkTestServer {
       log.error("error making rootClient, trying one more time", e);
       rootClient = new SolrZkClient(getZkHost(), TIMEOUT, 30000);
     }
-
+    
     if (solrFormat) {
       tryCleanSolrZkNode();
       makeSolrZkNode();
     }
-
+    
     chRootClient = new SolrZkClient(getZkAddress(), AbstractZkTestCase.TIMEOUT, 30000);
   }
 
@@ -497,7 +495,7 @@ public class ZkTestServer {
   public int getPort() {
     return zkServer.getLocalPort();
   }
-
+  
   public void expire(final long sessionId) {
     zkServer.zooKeeperServer.expire(new Session() {
       @Override
@@ -525,7 +523,7 @@ public class ZkTestServer {
     this.zkDb = zkDb;
     zkServer.zooKeeperServer.setZKDatabase(zkDb);
   }
-
+  
   public void run() throws InterruptedException, IOException {
     run(true);
   }
@@ -620,11 +618,11 @@ public class ZkTestServer {
       } catch (Exception e) {
         log.error("Exception shutting down ZooKeeper Test Server",e);
       }
-
+      
       if (zkDb != null) {
         zkDb.close();
       }
-
+      
       while (true) {
         try {
           zooThread.join();
@@ -641,7 +639,7 @@ public class ZkTestServer {
     }
     ObjectReleaseTracker.release(this);
   }
-
+  
   public static boolean waitForServerDown(String hp, long timeoutMs) {
     log.info("waitForServerDown: {}", hp);
     final TimeOut timeout = new TimeOut(timeoutMs, TimeUnit.MILLISECONDS, TimeSource.NANO_TIME);
@@ -652,7 +650,7 @@ public class ZkTestServer {
       } catch (IOException e) {
         return true;
       }
-
+      
       if (timeout.hasTimedOut()) {
         throw new RuntimeException("Time out waiting for ZooKeeper shutdown!");
       }
@@ -663,7 +661,7 @@ public class ZkTestServer {
       }
     }
   }
-
+  
   public static boolean waitForServerUp(String hp, long timeoutMs) {
     log.info("waitForServerUp: {}", hp);
     final TimeOut timeout = new TimeOut(timeoutMs, TimeUnit.MILLISECONDS, TimeSource.NANO_TIME);
@@ -675,7 +673,7 @@ public class ZkTestServer {
       } catch (IOException e) {
         e.printStackTrace();
       }
-
+      
       if (timeout.hasTimedOut()) {
         throw new RuntimeException("Time out waiting for ZooKeeper to startup!");
       }
@@ -686,7 +684,7 @@ public class ZkTestServer {
       }
     }
   }
-
+  
   public static class HostPort {
     String host;
     int port;
@@ -732,7 +730,7 @@ public class ZkTestServer {
       }
     }
   }
-
+  
   public static List<HostPort> parseHostPortList(String hplist) {
     log.info("parse host and port list: {}", hplist);
     ArrayList<HostPort> alist = new ArrayList<>();
@@ -785,7 +783,7 @@ public class ZkTestServer {
   public void setMinSessionTimeout(int minSessionTimeout) {
     this.minSessionTimeout = minSessionTimeout;
   }
-
+  
   void buildZooKeeper(String config,
       String schema) throws Exception {
     buildZooKeeper(SOLRHOME, config, schema);
@@ -822,15 +820,15 @@ public class ZkTestServer {
     }
     zkClient.makePath(destPath, file, false, true);
   }
-
+  
   // static to share with distrib test
   public void buildZooKeeper(File solrhome, String config, String schema) throws Exception {
 
     Map<String,Object> props = new HashMap<>();
     props.put("configName", "conf1");
     final ZkNodeProps zkProps = new ZkNodeProps(props);
-
-
+    
+    
     List<Op> ops = new ArrayList<>(2);
     String path = "/collections";
     ops.add(Op.create(path, null, chRootClient.getZkACLProvider().getACLsToAdd(path),  CreateMode.PERSISTENT));
@@ -848,6 +846,9 @@ public class ZkTestServer {
     ops.add(Op.create(path, null, chRootClient.getZkACLProvider().getACLsToAdd(path),  CreateMode.PERSISTENT));
     chRootClient.multi(ops, true);
 
+    // this workaround is acceptable until we remove legacyCloud because we just init a single core here
+    String defaultClusterProps = "{\""+ZkStateReader.LEGACY_CLOUD+"\":\"true\"}";
+    chRootClient.makePath(ZkStateReader.CLUSTER_PROPS, defaultClusterProps.getBytes(StandardCharsets.UTF_8), CreateMode.PERSISTENT, true);
     // for now, always upload the config and schema to the canonical names
     putConfig("conf1", chRootClient, solrhome, config, "solrconfig.xml");
     putConfig("conf1", chRootClient, solrhome, schema, "schema.xml");
@@ -862,23 +863,23 @@ public class ZkTestServer {
     putConfig("conf1", chRootClient, solrhome, "old_synonyms.txt");
     putConfig("conf1", chRootClient, solrhome, "synonyms.txt");
   }
-
+  
   public void makeSolrZkNode() throws Exception {
     rootClient.makePath("/solr", false, true);
   }
-
+  
   public void tryCleanSolrZkNode() throws Exception {
     tryCleanPath("/solr");
   }
-
+  
   void tryCleanPath(String path) throws Exception {
     if (rootClient.exists(path, true)) {
       rootClient.clean(path);
     }
   }
-
+  
   protected void printLayout() throws Exception {
-    rootClient.printLayoutToStream(System.out);
+    rootClient.printLayoutToStdOut();
   }
 
   public SolrZkClient getZkClient() {

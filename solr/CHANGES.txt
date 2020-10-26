@@ -4,337 +4,28 @@ This file lists Solr's raw release notes with details of every change to Solr.
 Most people will find the solr-upgrade-notes.adoc file more approachable.
 https://github.com/apache/lucene-solr/blob/master/solr/solr-ref-guide/src/solr-upgrade-notes.adoc
 
-==================  9.0.0 ==================
-
-Consult the lucene/CHANGES.txt file for additional, low level, changes in this release.
-
-New Features
----------------------
-* SOLR-14789: Migrate docker image creation from docker-solr repo to solr/docker. (Houston Putman, Martijn Koster, Tim Potter, David Smiley, janhoy, Mike Drob)
-
-* SOLR-14440: Introduce new Certificate Authentication Plugin to load Principal from certificate subject. (Mike Drob)
-
-* SOLR-13528 Rate Limiting in Solr (Atri Sharma, Mike Drob)
-
-Improvements
-----------------------
-* LUCENE-8984: MoreLikeThis MLT is biased for uncommon fields (Andy Hind via Anshum Gupta)
-
-* SOLR-14223: PKI Auth can bootstrap from existing key files instead of creating new keys on startup (Mike Drob)
-
-* SOLR-11725: Use corrected sample formula for computing stdDev and variance in JSON aggregations
-  (hossman, Munendra S N, yonik)
-
-* SOLR-14387: SolrClient.getById() will escape comma separater within ids (Markus Schuch via Mike Drob)
-
-* SOLR-10814: Add short-name feature to RuleBasedAuthz plugin (Mike Drob, Hrishikesh Gadre)
-
-* SOLR-7683 Introduce support to identify Solr internal request types (Atri Sharma, Hrishikesh Gadre)
-
-* SOLR-14799: JWT authentication plugin only requires "sub" claim when principalClaim=sub. (Erik Hatcher)
-
-* SOLR-14878: Report solr.xml's coreRootDirectory property via System Settings API, when set (Alexandre Rafalovitch)
-
-* SOLR-14880: Support coreRootDirectory setting when create new cores from command line, in standalone mode (Alexandre Rafalovitch)
-
-Other Changes
-----------------------
-* SOLR-14656: Autoscaling framework removed (Ishan Chattopadhyaya, noble, Ilan Ginzburg)
-
-* SOLR-14616: CDCR support removed (Ishan Chattopadhyaya)
-
-* LUCENE-9391: Upgrade HPPC to 0.8.2. (Haoyu Zhai)
-
-* SOLR-10288: Remove non-minified JavaScript from the webapp. (Erik Hatcher, marcussorealheis)
-
-* SOLR-13655:Upgrade Collections.unModifiableSet to Set.of and Set.copyOf (Atri Sharma via Tomás Fernández Löbbe)
-
-* SOLR-13797: SolrResourceLoader no longer caches bad results when asked for wrong type (Mike Drob)
-
-* LUCENE-9092: Upgrade Carrot2 to 3.16.2 (Dawid Weiss).
-
-* LUCENE-9080: Upgrade ICU4j to 62.2 and make regenerate work (Erick Erickson)
-
-* SOLR-14271: Remove duplicate async id check meant for pre Solr 8 versions (Anshum Gupta)
-
-* SOLR-14272: Remove autoReplicaFailoverBadNodeExpiration and autoReplicaFailoverWorkLoopDelay for 9.0 as it was
-  deprecated in 7.1 (Anshum Gupta)
-
-* SOLR-14258: DocList no longer extends DocSet. (David Smiley)
-
-* SOLR-14256: Remove HashDocSet; add DocSet.getBits() instead.  DocSet is now strictly immutable and ascending order.
-  It's now locked-down to external extension; only 2 impls exist.  (David Smiley)
-
-* SOLR-14197: SolrResourceLoader: remove deprecated methods and do other improvements. (David Smiley)
-
-* SOLR-14012: Return long value for unique and hll aggregations irrespective of shard count (Munendra S N, hossman)
-
-* SOLR-14322: AbstractFullDistribZkTestBase.waitForRecoveriesToFinish now takes a timeout and time unit instead of
-  assuming that we are passed value in seconds. (Mike Drob)
-
-* SOLR-13893: Remove support to read BlobRepository's max jar size from deprecated `runtme.lib.size` system property
-  (Erick Erickson, Kesharee Nandan Vishwakarma, Munendra S N)
-
-* SOLR-12720: Remove support for `autoReplicaFailoverWaitAfterExpiration`. (marcussorealheis, shalin)
-
-* SOLR-9909: The deprecated SolrjNamedThreadFactory has been removed. Use SolrNamedThreadFactory instead.
-  (Andras Salamon, shalin)
-
-* SOLR-14420: AuthenticationPlugin.authenticate accepts HttpServletRequest instead of ServletRequest. (Mike Drob)
-
-* SOLR-14429: Convert .txt files to properly formatted .md files. (Tomoko Uchida, Uwe Schindler)
-
-* SOLR-14412: Automatically set urlScheme to https when running secure solr with embedded zookeeper. (Mike Drob)
-  Do not erroneously set solr.jetty.https.port system property when running in http mode (Upendra Penegalapati)
-
-* SOLR-14014: Introducing a system property that allows users to disable the Admin UI, which is enabled by default.
-  If you have security concerns or other reasons to disable the Admin UI, you can modify `SOLR_ADMIN_UI_DISABLED`
-  `solr.in.sh`/`solr.in.cmd` at start. (marcussorealheis)
-
-* SOLR-14486: Autoscaling simulation framework no longer creates /clusterstate.json (format 1),
-  instead it creates individual per-collection /state.json files (format 2). (ab)
-
-* SOLR-12823: Remove /clusterstate.json support, including support for collections created with stateFormat=1,
-  as well as support for Collection API MIGRATESTATEFORMAT action and support for the legacyCloud flag (Ilan Ginzburg).
-
-* LUCENE-9411: Fail complation on warnings, 9x gradle-only (Erick Erickson, Dawid Weiss)
-  Deserves mention here as well as Lucene CHANGES.txt since it affects both.
-
-* SOLR-12847: Remove support for maxShardsPerNode. (ab)
-
-* SOLR-14244: Remove ReplicaInfo. (ab)
-
-* SOLR-14654: Remove plugin loading from .system collection (for 9.0) (noble)
-
-* SOLR-14702: All references to "master" and "slave" replaced with "leader" and "follower" (MarcusSorealheis,
-  Erick Erickson, Tomás Fernández Löbbe)
-
-* LUCENE-9433: Remove Ant support from trunk (Erick Erickson, Uwe Schindler et.al.)
-
-* SOLR-14783: Remove Data Import Handler (DIH), previously deprecated (Alexandre Rafalovitch)
-
-* SOLR-14846: Backup/Restore classes no longer take Optional method parameters and will accept nulls instead. (Mike Drob)
-
-* LUCENE-9531: Consolidated CharStream and FastCharStream classes: these have been moved from each query parser
-               package to org.apache.lucene.queryparser.charstream (Dawid Weiss).
-
-* SOLR-9607: Remove /terms configuration from solrconfig.xml, as implicit definition is up-to-par now (Alexandre Rafalovitch)
-
-* SOLR-14036: Remove distrib=false from /terms handler's default parameters (David Smiley, Munendra S N)
-
-* SOLR-14829: Cleanup the documentation for Request Handlers and Search Components (Alexandre Rafalovitch)
-
-* SOLR-10370: ReplicationHandler should fetch index at fixed delay instead of fixed rate (Cao Manh Dat)
-
-* SOLR-14930: Removed rule based replica placement (noble)
-
-* SOLR-14944: Remove the "spins" metrics - support for detection of spinning disks has been
-  removed in LUCENE-9576. (ab)
-
-Bug Fixes
----------------------
-* SOLR-14546: Fix for a relatively hard to hit issue in OverseerTaskProcessor that could lead to out of order execution
-  of Collection API tasks competing for a lock (Ilan Ginzburg).
-
-==================  8.7.0 ==================
-
-Consult the lucene/CHANGES.txt file for additional, low level, changes in this release.
-
-New Features
----------------------
-
-* SOLR-14151 Make schema components load from packages (noble)
-
-* SOLR-14681: Introduce ability to delete .jar stored in the Package Store. (MarcusSorealheis , Mike Drob)
-
-* SOLR-14604: Add the ability to uninstall a package from with the Package CLI. (MarcusSorealheis)
-
-* SOLR-14582: Expose IWC.setMaxCommitMergeWaitMillis in Solr's index config. This is an expert config option that can be
-  set when using a custom MergePolicy (doesn't have any effect on the default MP) (Tomás Fernández Löbbe)
-
-* SOLR-13751: Add BooleanSimilarityFactory class. (Andy Webb via Christine Poerschke)
-
-* SOLR-14875: Make SolrEventListeners load from packages (noble)
-
-* SOLR-10391: ConfigSet handler now supports overrides on existing configsets. (Tomás Fernández Löbbe)
-
-* SOLR-11167: Avoid $SOLR_STOP_WAIT use during 'bin/solr start' if $SOLR_START_WAIT is supplied.
-  (Omar Abdelnabi, Christine Poerschke)
-
-* SOLR-14907: Support single file upload/overwrite in configSet API. (Houston Putman)
-
-* SOLR-14914: Add option to disable metrics collection. (ab)
-
-* SOLR-14588: Introduce Circuit Breaker Infrastructure and a JVM heap usage memory tracking circuit breaker implementation (Atri Sharma)
-
-* SOLR-14615: CPU Utilization Based Circuit Breaker (Atri Sharma)
-
-Improvements
----------------------
-
-* SOLR-14523: Enhance gradle logging calls validation: eliminate getMessage() (Andras Salamon via Erick Erickson)
-
-* SOLR-14537: Improve performance of ExportWriter. (ab, Joel Bernstein)
-
-* SOLR-14566: Request ID's ('rid') are now added by default to distributed search requests, and can be used to correlate
-  logs from the receiving coordinator node with those from downstream shard requests.  This can be disabled by providing a
-  disableRequestId=true request parameter. (Jason Gerlowski)
-
-* SOLR-14635: ThreadDumpHandler has been enhanced to show lock ownership (hossman)
-
-* SOLR-11262: Add support to stream data out using push APIs when wt=xml (yonik, Munendra S N)
-
-* SOLR-13205: Prevent StringIndexOutOfBoundsException when parsing field names in SolrQueryParserBase
-  (pramodkumar9 via Jason Gerlowski)
-
-* SOLR-14651: The MetricsHistoryHandler can more completely disable itself when you tell it to.
-  Also, it now shuts down more thoroughly. (David Smiley)
-
-* SOLR-14722: Track timeAllowed from earlier in the request lifecycle. (David Smiley)
-
-* SOLR-13438: On deleting a collection, its config set will also be deleted iff it has been auto-created, and not used by any other collection (Anderson Dorow)
-
-* SOLR-14802: geodist: Support most (all?) spatial field types as an argument like LLPSF, SRPTFT, and others.
-  (Tom Edge, Craig Wrigglesworth)
-
-* SOLR-14905: Update commons-io version to 2.8.0 due to security vulnerability. (Nazerke Seidan via Bruno Roustant)
-
-* SOLR-14691: Metrics reporting should avoid creating objects. (ab, noble)
-
-* SOLR-14933: Ability to add T and P type replica from admin UI (Sayan Das via Eric Pugh)
-
-Optimizations
----------------------
-
-* SOLR-14354: HttpShardHandler send requests in async (Cao Manh Dat).
-
-* SOLR-14610: ReflectMapWriter to use MethodHandle instead of old reflection (noble)
-
-* SOLR-13132: JSON Facet perf improvements to support "sweeping" collection of "relatedness()"
-  (hossman, Michael Gibney)
-
-* SOLR-14422: Admin UI shows Angular placeholders on first load / refresh.  (Colvin Cowie via Eric Pugh)
-
-* SOLR-14819: Fix inefficient iterator pattern in JsonSchemaValidator. (Thomas DuBuisson via Bruno Roustant)
-
-* SOLR-14658: SolrJ's CollectionAdminRequest.collectionStatus(collection) would internally get
-  all collection statuses instead of just the specified collection. (Andy Vuong)
-
-* SOLR-14576 : Do not use SolrCore as keys in a WeakHashMap (noble)
-
-* SOLR-14776: Precompute fingerprint during PeerSync in parallel with fetching fingerprint from replicas.
-  (Cao Manh Dat, Mike Drob via shalin)
-
-Bug Fixes
----------------------
-
-* SOLR-14869: ChildDocTransformer should have omitted deleted child documents. (Bar Rotstein, David Smiley)
-
-* SOLR-11656: TLOG replication doesn't work properly after rebalancing leaders. (Yuki Yano via
-  Erick Erickson)
-
-* SOLR-14516: Fix NPE in JSON response writer(wt=json) with /get when writing non-stored, non-indexed docvalue field
-  from an uncommitted document (noble, Ishan Chattopadhyaya, Munendra S N)
-
-* SOLR-14657: Improve error handling in IndexReader realted metrics that were causing scary ERROR logging
-  if metrics were requested while Solr was in the process of closing/re-opening a new IndexReader. (hossman)
-
-* SOLR-14748: Fix incorrect auth/SSL startup logging (Jason Gerlowski)
-
-* SOLR-14751: Zookeeper Admin screen not working for old ZK versions (janhoy)
-
-* SOLR-14677: Improve DIH termination logic to close all DataSources, EntityProcessors (Jason Gerlowski)
-
-* SOLR-14703: Fix edismax replacement of all whitespace characters with spaces (Yuriy Koval via Jason Gerlowski)
-
-* SOLR-14700: Avoid NullPointerException in TupleStream.getShards() when streamContext is null.
-  (Mads Bondo Dydensborg, Christine Poerschke, Mike Drob)
-
-* SOLR-14752: Fix error in Zookeeper status when Prometheus plugin is enabled in ZK (Philipp Trulson via janhoy)
-
-* SOLR-14774: HealthCheckHandler is no longer an implicit SolrCore handler and can be configured from solr.xml
-  (Tomás Fernándex Löbbe)
-
-* SOLR-14714: Solr.cmd in windows loads the incorrect jetty module when using java>=9 (Endika Posadas via
-  Erick Erickson)
-
-* SOLR-14821: {!terms} docValuesTermsFilterTopLevel method now works with single-valued strings (Anatolii Siuniaev
-  via Jason Gerlowski)
-
-* SOLR-13181: macro expansion of parameters could result in a StringIndexOutOfBoundsException.
-  Also, params with macros will be processed more strictly by LTR FeatureWeight.
-  (David Smiley, Cesar Rodriguez, Christine Poerschke)
-
-* SOLR-14503: Use specified waitForZk value as connection timeout for zookeeper in SolrDispatcherFilter.
-  Also, consume specified SOLR_WAIT_FOR_ZK in bin/solr.cmd (Colvin Cowie via Munendra S N)
-
-* SOLR-14936: Fixed Grafana dashboard filters for collection, shard, replica and core (janhoy)
-
-* SOLR-14924: Some ReplicationHandler metrics are reported using incorrect types. (ab)
-
-* SOLR-14483: Fix empty drop down for adding replica in Admin UI (Sayan Das via Eric Pugh)
-
-* SOLR-14549: Fix listing of Files in a Directory on Solr Admin UI (Kevin Risden)
-
-Other Changes
----------------------
-
-* SOLR-14592: Upgrade Zookeeper to 3.6.1. NOTE: this required upgrading netty to 4.1.50 (Erick Erickson)
-
-* SOLR-10742: SolrCores.getNamesForCore is quite inefficient and blocks other core operations.
-  NOTE: this experimental method has been removed (Erick Erickson)
-
-* SOLR-13939: Extract any non-gradle related patches (deprecations, URL fixes, etc.) from gradle effort. NOTE:
-  this will be in several separate commits/pushes. (Erick Erickson)
-
-* SOLR-14637: Update CloudSolrClient examples to remove deprecated method. (Andras Salamon via Eric Pugh)
-
-* SOLR-14676: Update commons-collections to 4.4 and use it in Solr (Erick Erickson)
-
-* SOLR-11868: Deprecate CloudSolrClient.setIdField, use information from Zookeeper (Erick Erickson)
-
-* SOLR-14641: PeerSync, remove canHandleVersionRanges check (Cao Manh Dat)
-
-* SOLR-14731: Rename @SolrSingleThreaded to @SolrThreadUnsafe, mark DistribPackageStore with the annotation
-  (marcussorealheis)
-
-* SOLR-14579: Comment SolrJ 'Utils' generic map functions
-  (Megan Carey and a lot of education from Uwe Schindler via Erick Erickson)
-
-* SOLR-10471: Update default Zookeeper session timeout to 30s in bin/solr and bin/solr.cmd
-  (Michael Braun, Markus Jelsma via Munendra S N)
-
-* SOLR-14876: Upgrade to zookeeper 3.6.2 (odidev via Erick Erickson)
-
-* SOLR-14333: Implement toString in Collapse filter so that proper parsed queries returned in debug response.
-  Also, Deprecate unused constants NULL_COLLAPSE, NULL_IGNORE, NULL_EXPAND, HINT_MULTI_DOCVALUES in collapse parser.
-  (Guna Sekhar Dora Kovvuru, Munendra S N, Mike Drob)
-
-* SOLR-12987: Deprecated plugins/features are now logged once and with log category org.apache.solr.DEPRECATED
-  (David Smiley)
-
-* SOLR-14910: Use in-line tags for logger declarations in Gradle ValidateLogCalls that are non-standard,
-              change //logok to //nowarn (Erick Erickson)
-
-* SOLR-14659: Remove restlet as dependency for the ManagedResource API (Timothy Potter, noble)
-
 ==================  8.6.3 ==================
 
 Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.
 
 Bug Fixes
 ---------------------
-* SOLR-14859: DateRangeField now throws errors when invalid field/fieldType options specified; no longer silently
-  accepts incompatible option values (Jason Gerlowski, Chris Hostetter, Munendra S N)
+* SOLR-14859: DateRangeField now throws errors when invalid field/fieldType options specified; no longer silently accepts incompatible option values
+  (Jason Gerlowski, Chris Hostetter, Munendra S N)
 
-* SOLR-14768: Fix HTTP multipart POST to Solr -- a regression from 8.6.0. Many Jetty classes are not classpath-visible
-  from the Solr webapp.  (David Smiley)
+* SOLR-14768: Fix HTTP multipart POST to Solr -- a regression from 8.6.0.
+  Many Jetty classes are not classpath-visible from the Solr webapp.  (David Smiley)
 
-* SOLR-14850: Fix ExactStatsCache NullPointerException when shards.tolerant=true. (Yevhen Tienkaiev via ab)
+* SOLR-14850: Fix ExactStatsCache NullPointerException when shards.tolerant=true.
+  (Yevhen Tienkaiev via ab)
 
 * SOLR-14897: Fix unlimited number of forwarding the request from one node to another node. (hossman, Munendra S N)
 
 * SOLR-14898: Stop returning duplicate HTTP response headers when requests are forward to another node. (hossman)
+
+* SOLR-14835: Solr 8.6.x log starts with "XmlConfiguration Ignored arg" warning from Jetty. This incorrect message
+  is caused by a bug in Jetty 9.4.27 and can be safely ignored (the configuration is still correctly processed).
+  (Colving Cowie, ab)
 
 ==================  8.6.2 ==================
 
@@ -346,7 +37,10 @@ Bug Fixes
 
 * SOLR-14663: Copy ConfigSet root data from base ConfigSet when using CREATE command (Andras Salamon, Tomás Fernández Löbbe)
 
+
 ==================  8.6.1 ==================
+
+Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.
 
 Bug Fixes
 ---------------------
@@ -354,11 +48,11 @@ Bug Fixes
 * SOLR-14665, SOLR-14706: Revert SOLR-12845 adding of default autoscaling cluster policy, due to performance
  issues. (Ishan Chattopadhyaya, Houston Putman, Gus Heck, ab)
 
-* SOLR-14671: Parsing dynamic ZK config sometimes cause NuberFormatException (janhoy)
+* SOLR-14671: Parsing dynamic ZK config sometimes cause NumberFormatException (janhoy)
 
 ==================  8.6.0 ==================
 
-Consult the lucene/CHANGES.txt file for additional, low level, changes in this release.
+Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.
 
 New Features
 ---------------------
@@ -473,8 +167,6 @@ Optimizations
 
 * SOLR-14554: Add BlockMax-WAND support for queries where the score is requested (Tomás Fernández Löbbe)
 
-* SOLR-14634: Limit the HTTP security headers to "/solr" end point (noble)
-
 Bug Fixes
 ---------------------
 * SOLR-13264: IndexSizeTrigger aboveOp / belowOp properties not in valid properties.
@@ -546,8 +238,6 @@ Bug Fixes
 * SOLR-14550: Fix duplicates issue in Atomic updates with add-distinct (Thomas Corthals, Munendra S N)
 
 * SOLR-14345: Return proper error message when non-BinaryResponseParser is used in solrJ (Munendra S N)
-
-* SOLR-14516: NPE in JsonTextWriter (noble)
 
 * SOLR-14577: Return 400 BAD REQUEST when field is missing on a Terms query parser request
   (Tomás Fernández Löbbe)
@@ -754,10 +444,10 @@ Improvements
   SOLR_IP_WHITELIST and SOLR_IP_BLACKLIST. These variables can restrict access to
   Solr based on IP addresses/networks. (rmuir)
 
-* SOLR-14131: Add maxQueryLength option to DirectSolrSpellchecker. (Andy Webb via Bruno Roustant)
-
 * SOLR-13984: Java's SecurityManager sandbox can be enabled via environment variable,
   SOLR_SECURITY_MANAGER_ENABLED=true. (rmuir)
+
+* SOLR-14131: Add maxQueryLength option to DirectSolrSpellchecker. (Andy Webb via Bruno Roustant)
 
 * SOLR-14129: Reuse Jackson ObjectMapper in AuditLoggerPlugin (janhoy)
 
@@ -844,6 +534,8 @@ Bug Fixes
 * SOLR-13897: Fix unsafe publication of Terms object in ZkShardTerms that can cause visibility issues
   and race conditions under contention. (shalin)
 
+* SOLR-14239: Fix the behavior of CaffeineCache.computeIfAbsent on branch_8x. (ab)
+
 * SOLR-14090: Handle the case in `delete-copy-field` when source is a dynamic field (Frank Iversen, Munendra S N)
 
 * SOLR-14219: SOLR-14095 Introduced an issue for rolling restarts (Incompatible Java serialization). This change
@@ -864,9 +556,9 @@ Bug Fixes
 
 * SOLR-14250: Do not log error when trying to consume non-existing input stream due to Expect: 100-continue (janhoy)
 
-* SOLR-13411: Deny atomic update for route.field, uniqueKey, version and throw exception. (Dr Oleg Savrasov via Mikhail Khludnev)
-
 * SOLR-14252: Avoid NullPointerException in AggregateMetric. (Andy Webb via ab)
+
+* SOLR-13411: Deny atomic update for route.field, uniqueKey, version and throw exception. (Dr Oleg Savrasov via Mikhail Khludnev)
 
 * SOLR-14287: Admin UI Properties screen does not show colons (janhoy)
 
@@ -968,7 +660,7 @@ Upgrade Notes
   to set top-level query. build() would fail if called without setting mainQuery.
 
 * SOLR-13817: Deprecate legacy SolrCache implementations. Users are encouraged to transition their
-  configurations to use org.apache.solr.search.CaffeineCache instead. (ab)
+  configurations to use org.apache.solr.search.CaffeineCache instead.
 
 * SOLR-13982: Some security-related http headers such as Content-Security-Policy are now set. If you have custom html served
   up by Solr's http server that contains inline javascript, it will no longer execute in modern browsers. You can fix your JS
@@ -1070,7 +762,7 @@ Improvements
 * SOLR-13957: Add sensible defaults for the facet, random, facet2D, timeseries, stats
   and update Streaming Expressions (Joel Bernstein)
 
-* SOLR-13904: Analytic component abandon requests exceedig limit passed via timeAllowed parameter
+* SOLR-13904: Analytic component abandons requests exceedig a limit passed via timeAllowed parameter.
   (Houston Putman, Mikhail Khludnev).
 
 * SOLR-13970: Fail the request when collapsing or expand is used with Grouping. (Erick Erickson, Joel Bernstein, Munendra S N)
@@ -1194,14 +886,14 @@ Bug Fixes
 
 * SOLR-13963: JavaBinCodec has concurrent modification of CharArr resulting in corrupt internode updates (Colvin Cowie, noble)
 
-* SOLR-13971: Velocity response writer's resource loading now possible only through startup parameters.
-  (Ishan Chattopadhyaya, David Smiley)
-
-* SOLR-13465: CoreContainer.auditloggerPlugin should be volatile (janhoy, hossman)
+* SOLR-13941: Tests configure Jetty differently than when running via start.jar (janhoy, Uwe Schindler)
 
 * SOLR-13905: Make findRequestType in AuditEvent more robust (janhoy)
 
-* SOLR-13941: Tests configure Jetty differently than when running via start.jar (janhoy, Uwe Schindler)
+* SOLR-13465: CoreContainer.auditloggerPlugin should be volatile (janhoy, hossman)
+
+* SOLR-13971: Velocity response writer's resource loading now possible only through startup parameters.
+  (Ishan Chattopadhyaya, David Smiley)
 
 ==================  8.3.0 ==================
 
@@ -1266,6 +958,8 @@ New Features
 
 * SOLR-8241: Add CaffeineCache, an efficient implementation of SolrCache.(Ben Manes, Shawn Heisey, David Smiley, Andrzej Bialecki)
 
+* SOLR-13821: A Package store to store and load package artefacts (noble, Ishan Chattopadhyaya)
+
 * SOLR-13298: Allow zplot to plot matrices (Joel Bernstein)
 
 Improvements
@@ -1304,6 +998,8 @@ Improvements
 * SOLR-13638: Add debug, trace logging to RuleBasedAuthorizationPlugin (Jason Gerlowski)
 
 * SOLR-13784: EmbeddedSolrServer's defaultCore constructor argument is now optional (David Smiley)
+
+* LUCENE-8984: MoreLikeThis MLT is biased for uncommon fields (Andy Hind via Anshum Gupta)
 
 * SOLR-13798: SSL: Adding Enabling/Disabling client's hostname verification config (Cao Manh Dat)
 
@@ -1383,10 +1079,10 @@ Bug Fixes
 * SOLR-13802: Managed schema manipulations were not persisting the optional luceneMatchVersion that can be set
   on an Analyzer. (Thomas Wöckinger)
 
+* SOLR-13790: LRUStatsCache size explosion and ineffective caching. (ab)
+
 * SOLR-13539: Fix for class-cast issues during atomic-update 'removeregex' operations. This also incorporated some
   tests Tim wrote as a part of SOLR-9505. (Tim Owen via Jason Gerlowski)
-
-* SOLR-13790: LRUStatsCache size explosion and ineffective caching. (ab)
 
 * SOLR-13376: Multi-node race condition to create/remove nodeLost markers. (hoss, ab)
 
@@ -1710,7 +1406,6 @@ Jetty 9.4.14.v20181114
 
 Bug Fixes
 ----------------------
-
 * SOLR-13475: Null Pointer Exception when querying collection through collection alias. (Jörn Franke, ab)
 
 ==================  8.1.0 ==================
@@ -1739,6 +1434,12 @@ Upgrade Notes
   include the list of internal async requests (if any) in the "success" or "failed" keys (in addition
   to them being included outside those keys for backwards compatibility). See SOLR-12708 for more
   details
+
+* SOLR-12891: MacroExpander will no longer will expand URL parameters inside of the 'expr' parameter (used by streaming
+  expressions) Additionally, users are advised to use the 'InjectionDefense' class when constructing streaming
+  expressions that include user supplied data to avoid risks similar to SQL injection. The legacy behavior of
+  expanding the 'expr' parameter can be reinstated with -DStreamingExpressionMacros=true passed to the JVM at startup
+  (Gus Heck).
 
 * SOLR-13335: Velocity and Velocity Tools were both upgraded as part of this release. Velocity upgraded from 1.7 to 2.0.
   Please see https://velocity.apache.org/engine/2.0/upgrading.html about upgrading. Velocity Tools upgraded from 2.0 to
@@ -1818,6 +1519,8 @@ Bug Fixes
 * SOLR-11883: 500 code on functional query syntax errors and parameter dereferencing errors
 (Munendra S N via Mikhail Khludnev)
 
+* SOLR-13285: Updates with enum fields and javabin cause ClassCastException (noble)
+
 * SOLR-13234: Prometheus Metric Exporter not threadsafe. This changes the prometheus exporter to collect metrics
   from Solr on a fixed interval controlled by this tool and prevents concurrent collections. This change also improves
   performance slightly by using the cluster state instead of sending multiple HTTP requests to each node to lookup
@@ -1826,8 +1529,6 @@ Bug Fixes
 
 * SOLR-9882: 500 error code on breaching timeAllowed by core and distributed (fsv) search,
   old and json facets (Mikhail Khludnev)
-
-* SOLR-13285: Updates with enum fields and javabin cause ClassCastException (noble)
 
 * SOLR-13295: Reproducible failure in TestDistributedGrouping (Erick Erickson)
 
@@ -1907,6 +1608,13 @@ Improvements
 
 * SOLR-12999: Index replication could delete segments before downloading segments from master if there is not enough
   disk space (noble)
+
+* SOLR-12055 introduces async logging by default. There's a small window where log messages may be lost
+  in the event of some hard crash. Switch back to synchronous logging if this is unacceptable, see
+  see commeints in the log4j2 configuration files (log4j2.xml by default).
+
+* SOLR-12753: Async logging ring buffer and OOM error. When very long messages are written (1M messages or so),
+  it can produce an OOM error. Log messages are truncated at 10K via configuration in the log4j2.xml files.
 
 * SOLR-13227: Optimizing facet.range.other by avoiding expensive exceptions (Nikolay Khitrin via Mikhail Khludnev)
 
@@ -3127,7 +2835,7 @@ Upgrade Notes
   start scripts will no longer attempt this nor move existing console or GC logs into logs/archived either (SOLR-12144).
 
 * SOLR-11673: Slave doesn't commit empty index when completely new index is detected on master during replication.
-  To return the previous behavior pass false to skipCommitOnLeaderVersionZero in slave section of replication
+  To return the previous behavior pass false to skipCommitOnMasterVersionZero in slave section of replication
   handler configuration, or pass it to the fetchindex command.
 
 * SOLR-11453: Configuring slowQueryThresholdMillis now logs slow requests to a separate file - solr_slow_requests.log.
@@ -3287,7 +2995,7 @@ Bug Fixes
 * SOLR-12155: Exception from UnInvertedField constructor puts threads to infinite wait.
  (Andrey Kudryavtsev, Mikhail Khludnev)
 
-* SOLR-12201: TestReplicationHandler.doTestIndexFetchOnLeaderRestart(): handle unexpected replication failures
+* SOLR-12201: TestReplicationHandler.doTestIndexFetchOnMasterRestart(): handle unexpected replication failures
   (Steve Rowe)
 
 * SOLR-12190: Need to properly escape output in GraphMLResponseWriter. (yonik)
@@ -3923,7 +3631,7 @@ Other Changes
 * SOLR-12067: Increase autoAddReplicas default 30 second wait time to 120 seconds.
   (Varun Thacker, Mark Miller via shalin)
 
-* SOLR-12078: Fixed reproducable Failure in TestReplicationHandler.doTestIndexFetchOnLeaderRestart that happened
+* SOLR-12078: Fixed reproducable Failure in TestReplicationHandler.doTestIndexFetchOnMasterRestart that happened
   due to using stale http connections. (Gus Heck, shalin)
 
 * SOLR-12099: Remove reopenReaders attribute from 'IndexConfig in SolrConfig' page in ref guide. (shalin)

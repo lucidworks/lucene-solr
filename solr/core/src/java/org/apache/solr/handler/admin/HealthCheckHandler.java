@@ -70,7 +70,10 @@ public class HealthCheckHandler extends RequestHandlerBase {
 
   CoreContainer coreContainer;
 
+  public HealthCheckHandler() {}
+
   public HealthCheckHandler(final CoreContainer coreContainer) {
+    super();
     this.coreContainer = coreContainer;
   }
 

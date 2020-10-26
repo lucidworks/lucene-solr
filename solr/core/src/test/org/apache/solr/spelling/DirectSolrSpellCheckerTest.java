@@ -87,7 +87,7 @@ public class DirectSolrSpellCheckerTest extends SolrTestCaseJ4 {
       return null;
     });
   }
-  
+
   @Test
   public void testOnlyMorePopularWithExtendedResults() throws Exception {
     assertQ(req("q", "teststop:fox", "qt", "/spellCheckCompRH", SpellCheckComponent.COMPONENT_NAME, "true", SpellingParams.SPELLCHECK_DICT, "direct", SpellingParams.SPELLCHECK_EXTENDED_RESULTS, "true", SpellingParams.SPELLCHECK_ONLY_MORE_POPULAR, "true"),

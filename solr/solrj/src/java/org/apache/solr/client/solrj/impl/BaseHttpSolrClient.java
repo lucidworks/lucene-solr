@@ -48,7 +48,7 @@ public abstract class BaseHttpSolrClient extends SolrClient {
    * This should be thrown when a server has an error in executing the request and
    * it sends a proper payload back to the client
    */
-  public static class RemoteExecutionException extends RemoteSolrException {
+  public static class RemoteExecutionException extends HttpSolrClient.RemoteSolrException {
     @SuppressWarnings({"rawtypes"})
     private NamedList meta;
 
@@ -58,12 +58,12 @@ public abstract class BaseHttpSolrClient extends SolrClient {
     }
 
 
-    public static RemoteExecutionException create(String host, @SuppressWarnings({"rawtypes"})NamedList errResponse) {
+    public static HttpSolrClient.RemoteExecutionException create(String host, @SuppressWarnings({"rawtypes"})NamedList errResponse) {
       Object errObj = errResponse.get("error");
       if (errObj != null) {
         Number code = (Number) getObjectByPath(errObj, true, Collections.singletonList("code"));
         String msg = (String) getObjectByPath(errObj, true, Collections.singletonList("msg"));
-        return new RemoteExecutionException(host, code == null ? ErrorCode.UNKNOWN.code : code.intValue(),
+        return new HttpSolrClient.RemoteExecutionException(host, code == null ? ErrorCode.UNKNOWN.code : code.intValue(),
             msg == null ? "Unknown Error" : msg, errResponse);
 
       } else {

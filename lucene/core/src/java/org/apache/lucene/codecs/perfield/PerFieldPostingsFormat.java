@@ -61,8 +61,8 @@ import org.apache.lucene.util.RamUsageEstimator;
  * {@link ServiceLoader Service Provider Interface} to resolve format names.
  * <p>
  * Files written by each posting format have an additional suffix containing the 
- * format name. For example, in a per-field configuration instead of <code>_1.prx</code> 
- * filenames would look like <code>_1_Lucene40_0.prx</code>.
+ * format name. For example, in a per-field configuration instead of <tt>_1.prx</tt> 
+ * filenames would look like <tt>_1_Lucene40_0.prx</tt>.
  * @see ServiceLoader
  * @lucene.experimental
  */
@@ -80,7 +80,7 @@ public abstract class PerFieldPostingsFormat extends PostingsFormat {
   public static final String PER_FIELD_SUFFIX_KEY = PerFieldPostingsFormat.class.getSimpleName() + ".suffix";
 
   /** Sole constructor. */
-  protected PerFieldPostingsFormat() {
+  public PerFieldPostingsFormat() {
     super(PER_FIELD_NAME);
   }
 

@@ -40,8 +40,6 @@ import org.slf4j.LoggerFactory;
 import static org.apache.solr.handler.admin.SecurityConfHandler.getMapValue;
 
 public class Sha256AuthenticationProvider implements ConfigEditablePlugin,  BasicAuthPlugin.AuthenticationProvider {
-
-  static String CANNOT_DELETE_LAST_USER_ERROR = "You cannot delete the last user. At least one user must be configured at all times.";
   private Map<String, String> credentials;
   private String realm;
   private Map<String, String> promptHeader;
@@ -77,8 +75,9 @@ public class Sha256AuthenticationProvider implements ConfigEditablePlugin,  Basi
     credentials = new LinkedHashMap<>();
     @SuppressWarnings({"unchecked"})
     Map<String,String> users = (Map<String,String>) pluginConfig.get("credentials");
-    if (users == null || users.isEmpty()) {
-      throw new IllegalStateException("No users configured yet. At least one user must be configured in security.json");
+    if (users == null) {
+      log.debug("No users configured yet");
+      return;
     }
     for (Map.Entry<String, String> e : users.entrySet()) {
       String v = e.getValue();
@@ -116,7 +115,7 @@ public class Sha256AuthenticationProvider implements ConfigEditablePlugin,  Basi
     try {
       digest = MessageDigest.getInstance("SHA-256");
     } catch (NoSuchAlgorithmException e) {
-      log.error("Cannot find algorithm ", e);
+      log.error(e.getMessage(), e);
       return null;//should not happen
     }
     if (saltKey != null) {
@@ -147,15 +146,7 @@ public class Sha256AuthenticationProvider implements ConfigEditablePlugin,  Basi
           cmd.addError("No such user(s) " +names );
           return null;
         }
-        for (String name : names) {
-          if (map.containsKey(name)) {
-            if (map.size() == 1){
-              cmd.addError(CANNOT_DELETE_LAST_USER_ERROR);
-              return null;
-            }
-          }
-          map.remove(name);
-        }
+        for (String name : names) map.remove(name);
         return latestConf;
       }
       if ("set-user".equals(cmd.name) ) {

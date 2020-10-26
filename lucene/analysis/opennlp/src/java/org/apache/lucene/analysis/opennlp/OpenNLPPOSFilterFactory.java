@@ -22,9 +22,9 @@ import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.opennlp.tools.OpenNLPOpsFactory;
-import org.apache.lucene.util.ResourceLoader;
-import org.apache.lucene.util.ResourceLoaderAware;
-import org.apache.lucene.analysis.TokenFilterFactory;
+import org.apache.lucene.analysis.util.ResourceLoader;
+import org.apache.lucene.analysis.util.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
  * Factory for {@link OpenNLPPOSFilter}.
@@ -54,11 +54,6 @@ public class OpenNLPPOSFilterFactory extends TokenFilterFactory implements Resou
     if (!args.isEmpty()) {
       throw new IllegalArgumentException("Unknown parameters: " + args);
     }
-  }
-
-  /** Default ctor for compatibility with SPI */
-  public OpenNLPPOSFilterFactory() {
-    throw defaultCtorException();
   }
 
   @Override

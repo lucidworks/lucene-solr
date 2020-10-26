@@ -42,13 +42,13 @@ import com.google.common.base.Strings;
 import org.apache.commons.io.IOUtils;
 import org.apache.solr.client.solrj.impl.HttpClientUtil;
 import org.apache.solr.common.SolrException;
-import org.apache.solr.common.util.DOMUtil;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.PropertiesUtil;
 import org.apache.solr.logging.LogWatcherConfig;
 import org.apache.solr.metrics.reporters.SolrJmxReporter;
 import org.apache.solr.update.UpdateShardHandlerConfig;
+import org.apache.solr.util.DOMUtil;
 import org.apache.solr.util.JmxUtil;
+import org.apache.solr.util.PropertiesUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Node;
@@ -71,7 +71,7 @@ public class SolrXmlConfig {
 
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  public static NodeConfig fromConfig(Path solrHome, XmlConfigFile config, boolean fromZookeeper) {
+  public static NodeConfig fromConfig(Path solrHome, XmlConfigFile config) {
 
     checkForIllegalConfig(config);
 
@@ -113,7 +113,6 @@ public class SolrXmlConfig {
       configBuilder.setCloudConfig(cloudConfig);
     configBuilder.setBackupRepositoryPlugins(getBackupRepositoryPluginInfos(config));
     configBuilder.setMetricsConfig(getMetricsConfig(config));
-    configBuilder.setFromZookeeper(fromZookeeper);
     return fillSolrSection(configBuilder, entries);
   }
 
@@ -145,10 +144,6 @@ public class SolrXmlConfig {
   }
 
   public static NodeConfig fromInputStream(Path solrHome, InputStream is, Properties substituteProps) {
-    return fromInputStream(solrHome, is, substituteProps, false);
-  }
-
-  public static NodeConfig fromInputStream(Path solrHome, InputStream is, Properties substituteProps, boolean fromZookeeper) {
     SolrResourceLoader loader = new SolrResourceLoader(solrHome);
     if (substituteProps == null) {
       substituteProps = new Properties();
@@ -157,7 +152,7 @@ public class SolrXmlConfig {
       byte[] buf = IOUtils.toByteArray(is);
       try (ByteArrayInputStream dup = new ByteArrayInputStream(buf)) {
         XmlConfigFile config = new XmlConfigFile(loader, null, new InputSource(dup), null, substituteProps);
-        return fromConfig(solrHome, config, fromZookeeper);
+        return fromConfig(solrHome, config);
       }
     } catch (SolrException exc) {
       throw exc;
@@ -210,7 +205,7 @@ public class SolrXmlConfig {
       return properties;
     }
     catch (XPathExpressionException e) {
-      log.warn("Error parsing solr.xml: ", e);
+      log.warn("Error parsing solr.xml: {}", e.getMessage());
       return null;
     }
   }
@@ -413,6 +408,13 @@ public class SolrXmlConfig {
         case "zkClientTimeout":
           builder.setZkClientTimeout(parseInt(name, value));
           break;
+        case "autoReplicaFailoverBadNodeExpiration": case "autoReplicaFailoverWorkLoopDelay":
+          //TODO remove this in Solr 8.0
+          log.info("Configuration parameter {} is ignored", name);
+          break;
+        case "autoReplicaFailoverWaitAfterExpiration":
+          builder.setAutoReplicaFailoverWaitAfterExpiration(parseInt(name, value));
+          break;
         case "zkHost":
           builder.setZkHost(value);
           break;
@@ -430,12 +432,6 @@ public class SolrXmlConfig {
           break;
         case "createCollectionCheckLeaderActive":
           builder.setCreateCollectionCheckLeaderActive(Boolean.parseBoolean(value));
-          break;
-        case "pkiHandlerPrivateKeyPath":
-          builder.setPkiHandlerPrivateKeyPath(value);
-          break;
-        case "pkiHandlerPublicKeyPath":
-          builder.setPkiHandlerPublicKeyPath(value);
           break;
         default:
           throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Unknown configuration parameter in <solrcloud> section of solr.xml: " + name);
@@ -500,18 +496,7 @@ public class SolrXmlConfig {
 
   private static MetricsConfig getMetricsConfig(XmlConfigFile config) {
     MetricsConfig.MetricsConfigBuilder builder = new MetricsConfig.MetricsConfigBuilder();
-    Node node = config.getNode("solr/metrics", false);
-    // enabled by default
-    boolean enabled = true;
-    if (node != null) {
-      enabled = Boolean.parseBoolean(DOMUtil.getAttrOrDefault(node, "enabled", "true"));
-    }
-    builder.setEnabled(enabled);
-    if (!enabled) {
-      log.info("Metrics collection is disabled.");
-      return builder.build();
-    }
-    node = config.getNode("solr/metrics/suppliers/counter", false);
+    Node node = config.getNode("solr/metrics/suppliers/counter", false);
     if (node != null) {
       builder = builder.setCounterSupplier(new PluginInfo(node, "counterSupplier", false, false));
     }

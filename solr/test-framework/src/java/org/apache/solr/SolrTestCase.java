@@ -20,9 +20,7 @@ package org.apache.solr;
 import java.lang.invoke.MethodHandles;
 import java.io.File;
 
-import com.carrotsearch.randomizedtesting.annotations.ThreadLeakLingering;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util.QuickPatchThreadsFilter;
 import org.apache.solr.servlet.SolrDispatchFilter;
 import org.apache.solr.util.ExternalPaths;
 import org.apache.solr.util.RevertDefaultThreadHandlerRule;
@@ -39,7 +37,6 @@ import org.slf4j.LoggerFactory;
 import com.carrotsearch.randomizedtesting.rules.SystemPropertiesRestoreRule;
 
 import static com.carrotsearch.randomizedtesting.RandomizedTest.systemPropertyAsBoolean;
-import com.carrotsearch.randomizedtesting.annotations.ThreadLeakFilters;
 
 /**
  * All Solr test cases should derive from this class eventually. This is originally a result of async logging, see:
@@ -53,26 +50,8 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakFilters;
  * SolrTestCaseJ4.
  */
 
-  // ThreadLeakFilters are not additive. Any subclass that requires filters
-  // other than these must redefine these as well.
-@ThreadLeakFilters(defaultFilters = true, filters = {
-        SolrIgnoredThreadsFilter.class,
-        QuickPatchThreadsFilter.class
-})
-@ThreadLeakLingering(linger = 10000)
 public class SolrTestCase extends LuceneTestCase {
 
-  /**
-   * <b>DO NOT REMOVE THIS LOGGER</b>
-   * <p>
-   * For reasons that aren't 100% obvious, the existence of this logger is neccessary to ensure
-   * that the logging framework is properly initialized (even if concrete subclasses do not 
-   * themselves initialize any loggers) so that the async logger threads can be properly shutdown
-   * on completion of the test suite
-   * </p>
-   * @see <a href="https://issues.apache.org/jira/browse/SOLR-14247">SOLR-14247</a>
-   * @see #shutdownLogger
-   */
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   @ClassRule

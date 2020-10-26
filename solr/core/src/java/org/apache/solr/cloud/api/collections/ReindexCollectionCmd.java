@@ -35,6 +35,7 @@ import com.google.common.annotations.VisibleForTesting;
 import org.apache.http.client.HttpClient;
 import org.apache.solr.client.solrj.SolrResponse;
 import org.apache.solr.client.solrj.cloud.DistribStateManager;
+import org.apache.solr.client.solrj.cloud.autoscaling.Policy;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
@@ -108,9 +109,12 @@ public class ReindexCollectionCmd implements OverseerCollectionMessageHandler.Cm
       ZkStateReader.PULL_REPLICAS,
       ZkStateReader.TLOG_REPLICAS,
       ZkStateReader.REPLICATION_FACTOR,
+      ZkStateReader.MAX_SHARDS_PER_NODE,
       "shards",
+      Policy.POLICY,
       CollectionAdminParams.CREATE_NODE_SET_PARAM,
-      CollectionAdminParams.CREATE_NODE_SET_SHUFFLE_PARAM
+      CollectionAdminParams.CREATE_NODE_SET_SHUFFLE_PARAM,
+      ZkStateReader.AUTO_ADD_REPLICAS
   );
 
   private final OverseerCollectionMessageHandler ocmh;
@@ -238,6 +242,7 @@ public class ReindexCollectionCmd implements OverseerCollectionMessageHandler.Cm
     Integer numTlog = message.getInt(ZkStateReader.TLOG_REPLICAS, coll.getNumTlogReplicas());
     Integer numPull = message.getInt(ZkStateReader.PULL_REPLICAS, coll.getNumPullReplicas());
     int numShards = message.getInt(ZkStateReader.NUM_SHARDS_PROP, coll.getActiveSlices().size());
+    int maxShardsPerNode = message.getInt(ZkStateReader.MAX_SHARDS_PER_NODE, coll.getMaxShardsPerNode());
     DocRouter router = coll.getRouter();
     if (router == null) {
       router = DocRouter.DEFAULT;
@@ -315,7 +320,9 @@ public class ReindexCollectionCmd implements OverseerCollectionMessageHandler.Cm
         }
       }
 
+      propMap.put(ZkStateReader.MAX_SHARDS_PER_NODE, maxShardsPerNode);
       propMap.put(CommonAdminParams.WAIT_FOR_FINAL_STATE, true);
+      propMap.put(DocCollection.STATE_FORMAT, message.getInt(DocCollection.STATE_FORMAT, coll.getStateFormat()));
       if (rf != null) {
         propMap.put(ZkStateReader.REPLICATION_FACTOR, rf);
       }
@@ -341,6 +348,7 @@ public class ReindexCollectionCmd implements OverseerCollectionMessageHandler.Cm
           CommonParams.NAME, chkCollection,
           ZkStateReader.NUM_SHARDS_PROP, "1",
           ZkStateReader.REPLICATION_FACTOR, "1",
+          DocCollection.STATE_FORMAT, "2",
           CollectionAdminParams.COLL_CONF, "_default",
           CommonAdminParams.WAIT_FOR_FINAL_STATE, "true"
       );
@@ -570,14 +578,14 @@ public class ReindexCollectionCmd implements OverseerCollectionMessageHandler.Cm
   // XXX see #waitForDaemon() for why we need this
   private String getDaemonUrl(SolrResponse rsp, DocCollection coll) {
     @SuppressWarnings({"unchecked"})
-    Map<String, Object> rs = (Map<String, Object>)rsp.getResponse().get("result-set");
+    Map<String, Object> rs = (Map<String, Object>) rsp.getResponse().get("result-set");
     if (rs == null || rs.isEmpty()) {
       if (log.isDebugEnabled()) {
         log.debug(" -- Missing daemon information in response: {}", Utils.toJSONString(rsp));
       }
     }
     @SuppressWarnings({"unchecked"})
-    List<Object> list = (List<Object>)rs.get("docs");
+    List<Object> list = (List<Object>) rs.get("docs");
     if (list == null) {
       if (log.isDebugEnabled()) {
         log.debug(" -- Missing daemon information in response: {}", Utils.toJSONString(rsp));
@@ -587,8 +595,8 @@ public class ReindexCollectionCmd implements OverseerCollectionMessageHandler.Cm
     String replicaName = null;
     for (Object o : list) {
       @SuppressWarnings({"unchecked"})
-      Map<String, Object> map = (Map<String, Object>)o;
-      String op = (String)map.get("DaemonOp");
+      Map<String, Object> map = (Map<String, Object>) o;
+      String op = (String) map.get("DaemonOp");
       if (op == null) {
         continue;
       }

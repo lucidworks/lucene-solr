@@ -312,27 +312,11 @@ public class TestBooleanRewrites extends LuceneTestCase {
         .add(new TermQuery(new Term("foo", "baz")), Occur.MUST)
         .add(new MatchAllDocsQuery(), Occur.FILTER)
         .build();
-    Query expected = new BooleanQuery.Builder()
+    BooleanQuery expected = new BooleanQuery.Builder()
         .setMinimumNumberShouldMatch(bq.getMinimumNumberShouldMatch())
         .add(new TermQuery(new Term("foo", "bar")), Occur.MUST)
         .add(new TermQuery(new Term("foo", "baz")), Occur.MUST)
         .build();
-    assertEquals(expected, searcher.rewrite(bq));
-
-    bq = new BooleanQuery.Builder()
-            .add(new TermQuery(new Term("foo", "bar")), Occur.FILTER)
-            .add(new MatchAllDocsQuery(), Occur.FILTER)
-            .build();
-    expected = new BoostQuery(new ConstantScoreQuery(
-            new TermQuery(new Term("foo", "bar"))), 0.0f);
-    assertEquals(expected, searcher.rewrite(bq));
-
-    bq = new BooleanQuery.Builder()
-            .add(new MatchAllDocsQuery(), Occur.FILTER)
-            .add(new MatchAllDocsQuery(), Occur.FILTER)
-            .build();
-    expected = new BoostQuery(new ConstantScoreQuery(
-            new MatchAllDocsQuery()), 0.0f);
     assertEquals(expected, searcher.rewrite(bq));
   }
 
@@ -613,5 +597,20 @@ public class TestBooleanRewrites extends LuceneTestCase {
     reader.close();
     w.close();
     dir.close();
+  }
+
+  public void testFlattenInnerDisjunctionsWithMoreThan1024Terms() throws IOException {
+    IndexSearcher searcher = newSearcher(new MultiReader());
+
+    BooleanQuery.Builder builder1024 = new BooleanQuery.Builder();
+    for(int i = 0; i < 1024; i++) {
+      builder1024.add(new TermQuery(new Term("foo", "bar-" + i)), Occur.SHOULD);
+    }
+    Query inner = builder1024.build();
+    Query query = new BooleanQuery.Builder()
+        .add(inner, Occur.SHOULD)
+        .add(new TermQuery(new Term("foo", "baz")), Occur.SHOULD)
+        .build();
+    assertSame(query, searcher.rewrite(query));
   }
 }

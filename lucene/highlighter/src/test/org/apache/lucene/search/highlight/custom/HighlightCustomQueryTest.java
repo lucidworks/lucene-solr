@@ -101,7 +101,7 @@ public class HighlightCustomQueryTest extends LuceneTestCase {
 
   /**
    * This method intended for use with
-   * <code>testHighlightingWithDefaultField()</code>
+   * <tt>testHighlightingWithDefaultField()</tt>
    */
   private String highlightField(Query query, String fieldName,
       String text) throws IOException, InvalidTokenOffsetsException {

@@ -88,6 +88,8 @@ public class SuggestComponent extends SearchComponent implements SolrCoreAware, 
   @SuppressWarnings({"rawtypes"})
   protected NamedList initParams;
 
+  protected SolrMetricsContext metricsContext;
+
   /**
    * Key is the dictionary name used in SolrConfig, value is the corresponding {@link SolrSuggester}
    */
@@ -353,17 +355,22 @@ public class SuggestComponent extends SearchComponent implements SolrCoreAware, 
   }
 
   @Override
-  public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
-    super.initializeMetrics(parentContext, scope);
+  public SolrMetricsContext getSolrMetricsContext() {
+    return metricsContext;
+  }
 
-    this.solrMetricsContext.gauge(() -> ramBytesUsed(), true, "totalSizeInBytes", getCategory().toString());
-    MetricsMap suggestersMap = new MetricsMap(map -> {
+  @Override
+  public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
+    this.metricsContext = parentContext.getChildContext(this);
+
+    this.metricsContext.gauge(this, () -> ramBytesUsed(), true, "totalSizeInBytes", getCategory().toString());
+    MetricsMap suggestersMap = new MetricsMap((detailed, map) -> {
       for (Map.Entry<String, SolrSuggester> entry : suggesters.entrySet()) {
         SolrSuggester suggester = entry.getValue();
-        map.putNoEx(entry.getKey(), suggester.toString());
+        map.put(entry.getKey(), suggester.toString());
       }
     });
-    this.solrMetricsContext.gauge(suggestersMap, true, "suggesters", getCategory().toString(), scope);
+    this.metricsContext.gauge(this, suggestersMap, true, "suggesters", getCategory().toString(), scope);
   }
 
   @Override

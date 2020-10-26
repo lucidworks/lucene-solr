@@ -33,7 +33,6 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Locale;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -118,8 +117,7 @@ import org.slf4j.LoggerFactory;
 public final class HttpServer2 implements FilterContainer {
   public static final Object SOLR_HACK_FOR_CLASS_VERIFICATION = new Object();
 
-  // Apparently the Hadoop code expectes upper-case LOG, so...
-  public static final Logger LOG = LoggerFactory.getLogger(HttpServer2.class); //nowarn
+  public static final Logger LOG = LoggerFactory.getLogger(HttpServer2.class);
 
   public static final String HTTP_SCHEME = "http";
   public static final String HTTPS_SCHEME = "https";
@@ -399,13 +397,13 @@ public final class HttpServer2 implements FilterContainer {
           SSLFactory.SSL_SERVER_NEED_CLIENT_AUTH_DEFAULT);
       keyStore = sslConf.getTrimmed(SSLFactory.SSL_SERVER_KEYSTORE_LOCATION);
       if (keyStore == null || keyStore.isEmpty()) {
-        throw new IOException(String.format(Locale.ROOT, "Property %s not specified",
+        throw new IOException(String.format("Property %s not specified",
             SSLFactory.SSL_SERVER_KEYSTORE_LOCATION));
       }
       keyStorePassword = getPasswordString(sslConf,
           SSLFactory.SSL_SERVER_KEYSTORE_PASSWORD);
       if (keyStorePassword == null) {
-        throw new IOException(String.format(Locale.ROOT, "Property %s not specified",
+        throw new IOException(String.format("Property %s not specified",
             SSLFactory.SSL_SERVER_KEYSTORE_PASSWORD));
       }
       keyStoreType = sslConf.get(SSLFactory.SSL_SERVER_KEYSTORE_TYPE,

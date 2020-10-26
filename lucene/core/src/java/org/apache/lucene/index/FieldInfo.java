@@ -54,9 +54,6 @@ public final class FieldInfo {
   private int pointIndexDimensionCount;
   private int pointNumBytes;
 
-  private int vectorDimension;  // if it is a positive value, it means this field indexes vectors
-  private VectorValues.ScoreFunction vectorScoreFunction = VectorValues.ScoreFunction.NONE;
-
   // whether this field is used as the soft-deletes field
   private final boolean softDeletesField;
 
@@ -67,8 +64,7 @@ public final class FieldInfo {
    */
   public FieldInfo(String name, int number, boolean storeTermVector, boolean omitNorms, boolean storePayloads,
                    IndexOptions indexOptions, DocValuesType docValues, long dvGen, Map<String,String> attributes,
-                   int pointDimensionCount, int pointIndexDimensionCount, int pointNumBytes,
-                   int vectorDimension, VectorValues.ScoreFunction vectorScoreFunction, boolean softDeletesField) {
+                   int pointDimensionCount, int pointIndexDimensionCount, int pointNumBytes, boolean softDeletesField) {
     this.name = Objects.requireNonNull(name);
     this.number = number;
     this.docValuesType = Objects.requireNonNull(docValues, "DocValuesType must not be null (field: \"" + name + "\")");
@@ -87,10 +83,8 @@ public final class FieldInfo {
     this.pointDimensionCount = pointDimensionCount;
     this.pointIndexDimensionCount = pointIndexDimensionCount;
     this.pointNumBytes = pointNumBytes;
-    this.vectorDimension = vectorDimension;
-    this.vectorScoreFunction = vectorScoreFunction;
     this.softDeletesField = softDeletesField;
-    this.checkConsistency();
+    assert checkConsistency();
   }
 
   /** 
@@ -143,14 +137,6 @@ public final class FieldInfo {
       throw new IllegalStateException("field '" + name + "' cannot have a docvalues update generation without having docvalues");
     }
 
-    if (vectorDimension < 0) {
-      throw new IllegalStateException("vectorDimension must be >=0; got " + vectorDimension);
-    }
-
-    if (vectorDimension == 0 && vectorScoreFunction != VectorValues.ScoreFunction.NONE) {
-      throw new IllegalStateException("vector score function must be NONE when dimension = 0; got " + vectorScoreFunction);
-    }
-
     return true;
   }
 
@@ -193,7 +179,7 @@ public final class FieldInfo {
     if (attributes != null) {
       this.attributes.putAll(attributes);
     }
-    this.checkConsistency();
+    assert checkConsistency();
   }
 
   /** Record that this field is indexed with points, with the
@@ -228,7 +214,7 @@ public final class FieldInfo {
     pointIndexDimensionCount = indexDimensionCount;
     pointNumBytes = numBytes;
 
-    this.checkConsistency();
+    assert checkConsistency();
   }
 
   /** Return point data dimension count */
@@ -246,40 +232,6 @@ public final class FieldInfo {
     return pointNumBytes;
   }
 
-  /** Record that this field is indexed with vectors, with the specified num of dimensions and distance function */
-  public void setVectorDimensionAndScoreFunction(int dimension, VectorValues.ScoreFunction scoreFunction) {
-    if (dimension < 0) {
-      throw new IllegalArgumentException("vector dimension must be >= 0; got " + dimension);
-    }
-    if (dimension > VectorValues.MAX_DIMENSIONS) {
-      throw new IllegalArgumentException("vector dimension must be <= VectorValues.MAX_DIMENSIONS (=" + VectorValues.MAX_DIMENSIONS + "); got " + dimension);
-    }
-    if (dimension == 0 && scoreFunction != VectorValues.ScoreFunction.NONE) {
-      throw new IllegalArgumentException("vector score function must be NONE when the vector dimension = 0; got " + scoreFunction);
-    }
-    if (vectorDimension != 0 && vectorDimension != dimension) {
-      throw new IllegalArgumentException("cannot change vector dimension from " + vectorDimension + " to " + dimension + " for field=\"" + name + "\"");
-    }
-    if (vectorScoreFunction != VectorValues.ScoreFunction.NONE && vectorScoreFunction != scoreFunction) {
-      throw new IllegalArgumentException("cannot change vector score function from " + vectorScoreFunction + " to " + scoreFunction + " for field=\"" + name + "\"");
-    }
-
-    this.vectorDimension = dimension;
-    this.vectorScoreFunction = scoreFunction;
-
-    assert checkConsistency();
-  }
-
-  /** Returns the number of dimensions of the vector value */
-  public int getVectorDimension() {
-    return vectorDimension;
-  }
-
-  /** Returns {@link org.apache.lucene.index.VectorValues.ScoreFunction} for the field */
-  public VectorValues.ScoreFunction getVectorScoreFunction() {
-    return vectorScoreFunction;
-  }
-
   /** Record that this field is indexed with docvalues, with the specified type */
   public void setDocValuesType(DocValuesType type) {
     if (type == null) {
@@ -289,7 +241,7 @@ public final class FieldInfo {
       throw new IllegalArgumentException("cannot change DocValues type from " + docValuesType + " to " + type + " for field \"" + name + "\"");
     }
     docValuesType = type;
-    this.checkConsistency();
+    assert checkConsistency();
   }
   
   /** Returns IndexOptions for the field, or IndexOptions.NONE if the field is not indexed */
@@ -311,7 +263,6 @@ public final class FieldInfo {
       // cannot store payloads if we don't store positions:
       storePayloads = false;
     }
-    this.checkConsistency();
   }
   
   /**
@@ -325,7 +276,7 @@ public final class FieldInfo {
   /** Sets the docValues generation of this field. */
   void setDocValuesGen(long dvGen) {
     this.dvGen = dvGen;
-    this.checkConsistency();
+    assert checkConsistency();
   }
   
   /**
@@ -338,14 +289,14 @@ public final class FieldInfo {
   
   void setStoreTermVectors() {
     storeTermVector = true;
-    this.checkConsistency();
+    assert checkConsistency();
   }
   
   void setStorePayloads() {
     if (indexOptions != IndexOptions.NONE && indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0) {
       storePayloads = true;
     }
-    this.checkConsistency();
+    assert checkConsistency();
   }
 
   /**
@@ -361,7 +312,6 @@ public final class FieldInfo {
       throw new IllegalStateException("cannot omit norms: this field is not indexed");
     }
     omitNorms = true;
-    this.checkConsistency();
   }
   
   /**
@@ -383,13 +333,6 @@ public final class FieldInfo {
    */
   public boolean hasVectors() {
     return storeTermVector;
-  }
-
-  /**
-   * Returns whether any (numeric) vector values exist for this field
-   */
-  public boolean hasVectorValues() {
-    return vectorDimension > 0;
   }
   
   /**

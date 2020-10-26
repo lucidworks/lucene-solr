@@ -33,9 +33,9 @@ import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.index.PointValues.IntersectVisitor;
 import org.apache.lucene.index.PointValues.Relation;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
@@ -396,7 +396,7 @@ public class TestPointValues extends LuceneTestCase {
   public void testDifferentCodecs1() throws Exception {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random()));
-    iwc.setCodec(TestUtil.getDefaultCodec());
+    iwc.setCodec(Codec.forName("Lucene86"));
     IndexWriter w = new IndexWriter(dir, iwc);
     Document doc = new Document();
     doc.add(new IntPoint("int", 1));
@@ -427,7 +427,7 @@ public class TestPointValues extends LuceneTestCase {
     w.close();
     
     iwc = new IndexWriterConfig(new MockAnalyzer(random()));
-    iwc.setCodec(TestUtil.getDefaultCodec());
+    iwc.setCodec(Codec.forName("Lucene86"));
     w = new IndexWriter(dir, iwc);
     doc = new Document();
     doc.add(new IntPoint("int", 1));
@@ -625,7 +625,7 @@ public class TestPointValues extends LuceneTestCase {
   }
 
   public void testCheckIndexIncludesPoints() throws Exception {
-    Directory dir = new ByteBuffersDirectory();
+    Directory dir = new RAMDirectory();
     IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(null));
     Document doc = new Document();
     doc.add(new IntPoint("int1", 17));
@@ -660,7 +660,7 @@ public class TestPointValues extends LuceneTestCase {
   }
 
   public void testMergedStatsOneSegmentWithoutPoints() throws IOException {
-    Directory dir = new ByteBuffersDirectory();
+    Directory dir = new RAMDirectory();
     IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(null).setMergePolicy(NoMergePolicy.INSTANCE));
     w.addDocument(new Document());
     DirectoryReader.open(w).close();
@@ -681,7 +681,7 @@ public class TestPointValues extends LuceneTestCase {
   }
 
   public void testMergedStatsAllPointsDeleted() throws IOException {
-    Directory dir = new ByteBuffersDirectory();
+    Directory dir = new RAMDirectory();
     IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(null));
     w.addDocument(new Document());
     Document doc = new Document();
@@ -719,7 +719,7 @@ public class TestPointValues extends LuceneTestCase {
   private void doTestMergedStats() throws IOException {
     final int numDims = TestUtil.nextInt(random(), 1, 8);
     final int numBytesPerDim = TestUtil.nextInt(random(), 1, 16);
-    Directory dir = new ByteBuffersDirectory();
+    Directory dir = new RAMDirectory();
     IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(null));
     final int numDocs = TestUtil.nextInt(random(), 10, 20);
     for (int i = 0; i < numDocs; ++i) {

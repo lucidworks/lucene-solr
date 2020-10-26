@@ -21,10 +21,6 @@ import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.index.BaseTermVectorsFormatTestCase;
 
 public class TestSimpleTextTermVectorsFormat extends BaseTermVectorsFormatTestCase {
-  @Override
-  protected Class<? extends Throwable> getReadPastLastPositionExceptionClass() {
-    return AssertionError.class;
-  }
 
   @Override
   protected Codec getCodec() {

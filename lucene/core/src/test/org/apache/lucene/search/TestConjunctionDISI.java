@@ -22,8 +22,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.util.BitDocIdSet;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.LuceneTestCase;
@@ -41,7 +43,7 @@ public class TestConjunctionDISI extends LuceneTestCase {
     return new TwoPhaseIterator(approximation) {
 
       @Override
-      public boolean matches() {
+      public boolean matches() throws IOException {
         return confirmed.get(approximation.docID());
       }
 
@@ -87,6 +89,11 @@ public class TestConjunctionDISI extends LuceneTestCase {
 
     protected FakeWeight() {
       super(new MatchNoDocsQuery());
+    }
+
+    @Override
+    public void extractTerms(Set<Term> terms) {
+
     }
 
     @Override
@@ -390,22 +397,5 @@ public class TestConjunctionDISI extends LuceneTestCase {
 
   public void testCollapseSubConjunctionScorers() throws IOException {
     testCollapseSubConjunctions(true);
-  }
-
-  public void testIllegalAdvancementOfSubIteratorsTripsAssertion() throws IOException {
-    assumeTrue("Assertions must be enabled for this test!", LuceneTestCase.assertsAreEnabled);
-    int maxDoc = 100;
-    final int numIterators = TestUtil.nextInt(random(), 2, 5);
-    FixedBitSet set = randomSet(maxDoc);
-
-    DocIdSetIterator[] iterators = new DocIdSetIterator[numIterators];
-    for (int i = 0; i < iterators.length; ++i) {
-      iterators[i] = new BitDocIdSet(set).iterator();
-    }
-    final DocIdSetIterator conjunction = ConjunctionDISI.intersectIterators(Arrays.asList(iterators));
-    int idx = TestUtil.nextInt(random() , 0, iterators.length-1);
-    iterators[idx].nextDoc(); // illegally advancing one of the sub-iterators outside of the conjunction iterator
-    AssertionError ex = expectThrows(AssertionError.class, () -> conjunction.nextDoc());
-    assertEquals("Sub-iterators of ConjunctionDISI are not on the same document!", ex.getMessage());
   }
 }

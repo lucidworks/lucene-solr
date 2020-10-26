@@ -254,7 +254,7 @@ public class TestRangeFacetCounts extends FacetTestCase {
 
     final TaxonomyReader tr = new DirectoryTaxonomyReader(tw);
 
-    IndexSearcher s = newSearcher(r, false, false);
+    IndexSearcher s = newSearcher(r, false);
 
     if (VERBOSE) {
       System.out.println("TEST: searcher=" + s);
@@ -813,8 +813,7 @@ public class TestRangeFacetCounts extends FacetTestCase {
     FacetsCollector fc = new FacetsCollector();
 
     IndexReader r = writer.getReader();
-
-    IndexSearcher s = newSearcher(r, false, false);
+    IndexSearcher s = newSearcher(r);
     s.search(new MatchAllDocsQuery(), fc);
 
     final DoubleRange[] ranges = new DoubleRange[] {

@@ -37,8 +37,9 @@ import xml.etree.ElementTree as ET
 import zipfile
 from collections import defaultdict
 from collections import namedtuple
-import scriptutil
+from scriptutil import download
 
+import checkJavaDocs
 import checkJavadocLinks
 
 # This tool expects to find /lucene and /solr off the base URL.  You
@@ -148,14 +149,14 @@ def checkJARMetaData(desc, jarFile, gitRevision, version):
       'Specification-Vendor: The Apache Software Foundation',
       'Implementation-Vendor: The Apache Software Foundation',
       # Make sure 1.8 compiler was used to build release bits:
-      'X-Compile-Source-JDK: 11',
+      'X-Compile-Source-JDK: 8',
       # Make sure 1.8, 1.9 or 1.10 ant was used to build release bits: (this will match 1.8.x, 1.9.x, 1.10.x)
       ('Ant-Version: Apache Ant 1.8', 'Ant-Version: Apache Ant 1.9', 'Ant-Version: Apache Ant 1.10'),
       # Make sure .class files are 1.8 format:
-      'X-Compile-Target-JDK: 11',
+      'X-Compile-Target-JDK: 8',
       'Specification-Version: %s' % version,
       # Make sure the release was compiled with 1.8:
-      'Created-By: 11'):
+      'Created-By: 1.8'):
       if type(verify) is not tuple:
         verify = (verify,)
       for x in verify:
@@ -224,7 +225,8 @@ def checkAllJARs(topDir, project, gitRevision, version, tmpDir, baseURL):
     for file in files:
       if file.lower().endswith('.jar'):
         if project == 'solr':
-          if ((normRoot.endswith('/test-framework/lib') and file.startswith('jersey-'))
+          if ((normRoot.endswith('/contrib/dataimporthandler-extras/lib') and (file.startswith('javax.mail-') or file.startswith('activation-')))
+              or (normRoot.endswith('/test-framework/lib') and file.startswith('jersey-'))
               or (normRoot.endswith('/contrib/extraction/lib') and file.startswith('xml-apis-'))):
             print('      **WARNING**: skipping check of %s/%s: it has javax.* classes' % (root, file))
             continue
@@ -322,13 +324,13 @@ def checkSigs(project, urlString, version, tmpDir, isSigned, keysFile):
 
   for artifact, urlString in artifacts:
     print('  download %s...' % artifact)
-    scriptutil.download(artifact, urlString, tmpDir, force_clean=FORCE_CLEAN)
+    download(artifact, urlString, tmpDir, force_clean=FORCE_CLEAN)
     verifyDigests(artifact, urlString, tmpDir)
 
     if isSigned:
       print('    verify sig')
       # Test sig (this is done with a clean brand-new GPG world)
-      scriptutil.download(artifact + '.asc', urlString + '.asc', tmpDir, force_clean=FORCE_CLEAN)
+      download(artifact + '.asc', urlString + '.asc', tmpDir, force_clean=FORCE_CLEAN)
       sigFile = '%s/%s.asc' % (tmpDir, artifact)
       artifactFile = '%s/%s' % (tmpDir, artifact)
       logFile = '%s/%s.%s.gpg.verify.log' % (tmpDir, project, artifact)
@@ -623,7 +625,7 @@ def verifyUnpacked(java, project, artifact, unpackPath, gitRevision, version, te
     # TODO: clean this up to not be a list of modules that we must maintain
     extras = ('analysis', 'backward-codecs', 'benchmark', 'classification', 'codecs', 'core', 'demo', 'docs', 'expressions', 'facet', 'grouping', 'highlighter', 'join', 'luke', 'memory', 'misc', 'monitor', 'queries', 'queryparser', 'replicator', 'sandbox', 'spatial-extras', 'spatial3d', 'suggest', 'test-framework', 'licenses')
     if isSrc:
-      extras += ('build.gradle', 'build.xml', 'common-build.xml', 'module-build.xml', 'top-level-ivy-settings.xml', 'default-nested-ivy-settings.xml', 'ivy-versions.properties', 'ivy-ignore-conflicts.properties', 'tools', 'site', 'dev-docs')
+      extras += ('build.xml', 'common-build.xml', 'module-build.xml', 'top-level-ivy-settings.xml', 'default-nested-ivy-settings.xml', 'ivy-versions.properties', 'ivy-ignore-conflicts.properties', 'version.properties', 'tools', 'site', 'dev-docs')
   else:
     extras = ()
 
@@ -656,54 +658,54 @@ def verifyUnpacked(java, project, artifact, unpackPath, gitRevision, version, te
     # Can't run documentation-lint in lucene src, because dev-tools is missing
     validateCmd = 'ant validate' if project == 'lucene' else 'ant validate documentation-lint';
     print('    run "%s"' % validateCmd)
-    java.run_java11(validateCmd, '%s/validate.log' % unpackPath)
+    java.run_java8(validateCmd, '%s/validate.log' % unpackPath)
 
     if project == 'lucene':
-      print("    run tests w/ Java 11 and testArgs='%s'..." % testArgs)
-      java.run_java11('ant clean test %s' % testArgs, '%s/test.log' % unpackPath)
-      java.run_java11('ant jar', '%s/compile.log' % unpackPath)
-      testDemo(java.run_java11, isSrc, version, '11')
+      print("    run tests w/ Java 8 and testArgs='%s'..." % testArgs)
+      java.run_java8('ant clean test %s' % testArgs, '%s/test.log' % unpackPath)
+      java.run_java8('ant jar', '%s/compile.log' % unpackPath)
+      testDemo(java.run_java8, isSrc, version, '1.8')
 
-      print('    generate javadocs w/ Java 11...')
-      java.run_java11('ant javadocs', '%s/javadocs.log' % unpackPath)
-      checkBrokenLinks('%s/build/docs' % unpackPath)
+      print('    generate javadocs w/ Java 8...')
+      java.run_java8('ant javadocs', '%s/javadocs.log' % unpackPath)
+      checkJavadocpathFull('%s/build/docs' % unpackPath)
 
-      if java.run_java12:
-        print("    run tests w/ Java 12 and testArgs='%s'..." % testArgs)
-        java.run_java12('ant clean test %s' % testArgs, '%s/test.log' % unpackPath)
-        java.run_java12('ant jar', '%s/compile.log' % unpackPath)
-        testDemo(java.run_java12, isSrc, version, '12')
+      if java.run_java9:
+        print("    run tests w/ Java 9 and testArgs='%s'..." % testArgs)
+        java.run_java9('ant clean test %s' % testArgs, '%s/test.log' % unpackPath)
+        java.run_java9('ant jar', '%s/compile.log' % unpackPath)
+        testDemo(java.run_java9, isSrc, version, '9')
 
-        #print('    generate javadocs w/ Java 12...')
-        #java.run_java12('ant javadocs', '%s/javadocs.log' % unpackPath)
-        #checkBrokenLinks('%s/build/docs' % unpackPath)
+        #print('    generate javadocs w/ Java 9...')
+        #java.run_java9('ant javadocs', '%s/javadocs.log' % unpackPath)
+        #checkJavadocpathFull('%s/build/docs' % unpackPath)
 
     else:
       os.chdir('solr')
 
-      print("    run tests w/ Java 11 and testArgs='%s'..." % testArgs)
-      java.run_java11('ant clean test -Dtests.slow=false %s' % testArgs, '%s/test.log' % unpackPath)
+      print("    run tests w/ Java 8 and testArgs='%s'..." % testArgs)
+      java.run_java8('ant clean test -Dtests.slow=false %s' % testArgs, '%s/test.log' % unpackPath)
 
       # test javadocs
-      print('    generate javadocs w/ Java 11...')
-      java.run_java11('ant clean javadocs', '%s/javadocs.log' % unpackPath)
-      checkBrokenLinks('%s/solr/build/docs')
+      print('    generate javadocs w/ Java 8...')
+      java.run_java8('ant clean javadocs', '%s/javadocs.log' % unpackPath)
+      checkJavadocpathFull('%s/solr/build/docs' % unpackPath, False)
 
-      print('    test solr example w/ Java 11...')
-      java.run_java11('ant clean server', '%s/antexample.log' % unpackPath)
-      testSolrExample(unpackPath, java.java11_home, True)
+      print('    test solr example w/ Java 8...')
+      java.run_java8('ant clean server', '%s/antexample.log' % unpackPath)
+      testSolrExample(unpackPath, java.java8_home, True)
 
-      if java.run_java12:
-        print("    run tests w/ Java 12 and testArgs='%s'..." % testArgs)
-        java.run_java12('ant clean test -Dtests.slow=false %s' % testArgs, '%s/test.log' % unpackPath)
+      if java.run_java9:
+        print("    run tests w/ Java 9 and testArgs='%s'..." % testArgs)
+        java.run_java9('ant clean test -Dtests.slow=false %s' % testArgs, '%s/test.log' % unpackPath)
 
-        #print('    generate javadocs w/ Java 12...')
-        #java.run_java12('ant clean javadocs', '%s/javadocs.log' % unpackPath)
-        #checkBrokenLinks('%s/solr/build/docs' % unpackPath)
+        #print('    generate javadocs w/ Java 9...')
+        #java.run_java9('ant clean javadocs', '%s/javadocs.log' % unpackPath)
+        #checkJavadocpathFull('%s/solr/build/docs' % unpackPath, False)
 
-        print('    test solr example w/ Java 12...')
-        java.run_java12('ant clean server', '%s/antexample.log' % unpackPath)
-        testSolrExample(unpackPath, java.java12_home, True)
+        print('    test solr example w/ Java 9...')
+        java.run_java9('ant clean server', '%s/antexample.log' % unpackPath)
+        testSolrExample(unpackPath, java.java9_home, True)
 
       os.chdir('..')
       print('    check NOTICE')
@@ -714,29 +716,32 @@ def verifyUnpacked(java, project, artifact, unpackPath, gitRevision, version, te
     checkAllJARs(os.getcwd(), project, gitRevision, version, tmpDir, baseURL)
 
     if project == 'lucene':
-      testDemo(java.run_java11, isSrc, version, '11')
-      if java.run_java12:
-        testDemo(java.run_java12, isSrc, version, '12')
+      testDemo(java.run_java8, isSrc, version, '1.8')
+      if java.run_java9:
+        testDemo(java.run_java9, isSrc, version, '9')
+
+      print('    check Lucene\'s javadoc JAR')
+      checkJavadocpath('%s/docs' % unpackPath)
 
     else:
-      print('    copying unpacked distribution for Java 11 ...')
-      java11UnpackPath = '%s-java11' % unpackPath
-      if os.path.exists(java11UnpackPath):
-        shutil.rmtree(java11UnpackPath)
-      shutil.copytree(unpackPath, java11UnpackPath)
-      os.chdir(java11UnpackPath)
-      print('    test solr example w/ Java 11...')
-      testSolrExample(java11UnpackPath, java.java11_home, False)
+      print('    copying unpacked distribution for Java 8 ...')
+      java8UnpackPath = '%s-java8' % unpackPath
+      if os.path.exists(java8UnpackPath):
+        shutil.rmtree(java8UnpackPath)
+      shutil.copytree(unpackPath, java8UnpackPath)
+      os.chdir(java8UnpackPath)
+      print('    test solr example w/ Java 8...')
+      testSolrExample(java8UnpackPath, java.java8_home, False)
 
-      if java.run_java12:
-        print('    copying unpacked distribution for Java 12 ...')
-        java12UnpackPath = '%s-java12' % unpackPath
-        if os.path.exists(java12UnpackPath):
-          shutil.rmtree(java12UnpackPath)
-        shutil.copytree(unpackPath, java12UnpackPath)
-        os.chdir(java12UnpackPath)
-        print('    test solr example w/ Java 12...')
-        testSolrExample(java12UnpackPath, java.java12_home, False)
+      if java.run_java9:
+        print('    copying unpacked distribution for Java 9 ...')
+        java9UnpackPath = '%s-java9' % unpackPath
+        if os.path.exists(java9UnpackPath):
+          shutil.rmtree(java9UnpackPath)
+        shutil.copytree(unpackPath, java9UnpackPath)
+        os.chdir(java9UnpackPath)
+        print('    test solr example w/ Java 9...')
+        testSolrExample(java9UnpackPath, java.java9_home, False)
 
       os.chdir(unpackPath)
 
@@ -791,12 +796,7 @@ def readSolrOutput(p, startupEvent, failureEvent, logFile):
     startupEvent.set()
   finally:
     f.close()
-
-def is_port_in_use(port):
-    import socket
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(('localhost', port)) == 0
-
+    
 def testSolrExample(unpackPath, javaPath, isSrc):
   # test solr using some examples it comes with
   logFile = '%s/solr-example.log' % unpackPath
@@ -861,8 +861,26 @@ def testSolrExample(unpackPath, javaPath, isSrc):
   else:
     os.chdir(unpackPath)
     
-# check for broken links
-def checkBrokenLinks(path):
+# the weaker check: we can use this on java6 for some checks,
+# but its generated HTML is hopelessly broken so we cannot run
+# the link checking that checkJavadocpathFull does.
+def checkJavadocpath(path, failOnMissing=True):
+  # check for level='package'
+  # we fail here if its screwed up
+  if failOnMissing and checkJavaDocs.checkPackageSummaries(path, 'package'):
+    raise RuntimeError('missing javadocs package summaries!')
+    
+  # now check for level='class'
+  if checkJavaDocs.checkPackageSummaries(path):
+    # disabled: RM cannot fix all this, see LUCENE-3887
+    # raise RuntimeError('javadoc problems')
+    print('\n***WARNING***: javadocs want to fail!\n')
+
+# full checks
+def checkJavadocpathFull(path, failOnMissing=True):
+  # check for missing, etc
+  checkJavadocpath(path, failOnMissing)
+
   # also validate html/check for broken links
   if checkJavadocLinks.checkAll(path):
     raise RuntimeError('broken javadocs links found!')
@@ -941,7 +959,7 @@ def getBinaryDistFiles(project, tmpDir, version, baseURL):
   if not os.path.exists('%s/%s' % (tmpDir, distribution)):
     distURL = '%s/%s/%s' % (baseURL, project, distribution)
     print('    download %s...' % distribution, end=' ')
-    scriptutil.download(distribution, distURL, tmpDir, force_clean=FORCE_CLEAN)
+    download(distribution, distURL, tmpDir, force_clean=FORCE_CLEAN)
   destDir = '%s/unpack-%s-getBinaryDistFiles' % (tmpDir, project)
   if os.path.exists(destDir):
     shutil.rmtree(destDir)
@@ -1170,11 +1188,11 @@ def crawl(downloadedFiles, urlString, targetDir, exclusions=set()):
         crawl(downloadedFiles, subURL, path, exclusions)
       else:
         if not os.path.exists(path) or FORCE_CLEAN:
-          scriptutil.download(text, subURL, targetDir, quiet=True, force_clean=FORCE_CLEAN)
+          download(text, subURL, targetDir, quiet=True, force_clean=FORCE_CLEAN)
         downloadedFiles.append(path)
         sys.stdout.write('.')
 
-def make_java_config(parser, java12_home):
+def make_java_config(parser, java9_home):
   def _make_runner(java_home, version):
     print('Java %s JAVA_HOME=%s' % (version, java_home))
     if cygwin:
@@ -1188,16 +1206,16 @@ def make_java_config(parser, java12_home):
     def run_java(cmd, logfile):
       run('%s; %s' % (cmd_prefix, cmd), logfile)
     return run_java
-  java11_home =  os.environ.get('JAVA_HOME')
-  if java11_home is None:
+  java8_home =  os.environ.get('JAVA_HOME')
+  if java8_home is None:
     parser.error('JAVA_HOME must be set')
-  run_java11 = _make_runner(java11_home, '11')
-  run_java12 = None
-  if java12_home is not None:
-    run_java12 = _make_runner(java12_home, '12')
+  run_java8 = _make_runner(java8_home, '1.8')
+  run_java9 = None
+  if java9_home is not None:
+    run_java9 = _make_runner(java9_home, '9')
 
-  jc = namedtuple('JavaConfig', 'run_java11 java11_home run_java12 java12_home')
-  return jc(run_java11, java11_home, run_java12, java12_home)
+  jc = namedtuple('JavaConfig', 'run_java8 java8_home run_java9 java9_home')
+  return jc(run_java8, java8_home, run_java9, java9_home)
 
 version_re = re.compile(r'(\d+\.\d+\.\d+(-ALPHA|-BETA)?)')
 revision_re = re.compile(r'rev([a-f\d]+)')
@@ -1219,8 +1237,8 @@ def parse_config():
                       help='GIT revision number that release was built with, defaults to that in URL')
   parser.add_argument('--version', metavar='X.Y.Z(-ALPHA|-BETA)?',
                       help='Version of the release, defaults to that in URL')
-  parser.add_argument('--test-java12', metavar='JAVA12_HOME',
-                      help='Path to Java12 home directory, to run tests with if specified')
+  parser.add_argument('--test-java9', metavar='JAVA9_HOME',
+                      help='Path to Java9 home directory, to run tests with if specified')
   parser.add_argument('--download-only', action='store_true', default=False,
                       help='Only perform download and sha hash check steps')
   parser.add_argument('url', help='Url pointing to release to test')
@@ -1247,7 +1265,7 @@ def parse_config():
   if c.local_keys is not None and not os.path.exists(c.local_keys):
     parser.error('Local KEYS file "%s" not found' % c.local_keys)
 
-  c.java = make_java_config(parser, c.test_java12)
+  c.java = make_java_config(parser, c.test_java9)
 
   if c.tmp_dir:
     c.tmp_dir = os.path.abspath(c.tmp_dir)
@@ -1299,7 +1317,7 @@ def confirmAllReleasesAreTestedForBackCompat(smokeVersion, unpackPath):
   command = 'ant test -Dtestcase=TestBackwardsCompatibility -Dtests.verbose=true'
   p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
   stdout, stderr = p.communicate()
-  if p.returncode != 0:
+  if p.returncode is not 0:
     # Not good: the test failed!
     raise RuntimeError('%s failed:\n%s' % (command, stdout))
   stdout = stdout.decode('utf-8',errors='replace').replace('\r\n','\n')
@@ -1371,11 +1389,22 @@ def confirmAllReleasesAreTestedForBackCompat(smokeVersion, unpackPath):
   else:
     print('    success!')
 
+def getScriptVersion():
+  topLevelDir = '../..'                       # Assumption: this script is in dev-tools/scripts/ of a checkout
+  m = re.compile(r'(.*)/').match(sys.argv[0]) # Get this script's directory
+  if m is not None and m.group(1) != '.':
+    origCwd = os.getcwd()
+    os.chdir(m.group(1))
+    os.chdir('../..')
+    topLevelDir = os.getcwd()
+    os.chdir(origCwd)
+  reBaseVersion = re.compile(r'version\.base\s*=\s*(\d+\.\d+)')
+  return reBaseVersion.search(open('%s/lucene/version.properties' % topLevelDir).read()).group(1)
 
 def main():
   c = parse_config()
 
-  scriptVersion = scriptutil.find_current_version()
+  scriptVersion = getScriptVersion()
   if not c.version.startswith(scriptVersion + '.'):
     raise RuntimeError('smokeTestRelease.py for %s.X is incompatible with a %s release.' % (scriptVersion, c.version))
 
@@ -1424,11 +1453,8 @@ def smokeTest(java, baseURL, gitRevision, version, tmpDir, isSigned, local_keys,
   else:
     keysFileURL = "https://archive.apache.org/dist/lucene/KEYS"
     print("    Downloading online KEYS file %s" % keysFileURL)
-    scriptutil.download('KEYS', keysFileURL, tmpDir, force_clean=FORCE_CLEAN)
+    download('KEYS', keysFileURL, tmpDir, force_clean=FORCE_CLEAN)
     keysFile = '%s/KEYS' % (tmpDir)
-
-  if is_port_in_use(8983):
-    raise RuntimeError('Port 8983 is already in use. The smoketester needs it to test Solr')
 
   print()
   print('Test Lucene...')

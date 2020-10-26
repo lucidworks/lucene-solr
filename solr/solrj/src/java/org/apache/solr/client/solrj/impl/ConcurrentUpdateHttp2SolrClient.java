@@ -272,7 +272,7 @@ public class ConcurrentUpdateHttp2SolrClient extends SolrClient {
                 // don't want to fail to report error if parsing the response fails
                 log.warn("Failed to parse error response from {} due to: ", basePath, exc);
               } finally {
-                solrExc = new BaseHttpSolrClient.RemoteSolrException(basePath , statusCode, msg.toString(), null);
+                solrExc = new HttpSolrClient.RemoteSolrException(basePath , statusCode, msg.toString(), null);
                 if (metadata != null) {
                   solrExc.setMetadata(metadata);
                 }
@@ -301,7 +301,7 @@ public class ConcurrentUpdateHttp2SolrClient extends SolrClient {
 
   private void consumeFully(InputStream is) {
     if (is != null) {
-      try (is) {
+      try {
         // make sure the stream is full read
         is.skip(is.available());
         while (is.read() != -1) {
@@ -310,6 +310,12 @@ public class ConcurrentUpdateHttp2SolrClient extends SolrClient {
         // nothing to do then
       } catch (IOException e) {
         // quiet
+      } finally {
+        try {
+          is.close();
+        } catch (IOException e) {
+          // quiet
+        }
       }
     }
   }

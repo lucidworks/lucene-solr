@@ -20,7 +20,7 @@ package org.apache.lucene.analysis.br;
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
  * Factory for {@link BrazilianStemFilter}.
@@ -49,11 +49,6 @@ public class BrazilianStemFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public BrazilianStemFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public BrazilianStemFilter create(TokenStream in) {
     return new BrazilianStemFilter(in);

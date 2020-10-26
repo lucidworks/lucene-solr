@@ -23,6 +23,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 
 import org.apache.http.auth.AuthScope;
@@ -121,14 +122,17 @@ public class PreemptiveBasicAuthClientBuilderFactory implements HttpClientBuilde
   }
 
   @Override
-  public SolrHttpClientBuilder getHttpClientBuilder(SolrHttpClientBuilder builder) {
+  public SolrHttpClientBuilder getHttpClientBuilder(Optional<SolrHttpClientBuilder> optionalBuilder) {
     final String basicAuthUser = defaultParams.get(HttpClientUtil.PROP_BASIC_AUTH_USER);
     final String basicAuthPass = defaultParams.get(HttpClientUtil.PROP_BASIC_AUTH_PASS);
     if(basicAuthUser == null || basicAuthPass == null) {
       throw new IllegalArgumentException("username & password must be specified with " + getClass().getName());
     }
 
-    return initHttpClientBuilder(builder == null ? SolrHttpClientBuilder.create() : builder, basicAuthUser, basicAuthPass);
+    SolrHttpClientBuilder builder = optionalBuilder.isPresent() ?
+        initHttpClientBuilder(optionalBuilder.get(), basicAuthUser, basicAuthPass)
+        : initHttpClientBuilder(SolrHttpClientBuilder.create(), basicAuthUser, basicAuthPass);
+    return builder;
   }
 
   private SolrHttpClientBuilder initHttpClientBuilder(SolrHttpClientBuilder builder, String basicAuthUser, String basicAuthPass) {

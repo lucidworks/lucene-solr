@@ -41,6 +41,7 @@ import org.locationtech.spatial4j.shape.Rectangle;
 
 import static com.carrotsearch.randomizedtesting.RandomizedTest.randomDouble;
 import static com.carrotsearch.randomizedtesting.RandomizedTest.randomGaussian;
+import static com.carrotsearch.randomizedtesting.RandomizedTest.randomInt;
 import static com.carrotsearch.randomizedtesting.RandomizedTest.randomIntBetween;
 
 /** A base test class for spatial lucene. It's mostly Lucene generic. */
@@ -120,7 +121,7 @@ public abstract class SpatialTestCase extends LuceneTestCase {
 
   protected Point randomPoint() {
     final Rectangle WB = ctx.getWorldBounds();
-    return ctx.getShapeFactory().pointXY(
+    return ctx.makePoint(
         randomIntBetween((int) WB.getMinX(), (int) WB.getMaxX()),
         randomIntBetween((int) WB.getMinY(), (int) WB.getMaxY()));
   }
@@ -142,7 +143,7 @@ public abstract class SpatialTestCase extends LuceneTestCase {
     double yMin = yNewStartAndHeight[0];
     double yMax = yMin + yNewStartAndHeight[1];
 
-    return ctx.getShapeFactory().rect(xMin, xMax, yMin, yMax);
+    return ctx.makeRectangle(xMin, xMax, yMin, yMax);
   }
 
   /** Returns new minStart and new length that is inside the range specified by the arguments. */
@@ -153,7 +154,7 @@ public abstract class SpatialTestCase extends LuceneTestCase {
       int intBoundEnd = (int) (boundStart + boundLen);
       int intBoundLen = intBoundEnd - intBoundStart;
       int newLen = (int) randomGaussianMeanMax(intBoundLen / 16.0, intBoundLen);
-      int newStart = intBoundStart + randomIntBetween(0, intBoundLen - newLen);
+      int newStart = intBoundStart + randomInt(intBoundLen - newLen);
       return new double[]{newStart, newLen};
     } else { // (no int rounding)
       double newLen = randomGaussianMeanMax(boundLen / 16, boundLen);

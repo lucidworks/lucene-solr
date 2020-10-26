@@ -29,11 +29,11 @@ import java.util.Map;
 
 import org.apache.lucene.analysis.ja.JapaneseTokenizer.Mode;
 import org.apache.lucene.analysis.ja.dict.UserDictionary;
-import org.apache.lucene.analysis.TokenizerFactory;
+import org.apache.lucene.analysis.util.TokenizerFactory;
 import org.apache.lucene.util.AttributeFactory;
 import org.apache.lucene.util.IOUtils;
-import org.apache.lucene.util.ResourceLoader;
-import org.apache.lucene.util.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.ResourceLoader;
+import org.apache.lucene.analysis.util.ResourceLoaderAware;
 
 /**
  * Factory for {@link org.apache.lucene.analysis.ja.JapaneseTokenizer}.
@@ -128,17 +128,12 @@ public class JapaneseTokenizerFactory extends TokenizerFactory implements Resour
     userDictionaryPath = args.remove(USER_DICT_PATH);
     userDictionaryEncoding = args.remove(USER_DICT_ENCODING);
     discardPunctuation = getBoolean(args, DISCARD_PUNCTUATION, true);
-    discardCompoundToken = getBoolean(args, DISCARD_COMPOUND_TOKEN, true);
+    discardCompoundToken = getBoolean(args, DISCARD_COMPOUND_TOKEN, false);
     nbestCost = getInt(args, NBEST_COST, 0);
     nbestExamples = args.remove(NBEST_EXAMPLES);
     if (!args.isEmpty()) {
       throw new IllegalArgumentException("Unknown parameters: " + args);
     }
-  }
-
-  /** Default ctor for compatibility with SPI */
-  public JapaneseTokenizerFactory() {
-    throw defaultCtorException();
   }
 
   @Override

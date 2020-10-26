@@ -18,17 +18,42 @@
 package org.apache.solr.cloud.api.collections;
 
 
+import java.lang.invoke.MethodHandles;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
 import org.apache.solr.client.solrj.cloud.DistribStateManager;
 import org.apache.solr.client.solrj.cloud.NodeStateProvider;
 import org.apache.solr.client.solrj.cloud.SolrCloudManager;
-import org.apache.solr.client.solrj.cloud.VersionedData;
+import org.apache.solr.client.solrj.cloud.autoscaling.PolicyHelper;
+import org.apache.solr.client.solrj.cloud.autoscaling.ReplicaInfo;
+import org.apache.solr.client.solrj.cloud.autoscaling.Variable.Type;
+import org.apache.solr.client.solrj.cloud.autoscaling.VersionedData;
 import org.apache.solr.client.solrj.request.CoreAdminRequest;
 import org.apache.solr.cloud.Overseer;
 import org.apache.solr.cloud.api.collections.OverseerCollectionMessageHandler.ShardRequestTracker;
 import org.apache.solr.cloud.overseer.OverseerAction;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
-import org.apache.solr.common.cloud.*;
+import org.apache.solr.common.cloud.ClusterState;
+import org.apache.solr.common.cloud.CompositeIdRouter;
+import org.apache.solr.common.cloud.DocCollection;
+import org.apache.solr.common.cloud.DocRouter;
+import org.apache.solr.common.cloud.PlainIdRouter;
+import org.apache.solr.common.cloud.Replica;
+import org.apache.solr.common.cloud.ReplicaPosition;
+import org.apache.solr.common.cloud.Slice;
+import org.apache.solr.common.cloud.ZkNodeProps;
+import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.cloud.rule.ImplicitSnitch;
 import org.apache.solr.common.params.CommonAdminParams;
 import org.apache.solr.common.params.CommonParams;
@@ -47,15 +72,13 @@ import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.invoke.MethodHandles;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-
-import static org.apache.solr.client.solrj.impl.SolrClientNodeStateProvider.Variable.CORE_IDX;
-import static org.apache.solr.common.cloud.ZkStateReader.*;
+import static org.apache.solr.common.cloud.ZkStateReader.COLLECTION_PROP;
+import static org.apache.solr.common.cloud.ZkStateReader.REPLICA_TYPE;
+import static org.apache.solr.common.cloud.ZkStateReader.SHARD_ID_PROP;
 import static org.apache.solr.common.params.CollectionAdminParams.FOLLOW_ALIASES;
-import static org.apache.solr.common.params.CollectionParams.CollectionAction.*;
+import static org.apache.solr.common.params.CollectionParams.CollectionAction.ADDREPLICA;
+import static org.apache.solr.common.params.CollectionParams.CollectionAction.CREATESHARD;
+import static org.apache.solr.common.params.CollectionParams.CollectionAction.DELETESHARD;
 import static org.apache.solr.common.params.CommonAdminParams.ASYNC;
 import static org.apache.solr.common.params.CommonAdminParams.NUM_SUB_SHARDS;
 
@@ -113,6 +136,7 @@ public class SplitShardCmd implements OverseerCollectionMessageHandler.Cmd {
     String splitKey = message.getStr("split.key");
     DocCollection collection = clusterState.getCollection(collectionName);
 
+    PolicyHelper.SessionWrapper sessionWrapper = null;
 
     Slice parentSlice = getParentSlice(clusterState, collectionName, slice, splitKey);
     if (parentSlice.getState() != Slice.State.ACTIVE) {
@@ -129,12 +153,9 @@ public class SplitShardCmd implements OverseerCollectionMessageHandler.Cmd {
       throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Interrupted.");
     }
 
-    RTimerTree t;
-    if (ocmh.overseer.getCoreContainer().getNodeConfig().getMetricsConfig().isEnabled()) {
-      t = timings.sub("checkDiskSpace");
-      checkDiskSpace(collectionName, slice.get(), parentShardLeader, splitMethod, ocmh.cloudManager);
-      t.stop();
-    }
+    RTimerTree t = timings.sub("checkDiskSpace");
+    checkDiskSpace(collectionName, slice.get(), parentShardLeader, splitMethod, ocmh.cloudManager);
+    t.stop();
 
     // let's record the ephemeralOwner of the parent leader node
     Stat leaderZnodeStat = zkStateReader.getZkClient().exists(ZkStateReader.LIVE_NODES_ZKNODE + "/" + parentShardLeader.getNodeName(), null, true);
@@ -187,7 +208,7 @@ public class SplitShardCmd implements OverseerCollectionMessageHandler.Cmd {
       List<Map<String, Object>> replicas = new ArrayList<>((repFactor - 1) * 2);
 
       @SuppressWarnings("deprecation")
-      ShardHandler shardHandler = ocmh.shardHandlerFactory.getShardHandler();
+      ShardHandler shardHandler = ocmh.shardHandlerFactory.getShardHandler(ocmh.overseer.getCoreContainer().getUpdateShardHandler().getDefaultHttpClient());
 
 
       if (message.getBool(CommonAdminParams.SPLIT_BY_PREFIX, false)) {
@@ -407,10 +428,13 @@ public class SplitShardCmd implements OverseerCollectionMessageHandler.Cmd {
       log.debug("Successfully applied buffered updates on : {}", subShardNames);
 
       // Replica creation for the new Slices
+      // replica placement is controlled by the autoscaling policy framework
 
       Set<String> nodes = clusterState.getLiveNodes();
       List<String> nodeList = new ArrayList<>(nodes.size());
       nodeList.addAll(nodes);
+
+      // TODO: Have maxShardsPerNode param for this operation?
 
       // Remove the node that hosts the parent shard for replica creation.
       nodeList.remove(nodeName);
@@ -434,8 +458,10 @@ public class SplitShardCmd implements OverseerCollectionMessageHandler.Cmd {
           .assignPullReplicas(numPull.get())
           .onNodes(new ArrayList<>(clusterState.getLiveNodes()))
           .build();
-      Assign.AssignStrategy assignStrategy = Assign.createAssignStrategy(ocmh.cloudManager, clusterState, collection);
+      Assign.AssignStrategyFactory assignStrategyFactory = new Assign.AssignStrategyFactory(ocmh.cloudManager);
+      Assign.AssignStrategy assignStrategy = assignStrategyFactory.create(clusterState, collection);
       List<ReplicaPosition> replicaPositions = assignStrategy.assign(ocmh.cloudManager, assignRequest);
+      sessionWrapper = PolicyHelper.getLastSessionWrapper(true);
       t.stop();
 
       t = timings.sub("createReplicaPlaceholders");
@@ -588,6 +614,7 @@ public class SplitShardCmd implements OverseerCollectionMessageHandler.Cmd {
       log.error("Error executing split operation for collection: {} parent shard: {}", collectionName, slice, e);
       throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, null, e);
     } finally {
+      if (sessionWrapper != null) sessionWrapper.release();
       if (!success) {
         cleanupAfterFailure(zkStateReader, collectionName, parentSlice.getName(), subSlices, offlineSlices);
         unlockForSplit(ocmh.cloudManager, collectionName, parentSlice.getName());
@@ -613,21 +640,21 @@ public class SplitShardCmd implements OverseerCollectionMessageHandler.Cmd {
     NodeStateProvider nodeStateProvider = cloudManager.getNodeStateProvider();
     Map<String, Object> nodeValues = nodeStateProvider.getNodeValues(parentShardLeader.getNodeName(),
         Collections.singletonList(ImplicitSnitch.DISK));
-    Map<String, Map<String, List<Replica>>> infos = nodeStateProvider.getReplicaInfo(parentShardLeader.getNodeName(),
-        Collections.singletonList(CORE_IDX.metricsAttribute));
+    Map<String, Map<String, List<ReplicaInfo>>> infos = nodeStateProvider.getReplicaInfo(parentShardLeader.getNodeName(),
+        Collections.singletonList(Type.CORE_IDX.metricsAttribute));
     if (infos.get(collection) == null || infos.get(collection).get(shard) == null) {
       throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "missing replica information for parent shard leader");
     }
     // find the leader
-    List<Replica> lst = infos.get(collection).get(shard);
+    List<ReplicaInfo> lst = infos.get(collection).get(shard);
     Double indexSize = null;
-    for (Replica info : lst) {
-      if (info.getCoreName().equals(parentShardLeader.getCoreName())) {
-        Number size = (Number)info.get( CORE_IDX.metricsAttribute);
+    for (ReplicaInfo info : lst) {
+      if (info.getCore().equals(parentShardLeader.getCoreName())) {
+        Number size = (Number)info.getVariable(Type.CORE_IDX.metricsAttribute);
         if (size == null) {
           throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "missing index size information for parent shard leader");
         }
-        indexSize = (Double) CORE_IDX.convertVal(size);
+        indexSize = (Double) Type.CORE_IDX.convertVal(size);
         break;
       }
     }

@@ -19,7 +19,9 @@ package org.apache.solr.cloud.api.collections;
 
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -56,12 +58,12 @@ public class CategoryRoutedAlias extends RoutedAlias {
    * Parameters required for creating a category routed alias
    */
   @SuppressWarnings("WeakerAccess")
-  public static final Set<String> REQUIRED_ROUTER_PARAMS = Set.of(
+  public static final Set<String> REQUIRED_ROUTER_PARAMS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
       CommonParams.NAME,
       ROUTER_TYPE_NAME,
       ROUTER_FIELD,
       ROUTER_MAX_CARDINALITY
-  );
+  )));
 
   public static final String ROUTER_MUST_MATCH = "router.mustMatch";
 
@@ -69,9 +71,9 @@ public class CategoryRoutedAlias extends RoutedAlias {
    * Optional parameters for creating a category routed alias excluding parameters for collection creation.
    */
   @SuppressWarnings("WeakerAccess")
-  public static final Set<String> OPTIONAL_ROUTER_PARAMS = Set.of(
+  public static final Set<String> OPTIONAL_ROUTER_PARAMS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
       ROUTER_MAX_CARDINALITY,
-      ROUTER_MUST_MATCH);
+      ROUTER_MUST_MATCH)));
 
   private Aliases aliases;
   private final String aliasName;

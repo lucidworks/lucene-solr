@@ -119,8 +119,8 @@ public class MacroExpander {
     int start = 0;  // start of the unprocessed part of the string
     StringBuilder sb = null;
     for (;;) {
-      assert idx >= start;
       idx = val.indexOf(macroStart, idx);
+      int matchedStart = idx;
 
       // check if escaped
       if (idx > 0) {
@@ -135,19 +135,18 @@ public class MacroExpander {
         }
       }
       else if (idx < 0) {
-        break;
+        if (sb == null) return val;
+        sb.append(val.substring(start));
+        return sb.toString();
       }
 
       // found unescaped "${"
-      final int matchedStart = idx;
+      idx += macroStart.length();
 
-      int rbrace = val.indexOf('}', matchedStart + macroStart.length());
+      int rbrace = val.indexOf('}', idx);
       if (rbrace == -1) {
         // no matching close brace...
-        if (failOnMissingParams) {
-          return null;
-        }
-        break;
+        continue;
       }
 
       if (sb == null) {
@@ -155,14 +154,14 @@ public class MacroExpander {
       }
 
       if (matchedStart > 0) {
-        sb.append(val, start, matchedStart);
+        sb.append(val.substring(start, matchedStart));
       }
 
       // update "start" to be at the end of ${...}
-      idx = start = rbrace + 1;
+      start = rbrace + 1;
 
-      // String in-between braces
-      StrParser parser = new StrParser(val, matchedStart + macroStart.length(), rbrace);
+      // String inbetween = val.substring(idx, rbrace);
+      StrParser parser = new StrParser(val, idx, rbrace);
       try {
         String paramName = parser.getId();
         String defVal = null;
@@ -188,19 +187,13 @@ public class MacroExpander {
         }
 
       } catch (SyntaxError syntaxError) {
-        if (failOnMissingParams) {
-          return null;
-        }
         // append the part we would have skipped
-        sb.append(val, matchedStart, start);
+        sb.append( val.substring(matchedStart, start) );
+        continue;
       }
-    } // loop idx
 
-    if (sb == null) {
-      return val;
     }
-    sb.append(val, start, val.length());
-    return sb.toString();
+
   }
 
 

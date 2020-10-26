@@ -20,12 +20,13 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Locale;
 import java.util.Properties;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.carrotsearch.randomizedtesting.rules.SystemPropertiesRestoreRule;
+import com.google.common.collect.Sets;
 import org.apache.commons.exec.OS;
 import org.apache.lucene.util.TestUtil;
 import org.apache.solr.SolrTestCaseJ4;
@@ -103,8 +104,8 @@ public class TestSolrXml extends SolrTestCaseJ4 {
     assertEquals("true", backupRepoConfigs[0].attributes.get("default"));
     assertEquals(0, backupRepoConfigs[0].initArgs.size());
     assertTrue("allowPaths", cfg.getAllowPaths().containsAll(OS.isFamilyWindows() ?
-            Set.of("C:\\tmp", "C:\\home\\john").stream().map(s -> Path.of(s)).collect(Collectors.toSet()) :
-            Set.of("/tmp", "/home/john").stream().map(s -> Path.of(s)).collect(Collectors.toSet())
+            Sets.newHashSet("C:\\tmp", "C:\\home\\john").stream().map(s -> Paths.get(s)).collect(Collectors.toSet()) :
+            Sets.newHashSet("/tmp", "/home/john").stream().map(s -> Paths.get(s)).collect(Collectors.toSet())
         )
     );
     System.clearProperty("solr.allowPaths");

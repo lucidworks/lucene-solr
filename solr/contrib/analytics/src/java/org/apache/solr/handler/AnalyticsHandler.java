@@ -72,8 +72,11 @@ public class AnalyticsHandler extends RequestHandlerBase implements SolrCoreAwar
   }
 
   public void handleRequestBody(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
-
-    SolrQueryTimeoutImpl.set(req);
+   
+    long timeAllowed = req.getParams().getLong(CommonParams.TIME_ALLOWED, -1L);
+    if (timeAllowed >= 0L) {
+      SolrQueryTimeoutImpl.set(timeAllowed);
+    }
     try {
       DocSet docs;
       try {

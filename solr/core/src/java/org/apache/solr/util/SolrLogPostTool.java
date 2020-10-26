@@ -47,17 +47,17 @@ public class SolrLogPostTool {
   public static void main(String[] args) throws Exception {
 
     if(args.length != 2) {
-      CLIO.out("");
-      CLIO.out("postlogs is a simple tool for indexing Solr logs.");
-      CLIO.out("");
-      CLIO.out("parameters:");
-      CLIO.out("");
-      CLIO.out("-- baseUrl: Example http://localhost:8983/solr/collection1");
-      CLIO.out("-- rootDir: All files found at or below the root will be indexed.");
-      CLIO.out("");
-      CLIO.out("Sample syntax 1: ./bin/postlogs http://localhost:8983/solr/collection1 /user/foo/logs/solr.log");
-      CLIO.out("Sample syntax 2: ./bin/postlogs http://localhost:8983/solr/collection1 /user/foo/logs");
-      CLIO.out("");
+      System.out.println("");
+      System.out.println("postlogs is a simple tool for indexing Solr logs.");
+      System.out.println("");
+      System.out.println("parameters:");
+      System.out.println("");
+      System.out.println("-- baseUrl: Example http://localhost:8983/solr/collection1");
+      System.out.println("-- rootDir: All files found at or below the root will be indexed.");
+      System.out.println("");
+      System.out.println("Sample syntax 1: ./bin/postlogs http://localhost:8983/solr/collection1 /user/foo/logs/solr.log");
+      System.out.println("Sample syntax 2: ./bin/postlogs http://localhost:8983/solr/collection1 /user/foo/logs");
+      System.out.println("");
       return;
     }
 
@@ -87,8 +87,8 @@ public class SolrLogPostTool {
             try {
               doc = recordReader.readRecord();
             } catch (Throwable t) {
-              CLIO.err("Error reading log record:"+ bufferedReader.getLineNumber() +" from file:"+ fileName);
-              CLIO.err(t.getMessage());
+              System.err.println("Error reading log record:"+ bufferedReader.getLineNumber() +" from file:"+ fileName);
+              System.err.println(t.getMessage());
               continue;
             }
 
@@ -122,22 +122,22 @@ public class SolrLogPostTool {
 
   private static void sendBatch(SolrClient client, UpdateRequest request, boolean lastRequest) throws SolrServerException, IOException {
     final String beginMessage = lastRequest ? "Sending last batch ..." : "Sending batch of 300 log records...";
-    CLIO.out(beginMessage);
+    System.out.println(beginMessage);
     try {
       request.process(client);
-      CLIO.out("Batch sent");
+      System.out.println("Batch sent");
     } catch (Exception e) {
-      CLIO.err("Batch sending failed: " + e.getMessage());
-      e.printStackTrace(CLIO.getErrStream());
+      System.err.println("Batch sending failed: " + e.getMessage());
+      e.printStackTrace(System.err);
     }
 
     if (lastRequest) {
       try {
         client.commit();
-        CLIO.out("Committed");
+        System.out.println("Committed");
       } catch (Exception e) {
-        CLIO.err("Unable to commit documents: " + e.getMessage());
-        e.printStackTrace(CLIO.getErrStream());
+        System.err.println("Unable to commit documents: " + e.getMessage());
+        e.printStackTrace(System.err);
       }
     }
   }
@@ -287,7 +287,9 @@ public class SolrLogPostTool {
       lineRecord.setField("replica_s", parseReplica(line));
     }
 
-    private void parseQueryRecord(SolrInputDocument lineRecord, String line) {
+
+    private void parseQueryRecord(SolrInputDocument lineRecord, String line) throws IOException {
+      lineRecord.setField("date_dt", parseDate(line));
       lineRecord.setField("qtime_i", parseQTime(line));
       lineRecord.setField("status_s", parseStatus(line));
 
@@ -472,47 +474,51 @@ public class SolrLogPostTool {
       doc.setField(fieldName, fieldValue);
     }
 
-    private void addParams(SolrInputDocument doc,  String params) {
+    private void addParams(SolrInputDocument doc,  String params) throws IOException {
       String[] pairs = params.split("&");
       for(String pair : pairs) {
         String[] parts = pair.split("=");
         if(parts.length == 2 && parts[0].equals("q")) {
-          String dq = URLDecoder.decode(parts[1], Charset.defaultCharset());
+          String dq = URLDecoder.decode(parts[1], "UTF-8");
           setFieldIfUnset(doc, "q_s", dq);
           setFieldIfUnset(doc, "q_t", dq);
         }
 
-        if(parts[0].equals("rows")) {
-          String dr = URLDecoder.decode(parts[1], Charset.defaultCharset());
-          setFieldIfUnset(doc, "rows_i", dr);
-        }
+        try {
+          if (parts[0].equals("rows")) {
+            String dr = URLDecoder.decode(parts[1], "UTF-8");
+            setFieldIfUnset(doc, "rows_i", dr);
+          }
 
-        if(parts[0].equals("distrib")) {
-          String dr = URLDecoder.decode(parts[1], Charset.defaultCharset());
-          setFieldIfUnset(doc, "distrib_s", dr);
-        }
+          if (parts[0].equals("distrib")) {
+            String dr = URLDecoder.decode(parts[1], "UTF-8");
+            setFieldIfUnset(doc, "distrib_s", dr);
+          }
 
-        if(parts[0].equals("shards")) {
-          setFieldIfUnset(doc, "shards_s", "true");
-        }
+          if (parts[0].equals("isShard")) {
+            String dr = URLDecoder.decode(parts[1], "UTF-8");
+            setFieldIfUnset(doc, "isShard_s", dr);
+          }
 
-        if(parts[0].equals("ids") && !isRTGRequest(doc)) {
-          setFieldIfUnset(doc, "ids_s", "true");
-        }
+          if(parts[0].equals("shards")) {
+            setFieldIfUnset(doc, "shards_s", "true");
+          }
 
-        if(parts[0].equals("isShard")) {
-          String dr = URLDecoder.decode(parts[1], Charset.defaultCharset());
-          setFieldIfUnset(doc, "isShard_s", dr);
-        }
+          if(parts[0].equals("ids") && ! isRTGRequest(doc)) {
+            setFieldIfUnset(doc, "ids_s", "true");
+          }
 
-        if(parts[0].equals("wt")) {
-          String dr = URLDecoder.decode(parts[1], Charset.defaultCharset());
-          setFieldIfUnset(doc, "wt_s", dr);
-        }
+          if (parts[0].equals("wt")) {
+            String dr = URLDecoder.decode(parts[1], "UTF-8");
+            setFieldIfUnset(doc, "wt_s", dr);
+          }
 
-        if(parts[0].equals("facet")) {
-          String dr = URLDecoder.decode(parts[1], Charset.defaultCharset());
-          setFieldIfUnset(doc, "facet_s", dr);
+          if (parts[0].equals("facet")) {
+            String dr = URLDecoder.decode(parts[1], "UTF-8");
+            setFieldIfUnset(doc, "facet_s", dr);
+          }
+        } catch (Exception e) {
+          throw new IOException(e);
         }
 
         if(parts[0].equals("shards.purpose")) {

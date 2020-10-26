@@ -20,6 +20,7 @@ package org.apache.lucene.search.spans;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
@@ -106,10 +107,6 @@ public final class SpanNotQuery extends SpanQuery {
                                   includeWeight, excludeWeight, boost);
   }
 
-  /**
-   * Creates SpanNotQuery scorer instances
-   * @lucene.internal
-   */
   public class SpanNotWeight extends SpanWeight {
 
     final SpanWeight includeWeight;
@@ -191,6 +188,11 @@ public final class SpanNotQuery extends SpanQuery {
           }
         }
       };
+    }
+
+    @Override
+    public void extractTerms(Set<Term> terms) {
+      includeWeight.extractTerms(terms);
     }
 
     @Override

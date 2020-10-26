@@ -764,54 +764,6 @@ public class TestJsonFacets extends SolrTestCaseHS {
   }
 
   @Test
-  public void testSKGSweepMultiAcc() throws Exception {
-    Client client = Client.localClient();
-    indexSimple(client);
-    
-    // simple single level facet w/skg & trivial non-sweeping stat using various sorts & (re)sorting
-    for (String sort : Arrays.asList("sort:'index asc'",
-                                     "sort:'y desc'",
-                                     "sort:'z desc'",
-                                     "sort:'skg desc'",
-                                     "prelim_sort:'count desc', sort:'index asc'",
-                                     "prelim_sort:'count desc', sort:'y desc'",
-                                     "prelim_sort:'count desc', sort:'z desc'",
-                                     "prelim_sort:'count desc', sort:'skg desc'")) {
-      // the relatedness score of each of our cat_s values is (conviniently) also alphabetical order,
-      // (and the same order as 'sum(num_i) desc' & 'min(num_i) desc')
-      //
-      // So all of these re/sort options should produce identical output
-      // - Testing "index" sort allows the randomized use of "stream" processor as default to be tested.
-      // - Testing (re)sorts on other stats sanity checks code paths where relatedness() is a "defered" Agg
-
-      for (String sweep : Arrays.asList("true", "false")) {
-        //  results should be the same even if we disable sweeping...
-        assertJQ(req("q", "cat_s:[* TO *]", "rows", "0",
-                     "fore", "where_s:NY", "back", "*:*",
-                     "json.facet", ""
-                     + "{x: { type: terms, field: 'cat_s', "+sort+", limit:-1, "
-                     + "      facet: { skg: { type: 'func', func:'relatedness($fore,$back)', "
-                     +"                       "+RelatednessAgg.SWEEP_COLLECTION+": "+sweep+" },"
-                     + "               y:'sum(num_i)', "
-                     +"                z:'min(num_i)' } } }")
-                 , "facets=={count:5, x:{ buckets:["
-                 + "   { val:'A', count:2, y:5.0, z:2, "
-                 + "     skg : { relatedness: 0.00554, "
-                 + "             foreground_popularity: 0.16667,"
-                 + "             background_popularity: 0.33333, },"
-                 + "   }, "
-                 + "   { val:'B', count:3, y:-3.0, z:-5, "
-                 + "     skg : { relatedness: 0.0, " // perfectly average and uncorrolated
-                 + "             foreground_popularity: 0.16667,"
-                 + "             background_popularity: 0.5 },"
-                 + "   } ] } } "
-                 );
-      }
-    }
-  }
-
-  
-  @Test
   public void testRepeatedNumerics() throws Exception {
     Client client = Client.localClient();
     String field = "num_is"; // docValues of multi-valued points field can contain duplicate values... make sure they don't mess up our counts.
@@ -1386,21 +1338,11 @@ public class TestJsonFacets extends SolrTestCaseHS {
             ", f2:{  'buckets':[{ val:'B', count:3, x:11.0 }, { val:'A', count:2, x:4.0 }]} " +
             ", f3:{  'buckets':[{ val:'A', count:2, x:2 },    { val:'B', count:3, x:2 }]} " +
             ", f4:{  'buckets':[{ val:'A', count:2, x:2 },    { val:'B', count:3, x:2 }]} " +
-            ", f5:{  'buckets':[{ val:'B', count:3, x:112.0 },    { val:'A', count:2, x:2.0 }]} " +
+            ", f5:{  'buckets':[{ val:'B', count:3, x:74.6666666666666 },    { val:'A', count:2, x:1.0 }]} " +
             ", f6:{  buckets:[{ val:-9.0, count:1, x:1 }]} " +
             ", f7:{  buckets:[{ val:B, count:3, x:3 },{ val:A, count:2, x:0 }]} " +
             ", f8:{  buckets:[{ val:A, count:2, x:2 },{ val:B, count:3, x:0 }]} " +
             "}"
-    );
-
-    // test for stdDev and variance of size 1 and 0
-    client.testJQ(params(p, "q", "id:1", "json.facet", "{n1:'stddev(${num_d})', n2: 'variance(${num_d})'}")
-        , "facets=={ 'count':1, " +
-            "  n1:0.0, n2:0.0 }"
-    );
-    client.testJQ(params(p, "q", "id:3", "json.facet", "{n1:'stddev(${num_d})', n2: 'variance(${num_d})'}")
-        , "facets=={ 'count':1, " +
-            "  n1:0.0, n2:0.0 }"
     );
 
     // test sorting by stat with function
@@ -1915,7 +1857,7 @@ public class TestJsonFacets extends SolrTestCaseHS {
             "sum1:3.0, sumsq1:247.0, avg1:0.6, avg2:0.5, mind:-9.0, maxd:11.0" +
             ", numwhere:2, unique_num_i:4, unique_num_d:5, unique_date:5" +
             ", where_hll:2, hll_num_i:4, hll_num_d:5, hll_date:5" +
-            ", med:2.0, perc:[-9.0,2.0,11.0], variance:61.3, stddev:7.829431652425353" +
+            ", med:2.0, perc:[-9.0,2.0,11.0], variance:49.04, stddev:7.002856560004639" +
             ", mini:-5, maxi:7, missing:4, vals:2" +
             "}"
     );
@@ -1931,7 +1873,7 @@ public class TestJsonFacets extends SolrTestCaseHS {
         , "facets=={ 'count':6, " +
             "sum1:0.0, sumsq1:51.5, avg1:0.0, mind:-5.0, maxd:3.0" +
             ", mini:-5, maxi:3, mins:'a', maxs:'b'" +
-            ", stddev:2.712405363721075, variance:7.3571428571, median:0.0, perc:[-5.0,2.25,3.0]" +
+            ", stddev:2.537222891273055, variance:6.4375, median:0.0, perc:[-5.0,2.25,3.0]" +
             "}"
     );
 
@@ -2421,8 +2363,8 @@ public class TestJsonFacets extends SolrTestCaseHS {
             ", sumd:'sum(${num_d})', avgd:'avg(${num_d})', variance:'variance(${num_d})', stddev:'stddev(${num_d})', missing:'missing(${multi_ss})', vals:'countvals(${multi_ss})'}   }}"
         )
         , "facets=={ 'count':6, " +
-            "'f1':{  buckets:[{val:B, count:3, h:2, u:2, mind:-9.0, maxd:11.0, mini:-5, maxi:7,  sumd:-3.0, avgd:-1.0, variance:112.0, stddev:10.583005244258363, missing:0, vals:5}," +
-            "                 {val:A, count:2, h:2, u:2, mind:2.0, maxd:4.0,  mini:2, maxi:3, sumd:6.0, avgd:3.0, variance:2.0, stddev:1.4142135623730951, missing:1, vals:1}] } } "
+            "'f1':{  buckets:[{val:B, count:3, h:2, u:2, mind:-9.0, maxd:11.0, mini:-5, maxi:7,  sumd:-3.0, avgd:-1.0, variance:74.66666666666667, stddev:8.640987597877148, missing:0, vals:5}," +
+            "                 {val:A, count:2, h:2, u:2, mind:2.0, maxd:4.0,  mini:2, maxi:3, sumd:6.0, avgd:3.0, variance:1.0, stddev:1.0, missing:1, vals:1}] } } "
 
     );
 
@@ -3447,64 +3389,6 @@ public class TestJsonFacets extends SolrTestCaseHS {
             "}"
     );
 
-  }
-
-  @Test
-  public void testFacetValueTypes() throws Exception {
-    doFacetValueTypeValidation(Client.localClient());
-  }
-
-  @Test
-  public void testFacetValueTypesDistrib() throws Exception {
-    initServers();
-    Client client = servers.getClient(random().nextInt());
-    client.queryDefaults().set( "shards", servers.getShards(), "debugQuery", Boolean.toString(random().nextBoolean()) );
-    doFacetValueTypeValidation(client);
-  }
-
-  private void doFacetValueTypeValidation(Client client) throws Exception {
-    indexSimple(client);
-
-    client.testXQ(params("q", "*:*", "rows", "0",
-        "json.facet", "{cat_s:{type:terms,field:cat_s,mincount:0,missing:true,allBuckets:true,numBuckets:true,limit:1}}"),
-        "/response/lst[@name='facets']/long[@name='count'][.=6]", // count
-        "/response/lst[@name='facets']/lst[@name='cat_s']/long[@name='numBuckets'][.=2]", // total no of buckets
-        "*[count(/response/lst[@name='facets']/lst[@name='cat_s']/arr[@name='buckets']/lst)=1]", // no of entries
-        "/response/lst[@name='facets']/lst[@name='cat_s']/lst[@name='allBuckets']/long[@name='count'][.=5]", // allBuckets
-        "/response/lst[@name='facets']/lst[@name='cat_s']/lst[@name='missing']/long[@name='count'][.=1]", // missing
-        "/response/lst[@name='facets']/lst[@name='cat_s']/arr[@name='buckets']/lst[1]/str[@name='val'][.='B']", // facet value
-        "/response/lst[@name='facets']/lst[@name='cat_s']/arr[@name='buckets']/lst[1]/long[@name='count'][.='3']" // facet count
-    );
-
-    // aggregations types for string
-    client.testXQ(params("q", "*:*", "rows", "0",
-        "json.facet", "{unique:'unique(cat_s)',hll:'hll(cat_s)',vals:'countvals(cat_s)',missing:'missing(cat_s)'}"),
-        "/response/lst[@name='facets']/long[@name='count'][.=6]", // count
-        "/response/lst[@name='facets']/long[@name='unique'][.=2]", // unique
-        "/response/lst[@name='facets']/long[@name='hll'][.=2]", // hll
-        "/response/lst[@name='facets']/long[@name='vals'][.=5]", // values
-        "/response/lst[@name='facets']/long[@name='missing'][.=1]" // missing
-    );
-
-    // aggregations types for number
-    client.testXQ(params("q", "*:*", "rows", "0",
-        "json.facet", "{unique:'unique(num_i)',hll:'hll(num_i)',vals:'countvals(num_i)',missing:'missing(num_i)'}"),
-        "/response/lst[@name='facets']/long[@name='count'][.=6]", // count
-        "/response/lst[@name='facets']/long[@name='unique'][.=4]", // unique
-        "/response/lst[@name='facets']/long[@name='hll'][.=4]", // hll
-        "/response/lst[@name='facets']/long[@name='vals'][.=5]", // values
-        "/response/lst[@name='facets']/long[@name='missing'][.=1]" // missing
-    );
-
-    // aggregations types for multi-valued number
-    client.testXQ(params("q", "*:*", "rows", "0",
-        "json.facet", "{unique:'unique(num_is)',hll:'hll(num_is)',vals:'countvals(num_is)',missing:'missing(num_is)'}"),
-        "/response/lst[@name='facets']/long[@name='count'][.=6]", // count
-        "/response/lst[@name='facets']/long[@name='unique'][.=7]", // unique
-        "/response/lst[@name='facets']/long[@name='hll'][.=7]", // hll
-        "/response/lst[@name='facets']/long[@name='vals'][.=9]", // values
-        "/response/lst[@name='facets']/long[@name='missing'][.=1]" // missing
-    );
   }
 
   public void XtestPercentiles() {

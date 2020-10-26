@@ -33,12 +33,12 @@ import org.junit.Test;
 @Slow
 public class LeaderElectionIntegrationTest extends SolrCloudTestCase {
   private final static int NUM_REPLICAS_OF_SHARD1 = 5;
-
+  
   @BeforeClass
   public static void beforeClass() {
     System.setProperty("solrcloud.skip.autorecovery", "true");
   }
-
+  
   @Override
   public void setUp() throws Exception {
     super.setUp();
@@ -51,7 +51,7 @@ public class LeaderElectionIntegrationTest extends SolrCloudTestCase {
   private void createCollection(String collection) throws IOException, SolrServerException {
     assertEquals(0, CollectionAdminRequest.createCollection(collection,
         "conf", 2, 1)
-        .process(cluster.getSolrClient()).getStatus());
+        .setMaxShardsPerNode(1).process(cluster.getSolrClient()).getStatus());
     for (int i = 1; i < NUM_REPLICAS_OF_SHARD1; i++) {
       assertTrue(
           CollectionAdminRequest.addReplicaToShard(collection, "shard1").process(cluster.getSolrClient()).isSuccess()
@@ -96,7 +96,7 @@ public class LeaderElectionIntegrationTest extends SolrCloudTestCase {
       }
 
       if (jetty == getRunner(leader)) {
-        cluster.getZkClient().printLayoutToStream(System.out);
+        cluster.getZkClient().printLayoutToStdOut();
         fail("We didn't find a new leader! " + jetty + " was close, but it's still showing as the leader");
       }
 
@@ -166,10 +166,10 @@ public class LeaderElectionIntegrationTest extends SolrCloudTestCase {
   }
 
   private String getLeader(String collection) throws InterruptedException {
-
+    
     ZkNodeProps props = cluster.getSolrClient().getZkStateReader().getLeaderRetry(collection, "shard1", 30000);
     String leader = props.getStr(ZkStateReader.NODE_NAME_PROP);
-
+    
     return leader;
   }
 

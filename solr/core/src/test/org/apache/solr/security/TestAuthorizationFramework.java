@@ -21,7 +21,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
 import org.apache.http.client.HttpClient;
@@ -61,7 +60,7 @@ public class TestAuthorizationFramework extends AbstractFullDistribZkTestBase {
     MockAuthorizationPlugin.denyUsers.add("user1");
 
     try {
-      waitForThingsToLevelOut(10, TimeUnit.SECONDS);
+      waitForThingsToLevelOut(10);
       String baseUrl = jettys.get(0).getBaseUrl().toString();
       verifySecurityStatus(cloudClient.getLbClient().getHttpClient(), baseUrl + "/admin/authorization", "authorization/class", MockAuthorizationPlugin.class.getName(), 20);
       log.info("Starting test");

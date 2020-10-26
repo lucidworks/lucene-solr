@@ -26,7 +26,7 @@ import org.apache.lucene.search.TotalHits;
  *
  * @since solr 0.9
  */
-public interface DocList {
+public interface DocList extends DocSet {
 
   /**
    * Returns the zero based offset of this list within the total ordered list of matches to the query.
@@ -36,6 +36,7 @@ public interface DocList {
   /**
    * Returns the number of ids in this list.
    */
+  @Override
   public int size();
 
   /**
@@ -78,6 +79,7 @@ public interface DocList {
    * </p>
    * @see #hasScores
    */
+  @Override
   public DocIterator iterator();
     
   /** True if scores were retained */
@@ -88,3 +90,55 @@ public interface DocList {
    */
   public float maxScore();
 }
+
+
+/****  Maybe do this at a higher level (more efficient)
+
+class SmartDocSet implements DocSet {
+  static int INITIAL_SIZE=10;
+  static int TRANSITION_SIZE=10;
+
+  protected BitSet bits;
+  int size;
+
+  protected int[] arr;     // keep small set as an array, or as a hash?
+  protected int arrsize;
+
+  public SmartDocSet() {
+    if (INITIAL_SIZE>0) {
+      arr=new int[INITIAL_SIZE];
+    } else {
+      bits=new BitSet();
+    }
+  }
+
+
+  public void addUnique(int doc) {
+    size++;
+    if (bits != null) {
+      bits.set(doc);
+    }
+    else {
+      if (arrsize<10) {
+        arr[arrsize++]=doc;
+      } else  {
+        // TODO: transition to bit set
+      }
+    }
+  };
+
+  public int size() {
+    return size;
+  }
+  public boolean exists(int docid) {
+    return false;
+  }
+  public DocSet intersection(DocSet other) {
+    return null;
+
+  }
+  public DocSet union(DocSet other) {
+    return null;
+  }
+}
+***/

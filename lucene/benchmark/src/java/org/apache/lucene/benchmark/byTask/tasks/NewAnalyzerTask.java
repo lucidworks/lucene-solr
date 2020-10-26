@@ -48,7 +48,7 @@ public class NewAnalyzerTask extends PerfTask {
       return cnstr.newInstance(Version.LATEST);
     } catch (NoSuchMethodException nsme) {
       // otherwise use default ctor
-      return clazz.getConstructor().newInstance();
+      return clazz.newInstance();
     }
   }
 

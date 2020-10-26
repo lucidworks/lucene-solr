@@ -117,9 +117,6 @@ public final class ByteBuffersDataOutput extends DataOutput implements Accountab
    */
   private final ArrayDeque<ByteBuffer> blocks = new ArrayDeque<>();
 
-  /** Cumulative RAM usage across all blocks. */
-  private long ramBytesUsed;
-
   /**
    * The current-or-next write block.
    */
@@ -209,7 +206,7 @@ public final class ByteBuffersDataOutput extends DataOutput implements Accountab
       result.add(EMPTY);
     } else {
       for (ByteBuffer bb : blocks) {
-        bb = bb.asReadOnlyBuffer().flip();
+        bb = (ByteBuffer) bb.asReadOnlyBuffer().flip(); // cast for jdk8 (covariant in jdk9+) 
         result.add(bb);
       }
     }
@@ -234,7 +231,7 @@ public final class ByteBuffersDataOutput extends DataOutput implements Accountab
       result.add(EMPTY);
     } else {
       for (ByteBuffer bb : blocks) {
-        bb = bb.duplicate().flip();
+        bb = (ByteBuffer) bb.duplicate().flip(); // cast for jdk8 (covariant in jdk9+) 
         result.add(bb);
       }
     }
@@ -286,7 +283,8 @@ public final class ByteBuffersDataOutput extends DataOutput implements Accountab
       if (bb.hasArray()) {
         output.writeBytes(bb.array(), bb.arrayOffset(), bb.position());
       } else {
-        bb = bb.asReadOnlyBuffer().flip();
+        bb = bb.asReadOnlyBuffer();
+        bb.flip();
         output.copyBytes(new ByteBuffersDataInput(Collections.singletonList(bb)), bb.remaining());
       }
     }
@@ -403,8 +401,8 @@ public final class ByteBuffersDataOutput extends DataOutput implements Accountab
   public long ramBytesUsed() {
     // Return a rough estimation for allocated blocks. Note that we do not make
     // any special distinction for direct memory buffers.
-    assert ramBytesUsed == blocks.stream().mapToLong(ByteBuffer::capacity).sum() + blocks.size() * RamUsageEstimator.NUM_BYTES_OBJECT_REF;
-    return ramBytesUsed;
+    return RamUsageEstimator.NUM_BYTES_OBJECT_REF * blocks.size() + 
+           blocks.stream().mapToLong(buf -> buf.capacity()).sum();
   }
 
   /**
@@ -420,7 +418,6 @@ public final class ByteBuffersDataOutput extends DataOutput implements Accountab
       blocks.forEach(blockReuse);
     }
     blocks.clear();
-    ramBytesUsed = 0;
     currentBlock = EMPTY;
   }
 
@@ -454,7 +451,6 @@ public final class ByteBuffersDataOutput extends DataOutput implements Accountab
     currentBlock = blockAllocate.apply(requiredBlockSize);
     assert currentBlock.capacity() == requiredBlockSize;
     blocks.add(currentBlock);
-    ramBytesUsed += RamUsageEstimator.NUM_BYTES_OBJECT_REF + currentBlock.capacity();
   }
 
   private void rewriteToBlockSize(int targetBlockBits) {
@@ -476,7 +472,6 @@ public final class ByteBuffersDataOutput extends DataOutput implements Accountab
     assert blocks.isEmpty();
     this.blockBits = targetBlockBits;
     blocks.addAll(cloned.blocks);
-    ramBytesUsed = cloned.ramBytesUsed;
   }
 
   private static int computeBlockSizeBitsFor(long bytes) {

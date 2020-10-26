@@ -35,12 +35,15 @@ import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BoostAttribute;
 import org.apache.lucene.search.BoostQuery;
-import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MultiPhraseQuery;
 import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.SynonymQuery;
 import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.spans.SpanNearQuery;
+import org.apache.lucene.search.spans.SpanOrQuery;
+import org.apache.lucene.search.spans.SpanQuery;
+import org.apache.lucene.search.spans.SpanTermQuery;
 import org.apache.lucene.util.automaton.CharacterRunAutomaton;
 import org.apache.lucene.util.automaton.RegExp;
 
@@ -159,14 +162,18 @@ public class TestQueryBuilder extends LuceneTestCase {
   }
 
   /** forms graph query */
-  public void testMultiWordSynonymsPhrase() {
-    Query expected = new BooleanQuery.Builder()
-        .add(new PhraseQuery("field", "guinea", "pig"), BooleanClause.Occur.SHOULD)
-        .add(new TermQuery(new Term("field", "cavy")), BooleanClause.Occur.SHOULD)
+  public void testMultiWordSynonymsPhrase() throws Exception {
+    SpanNearQuery expectedNear = SpanNearQuery.newOrderedNearQuery("field")
+        .addClause(new SpanTermQuery(new Term("field", "guinea")))
+        .addClause(new SpanTermQuery(new Term("field", "pig")))
+        .setSlop(0)
         .build();
 
+    SpanTermQuery expectedTerm = new SpanTermQuery(new Term("field", "cavy"));
+
     QueryBuilder queryBuilder = new QueryBuilder(new MockSynonymAnalyzer());
-    assertEquals(expected, queryBuilder.createPhraseQuery("field", "guinea pig"));
+    assertEquals(new SpanOrQuery(new SpanQuery[]{expectedNear, expectedTerm}),
+        queryBuilder.createPhraseQuery("field", "guinea pig"));
   }
 
   public void testMultiWordSynonymsPhraseWithSlop() throws Exception {
@@ -493,13 +500,13 @@ public class TestQueryBuilder extends LuceneTestCase {
     }
     QueryBuilder qb = new QueryBuilder(null);
     try (TokenStream ts = new CannedBinaryTokenStream(tokens)) {
-      expectThrows(IndexSearcher.TooManyClauses.class, () -> qb.analyzeGraphBoolean("", ts, BooleanClause.Occur.MUST));
+      expectThrows(BooleanQuery.TooManyClauses.class, () -> qb.analyzeGraphBoolean("", ts, BooleanClause.Occur.MUST));
     }
     try (TokenStream ts = new CannedBinaryTokenStream(tokens)) {
-      expectThrows(IndexSearcher.TooManyClauses.class, () -> qb.analyzeGraphBoolean("", ts, BooleanClause.Occur.SHOULD));
+      expectThrows(BooleanQuery.TooManyClauses.class, () -> qb.analyzeGraphBoolean("", ts, BooleanClause.Occur.SHOULD));
     }
     try (TokenStream ts = new CannedBinaryTokenStream(tokens)) {
-      expectThrows(IndexSearcher.TooManyClauses.class, () -> qb.analyzeGraphPhrase(ts, "", 0));
+      expectThrows(BooleanQuery.TooManyClauses.class, () -> qb.analyzeGraphPhrase(ts, "", 0));
     }
   }
 

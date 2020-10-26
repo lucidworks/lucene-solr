@@ -34,6 +34,10 @@ import java.util.stream.Collectors;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.cloud.NodeStateProvider;
+import org.apache.solr.client.solrj.cloud.autoscaling.ReplicaInfo;
+import org.apache.solr.client.solrj.cloud.autoscaling.Row;
+import org.apache.solr.client.solrj.cloud.autoscaling.Variable.Type;
+import org.apache.solr.client.solrj.cloud.autoscaling.VariableBase;
 import org.apache.solr.client.solrj.request.GenericSolrRequest;
 import org.apache.solr.client.solrj.response.SimpleSolrResponse;
 import org.apache.solr.common.MapWriter;
@@ -41,7 +45,6 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
-import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.rule.ImplicitSnitch;
 import org.apache.solr.common.cloud.rule.SnitchContext;
 import org.apache.solr.common.params.CollectionAdminParams;
@@ -57,12 +60,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static java.util.Collections.emptyMap;
+import static org.apache.solr.client.solrj.cloud.autoscaling.Clause.METRICS_PREFIX;
+import static org.apache.solr.client.solrj.cloud.autoscaling.Variable.Type.FREEDISK;
+import static org.apache.solr.client.solrj.cloud.autoscaling.Variable.Type.TOTALDISK;
+import static org.apache.solr.client.solrj.cloud.autoscaling.Variable.Type.WITH_COLLECTION;
 
 /**
  * The <em>real</em> {@link NodeStateProvider}, which communicates with Solr via SolrJ.
  */
 public class SolrClientNodeStateProvider implements NodeStateProvider, MapWriter {
-  public static final String METRICS_PREFIX = "metrics:";
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   //only for debugging
   public static SolrClientNodeStateProvider INST;
@@ -70,7 +76,7 @@ public class SolrClientNodeStateProvider implements NodeStateProvider, MapWriter
 
 
   private final CloudSolrClient solrClient;
-  protected final Map<String, Map<String, Map<String, List<Replica>>>> nodeVsCollectionVsShardVsReplicaInfo = new HashMap<>();
+  protected final Map<String, Map<String, Map<String, List<ReplicaInfo>>>> nodeVsCollectionVsShardVsReplicaInfo = new HashMap<>();
   private Map<String, Object> snitchSession = new HashMap<>();
   @SuppressWarnings({"rawtypes"})
   private Map<String, Map> nodeVsTags = new HashMap<>();
@@ -104,10 +110,10 @@ public class SolrClientNodeStateProvider implements NodeStateProvider, MapWriter
         withCollectionsMap.put(coll.getName(), (String) coll.getProperties().get(CollectionAdminParams.WITH_COLLECTION));
       }
       coll.forEachReplica((shard, replica) -> {
-        Map<String, Map<String, List<Replica>>> nodeData = nodeVsCollectionVsShardVsReplicaInfo.computeIfAbsent(replica.getNodeName(), k -> new HashMap<>());
-        Map<String, List<Replica>> collData = nodeData.computeIfAbsent(collName, k -> new HashMap<>());
-        List<Replica> replicas = collData.computeIfAbsent(shard, k -> new ArrayList<>());
-        replicas.add((Replica) replica.clone());
+        Map<String, Map<String, List<ReplicaInfo>>> nodeData = nodeVsCollectionVsShardVsReplicaInfo.computeIfAbsent(replica.getNodeName(), k -> new HashMap<>());
+        Map<String, List<ReplicaInfo>> collData = nodeData.computeIfAbsent(collName, k -> new HashMap<>());
+        List<ReplicaInfo> replicas = collData.computeIfAbsent(shard, k -> new ArrayList<>());
+        replicas.add(new ReplicaInfo(collName, shard, replica, new HashMap<>(replica.getProperties())));
       });
     });
   }
@@ -122,38 +128,40 @@ public class SolrClientNodeStateProvider implements NodeStateProvider, MapWriter
   public Map<String, Object> getNodeValues(String node, Collection<String> tags) {
     Map<String, Object> tagVals = fetchTagValues(node, tags);
     nodeVsTags.put(node, tagVals);
+    if (tags.contains(WITH_COLLECTION.tagName)) {
+      tagVals.put(WITH_COLLECTION.tagName, withCollectionsMap);
+    }
     return tagVals;
   }
 
   protected Map<String, Object> fetchTagValues(String node, Collection<String> tags) {
-    MetricsFetchingSnitch snitch = new MetricsFetchingSnitch();
+    AutoScalingSnitch snitch = new AutoScalingSnitch();
     ClientSnitchCtx ctx = new ClientSnitchCtx(null, node, snitchSession, solrClient);
     snitch.getTags(node, new HashSet<>(tags), ctx);
     return ctx.getTags();
   }
 
-  public void forEachReplica(String node, Consumer<Replica> consumer){
-    forEachReplica(nodeVsCollectionVsShardVsReplicaInfo.get(node), consumer);
+  public void forEachReplica(String node, Consumer<ReplicaInfo> consumer){
+    Row.forEachReplica(nodeVsCollectionVsShardVsReplicaInfo.get(node), consumer);
   }
 
-  public static void forEachReplica(Map<String, Map<String, List<Replica>>> collectionVsShardVsReplicas, Consumer<Replica> consumer) {
-    collectionVsShardVsReplicas.forEach((coll, shardVsReplicas) -> shardVsReplicas
-            .forEach((shard, replicaInfos) -> {
-              for (int i = 0; i < replicaInfos.size(); i++) {
-                Replica r = replicaInfos.get(i);
-                consumer.accept(r);
-              }
-            }));
-  }
+
   @Override
-  public Map<String, Map<String, List<Replica>>> getReplicaInfo(String node, Collection<String> keys) {
-    Map<String, Map<String, List<Replica>>> result = nodeVsCollectionVsShardVsReplicaInfo.computeIfAbsent(node, o -> new HashMap<>());    if (!keys.isEmpty()) {
-      Map<String, Pair<String, Replica>> metricsKeyVsTagReplica = new HashMap<>();
-      forEachReplica(result, r -> {
+  public Map<String, Map<String, List<ReplicaInfo>>> getReplicaInfo(String node, Collection<String> keys) {
+    @SuppressWarnings({"unchecked"})
+    Map<String, Map<String, List<ReplicaInfo>>> result = nodeVsCollectionVsShardVsReplicaInfo.computeIfAbsent(node, Utils.NEW_HASHMAP_FUN);
+    if (!keys.isEmpty()) {
+      Map<String, Pair<String, ReplicaInfo>> metricsKeyVsTagReplica = new HashMap<>();
+      Row.forEachReplica(result, r -> {
         for (String key : keys) {
-          if (r.getProperties().containsKey(key)) continue;// it's already collected
-          String perReplicaMetricsKey = "solr.core." + r.getCollection() + "." + r.getShard() + "." + Utils.parseMetricsReplicaName(r.getCollection(), r.getCoreName()) + ":";
+          if (r.getVariables().containsKey(key)) continue;// it's already collected
+          String perReplicaMetricsKey = "solr.core." + r.getCollection() + "." + r.getShard() + "." + Utils.parseMetricsReplicaName(r.getCollection(), r.getCore()) + ":";
+          Type tagType = VariableBase.getTagType(key);
           String perReplicaValue = key;
+          if (tagType != null) {
+            perReplicaValue = tagType.metricsAttribute;
+            perReplicaValue = perReplicaValue == null ? key : perReplicaValue;
+          }
           perReplicaMetricsKey += perReplicaValue;
           metricsKeyVsTagReplica.put(perReplicaMetricsKey, new Pair<>(key, r));
         }
@@ -162,8 +170,10 @@ public class SolrClientNodeStateProvider implements NodeStateProvider, MapWriter
       if (!metricsKeyVsTagReplica.isEmpty()) {
         Map<String, Object> tagValues = fetchReplicaMetrics(node, metricsKeyVsTagReplica);
         tagValues.forEach((k, o) -> {
-          Pair<String, Replica> p = metricsKeyVsTagReplica.get(k);
-          if (p.second() != null) p.second().getProperties().put(p.first(), o);
+          Pair<String, ReplicaInfo> p = metricsKeyVsTagReplica.get(k);
+          Type validator = VariableBase.getTagType(p.first());
+          if (validator != null) o = validator.convertVal(o);
+          if (p.second() != null) p.second().getVariables().put(p.first(), o);
         });
 
       }
@@ -171,9 +181,9 @@ public class SolrClientNodeStateProvider implements NodeStateProvider, MapWriter
     return result;
   }
 
-  protected Map<String, Object> fetchReplicaMetrics(String node, Map<String, Pair<String, Replica>> metricsKeyVsTagReplica) {
+  protected Map<String, Object> fetchReplicaMetrics(String node, Map<String, Pair<String, ReplicaInfo>> metricsKeyVsTagReplica) {
     Map<String, Object> collect = metricsKeyVsTagReplica.entrySet().stream()
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getKey));
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getKey));
     ClientSnitchCtx ctx = new ClientSnitchCtx(null, null, emptyMap(), solrClient);
     fetchReplicaMetrics(node, ctx, collect);
     return ctx.getTags();
@@ -185,9 +195,39 @@ public class SolrClientNodeStateProvider implements NodeStateProvider, MapWriter
     ModifiableSolrParams params = new ModifiableSolrParams();
     params.add("key", metricsKeyVsTag.keySet().toArray(new String[0]));
     try {
-      SimpleSolrResponse rsp = ctx.invokeWithRetry(solrNode, CommonParams.METRICS_PATH, params);
+
+      SimpleSolrResponse rsp = null;
+      int cnt = 0;
+      while (cnt++ < 3) {
+        try {
+          rsp = ctx.invoke(solrNode, CommonParams.METRICS_PATH, params);
+          break;
+        } catch (SolrException | SolrServerException | IOException e) {
+          boolean hasCauseIOException = false;
+          Throwable cause = e;
+          while (cause != null) {
+            if (cause instanceof IOException) {
+              hasCauseIOException = true;
+              break;
+            }
+            cause = cause.getCause();
+          }
+          if (hasCauseIOException || e instanceof IOException) {
+            if (log.isInfoEnabled()) {
+              log.info("Error on getting remote info, trying again: {}", e.getMessage());
+            }
+            Thread.sleep(500);
+            continue;
+          } else {
+            throw e;
+          }
+        }
+      }
+
+
+      SimpleSolrResponse frsp = rsp;
       metricsKeyVsTag.forEach((key, tag) -> {
-        Object v = Utils.getObjectByPath(rsp.nl, true, Arrays.asList("metrics", key));
+        Object v = Utils.getObjectByPath(frsp.nl, true, Arrays.asList("metrics", key));
         if (tag instanceof Function) {
           @SuppressWarnings({"unchecked"})
           Pair<String, Object> p = (Pair<String, Object>) ((Function) tag).apply(v);
@@ -206,8 +246,8 @@ public class SolrClientNodeStateProvider implements NodeStateProvider, MapWriter
 
   }
 
-  // uses metrics API to get node information
-  static class MetricsFetchingSnitch extends ImplicitSnitch {
+  //uses metrics API to get node information
+  static class AutoScalingSnitch extends ImplicitSnitch {
     @Override
     protected void getRemoteInfo(String solrNode, Set<String> requestedTags, SnitchContext ctx) {
       if (!((ClientSnitchCtx)ctx).isNodeAlive(solrNode)) return;
@@ -242,7 +282,7 @@ public class SolrClientNodeStateProvider implements NodeStateProvider, MapWriter
         groups.add("solr.node");
         prefixes.add("CONTAINER.fs.usableSpace");
       }
-      if (requestedTags.contains (Variable.TOTALDISK.tagName)) {
+      if (requestedTags.contains(TOTALDISK.tagName)) {
         groups.add("solr.node");
         prefixes.add("CONTAINER.fs.totalSpace");
       }
@@ -265,35 +305,68 @@ public class SolrClientNodeStateProvider implements NodeStateProvider, MapWriter
       params.add("prefix", StrUtils.join(prefixes, ','));
 
       try {
-        SimpleSolrResponse rsp = snitchContext.invokeWithRetry(solrNode, CommonParams.METRICS_PATH, params);
-        NamedList<?> metrics = (NamedList<?>) rsp.nl.get("metrics");
-        if (metrics != null) {
-          // metrics enabled
-          if (requestedTags.contains(Variable.FREEDISK.tagName)) {
-            Object n = Utils.getObjectByPath(metrics, true, "solr.node/CONTAINER.fs.usableSpace");
-            if (n != null) ctx.getTags().put(Variable.FREEDISK.tagName, Variable.FREEDISK.convertVal(n));
-          }
-          if (requestedTags.contains(Variable.TOTALDISK.tagName)) {
-            Object n = Utils.getObjectByPath(metrics, true, "solr.node/CONTAINER.fs.totalSpace");
-            if (n != null) ctx.getTags().put(Variable.TOTALDISK.tagName, Variable.TOTALDISK.convertVal(n));
-          }
-          if (requestedTags.contains(CORES)) {
-            NamedList<?> node = (NamedList<?>) metrics.get("solr.node");
-            int count = 0;
-            for (String leafCoreMetricName : new String[]{"lazy", "loaded", "unloaded"}) {
-              Number n = (Number) node.get("CONTAINER.cores." + leafCoreMetricName);
-              if (n != null) count += n.intValue();
+        SimpleSolrResponse rsp = null;
+        int retries = 5;
+        int cnt = 0;
+        while (cnt++ < retries) {
+          try {
+            rsp = snitchContext.invoke(solrNode, CommonParams.METRICS_PATH, params);
+            break;
+          } catch (SolrException | SolrServerException | IOException e) {
+            if (e instanceof SolrServerException) {
+
             }
-            ctx.getTags().put(CORES, count);
+
+            boolean hasCauseIOException = false;
+            Throwable cause = e;
+            while (cause != null) {
+              if (cause instanceof IOException) {
+                hasCauseIOException = true;
+                break;
+              }
+              cause = cause.getCause();
+            }
+            if (hasCauseIOException || e instanceof IOException) {
+              if (log.isInfoEnabled()) {
+                log.info("Error on getting remote info, trying again: {}", e.getMessage());
+              }
+              Thread.sleep(500);
+              continue;
+            } else {
+              throw e;
+            }
           }
-          if (requestedTags.contains(SYSLOADAVG)) {
-            Number n = (Number) Utils.getObjectByPath(metrics, true, "solr.jvm/os.systemLoadAverage");
-            if (n != null) ctx.getTags().put(SYSLOADAVG, n.doubleValue() * 100.0d);
+        }
+
+        if (cnt == retries || rsp == null) {
+          throw new SolrException(ErrorCode.SERVER_ERROR, "Could not get remote info after many retries on NoHttpResponseException");
+        }
+
+        NamedList<?> metrics = (NamedList<?>) rsp.nl.get("metrics");
+        if (requestedTags.contains(FREEDISK.tagName)) {
+          Object n = Utils.getObjectByPath(metrics, true, "solr.node/CONTAINER.fs.usableSpace");
+          if (n != null) ctx.getTags().put(FREEDISK.tagName, FREEDISK.convertVal(n));
+        }
+        if (requestedTags.contains(TOTALDISK.tagName)) {
+          Object n = Utils.getObjectByPath(metrics, true, "solr.node/CONTAINER.fs.totalSpace");
+          if (n != null) ctx.getTags().put(TOTALDISK.tagName, TOTALDISK.convertVal(n));
+        }
+        if (requestedTags.contains(CORES)) {
+          NamedList<?> node = (NamedList<?>) metrics.get("solr.node");
+          int count = 0;
+          for (String leafCoreMetricName : new String[]{"lazy", "loaded", "unloaded"}) {
+            Number n = (Number) node.get("CONTAINER.cores." + leafCoreMetricName);
+            if (n != null) count += n.intValue();
           }
-          if (requestedTags.contains(HEAPUSAGE)) {
-            Number n = (Number) Utils.getObjectByPath(metrics, true, "solr.jvm/memory.heap.usage");
-            if (n != null) ctx.getTags().put(HEAPUSAGE, n.doubleValue() * 100.0d);
-          }
+          ctx.getTags().put(CORES, count);
+        }
+        if (requestedTags.contains(SYSLOADAVG)) {
+          Number n = (Number) Utils.getObjectByPath(metrics, true, "solr.jvm/os.systemLoadAverage");
+          if (n != null) ctx.getTags().put(SYSLOADAVG, n.doubleValue() * 100.0d);
+        }
+        if (requestedTags.contains(HEAPUSAGE)) {
+          Number n = (Number) Utils.getObjectByPath(metrics, true, "solr.jvm/memory.heap.usage");
+          if (n != null) ctx.getTags().put(HEAPUSAGE, n.doubleValue() * 100.0d);
         }
       } catch (Exception e) {
         throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Error getting remote info", e);
@@ -307,7 +380,7 @@ public class SolrClientNodeStateProvider implements NodeStateProvider, MapWriter
   }
 
   static class ClientSnitchCtx
-          extends SnitchContext {
+      extends SnitchContext {
     private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
     ZkClientClusterStateProvider zkClientClusterStateProvider;
@@ -334,41 +407,6 @@ public class SolrClientNodeStateProvider implements NodeStateProvider, MapWriter
       return Utils.getJson(zkClientClusterStateProvider.getZkStateReader().getZkClient(), path, true);
     }
 
-    /**
-     * Will attempt to call {@link #invoke(String, String, SolrParams)} up to five times, retrying on any IO Exceptions
-     */
-    public SimpleSolrResponse invokeWithRetry(String solrNode, String path, SolrParams params) throws InterruptedException, IOException, SolrServerException {
-      int retries = 5;
-      int cnt = 0;
-
-      while (cnt++ < retries) {
-        try {
-          return invoke(solrNode, path, params);
-        } catch (SolrException | SolrServerException | IOException e) {
-          boolean hasIOExceptionCause = false;
-
-          Throwable t = e;
-          while (t != null) {
-            if (t instanceof IOException) {
-              hasIOExceptionCause = true;
-              break;
-            }
-            t = t.getCause();
-          }
-
-          if (hasIOExceptionCause) {
-            if (log.isInfoEnabled()) {
-              log.info("Error on getting remote info, trying again: ", e);
-            }
-            Thread.sleep(500);
-          } else {
-            throw e;
-          }
-        }
-      }
-
-      throw new SolrException(ErrorCode.SERVER_ERROR, "Could not get remote info after many retries on NoHttpResponseException");
-    }
 
     public SimpleSolrResponse invoke(String solrNode, String path, SolrParams params)
         throws IOException, SolrServerException {
@@ -386,38 +424,5 @@ public class SolrClientNodeStateProvider implements NodeStateProvider, MapWriter
       }
     }
 
-  }
-
-  public enum Variable {
-    FREEDISK("freedisk", null, Double.class),
-    TOTALDISK("totaldisk", null, Double.class),
-    CORE_IDX("INDEX.sizeInGB",  "INDEX.sizeInBytes", Double.class)
-    ;
-
-
-    public final String tagName, metricsAttribute;
-    @SuppressWarnings("rawtypes")
-    public final Class type;
-
-
-    @SuppressWarnings("rawtypes")
-    Variable(String tagName, String metricsAttribute, Class type) {
-      this.tagName = tagName;
-      this.metricsAttribute = metricsAttribute;
-      this.type = type;
-    }
-
-    public Object convertVal(Object val) {
-      if(val instanceof String) {
-        return Double.valueOf((String)val);
-      } else if (val instanceof Number) {
-        Number num = (Number)val;
-        return num.doubleValue();
-
-      } else {
-        throw new IllegalArgumentException("Unknown type : "+val);
-      }
-
-    }
   }
 }

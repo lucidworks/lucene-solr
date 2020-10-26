@@ -19,6 +19,7 @@ package org.apache.solr.util;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import java.io.Console;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -43,6 +44,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -58,7 +60,6 @@ import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.GnuParser;
 import org.apache.commons.cli.HelpFormatter;
@@ -72,6 +73,7 @@ import org.apache.commons.exec.Executor;
 import org.apache.commons.exec.OS;
 import org.apache.commons.exec.environment.EnvironmentUtils;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.apache.http.HttpEntity;
@@ -93,14 +95,29 @@ import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.cloud.SolrCloudManager;
+import org.apache.solr.client.solrj.cloud.autoscaling.AutoScalingConfig;
+import org.apache.solr.client.solrj.cloud.autoscaling.Policy;
+import org.apache.solr.client.solrj.cloud.autoscaling.PolicyHelper;
+import org.apache.solr.client.solrj.cloud.autoscaling.ReplicaInfo;
+import org.apache.solr.client.solrj.cloud.autoscaling.Suggester;
+import org.apache.solr.client.solrj.cloud.autoscaling.Variable;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpClientUtil;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
+import org.apache.solr.client.solrj.impl.SolrClientCloudManager;
 import org.apache.solr.client.solrj.impl.ZkClientClusterStateProvider;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.ContentStreamUpdateRequest;
+import org.apache.solr.client.solrj.request.V2Request;
 import org.apache.solr.client.solrj.response.CollectionAdminResponse;
 import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.cloud.autoscaling.sim.NoopDistributedQueueFactory;
+import org.apache.solr.cloud.autoscaling.sim.SimCloudManager;
+import org.apache.solr.cloud.autoscaling.sim.SimScenario;
+import org.apache.solr.cloud.autoscaling.sim.SimUtils;
+import org.apache.solr.cloud.autoscaling.sim.SnapshotCloudManager;
+import org.apache.solr.common.MapWriter;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
@@ -113,9 +130,12 @@ import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.CollectionAdminParams;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.ContentStreamBase;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.StrUtils;
+import org.apache.solr.common.util.TimeSource;
+import org.apache.solr.common.util.Utils;
 import org.apache.solr.security.Sha256AuthenticationProvider;
 import org.apache.solr.util.configuration.SSLConfigurationsFactory;
 import org.noggit.CharArr;
@@ -133,7 +153,7 @@ import static org.apache.solr.common.util.Utils.fromJSONString;
 /**
  * Command-line utility for working with Solr.
  */
-public class SolrCLI implements CLIO {
+public class SolrCLI {
   private static final long MAX_WAIT_FOR_CORE_LOAD_NANOS = TimeUnit.NANOSECONDS.convert(1, TimeUnit.MINUTES);
 
   /**
@@ -150,7 +170,7 @@ public class SolrCLI implements CLIO {
     protected boolean verbose = false;
 
     protected ToolBase() {
-      this(CLIO.getOutStream());
+      this(System.out);
     }
 
     protected ToolBase(PrintStream stdout) {
@@ -177,9 +197,9 @@ public class SolrCLI implements CLIO {
         // since this is a CLI, spare the user the stacktrace
         String excMsg = exc.getMessage();
         if (excMsg != null) {
-          CLIO.err("\nERROR: " + excMsg + "\n");
+          System.err.println("\nERROR: " + excMsg + "\n");
           if (verbose) {
-            exc.printStackTrace(CLIO.getErrStream());
+            exc.printStackTrace(System.err);
           }
           toolExitStatus = 1;
         } else {
@@ -264,7 +284,7 @@ public class SolrCLI implements CLIO {
    */
   public static void main(String[] args) throws Exception {
     if (args == null || args.length == 0 || args[0] == null || args[0].trim().length() == 0) {
-      CLIO.err("Invalid command-line args! Must pass the name of a tool to run.\n"
+      System.err.println("Invalid command-line args! Must pass the name of a tool to run.\n"
           + "Supported tools:\n");
       displayToolOptions();
       exit(1);
@@ -272,7 +292,7 @@ public class SolrCLI implements CLIO {
 
     if (args.length == 1 && Arrays.asList("-v","-version","version").contains(args[0])) {
       // Simple version tool, no need for its own class
-      CLIO.out(Version.LATEST.toString());
+      System.out.println(Version.LATEST);
       exit(0);
     }
 
@@ -333,7 +353,7 @@ public class SolrCLI implements CLIO {
     if (keyStoreFile.isFile()) {
       System.setProperty(sysProp, keyStoreFile.getAbsolutePath());
     } else {
-      CLIO.err("WARNING: "+sysProp+" file "+keyStore+
+      System.err.println("WARNING: "+sysProp+" file "+keyStore+
           " not found! https requests to Solr will likely fail; please update your "+
           sysProp+" setting to use an absolute path.");
     }
@@ -392,6 +412,8 @@ public class SolrCLI implements CLIO {
       return new UtilsTool();
     else if ("auth".equals(toolType))
       return new AuthTool();
+    else if ("autoscaling".equals(toolType))
+      return new AutoscalingTool();
     else if ("export".equals(toolType))
       return new ExportTool();
     else if ("package".equals(toolType))
@@ -401,7 +423,7 @@ public class SolrCLI implements CLIO {
     // classpath scanning
 
     for (Class<Tool> next : findToolClassesInPackage("org.apache.solr.util")) {
-      Tool tool = next.getConstructor().newInstance();
+      Tool tool = next.newInstance();
       if (toolType.equals(tool.getName()))
         return tool;
     }
@@ -414,6 +436,7 @@ public class SolrCLI implements CLIO {
     formatter.printHelp("healthcheck", getToolOptions(new HealthcheckTool()));
     formatter.printHelp("status", getToolOptions(new StatusTool()));
     formatter.printHelp("api", getToolOptions(new ApiTool()));
+    formatter.printHelp("autoscaling", getToolOptions(new AutoscalingTool()));
     formatter.printHelp("create_collection", getToolOptions(new CreateCollectionTool()));
     formatter.printHelp("create_core", getToolOptions(new CreateCoreTool()));
     formatter.printHelp("create", getToolOptions(new CreateTool()));
@@ -426,12 +449,10 @@ public class SolrCLI implements CLIO {
     formatter.printHelp("cp", getToolOptions(new ZkCpTool()));
     formatter.printHelp("mv", getToolOptions(new ZkMvTool()));
     formatter.printHelp("ls", getToolOptions(new ZkLsTool()));
-    formatter.printHelp("export", getToolOptions(new ExportTool()));
-    formatter.printHelp("package", getToolOptions(new PackageTool()));
 
     List<Class<Tool>> toolClasses = findToolClassesInPackage("org.apache.solr.util");
     for (Class<Tool> next : toolClasses) {
-      Tool tool = next.getConstructor().newInstance();
+      Tool tool = next.newInstance();
       formatter.printHelp(tool.getName(), getToolOptions(tool));
     }
   }
@@ -494,7 +515,7 @@ public class SolrCLI implements CLIO {
         }
       }
       if (!hasHelpArg) {
-        CLIO.err("Failed to parse command-line arguments due to: "
+        System.err.println("Failed to parse command-line arguments due to: "
             + exp.getMessage());
       }
       HelpFormatter formatter = new HelpFormatter();
@@ -654,7 +675,8 @@ public class SolrCLI implements CLIO {
         }
         if (--attempts > 0 && checkCommunicationError(exc)) {
           if (!isFirstAttempt) // only show the log warning after the second attempt fails
-            log.warn("Request to {} failed, sleeping for 5 seconds before re-trying the request ...", getUrl, exc);
+              log.warn("Request to {}  failed due to: {}, sleeping for 5 seconds before re-trying the request ..."
+                  , getUrl, exc.getMessage());
           try {
             Thread.sleep(5000);
           } catch (InterruptedException ie) { Thread.interrupted(); }
@@ -837,12 +859,380 @@ public class SolrCLI implements CLIO {
     return result;
   }
 
+
+  public static class AutoscalingTool extends ToolBase {
+
+    public AutoscalingTool() {
+      this(System.out);
+    }
+
+    public AutoscalingTool(PrintStream stdout) {
+      super(stdout);
+    }
+
+    @Override
+    public Option[] getOptions() {
+      return new Option[] {
+          Option.builder("zkHost")
+              .argName("HOST")
+              .hasArg()
+              .required(false)
+              .desc("Address of the Zookeeper ensemble; defaults to: "+ZK_HOST)
+              .build(),
+          Option.builder("a")
+              .argName("CONFIG")
+              .hasArg()
+              .required(false)
+              .desc("Autoscaling config file, defaults to the one deployed in the cluster.")
+              .longOpt("config")
+              .build(),
+          Option.builder("s")
+              .desc("Show calculated suggestions")
+              .longOpt("suggestions")
+              .build(),
+          Option.builder("c")
+              .desc("Show ClusterState (collections layout)")
+              .longOpt("clusterState")
+              .build(),
+          Option.builder("d")
+              .desc("Show calculated diagnostics")
+              .longOpt("diagnostics")
+              .build(),
+          Option.builder("n")
+              .desc("Show sorted nodes with diagnostics")
+              .longOpt("sortedNodes")
+              .build(),
+          Option.builder("r")
+              .desc("Redact node and collection names (original names will be consistently randomized)")
+              .longOpt("redact")
+              .build(),
+          Option.builder("stats")
+              .desc("Show summarized collection & node statistics.")
+              .build(),
+          Option.builder("save")
+              .desc("Store autoscaling snapshot of the current cluster.")
+              .argName("DIR")
+              .hasArg()
+              .build(),
+          Option.builder("load")
+              .desc("Load autoscaling snapshot of the cluster instead of using the real one.")
+              .argName("DIR")
+              .hasArg()
+              .build(),
+          Option.builder("simulate")
+              .desc("Simulate execution of all suggestions.")
+              .build(),
+          Option.builder("i")
+              .desc("Max number of simulation iterations.")
+              .argName("NUMBER")
+              .hasArg()
+              .longOpt("iterations")
+              .build(),
+          Option.builder("ss")
+              .desc("Save autoscaling snapshots at each step of simulated execution.")
+              .argName("DIR")
+              .longOpt("saveSimulated")
+              .hasArg()
+              .build(),
+          Option.builder("scenario")
+              .desc("Execute a scenario from a file (and ignore all other options).")
+              .argName("FILE")
+              .hasArg()
+              .build(),
+          Option.builder("all")
+              .desc("Turn on all options to get all available information.")
+              .build()
+
+      };
+    }
+
+    @Override
+    public String getName() {
+      return "autoscaling";
+    }
+
+    protected void runImpl(CommandLine cli) throws Exception {
+      raiseLogLevelUnlessVerbose(cli);
+      if (cli.hasOption("scenario")) {
+        String data = IOUtils.toString(new FileInputStream(cli.getOptionValue("scenario")), "UTF-8");
+        try (SimScenario scenario = SimScenario.load(data)) {
+          scenario.verbose = verbose;
+          scenario.console = System.err;
+          scenario.run();
+        }
+        return;
+      }
+      SnapshotCloudManager cloudManager;
+      AutoScalingConfig config = null;
+      String configFile = cli.getOptionValue("a");
+      if (configFile != null) {
+        System.err.println("- reading autoscaling config from " + configFile);
+        config = new AutoScalingConfig(IOUtils.toByteArray(new FileInputStream(configFile)));
+      }
+      if (cli.hasOption("load")) {
+        File sourceDir = new File(cli.getOptionValue("load"));
+        System.err.println("- loading autoscaling snapshot from " + sourceDir.getAbsolutePath());
+        cloudManager = SnapshotCloudManager.readSnapshot(sourceDir);
+        if (config == null) {
+          System.err.println("- reading autoscaling config from the snapshot.");
+          config = cloudManager.getDistribStateManager().getAutoScalingConfig();
+        }
+      } else {
+        String zkHost = cli.getOptionValue("zkHost", ZK_HOST);
+
+        log.debug("Connecting to Solr cluster: {}", zkHost);
+        try (CloudSolrClient cloudSolrClient = new CloudSolrClient.Builder(Collections.singletonList(zkHost), Optional.empty()).build()) {
+
+          String collection = cli.getOptionValue("collection");
+          if (collection != null)
+            cloudSolrClient.setDefaultCollection(collection);
+
+          cloudSolrClient.connect();
+          try (SolrClientCloudManager realCloudManager = new SolrClientCloudManager(NoopDistributedQueueFactory.INSTANCE, cloudSolrClient)) {
+            if (config == null) {
+              System.err.println("- reading autoscaling config from the cluster.");
+              config = realCloudManager.getDistribStateManager().getAutoScalingConfig();
+            }
+            cloudManager = new SnapshotCloudManager(realCloudManager, config);
+          }
+        }
+      }
+      boolean redact = cli.hasOption("r");
+      if (cli.hasOption("save")) {
+        File targetDir = new File(cli.getOptionValue("save"));
+        cloudManager.saveSnapshot(targetDir, true, redact);
+        System.err.println("- saved autoscaling snapshot to " + targetDir.getAbsolutePath());
+      }
+      HashSet<String> liveNodes = new HashSet<>(cloudManager.getClusterStateProvider().getLiveNodes());
+      boolean withSuggestions = cli.hasOption("s");
+      boolean withDiagnostics = cli.hasOption("d") || cli.hasOption("n");
+      boolean withSortedNodes = cli.hasOption("n");
+      boolean withClusterState = cli.hasOption("c");
+      boolean withStats = cli.hasOption("stats");
+      if (cli.hasOption("all")) {
+        withSuggestions = true;
+        withDiagnostics = true;
+        withSortedNodes = true;
+        withClusterState = true;
+        withStats = true;
+      }
+      // prepare to redact also host names / IPs in base_url and other properties
+      ClusterState clusterState = cloudManager.getClusterStateProvider().getClusterState();
+      RedactionUtils.RedactionContext ctx = null;
+      if (redact) {
+        ctx = SimUtils.getRedactionContext(clusterState);
+      }
+      if (!withSuggestions && !withDiagnostics) {
+        withSuggestions = true;
+      }
+      Map<String, Object> results = prepareResults(cloudManager, config, withClusterState,
+          withStats, withSuggestions, withSortedNodes, withDiagnostics);
+      if (cli.hasOption("simulate")) {
+        String iterStr = cli.getOptionValue("i", "10");
+        String saveSimulated = cli.getOptionValue("saveSimulated");
+        int iterations;
+        try {
+          iterations = Integer.parseInt(iterStr);
+        } catch (Exception e) {
+          log.warn("Invalid option 'i' value, using default 10:", e);
+          iterations = 10;
+        }
+        Map<String, Object> simulationResults = new HashMap<>();
+        simulate(cloudManager, config, simulationResults, saveSimulated, withClusterState,
+            withStats, withSuggestions, withSortedNodes, withDiagnostics, iterations, redact);
+        results.put("simulation", simulationResults);
+      }
+      String data = Utils.toJSONString(results);
+      if (redact) {
+        data = RedactionUtils.redactNames(ctx.getRedactions(), data);
+      }
+      stdout.println(data);
+    }
+
+    private Map<String, Object> prepareResults(SolrCloudManager clientCloudManager,
+                                               AutoScalingConfig config,
+                                               boolean withClusterState,
+                                               boolean withStats,
+                                               boolean withSuggestions,
+                                               boolean withSortedNodes,
+                                               boolean withDiagnostics) throws Exception {
+      Policy.Session session = config.getPolicy().createSession(clientCloudManager);
+      ClusterState clusterState = clientCloudManager.getClusterStateProvider().getClusterState();
+      List<Suggester.SuggestionInfo> suggestions = Collections.emptyList();
+      long start, end;
+      if (withSuggestions) {
+        System.err.println("- calculating suggestions...");
+        start = TimeSource.NANO_TIME.getTimeNs();
+        suggestions = PolicyHelper.getSuggestions(config, clientCloudManager);
+        end = TimeSource.NANO_TIME.getTimeNs();
+        System.err.println("  (took " + TimeUnit.NANOSECONDS.toMillis(end - start) + " ms)");
+      }
+      Map<String, Object> diagnostics = Collections.emptyMap();
+      if (withDiagnostics) {
+        System.err.println("- calculating diagnostics...");
+        start = TimeSource.NANO_TIME.getTimeNs();
+        MapWriter mw = PolicyHelper.getDiagnostics(session);
+        diagnostics = new LinkedHashMap<>();
+        mw.toMap(diagnostics);
+        end = TimeSource.NANO_TIME.getTimeNs();
+        System.err.println("  (took " + TimeUnit.NANOSECONDS.toMillis(end - start) + " ms)");
+      }
+      Map<String, Object> results = new LinkedHashMap<>();
+      if (withClusterState) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("znodeVersion", clusterState.getZNodeVersion());
+        map.put("liveNodes", new TreeSet<>(clusterState.getLiveNodes()));
+        map.put("collections", clusterState.getCollectionsMap());
+        results.put("CLUSTERSTATE", map);
+      }
+      if (withStats) {
+        results.put("STATISTICS", SimUtils.calculateStats(clientCloudManager, config, verbose));
+      }
+      if (withSuggestions) {
+        results.put("SUGGESTIONS", suggestions);
+      }
+      if (!withSortedNodes) {
+        diagnostics.remove("sortedNodes");
+      }
+      if (withDiagnostics) {
+        results.put("DIAGNOSTICS", diagnostics);
+      }
+      return results;
+    }
+
+
+    private void simulate(SolrCloudManager cloudManager,
+                          AutoScalingConfig config,
+                          Map<String, Object> results,
+                          String saveSimulated,
+                          boolean withClusterState,
+                          boolean withStats,
+                          boolean withSuggestions,
+                          boolean withSortedNodes,
+                          boolean withDiagnostics, int iterations, boolean redact) throws Exception {
+      File saveDir = null;
+      if (saveSimulated != null) {
+        saveDir = new File(saveSimulated);
+        if (!saveDir.exists()) {
+          if (!saveDir.mkdirs()) {
+            throw new Exception("Unable to create 'saveSimulated' directory: " + saveDir.getAbsolutePath());
+          }
+        } else if (!saveDir.isDirectory()) {
+          throw new Exception("'saveSimulated' path exists and is not a directory! " + saveDir.getAbsolutePath());
+        }
+      }
+      int SPEED = 50;
+      SimCloudManager simCloudManager = SimCloudManager.createCluster(cloudManager, config, TimeSource.get("simTime:" + SPEED));
+      int loop = 0;
+      List<Suggester.SuggestionInfo> suggestions = Collections.emptyList();
+      Map<String, Object> intermediate = new LinkedHashMap<>();
+      results.put("intermediate", intermediate);
+      while (loop < iterations) {
+        LinkedHashMap<String, Object> perStep = new LinkedHashMap<>();
+        long start = TimeSource.NANO_TIME.getTimeNs();
+        suggestions = PolicyHelper.getSuggestions(config, simCloudManager);
+        System.err.println("-- step " + loop + ", " + suggestions.size() + " suggestions.");
+        long end = TimeSource.NANO_TIME.getTimeNs();
+        System.err.println("   - calculated in " + TimeUnit.NANOSECONDS.toMillis(end - start) + " ms (real time ≈ simulated time)");
+        if (suggestions.isEmpty()) {
+          break;
+        }
+        SnapshotCloudManager snapshotCloudManager = new SnapshotCloudManager(simCloudManager, config);
+        if (saveDir != null) {
+          File target = new File(saveDir, "step" + loop + "_start");
+          snapshotCloudManager.saveSnapshot(target, true, redact);
+        }
+        if (verbose) {
+          Map<String, Object> snapshot = snapshotCloudManager.getSnapshot(false, redact);
+          snapshot.remove(SnapshotCloudManager.DISTRIB_STATE_KEY);
+          snapshot.remove(SnapshotCloudManager.MANAGER_STATE_KEY);
+          perStep.put("snapshotStart", snapshot);
+        }
+        intermediate.put("step" + loop, perStep);
+        int unresolvedCount = 0;
+        start = TimeSource.NANO_TIME.getTimeNs();
+        List<Map<String, Object>> perStepOps = new ArrayList<>(suggestions.size());
+        if (withSuggestions) {
+          perStep.put("suggestions", suggestions);
+          perStep.put("opDetails", perStepOps);
+        }
+        for (Suggester.SuggestionInfo suggestion : suggestions) {
+          SolrRequest<?> operation = suggestion.getOperation();
+          if (operation == null) {
+            unresolvedCount++;
+            if (suggestion.getViolation() == null) {
+              System.err.println("   - ignoring suggestion without violation and without operation: " + suggestion);
+            }
+            continue;
+          }
+          SolrParams params = operation.getParams();
+          if (operation instanceof V2Request) {
+            params = SimUtils.v2AdminRequestToV1Params((V2Request)operation);
+          }
+          Map<String, Object> paramsMap = new LinkedHashMap<>();
+          params.toMap(paramsMap);
+          ReplicaInfo info = simCloudManager.getSimClusterStateProvider().simGetReplicaInfo(
+              params.get(CollectionAdminParams.COLLECTION), params.get("replica"));
+          if (info == null) {
+            System.err.println("Could not find ReplicaInfo for params: " + params);
+          } else if (verbose) {
+            paramsMap.put("replicaInfo", info);
+          } else if (info.getVariable(Variable.Type.CORE_IDX.tagName) != null) {
+            paramsMap.put(Variable.Type.CORE_IDX.tagName, info.getVariable(Variable.Type.CORE_IDX.tagName));
+          }
+          if (withSuggestions) {
+            perStepOps.add(paramsMap);
+          }
+          try {
+            simCloudManager.request(operation);
+          } catch (Exception e) {
+            System.err.println("Aborting - error executing suggestion " + suggestion + ": " + e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("suggestion", suggestion);
+            error.put("replicaInfo", info);
+            error.put("exception", e);
+            perStep.put("error", error);
+            break;
+          }
+        }
+        end = TimeSource.NANO_TIME.getTimeNs();
+        long realTime = TimeUnit.NANOSECONDS.toMillis(end - start);
+        long simTime = realTime * SPEED;
+        System.err.println("   - executed in " + realTime + " ms (real time), " + simTime + " ms (simulated time)");
+        if (unresolvedCount == suggestions.size()) {
+          System.err.println("--- aborting simulation, only unresolved violations remain");
+          break;
+        }
+        if (withStats) {
+          perStep.put("statsExecutionStop", SimUtils.calculateStats(simCloudManager, config, verbose));
+        }
+        snapshotCloudManager = new SnapshotCloudManager(simCloudManager, config);
+        if (saveDir != null) {
+          File target = new File(saveDir, "step" + loop + "_stop");
+          snapshotCloudManager.saveSnapshot(target, true, redact);
+        }
+        if (verbose) {
+          Map<String, Object> snapshot = snapshotCloudManager.getSnapshot(false, redact);
+          snapshot.remove(SnapshotCloudManager.DISTRIB_STATE_KEY);
+          snapshot.remove(SnapshotCloudManager.MANAGER_STATE_KEY);
+          perStep.put("snapshotStop", snapshot);
+        }
+        loop++;
+      }
+      if (loop == iterations && !suggestions.isEmpty()) {
+        System.err.println("### Failed to apply all suggestions in " + iterations + " steps. Remaining suggestions: " + suggestions + "\n");
+      }
+      results.put("finalState", prepareResults(simCloudManager, config, withClusterState, withStats,
+          withSuggestions, withSortedNodes, withDiagnostics));
+    }
+  }
+
   /**
    * Get the status of a Solr server.
    */
   public static class StatusTool extends ToolBase {
 
-    public StatusTool() { this(CLIO.getOutStream()); }
+    public StatusTool() { this(System.out); }
     public StatusTool(PrintStream stdout) { super(stdout); }
 
     public String getName() {
@@ -889,7 +1279,7 @@ public class SolrCLI implements CLIO {
           }
           if (checkCommunicationError(exc)) {
             // this is not actually an error from the tool as it's ok if Solr is not online.
-            CLIO.err("Solr at "+solrUrl+" not online.");
+            System.err.println("Solr at "+solrUrl+" not online.");
           } else {
             throw new Exception("Failed to get system information from " + solrUrl + " due to: "+exc);
           }
@@ -991,7 +1381,7 @@ public class SolrCLI implements CLIO {
    */
   public static class ApiTool extends ToolBase {
 
-    public ApiTool() { this(CLIO.getOutStream()); }
+    public ApiTool() { this(System.out); }
     public ApiTool(PrintStream stdout) { super(stdout); }
 
     public String getName() {
@@ -1028,17 +1418,19 @@ public class SolrCLI implements CLIO {
   private static final long MS_IN_HOUR = MS_IN_MIN * 60L;
   private static final long MS_IN_DAY = MS_IN_HOUR * 24L;
 
-  @VisibleForTesting
-  static final String uptime(long uptimeMs) {
+  private static final String uptime(long uptimeMs) {
     if (uptimeMs <= 0L) return "?";
 
-    long numDays = (uptimeMs >= MS_IN_DAY) ? (uptimeMs / MS_IN_DAY) : 0L;
+    long numDays = (uptimeMs >= MS_IN_DAY)
+        ? (long) Math.floor(uptimeMs / MS_IN_DAY) : 0L;
     long rem = uptimeMs - (numDays * MS_IN_DAY);
-    long numHours = (rem >= MS_IN_HOUR) ?  (rem / MS_IN_HOUR) : 0L;
+    long numHours = (rem >= MS_IN_HOUR)
+        ? (long) Math.floor(rem / MS_IN_HOUR) : 0L;
     rem = rem - (numHours * MS_IN_HOUR);
-    long numMinutes = (rem >= MS_IN_MIN) ? (rem / MS_IN_MIN) : 0L;
+    long numMinutes = (rem >= MS_IN_MIN)
+        ? (long) Math.floor(rem / MS_IN_MIN) : 0L;
     rem = rem - (numMinutes * MS_IN_MIN);
-    long numSeconds = Math.round(rem / 1000.0);
+    long numSeconds = Math.round(rem / 1000);
     return String.format(Locale.ROOT, "%d days, %d hours, %d minutes, %d seconds", numDays,
         numHours, numMinutes, numSeconds);
   }
@@ -1174,7 +1566,7 @@ public class SolrCLI implements CLIO {
    */
   public static class HealthcheckTool extends SolrCloudTool {
 
-    public HealthcheckTool() { this(CLIO.getOutStream()); }
+    public HealthcheckTool() { this(System.out); }
     public HealthcheckTool(PrintStream stdout) { super(stdout); }
 
     @Override
@@ -1336,6 +1728,12 @@ public class SolrCLI implements CLIO {
           .required(false)
           .desc("Number of copies of each document across the collection (replicas per shard); default is 1")
           .build(),
+      Option.builder("maxShardsPerNode")
+          .argName("#")
+          .hasArg()
+          .required(false)
+          .desc("Maximum number of shards per Solr node; default is determined based on the number of shards, replication factor, and live nodes.")
+          .build(),
       Option.builder("confdir")
           .argName("NAME")
           .hasArg()
@@ -1475,7 +1873,7 @@ public class SolrCLI implements CLIO {
   public static class CreateCollectionTool extends ToolBase {
 
     public CreateCollectionTool() {
-      this(CLIO.getOutStream());
+      this(System.out);
     }
 
     public CreateCollectionTool(PrintStream stdout) {
@@ -1526,6 +1924,11 @@ public class SolrCLI implements CLIO {
       // build a URL to create the collection
       int numShards = optionAsInt(cli, "shards", 1);
       int replicationFactor = optionAsInt(cli, "replicationFactor", 1);
+      int maxShardsPerNode = -1;
+
+      if (cli.hasOption("maxShardsPerNode")) {
+        maxShardsPerNode = Integer.parseInt(cli.getOptionValue("maxShardsPerNode"));
+      }
 
       String confname = cli.getOptionValue("confname");
       String confdir = cli.getOptionValue("confdir");
@@ -1561,11 +1964,12 @@ public class SolrCLI implements CLIO {
       // doesn't seem to exist ... try to create
       String createCollectionUrl =
           String.format(Locale.ROOT,
-              "%s/admin/collections?action=CREATE&name=%s&numShards=%d&replicationFactor=%d",
+              "%s/admin/collections?action=CREATE&name=%s&numShards=%d&replicationFactor=%d&maxShardsPerNode=%d",
               baseUrl,
               collectionName,
               numShards,
-              replicationFactor);
+              replicationFactor,
+              maxShardsPerNode);
       if (confname != null && !"".equals(confname.trim())) {
         createCollectionUrl = createCollectionUrl + String.format(Locale.ROOT, "&collection.configName=%s", confname);
       }
@@ -1601,7 +2005,7 @@ public class SolrCLI implements CLIO {
 
   public static class CreateCoreTool extends ToolBase {
 
-    public CreateCoreTool() { this(CLIO.getOutStream()); }
+    public CreateCoreTool() { this(System.out); }
     public CreateCoreTool(PrintStream stdout) { super(stdout); }
 
     public String getName() {
@@ -1667,7 +2071,7 @@ public class SolrCLI implements CLIO {
 
       String systemInfoUrl = solrUrl+"admin/info/system";
       CloseableHttpClient httpClient = getHttpClient();
-      String coreRootDirectory = null; //usually same as solr home, but not always
+      String solrHome = null;
       try {
         Map<String,Object> systemInfo = getJson(httpClient, systemInfoUrl, 2, true);
         if ("solrcloud".equals(systemInfo.get("mode"))) {
@@ -1676,11 +2080,9 @@ public class SolrCLI implements CLIO {
         }
 
         // convert raw JSON into user-friendly output
-        coreRootDirectory = (String)systemInfo.get("core_root");
-
-        //Fall back to solr_home, in case we are running against older server that does not return the property
-        if (coreRootDirectory == null)  coreRootDirectory = (String)systemInfo.get("solr_home");
-        if (coreRootDirectory == null)  coreRootDirectory = configsetsDir.getParentFile().getAbsolutePath();
+        solrHome = (String)systemInfo.get("solr_home");
+        if (solrHome == null)
+          solrHome = configsetsDir.getParentFile().getAbsolutePath();
 
       } finally {
         closeHttpClient(httpClient);
@@ -1692,7 +2094,7 @@ public class SolrCLI implements CLIO {
             "' already exists!\nChecked core existence using Core API command:\n"+coreStatusUrl);
       }
 
-      File coreInstanceDir = new File(coreRootDirectory, coreName);
+      File coreInstanceDir = new File(solrHome, coreName);
       File confDir = new File(configSetDir,"conf");
       if (!coreInstanceDir.isDirectory()) {
         coreInstanceDir.mkdirs();
@@ -1742,7 +2144,7 @@ public class SolrCLI implements CLIO {
 
   public static class CreateTool extends ToolBase {
 
-    public CreateTool() { this(CLIO.getOutStream()); }
+    public CreateTool() { this(System.out); }
     public CreateTool(PrintStream stdout) { super(stdout); }
 
     public String getName() {
@@ -1781,7 +2183,7 @@ public class SolrCLI implements CLIO {
   public static class ConfigSetUploadTool extends ToolBase {
 
     public ConfigSetUploadTool() {
-      this(CLIO.getOutStream());
+      this(System.out);
     }
 
     public ConfigSetUploadTool(PrintStream stdout) {
@@ -1844,7 +2246,7 @@ public class SolrCLI implements CLIO {
 
         zkClient.upConfig(confPath, confName);
       } catch (Exception e) {
-        log.error("Could not complete upconfig operation for reason: ", e);
+        log.error("Could not complete upconfig operation for reason: {}", e.getMessage());
         throw (e);
       }
     }
@@ -1853,7 +2255,7 @@ public class SolrCLI implements CLIO {
   public static class ConfigSetDownloadTool extends ToolBase {
 
     public ConfigSetDownloadTool() {
-      this(CLIO.getOutStream());
+      this(System.out);
     }
 
     public ConfigSetDownloadTool(PrintStream stdout) {
@@ -1917,7 +2319,7 @@ public class SolrCLI implements CLIO {
 
         zkClient.downConfig(confName, configSetPath);
       } catch (Exception e) {
-        log.error("Could not complete downconfig operation for reason: ", e);
+        log.error("Could not complete downconfig operation for reason: {}", e.getMessage());
         throw (e);
       }
 
@@ -1928,7 +2330,7 @@ public class SolrCLI implements CLIO {
   public static class ZkRmTool extends ToolBase {
 
     public ZkRmTool() {
-      this(CLIO.getOutStream());
+      this(System.out);
     }
 
     public ZkRmTool(PrintStream stdout) {
@@ -1993,7 +2395,7 @@ public class SolrCLI implements CLIO {
             " recurse: " + Boolean.toString(recurse));
         zkClient.clean(znode);
       } catch (Exception e) {
-        log.error("Could not complete rm operation for reason: ", e);
+        log.error("Could not complete rm operation for reason: {}", e.getMessage());
         throw (e);
       }
 
@@ -2004,7 +2406,7 @@ public class SolrCLI implements CLIO {
   public static class ZkLsTool extends ToolBase {
 
     public ZkLsTool() {
-      this(CLIO.getOutStream());
+      this(System.out);
     }
 
     public ZkLsTool(PrintStream stdout) {
@@ -2061,7 +2463,7 @@ public class SolrCLI implements CLIO {
             " recurse: " + Boolean.toString(recurse), cli);
         stdout.print(zkClient.listZnode(znode, recurse));
       } catch (Exception e) {
-        log.error("Could not complete ls operation for reason: ", e);
+        log.error("Could not complete ls operation for reason: {}", e.getMessage());
         throw (e);
       }
     }
@@ -2071,7 +2473,7 @@ public class SolrCLI implements CLIO {
   public static class ZkMkrootTool extends ToolBase {
 
     public ZkMkrootTool() {
-      this(CLIO.getOutStream());
+      this(System.out);
     }
 
     public ZkMkrootTool(PrintStream stdout) {
@@ -2120,7 +2522,7 @@ public class SolrCLI implements CLIO {
         echo("Creating Zookeeper path " + znode + " on ZooKeeper at " + zkHost);
         zkClient.makePath(znode, true);
       } catch (Exception e) {
-        log.error("Could not complete mkroot operation for reason: ", e);
+        log.error("Could not complete mkroot operation for reason: {}", e.getMessage());
         throw (e);
       }
     }
@@ -2132,7 +2534,7 @@ public class SolrCLI implements CLIO {
   public static class ZkCpTool extends ToolBase {
 
     public ZkCpTool() {
-      this(CLIO.getOutStream());
+      this(System.out);
     }
 
     public ZkCpTool(PrintStream stdout) {
@@ -2211,7 +2613,7 @@ public class SolrCLI implements CLIO {
         }
         zkClient.zkTransfer(srcName, srcIsZk, dstName, dstIsZk, recurse);
       } catch (Exception e) {
-        log.error("Could not complete the zk operation for reason: ", e);
+        log.error("Could not complete the zk operation for reason: {}", e.getMessage());
         throw (e);
       }
     }
@@ -2221,7 +2623,7 @@ public class SolrCLI implements CLIO {
   public static class ZkMvTool extends ToolBase {
 
     public ZkMvTool() {
-      this(CLIO.getOutStream());
+      this(System.out);
     }
 
     public ZkMvTool(PrintStream stdout) {
@@ -2289,7 +2691,7 @@ public class SolrCLI implements CLIO {
         echo("Moving Znode " + source + " to " + dest + " on ZooKeeper at " + zkHost);
         zkClient.moveZnode(source, dest);
       } catch (Exception e) {
-        log.error("Could not complete mv operation for reason: ", e);
+        log.error("Could not complete mv operation for reason: {}", e.getMessage());
         throw (e);
       }
 
@@ -2300,7 +2702,7 @@ public class SolrCLI implements CLIO {
 
   public static class DeleteTool extends ToolBase {
 
-    public DeleteTool() { this(CLIO.getOutStream()); }
+    public DeleteTool() { this(System.out); }
     public DeleteTool(PrintStream stdout) { super(stdout); }
 
     public String getName() {
@@ -2483,7 +2885,7 @@ public class SolrCLI implements CLIO {
    */
   public static class ConfigTool extends ToolBase {
 
-    public ConfigTool() { this(CLIO.getOutStream()); }
+    public ConfigTool() { this(System.out); }
     public ConfigTool(PrintStream stdout) { super(stdout); }
 
     public String getName() {
@@ -2617,7 +3019,7 @@ public class SolrCLI implements CLIO {
      * Default constructor used by the framework when running as a command-line application.
      */
     public RunExampleTool() {
-      this(null, System.in, CLIO.getOutStream());
+      this(null, System.in, System.out);
     }
 
     public RunExampleTool(Executor executor, InputStream userInput, PrintStream stdout) {
@@ -2640,7 +3042,7 @@ public class SolrCLI implements CLIO {
               .argName("NAME")
               .hasArg()
               .required(true)
-              .desc("Name of the example to launch, one of: cloud, techproducts, schemaless")
+              .desc("Name of the example to launch, one of: cloud, techproducts, dih, schemaless")
               .longOpt("example")
               .build(),
           Option.builder("script")
@@ -2756,12 +3158,32 @@ public class SolrCLI implements CLIO {
       String exampleType = cli.getOptionValue("example");
       if ("cloud".equals(exampleType)) {
         runCloudExample(cli);
+      } else if ("dih".equals(exampleType)) {
+        runDihExample(cli);
       } else if ("techproducts".equals(exampleType) || "schemaless".equals(exampleType)) {
         runExample(cli, exampleType);
       } else {
         throw new IllegalArgumentException("Unsupported example "+exampleType+
-            "! Please choose one of: cloud, schemaless, or techproducts");
+            "! Please choose one of: cloud, dih, schemaless, or techproducts");
       }
+    }
+
+    protected void runDihExample(CommandLine cli) throws Exception {
+      File dihSolrHome = new File(exampleDir, "example-DIH/solr");
+      if (!dihSolrHome.isDirectory()) {
+        dihSolrHome = new File(serverDir.getParentFile(), "example/example-DIH/solr");
+        if (!dihSolrHome.isDirectory()) {
+          throw new Exception("example/example-DIH/solr directory not found");
+        }
+      }
+
+      boolean isCloudMode = cli.hasOption('c');
+      String zkHost = cli.getOptionValue('z');
+      int port = Integer.parseInt(cli.getOptionValue('p', "8983"));
+
+      Map<String,Object> nodeStatus = startSolr(dihSolrHome, isCloudMode, cli, port, zkHost, 30);
+      String solrUrl = (String)nodeStatus.get("baseUrl");
+      echo("\nSolr dih example launched successfully. Direct your Web browser to "+solrUrl+" to visit the Solr Admin UI");
     }
 
     protected void runExample(CommandLine cli, String exampleName) throws Exception {
@@ -2951,7 +3373,7 @@ public class SolrCLI implements CLIO {
       try {
         configTool.runTool(processCommandLineArgs(joinCommonAndToolOptions(configTool.getOptions()), configArgs));
       } catch (Exception exc) {
-        CLIO.err("Failed to update '"+propName+"' property due to: "+exc);
+        System.err.println("Failed to update '"+propName+"' property due to: "+exc);
       }
     }
 
@@ -2981,7 +3403,7 @@ public class SolrCLI implements CLIO {
               " seconds! Please check the solr.log for each node to look for errors.\n");
         }
       } catch (Exception exc) {
-        CLIO.err("Failed to see if "+numNodes+" joined the SolrCloud cluster due to: "+exc);
+        System.err.println("Failed to see if "+numNodes+" joined the SolrCloud cluster due to: "+exc);
       } finally {
         if (cloudClient != null) {
           try {
@@ -3368,7 +3790,7 @@ public class SolrCLI implements CLIO {
     private static boolean useExitCode = false;
     private static Optional<Long> timeoutMs = Optional.empty();
 
-    public AssertTool() { this(CLIO.getOutStream()); }
+    public AssertTool() { this(System.out); }
     public AssertTool(PrintStream stdout) { super(stdout); }
 
     public String getName() {
@@ -3457,10 +3879,9 @@ public class SolrCLI implements CLIO {
         // since this is a CLI, spare the user the stacktrace
         String excMsg = exc.getMessage();
         if (excMsg != null) {
+          System.err.println("\nERROR: " + excMsg + "\n");
           if (verbose) {
-            CLIO.err("\nERROR: " + exc + "\n");
-          } else {
-            CLIO.err("\nERROR: " + excMsg + "\n");
+            exc.printStackTrace(System.err);
           }
           toolExitStatus = 100; // Exit >= 100 means error, else means number of tests that failed
         } else {
@@ -3688,7 +4109,7 @@ public class SolrCLI implements CLIO {
 
   // Authentication tool
   public static class AuthTool extends ToolBase {
-    public AuthTool() { this(CLIO.getOutStream()); }
+    public AuthTool() { this(System.out); }
     public AuthTool(PrintStream stdout) { super(stdout); }
 
     public String getName() {
@@ -3787,7 +4208,7 @@ public class SolrCLI implements CLIO {
         case "kerberos":
           return handleKerberos(cli);
         default:
-          CLIO.out("Only type=basicAuth or kerberos supported at the moment.");
+          System.out.println("Only type=basicAuth or kerberos supported at the moment.");
           exit(1);
       }
       return 1;
@@ -3812,13 +4233,13 @@ public class SolrCLI implements CLIO {
             try {
               zkHost = getZkHost(cli);
             } catch (Exception ex) {
-              CLIO.out("Unable to access ZooKeeper. Please add the following security.json to ZooKeeper (in case of SolrCloud):\n"
+              System.out.println("Unable to access ZooKeeper. Please add the following security.json to ZooKeeper (in case of SolrCloud):\n"
                   + securityJson + "\n");
               zkInaccessible = true;
             }
             if (zkHost == null) {
               if (zkInaccessible == false) {
-                CLIO.out("Unable to access ZooKeeper. Please add the following security.json to ZooKeeper (in case of SolrCloud):\n"
+                System.out.println("Unable to access ZooKeeper. Please add the following security.json to ZooKeeper (in case of SolrCloud):\n"
                     + securityJson + "\n");
                 zkInaccessible = true;
               }
@@ -3830,14 +4251,14 @@ public class SolrCLI implements CLIO {
                 if (zkClient.exists("/security.json", true)) {
                   byte oldSecurityBytes[] = zkClient.getData("/security.json", null, null, true);
                   if (!"{}".equals(new String(oldSecurityBytes, StandardCharsets.UTF_8).trim())) {
-                    CLIO.out("Security is already enabled. You can disable it with 'bin/solr auth disable'. Existing security.json: \n"
+                    System.out.println("Security is already enabled. You can disable it with 'bin/solr auth disable'. Existing security.json: \n"
                         + new String(oldSecurityBytes, StandardCharsets.UTF_8));
                     exit(1);
                   }
                 }
               } catch (Exception ex) {
                 if (zkInaccessible == false) {
-                  CLIO.out("Unable to access ZooKeeper. Please add the following security.json to ZooKeeper (in case of SolrCloud):\n"
+                  System.out.println("Unable to access ZooKeeper. Please add the following security.json to ZooKeeper (in case of SolrCloud):\n"
                       + securityJson + "\n");
                   zkInaccessible = true;
                 }
@@ -3852,7 +4273,7 @@ public class SolrCLI implements CLIO {
                 zkClient.setData("/security.json", securityJson.getBytes(StandardCharsets.UTF_8), true);
               } catch (Exception ex) {
                 if (zkInaccessible == false) {
-                  CLIO.out("Unable to access ZooKeeper. Please add the following security.json to ZooKeeper (in case of SolrCloud):\n"
+                  System.out.println("Unable to access ZooKeeper. Please add the following security.json to ZooKeeper (in case of SolrCloud):\n"
                       + securityJson);
                   zkInaccessible = true;
                 }
@@ -3870,7 +4291,7 @@ public class SolrCLI implements CLIO {
           String solrIncludeFilename = cli.getOptionValue("solrIncludeFile");
           File includeFile = new File(solrIncludeFilename);
           if (includeFile.exists() == false || includeFile.canWrite() == false) {
-            CLIO.out("Solr include file " + solrIncludeFilename + " doesn't exist or is not writeable.");
+            System.out.println("Solr include file " + solrIncludeFilename + " doesn't exist or is not writeable.");
             printAuthEnablingInstructions(config);
             System.exit(0);
           }
@@ -3898,8 +4319,8 @@ public class SolrCLI implements CLIO {
           solrIncludeFilename = cli.getOptionValue("solrIncludeFile");
           includeFile = new File(solrIncludeFilename);
           if (!includeFile.exists() || !includeFile.canWrite()) {
-            CLIO.out("Solr include file " + solrIncludeFilename + " doesn't exist or is not writeable.");
-            CLIO.out("Security has been disabled. Please remove any SOLR_AUTH_TYPE or SOLR_AUTHENTICATION_OPTS configuration from solr.in.sh/solr.in.cmd.\n");
+            System.out.println("Solr include file " + solrIncludeFilename + " doesn't exist or is not writeable.");
+            System.out.println("Security has been disabled. Please remove any SOLR_AUTH_TYPE or SOLR_AUTHENTICATION_OPTS configuration from solr.in.sh/solr.in.cmd.\n");
             System.exit(0);
           }
 
@@ -3908,11 +4329,11 @@ public class SolrCLI implements CLIO {
           return 0;
 
         default:
-          CLIO.out("Valid auth commands are: enable, disable");
+          System.out.println("Valid auth commands are: enable, disable");
           exit(1);
       }
 
-      CLIO.out("Options not understood.");
+      System.out.println("Options not understood.");
       new HelpFormatter().printHelp("bin/solr auth <enable|disable> [OPTIONS]", getToolOptions(this));
       return 1;
     }
@@ -3923,11 +4344,11 @@ public class SolrCLI implements CLIO {
       switch (cmd) {
         case "enable":
           if (!prompt && !cli.hasOption("credentials")) {
-            CLIO.out("Option -credentials or -prompt is required with enable.");
+            System.out.println("Option -credentials or -prompt is required with enable.");
             new HelpFormatter().printHelp("bin/solr auth <enable|disable> [OPTIONS]", getToolOptions(this));
             exit(1);
           } else if (!prompt && (cli.getOptionValue("credentials") == null || !cli.getOptionValue("credentials").contains(":"))) {
-            CLIO.out("Option -credentials is not in correct format.");
+            System.out.println("Option -credentials is not in correct format.");
             new HelpFormatter().printHelp("bin/solr auth <enable|disable> [OPTIONS]", getToolOptions(this));
             exit(1);
           }
@@ -3939,17 +4360,17 @@ public class SolrCLI implements CLIO {
               zkHost = getZkHost(cli);
             } catch (Exception ex) {
               if (cli.hasOption("zkHost")) {
-                CLIO.out("Couldn't get ZooKeeper host. Please make sure that ZooKeeper is running and the correct zkHost has been passed in.");
+                System.out.println("Couldn't get ZooKeeper host. Please make sure that ZooKeeper is running and the correct zkHost has been passed in.");
               } else {
-                CLIO.out("Couldn't get ZooKeeper host. Please make sure Solr is running in cloud mode, or a zkHost has been passed in.");
+                System.out.println("Couldn't get ZooKeeper host. Please make sure Solr is running in cloud mode, or a zkHost has been passed in.");
               }
               exit(1);
             }
             if (zkHost == null) {
               if (cli.hasOption("zkHost")) {
-                CLIO.out("Couldn't get ZooKeeper host. Please make sure that ZooKeeper is running and the correct zkHost has been passed in.");
+                System.out.println("Couldn't get ZooKeeper host. Please make sure that ZooKeeper is running and the correct zkHost has been passed in.");
               } else {
-                CLIO.out("Couldn't get ZooKeeper host. Please make sure Solr is running in cloud mode, or a zkHost has been passed in.");
+                System.out.println("Couldn't get ZooKeeper host. Please make sure Solr is running in cloud mode, or a zkHost has been passed in.");
               }
               exit(1);
             }
@@ -3959,7 +4380,7 @@ public class SolrCLI implements CLIO {
               if (zkClient.exists("/security.json", true)) {
                 byte oldSecurityBytes[] = zkClient.getData("/security.json", null, null, true);
                 if (!"{}".equals(new String(oldSecurityBytes, StandardCharsets.UTF_8).trim())) {
-                  CLIO.out("Security is already enabled. You can disable it with 'bin/solr auth disable'. Existing security.json: \n"
+                  System.out.println("Security is already enabled. You can disable it with 'bin/solr auth disable'. Existing security.json: \n"
                       + new String(oldSecurityBytes, StandardCharsets.UTF_8));
                   exit(1);
                 }
@@ -3978,7 +4399,7 @@ public class SolrCLI implements CLIO {
             password = new String(console.readPassword("Enter password: "));
           }
 
-          boolean blockUnknown = Boolean.valueOf(cli.getOptionValue("blockUnknown", "true"));
+          boolean blockUnknown = Boolean.valueOf(cli.getOptionValue("blockUnknown", "false"));
 
           String securityJson = "{" +
               "\n  \"authentication\":{" +
@@ -4007,7 +4428,7 @@ public class SolrCLI implements CLIO {
           String solrIncludeFilename = cli.getOptionValue("solrIncludeFile");
           File includeFile = new File(solrIncludeFilename);
           if (includeFile.exists() == false || includeFile.canWrite() == false) {
-            CLIO.out("Solr include file " + solrIncludeFilename + " doesn't exist or is not writeable.");
+            System.out.println("Solr include file " + solrIncludeFilename + " doesn't exist or is not writeable.");
             printAuthEnablingInstructions(username, password);
             System.exit(0);
           }
@@ -4015,7 +4436,7 @@ public class SolrCLI implements CLIO {
           File basicAuthConfFile = new File(authConfDir + File.separator + "basicAuth.conf");
 
           if (basicAuthConfFile.getParentFile().canWrite() == false) {
-            CLIO.out("Cannot write to file: " + basicAuthConfFile.getAbsolutePath());
+            System.out.println("Cannot write to file: " + basicAuthConfFile.getAbsolutePath());
             printAuthEnablingInstructions(username, password);
             System.exit(0);
           }
@@ -4048,8 +4469,8 @@ public class SolrCLI implements CLIO {
           solrIncludeFilename = cli.getOptionValue("solrIncludeFile");
           includeFile = new File(solrIncludeFilename);
           if (!includeFile.exists() || !includeFile.canWrite()) {
-            CLIO.out("Solr include file " + solrIncludeFilename + " doesn't exist or is not writeable.");
-            CLIO.out("Security has been disabled. Please remove any SOLR_AUTH_TYPE or SOLR_AUTHENTICATION_OPTS configuration from solr.in.sh/solr.in.cmd.\n");
+            System.out.println("Solr include file " + solrIncludeFilename + " doesn't exist or is not writeable.");
+            System.out.println("Security has been disabled. Please remove any SOLR_AUTH_TYPE or SOLR_AUTHENTICATION_OPTS configuration from solr.in.sh/solr.in.cmd.\n");
             System.exit(0);
           }
 
@@ -4058,33 +4479,33 @@ public class SolrCLI implements CLIO {
           return 0;
 
         default:
-          CLIO.out("Valid auth commands are: enable, disable");
+          System.out.println("Valid auth commands are: enable, disable");
           exit(1);
       }
 
-      CLIO.out("Options not understood.");
+      System.out.println("Options not understood.");
       new HelpFormatter().printHelp("bin/solr auth <enable|disable> [OPTIONS]", getToolOptions(this));
       return 1;
     }
     private void printAuthEnablingInstructions(String username, String password) {
       if (SystemUtils.IS_OS_WINDOWS) {
-        CLIO.out("\nAdd the following lines to the solr.in.cmd file so that the solr.cmd script can use subsequently.\n");
-        CLIO.out("set SOLR_AUTH_TYPE=basic\n"
+        System.out.println("\nAdd the following lines to the solr.in.cmd file so that the solr.cmd script can use subsequently.\n");
+        System.out.println("set SOLR_AUTH_TYPE=basic\n"
             + "set SOLR_AUTHENTICATION_OPTS=\"-Dbasicauth=" + username + ":" + password + "\"\n");
       } else {
-        CLIO.out("\nAdd the following lines to the solr.in.sh file so that the ./solr script can use subsequently.\n");
-        CLIO.out("SOLR_AUTH_TYPE=\"basic\"\n"
+        System.out.println("\nAdd the following lines to the solr.in.sh file so that the ./solr script can use subsequently.\n");
+        System.out.println("SOLR_AUTH_TYPE=\"basic\"\n"
             + "SOLR_AUTHENTICATION_OPTS=\"-Dbasicauth=" + username + ":" + password + "\"\n");
       }
     }
     private void printAuthEnablingInstructions(String kerberosConfig) {
       if (SystemUtils.IS_OS_WINDOWS) {
-        CLIO.out("\nAdd the following lines to the solr.in.cmd file so that the solr.cmd script can use subsequently.\n");
-        CLIO.out("set SOLR_AUTH_TYPE=kerberos\n"
+        System.out.println("\nAdd the following lines to the solr.in.cmd file so that the solr.cmd script can use subsequently.\n");
+        System.out.println("set SOLR_AUTH_TYPE=kerberos\n"
             + "set SOLR_AUTHENTICATION_OPTS=\"" + kerberosConfig + "\"\n");
       } else {
-        CLIO.out("\nAdd the following lines to the solr.in.sh file so that the ./solr script can use subsequently.\n");
-        CLIO.out("SOLR_AUTH_TYPE=\"kerberos\"\n"
+        System.out.println("\nAdd the following lines to the solr.in.sh file so that the ./solr script can use subsequently.\n");
+        System.out.println("SOLR_AUTH_TYPE=\"kerberos\"\n"
             + "SOLR_AUTHENTICATION_OPTS=\"" + kerberosConfig + "\"\n");
       }
     }
@@ -4168,7 +4589,7 @@ public class SolrCLI implements CLIO {
     private Path logsPath;
     private boolean beQuiet;
 
-    public UtilsTool() { this(CLIO.getOutStream()); }
+    public UtilsTool() { this(System.out); }
     public UtilsTool(PrintStream stdout) { super(stdout); }
 
     public String getName() {

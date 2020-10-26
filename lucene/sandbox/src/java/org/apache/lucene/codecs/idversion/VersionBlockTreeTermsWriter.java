@@ -34,8 +34,8 @@ import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.store.ByteBuffersDataOutput;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.RAMOutputStream;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
@@ -43,12 +43,12 @@ import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.IntsRefBuilder;
 import org.apache.lucene.util.StringHelper;
-import org.apache.lucene.util.fst.FSTCompiler;
+import org.apache.lucene.util.fst.Builder;
 import org.apache.lucene.util.fst.ByteSequenceOutputs;
 import org.apache.lucene.util.fst.BytesRefFSTEnum;
 import org.apache.lucene.util.fst.FST;
-import org.apache.lucene.util.fst.PairOutputs;
 import org.apache.lucene.util.fst.PairOutputs.Pair;
+import org.apache.lucene.util.fst.PairOutputs;
 import org.apache.lucene.util.fst.PositiveIntOutputs;
 import org.apache.lucene.util.fst.Util;
 
@@ -160,6 +160,7 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
   }
 
   private final List<FieldMetaData> fields = new ArrayList<>();
+  private final String segment;
 
   /** Create a new writer.  The number of items (terms or
    *  sub-blocks) per block will aim to be between
@@ -173,6 +174,8 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
     throws IOException
   {
     BlockTreeTermsWriter.validateSettings(minItemsInBlock, maxItemsInBlock);
+    segment = state.segmentInfo.name;
+
     maxDoc = state.segmentInfo.maxDoc();
 
     final String termsFileName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, TERMS_EXTENSION);
@@ -321,12 +324,12 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
       return "BLOCK: " + brToString(prefix);
     }
 
-    public void compileIndex(List<PendingBlock> blocks, ByteBuffersDataOutput scratchBytes, IntsRefBuilder scratchIntsRef) throws IOException {
+    public void compileIndex(List<PendingBlock> blocks, RAMOutputStream scratchBytes, IntsRefBuilder scratchIntsRef) throws IOException {
 
       assert (isFloor && blocks.size() > 1) || (isFloor == false && blocks.size() == 1): "isFloor=" + isFloor + " blocks=" + blocks;
       assert this == blocks.get(0);
 
-      assert scratchBytes.size() == 0;
+      assert scratchBytes.getFilePointer() == 0;
 
       long maxVersionIndex = maxVersion;
 
@@ -348,28 +351,30 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
         }
       }
 
-      final FSTCompiler<Pair<BytesRef,Long>> fstCompiler = new FSTCompiler.Builder<>(FST.INPUT_TYPE.BYTE1, FST_OUTPUTS)
-          .shouldShareNonSingletonNodes(false).build();
+      final Builder<Pair<BytesRef,Long>> indexBuilder = new Builder<>(FST.INPUT_TYPE.BYTE1,
+                                                                      0, 0, true, false, Integer.MAX_VALUE,
+                                                                      FST_OUTPUTS, true, 15);
       //if (DEBUG) {
       //  System.out.println("  compile index for prefix=" + prefix);
       //}
       //indexBuilder.DEBUG = false;
-      final byte[] bytes = scratchBytes.toArrayCopy();
+      final byte[] bytes = new byte[(int) scratchBytes.getFilePointer()];
       assert bytes.length > 0;
-      fstCompiler.add(Util.toIntsRef(prefix, scratchIntsRef), FST_OUTPUTS.newPair(new BytesRef(bytes, 0, bytes.length), Long.MAX_VALUE - maxVersionIndex));
+      scratchBytes.writeTo(bytes, 0);
+      indexBuilder.add(Util.toIntsRef(prefix, scratchIntsRef), FST_OUTPUTS.newPair(new BytesRef(bytes, 0, bytes.length), Long.MAX_VALUE - maxVersionIndex));
       scratchBytes.reset();
 
       // Copy over index for all sub-blocks
       for(PendingBlock block : blocks) {
         if (block.subIndices != null) {
           for(FST<Pair<BytesRef,Long>> subIndex : block.subIndices) {
-            append(fstCompiler, subIndex, scratchIntsRef);
+            append(indexBuilder, subIndex, scratchIntsRef);
           }
           block.subIndices = null;
         }
       }
 
-      index = fstCompiler.compile();
+      index = indexBuilder.finish();
 
       assert subIndices == null;
 
@@ -384,19 +389,19 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
     // TODO: maybe we could add bulk-add method to
     // Builder?  Takes FST and unions it w/ current
     // FST.
-    private void append(FSTCompiler<Pair<BytesRef,Long>> fstCompiler, FST<Pair<BytesRef,Long>> subIndex, IntsRefBuilder scratchIntsRef) throws IOException {
+    private void append(Builder<Pair<BytesRef,Long>> builder, FST<Pair<BytesRef,Long>> subIndex, IntsRefBuilder scratchIntsRef) throws IOException {
       final BytesRefFSTEnum<Pair<BytesRef,Long>> subIndexEnum = new BytesRefFSTEnum<>(subIndex);
       BytesRefFSTEnum.InputOutput<Pair<BytesRef,Long>> indexEnt;
       while((indexEnt = subIndexEnum.next()) != null) {
         //if (DEBUG) {
         //  System.out.println("      add sub=" + indexEnt.input + " " + indexEnt.input + " output=" + indexEnt.output);
         //}
-        fstCompiler.add(Util.toIntsRef(indexEnt.input, scratchIntsRef), indexEnt.output);
+        builder.add(Util.toIntsRef(indexEnt.input, scratchIntsRef), indexEnt.output);
       }
     }
   }
 
-  private final ByteBuffersDataOutput scratchBytes = ByteBuffersDataOutput.newResettableInstance();
+  private final RAMOutputStream scratchBytes = new RAMOutputStream();
   private final IntsRefBuilder scratchIntsRef = new IntsRefBuilder();
 
   class TermsWriter {
@@ -582,7 +587,7 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
           assert ent.isTerm: "i=" + i;
 
           PendingTerm term = (PendingTerm) ent;
-          assert StringHelper.startsWith(term.termBytes, prefix): term + " prefix=" + prefix;
+          assert StringHelper.startsWith(term.termBytes, prefix): "term.term=" + term.termBytes + " prefix=" + prefix;
           BlockTermState state = term.state;
           maxVersionInBlock = Math.max(maxVersionInBlock, ((IDVersionTermState) state).idVersion);
           final int suffix = term.termBytes.length - prefixLength;
@@ -610,7 +615,7 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
           PendingEntry ent = pending.get(i);
           if (ent.isTerm) {
             PendingTerm term = (PendingTerm) ent;
-            assert StringHelper.startsWith(term.termBytes, prefix): term + " prefix=" + prefix;
+            assert StringHelper.startsWith(term.termBytes, prefix): "term.term=" + term.termBytes + " prefix=" + prefix;
             BlockTermState state = term.state;
             maxVersionInBlock = Math.max(maxVersionInBlock, ((IDVersionTermState) state).idVersion);
             final int suffix = term.termBytes.length - prefixLength;
@@ -678,13 +683,13 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
       // search on lookup
 
       // Write suffixes byte[] blob to terms dict output:
-      out.writeVInt((int) (suffixWriter.size() << 1) | (isLeafBlock ? 1:0));
-      suffixWriter.copyTo(out);
+      out.writeVInt((int) (suffixWriter.getFilePointer() << 1) | (isLeafBlock ? 1:0));
+      suffixWriter.writeTo(out);
       suffixWriter.reset();
 
       // Write term meta data byte[] blob
-      out.writeVInt((int) metaWriter.size());
-      metaWriter.copyTo(out);
+      out.writeVInt((int) metaWriter.getFilePointer());
+      metaWriter.writeTo(out);
       metaWriter.reset();
 
       // if (DEBUG) {
@@ -807,8 +812,8 @@ public final class VersionBlockTreeTermsWriter extends FieldsConsumer {
       }
     }
 
-    private final ByteBuffersDataOutput suffixWriter = ByteBuffersDataOutput.newResettableInstance();
-    private final ByteBuffersDataOutput metaWriter = ByteBuffersDataOutput.newResettableInstance();
+    private final RAMOutputStream suffixWriter = new RAMOutputStream();
+    private final RAMOutputStream metaWriter = new RAMOutputStream();
   }
 
   private boolean closed;

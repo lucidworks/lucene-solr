@@ -367,7 +367,7 @@ public class StandardQueryParser extends QueryParserHelper implements CommonQuer
     FuzzyConfig fuzzyConfig = getQueryConfigHandler().get(ConfigurationKeys.FUZZY_CONFIG);
     
     if (fuzzyConfig == null) {
-      return FuzzyQuery.defaultMaxEdits;
+      return FuzzyQuery.defaultMinSimilarity;
     } else {
       return fuzzyConfig.getMinSimilarity();
     }
@@ -406,7 +406,7 @@ public class StandardQueryParser extends QueryParserHelper implements CommonQuer
   
   /**
    * Set the minimum similarity for fuzzy queries. Default is defined on
-   * {@link FuzzyQuery#defaultMaxEdits}.
+   * {@link FuzzyQuery#defaultMinSimilarity}.
    */
   @Override
   public void setFuzzyMinSim(float fuzzyMinSim) {

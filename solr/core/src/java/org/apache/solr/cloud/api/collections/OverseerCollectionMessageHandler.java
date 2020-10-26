@@ -38,10 +38,10 @@ import org.apache.solr.client.solrj.SolrResponse;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.cloud.DistribStateManager;
 import org.apache.solr.client.solrj.cloud.SolrCloudManager;
-import org.apache.solr.client.solrj.cloud.AlreadyExistsException;
-import org.apache.solr.client.solrj.cloud.BadVersionException;
-import org.apache.solr.client.solrj.impl.BaseHttpSolrClient;
+import org.apache.solr.client.solrj.cloud.autoscaling.AlreadyExistsException;
+import org.apache.solr.client.solrj.cloud.autoscaling.BadVersionException;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
+import org.apache.solr.client.solrj.impl.HttpSolrClient.RemoteSolrException;
 import org.apache.solr.client.solrj.request.AbstractUpdateRequest;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.response.UpdateResponse;
@@ -50,6 +50,7 @@ import org.apache.solr.cloud.Overseer;
 import org.apache.solr.cloud.OverseerMessageHandler;
 import org.apache.solr.cloud.OverseerNodePrioritizer;
 import org.apache.solr.cloud.OverseerSolrResponse;
+import org.apache.solr.cloud.OverseerTaskProcessor;
 import org.apache.solr.cloud.Stats;
 import org.apache.solr.cloud.ZkController;
 import org.apache.solr.cloud.overseer.OverseerAction;
@@ -91,6 +92,8 @@ import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.solr.client.solrj.cloud.autoscaling.Policy.POLICY;
+import static org.apache.solr.common.cloud.DocCollection.SNITCH;
 import static org.apache.solr.common.cloud.ZkStateReader.BASE_URL_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.COLLECTION_PROP;
 import static org.apache.solr.common.cloud.ZkStateReader.CORE_NAME_PROP;
@@ -144,6 +147,11 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
       ZkStateReader.NRT_REPLICAS, "1",
       ZkStateReader.TLOG_REPLICAS, "0",
       ZkStateReader.PULL_REPLICAS, "0",
+      ZkStateReader.MAX_SHARDS_PER_NODE, "1",
+      ZkStateReader.AUTO_ADD_REPLICAS, "false",
+      DocCollection.RULE, null,
+      POLICY, null,
+      SNITCH, null,
       WITH_COLLECTION, null,
       COLOCATED_WITH, null));
 
@@ -212,6 +220,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
         .put(MOCK_COLL_TASK, this::mockOperation)
         .put(MOCK_SHARD_TASK, this::mockOperation)
         .put(MOCK_REPLICA_TASK, this::mockOperation)
+        .put(MIGRATESTATEFORMAT, this::migrateStateFormat)
         .put(CREATESHARD, new CreateShardCmd(this))
         .put(MIGRATE, new MigrateCmd(this))
         .put(CREATE, new CreateCollectionCmd(this))
@@ -232,6 +241,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
         .put(ADDREPLICA, new AddReplicaCmd(this))
         .put(MOVEREPLICA, new MoveReplicaCmd(this))
         .put(REINDEXCOLLECTION, new ReindexCollectionCmd(this))
+        .put(UTILIZENODE, new UtilizeNodeCmd(this))
         .put(RENAME, new RenameCmd(this))
         .build()
     ;
@@ -329,7 +339,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
     sreq.shards = new String[] {baseUrl};
     sreq.actualShards = sreq.shards;
     sreq.params = params;
-    ShardHandler shardHandler = shardHandlerFactory.getShardHandler();
+    ShardHandler shardHandler = shardHandlerFactory.getShardHandler(overseer.getCoreContainer().getUpdateShardHandler().getDefaultHttpClient());
     shardHandler.submit(sreq, baseUrl, sreq.params);
   }
 
@@ -459,6 +469,37 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
         log.error(msg);
       }
     }
+  }
+
+
+  //TODO should we not remove in the next release ?
+  @SuppressWarnings({"unchecked"})
+  private void migrateStateFormat(ClusterState state, ZkNodeProps message, @SuppressWarnings({"rawtypes"})NamedList results) throws Exception {
+    final String collectionName = message.getStr(COLLECTION_PROP);
+
+    boolean firstLoop = true;
+    // wait for a while until the state format changes
+    TimeOut timeout = new TimeOut(30, TimeUnit.SECONDS, timeSource);
+    while (! timeout.hasTimedOut()) {
+      DocCollection collection = zkStateReader.getClusterState().getCollection(collectionName);
+      if (collection == null) {
+        throw new SolrException(ErrorCode.BAD_REQUEST, "Collection: " + collectionName + " not found");
+      }
+      if (collection.getStateFormat() == 2) {
+        // Done.
+        results.add("success", new SimpleOrderedMap<>());
+        return;
+      }
+
+      if (firstLoop) {
+        // Actually queue the migration command.
+        firstLoop = false;
+        ZkNodeProps m = new ZkNodeProps(Overseer.QUEUE_OPERATION, MIGRATESTATEFORMAT.toLower(), COLLECTION_PROP, collectionName);
+        overseer.offerStateUpdate(Utils.toJSON(m));
+      }
+      timeout.sleep(100);
+    }
+    throw new SolrException(ErrorCode.SERVER_ERROR, "Could not migrate state format for collection: " + collectionName);
   }
 
   @SuppressWarnings({"unchecked"})
@@ -591,7 +632,8 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
     if(configName != null) {
       validateConfigOrThrowSolrException(configName);
 
-      createConfNode(cloudManager.getDistribStateManager(), configName, collectionName);
+      boolean isLegacyCloud =  Overseer.isLegacy(zkStateReader);
+      createConfNode(cloudManager.getDistribStateManager(), configName, collectionName, isLegacyCloud);
       reloadCollection(null, new ZkNodeProps(NAME, collectionName), results);
     }
 
@@ -687,7 +729,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
    * This doesn't validate the config (path) itself and is just responsible for creating the confNode.
    * That check should be done before the config node is created.
    */
-  public static void createConfNode(DistribStateManager stateManager, String configName, String coll) throws IOException, AlreadyExistsException, BadVersionException, KeeperException, InterruptedException {
+  public static void createConfNode(DistribStateManager stateManager, String configName, String coll, boolean isLegacyCloud) throws IOException, AlreadyExistsException, BadVersionException, KeeperException, InterruptedException {
 
     if (configName != null) {
       String collDir = ZkStateReader.COLLECTIONS_ZKNODE + "/" + coll;
@@ -699,7 +741,11 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
         stateManager.makePath(collDir, data, CreateMode.PERSISTENT, false);
       }
     } else {
-      throw new SolrException(ErrorCode.BAD_REQUEST,"Unable to get config name");
+      if(isLegacyCloud){
+        log.warn("Could not obtain config name");
+      } else {
+        throw new SolrException(ErrorCode.BAD_REQUEST,"Unable to get config name");
+      }
     }
   }
 
@@ -717,7 +763,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
     log.info("Executing Collection Cmd={}, asyncId={}", params, asyncId);
     String collectionName = message.getStr(NAME);
     @SuppressWarnings("deprecation")
-    ShardHandler shardHandler = shardHandlerFactory.getShardHandler();
+    ShardHandler shardHandler = shardHandlerFactory.getShardHandler(overseer.getCoreContainer().getUpdateShardHandler().getDefaultHttpClient());
 
     ClusterState clusterState = zkStateReader.getClusterState();
     DocCollection coll = clusterState.getCollection(collectionName);
@@ -743,8 +789,8 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
   @SuppressWarnings("deprecation")
   private void processResponse(NamedList<Object> results, Throwable e, String nodeName, SolrResponse solrResponse, String shard, Set<String> okayExceptions) {
     String rootThrowable = null;
-    if (e instanceof BaseHttpSolrClient.RemoteSolrException) {
-      rootThrowable = ((BaseHttpSolrClient.RemoteSolrException) e).getRootThrowable();
+    if (e instanceof RemoteSolrException) {
+      rootThrowable = ((RemoteSolrException) e).getRootThrowable();
     }
 
     if (e != null && (rootThrowable == null || !okayExceptions.contains(rootThrowable))) {
@@ -858,31 +904,26 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
   }
 
 
-  // -1 is not a possible batchSessionId so -1 will force initialization of lockSession
   private long sessionId = -1;
   private LockTree.Session lockSession;
 
-  /**
-   * Grabs an exclusive lock for this particular task.
-   * @return <code>null</code> if locking is not possible. When locking is not possible, it will remain
-   * impossible for the passed value of <code>batchSessionId</code>. This is to guarantee tasks are executed
-   * in queue order (and a later task is not run earlier than its turn just because it happens that a lock got released).
-   */
   @Override
-  public Lock lockTask(ZkNodeProps message, long batchSessionId) {
-    if (sessionId != batchSessionId) {
+  public Lock lockTask(ZkNodeProps message, OverseerTaskProcessor.TaskBatch taskBatch) {
+    if (lockSession == null || sessionId != taskBatch.getId()) {
       //this is always called in the same thread.
       //Each batch is supposed to have a new taskBatch
       //So if taskBatch changes we must create a new Session
+      // also check if the running tasks are empty. If yes, clear lockTree
+      // this will ensure that locks are not 'leaked'
+      if(taskBatch.getRunningTasks() == 0) lockTree.clear();
       lockSession = lockTree.getSession();
-      sessionId = batchSessionId;
     }
-
     return lockSession.lock(getCollectionAction(message.getStr(Overseer.QUEUE_OPERATION)),
         Arrays.asList(
             getTaskKey(message),
             message.getStr(ZkStateReader.SHARD_ID_PROP),
             message.getStr(ZkStateReader.REPLICA_PROP))
+
     );
   }
 

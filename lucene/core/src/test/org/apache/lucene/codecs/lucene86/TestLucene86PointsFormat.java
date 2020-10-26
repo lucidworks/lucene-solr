@@ -39,8 +39,9 @@ import org.apache.lucene.index.PointValues.Relation;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.FutureArrays;
 import org.apache.lucene.util.TestUtil;
-import org.apache.lucene.util.bkd.BKDConfig;
+import org.apache.lucene.util.bkd.BKDWriter;
 
 public class TestLucene86PointsFormat extends BasePointsFormatTestCase {
 
@@ -49,7 +50,7 @@ public class TestLucene86PointsFormat extends BasePointsFormatTestCase {
   
   public TestLucene86PointsFormat() {
     // standard issue
-    Codec defaultCodec = TestUtil.getDefaultCodec();
+    Codec defaultCodec = new Lucene86Codec();
     if (random().nextBoolean()) {
       // randomize parameters
       maxPointsInLeafNode = TestUtil.nextInt(random(), 50, 500);
@@ -78,7 +79,7 @@ public class TestLucene86PointsFormat extends BasePointsFormatTestCase {
     } else {
       // standard issue
       codec = defaultCodec;
-      maxPointsInLeafNode = BKDConfig.DEFAULT_MAX_POINTS_IN_LEAF_NODE;
+      maxPointsInLeafNode = BKDWriter.DEFAULT_MAX_POINTS_IN_LEAF_NODE;
     }
   }
 
@@ -173,8 +174,8 @@ public class TestLucene86PointsFormat extends BasePointsFormatTestCase {
 
       @Override
       public Relation compare(byte[] minPackedValue, byte[] maxPackedValue) {
-        if (Arrays.compareUnsigned(uniquePointValue, 0, 3, maxPackedValue, 0, 3) > 0 ||
-            Arrays.compareUnsigned(uniquePointValue, 0, 3, minPackedValue, 0, 3) < 0) {
+        if (FutureArrays.compareUnsigned(uniquePointValue, 0, 3, maxPackedValue, 0, 3) > 0 ||
+            FutureArrays.compareUnsigned(uniquePointValue, 0, 3, minPackedValue, 0, 3) < 0) {
           return Relation.CELL_OUTSIDE_QUERY;
         }
         return Relation.CELL_CROSSES_QUERY;
@@ -186,7 +187,7 @@ public class TestLucene86PointsFormat extends BasePointsFormatTestCase {
     final long pointCount = points.estimatePointCount(onePointMatchVisitor);
     assertTrue(""+pointCount,
         pointCount == (maxPointsInLeafNode + 1) / 2 || // common case
-        pointCount == 2*((maxPointsInLeafNode + 1) / 2)); // if the point is a split value
+            pointCount == 2*((maxPointsInLeafNode + 1) / 2)); // if the point is a split value
 
     final long docCount = points.estimateDocCount(onePointMatchVisitor);
 
@@ -282,8 +283,8 @@ public class TestLucene86PointsFormat extends BasePointsFormatTestCase {
       @Override
       public Relation compare(byte[] minPackedValue, byte[] maxPackedValue) {
         for (int dim = 0; dim < 2; ++dim) {
-          if (Arrays.compareUnsigned(uniquePointValue[dim], 0, 3, maxPackedValue, dim * 3, dim * 3 + 3) > 0 ||
-              Arrays.compareUnsigned(uniquePointValue[dim], 0, 3, minPackedValue, dim * 3, dim * 3 + 3) < 0) {
+          if (FutureArrays.compareUnsigned(uniquePointValue[dim], 0, 3, maxPackedValue, dim * 3, dim * 3 + 3) > 0 ||
+              FutureArrays.compareUnsigned(uniquePointValue[dim], 0, 3, minPackedValue, dim * 3, dim * 3 + 3) < 0) {
             return Relation.CELL_OUTSIDE_QUERY;
           }
         }

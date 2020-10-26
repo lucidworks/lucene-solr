@@ -16,7 +16,7 @@
  */
  
 /** 
- * Provides RESTful API access to managed resources in the Solr Schema.
+ * Provides RESTful API access to the Solr Schema using Restlet.
  */
 package org.apache.solr.rest.schema;
 

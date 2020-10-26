@@ -29,13 +29,12 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.document.Document;
@@ -64,6 +63,7 @@ import org.apache.lucene.util.NumericUtils;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentBase;
 import org.apache.solr.common.SolrException;
+import org.apache.solr.common.util.ByteArrayUtf8CharSequence;
 import org.apache.solr.core.SolrConfig;
 import org.apache.solr.response.DocsStreamer;
 import org.apache.solr.response.ResultContext;
@@ -309,15 +309,14 @@ public class SolrDocumentFetcher {
 
 
     @Override
-    public void stringField(FieldInfo fieldInfo, String value) throws IOException {
+    public void stringField(FieldInfo fieldInfo, byte[] value) throws IOException {
       Predicate<String> readAsBytes = ResultContext.READASBYTES.get();
       if (readAsBytes != null && readAsBytes.test(fieldInfo.name)) {
         final FieldType ft = new FieldType(TextField.TYPE_STORED);
         ft.setStoreTermVectors(fieldInfo.hasVectors());
         ft.setOmitNorms(fieldInfo.omitsNorms());
         ft.setIndexOptions(fieldInfo.getIndexOptions());
-        Objects.requireNonNull(value, "String value should not be null");
-        doc.add(new StoredField(fieldInfo.name, value, ft));
+        doc.add(new StoredField(fieldInfo.name, new ByteArrayUtf8CharSequence(value, 0, value.length), ft));
       } else {
         super.stringField(fieldInfo, value);
       }
@@ -381,9 +380,9 @@ public class SolrDocumentFetcher {
       }
       // must be String
       if (f instanceof LargeLazyField) { // optimization to avoid premature string conversion
-        visitor.stringField(info, toStringUnwrapIfPossible(((LargeLazyField) f).readBytes()));
+        visitor.stringField(info, toByteArrayUnwrapIfPossible(((LargeLazyField) f).readBytes()));
       } else {
-        visitor.stringField(info, f.stringValue());
+        visitor.stringField(info, f.stringValue().getBytes(StandardCharsets.UTF_8));
       }
     }
   }
@@ -393,14 +392,6 @@ public class SolrDocumentFetcher {
       return bytesRef.bytes;
     } else {
       return Arrays.copyOfRange(bytesRef.bytes, bytesRef.offset, bytesRef.offset + bytesRef.length);
-    }
-  }
-
-  private String toStringUnwrapIfPossible(BytesRef bytesRef) {
-    if (bytesRef.offset == 0 && bytesRef.bytes.length == bytesRef.length) {
-      return new String(bytesRef.bytes, StandardCharsets.UTF_8);
-    } else {
-      return new String(bytesRef.bytes, bytesRef.offset, bytesRef.offset + bytesRef.length, StandardCharsets.UTF_8);
     }
   }
 
@@ -468,10 +459,9 @@ public class SolrDocumentFetcher {
           }
 
           @Override
-          public void stringField(FieldInfo fieldInfo, String value) throws IOException {
-            Objects.requireNonNull(value, "String value should not be null");
-            bytesRef.bytes = value.getBytes(StandardCharsets.UTF_8);
-            bytesRef.length = value.length();
+          public void stringField(FieldInfo fieldInfo, byte[] value) throws IOException {
+            bytesRef.bytes = value;
+            bytesRef.length = value.length;
             done = true;
           }
 

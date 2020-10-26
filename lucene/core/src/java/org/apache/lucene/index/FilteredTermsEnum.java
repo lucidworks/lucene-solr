@@ -73,7 +73,7 @@ public abstract class FilteredTermsEnum extends TermsEnum {
    * Creates a filtered {@link TermsEnum} on a terms enum.
    * @param tenum the terms enumeration to filter.
    */
-  protected FilteredTermsEnum(final TermsEnum tenum) {
+  public FilteredTermsEnum(final TermsEnum tenum) {
     this(tenum, true);
   }
 
@@ -81,7 +81,7 @@ public abstract class FilteredTermsEnum extends TermsEnum {
    * Creates a filtered {@link TermsEnum} on a terms enum.
    * @param tenum the terms enumeration to filter.
    */
-  protected FilteredTermsEnum(final TermsEnum tenum, final boolean startWithSeek) {
+  public FilteredTermsEnum(final TermsEnum tenum, final boolean startWithSeek) {
     assert tenum != null;
     this.tenum = tenum;
     doSeek = startWithSeek;

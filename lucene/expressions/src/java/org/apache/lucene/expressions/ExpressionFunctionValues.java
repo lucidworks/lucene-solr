@@ -24,9 +24,6 @@ import org.apache.lucene.search.DoubleValues;
 class ExpressionFunctionValues extends DoubleValues {
   final Expression expression;
   final DoubleValues[] functionValues;
-  double currentValue;
-  int currentDoc = -1;
-  boolean computed;
   
   ExpressionFunctionValues(Expression expression, DoubleValues[] functionValues) {
     if (expression == null) {
@@ -41,23 +38,14 @@ class ExpressionFunctionValues extends DoubleValues {
 
   @Override
   public boolean advanceExact(int doc) throws IOException {
-    if (currentDoc == doc) {
-      return true;
-    }
     for (DoubleValues v : functionValues) {
       v.advanceExact(doc);
     }
-    currentDoc = doc;
-    computed = false;
     return true;
   }
   
   @Override
   public double doubleValue() {
-    if (computed == false) {
-      currentValue = expression.evaluate(functionValues);
-      computed = true;
-    }
-    return currentValue;
+    return expression.evaluate(functionValues);
   }
 }

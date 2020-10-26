@@ -19,6 +19,7 @@ package org.apache.lucene.search;
 import java.util.Arrays;
 import java.util.Comparator;
 
+import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.LatLonDocValuesField;
@@ -245,7 +246,7 @@ public class TestNearest extends LuceneTestCase {
 
   private IndexWriterConfig getIndexWriterConfig() {
     IndexWriterConfig iwc = newIndexWriterConfig();
-    iwc.setCodec(TestUtil.getDefaultCodec());
+    iwc.setCodec(Codec.forName("Lucene86"));
     return iwc;
   }
 }

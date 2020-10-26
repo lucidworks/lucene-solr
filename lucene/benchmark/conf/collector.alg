@@ -25,7 +25,7 @@ collector.class=coll:topScoreDocOrdered:topScoreDocUnordered:topScoreDocOrdered:
 
 analyzer=org.apache.lucene.analysis.core.WhitespaceAnalyzer
 directory=FSDirectory
-#directory=ByteBuffersDirectory
+#directory=RamDirectory
 
 doc.stored=true
 doc.tokenized=true

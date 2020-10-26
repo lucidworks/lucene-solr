@@ -24,14 +24,14 @@ import java.util.Map;
 import com.ibm.icu.text.FilteredNormalizer2;
 import com.ibm.icu.text.Normalizer2;
 import com.ibm.icu.text.UnicodeSet;
-import org.apache.lucene.analysis.CharFilterFactory;
+import org.apache.lucene.analysis.util.CharFilterFactory;
 
 /**
  * Factory for {@link ICUNormalizer2CharFilter}
  * <p>
  * Supports the following attributes:
  * <ul>
- *   <li>form: A <a href="http://unicode.org/reports/tr15/">Unicode Normalization Form</a>,
+ *   <li>name: A <a href="http://unicode.org/reports/tr15/">Unicode Normalization Form</a>, 
  *       one of 'nfc','nfkc', 'nfkc_cf'. Default is nfkc_cf.
  *   <li>mode: Either 'compose' or 'decompose'. Default is compose. Use "decompose" with nfc
  *       or nfkc, to get nfd or nfkd, respectively.
@@ -55,10 +55,10 @@ public class ICUNormalizer2CharFilterFactory extends CharFilterFactory {
   /** Creates a new ICUNormalizer2CharFilterFactory */
   public ICUNormalizer2CharFilterFactory(Map<String,String> args) {
     super(args);
-    String form = get(args, "form", "nfkc_cf");
+    String name = get(args, "name", "nfkc_cf");
     String mode = get(args, "mode", Arrays.asList("compose", "decompose"), "compose");
     Normalizer2 normalizer = Normalizer2.getInstance
-        (null, form, "compose".equals(mode) ? Normalizer2.Mode.COMPOSE : Normalizer2.Mode.DECOMPOSE);
+        (null, name, "compose".equals(mode) ? Normalizer2.Mode.COMPOSE : Normalizer2.Mode.DECOMPOSE);
     
     String filter = get(args, "filter");
     if (filter != null) {
@@ -72,11 +72,6 @@ public class ICUNormalizer2CharFilterFactory extends CharFilterFactory {
       throw new IllegalArgumentException("Unknown parameters: " + args);
     }
     this.normalizer = normalizer;
-  }
-
-  /** Default ctor for compatibility with SPI */
-  public ICUNormalizer2CharFilterFactory() {
-    throw defaultCtorException();
   }
 
   @Override

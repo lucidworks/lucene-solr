@@ -34,6 +34,8 @@ import org.apache.lucene.search.TermQuery;
 import static org.apache.lucene.util.RamUsageEstimator.COMPRESSED_REFS_ENABLED;
 import static org.apache.lucene.util.RamUsageEstimator.HOTSPOT_BEAN_CLASS;
 import static org.apache.lucene.util.RamUsageEstimator.JVM_IS_HOTSPOT_64BIT;
+import static org.apache.lucene.util.RamUsageEstimator.LONG_CACHE_MAX_VALUE;
+import static org.apache.lucene.util.RamUsageEstimator.LONG_CACHE_MIN_VALUE;
 import static org.apache.lucene.util.RamUsageEstimator.LONG_SIZE;
 import static org.apache.lucene.util.RamUsageEstimator.MANAGEMENT_FACTORY_CLASS;
 import static org.apache.lucene.util.RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
@@ -218,6 +220,8 @@ public class TestRamUsageEstimator extends LuceneTestCase {
     System.out.println("NUM_BYTES_OBJECT_HEADER = " + NUM_BYTES_OBJECT_HEADER);
     System.out.println("NUM_BYTES_ARRAY_HEADER = " + NUM_BYTES_ARRAY_HEADER);
     System.out.println("LONG_SIZE = " + LONG_SIZE);
+    System.out.println("LONG_CACHE_MIN_VALUE = " + LONG_CACHE_MIN_VALUE);
+    System.out.println("LONG_CACHE_MAX_VALUE = " + LONG_CACHE_MAX_VALUE);
   }
 
   @SuppressWarnings("unused")

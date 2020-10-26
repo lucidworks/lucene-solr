@@ -31,7 +31,7 @@ import org.apache.lucene.search.IndexSearcher;
 /**
  * A {@link DoubleValuesSource} which evaluates a {@link Expression} given the context of an {@link Bindings}.
  */
-class ExpressionValueSource extends DoubleValuesSource {
+final class ExpressionValueSource extends DoubleValuesSource {
   final DoubleValuesSource[] variables;
   final Expression expression;
   final boolean needsScores;
@@ -69,8 +69,7 @@ class ExpressionValueSource extends DoubleValuesSource {
       if (values == null) {
         values = variables[i].getValues(readerContext, scores);
         if (values == null) {
-          throw new RuntimeException("Unrecognized variable (" + externalName + ") referenced in expression (" +
-              expression.sourceText + ").");
+          throw new RuntimeException("Internal error. External (" + externalName + ") does not exist.");
         }
         valuesCache.put(externalName, values);
       }
@@ -80,7 +79,7 @@ class ExpressionValueSource extends DoubleValuesSource {
     return new ExpressionFunctionValues(expression, externalValues);
   }
 
-  static DoubleValues zeroWhenUnpositioned(DoubleValues in) {
+  private static DoubleValues zeroWhenUnpositioned(DoubleValues in) {
     return new DoubleValues() {
 
       boolean positioned = false;

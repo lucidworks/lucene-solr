@@ -22,11 +22,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.invoke.MethodHandles;
 import java.nio.file.Path;
+import java.util.Properties;
 
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.cloud.ZkConfigManager;
 import org.apache.solr.common.cloud.ZooKeeperException;
-import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.SolrResourceLoader;
 import org.apache.solr.core.SolrResourceNotFoundException;
 import org.apache.solr.schema.ZkIndexSchemaReader;
@@ -55,8 +55,8 @@ public class ZkSolrResourceLoader extends SolrResourceLoader {
    * the "lib/" directory in the specified instance directory.
    */
   public ZkSolrResourceLoader(Path instanceDir, String configSet, ClassLoader parent,
-                              ZkController zooKeeperController) {
-    super(instanceDir, parent);
+                              Properties coreProperties, ZkController zooKeeperController) {
+    super(instanceDir, parent, coreProperties);
     this.zkController = zooKeeperController;
     configSetZkPath = ZkConfigManager.CONFIGS_ZKNODE + "/" + configSet;
   }
@@ -158,9 +158,4 @@ public class ZkSolrResourceLoader extends SolrResourceLoader {
   }
 
   public ZkIndexSchemaReader getZkIndexSchemaReader() { return zkIndexSchemaReader; }
-
-  @Override
-  public CoreContainer getCoreContainer() {
-    return zkController.getCoreContainer();
-  }
 }

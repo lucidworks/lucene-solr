@@ -73,7 +73,7 @@ public class PathTrie<T> {
   // /a/b/c will be returned as ["a","b","c"]
   public static List<String> getPathSegments(String path) {
     if (path == null || path.isEmpty()) return emptyList();
-    List<String> parts = new ArrayList<>() {
+    List<String> parts = new ArrayList<String>() {
       @Override
       public boolean add(String s) {
         if (s == null || s.isEmpty()) return false;

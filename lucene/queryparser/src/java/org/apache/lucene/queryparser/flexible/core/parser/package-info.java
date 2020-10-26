@@ -20,7 +20,7 @@
  * 
  * <h2>Parser</h2>
  * <p>
- * The package <code>org.apache.lucene.queryparser.flexible.parser</code> contains interfaces
+ * The package <tt>org.apache.lucene.queryparser.flexible.parser</tt> contains interfaces
  * that should be implemented by the parsers.
  * 
  * Parsers produce QueryNode Trees from a string object.

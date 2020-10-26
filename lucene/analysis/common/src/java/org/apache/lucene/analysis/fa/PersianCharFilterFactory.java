@@ -20,7 +20,7 @@ package org.apache.lucene.analysis.fa;
 import java.io.Reader;
 import java.util.Map;
 
-import org.apache.lucene.analysis.CharFilterFactory;
+import org.apache.lucene.analysis.util.CharFilterFactory;
 
 /**
  * Factory for {@link PersianCharFilter}.
@@ -48,11 +48,6 @@ public class PersianCharFilterFactory extends CharFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public PersianCharFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public Reader create(Reader input) {
     return new PersianCharFilter(input);

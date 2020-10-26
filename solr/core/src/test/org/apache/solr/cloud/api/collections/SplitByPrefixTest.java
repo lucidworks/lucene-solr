@@ -154,6 +154,7 @@ public class SplitByPrefixTest extends SolrCloudTestCase {
 
     CollectionAdminRequest
         .createCollection(COLLECTION_NAME, "conf", 1, 1)
+        .setMaxShardsPerNode(100)
         .process(cluster.getSolrClient());
 
     cluster.waitForActiveCollection(COLLECTION_NAME, 1, 1);

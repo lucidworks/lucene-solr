@@ -16,7 +16,6 @@
  */
 package org.apache.solr.handler.component;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.regex.Pattern;
 
@@ -86,7 +85,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
 
   @Test
   public void testEmptyLower() throws Exception {
-    assertQ(req("indent","true", "qt","/terms",  "terms.fl","lowerfilt", "terms.upper","b")
+    assertQ(req("indent","true", "qt","/terms",  "terms","true", "terms.fl","lowerfilt", "terms.upper","b")
         ,"count(//lst[@name='lowerfilt']/*)=6"
         ,"//int[@name='a'] "
         ,"//int[@name='aa'] "
@@ -100,7 +99,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
 
   @Test
   public void testMultipleFields() throws Exception {
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
         "terms.fl","lowerfilt", "terms.upper","b",
         "terms.fl","standardfilt")
         ,"count(//lst[@name='lowerfilt']/*)=6"
@@ -111,13 +110,13 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
 
   @Test
   public void testUnlimitedRows() throws Exception {
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
         "terms.fl","lowerfilt",
         "terms.fl","standardfilt")
         ,"count(//lst[@name='lowerfilt']/*)=9"
         ,"count(//lst[@name='standardfilt']/*)=10"
     );
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
         "terms.fl","lowerfilt",
         "terms.fl","standardfilt",
         "terms.limit","-1")
@@ -130,7 +129,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
 
   @Test
   public void testPrefix() throws Exception {
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
         "terms.fl","lowerfilt", "terms.upper","b",
         "terms.fl","standardfilt",
         "terms.lower","aa", "terms.lower.incl","false", "terms.prefix","aa", "terms.upper","b", "terms.limit","50")
@@ -141,7 +140,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
 
   @Test
   public void testRegexp() throws Exception {
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
         "terms.fl","standardfilt",
         "terms.lower","a", "terms.lower.incl","false",
         "terms.upper","c", "terms.upper.incl","true",
@@ -155,20 +154,16 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
       ModifiableSolrParams params = new ModifiableSolrParams();
       params.add(TermsParams.TERMS_REGEXP_FLAG, "case_insensitive", "literal", "comments", "multiline", "unix_lines",
               "unicode_case", "dotall", "canon_eq");
-      try (TermsComponent termsComponent = new TermsComponent()) {
-        int flags = termsComponent.resolveRegexpFlags(params);
-        int expected = Pattern.CASE_INSENSITIVE | Pattern.LITERAL | Pattern.COMMENTS | Pattern.MULTILINE | Pattern.UNIX_LINES
-            | Pattern.UNICODE_CASE | Pattern.DOTALL | Pattern.CANON_EQ;
-        assertEquals(expected, flags);
-      } catch (IOException e) {
-        fail("Error closing TermsComponent");
-      }
+      int flags = new TermsComponent().resolveRegexpFlags(params);
+      int expected = Pattern.CASE_INSENSITIVE | Pattern.LITERAL | Pattern.COMMENTS | Pattern.MULTILINE | Pattern.UNIX_LINES
+              | Pattern.UNICODE_CASE | Pattern.DOTALL | Pattern.CANON_EQ;
+      assertEquals(expected, flags);
   }
 
   @Test
   public void testRegexpWithFlags() throws Exception {
     // TODO: there are no uppercase or mixed-case terms in the index!
-    assertQ(req("indent", "true", "qt", "/terms",
+    assertQ(req("indent", "true", "qt", "/terms", "terms", "true",
             "terms.fl", "standardfilt",
             "terms.lower", "a", "terms.lower.incl", "false",
             "terms.upper", "c", "terms.upper.incl", "true",
@@ -180,7 +175,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
 
   @Test
   public void testSortCount() throws Exception {
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
         "terms.fl","standardfilt",
         "terms.lower","s", "terms.lower.incl","false",
         "terms.prefix","s",
@@ -196,7 +191,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
   @Test
   public void testTermsList() throws Exception {
     //Terms list always returns in index order
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
             "terms.fl","standardfilt",
             "terms.list","spider,snake,a\\,b,shark,ddddd,bad")
         ,"count(//lst[@name='standardfilt']/*)=5"
@@ -209,7 +204,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
 
 
     //Test with numeric terms
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
             "terms.fl","foo_i",
             "terms.list","2,1")
         ,"count(//lst[@name='foo_i']/*)=2"
@@ -222,7 +217,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
   @Test
   public void testStats() throws Exception {
     //Terms list always returns in index order
-    assertQ(req("indent", "true", "qt", "/terms",
+    assertQ(req("indent", "true", "qt", "/terms", "terms", "true",
             "terms.fl", "standardfilt","terms.stats", "true",
             "terms.list", "spider,snake,shark,ddddd,bad")
         , "//lst[@name='indexstats']/long[1][@name='numDocs'][.='24']"
@@ -231,7 +226,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
 
   @Test
   public void testSortIndex() throws Exception {
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
         "terms.fl","standardfilt",
         "terms.lower","s", "terms.lower.incl","false",
         "terms.prefix","s",
@@ -245,7 +240,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
   
   @Test
   public void testPastUpper() throws Exception {
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
         "terms.fl","lowerfilt",
         //no upper bound, lower bound doesn't exist
         "terms.lower","d")
@@ -255,7 +250,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
 
   @Test
   public void testLowerExclusive() throws Exception {
-     assertQ(req("indent","true", "qt","/terms",
+     assertQ(req("indent","true", "qt","/terms",  "terms","true",
         "terms.fl","lowerfilt",
         "terms.lower","a", "terms.lower.incl","false",
         "terms.upper","b")
@@ -267,7 +262,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
         ,"//int[@name='abc'] "
     );
 
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
         "terms.fl","standardfilt",
         "terms.lower","cc", "terms.lower.incl","false",
         "terms.upper","d")
@@ -277,7 +272,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
 
   @Test
   public void test() throws Exception {
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
        "terms.fl","lowerfilt",
        "terms.lower","a",
        "terms.upper","b")
@@ -290,7 +285,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
        ,"//int[@name='abc'] "
     );
 
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
        "terms.fl","lowerfilt",
        "terms.lower","a",
        "terms.upper","b",
@@ -301,20 +296,20 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
        ,"//int[@name='aa']"
     );
 
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
        "terms.fl","foo_i")
        ,"//int[@name='1'][.='2']"
     );
 
     /* terms.raw only applies to indexed fields
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
        "terms.fl","foo_i", "terms.raw","true")
        ,"not(//int[@name='1'][.='2'])"
     );
     */
 
     // check something at the end of the index
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
        "terms.fl","zzz_i")
         ,"count(//lst[@name='zzz_i']/*)=0"
     );
@@ -322,7 +317,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
 
   @Test
   public void testMinMaxFreq() throws Exception {
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
        "terms.fl","lowerfilt",
        "terms.lower","a",
        "terms.mincount","2",
@@ -331,7 +326,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
        ,"count(//lst[@name='lowerfilt']/*)=1"
     );
 
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms",  "terms","true",
        "terms.fl","standardfilt",
        "terms.lower","d",
        "terms.mincount","2",
@@ -342,40 +337,11 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
   }
 
   @Test
-  public void testTermsWithJSON() throws Exception {
-    ModifiableSolrParams params = params(
-        "qt", "/terms", "terms.fl", "standardfilt", "terms.lower", "a",
-        "terms.sort", "index", "wt", "json"
-    );
-
-    assertJQ(req(params), "/terms/standardfilt/[0]==a", "/terms/standardfilt/[1]==1");
-
-    // enable terms.ttf
-    params.set("terms.ttf", "true");
-    assertJQ(req(params), "/terms/standardfilt/[0]==a", "/terms/standardfilt/[1]/df==1",
-        "/terms/standardfilt/[1]/ttf==1");
-
-    // test the response with terms.list and terms.ttf=false
-    params.set("terms.list", "spider,snake,shark");
-    params.remove("terms.ttf");
-    assertJQ(req(params), "/terms/standardfilt/[0]==shark", "/terms/standardfilt/[1]==2",
-        "/terms/standardfilt/[2]==snake", "/terms/standardfilt/[3]==3",
-        "/terms/standardfilt/[4]==spider", "/terms/standardfilt/[5]==1"
-    );
-    // with terms.list and terms.ttf=true
-    params.set("terms.ttf", "true");
-    assertJQ(req(params),
-        "/terms/standardfilt/[0]==shark", "/terms/standardfilt/[1]/df==2", "/terms/standardfilt/[1]/ttf==2",
-        "/terms/standardfilt/[2]==snake", "/terms/standardfilt/[3]/df==3", "/terms/standardfilt/[3]/ttf==3",
-        "/terms/standardfilt/[4]==spider", "/terms/standardfilt/[5]/df==1", "/terms/standardfilt/[5]/ttf==1"
-    );
-  }
-
-  @Test
   public void testDocFreqAndTotalTermFreq() throws Exception {
     SolrQueryRequest req = req(
         "indent","true",
         "qt", "/terms",
+        "terms", "true",
         "terms.fl", "standardfilt",
         "terms.ttf", "true",
         "terms.list", "snake,spider,shark,ddddd");
@@ -394,6 +360,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
     req = req(
         "indent","true",
         "qt", "/terms",
+        "terms", "true",
         "terms.fl", "standardfilt",
         "terms.ttf", "true",
         "terms.limit", "-1",
@@ -416,6 +383,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
     SolrQueryRequest req = req(
         "indent","true",
         "qt", "/terms",
+        "terms", "true",
         "terms.fl", "standardfilt",
         "terms.ttf", "true",
         "terms.list", "boo,snake");
@@ -430,6 +398,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
     SolrQueryRequest req = req(
         "indent","true",
         "qt", "/terms",
+        "terms", "true",
         "terms.fl", "lowerfilt",
         "terms.fl", "standardfilt",
         "terms.ttf", "true",
@@ -454,6 +423,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
     req = req(
         "indent","true",
         "qt", "/terms",
+        "terms", "true",
         "terms.fl", "lowerfilt",
         "terms.fl", "standardfilt",
         "terms.ttf", "true",
@@ -504,6 +474,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
 
     SolrQueryRequest req = req(
         "qt", "/terms",
+        "terms", "true",
         "terms.fl", "foo_pi");
     ;
     try {
@@ -582,7 +553,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
       }
       assert(i==nvals);
 
-      assertQ(req("indent","true", "qt","/terms",
+      assertQ(req("indent","true", "qt","/terms",  "terms","true",
           "terms.fl","foo_pi", "terms.sort","index", "terms.limit","2")
           ,"count(//lst[@name='foo_pi']/*)=2"
           ,"//lst[@name='foo_pi']/int[1][@name='" +val1+ "']"
@@ -631,7 +602,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
     assertU(adoc("id", Integer.toString(100102), "foo_pdt", dates[1]));
     assertU(commit());
 
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms", "terms","true",
         "terms.fl","foo_pdt", "terms.sort","count"),
         "count(//lst[@name='foo_pdt']/*)=2",
         "//lst[@name='foo_pdt']/int[1][@name='" + dates[1] + "'][.='51']",
@@ -642,7 +613,7 @@ public class TermsComponentTest extends SolrTestCaseJ4 {
     assertU(delQ("*:*"));
     assertU(commit());
 
-    assertQ(req("indent","true", "qt","/terms",
+    assertQ(req("indent","true", "qt","/terms", "terms","true",
         "terms.fl","foo_pdt", "terms.sort","count"),
         "count(//lst[@name='foo_pdt']/*)=0"
     );

@@ -19,6 +19,7 @@ package org.apache.lucene.luke.models.search;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import org.apache.lucene.queries.mlt.MoreLikeThis;
@@ -70,7 +71,7 @@ public final class MLTConfig {
   }
 
   private MLTConfig(Builder builder) {
-    this.fields = List.copyOf(builder.fields);
+    this.fields = Collections.unmodifiableList(builder.fields);
     this.maxDocFreq = builder.maxDocFreq;
     this.minDocFreq = builder.minDocFreq;
     this.minTermFreq = builder.minTermFreq;

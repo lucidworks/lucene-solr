@@ -40,9 +40,8 @@ import org.apache.lucene.spatial.prefix.tree.SpatialPrefixTree;
 import org.apache.lucene.spatial.query.SpatialArgs;
 import org.apache.lucene.spatial.query.SpatialArgsParser;
 import org.apache.lucene.spatial.query.SpatialOperation;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
-
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.LuceneTestCase;
 import org.locationtech.spatial4j.context.SpatialContext;
 import org.locationtech.spatial4j.distance.DistanceUtils;
@@ -99,7 +98,7 @@ public class SpatialExample extends LuceneTestCase {
 
     this.strategy = new RecursivePrefixTreeStrategy(grid, "myGeoField");
 
-    this.directory = new ByteBuffersDirectory();
+    this.directory = new RAMDirectory();
   }
 
   private void indexPoints() throws Exception {
@@ -108,14 +107,14 @@ public class SpatialExample extends LuceneTestCase {
 
     //Spatial4j is x-y order for arguments
     indexWriter.addDocument(newSampleDocument(
-        2, ctx.getShapeFactory().pointXY(-80.93, 33.77)));
+        2, ctx.makePoint(-80.93, 33.77)));
 
     //Spatial4j has a WKT parser which is also "x y" order
     indexWriter.addDocument(newSampleDocument(
         4, ctx.readShapeFromWkt("POINT(60.9289094 -50.7693246)")));
 
     indexWriter.addDocument(newSampleDocument(
-        20, ctx.getShapeFactory().pointXY(0.1,0.1), ctx.getShapeFactory().pointXY(0, 0)));
+        20, ctx.makePoint(0.1,0.1), ctx.makePoint(0, 0)));
 
     indexWriter.close();
   }
@@ -149,7 +148,7 @@ public class SpatialExample extends LuceneTestCase {
       //Search with circle
       //note: SpatialArgs can be parsed from a string
       SpatialArgs args = new SpatialArgs(SpatialOperation.Intersects,
-          ctx.getShapeFactory().circle(-80.0, 33.0, DistanceUtils.dist2Degrees(200, DistanceUtils.EARTH_MEAN_RADIUS_KM)));
+          ctx.makeCircle(-80.0, 33.0, DistanceUtils.dist2Degrees(200, DistanceUtils.EARTH_MEAN_RADIUS_KM)));
       Query query = strategy.makeQuery(args);
       TopDocs docs = indexSearcher.search(query, 10, idSort);
       assertDocMatchedIds(indexSearcher, docs, 2);
@@ -168,7 +167,7 @@ public class SpatialExample extends LuceneTestCase {
     }
     //--Match all, order by distance ascending
     {
-      Point pt = ctx.getShapeFactory().pointXY(60, -50);
+      Point pt = ctx.makePoint(60, -50);
       DoubleValuesSource valueSource = strategy.makeDistanceValueSource(pt, DistanceUtils.DEG_TO_KM);//the distance (in km)
       Sort distSort = new Sort(valueSource.getSortField(false)).rewrite(indexSearcher);//false=asc dist
       TopDocs docs = indexSearcher.search(new MatchAllDocsQuery(), 10, distSort);
@@ -183,7 +182,7 @@ public class SpatialExample extends LuceneTestCase {
     //demo arg parsing
     {
       SpatialArgs args = new SpatialArgs(SpatialOperation.Intersects,
-          ctx.getShapeFactory().circle(-80.0, 33.0, 1));
+          ctx.makeCircle(-80.0, 33.0, 1));
       SpatialArgs args2 = new SpatialArgsParser().parse("Intersects(BUFFER(POINT(-80 33),1))", ctx);
       assertEquals(args.toString(),args2.toString());
     }

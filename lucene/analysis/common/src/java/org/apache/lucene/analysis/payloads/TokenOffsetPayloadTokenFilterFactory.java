@@ -20,7 +20,7 @@ package org.apache.lucene.analysis.payloads;
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
  * Factory for {@link TokenOffsetPayloadTokenFilter}.
@@ -48,11 +48,6 @@ public class TokenOffsetPayloadTokenFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public TokenOffsetPayloadTokenFilterFactory() {
-    throw defaultCtorException();
-  }
-
   @Override
   public TokenOffsetPayloadTokenFilter create(TokenStream input) {
     return new TokenOffsetPayloadTokenFilter(input);

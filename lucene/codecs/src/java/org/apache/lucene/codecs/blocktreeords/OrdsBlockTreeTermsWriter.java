@@ -36,8 +36,8 @@ import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.store.ByteBuffersDataOutput;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.RAMOutputStream;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
@@ -45,7 +45,7 @@ import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.IntsRefBuilder;
 import org.apache.lucene.util.StringHelper;
-import org.apache.lucene.util.fst.FSTCompiler;
+import org.apache.lucene.util.fst.Builder;
 import org.apache.lucene.util.fst.BytesRefFSTEnum;
 import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.Util;
@@ -328,12 +328,12 @@ public final class OrdsBlockTreeTermsWriter extends FieldsConsumer {
       return "BLOCK: " + brToString(prefix);
     }
 
-    public void compileIndex(List<PendingBlock> blocks, ByteBuffersDataOutput scratchBytes, IntsRefBuilder scratchIntsRef) throws IOException {
+    public void compileIndex(List<PendingBlock> blocks, RAMOutputStream scratchBytes, IntsRefBuilder scratchIntsRef) throws IOException {
 
       assert (isFloor && blocks.size() > 1) || (isFloor == false && blocks.size() == 1): "isFloor=" + isFloor + " blocks=" + blocks;
       assert this == blocks.get(0);
 
-      assert scratchBytes.size() == 0;
+      assert scratchBytes.getFilePointer() == 0;
 
       // TODO: try writing the leading vLong in MSB order
       // (opposite of what Lucene does today), for better
@@ -359,14 +359,18 @@ public final class OrdsBlockTreeTermsWriter extends FieldsConsumer {
         }
       }
 
-      final FSTCompiler<Output> fstCompiler = new FSTCompiler.Builder<>(FST.INPUT_TYPE.BYTE1, FST_OUTPUTS).shouldShareNonSingletonNodes(false).build();
+      final Builder<Output> indexBuilder = new Builder<>(FST.INPUT_TYPE.BYTE1,
+                                                         0, 0, true, false, Integer.MAX_VALUE,
+                                                         FST_OUTPUTS, true, 15);
       //if (DEBUG) {
       //  System.out.println("  compile index for prefix=" + prefix);
       //}
       //indexBuilder.DEBUG = false;
-      final byte[] bytes = scratchBytes.toArrayCopy();
+      final byte[] bytes = new byte[(int) scratchBytes.getFilePointer()];
       assert bytes.length > 0;
-      fstCompiler.add(Util.toIntsRef(prefix, scratchIntsRef),
+      // System.out.println("  bytes=" + bytes.length);
+      scratchBytes.writeTo(bytes, 0);
+      indexBuilder.add(Util.toIntsRef(prefix, scratchIntsRef),
                        FST_OUTPUTS.newOutput(new BytesRef(bytes, 0, bytes.length),
                                              0, Long.MAX_VALUE-(sumTotalTermCount-1)));
       scratchBytes.reset();
@@ -377,7 +381,7 @@ public final class OrdsBlockTreeTermsWriter extends FieldsConsumer {
       for(PendingBlock block : blocks) {
         if (block.subIndices != null) {
           for(SubIndex subIndex : block.subIndices) {
-            append(fstCompiler, subIndex.index, termOrdOffset + subIndex.termOrdStart, scratchIntsRef);
+            append(indexBuilder, subIndex.index, termOrdOffset + subIndex.termOrdStart, scratchIntsRef);
           }
           block.subIndices = null;
         }
@@ -387,7 +391,7 @@ public final class OrdsBlockTreeTermsWriter extends FieldsConsumer {
 
       assert sumTotalTermCount == totFloorTermCount;
 
-      index = fstCompiler.compile();
+      index = indexBuilder.finish();
       assert subIndices == null;
 
       /*
@@ -401,7 +405,7 @@ public final class OrdsBlockTreeTermsWriter extends FieldsConsumer {
     // TODO: maybe we could add bulk-add method to
     // Builder?  Takes FST and unions it w/ current
     // FST.
-    private void append(FSTCompiler<Output> fstCompiler, FST<Output> subIndex, long termOrdOffset, IntsRefBuilder scratchIntsRef) throws IOException {
+    private void append(Builder<Output> builder, FST<Output> subIndex, long termOrdOffset, IntsRefBuilder scratchIntsRef) throws IOException {
       final BytesRefFSTEnum<Output> subIndexEnum = new BytesRefFSTEnum<>(subIndex);
       BytesRefFSTEnum.InputOutput<Output> indexEnt;
       while ((indexEnt = subIndexEnum.next()) != null) {
@@ -412,12 +416,12 @@ public final class OrdsBlockTreeTermsWriter extends FieldsConsumer {
         //long blockTermCount = output.endOrd - output.startOrd + 1;
         Output newOutput = FST_OUTPUTS.newOutput(output.bytes, termOrdOffset+output.startOrd, output.endOrd-termOrdOffset);
         //System.out.println("  append sub=" + indexEnt.input + " output=" + indexEnt.output + " termOrdOffset=" + termOrdOffset + " blockTermCount=" + blockTermCount  + " newOutput=" + newOutput  + " endOrd=" + (termOrdOffset+Long.MAX_VALUE-output.endOrd));
-        fstCompiler.add(Util.toIntsRef(indexEnt.input, scratchIntsRef), newOutput);
+        builder.add(Util.toIntsRef(indexEnt.input, scratchIntsRef), newOutput);
       }
     }
   }
 
-  private final ByteBuffersDataOutput scratchBytes = ByteBuffersDataOutput.newResettableInstance();
+  private final RAMOutputStream scratchBytes = new RAMOutputStream();
   private final IntsRefBuilder scratchIntsRef = new IntsRefBuilder();
 
   class TermsWriter {
@@ -604,7 +608,7 @@ public final class OrdsBlockTreeTermsWriter extends FieldsConsumer {
           assert ent.isTerm: "i=" + i;
 
           PendingTerm term = (PendingTerm) ent;
-          assert StringHelper.startsWith(term.termBytes, prefix): term + " prefix=" + prefix;
+          assert StringHelper.startsWith(term.termBytes, prefix): "term.term=" + term.termBytes + " prefix=" + prefix;
           BlockTermState state = term.state;
           final int suffix = term.termBytes.length - prefixLength;
           /*
@@ -640,7 +644,7 @@ public final class OrdsBlockTreeTermsWriter extends FieldsConsumer {
           PendingEntry ent = pending.get(i);
           if (ent.isTerm) {
             PendingTerm term = (PendingTerm) ent;
-            assert StringHelper.startsWith(term.termBytes, prefix): term + " prefix=" + prefix;
+            assert StringHelper.startsWith(term.termBytes, prefix): "term.term=" + term.termBytes + " prefix=" + prefix;
             BlockTermState state = term.state;
             final int suffix = term.termBytes.length - prefixLength;
             /*
@@ -717,18 +721,18 @@ public final class OrdsBlockTreeTermsWriter extends FieldsConsumer {
       // search on lookup
 
       // Write suffixes byte[] blob to terms dict output:
-      out.writeVInt((int) (suffixWriter.size() << 1) | (isLeafBlock ? 1:0));
-      suffixWriter.copyTo(out);
+      out.writeVInt((int) (suffixWriter.getFilePointer() << 1) | (isLeafBlock ? 1:0));
+      suffixWriter.writeTo(out);
       suffixWriter.reset();
 
       // Write term stats byte[] blob
-      out.writeVInt((int) statsWriter.size());
-      statsWriter.copyTo(out);
+      out.writeVInt((int) statsWriter.getFilePointer());
+      statsWriter.writeTo(out);
       statsWriter.reset();
 
       // Write term meta data byte[] blob
-      out.writeVInt((int) metaWriter.size());
-      metaWriter.copyTo(out);
+      out.writeVInt((int) metaWriter.getFilePointer());
+      metaWriter.writeTo(out);
       metaWriter.reset();
 
       // if (DEBUG) {
@@ -862,9 +866,9 @@ public final class OrdsBlockTreeTermsWriter extends FieldsConsumer {
       }
     }
 
-    private final ByteBuffersDataOutput suffixWriter = ByteBuffersDataOutput.newResettableInstance();
-    private final ByteBuffersDataOutput statsWriter = ByteBuffersDataOutput.newResettableInstance();
-    private final ByteBuffersDataOutput metaWriter = ByteBuffersDataOutput.newResettableInstance();
+    private final RAMOutputStream suffixWriter = new RAMOutputStream();
+    private final RAMOutputStream statsWriter = new RAMOutputStream();
+    private final RAMOutputStream metaWriter = new RAMOutputStream();
   }
 
   private boolean closed;

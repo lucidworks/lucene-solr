@@ -99,14 +99,11 @@ public class MinHashFilterTest extends BaseTokenStreamTestCase {
     }
     assertEquals(100, minSet.size());
     assertEquals(0, unadded.size());
-  }
 
-  public void testCollisions() {
     HashSet<LongPair> collisionDetection = new HashSet<LongPair>();
-    HashSet<LongPair> unadded = new HashSet<LongPair>();
-    FixedSizeTreeSet<LongPair> minSet = new FixedSizeTreeSet<LongPair>(500);
-    int numElements = TEST_NIGHTLY ? 1000000 : 10000;
-    for (int i = 0; i < numElements; i++) {
+    unadded = new HashSet<LongPair>();
+    minSet = new FixedSizeTreeSet<LongPair>(500);
+    for (int i = 0; i < 1000000; i++) {
       LongPair hash = new LongPair();
       MinHashFilter.murmurhash3_x64_128(MinHashFilter.getBytes(i), 0, 4, 0, hash);
       collisionDetection.add(hash);
@@ -125,9 +122,9 @@ public class MinHashFilterTest extends BaseTokenStreamTestCase {
         }
       }
     }
-    assertEquals(numElements, collisionDetection.size());
+    assertEquals(1000000, collisionDetection.size());
     assertEquals(500, minSet.size());
-    assertEquals(numElements - 500, unadded.size());
+    assertEquals(999500, unadded.size());
 
     LongPair last = null;
     LongPair current = null;

@@ -26,17 +26,17 @@
   <requestHandler name="/select" class="solr.SearchHandler" />
 
   <query>
-    <filterCache
+    <filterCache class="solr.CaffeineCache"
       size="512"
       initialSize="512"
       autowarmCount="0" />
 
-    <queryResultCache
+    <queryResultCache class="solr.CaffeineCache"
       size="512"
       initialSize="512"
       autowarmCount="0" />
 
-    <documentCache
+    <documentCache class="solr.CaffeineCache"
       size="512"
       initialSize="512"
       autowarmCount="0" />

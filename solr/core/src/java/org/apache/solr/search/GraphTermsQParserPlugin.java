@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.lucene.document.DoublePoint;
@@ -61,6 +62,7 @@ import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.BytesRefIterator;
 import org.apache.lucene.util.DocIdSetBuilder;
 import org.apache.lucene.util.FixedBitSet;
+import org.apache.lucene.util.FutureArrays;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.request.SolrQueryRequest;
@@ -252,6 +254,14 @@ public class GraphTermsQParserPlugin extends QParserPlugin {
       }
 
       return new ConstantScoreWeight(this, boost) {
+
+        @Override
+        public void extractTerms(Set<Term> terms) {
+          // no-op
+          // This query is for abuse cases when the number of terms is too high to
+          // run efficiently as a BooleanQuery. So likewise we hide its terms in
+          // order to protect highlighters
+        }
 
         @Override
         public Scorer scorer(LeafReaderContext context) throws IOException {
@@ -504,7 +514,8 @@ abstract class PointSetQuery extends Query implements DocSetProducer, Accountabl
     }
     if (searcher instanceof SolrIndexSearcher) {
       return ((SolrIndexSearcher) searcher).getLiveDocSet().getBits();
-    } else { // could happen in Delete-by-query situation
+    } else {
+      // TODO Does this ever happen?  In Solr should always be SolrIndexSearcher?
       //smallSetSize==0 thus will always produce a BitDocSet (FixedBitSet)
       DocSetCollector docSetCollector = new DocSetCollector(0, searcher.getIndexReader().maxDoc());
       searcher.search(new MatchAllDocsQuery(), docSetCollector);
@@ -648,12 +659,12 @@ abstract class PointSetQuery extends Query implements DocSetProducer, Accountabl
       for(int dim=0;dim<numDims;dim++) {
         int offset = dim*bytesPerDim;
 
-        int cmpMin = Arrays.compareUnsigned(minPackedValue, offset, offset + bytesPerDim, pointBytes, offset, offset + bytesPerDim);
+        int cmpMin = FutureArrays.compareUnsigned(minPackedValue, offset, offset + bytesPerDim, pointBytes, offset, offset + bytesPerDim);
         if (cmpMin > 0) {
           return PointValues.Relation.CELL_OUTSIDE_QUERY;
         }
 
-        int cmpMax = Arrays.compareUnsigned(maxPackedValue, offset, offset + bytesPerDim, pointBytes, offset, offset + bytesPerDim);
+        int cmpMax = FutureArrays.compareUnsigned(maxPackedValue, offset, offset + bytesPerDim, pointBytes, offset, offset + bytesPerDim);
         if (cmpMax < 0) {
           return PointValues.Relation.CELL_OUTSIDE_QUERY;
         }

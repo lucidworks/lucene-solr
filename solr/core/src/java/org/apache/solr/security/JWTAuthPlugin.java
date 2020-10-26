@@ -17,7 +17,10 @@
 package org.apache.solr.security;
 
 import javax.servlet.FilterChain;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletRequestWrapper;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -71,6 +74,7 @@ import org.slf4j.LoggerFactory;
 public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider, ConfigEditablePlugin {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   private static final String PARAM_BLOCK_UNKNOWN = "blockUnknown";
+  private static final String PARAM_REQUIRE_SUBJECT = "requireSub";
   private static final String PARAM_REQUIRE_ISSUER = "requireIss";
   private static final String PARAM_PRINCIPAL_CLAIM = "principalClaim";
   private static final String PARAM_ROLES_CLAIM = "rolesClaim";
@@ -91,7 +95,7 @@ public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider,
   static final String PRIMARY_ISSUER = "PRIMARY";
 
   private static final Set<String> PROPS = ImmutableSet.of(PARAM_BLOCK_UNKNOWN,
-      PARAM_PRINCIPAL_CLAIM, PARAM_REQUIRE_EXPIRATIONTIME, PARAM_ALG_WHITELIST,
+      PARAM_REQUIRE_SUBJECT, PARAM_PRINCIPAL_CLAIM, PARAM_REQUIRE_EXPIRATIONTIME, PARAM_ALG_WHITELIST,
       PARAM_JWK_CACHE_DURATION, PARAM_CLAIMS_MATCH, PARAM_SCOPE, PARAM_REALM, PARAM_ROLES_CLAIM,
       PARAM_ADMINUI_SCOPE, PARAM_REDIRECT_URIS, PARAM_REQUIRE_ISSUER, PARAM_ISSUERS,
       // These keys are supported for now to enable PRIMARY issuer config through top-level keys
@@ -136,6 +140,10 @@ public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider,
     blockUnknown = Boolean.parseBoolean(String.valueOf(pluginConfig.getOrDefault(PARAM_BLOCK_UNKNOWN, false)));
     requireIssuer = Boolean.parseBoolean(String.valueOf(pluginConfig.getOrDefault(PARAM_REQUIRE_ISSUER, "true")));
     requireExpirationTime = Boolean.parseBoolean(String.valueOf(pluginConfig.getOrDefault(PARAM_REQUIRE_EXPIRATIONTIME, "true")));
+    if (pluginConfig.get(PARAM_REQUIRE_SUBJECT) != null) {
+      log.warn("Parameter {} is no longer used and may generate error in a later version. A subject claim is now always required",
+          PARAM_REQUIRE_SUBJECT);
+    }
     principalClaim = (String) pluginConfig.getOrDefault(PARAM_PRINCIPAL_CLAIM, "sub");
 
     rolesClaim = (String) pluginConfig.get(PARAM_ROLES_CLAIM);
@@ -270,7 +278,10 @@ public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider,
    * Main authentication method that looks for correct JWT token in the Authorization header
    */
   @Override
-  public boolean doAuthenticate(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws Exception {
+  public boolean doAuthenticate(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws Exception {
+    HttpServletRequest request = (HttpServletRequest) servletRequest;
+    HttpServletResponse response = (HttpServletResponse) servletResponse;
+    
     String header = request.getHeader(HttpHeaders.AUTHORIZATION);
 
     if (jwtConsumer == null) {
@@ -313,7 +324,12 @@ public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider,
     switch (authResponse.getAuthCode()) {
       case AUTHENTICATED:
         final Principal principal = authResponse.getPrincipal();
-        request = wrapWithPrincipal(request, principal);
+        HttpServletRequestWrapper wrapper = new HttpServletRequestWrapper(request) {
+          @Override
+          public Principal getUserPrincipal() {
+            return principal;
+          }
+        };
         if (!(principal instanceof JWTPrincipal)) {
           numErrors.mark();
           throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "JWTAuth plugin says AUTHENTICATED but no token extracted");
@@ -321,7 +337,7 @@ public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider,
         if (log.isDebugEnabled())
           log.debug("Authentication SUCCESS");
         numAuthenticated.inc();
-        filterChain.doFilter(request, response);
+        filterChain.doFilter(wrapper, response);
         return true;
 
       case PASS_THROUGH:
@@ -495,6 +511,7 @@ public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider,
     } else {
       jwtConsumerBuilder.setSkipDefaultAudienceValidation();
     }
+    jwtConsumerBuilder.setRequireSubject();
     if (requireExpirationTime)
       jwtConsumerBuilder.setRequireExpirationTime();
     if (algWhitelist != null)

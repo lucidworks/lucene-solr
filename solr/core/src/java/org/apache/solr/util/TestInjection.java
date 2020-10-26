@@ -143,7 +143,7 @@ public class TestInjection {
 
   private volatile static AtomicInteger countPrepRecoveryOpPauseForever = new AtomicInteger(0);
 
-  public volatile static Integer delayBeforeFollowerCommitRefresh=null;
+  public volatile static Integer delayBeforeSlaveCommitRefresh=null;
 
   public volatile static Integer delayInExecutePlanAction=null;
 
@@ -185,7 +185,7 @@ public class TestInjection {
     countPrepRecoveryOpPauseForever = new AtomicInteger(0);
     failIndexFingerprintRequests = null;
     wrongIndexFingerprint = null;
-    delayBeforeFollowerCommitRefresh = null;
+    delayBeforeSlaveCommitRefresh = null;
     delayInExecutePlanAction = null;
     failInExecutePlanAction = false;
     skipIndexWriterCommitOnClose = false;
@@ -260,9 +260,8 @@ public class TestInjection {
         if (rand.nextBoolean()) {
           throw new TestShutdownFailError("Test exception for non graceful close");
         } else {
-          final Timer timer = new Timer();
+          
           final Thread cthread = Thread.currentThread();
-
           TimerTask task = new TimerTask() {
             @Override
             public void run() {
@@ -279,10 +278,11 @@ public class TestInjection {
               }
               
               cthread.interrupt();
-              timers.remove(timer);
+              timers.remove(this);
+              cancel();
             }
           };
-
+          Timer timer = new Timer();
           timers.add(timer);
           timer.schedule(task, rand.nextInt(500));
         }
@@ -521,11 +521,11 @@ public class TestInjection {
     return new Pair<>(Boolean.parseBoolean(val), Integer.parseInt(percent));
   }
 
-  public static boolean injectDelayBeforeFollowerCommitRefresh() {
-    if (delayBeforeFollowerCommitRefresh!=null) {
+  public static boolean injectDelayBeforeSlaveCommitRefresh() {
+    if (delayBeforeSlaveCommitRefresh!=null) {
       try {
-        log.info("Pausing IndexFetcher for {}ms", delayBeforeFollowerCommitRefresh);
-        Thread.sleep(delayBeforeFollowerCommitRefresh);
+        log.info("Pausing IndexFetcher for {}ms", delayBeforeSlaveCommitRefresh);
+        Thread.sleep(delayBeforeSlaveCommitRefresh);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
       }

@@ -47,7 +47,7 @@ import java.util.regex.Pattern;
 import com.google.common.collect.ImmutableList;
 import org.apache.commons.io.FileUtils;
 import org.apache.lucene.index.IndexDeletionPolicy;
-import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.util.Version;
 import org.apache.solr.client.solrj.io.stream.expr.Expressible;
 import org.apache.solr.cloud.RecoveryStrategy;
@@ -55,11 +55,8 @@ import org.apache.solr.cloud.ZkSolrResourceLoader;
 import org.apache.solr.common.MapSerializable;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
-import org.apache.solr.common.util.DOMUtil;
 import org.apache.solr.common.util.IOUtils;
 import org.apache.solr.handler.component.SearchComponent;
-import org.apache.solr.pkg.PackageListeners;
-import org.apache.solr.pkg.PackageLoader;
 import org.apache.solr.request.SolrRequestHandler;
 import org.apache.solr.response.QueryResponseWriter;
 import org.apache.solr.response.transform.TransformerFactory;
@@ -67,7 +64,7 @@ import org.apache.solr.rest.RestManager;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.IndexSchemaFactory;
 import org.apache.solr.search.CacheConfig;
-import org.apache.solr.search.CaffeineCache;
+import org.apache.solr.search.FastLRUCache;
 import org.apache.solr.search.QParserPlugin;
 import org.apache.solr.search.SolrCache;
 import org.apache.solr.search.ValueSourceParser;
@@ -78,7 +75,7 @@ import org.apache.solr.update.SolrIndexConfig;
 import org.apache.solr.update.UpdateLog;
 import org.apache.solr.update.processor.UpdateRequestProcessorChain;
 import org.apache.solr.update.processor.UpdateRequestProcessorFactory;
-import org.apache.solr.util.circuitbreaker.CircuitBreakerManager;
+import org.apache.solr.util.DOMUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Node;
@@ -100,7 +97,7 @@ import static org.apache.solr.core.SolrConfig.PluginOpts.REQUIRE_NAME_IN_OVERLAY
 
 /**
  * Provides a static reference to a Config object modeling the main
- * configuration data for a Solr instance -- typically found in
+ * configuration data for a a Solr instance -- typically found in
  * "solrconfig.xml".
  */
 public class SolrConfig extends XmlConfigFile implements MapSerializable {
@@ -108,7 +105,6 @@ public class SolrConfig extends XmlConfigFile implements MapSerializable {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   public static final String DEFAULT_CONF_FILE = "solrconfig.xml";
-
 
   private RequestParams requestParams;
 
@@ -205,11 +201,11 @@ public class SolrConfig extends XmlConfigFile implements MapSerializable {
     // Parse indexConfig section, using mainIndex as backup in case old config is used
     indexConfig = new SolrIndexConfig(this, "indexConfig", null);
 
-    booleanQueryMaxClauseCount = getInt("query/maxBooleanClauses", IndexSearcher.getMaxClauseCount());
-    if (IndexSearcher.getMaxClauseCount() < booleanQueryMaxClauseCount) {
-      log.warn("solrconfig.xml: <maxBooleanClauses> of {} is greater than global limit of {} {}"
-          , booleanQueryMaxClauseCount, IndexSearcher.getMaxClauseCount()
-          , "and will have no effect set 'maxBooleanClauses' in solr.xml to increase global limit");
+    booleanQueryMaxClauseCount = getInt("query/maxBooleanClauses", BooleanQuery.getMaxClauseCount());
+    if (BooleanQuery.getMaxClauseCount() < booleanQueryMaxClauseCount) {
+      log.warn("solrconfig.xml: <maxBooleanClauses> of {} is greater than global limit of {} and will have no effect {}"
+          , booleanQueryMaxClauseCount, BooleanQuery.getMaxClauseCount()
+          , "set 'maxBooleanClauses' in solr.xml to increase global limit");
     }
     
     // Warn about deprecated / discontinued parameters
@@ -229,6 +225,8 @@ public class SolrConfig extends XmlConfigFile implements MapSerializable {
     queryResultMaxDocsCached = getInt("query/queryResultMaxDocsCached", Integer.MAX_VALUE);
     enableLazyFieldLoading = getBool("query/enableLazyFieldLoading", false);
     
+    useRangeVersionsForPeerSync = getBool("peerSync/useRangeVersions", true);
+
     filterCacheConfig = CacheConfig.getConfig(this, "query/filterCache");
     queryResultCacheConfig = CacheConfig.getConfig(this, "query/queryResultCache");
     documentCacheConfig = CacheConfig.getConfig(this, "query/documentCache");
@@ -239,7 +237,7 @@ public class SolrConfig extends XmlConfigFile implements MapSerializable {
       args.put("size", "10000");
       args.put("initialSize", "10");
       args.put("showItems", "-1");
-      conf = new CacheConfig(CaffeineCache.class, args, null);
+      conf = new CacheConfig(FastLRUCache.class, args, null);
     }
     fieldValueCacheConfig = conf;
     useColdSearcher = getBool("query/useColdSearcher", false);
@@ -285,7 +283,7 @@ public class SolrConfig extends XmlConfigFile implements MapSerializable {
         "requestDispatcher/requestParsers/@enableStreamBody", false);
 
     handleSelect = getBool(
-        "requestDispatcher/@handleSelect", false);
+        "requestDispatcher/@handleSelect", !luceneMatchVersion.onOrAfter(Version.LUCENE_7_0_0));
 
     addHttpRequestToContext = getBool(
         "requestDispatcher/requestParsers/@addHttpRequestToContext", false);
@@ -341,6 +339,7 @@ public class SolrConfig extends XmlConfigFile implements MapSerializable {
           // and even then -- only if there is a single SpellCheckComponent
           // because of queryConverter.setIndexAnalyzer
       .add(new SolrPluginInfo(QueryConverter.class, "queryConverter", REQUIRE_NAME, REQUIRE_CLASS))
+      .add(new SolrPluginInfo(PluginBag.RuntimeLib.class, "runtimeLib", REQUIRE_NAME, MULTI_OK))
           // this is hackish, since it picks up all SolrEventListeners,
           // regardless of when/how/why they are used (or even if they are
           // declared outside of the appropriate context) but there's no nice
@@ -358,7 +357,6 @@ public class SolrConfig extends XmlConfigFile implements MapSerializable {
       .add(new SolrPluginInfo(IndexSchemaFactory.class, "schemaFactory", REQUIRE_CLASS))
       .add(new SolrPluginInfo(RestManager.class, "restManager"))
       .add(new SolrPluginInfo(StatsCache.class, "statsCache", REQUIRE_CLASS))
-      .add(new SolrPluginInfo(CircuitBreakerManager.class, "circuitBreaker"))
       .build();
   public static final Map<String, SolrPluginInfo> classVsSolrPluginInfo;
 
@@ -524,7 +522,9 @@ public class SolrConfig extends XmlConfigFile implements MapSerializable {
   public final int queryResultWindowSize;
   public final int queryResultMaxDocsCached;
   public final boolean enableLazyFieldLoading;
-
+  
+  public final boolean useRangeVersionsForPeerSync;
+  
   // IndexConfig settings
   public final SolrIndexConfig indexConfig;
 
@@ -864,7 +864,7 @@ public class SolrConfig extends XmlConfigFile implements MapSerializable {
   @SuppressWarnings({"unchecked", "rawtypes"})
   public Map<String, Object> toMap(Map<String, Object> result) {
     if (getZnodeVersion() > -1) result.put(ZNODEVER, getZnodeVersion());
-    if(luceneMatchVersion != null) result.put(IndexSchema.LUCENE_MATCH_VERSION_PARAM, luceneMatchVersion.toString());
+    result.put(IndexSchema.LUCENE_MATCH_VERSION_PARAM, luceneMatchVersion);
     result.put("updateHandler", getUpdateHandlerInfo());
     Map m = new LinkedHashMap();
     result.put("query", m);
@@ -873,7 +873,6 @@ public class SolrConfig extends XmlConfigFile implements MapSerializable {
     m.put("queryResultMaxDocsCached", queryResultMaxDocsCached);
     m.put("enableLazyFieldLoading", enableLazyFieldLoading);
     m.put("maxBooleanClauses", booleanQueryMaxClauseCount);
-
     for (SolrPluginInfo plugin : plugins) {
       List<PluginInfo> infos = getPluginInfos(plugin.clazz.getName());
       if (infos == null || infos.isEmpty()) continue;
@@ -912,6 +911,10 @@ public class SolrConfig extends XmlConfigFile implements MapSerializable {
         "addHttpRequestToContext", addHttpRequestToContext));
     if (indexConfig != null) result.put("indexConfig", indexConfig);
 
+    m = new LinkedHashMap();
+    result.put("peerSync", m);
+    m.put("useRangeVersions", useRangeVersionsForPeerSync);
+
     //TODO there is more to add
 
     return result;
@@ -949,21 +952,6 @@ public class SolrConfig extends XmlConfigFile implements MapSerializable {
     return requestParams;
   }
 
-  /**
-   * The version of package that should be loaded for a given package name
-   * This information is stored in the params.json in the same configset
-   * If params.json is absent or there is no corresponding version specified for a given package,
-   * this returns a null and the latest is used by the caller
-   */
-  public String maxPackageVersion(String pkg) {
-    RequestParams.ParamSet p = getRequestParams().getParams(PackageListeners.PACKAGE_VERSIONS);
-    if (p == null) {
-      return null;
-    }
-    Object o = p.get().get(pkg);
-    if (o == null || PackageLoader.LATEST.equals(o)) return null;
-    return o.toString();
-  }
 
   public RequestParams refreshRequestParams() {
     requestParams = RequestParams.getFreshRequestParams(getResourceLoader(), requestParams);

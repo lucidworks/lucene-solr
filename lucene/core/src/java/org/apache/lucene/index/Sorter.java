@@ -41,7 +41,7 @@ final class Sorter {
   }
 
   /**
-   * A permutation of doc IDs. For every document ID between <code>0</code> and
+   * A permutation of doc IDs. For every document ID between <tt>0</tt> and
    * {@link IndexReader#maxDoc()}, <code>oldToNew(newToOld(docID))</code> must
    * return <code>docID</code>.
    */
@@ -191,7 +191,7 @@ final class Sorter {
    * {@link #sort(int, IndexSorter.DocComparator)} to compute the old-to-new permutation
    * given a list of documents and their corresponding values.
    * <p>
-   * A return value of <code>null</code> is allowed and means that
+   * A return value of <tt>null</tt> is allowed and means that
    * <code>reader</code> is already sorted.
    * <p>
    * <b>NOTE:</b> deleted documents are expected to appear in the mapping as

@@ -18,10 +18,9 @@ package org.apache.solr.analysis;
 
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
 import java.util.Map;
 
 /**
@@ -58,8 +57,8 @@ public class ThrowingMockTokenFilterFactory extends TokenFilterFactory {
       public boolean incrementToken() throws IOException {
         if (input.incrementToken()) {
           try {
-            throw exceptionClass.getConstructor().newInstance();
-          } catch (IllegalAccessException | InstantiationException | InvocationTargetException | NoSuchMethodException iae) {
+            throw exceptionClass.newInstance();
+          } catch (IllegalAccessException | InstantiationException iae) {
             throw new RuntimeException(iae);
           }
         }

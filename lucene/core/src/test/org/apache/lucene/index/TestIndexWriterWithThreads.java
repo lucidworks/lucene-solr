@@ -59,6 +59,7 @@ public class TestIndexWriterWithThreads extends LuceneTestCase {
     private final CyclicBarrier syncStart;
     boolean diskFull;
     Throwable error;
+    AlreadyClosedException ace;
     IndexWriter writer;
     boolean noErrors;
     volatile int addCount;
@@ -453,7 +454,7 @@ public class TestIndexWriterWithThreads extends LuceneTestCase {
     @Override
     public void eval(MockDirectoryWrapper dir)  throws IOException {
       if (doFail) {
-        if (callStackContains(IndexingChain.class, "flush")) {
+        if (callStackContains(DefaultIndexingChain.class, "flush")) {
           if (onlyOnce)
             doFail = false;
           //System.out.println(Thread.currentThread().getName() + ": NOW FAIL: onlyOnce=" + onlyOnce);

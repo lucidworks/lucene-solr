@@ -47,7 +47,7 @@ public class SolrRequestInfo {
   protected SolrQueryRequest req;
   protected SolrQueryResponse rsp;
   protected Date now;
-  public HttpServletRequest httpRequest;
+  protected HttpServletRequest httpRequest;
   protected TimeZone tz;
   protected ResponseBuilder rb;
   protected List<Closeable> closeHooks;

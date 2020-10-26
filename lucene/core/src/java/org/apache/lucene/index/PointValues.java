@@ -19,7 +19,6 @@ package org.apache.lucene.index;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.net.InetAddress;
-import java.util.Arrays;
 
 import org.apache.lucene.document.BinaryPoint;
 import org.apache.lucene.document.DoublePoint;
@@ -29,7 +28,8 @@ import org.apache.lucene.document.IntPoint;
 import org.apache.lucene.document.LatLonPoint;
 import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.search.DocIdSetIterator;
-import org.apache.lucene.util.bkd.BKDConfig;
+import org.apache.lucene.util.FutureArrays;
+import org.apache.lucene.util.bkd.BKDWriter;
 
 /** 
  * Access to indexed numeric values.
@@ -38,9 +38,8 @@ import org.apache.lucene.util.bkd.BKDConfig;
  * points are indexed with datastructures such as <a href="https://en.wikipedia.org/wiki/K-d_tree">KD-trees</a>. 
  * These structures are optimized for operations such as <i>range</i>, <i>distance</i>, <i>nearest-neighbor</i>, 
  * and <i>point-in-polygon</i> queries. 
- * <h2>Basic Point Types</h2>
- * <table>
- *   <caption>Basic point types in Java and Lucene</caption>
+ * <h1>Basic Point Types</h1>
+ * <table summary="Basic point types in Java and Lucene">
  *   <tr><th>Java type</th><th>Lucene class</th></tr>
  *   <tr><td>{@code int}</td><td>{@link IntPoint}</td></tr>
  *   <tr><td>{@code long}</td><td>{@link LongPoint}</td></tr>
@@ -66,7 +65,7 @@ import org.apache.lucene.util.bkd.BKDConfig;
  *   Query query = IntPoint.newRangeQuery("year", 1960, 1980);
  *   TopDocs docs = searcher.search(query, ...);
  * </pre>
- * <h2>Geospatial Point Types</h2>
+ * <h1>Geospatial Point Types</h1>
  * Although basic point types such as {@link DoublePoint} support points in multi-dimensional space too, Lucene has
  * specialized classes for location data. These classes are optimized for location data: they are more space-efficient and 
  * support special operations such as <i>distance</i> and <i>polygon</i> queries. There are currently two implementations:
@@ -76,7 +75,7 @@ import org.apache.lucene.util.bkd.BKDConfig;
  *   <li><a href="{@docRoot}/../spatial3d/org/apache/lucene/spatial3d/Geo3DPoint.html">Geo3DPoint</a>* in <i>lucene-spatial3d</i>: indexes {@code (latitude,longitude)} as {@code (x,y,z)} in three-dimensional space.
  * </ol>
  * * does <b>not</b> support altitude, 3D here means "uses three dimensions under-the-hood"<br>
- * <h2>Advanced usage</h2>
+ * <h1>Advanced usage</h1>
  * Custom structures can be created on top of single- or multi- dimensional basic types, on top of 
  * {@link BinaryPoint} for more flexibility, or via custom {@link Field} subclasses.
  *
@@ -87,10 +86,10 @@ public abstract class PointValues {
   public static final int MAX_NUM_BYTES = 16;
 
   /** Maximum number of dimensions */
-  public static final int MAX_DIMENSIONS = BKDConfig.MAX_DIMS;
+  public static final int MAX_DIMENSIONS = BKDWriter.MAX_DIMS;
 
   /** Maximum number of index dimensions */
-  public static final int MAX_INDEX_DIMENSIONS = BKDConfig.MAX_INDEX_DIMS;
+  public static final int MAX_INDEX_DIMENSIONS = BKDWriter.MAX_INDEX_DIMS;
 
   /** Return the cumulated number of points across all leaves of the given
    * {@link IndexReader}. Leaves that do not have points for the given field
@@ -144,7 +143,7 @@ public abstract class PointValues {
         final int numBytesPerDimension = values.getBytesPerDimension();
         for (int i = 0; i < numDimensions; ++i) {
           int offset = i * numBytesPerDimension;
-          if (Arrays.compareUnsigned(leafMinValue, offset, offset + numBytesPerDimension, minValue, offset, offset + numBytesPerDimension) < 0) {
+          if (FutureArrays.compareUnsigned(leafMinValue, offset, offset + numBytesPerDimension, minValue, offset, offset + numBytesPerDimension) < 0) {
             System.arraycopy(leafMinValue, offset, minValue, offset, numBytesPerDimension);
           }
         }
@@ -175,7 +174,7 @@ public abstract class PointValues {
         final int numBytesPerDimension = values.getBytesPerDimension();
         for (int i = 0; i < numDimensions; ++i) {
           int offset = i * numBytesPerDimension;
-          if (Arrays.compareUnsigned(leafMaxValue, offset, offset + numBytesPerDimension, maxValue, offset, offset + numBytesPerDimension) > 0) {
+          if (FutureArrays.compareUnsigned(leafMaxValue, offset, offset + numBytesPerDimension, maxValue, offset, offset + numBytesPerDimension) > 0) {
             System.arraycopy(leafMaxValue, offset, maxValue, offset, numBytesPerDimension);
           }
         }

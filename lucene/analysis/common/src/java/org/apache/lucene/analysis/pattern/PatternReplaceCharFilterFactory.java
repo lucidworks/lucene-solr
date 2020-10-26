@@ -21,7 +21,7 @@ import java.io.Reader;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-import org.apache.lucene.analysis.CharFilterFactory;
+import org.apache.lucene.analysis.util.CharFilterFactory;
 
 /**
  * Factory for {@link PatternReplaceCharFilter}. 
@@ -53,11 +53,6 @@ public class PatternReplaceCharFilterFactory extends CharFilterFactory {
     if (!args.isEmpty()) {
       throw new IllegalArgumentException("Unknown parameters: " + args);
     }
-  }
-
-  /** Default ctor for compatibility with SPI */
-  public PatternReplaceCharFilterFactory() {
-    throw defaultCtorException();
   }
 
   @Override

@@ -17,8 +17,6 @@
 package org.apache.lucene.analysis.util;
 
 
-import org.apache.lucene.util.ResourceLoader;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -45,7 +43,7 @@ public class StringMockResourceLoader implements ResourceLoader {
   public <T> T newInstance(String cname, Class<T> expectedType) {
     Class<? extends T> clazz = findClass(cname, expectedType);
     try {
-      return clazz.getConstructor().newInstance();
+      return clazz.newInstance();
     } catch (Exception e) {
       throw new RuntimeException("Cannot create instance: " + cname, e);
     }

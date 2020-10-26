@@ -19,6 +19,7 @@ package org.apache.lucene.queries.payloads;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
@@ -163,6 +164,11 @@ public class PayloadScoreQuery extends SpanQuery {
     @Override
     public boolean isCacheable(LeafReaderContext ctx) {
       return innerWeight.isCacheable(ctx);
+    }
+
+    @Override
+    public void extractTerms(Set<Term> terms) {
+      innerWeight.extractTerms(terms);
     }
 
     @Override

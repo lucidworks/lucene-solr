@@ -63,7 +63,7 @@ public class DocumentObjectBinder {
     }
 
     try {
-      T obj = clazz.getConstructor().newInstance();
+      T obj = clazz.newInstance();
       for (DocField docField : fields) {
         docField.inject(obj, solrDoc);
       }

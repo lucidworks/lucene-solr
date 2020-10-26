@@ -93,7 +93,7 @@ public class CloudUtil {
             }
             log.error("{}",
                 new SolrException(ErrorCode.SERVER_ERROR, "Will not load SolrCore " + desc.getName()
-                    + " because it has been replaced due to failover.")); // nowarn
+                    + " because it has been replaced due to failover.")); // logOk
             throw new SolrException(ErrorCode.SERVER_ERROR,
                 "Will not load SolrCore " + desc.getName()
                     + " because it has been replaced due to failover.");
@@ -235,6 +235,7 @@ public class CloudUtil {
    * Return a {@link CollectionStatePredicate} that returns true if a collection has the expected
    * number of shards and replicas.
    * <p>Note: for shards marked as inactive the current Solr behavior is that replicas remain active.
+   * {@link org.apache.solr.cloud.autoscaling.sim.SimCloudManager} follows this behavior.</p>
    * @param expectedShards expected number of shards
    * @param expectedReplicas expected number of active replicas per shard
    * @param withInactive if true then count also inactive shards

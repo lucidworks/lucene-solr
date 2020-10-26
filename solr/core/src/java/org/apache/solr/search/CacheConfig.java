@@ -24,12 +24,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.solr.common.MapSerializable;
 import org.apache.solr.common.SolrException;
-import org.apache.solr.common.util.DOMUtil;
 import org.apache.solr.common.util.StrUtils;
+import org.apache.solr.common.MapSerializable;
 import org.apache.solr.core.SolrConfig;
 import org.apache.solr.core.SolrResourceLoader;
+import org.apache.solr.util.DOMUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Node;
@@ -133,7 +133,7 @@ public class CacheConfig implements MapSerializable{
 
     SolrResourceLoader loader = solrConfig.getResourceLoader();
     config.cacheImpl = config.args.get("class");
-    if(config.cacheImpl == null) config.cacheImpl = "solr.CaffeineCache";
+    if (config.cacheImpl == null) config.cacheImpl = "solr.CaffeineCache";
     config.regenImpl = config.args.get("regenerator");
     config.clazz = loader.findClass(config.cacheImpl, SolrCache.class);
     if (config.regenImpl != null) {

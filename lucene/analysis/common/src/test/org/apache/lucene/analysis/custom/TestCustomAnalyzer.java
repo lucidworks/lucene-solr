@@ -37,21 +37,18 @@ import org.apache.lucene.analysis.core.StopFilterFactory;
 import org.apache.lucene.analysis.core.WhitespaceTokenizerFactory;
 import org.apache.lucene.analysis.miscellaneous.ASCIIFoldingFilterFactory;
 import org.apache.lucene.analysis.reverse.ReverseStringFilterFactory;
-import org.apache.lucene.analysis.classic.ClassicTokenizerFactory;
+import org.apache.lucene.analysis.standard.ClassicTokenizerFactory;
 import org.apache.lucene.analysis.standard.StandardTokenizerFactory;
-import org.apache.lucene.analysis.CharFilterFactory;
-import org.apache.lucene.analysis.TokenFilterFactory;
-import org.apache.lucene.analysis.TokenizerFactory;
+import org.apache.lucene.analysis.util.CharFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenizerFactory;
 import org.apache.lucene.util.AttributeFactory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.SetOnce.AlreadySetException;
 import org.apache.lucene.util.Version;
 
 public class TestCustomAnalyzer extends BaseTokenStreamTestCase {
-
-  @SuppressWarnings("deprecation")
-  private static final Version LUCENE_8_0_0 = Version.LUCENE_8_0_0;
-
+  
   // Test some examples (TODO: we only check behavior, we may need something like TestRandomChains...)
 
   public void testWhitespaceFactoryWithFolding() throws Exception {
@@ -108,7 +105,7 @@ public class TestCustomAnalyzer extends BaseTokenStreamTestCase {
 
   public void testFactoryHtmlStripClassicFolding() throws Exception {
     CustomAnalyzer a = CustomAnalyzer.builder()
-        .withDefaultMatchVersion(LUCENE_8_0_0)
+        .withDefaultMatchVersion(Version.LUCENE_7_0_0)
         .addCharFilter(HTMLStripCharFilterFactory.class)
         .withTokenizer(ClassicTokenizerFactory.class)
         .addTokenFilter(ASCIIFoldingFilterFactory.class, "preserveOriginal", "true")
@@ -127,7 +124,7 @@ public class TestCustomAnalyzer extends BaseTokenStreamTestCase {
     assertSame(LowerCaseFilterFactory.class, tokenFilters.get(1).getClass());
     assertEquals(100, a.getPositionIncrementGap("dummy"));
     assertEquals(1000, a.getOffsetGap("dummy"));
-    assertSame(LUCENE_8_0_0, a.getVersion());
+    assertSame(Version.LUCENE_7_0_0, a.getVersion());
 
     assertAnalyzesTo(a, "<p>foo bar</p> FOO BAR", 
         new String[] { "foo", "bar", "foo", "bar" },
@@ -140,7 +137,7 @@ public class TestCustomAnalyzer extends BaseTokenStreamTestCase {
   
   public void testHtmlStripClassicFolding() throws Exception {
     CustomAnalyzer a = CustomAnalyzer.builder()
-        .withDefaultMatchVersion(LUCENE_8_0_0)
+        .withDefaultMatchVersion(Version.LUCENE_7_0_0)
         .addCharFilter("htmlstrip")
         .withTokenizer("classic")
         .addTokenFilter("asciifolding", "preserveOriginal", "true")
@@ -159,7 +156,7 @@ public class TestCustomAnalyzer extends BaseTokenStreamTestCase {
     assertSame(LowerCaseFilterFactory.class, tokenFilters.get(1).getClass());
     assertEquals(100, a.getPositionIncrementGap("dummy"));
     assertEquals(1000, a.getOffsetGap("dummy"));
-    assertSame(LUCENE_8_0_0, a.getVersion());
+    assertSame(Version.LUCENE_7_0_0, a.getVersion());
 
     assertAnalyzesTo(a, "<p>foo bar</p> FOO BAR", 
         new String[] { "foo", "bar", "foo", "bar" },

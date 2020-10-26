@@ -24,53 +24,37 @@ public enum ScoreMode {
   /**
    * Produced scorers will allow visiting all matches and get their score.
    */
-  COMPLETE(true, true),
+  COMPLETE {
+    @Override
+    public boolean needsScores() {
+      return true;
+    }
+  },
 
   /**
    * Produced scorers will allow visiting all matches but scores won't be
    * available.
    */
-  COMPLETE_NO_SCORES(true, false),
+  COMPLETE_NO_SCORES {
+    @Override
+    public boolean needsScores() {
+      return false;
+    }
+  },
 
   /**
    * Produced scorers will optionally allow skipping over non-competitive
    * hits using the {@link Scorer#setMinCompetitiveScore(float)} API.
    */
-  TOP_SCORES(false, true),
-
-  /**
-   * ScoreMode for top field collectors that can provide their own iterators,
-   * to optionally allow to skip for non-competitive docs
-   */
-  TOP_DOCS(false, false),
-
-  /**
-   * ScoreMode for top field collectors that can provide their own iterators,
-   * to optionally allow to skip for non-competitive docs.
-   * This mode is used when there is a secondary sort by _score.
-   */
-  TOP_DOCS_WITH_SCORES(false, true);
-
-  private final boolean needsScores;
-  private final boolean isExhaustive;
-
-  ScoreMode(boolean isExhaustive, boolean needsScores) {
-    this.isExhaustive = isExhaustive;
-    this.needsScores = needsScores;
-  }
+  TOP_SCORES {
+    @Override
+    public boolean needsScores() {
+      return true;
+    }
+  };
 
   /**
    * Whether this {@link ScoreMode} needs to compute scores.
    */
-  public boolean needsScores() {
-    return needsScores;
-  }
-
-  /**
-   * Returns {@code true} if for this {@link ScoreMode} it is necessary to process all documents,
-   * or {@code false} if is enough to go through top documents only.
-   */
-  public boolean isExhaustive() {
-    return isExhaustive;
-  }
+  public abstract boolean needsScores();
 }

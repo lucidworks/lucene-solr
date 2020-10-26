@@ -53,9 +53,4 @@ public class ConfigRequest extends SolrRequest {
   public SolrResponse createResponse(SolrClient client) {
     return new SolrResponseBase();
   }
-
-  @Override
-  public String getRequestType() {
-    return SolrRequest.SolrRequestType.ADMIN.toString();
-  }
 }

@@ -214,11 +214,11 @@ public final class CommitsImpl extends LukeModel implements Commits {
 
   static String toDisplaySize(long size) {
     if (size < 1024) {
-      return size + " B";
+      return String.valueOf(size) + " B";
     } else if (size < 1048576) {
-      return (size / 1024) + " KB";
+      return String.valueOf(size / 1024) + " KB";
     } else {
-      return (size / 1048576) + " MB";
+      return String.valueOf(size / 1048576) + " MB";
     }
   }
 }

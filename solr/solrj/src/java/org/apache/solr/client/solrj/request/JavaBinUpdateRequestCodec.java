@@ -342,7 +342,7 @@ public class JavaBinUpdateRequestCodec {
 
           handler.update(sdoc, updateRequest, commitWithin, overwrite);
         }
-        return Collections.emptyList();
+        return Collections.EMPTY_LIST;
       } finally {
         super.readStringAsCharSeq = false;
 

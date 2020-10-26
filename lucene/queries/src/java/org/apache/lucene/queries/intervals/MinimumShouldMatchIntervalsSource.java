@@ -115,7 +115,7 @@ class MinimumShouldMatchIntervalsSource extends IntervalsSource {
 
   @Override
   public String toString() {
-    return "AtLeast("
+    return "ProxBoost("
         + Arrays.stream(sources).map(IntervalsSource::toString).collect(Collectors.joining(","))
         + "~" + minShouldMatch + ")";
   }

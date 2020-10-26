@@ -21,8 +21,8 @@ import static org.junit.Assert.*;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.IOUtils.IOConsumer;
@@ -67,7 +67,7 @@ public final class TestByteBuffersDataInput extends RandomizedTest {
     ByteBuffersDataOutput dst = new ByteBuffersDataOutput();
 
     long seed = randomLong();
-    int max = LuceneTestCase.TEST_NIGHTLY ? 1_000_000 : 100_000;
+    int max = 1_000_000;
     List<IOConsumer<DataInput>> reply = 
         TestByteBuffersDataOutput.addRandomData(dst, new Xoroshiro128PlusRandom(seed), max);
 
@@ -157,7 +157,6 @@ public final class TestByteBuffersDataInput extends RandomizedTest {
   
       byte [] array = dst.toArrayCopy();
       array = ArrayUtil.copyOfSubArray(array, prefix.length, array.length);
-
       for (int i = 0; i < 1000; i++) {
         int offs = randomIntBetween(0, array.length - 1);
         in.seek(offs);

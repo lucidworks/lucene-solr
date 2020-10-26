@@ -16,10 +16,14 @@
  */
 package org.apache.solr.util;
 
-import java.util.Set;
 import java.util.TimeZone;
-import java.util.regex.Matcher;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Collections;
+import java.util.Arrays;
+
 import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 
 import org.apache.solr.common.SolrException;
 
@@ -40,7 +44,8 @@ public final class TimeZoneUtils {
    * @see TimeZone#getAvailableIDs
    */
   public static final Set<String> KNOWN_TIMEZONE_IDS 
-    = Set.of(TimeZone.getAvailableIDs());
+    = Collections.unmodifiableSet(new HashSet<>
+                                  (Arrays.asList(TimeZone.getAvailableIDs())));
 
   /**
    * This method is provided as a replacement for TimeZone.getTimeZone but 

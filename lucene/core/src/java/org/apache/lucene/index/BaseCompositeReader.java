@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /** Base class for implementing {@link CompositeReader}s based on an array
  * of sub-readers. The implementing class has to add code for
@@ -37,7 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * as documents are added to and deleted from an index.  Clients should thus not
  * rely on a given document having the same number between sessions.
  * 
- * <p><a id="thread-safety"></a><p><b>NOTE</b>: {@link
+ * <p><a name="thread-safety"></a><p><b>NOTE</b>: {@link
  * IndexReader} instances are completely thread
  * safe, meaning multiple threads can call any of its methods,
  * concurrently.  If your application requires external
@@ -51,7 +50,7 @@ public abstract class BaseCompositeReader<R extends IndexReader> extends Composi
   private final R[] subReaders;
   private final int[] starts;       // 1st docno for each reader
   private final int maxDoc;
-  private AtomicInteger numDocs = new AtomicInteger(-1); // computed lazily
+  private int numDocs = -1;         // computed lazily
 
   /** List view solely for {@link #getSequentialSubReaders()},
    * for effectiveness the array is used internally. */
@@ -107,16 +106,15 @@ public abstract class BaseCompositeReader<R extends IndexReader> extends Composi
     // reader that don't involve calling numDocs().
     // However it's not crucial to make sure that we don't call numDocs() more
     // than once on the sub readers, since they likely cache numDocs() anyway,
-    // hence the opaque read.
-    // http://gee.cs.oswego.edu/dl/html/j9mm.html#opaquesec.
-    int numDocs = this.numDocs.getOpaque();
+    // hence the lack of synchronization.
+    int numDocs = this.numDocs;
     if (numDocs == -1) {
       numDocs = 0;
       for (IndexReader r : subReaders) {
         numDocs += r.numDocs();
       }
       assert numDocs >= 0;
-      this.numDocs.set(numDocs);
+      this.numDocs = numDocs;
     }
     return numDocs;
   }

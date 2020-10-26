@@ -24,11 +24,6 @@ import java.util.Objects;
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.IndexSorter;
 import org.apache.lucene.index.SortFieldProvider;
-import org.apache.lucene.search.comparators.DocComparator;
-import org.apache.lucene.search.comparators.DoubleComparator;
-import org.apache.lucene.search.comparators.FloatComparator;
-import org.apache.lucene.search.comparators.IntComparator;
-import org.apache.lucene.search.comparators.LongComparator;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.util.BytesRef;
@@ -37,10 +32,6 @@ import org.apache.lucene.util.NumericUtils;
 /**
  * Stores information about how to sort documents by terms in an individual
  * field.  Fields must be indexed in order to sort by them.
- *
- * Sorting on a numeric field that is indexed with both doc values and points may use an
- * optimization to skip non-competitive documents. This optimization relies on the assumption
- * that the same data is stored in these points and doc values.
  *
  * <p>Created: Feb 11, 2004 1:25:29 PM
  *
@@ -457,19 +448,19 @@ public class SortField {
       return new FieldComparator.RelevanceComparator(numHits);
 
     case DOC:
-      return new DocComparator(numHits, reverse, sortPos);
+      return new FieldComparator.DocComparator(numHits);
 
     case INT:
-      return new IntComparator(numHits, field, (Integer) missingValue, reverse, sortPos);
+      return new FieldComparator.IntComparator(numHits, field, (Integer) missingValue);
 
     case FLOAT:
-      return new FloatComparator(numHits, field, (Float) missingValue, reverse, sortPos);
+      return new FieldComparator.FloatComparator(numHits, field, (Float) missingValue);
 
     case LONG:
-      return new LongComparator(numHits, field, (Long) missingValue, reverse, sortPos);
+      return new FieldComparator.LongComparator(numHits, field, (Long) missingValue);
 
     case DOUBLE:
-      return new DoubleComparator(numHits, field, (Double) missingValue, reverse, sortPos);
+      return new FieldComparator.DoubleComparator(numHits, field, (Double) missingValue);
 
     case CUSTOM:
       assert comparatorSource != null;

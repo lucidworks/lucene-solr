@@ -102,7 +102,7 @@ public class TestCompressingTermVectorsFormat extends BaseTermVectorsFormatTestC
       for (LeafReaderContext leaf : ir2.leaves()) {
         CodecReader sr = (CodecReader) leaf.reader();
         CompressingTermVectorsReader reader = (CompressingTermVectorsReader)sr.getTermVectorsReader();
-        assertTrue(reader.getNumDirtyDocs() > 0);
+        assertEquals(1, reader.getNumChunks());
         assertEquals(1, reader.getNumDirtyChunks());
       }
     }

@@ -17,6 +17,8 @@
 
 package org.apache.solr.common.cloud;
 
+import java.io.BufferedReader;
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -48,7 +50,7 @@ public class ZkDynamicConfig {
   public static ZkDynamicConfig parseLines(String lines) {
     ZkDynamicConfig zkDynamicConfig = new ZkDynamicConfig();
     if (!StringUtils.isEmpty(lines)) {
-      lines.lines().forEach(l -> {
+      new BufferedReader(new StringReader(lines)).lines().forEach(l -> {
         if (l.startsWith("version=")) {
           zkDynamicConfig.version = l.split("=")[1];
         }

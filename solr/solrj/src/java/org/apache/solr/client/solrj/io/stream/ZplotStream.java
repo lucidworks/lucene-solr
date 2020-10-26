@@ -294,6 +294,7 @@ public class ZplotStream extends TupleStream implements Expressible {
         while(it.hasNext()) {
           values.add((Long)it.next());
         }
+        System.out.println(values);
         int[] x = new int[values.size()];
         double[] y = new double[values.size()];
         for(int i=0; i<values.size(); i++) {

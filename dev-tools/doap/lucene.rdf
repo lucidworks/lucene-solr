@@ -69,13 +69,6 @@
     <!-- NOTE: please insert releases in numeric order, NOT chronologically. -->
     <release>
        <Version>
-         <name>lucene-8.6.3</name>
-         <created>2020-10-07</created>
-         <revision>8.6.3</revision>
-       </Version>
-   </release>
-    <release>
-       <Version>
          <name>lucene-8.6.2</name>
          <created>2020-09-01</created>
          <revision>8.6.2</revision>
@@ -122,7 +115,7 @@
         <created>2020-01-13</created>
         <revision>8.4.1</revision>
       </Version>
-    </release>
+   </release>
    <release>
       <Version>
         <name>lucene-8.4.0</name>
@@ -267,15 +260,15 @@
       <Version>
         <name>lucene-7.0.0</name>
         <created>2017-09-20</created>
-        <revision>7.0.0</revision>
+	      <revision>7.0.0</revision>
       </Version>
     </release>
     <release>
-      <Version>
-        <name>lucene-6.6.6</name>
-        <created>2018-04-05</created>
-        <revision>6.6.6</revision>
-      </Version>
+       <Version>
+         <name>lucene-6.6.6</name>
+         <created>2019-04-05</created>
+         <revision>6.6.6</revision>
+       </Version>
     </release>
     <release>
       <Version>

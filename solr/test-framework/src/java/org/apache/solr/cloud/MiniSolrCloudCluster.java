@@ -17,6 +17,7 @@
 package org.apache.solr.cloud;
 
 import java.io.IOException;
+
 import java.lang.invoke.MethodHandles;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -77,7 +78,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.MetricRegistry;
-
 import static org.apache.solr.core.ConfigSetProperties.DEFAULT_FILENAME;
 
 /**
@@ -115,11 +115,8 @@ public class MiniSolrCloudCluster {
       "    <int name=\"distribUpdateSoTimeout\">${distribUpdateSoTimeout:340000}</int>\n" +
       "    <str name=\"zkCredentialsProvider\">${zkCredentialsProvider:org.apache.solr.common.cloud.DefaultZkCredentialsProvider}</str> \n" +
       "    <str name=\"zkACLProvider\">${zkACLProvider:org.apache.solr.common.cloud.DefaultZkACLProvider}</str> \n" +
-      "    <str name=\"pkiHandlerPrivateKeyPath\">${pkiHandlerPrivateKeyPath:cryptokeys/priv_key512_pkcs8.pem}</str> \n" +
-      "    <str name=\"pkiHandlerPublicKeyPath\">${pkiHandlerPublicKeyPath:cryptokeys/pub_key512.der}</str> \n" +
       "  </solrcloud>\n" +
-      // NOTE: this turns off the metrics collection unless overriden by a sysprop
-      "  <metrics enabled=\"${metricsEnabled:false}\">\n" +
+      "  <metrics>\n" +
       "    <reporter name=\"default\" class=\"org.apache.solr.metrics.reporters.SolrJmxReporter\">\n" +
       "      <str name=\"rootName\">solr_${hostPort:8983}</str>\n" +
       "    </reporter>\n" +

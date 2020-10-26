@@ -214,10 +214,14 @@ public class TestDocument extends LuceneTestCase {
 
   public void testGetValues() {
     Document doc = makeDocumentWithFields();
-    assertArrayEquals(new String[] {"test1", "test2"}, doc.getValues("keyword"));
-    assertArrayEquals(new String[] {"test1", "test2"}, doc.getValues("text"));
-    assertArrayEquals(new String[] {"test1", "test2"}, doc.getValues("unindexed"));
-    assertArrayEquals(new String[0], doc.getValues("nope"));
+    assertEquals(new String[] {"test1", "test2"},
+                 doc.getValues("keyword"));
+    assertEquals(new String[] {"test1", "test2"},
+                 doc.getValues("text"));
+    assertEquals(new String[] {"test1", "test2"},
+                 doc.getValues("unindexed"));
+    assertEquals(new String[0],
+                 doc.getValues("nope"));
   }
   
   public void testPositionIncrementMultiFields() throws Exception {

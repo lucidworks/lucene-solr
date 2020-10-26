@@ -77,7 +77,6 @@ public class CachingNaiveBayesClassifier extends SimpleNaiveBayesClassifier {
   }
 
 
-  /** Transforms values into a range between 0 and 1 */
   protected List<ClassificationResult<BytesRef>> assignClassNormalizedList(String inputDocument) throws IOException {
     String[] tokenizedText = tokenize(inputDocument);
 
@@ -85,7 +84,8 @@ public class CachingNaiveBayesClassifier extends SimpleNaiveBayesClassifier {
 
     // normalization
     // The values transforms to a 0-1 range
-    return super.normClassificationResults(assignedClasses);
+    ArrayList<ClassificationResult<BytesRef>> asignedClassesNorm = super.normClassificationResults(assignedClasses);
+    return asignedClassesNorm;
   }
 
   private List<ClassificationResult<BytesRef>> calculateLogLikelihood(String[] tokenizedText) throws IOException {
@@ -222,7 +222,7 @@ public class CachingNaiveBayesClassifier extends SimpleNaiveBayesClassifier {
     }
     for (Map.Entry<String, Long> entry : frequencyMap.entrySet()) {
       if (entry.getValue() > minTermOccurrenceInCache) {
-        termCClassHitCache.put(entry.getKey(), new ConcurrentHashMap<>());
+        termCClassHitCache.put(entry.getKey(), new ConcurrentHashMap<BytesRef, Integer>());
       }
     }
 

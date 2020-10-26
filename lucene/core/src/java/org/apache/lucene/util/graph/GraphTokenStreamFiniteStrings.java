@@ -137,7 +137,7 @@ public final class GraphTokenStreamFiniteStrings {
    */
   public Iterator<TokenStream> getFiniteStrings(int startState, int endState) {
     final FiniteStringsIterator it = new FiniteStringsIterator(det, startState, endState);
-    return new Iterator<> () {
+    return new Iterator<TokenStream> () {
       IntsRef current;
       boolean finished = false;
 

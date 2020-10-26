@@ -13,37 +13,37 @@ Please join the Lucene-User mailing list by sending a message to:
 
 FILES
 
-lucene-analysis-common-XX.jar
+lucene-analyzers-common-XX.jar
   The primary analysis module library, containing general-purpose analysis
   components and support for various languages.
 
-lucene-analysis-icu-XX.jar
+lucene-analyzers-icu-XX.jar
   An add-on analysis library that provides improved Unicode support via
   International Components for Unicode (ICU). Note: this module depends on
   the ICU4j jar file (version >= 4.6.0)
 
-lucene-analysis-kuromoji-XX.jar
+lucene-analyzers-kuromoji-XX.jar
   An analyzer with morphological analysis for Japanese.
 
-lucene-analysis-morfologik-XX.jar
+lucene-analyzers-morfologik-XX.jar
   An analyzer using the Morfologik stemming library.
 
-lucene-analysis-nori-XX.jar
+lucene-analyzers-nori-XX.jar
   An analyzer with morphological analysis for Korean.
 
-lucene-analysis-opennlp-XX.jar
+lucene-analyzers-opennlp-XX.jar
   An analyzer using the OpenNLP natural-language processing library.
 
-lucene-analysis-phonetic-XX.jar
+lucene-analyzers-phonetic-XX.jar
   An add-on analysis library that provides phonetic encoders via Apache
   Commons-Codec. Note: this module depends on the commons-codec jar 
   file
   
-lucene-analysis-smartcn-XX.jar
+lucene-analyzers-smartcn-XX.jar
   An add-on analysis library that provides word segmentation for Simplified
   Chinese.
 
-lucene-analysis-stempel-XX.jar
+lucene-analyzers-stempel-XX.jar
   An add-on analysis library that contains a universal algorithmic stemmer,
   including tables for the Polish language.
 

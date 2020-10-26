@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
@@ -272,6 +273,13 @@ public class PhraseWildcardQuery extends Query {
           return new ExactPhraseMatcher(postingsFreqs, scoreMode, scorer, totalMatchCost);
         } else {
           return new SloppyPhraseMatcher(postingsFreqs, slop, scoreMode, scorer, totalMatchCost, exposeOffsets);
+        }
+      }
+
+      @Override
+      public void extractTerms(Set<Term> terms) {
+        for (int i = 0, size = phraseTerms.size(); i < size; i++) {
+          terms.addAll(termsData.getTermData(i).terms);
         }
       }
     };
@@ -858,7 +866,7 @@ public class PhraseWildcardQuery extends Query {
     @SuppressWarnings("unchecked")
     protected void setTermStatesForSegment(LeafReaderContext leafReaderContext, List<TermBytesTermState> termStates) {
       if (termStatesPerSegment == null) {
-        termStatesPerSegment = (List<TermBytesTermState>[]) new List<?>[numSegments];
+        termStatesPerSegment = (List<TermBytesTermState>[]) new List[numSegments];
         termsData.numTermsMatching++;
       }
       termStatesPerSegment[leafReaderContext.ord] = termStates;

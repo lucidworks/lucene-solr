@@ -411,7 +411,7 @@ public class JettySolrRunner {
     GzipHandler gzipHandler = new GzipHandler();
     gzipHandler.setHandler(chain);
 
-    gzipHandler.setMinGzipSize(23); // https://github.com/eclipse/jetty.project/issues/4191
+    gzipHandler.setMinGzipSize(0);
     gzipHandler.setCheckGzExists(false);
     gzipHandler.setCompressionLevel(-1);
     gzipHandler.setExcludedAgentPatterns(".*MSIE.6\\.0.*");
@@ -810,9 +810,13 @@ public class JettySolrRunner {
   /**
    * A main class that starts jetty+solr This is useful for debugging
    */
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
+    try {
     JettySolrRunner jetty = new JettySolrRunner(".", "/solr", 8983);
     jetty.start();
+    } catch (Exception ex) {
+      ex.printStackTrace();
+    }
   }
 
   /**

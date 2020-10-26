@@ -21,10 +21,12 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.RamUsageEstimator;
 
@@ -46,14 +48,14 @@ public final class CoveringQuery extends Query implements Accountable {
    * @param queries Sub queries to match.
    * @param minimumNumberMatch Per-document long value that records how many queries
    *                           should match. Values that are less than 1 are treated
-   *                           like <code>1</code>: only documents that have at least one
+   *                           like <tt>1</tt>: only documents that have at least one
    *                           matching clause will be considered matches. Documents
-   *                           that do not have a value for <code>minimumNumberMatch</code>
+   *                           that do not have a value for <tt>minimumNumberMatch</tt>
    *                           do not match.
    */
   public CoveringQuery(Collection<Query> queries, LongValuesSource minimumNumberMatch) {
-    if (queries.size() > IndexSearcher.getMaxClauseCount()) {
-      throw new IndexSearcher.TooManyClauses();
+    if (queries.size() > BooleanQuery.getMaxClauseCount()) {
+      throw new BooleanQuery.TooManyClauses();
     }
     if (minimumNumberMatch.needsScores()) {
       throw new IllegalArgumentException("The minimum number of matches may not depend on the score.");
@@ -145,6 +147,13 @@ public final class CoveringQuery extends Query implements Accountable {
       super(query);
       this.weights = weights;
       this.minimumNumberMatch = minimumNumberMatch;
+    }
+
+    @Override
+    public void extractTerms(Set<Term> terms) {
+      for (Weight weight : weights) {
+        weight.extractTerms(terms);
+      }
     }
 
     @Override

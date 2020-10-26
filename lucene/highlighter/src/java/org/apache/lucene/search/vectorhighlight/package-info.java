@@ -35,8 +35,7 @@
  * <p>To explain the algorithm, let's use the following sample text
  *  (to be highlighted) and user query:</p>
  * 
- * <table style="border: 1px solid">
- * <caption>sample document and query</caption>
+ * <table border=1 summary="sample document and query">
  * <tr>
  * <td><b>Sample Text</b></td>
  * <td>Lucene is a search engine library.</td>
@@ -165,7 +164,7 @@
  * <li><code>WeightedFragListBuilder using WeightedFieldFragList</code>: <i>sum-of-distinct-weights</i>-approach. The totalBoost is calculated by summarizing the IDF-weights of distinct terms.</li>
  * </ul> 
  * <p>Comparison of the two approaches:</p>
- * <table style="border: 1px solid">
+ * <table border="1">
  * <caption>
  *   query = das alte testament (The Old Testament)
  * </caption>

@@ -159,7 +159,7 @@ public class BlockHeader implements Accountable {
     public BlockHeader read(DataInput input, BlockHeader reuse) throws IOException {
       int linesCount = input.readVInt();
       if (linesCount <= 0 || linesCount > UniformSplitTermsWriter.MAX_NUM_BLOCK_LINES) {
-        throw new CorruptIndexException("Illegal number of lines in block: " + linesCount, input);
+        throw new CorruptIndexException("Illegal number of lines in a block: " + linesCount, input);
       }
 
       long baseDocsFP = input.readVLong();

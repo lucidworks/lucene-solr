@@ -137,7 +137,7 @@ public class CollectionMutator {
     }
 
     return new ZkWriteCommand(coll.getName(),
-        new DocCollection(coll.getName(), coll.getSlicesMap(), m, coll.getRouter(), coll.getZNodeVersion()));
+        new DocCollection(coll.getName(), coll.getSlicesMap(), m, coll.getRouter(), coll.getZNodeVersion(), coll.getZNode()));
   }
 
   public static DocCollection updateSlice(String collectionName, DocCollection collection, Slice slice) {

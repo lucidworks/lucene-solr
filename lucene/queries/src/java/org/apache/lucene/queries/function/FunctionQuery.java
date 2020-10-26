@@ -18,9 +18,11 @@ package org.apache.lucene.queries.function;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
@@ -53,14 +55,10 @@ public class FunctionQuery extends Query {
     return func;
   }
 
-  /**
-   * Creates FunctionQuery scorer instances
-   * @lucene.internal
-   */
   protected class FunctionWeight extends Weight {
     protected final IndexSearcher searcher;
     protected final float boost;
-    protected final Map<Object, Object> context;
+    protected final Map context;
 
     public FunctionWeight(IndexSearcher searcher, float boost) throws IOException {
       super(FunctionQuery.this);
@@ -69,6 +67,9 @@ public class FunctionQuery extends Query {
       func.createWeight(context, searcher);
       this.boost = boost;
     }
+
+    @Override
+    public void extractTerms(Set<Term> terms) {}
 
     @Override
     public Scorer scorer(LeafReaderContext context) throws IOException {
@@ -91,10 +92,6 @@ public class FunctionQuery extends Query {
     visitor.visitLeaf(this);
   }
 
-  /**
-   * Scores all documents, applying the function to each document
-   * @lucene.internal
-   */
   protected class AllScorer extends Scorer {
     final IndexReader reader;
     final FunctionWeight weight;

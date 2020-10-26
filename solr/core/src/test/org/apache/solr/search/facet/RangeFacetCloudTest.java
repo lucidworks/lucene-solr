@@ -85,6 +85,7 @@ public class RangeFacetCloudTest extends SolrCloudTestCase {
   public static void setupCluster() throws Exception {
     final int numShards = TestUtil.nextInt(random(),1,5);
     final int numReplicas = 1;
+    final int maxShardsPerNode = 1;
     final int nodeCount = numShards * numReplicas;
 
     configureCluster(nodeCount)
@@ -92,6 +93,7 @@ public class RangeFacetCloudTest extends SolrCloudTestCase {
       .configure();
 
     assertEquals(0, (CollectionAdminRequest.createCollection(COLLECTION, CONF, numShards, numReplicas)
+                     .setMaxShardsPerNode(maxShardsPerNode)
                      .setProperties(Collections.singletonMap(CoreAdminParams.CONFIG, "solrconfig-minimal.xml"))
                      .process(cluster.getSolrClient())).getStatus());
     
@@ -775,7 +777,7 @@ public class RangeFacetCloudTest extends SolrCloudTestCase {
         toMerge.add(TERM_MODEL[i]);
       }
 
-      assertEquals("count", expectedCount, bucket.get("count"));
+      assertEqualsHACK("count", expectedCount, bucket.get("count"));
       
       // merge the maps of our range values by summing the (int) values on key collisions
       final Map<String,Long> expectedTermCounts = toMerge.stream()
@@ -802,7 +804,7 @@ public class RangeFacetCloudTest extends SolrCloudTestCase {
           assertNotNull("subfacet bucket with null term: " + subBucket, term);
           final Long expectedTermCount = expectedTermCounts.get(term.toString());
           assertNotNull("unexpected subfacet bucket: " + subBucket, expectedTermCount);
-          assertEquals("subfacet count for term: " + term, expectedTermCount, subBucket.get("count"));
+          assertEqualsHACK("subfacet count for term: " + term, expectedTermCount, subBucket.get("count"));
         }
       }
         
@@ -944,6 +946,16 @@ public class RangeFacetCloudTest extends SolrCloudTestCase {
       val = val.replaceAll("\\s","");
     }
     return ", other:" + val;
+  }
+  
+  /**
+   * HACK to work around SOLR-11775.
+   * Asserts that the 'actual' argument is a (non-null) Number, then compares it's 'longValue' to the 'expected' argument
+   */
+  private static void assertEqualsHACK(String msg, long expected, Object actual) {
+    assertNotNull(msg, actual);
+    assertTrue(msg + " ... NOT A NUMBER: " + actual.getClass(), Number.class.isInstance(actual));
+    assertEquals(msg, expected, ((Number)actual).longValue());
   }
   
 }

@@ -18,7 +18,7 @@ package org.apache.lucene.analysis.shingle;
 
 
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 import java.util.Map;
 
@@ -70,11 +70,6 @@ public class ShingleFilterFactory extends TokenFilterFactory {
     if (!args.isEmpty()) {
       throw new IllegalArgumentException("Unknown parameters: " + args);
     }
-  }
-
-  /** Default ctor for compatibility with SPI */
-  public ShingleFilterFactory() {
-    throw defaultCtorException();
   }
 
   @Override

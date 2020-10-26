@@ -57,8 +57,8 @@ class FacetFieldProcessorByHashDV extends FacetFieldProcessor {
     static final float LOAD_FACTOR = 0.7f;
 
     long[] vals;
-    long[] counts;  // maintain the counts here since we need them to tell if there was actually a value anyway
-    long[] oldToNewMapping;
+    int[] counts;  // maintain the counts here since we need them to tell if there was actually a value anyway
+    int[] oldToNewMapping;
 
     int cardinality;
     int threshold;
@@ -66,7 +66,7 @@ class FacetFieldProcessorByHashDV extends FacetFieldProcessor {
     /** sz must be a power of two */
     LongCounts(int sz) {
       vals = new long[sz];
-      counts = new long[sz];
+      counts = new int[sz];
       threshold = (int) (sz * LOAD_FACTOR);
     }
 
@@ -95,7 +95,7 @@ class FacetFieldProcessorByHashDV extends FacetFieldProcessor {
 
       int h = hash(val);
       for (int slot = h & (vals.length-1);  ;slot = (slot + ((h>>7)|1)) & (vals.length-1)) {
-        long count = counts[slot];
+        int count = counts[slot];
         if (count == 0) {
           counts[slot] = 1;
           vals[slot] = val;
@@ -111,14 +111,14 @@ class FacetFieldProcessorByHashDV extends FacetFieldProcessor {
 
     protected void rehash() {
       long[] oldVals = vals;
-      long[] oldCounts = counts;  // after retrieving the count, this array is reused as a mapping to new array
+      int[] oldCounts = counts;  // after retrieving the count, this array is reused as a mapping to new array
       int newCapacity = vals.length << 1;
       vals = new long[newCapacity];
-      counts = new long[newCapacity];
+      counts = new int[newCapacity];
       threshold = (int) (newCapacity * LOAD_FACTOR);
 
       for (int i=0; i<oldVals.length; i++) {
-        long count = oldCounts[i];
+        int count = oldCounts[i];
         if (count == 0) {
           oldCounts[i] = -1;
           continue;
@@ -291,12 +291,12 @@ class FacetFieldProcessorByHashDV extends FacetFieldProcessor {
 
     countAcc = new SlotAcc.CountSlotAcc(fcontext) {
       @Override
-      public void incrementCount(int slot, long count) {
+      public void incrementCount(int slot, int count) {
         throw new UnsupportedOperationException();
       }
 
       @Override
-      public long getCount(int slot) {
+      public int getCount(int slot) {
         return table.counts[slot];
       }
 
@@ -317,7 +317,7 @@ class FacetFieldProcessorByHashDV extends FacetFieldProcessor {
 
       @Override
       public int compare(int slotA, int slotB) {
-        return Long.compare( table.counts[slotA], table.counts[slotB] );
+        return Integer.compare( table.counts[slotA], table.counts[slotB] );
       }
 
       @Override
@@ -460,7 +460,7 @@ class FacetFieldProcessorByHashDV extends FacetFieldProcessor {
     }
 
     final int finalNumSlots = numSlots;
-    final long[] mapping = table.oldToNewMapping;
+    final int[] mapping = table.oldToNewMapping;
 
     SlotAcc.Resizer resizer = new SlotAcc.Resizer() {
       @Override
@@ -471,7 +471,7 @@ class FacetFieldProcessorByHashDV extends FacetFieldProcessor {
       @Override
       public int getNewSlot(int oldSlot) {
         if (oldSlot < mapping.length) {
-          return (int) mapping[oldSlot];
+          return mapping[oldSlot];
         }
         if (oldSlot == oldAllBucketsSlot) {
           return allBucketsSlot;

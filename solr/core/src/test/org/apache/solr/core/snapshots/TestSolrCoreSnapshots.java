@@ -29,8 +29,7 @@ import java.util.Optional;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexCommit;
 import org.apache.lucene.index.IndexNotFoundException;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.NIOFSDirectory;
+import org.apache.lucene.store.SimpleFSDirectory;
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.lucene.util.TestUtil;
 import org.apache.solr.SolrTestCaseJ4;
@@ -105,7 +104,7 @@ public class TestSolrCoreSnapshots extends SolrCloudTestCase {
 
     try (
         SolrClient adminClient = getHttpSolrClient(cluster.getJettySolrRunners().get(0).getBaseUrl().toString());
-        SolrClient leaderClient = getHttpSolrClient(replica.getCoreUrl())) {
+        SolrClient masterClient = getHttpSolrClient(replica.getCoreUrl())) {
 
       SnapshotMetaData metaData = createSnapshot(adminClient, coreName, commitName);
       // Create another snapshot referring to the same index commit to verify the
@@ -116,8 +115,8 @@ public class TestSolrCoreSnapshots extends SolrCloudTestCase {
       assertEquals (metaData.getGenerationNumber(), duplicateCommit.getGenerationNumber());
 
       // Delete all documents
-      leaderClient.deleteByQuery("*:*");
-      leaderClient.commit();
+      masterClient.deleteByQuery("*:*");
+      masterClient.commit();
       BackupRestoreUtils.verifyDocs(0, cluster.getSolrClient(), collectionName);
 
       // Verify that the index directory contains at least 2 index commits - one referred by the snapshots
@@ -192,7 +191,7 @@ public class TestSolrCoreSnapshots extends SolrCloudTestCase {
 
     try (
         SolrClient adminClient = getHttpSolrClient(cluster.getJettySolrRunners().get(0).getBaseUrl().toString());
-        SolrClient leaderClient = getHttpSolrClient(replica.getCoreUrl())) {
+        SolrClient masterClient = getHttpSolrClient(replica.getCoreUrl())) {
 
       SnapshotMetaData metaData = createSnapshot(adminClient, coreName, commitName);
 
@@ -203,7 +202,7 @@ public class TestSolrCoreSnapshots extends SolrCloudTestCase {
           //Delete a few docs
           int numDeletes = TestUtil.nextInt(random(), 1, nDocs);
           for(int i=0; i<numDeletes; i++) {
-            leaderClient.deleteByQuery("id:" + i);
+            masterClient.deleteByQuery("id:" + i);
           }
           //Add a few more
           int moreAdds = TestUtil.nextInt(random(), 1, 100);
@@ -211,9 +210,9 @@ public class TestSolrCoreSnapshots extends SolrCloudTestCase {
             SolrInputDocument doc = new SolrInputDocument();
             doc.addField("id", i + nDocs);
             doc.addField("name", "name = " + (i + nDocs));
-            leaderClient.add(doc);
+            masterClient.add(doc);
           }
-          leaderClient.commit();
+          masterClient.commit();
         }
       }
 
@@ -227,7 +226,7 @@ public class TestSolrCoreSnapshots extends SolrCloudTestCase {
       }
 
       // Optimize the index.
-      leaderClient.optimize(true, true, 1);
+      masterClient.optimize(true, true, 1);
 
       // After invoking optimize command, verify that the index directory contains multiple commits (including the one we snapshotted earlier).
       {
@@ -248,13 +247,13 @@ public class TestSolrCoreSnapshots extends SolrCloudTestCase {
           SolrInputDocument doc = new SolrInputDocument();
           doc.addField("id", i + nDocs);
           doc.addField("name", "name = " + (i + nDocs));
-          leaderClient.add(doc);
+          masterClient.add(doc);
         }
-        leaderClient.commit();
+        masterClient.commit();
       }
 
       // Optimize the index.
-      leaderClient.optimize(true, true, 1);
+      masterClient.optimize(true, true, 1);
 
       // Verify that the index directory contains only 1 index commit (which is not the same as the snapshotted commit).
       Collection<IndexCommit> commits = listCommits(metaData.getIndexDirPath());
@@ -304,7 +303,7 @@ public class TestSolrCoreSnapshots extends SolrCloudTestCase {
   }
 
   private List<IndexCommit> listCommits(String directory) throws Exception {
-    Directory dir = new NIOFSDirectory(Paths.get(directory));
+    SimpleFSDirectory dir = new SimpleFSDirectory(Paths.get(directory));
     try {
       return DirectoryReader.listCommits(dir);
     } catch (IndexNotFoundException ex) {

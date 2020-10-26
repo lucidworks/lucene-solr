@@ -22,14 +22,10 @@
 #SOLR_JAVA_HOME=""
 
 # This controls the number of seconds that the solr script will wait for
-# Solr to stop gracefully.  If the graceful stop fails, the script will
-# forcibly stop Solr.
+# Solr to stop gracefully or Solr to start.  If the graceful stop fails,
+# the script will forcibly stop Solr.  If the start fails, the script will
+# give up waiting and display the last few lines of the logfile.
 #SOLR_STOP_WAIT="180"
-
-# This controls the number of seconds that the solr script will wait for
-# Solr to start.  If the start fails, the script will give up waiting and
-# display the last few lines of the logfile.
-#SOLR_START_WAIT="$SOLR_STOP_WAIT"
 
 # Increase Java Heap as needed to support your indexing / query needs
 #SOLR_HEAP="512m"
@@ -71,7 +67,7 @@
 #ZK_HOST=""
 
 # Set the ZooKeeper client timeout (for SolrCloud mode)
-#ZK_CLIENT_TIMEOUT="30000"
+#ZK_CLIENT_TIMEOUT="15000"
 
 # By default the start script uses "localhost"; override the hostname here
 # for production SolrCloud environments to control the hostname exposed to cluster state
@@ -142,14 +138,6 @@
 # Specify a comma-separated list of addresses or networks, for example:
 #   127.0.0.1, 192.168.0.0/24, [::1], [2000:123:4:5::]/64
 #SOLR_IP_BLACKLIST=
-
-# Sets the network interface the Solr binds to. To prevent administrators from
-# accidentally exposing Solr more widely than intended, this defaults to 127.0.0.1.
-# Administrators should think carefully about their deployment environment and
-# set this value as narrowly as required before going to production. In
-# environments where security is not a concern, 0.0.0.0 can be used to allow
-# Solr to accept connections on all network interfaces.
-#SOLR_JETTY_HOST="127.0.0.1"
 
 # Enables HTTPS. It is implictly true if you set SOLR_SSL_KEY_STORE. Use this config
 # to enable https module with custom jetty configuration.
@@ -238,11 +226,7 @@
 # Runtime properties are passed to the security policy file (server/etc/security.policy)
 # You can also tweak via standard JDK files such as ~/.java.policy, see https://s.apache.org/java8policy
 # This is experimental! It may not work at all with Hadoop/HDFS features.
-#SOLR_SECURITY_MANAGER_ENABLED=true
-# This variable provides you with the option to disable the Admin UI. if you uncomment the variable below and
-# change the value to true. The option is configured as a system property as defined in SOLR_START_OPTS in the start
-# scripts.
-# SOLR_ADMIN_UI_DISABLED=false
+#SOLR_SECURITY_MANAGER_ENABLED=false
 
 # Solr is by default allowed to read and write data from/to SOLR_HOME and a few other well defined locations
 # Sometimes it may be necessary to place a core or a backup on a different location or a different disk

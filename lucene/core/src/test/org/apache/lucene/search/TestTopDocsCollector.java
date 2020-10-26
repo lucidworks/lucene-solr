@@ -106,10 +106,6 @@ public class TestTopDocsCollector extends LuceneTestCase {
 
   private TopDocsCollector<ScoreDoc> doSearch(int numResults) throws IOException {
     Query q = new MatchAllDocsQuery();
-    return doSearch(numResults, q);
-  }
-
-  private TopDocsCollector<ScoreDoc> doSearch(int numResults, Query q) throws IOException {
     IndexSearcher searcher = newSearcher(reader);
     TopDocsCollector<ScoreDoc> tdc = new MyTopsDocCollector(numResults);
     searcher.search(q, tdc);
@@ -167,21 +163,20 @@ public class TestTopDocsCollector extends LuceneTestCase {
     TopDocsCollector<ScoreDoc> tdc = doSearch(numResults);
     
     // start < 0
-    IllegalArgumentException exception = expectThrows(IllegalArgumentException.class, () -> {
-      tdc.topDocs(-1);
-    });
-
-    assertEquals("Expected value of starting position is between 0 and 5, got -1", exception.getMessage());
-
+    assertEquals(0, tdc.topDocs(-1).scoreDocs.length);
+    
+    // start > pq.size()
+    assertEquals(0, tdc.topDocs(numResults + 1).scoreDocs.length);
+    
     // start == pq.size()
     assertEquals(0, tdc.topDocs(numResults).scoreDocs.length);
     
     // howMany < 0
-    exception = expectThrows(IllegalArgumentException.class, () -> {
-      tdc.topDocs(0, -1);
-    });
-
-    assertEquals("Number of hits requested must be greater than 0 but value was -1", exception.getMessage());
+    assertEquals(0, tdc.topDocs(0, -1).scoreDocs.length);
+    
+    // howMany == 0
+    assertEquals(0, tdc.topDocs(0, 0).scoreDocs.length);
+    
   }
   
   public void testZeroResults() throws Exception {
@@ -221,22 +216,6 @@ public class TestTopDocsCollector extends LuceneTestCase {
     tdc = doSearch(15);
     // get the last 5 only.
     assertEquals(5, tdc.topDocs(10).scoreDocs.length);
-  }
-
-  public void testIllegalArguments() throws Exception {
-    final TopDocsCollector<ScoreDoc> tdc = doSearch(15);
-
-    IllegalArgumentException expected = expectThrows(IllegalArgumentException.class, () -> {
-      tdc.topDocs(-1);
-    });
-
-    assertEquals("Expected value of starting position is between 0 and 15, got -1", expected.getMessage());
-
-    expected = expectThrows(IllegalArgumentException.class, () -> {
-      tdc.topDocs(9, -1);
-    });
-
-    assertEquals("Number of hits requested must be greater than 0 but value was -1", expected.getMessage());
   }
   
   // This does not test the PQ's correctness, but whether topDocs()

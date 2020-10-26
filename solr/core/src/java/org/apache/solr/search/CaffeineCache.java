@@ -362,9 +362,14 @@ public class CaffeineCache<K, V> extends SolrCacheBase implements SolrCache<K, V
   }
 
   @Override
+  public Set<String> getMetricNames() {
+    return metricNames;
+  }
+
+  @Override
   public void initializeMetrics(SolrMetricsContext parentContext, String scope) {
     solrMetricsContext = parentContext.getChildContext(this);
-    cacheMap = new MetricsMap(map -> {
+    cacheMap = new MetricsMap((detailed, map) -> {
       if (cache != null) {
         CacheStats stats = cache.stats();
         long insertCount = inserts.sum();
@@ -387,6 +392,6 @@ public class CaffeineCache<K, V> extends SolrCacheBase implements SolrCache<K, V
         map.put("cumulative_evictions", cumulativeStats.evictionCount());
       }
     });
-    solrMetricsContext.gauge(cacheMap, true, scope, getCategory().toString());
+    solrMetricsContext.gauge(this, cacheMap, true, scope, getCategory().toString());
   }
 }

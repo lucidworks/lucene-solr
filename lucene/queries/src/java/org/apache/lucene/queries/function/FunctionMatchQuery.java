@@ -44,32 +44,17 @@ import org.apache.lucene.search.Weight;
  */
 public final class FunctionMatchQuery extends Query {
 
-  static final float DEFAULT_MATCH_COST = 100;
-
   private final DoubleValuesSource source;
   private final DoublePredicate filter;
-  private final float matchCost; // not used in equals/hashCode
 
   /**
-   * Create a FunctionMatchQuery with default TwoPhaseIterator matchCost -
-   * {@link #DEFAULT_MATCH_COST} = {@value #DEFAULT_MATCH_COST}
+   * Create a FunctionMatchQuery
    * @param source  a {@link DoubleValuesSource} to use for values
    * @param filter  the predicate to match against
    */
   public FunctionMatchQuery(DoubleValuesSource source, DoublePredicate filter) {
-    this(source, filter, DEFAULT_MATCH_COST);
-  }
-
-  /**
-   * Create a FunctionMatchQuery
-   * @param source     a {@link DoubleValuesSource} to use for values
-   * @param filter     the predicate to match against
-   * @param matchCost  to be returned by {@link TwoPhaseIterator#matchCost()}
-   */
-  public FunctionMatchQuery(DoubleValuesSource source, DoublePredicate filter, float matchCost) {
     this.source = source;
     this.filter = filter;
-    this.matchCost = matchCost;
   }
 
   @Override
@@ -98,7 +83,7 @@ public final class FunctionMatchQuery extends Query {
 
           @Override
           public float matchCost() {
-            return matchCost; // TODO maybe DoubleValuesSource should have a matchCost?
+            return 100; // TODO maybe DoubleValuesSource should have a matchCost?
           }
         };
         return new ConstantScoreScorer(this, score(), scoreMode, twoPhase);

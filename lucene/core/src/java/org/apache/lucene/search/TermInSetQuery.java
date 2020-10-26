@@ -23,6 +23,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.SortedSet;
 
 import org.apache.lucene.index.IndexReader;
@@ -114,7 +115,7 @@ public class TermInSetQuery extends Query implements Accountable {
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
-    final int threshold = Math.min(BOOLEAN_REWRITE_TERM_COUNT_THRESHOLD, IndexSearcher.getMaxClauseCount());
+    final int threshold = Math.min(BOOLEAN_REWRITE_TERM_COUNT_THRESHOLD, BooleanQuery.getMaxClauseCount());
     if (termData.size() <= threshold) {
       BooleanQuery.Builder bq = new BooleanQuery.Builder();
       TermIterator iterator = termData.iterator();
@@ -240,6 +241,14 @@ public class TermInSetQuery extends Query implements Accountable {
     return new ConstantScoreWeight(this, boost) {
 
       @Override
+      public void extractTerms(Set<Term> terms) {
+        // no-op
+        // This query is for abuse cases when the number of terms is too high to
+        // run efficiently as a BooleanQuery. So likewise we hide its terms in
+        // order to protect highlighters
+      }
+
+      @Override
       public Matches matches(LeafReaderContext context, int doc) throws IOException {
         Terms terms = context.reader().terms(field);
         if (terms == null || terms.hasPositions() == false) {
@@ -265,7 +274,7 @@ public class TermInSetQuery extends Query implements Accountable {
 
         // We will first try to collect up to 'threshold' terms into 'matchingTerms'
         // if there are two many terms, we will fall back to building the 'builder'
-        final int threshold = Math.min(BOOLEAN_REWRITE_TERM_COUNT_THRESHOLD, IndexSearcher.getMaxClauseCount());
+        final int threshold = Math.min(BOOLEAN_REWRITE_TERM_COUNT_THRESHOLD, BooleanQuery.getMaxClauseCount());
         assert termData.size() > threshold : "Query should have been rewritten";
         List<TermAndState> matchingTerms = new ArrayList<>(threshold);
         DocIdSetBuilder builder = null;

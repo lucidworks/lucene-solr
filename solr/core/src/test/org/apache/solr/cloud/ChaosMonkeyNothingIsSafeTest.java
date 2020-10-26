@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.solr.SolrTestCaseJ4.SuppressSSL;
@@ -233,7 +232,7 @@ public class ChaosMonkeyNothingIsSafeTest extends AbstractFullDistribZkTestBase 
       Thread.sleep(2000);
       
       // wait until there are no recoveries...
-      waitForThingsToLevelOut();
+      waitForThingsToLevelOut(Integer.MAX_VALUE);//Math.round((runLength / 1000.0f / 3.0f)));
       
       // make sure we again have leaders for each shard
       for (int j = 1; j < sliceCount; j++) {
@@ -257,7 +256,7 @@ public class ChaosMonkeyNothingIsSafeTest extends AbstractFullDistribZkTestBase 
       }
       
       
-      waitForThingsToLevelOut(20, TimeUnit.SECONDS);
+      waitForThingsToLevelOut(20);
       
       commit();
       
@@ -289,7 +288,7 @@ public class ChaosMonkeyNothingIsSafeTest extends AbstractFullDistribZkTestBase 
 
       try (CloudSolrClient client = createCloudClient("collection1", 30000)) {
           createCollection(null, "testcollection",
-              1, 1, client, null, "conf1");
+              1, 1, 1, client, null, "conf1");
 
       }
       List<Integer> numShardsNumReplicas = new ArrayList<>(2);

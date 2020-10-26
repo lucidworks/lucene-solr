@@ -95,22 +95,25 @@
          that match a particular query.
       -->
     <filterCache
+      class="solr.search.FastLRUCache"
       size="512"
       initialSize="512"
       autowarmCount="2"/>
 
     <queryResultCache
+      class="solr.search.LRUCache"
       size="512"
       initialSize="512"
       autowarmCount="2"/>
 
     <documentCache
+      class="solr.search.LRUCache"
       size="512"
       initialSize="512"
       autowarmCount="0"/>
 
     <cache name="perSegFilter"
-      class="solr.CaffeineCache"
+      class="solr.search.LRUCache"
       size="10"
       initialSize="0"
       autowarmCount="10" />
@@ -122,6 +125,7 @@
     <!--
 
     <cache name="myUserCache"
+      class="solr.search.LRUCache"
       size="4096"
       initialSize="1024"
       autowarmCount="1024"
@@ -171,6 +175,10 @@
   
   <queryResponseWriter name="xml" default="true"
                        class="solr.XMLResponseWriter" />
+
+  <!-- An alternate set representation that uses an integer hash to store filters (sets of docids).
+       If the set cardinality <= maxSize elements, then HashDocSet will be used instead of the bitset
+       based HashBitset. -->
 
   <!-- requestHandler plugins
   -->
@@ -294,7 +302,6 @@
     </lst>
   </searchComponent>
 
-    <!-- This is now part of the implicit configuration together with terms=true and distrib=false defaults
   <searchComponent name="termsComp" class="org.apache.solr.handler.component.TermsComponent"/>
 
   <requestHandler name="/terms" class="org.apache.solr.handler.component.SearchHandler">
@@ -302,7 +309,6 @@
       <str>termsComp</str>
     </arr>
   </requestHandler>
-  -->
   
   
   <!--
@@ -546,7 +552,7 @@
   </restManager>
 
   <!-- warning: not a best practice; requests generally ought to be explicit to thus not require this -->
-  <initParams path="/select,/dismax,/defaults,/lazy,/spellCheckCompRH,/spellCheckWithWordbreak,/spellCheckCompRH_Direct,/spellCheckCompRH1,/mltrh,/tvrh,/search-facet-def,/search-facet-invariants">
+  <initParams path="/select,/dismax,/defaults,/lazy,/spellCheckCompRH,/spellCheckWithWordbreak,/spellCheckCompRH_Direct,/spellCheckCompRH1,/mltrh,/tvrh,/search-facet-def,/search-facet-invariants,/terms">
     <lst name="defaults">
       <str name="df">text</str>
     </lst>

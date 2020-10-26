@@ -75,7 +75,7 @@ public class FuzzyQuery extends MultiTermQuery {
    * @param maxEdits must be {@code >= 0} and {@code <=} {@link LevenshteinAutomata#MAXIMUM_SUPPORTED_DISTANCE}.
    * @param prefixLength length of common (non-fuzzy) prefix
    * @param maxExpansions the maximum number of terms to match. If this number is
-   *  greater than {@link IndexSearcher#getMaxClauseCount} when the query is rewritten,
+   *  greater than {@link BooleanQuery#getMaxClauseCount} when the query is rewritten, 
    *  then the maxClauseCount will be used instead.
    * @param transpositions true if transpositions should be treated as a primitive
    *        edit operation. If this is false, comparisons will implement the classic
@@ -159,13 +159,17 @@ public class FuzzyQuery extends MultiTermQuery {
   @Override
   public void visit(QueryVisitor visitor) {
     if (visitor.acceptField(field)) {
-      visitor.consumeTermsMatching(this, term.field(), () -> getAutomata().runAutomaton);
+      if (maxEdits == 0 || prefixLength >= term.text().length()) {
+        visitor.consumeTerms(this, term);
+      } else {
+        visitor.consumeTermsMatching(this, term.field(), () -> getAutomata().runAutomaton);
+      }
     }
   }
 
   @Override
   protected TermsEnum getTermsEnum(Terms terms, AttributeSource atts) throws IOException {
-    if (maxEdits == 0) { // can only match if it's exact
+    if (maxEdits == 0 || prefixLength >= term.text().length()) {  // can only match if it's exact
       return new SingleTermsEnum(terms.iterator(), term.bytes());
     }
     return new FuzzyTermsEnum(terms, atts, getTerm(), maxEdits, prefixLength, transpositions);
@@ -216,15 +220,23 @@ public class FuzzyQuery extends MultiTermQuery {
         && Objects.equals(maxExpansions, other.maxExpansions) && Objects.equals(transpositions, other.transpositions)
         && Objects.equals(term, other.term);
   }
+  
+  /**
+   * @deprecated pass integer edit distances instead.
+   */
+  @Deprecated
+  public final static float defaultMinSimilarity = LevenshteinAutomata.MAXIMUM_SUPPORTED_DISTANCE;
 
   /**
-   * Helper function to convert from "minimumSimilarity" fractions
+   * Helper function to convert from deprecated "minimumSimilarity" fractions
    * to raw edit distances.
    * 
    * @param minimumSimilarity scaled similarity
    * @param termLen length (in unicode codepoints) of the term.
    * @return equivalent number of maxEdits
+   * @deprecated pass integer edit distances instead.
    */
+  @Deprecated
   public static int floatToEdits(float minimumSimilarity, int termLen) {
     if (minimumSimilarity >= 1f) {
       return (int) Math.min(minimumSimilarity, LevenshteinAutomata.MAXIMUM_SUPPORTED_DISTANCE);

@@ -81,8 +81,7 @@ import com.google.common.annotations.VisibleForTesting;
 public class BlockPoolSlice {
   public static final Object SOLR_HACK_FOR_CLASS_VERIFICATION = new Object();
 
-  // Apparently the Hadoop code expectes upper-case LOG, so...
-  static final Logger LOG = LoggerFactory.getLogger(BlockPoolSlice.class); //nowarn
+  static final Logger LOG = LoggerFactory.getLogger(BlockPoolSlice.class);
 
   private final String bpid;
   private final FsVolumeImpl volume; // volume to which this BlockPool belongs to

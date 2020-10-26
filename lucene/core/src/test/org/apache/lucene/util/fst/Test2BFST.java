@@ -54,7 +54,8 @@ public class Test2BFST extends LuceneTestCase {
         System.out.println("\nTEST: 3B nodes; doPack=false output=NO_OUTPUTS");
         Outputs<Object> outputs = NoOutputs.getSingleton();
         Object NO_OUTPUT = outputs.getNoOutput();
-        final FSTCompiler<Object> fstCompiler = new FSTCompiler<>(FST.INPUT_TYPE.BYTE1, outputs);
+        final Builder<Object> b = new Builder<>(FST.INPUT_TYPE.BYTE1, 0, 0, true, true, Integer.MAX_VALUE, outputs,
+                                                true, 15);
 
         int count = 0;
         Random r = new Random(seed);
@@ -65,21 +66,21 @@ public class Test2BFST extends LuceneTestCase {
           for(int i=10;i<ints2.length;i++) {
             ints2[i] = r.nextInt(256);
           }
-          fstCompiler.add(input2, NO_OUTPUT);
+          b.add(input2, NO_OUTPUT);
           count++;
           if (count % 100000 == 0) {
-            System.out.println(count + ": " + fstCompiler.fstRamBytesUsed() + " bytes; " + fstCompiler.getNodeCount() + " nodes");
+            System.out.println(count + ": " + b.fstRamBytesUsed() + " bytes; " + b.getNodeCount() + " nodes");
           }
-          if (fstCompiler.getNodeCount() > Integer.MAX_VALUE + 100L * 1024 * 1024) {
+          if (b.getNodeCount() > Integer.MAX_VALUE + 100L * 1024 * 1024) {
             break;
           }
           nextInput(r, ints2);
         }
 
-        FST<Object> fst = fstCompiler.compile();
+        FST<Object> fst = b.finish();
 
         for(int verify=0;verify<2;verify++) {
-          System.out.println("\nTEST: now verify [fst size=" + fst.ramBytesUsed() + "; nodeCount=" + fstCompiler.getNodeCount() + "; arcCount=" + fstCompiler.getArcCount() + "]");
+          System.out.println("\nTEST: now verify [fst size=" + fst.ramBytesUsed() + "; nodeCount=" + b.getNodeCount() + "; arcCount=" + b.getArcCount() + "]");
 
           Arrays.fill(ints2, 0);
           r = new Random(seed);
@@ -135,7 +136,8 @@ public class Test2BFST extends LuceneTestCase {
       {
         System.out.println("\nTEST: 3 GB size; outputs=bytes");
         Outputs<BytesRef> outputs = ByteSequenceOutputs.getSingleton();
-        final FSTCompiler<BytesRef> fstCompiler = new FSTCompiler<>(FST.INPUT_TYPE.BYTE1, outputs);
+        final Builder<BytesRef> b = new Builder<>(FST.INPUT_TYPE.BYTE1, 0, 0, true, true, Integer.MAX_VALUE, outputs,
+                                                  true, 15);
 
         byte[] outputBytes = new byte[20];
         BytesRef output = new BytesRef(outputBytes);
@@ -145,10 +147,10 @@ public class Test2BFST extends LuceneTestCase {
         while(true) {
           r.nextBytes(outputBytes);
           //System.out.println("add: " + input + " -> " + output);
-          fstCompiler.add(input, BytesRef.deepCopyOf(output));
+          b.add(input, BytesRef.deepCopyOf(output));
           count++;
           if (count % 10000 == 0) {
-            long size = fstCompiler.fstRamBytesUsed();
+            long size = b.fstRamBytesUsed();
             if (count % 1000000 == 0) {
               System.out.println(count + "...: " + size + " bytes");
             }
@@ -159,10 +161,10 @@ public class Test2BFST extends LuceneTestCase {
           nextInput(r, ints);
         }
 
-        FST<BytesRef> fst = fstCompiler.compile();
+        FST<BytesRef> fst = b.finish();
         for(int verify=0;verify<2;verify++) {
 
-          System.out.println("\nTEST: now verify [fst size=" + fst.ramBytesUsed() + "; nodeCount=" + fstCompiler.getNodeCount() + "; arcCount=" + fstCompiler.getArcCount() + "]");
+          System.out.println("\nTEST: now verify [fst size=" + fst.ramBytesUsed() + "; nodeCount=" + b.getNodeCount() + "; arcCount=" + b.getArcCount() + "]");
 
           r = new Random(seed);
           Arrays.fill(ints, 0);
@@ -214,7 +216,8 @@ public class Test2BFST extends LuceneTestCase {
       {
         System.out.println("\nTEST: 3 GB size; outputs=long");
         Outputs<Long> outputs = PositiveIntOutputs.getSingleton();
-        final FSTCompiler<Long> fstCompiler = new FSTCompiler<>(FST.INPUT_TYPE.BYTE1, outputs);
+        final Builder<Long> b = new Builder<>(FST.INPUT_TYPE.BYTE1, 0, 0, true, true, Integer.MAX_VALUE, outputs,
+                                              true, 15);
 
         long output = 1;
 
@@ -223,11 +226,11 @@ public class Test2BFST extends LuceneTestCase {
         Random r = new Random(seed);
         while(true) {
           //System.out.println("add: " + input + " -> " + output);
-          fstCompiler.add(input, output);
+          b.add(input, output);
           output += 1+r.nextInt(10);
           count++;
           if (count % 10000 == 0) {
-            long size = fstCompiler.fstRamBytesUsed();
+            long size = b.fstRamBytesUsed();
             if (count % 1000000 == 0) {
               System.out.println(count + "...: " + size + " bytes");
             }
@@ -238,11 +241,11 @@ public class Test2BFST extends LuceneTestCase {
           nextInput(r, ints);
         }
 
-        FST<Long> fst = fstCompiler.compile();
+        FST<Long> fst = b.finish();
 
         for(int verify=0;verify<2;verify++) {
 
-          System.out.println("\nTEST: now verify [fst size=" + fst.ramBytesUsed() + "; nodeCount=" + fstCompiler.getNodeCount() + "; arcCount=" + fstCompiler.getArcCount() + "]");
+          System.out.println("\nTEST: now verify [fst size=" + fst.ramBytesUsed() + "; nodeCount=" + b.getNodeCount() + "; arcCount=" + b.getArcCount() + "]");
 
           Arrays.fill(ints, 0);
 
@@ -256,9 +259,7 @@ public class Test2BFST extends LuceneTestCase {
             // forward lookup:
             assertEquals(output, Util.get(fst, input).longValue());
             // reverse lookup:
-            @SuppressWarnings("deprecation")
-            IntsRef inputResult = Util.getByOutput(fst, output);
-            assertEquals(input, inputResult);
+            assertEquals(input, Util.getByOutput(fst, output));
             output += 1 + r.nextInt(10);
             nextInput(r, ints);
           }

@@ -81,7 +81,7 @@ public class BackupCmd implements OverseerCollectionMessageHandler.Cmd {
     Instant startTime = Instant.now();
 
     CoreContainer cc = ocmh.overseer.getCoreContainer();
-    BackupRepository repository = cc.newBackupRepository(repo);
+    BackupRepository repository = cc.newBackupRepository(Optional.ofNullable(repo));
     BackupManager backupMgr = new BackupManager(repository, ocmh.zkStateReader);
 
     // Backup location
@@ -113,8 +113,8 @@ public class BackupCmd implements OverseerCollectionMessageHandler.Cmd {
     String configName = ocmh.zkStateReader.readConfigName(collectionName);
     backupMgr.downloadConfigDir(location, backupName, configName);
 
-    //Save the collection's state (coming from the collection's state.json)
-    //We extract the state and back it up as a separate json
+    //Save the collection's state. Can be part of the monolithic clusterstate.json or a individual state.json
+    //Since we don't want to distinguish we extract the state and back it up as a separate json
     DocCollection collectionState = ocmh.zkStateReader.getClusterState().getCollection(collectionName);
     backupMgr.writeCollectionState(location, backupName, collectionName, collectionState);
 
@@ -170,7 +170,7 @@ public class BackupCmd implements OverseerCollectionMessageHandler.Cmd {
     String backupName = request.getStr(NAME);
     String asyncId = request.getStr(ASYNC);
     String repoName = request.getStr(CoreAdminParams.BACKUP_REPOSITORY);
-    ShardHandler shardHandler = ocmh.shardHandlerFactory.getShardHandler();
+    ShardHandler shardHandler = ocmh.shardHandlerFactory.getShardHandler(ocmh.overseer.getCoreContainer().getUpdateShardHandler().getDefaultHttpClient());
 
     String commitName = request.getStr(CoreAdminParams.COMMIT_NAME);
     Optional<CollectionSnapshotMetaData> snapshotMeta = Optional.empty();

@@ -97,8 +97,8 @@ public class Diff {
   }
   
   /**
-   * Apply the given patch string <code>diff</code> to the given string <code>
-   * dest</code>.
+   * Apply the given patch string <tt>diff</tt> to the given string <tt>
+   * dest</tt>.
    * 
    * @param dest Destination string
    * @param diff Patch string

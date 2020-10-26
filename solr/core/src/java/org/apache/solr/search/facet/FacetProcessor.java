@@ -292,24 +292,25 @@ public abstract class FacetProcessor<FacetRequestT extends FacetRequest>  {
     return appliedFilters;
   }
 
-  protected void processStats(SimpleOrderedMap<Object> bucket, Query bucketQ, DocSet docs, long docCount) throws IOException {
+  protected void processStats(SimpleOrderedMap<Object> bucket, Query bucketQ, DocSet docs, int docCount) throws IOException {
     if (docCount == 0 && !freq.processEmpty || freq.getFacetStats().size() == 0) {
       bucket.add("count", docCount);
       return;
     }
     createAccs(docCount, 1);
-    long collected = collect(docs, 0, slotNum -> { return new SlotContext(bucketQ); });
+    int collected = collect(docs, 0, slotNum -> { return new SlotContext(bucketQ); });
     countAcc.incrementCount(0, collected);
     assert collected == docCount;
     addStats(bucket, 0);
   }
 
-  protected void createAccs(long docCount, int slotCount) throws IOException {
+  protected void createAccs(int docCount, int slotCount) throws IOException {
     accMap = new LinkedHashMap<>();
 
     // allow a custom count acc to be used
     if (countAcc == null) {
       countAcc = new SlotAcc.CountSlotArrAcc(fcontext, slotCount);
+      countAcc.key = "count";
     }
 
     for (Map.Entry<String,AggValueSource> entry : freq.getFacetStats().entrySet()) {
@@ -333,8 +334,8 @@ public abstract class FacetProcessor<FacetRequestT extends FacetRequest>  {
     }
   }
 
-  long collect(DocSet docs, int slot, IntFunction<SlotContext> slotContext) throws IOException {
-    long count = 0;
+  int collect(DocSet docs, int slot, IntFunction<SlotContext> slotContext) throws IOException {
+    int count = 0;
     SolrIndexSearcher searcher = fcontext.searcher;
 
     if (0 == docs.size()) {
@@ -393,7 +394,7 @@ public abstract class FacetProcessor<FacetRequestT extends FacetRequest>  {
   }
 
   void addStats(SimpleOrderedMap<Object> target, int slotNum) throws IOException {
-    long count = countAcc.getCount(slotNum);
+    int count = countAcc.getCount(slotNum);
     target.add("count", count);
     if (count > 0 || freq.processEmpty) {
       for (SlotAcc acc : accs) {
@@ -406,7 +407,7 @@ public abstract class FacetProcessor<FacetRequestT extends FacetRequest>  {
 
     boolean needDocSet = (skip==false && freq.getFacetStats().size() > 0) || freq.getSubFacets().size() > 0;
 
-    long count;
+    int count;
 
     if (result != null) {
       count = result.size();

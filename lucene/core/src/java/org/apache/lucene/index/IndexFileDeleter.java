@@ -40,7 +40,7 @@ import org.apache.lucene.util.Constants;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.InfoStream;
 
-/**
+/*
  * This class keeps track of each SegmentInfos instance that
  * is still "live", either because it corresponds to a
  * segments_N file in the Directory (a "commit", i.e. a
@@ -76,6 +76,7 @@ import org.apache.lucene.util.InfoStream;
  * instantiating this class.  It opens segments_N file(s)
  * directly with no retry logic.
  */
+
 final class IndexFileDeleter implements Closeable {
 
   /* Reference count for all files in the index.
@@ -153,7 +154,7 @@ final class IndexFileDeleter implements Closeable {
           // Add this file to refCounts with initial count 0:
           getRefCount(fileName);
           
-          if (fileName.startsWith(IndexFileNames.SEGMENTS)) {
+          if (fileName.startsWith(IndexFileNames.SEGMENTS) && !fileName.equals(IndexFileNames.OLD_SEGMENTS_GEN)) {
             
             // This is a commit (segments or segments_N), and
             // it's valid (<= the max gen).  Load it, then
@@ -268,7 +269,7 @@ final class IndexFileDeleter implements Closeable {
     Map<String,Long> maxPerSegmentGen = new HashMap<>();
 
     for(String fileName : files) {
-      if (fileName.equals(IndexWriter.WRITE_LOCK_NAME)) {
+      if (fileName.equals(IndexFileNames.OLD_SEGMENTS_GEN) || fileName.equals(IndexWriter.WRITE_LOCK_NAME)) {
         // do nothing
       } else if (fileName.startsWith(IndexFileNames.SEGMENTS)) {
         try {

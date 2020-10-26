@@ -56,7 +56,6 @@ import org.apache.lucene.search.grouping.AllGroupHeadsCollector;
 import org.apache.lucene.search.grouping.AllGroupsCollector;
 import org.apache.lucene.search.grouping.TermGroupFacetCollector;
 import org.apache.lucene.search.grouping.TermGroupSelector;
-import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CharsRefBuilder;
 import org.apache.lucene.util.StringHelper;
@@ -81,11 +80,13 @@ import org.apache.solr.schema.TrieField;
 import org.apache.solr.search.BitDocSet;
 import org.apache.solr.search.DocSet;
 import org.apache.solr.search.Grouping;
+import org.apache.solr.search.HashDocSet;
 import org.apache.solr.search.Insanity;
 import org.apache.solr.search.QParser;
 import org.apache.solr.search.QueryParsing;
 import org.apache.solr.search.QueryUtils;
 import org.apache.solr.search.SolrIndexSearcher;
+import org.apache.solr.search.SortedIntDocSet;
 import org.apache.solr.search.SyntaxError;
 import org.apache.solr.search.facet.FacetDebugInfo;
 import org.apache.solr.search.facet.FacetRequest;
@@ -577,12 +578,12 @@ public class SimpleFacets {
               @SuppressWarnings({"unchecked"})
               List<NamedList<Object>> buckets = (List<NamedList<Object>>)res.get("buckets");
               for(NamedList<Object> b : buckets) {
-                counts.add(b.get("val").toString(), ((Number)b.get("count")).intValue());
+                counts.add(b.get("val").toString(), (Integer)b.get("count"));
               }
               if(missing) {
                 @SuppressWarnings({"unchecked"})
                 NamedList<Object> missingCounts = (NamedList<Object>) res.get("missing");
-                counts.add(null, ((Number)missingCounts.get("count")).intValue());
+                counts.add(null, (Integer)missingCounts.get("count"));
               }
             }
           break;
@@ -963,11 +964,10 @@ public class SimpleFacets {
     int minDfFilterCache = global.getFieldInt(field, FacetParams.FACET_ENUM_CACHE_MINDF, 0);
 
     // make sure we have a set that is fast for random access, if we will use it for that
-    Bits fastForRandomSet;
-    if (minDfFilterCache <= 0) {
-      fastForRandomSet = null;
-    } else {
-      fastForRandomSet = docs.getBits();
+    DocSet fastForRandomSet = docs;
+    if (minDfFilterCache>0 && docs instanceof SortedIntDocSet) {
+      SortedIntDocSet sset = (SortedIntDocSet)docs;
+      fastForRandomSet = new HashDocSet(sset.getDocs(), 0, sset.size());
     }
 
     IndexSchema schema = searcher.getSchema();
@@ -1066,7 +1066,7 @@ public class SimpleFacets {
                   int base = sub.slice.start;
                   int docid;
                   while ((docid = sub.postingsEnum.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
-                    if (fastForRandomSet.get(docid + base)) {
+                    if (fastForRandomSet.exists(docid + base)) {
                       c++;
                       if (intersectsCheck) {
                         assert c==1;
@@ -1078,7 +1078,7 @@ public class SimpleFacets {
               } else {
                 int docid;
                 while ((docid = postingsEnum.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
-                  if (fastForRandomSet.get(docid)) {
+                  if (fastForRandomSet.exists(docid)) {
                     c++;
                     if (intersectsCheck) {
                       assert c==1;

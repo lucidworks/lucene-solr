@@ -58,7 +58,7 @@ public abstract class UnInvertedFieldAcc extends SlotAcc implements UnInvertedFi
     int currentSlot;
     double initialValue;
 
-    public DoubleUnInvertedFieldAcc(FacetContext fcontext, SchemaField sf, int numSlots, double initialValue) throws IOException {
+  public DoubleUnInvertedFieldAcc(FacetContext fcontext, SchemaField sf, int numSlots, double initialValue) throws IOException {
       super(fcontext, sf, numSlots);
       result = new double[numSlots];
       if (initialValue != 0) {
@@ -102,7 +102,7 @@ public abstract class UnInvertedFieldAcc extends SlotAcc implements UnInvertedFi
     int[] counts;
     double[] sum;
 
-    public SDVUnInvertedFieldAcc(FacetContext fcontext, SchemaField sf, int numSlots) throws IOException {
+  public SDVUnInvertedFieldAcc(FacetContext fcontext, SchemaField sf, int numSlots) throws IOException {
       super(fcontext, sf, numSlots, 0);
       this.counts = new int[numSlots];
       this.sum = new double[numSlots];

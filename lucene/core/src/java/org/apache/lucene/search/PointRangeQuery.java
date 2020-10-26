@@ -30,6 +30,7 @@ import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BitSetIterator;
 import org.apache.lucene.util.DocIdSetBuilder;
 import org.apache.lucene.util.FixedBitSet;
+import org.apache.lucene.util.FutureArrays;
 
 /** 
  * Abstract class for range queries against single or multidimensional points such as
@@ -116,11 +117,11 @@ public abstract class PointRangeQuery extends Query {
       private boolean matches(byte[] packedValue) {
         for(int dim=0;dim<numDims;dim++) {
           int offset = dim*bytesPerDim;
-          if (Arrays.compareUnsigned(packedValue, offset, offset + bytesPerDim, lowerPoint, offset, offset + bytesPerDim) < 0) {
+          if (FutureArrays.compareUnsigned(packedValue, offset, offset + bytesPerDim, lowerPoint, offset, offset + bytesPerDim) < 0) {
             // Doc's value is too low, in this dimension
             return false;
           }
-          if (Arrays.compareUnsigned(packedValue, offset, offset + bytesPerDim, upperPoint, offset, offset + bytesPerDim) > 0) {
+          if (FutureArrays.compareUnsigned(packedValue, offset, offset + bytesPerDim, upperPoint, offset, offset + bytesPerDim) > 0) {
             // Doc's value is too high, in this dimension
             return false;
           }
@@ -135,13 +136,13 @@ public abstract class PointRangeQuery extends Query {
         for(int dim=0;dim<numDims;dim++) {
           int offset = dim*bytesPerDim;
 
-          if (Arrays.compareUnsigned(minPackedValue, offset, offset + bytesPerDim, upperPoint, offset, offset + bytesPerDim) > 0 ||
-              Arrays.compareUnsigned(maxPackedValue, offset, offset + bytesPerDim, lowerPoint, offset, offset + bytesPerDim) < 0) {
+          if (FutureArrays.compareUnsigned(minPackedValue, offset, offset + bytesPerDim, upperPoint, offset, offset + bytesPerDim) > 0 ||
+              FutureArrays.compareUnsigned(maxPackedValue, offset, offset + bytesPerDim, lowerPoint, offset, offset + bytesPerDim) < 0) {
             return Relation.CELL_OUTSIDE_QUERY;
           }
 
-          crosses |= Arrays.compareUnsigned(minPackedValue, offset, offset + bytesPerDim, lowerPoint, offset, offset + bytesPerDim) < 0 ||
-              Arrays.compareUnsigned(maxPackedValue, offset, offset + bytesPerDim, upperPoint, offset, offset + bytesPerDim) > 0;
+          crosses |= FutureArrays.compareUnsigned(minPackedValue, offset, offset + bytesPerDim, lowerPoint, offset, offset + bytesPerDim) < 0 ||
+              FutureArrays.compareUnsigned(maxPackedValue, offset, offset + bytesPerDim, upperPoint, offset, offset + bytesPerDim) > 0;
         }
 
         if (crosses) {
@@ -221,7 +222,7 @@ public abstract class PointRangeQuery extends Query {
 
           @Override
           public Relation compare(byte[] minPackedValue, byte[] maxPackedValue) {
-             Relation relation = relate(minPackedValue, maxPackedValue);
+            Relation relation = relate(minPackedValue, maxPackedValue);
             switch (relation) {
               case CELL_INSIDE_QUERY:
                 // all points match, skip this subtree
@@ -260,8 +261,8 @@ public abstract class PointRangeQuery extends Query {
           allDocsMatch = true;
           for (int i = 0; i < numDims; ++i) {
             int offset = i * bytesPerDim;
-            if (Arrays.compareUnsigned(lowerPoint, offset, offset + bytesPerDim, fieldPackedLower, offset, offset + bytesPerDim) > 0
-                || Arrays.compareUnsigned(upperPoint, offset, offset + bytesPerDim, fieldPackedUpper, offset, offset + bytesPerDim) < 0) {
+            if (FutureArrays.compareUnsigned(lowerPoint, offset, offset + bytesPerDim, fieldPackedLower, offset, offset + bytesPerDim) > 0
+                || FutureArrays.compareUnsigned(upperPoint, offset, offset + bytesPerDim, fieldPackedUpper, offset, offset + bytesPerDim) < 0) {
               allDocsMatch = false;
               break;
             }

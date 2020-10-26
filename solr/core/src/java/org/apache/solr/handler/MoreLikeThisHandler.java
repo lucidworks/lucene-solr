@@ -100,7 +100,10 @@ public class MoreLikeThisHandler extends RequestHandlerBase
   {
     SolrParams params = req.getParams();
 
-    SolrQueryTimeoutImpl.set(req);
+    long timeAllowed = (long)params.getInt( CommonParams.TIME_ALLOWED, -1 );
+    if(timeAllowed > 0) {
+      SolrQueryTimeoutImpl.set(timeAllowed);
+    }
       try {
 
         // Set field flags
@@ -277,7 +280,7 @@ public class MoreLikeThisHandler extends RequestHandlerBase
           }
         }
       } catch (ExitableDirectoryReader.ExitingReaderException ex) {
-        log.warn( "Query: {}; ", req.getParamString(), ex);
+        log.warn( "Query: {}; {}", req.getParamString(), ex.getMessage());
       } finally {
         SolrQueryTimeoutImpl.reset();
       }

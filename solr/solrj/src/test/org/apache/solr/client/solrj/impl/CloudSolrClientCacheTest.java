@@ -31,7 +31,7 @@ import java.util.function.Function;
 import com.google.common.collect.ImmutableSet;
 import org.apache.http.NoHttpResponseException;
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.client.solrj.cloud.DelegatingClusterStateProvider;
+import org.apache.solr.client.solrj.cloud.autoscaling.DelegatingClusterStateProvider;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.DocCollection;
@@ -87,7 +87,8 @@ public class CloudSolrClientCacheTest extends SolrTestCaseJ4 {
         .withLBHttpSolrClient(mockLbclient)
         .build()) {
       livenodes.addAll(ImmutableSet.of("192.168.1.108:7574_solr", "192.168.1.108:8983_solr"));
-      ClusterState cs = ClusterState.createFromJson(1, coll1State.getBytes(UTF_8), Collections.emptySet());
+      ClusterState cs = ClusterState.load(1, coll1State.getBytes(UTF_8),
+          Collections.emptySet(), "/collections/gettingstarted/state.json");
       refs.put(collName, new Ref(collName));
       colls.put(collName, cs.getCollectionOrNull(collName));
       responses.put("request", o -> {
@@ -157,6 +158,8 @@ public class CloudSolrClientCacheTest extends SolrTestCaseJ4 {
   private String coll1State = "{'gettingstarted':{\n" +
       "    'replicationFactor':'2',\n" +
       "    'router':{'name':'compositeId'},\n" +
+      "    'maxShardsPerNode':'2',\n" +
+      "    'autoAddReplicas':'false',\n" +
       "    'shards':{\n" +
       "      'shard1':{\n" +
       "        'range':'80000000-ffffffff',\n" +

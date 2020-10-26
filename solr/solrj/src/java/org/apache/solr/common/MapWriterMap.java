@@ -51,13 +51,8 @@ public class MapWriterMap implements MapWriter {
 
 
   @Override
-  public int _size() {
-    return delegate.size();
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  public Map<String,Object> toMap(Map<String, Object> map) {
+  @SuppressWarnings({"rawtypes"})
+  public Map toMap(Map<String, Object> map) {
     return delegate;
   }
 }

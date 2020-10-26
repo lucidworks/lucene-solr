@@ -24,8 +24,8 @@ import java.util.Currency;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.lucene.util.ResourceLoader;
-import org.apache.lucene.util.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.ResourceLoader;
+import org.apache.lucene.analysis.util.ResourceLoaderAware;
 import org.apache.lucene.document.StoredField;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.index.LeafReaderContext;
@@ -122,7 +122,7 @@ public class CurrencyFieldType extends FieldType implements SchemaAware, Resourc
     try {
       Class<? extends ExchangeRateProvider> c
           = schema.getResourceLoader().findClass(exchangeRateProviderClass, ExchangeRateProvider.class);
-      provider = c.getConstructor().newInstance();
+      provider = c.newInstance();
       provider.init(args);
     } catch (Exception e) {
       throw new SolrException(ErrorCode.SERVER_ERROR,

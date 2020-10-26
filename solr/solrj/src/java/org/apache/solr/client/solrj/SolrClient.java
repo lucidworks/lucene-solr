@@ -42,7 +42,6 @@ import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.StrUtils;
 
 /**
  * Abstraction through which all communication with a Solr server may be routed
@@ -1240,7 +1239,8 @@ public abstract class SolrClient implements Serializable, Closeable {
     if (StringUtils.isEmpty(reqParams.get(CommonParams.QT))) {
       reqParams.set(CommonParams.QT, "/get");
     }
-    reqParams.set("ids", ids.stream().map(id -> StrUtils.escapeTextWithSeparator(id, ',')).toArray(String[]::new));
+    reqParams.set("ids", ids.toArray(new String[ids.size()]));
+
     return query(collection, reqParams).getResults();
   }
 
@@ -1305,12 +1305,4 @@ public abstract class SolrClient implements Serializable, Closeable {
     return binder;
   }
 
-  /**
-   * This method defines the context in which this Solr client
-   * is being used (e.g. for internal communication between Solr
-   * nodes or as an external client). The default value is {@code SolrClientContext#Client}
-   */
-  public SolrRequest.SolrClientContext getContext() {
-    return SolrRequest.SolrClientContext.CLIENT;
-  }
 }

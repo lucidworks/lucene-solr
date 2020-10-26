@@ -17,7 +17,6 @@
 package org.apache.lucene.codecs.cranky;
 
 import java.io.IOException;
-import java.util.Collection;
 import java.util.Random;
 
 import org.apache.lucene.codecs.StoredFieldsFormat;
@@ -30,7 +29,6 @@ import org.apache.lucene.index.MergeState;
 import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
-import org.apache.lucene.util.Accountable;
 
 class CrankyStoredFieldsFormat extends StoredFieldsFormat {
   final StoredFieldsFormat delegate;
@@ -112,16 +110,6 @@ class CrankyStoredFieldsFormat extends StoredFieldsFormat {
         throw new IOException("Fake IOException from StoredFieldsWriter.writeField()");
       }
       delegate.writeField(info, field);
-    }
-
-    @Override
-    public long ramBytesUsed() {
-      return delegate.ramBytesUsed();
-    }
-
-    @Override
-    public Collection<Accountable> getChildResources() {
-      return delegate.getChildResources();
     }
   }
 }

@@ -434,15 +434,10 @@ public class ComplexPhraseQueryParser extends QueryParser {
 
     @Override
     public String toString(String field) {
-      StringBuilder sb = new StringBuilder();
-      if (!this.field.equals(field)) {
-        sb.append(this.field).append(":");
-      }
-      sb.append("\"").append(phrasedQueryStringContents).append("\"");
-      if (slopFactor != 0) {
-        sb.append("~").append(slopFactor);
-      }
-      return sb.toString();
+      if (slopFactor == 0)
+        return "\"" + phrasedQueryStringContents + "\"";
+      else
+        return "\"" + phrasedQueryStringContents + "\"" + "~" + slopFactor;
     }
 
     @Override

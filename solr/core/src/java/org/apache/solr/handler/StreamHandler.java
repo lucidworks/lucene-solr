@@ -138,7 +138,7 @@ public class StreamHandler extends RequestHandlerBase implements SolrCoreAware, 
         streamFactory.withFunctionName(pluginInfo.name,
             () -> holder.getClazz());
       } else {
-        Class<? extends Expressible> clazz = core.getResourceLoader().findClass(pluginInfo.className, Expressible.class);
+        Class<? extends Expressible> clazz = core.getMemClassLoader().findClass(pluginInfo.className, Expressible.class);
         streamFactory.withFunctionName(pluginInfo.name, clazz);
       }
     }
@@ -158,8 +158,8 @@ public class StreamHandler extends RequestHandlerBase implements SolrCoreAware, 
     }
 
     @Override
-    protected Object initNewInstance(PackageLoader.Package.Version newest, SolrCore core) {
-      return clazz = newest.getLoader().findClass(pluginInfo.className, Expressible.class);
+    protected void initNewInstance(PackageLoader.Package.Version newest) {
+      clazz = newest.getLoader().findClass(pluginInfo.className, Expressible.class);
     }
 
   }
@@ -214,7 +214,6 @@ public class StreamHandler extends RequestHandlerBase implements SolrCoreAware, 
 
     int worker = params.getInt("workerID", 0);
     int numWorkers = params.getInt("numWorkers", 1);
-    boolean local = params.getBool("streamLocalOnly", false);
     StreamContext context = new StreamContext();
     context.setRequestParams(params);
     context.setRequestReplicaListTransformerGenerator(requestReplicaListTransformerGenerator);
@@ -226,7 +225,6 @@ public class StreamHandler extends RequestHandlerBase implements SolrCoreAware, 
     context.setObjectCache(objectCache);
     context.put("core", this.coreName);
     context.put("solr-core", req.getCore());
-    context.setLocal(local);
     tupleStream.setStreamContext(context);
 
     // if asking for explanation then go get it

@@ -89,15 +89,4 @@ final class MultiLeafFieldComparator implements LeafFieldComparator {
     }
   }
 
-  @Override
-  public void setHitsThresholdReached() throws IOException {
-    // this is needed for skipping functionality that is only relevant for the 1st comparator
-    firstComparator.setHitsThresholdReached();
-  }
-
-  @Override
-  public DocIdSetIterator competitiveIterator() throws IOException {
-    // this is needed for skipping functionality that is only relevant for the 1st comparator
-    return firstComparator.competitiveIterator();
-  }
 }

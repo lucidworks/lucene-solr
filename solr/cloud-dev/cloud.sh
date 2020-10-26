@@ -25,7 +25,6 @@
 #  -n <num>          number of nodes to create/start if this doesn't match error
 #  -w <path>         path to the vcs checkout
 #  -z <num>          port to look for zookeeper on (2181 default)
-#  -d <url>          Download solr tarball from this URL
 #
 # Commands:
 #   new              Create a new cluster named by the current date or [name]
@@ -110,7 +109,7 @@ NUM_NODES=0      # need to detect if not specified
 VCS_WORK=${DEFAULT_VCS_WORKSPACE}
 ZK_PORT=2181
 
-while getopts ":crm:a:n:w:z:d:" opt; do
+while getopts ":crm:a:n:w:z:" opt; do
   case ${opt} in
     c)
       CLEAN=true
@@ -132,9 +131,6 @@ while getopts ":crm:a:n:w:z:d:" opt; do
       ;;
     z)
       ZK_PORT=$OPTARG
-      ;;
-    d)
-      SMOKE_RC_URL=$OPTARG
       ;;
    \?)
       echo "Invalid option: -$OPTARG" >&2
@@ -271,20 +267,17 @@ recompileIfReq() {
 # Copy tarball #
 ################
 copyTarball() {
+    echo "foo"
     pushd ${CLUSTER_WD}
+    echo "bar"
     rm -rf solr-*  # remove tarball and dir to which it extracts
+    echo "baz"
     pushd # back to original dir to properly resolve vcs working dir
-    if [ ! -z "$SMOKE_RC_URL" ]; then
-      pushd ${CLUSTER_WD}
-      RC_FILE=$(echo "${SMOKE_RC_URL}" | rev | cut -d '/' -f 1 | rev)
-      curl -o "$RC_FILE" "$SMOKE_RC_URL"
-      pushd
-    else
-      if [[ ! -f $(ls "$VCS_WORK"/solr/package/solr-*.tgz) ]]; then
-        echo "No solr tarball found try again with -r"; popd; exit 10;
-      fi
-      cp "$VCS_WORK"/solr/package/solr-*.tgz ${CLUSTER_WD}
+    echo "foobar:"$(pwd)
+    if [[ ! -f $(ls "$VCS_WORK"/solr/package/solr-*.tgz) ]]; then
+      echo "No solr tarball found try again with -r"; popd; exit 10;
     fi
+    cp "$VCS_WORK"/solr/package/solr-*.tgz ${CLUSTER_WD}
     pushd # back into cluster wd to unpack
     tar xzvf solr-*.tgz
     popd

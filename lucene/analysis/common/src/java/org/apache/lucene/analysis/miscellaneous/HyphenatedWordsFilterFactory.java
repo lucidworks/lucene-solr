@@ -20,7 +20,7 @@ package org.apache.lucene.analysis.miscellaneous;
 import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
  * Factory for {@link HyphenatedWordsFilter}.
@@ -48,12 +48,7 @@ public class HyphenatedWordsFilterFactory extends TokenFilterFactory {
     }
   }
   
-  /** Default ctor for compatibility with SPI */
-  public HyphenatedWordsFilterFactory() {
-    throw defaultCtorException();
-  }
-
-@Override
+  @Override
   public HyphenatedWordsFilter create(TokenStream input) {
     return new HyphenatedWordsFilter(input);
   }

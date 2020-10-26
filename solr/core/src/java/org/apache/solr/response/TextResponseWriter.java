@@ -157,7 +157,16 @@ public abstract class TextResponseWriter implements TextWriter {
   // types of formats, including those where the name may come after the value (like
   // some XML formats).
 
-  public abstract void writeStartDocumentList(String name, long start, int size, long numFound, Float maxScore, Boolean numFoundExact) throws IOException;
+  //TODO: Make abstract in Solr 9.0
+  public void writeStartDocumentList(String name, long start, int size, long numFound, Float maxScore, Boolean numFoundExact) throws IOException {
+    writeStartDocumentList(name, start, size, numFound, maxScore);
+  }
+  
+  /**
+   * @deprecated Use {@link #writeStartDocumentList(String, long, int, long, Float, Boolean)}
+   */
+  @Deprecated
+  public abstract void writeStartDocumentList(String name, long start, int size, long numFound, Float maxScore) throws IOException;
 
   public abstract void writeSolrDocument(String name, SolrDocument doc, ReturnFields fields, int idx) throws IOException;
   

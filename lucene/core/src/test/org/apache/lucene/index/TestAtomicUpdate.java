@@ -27,9 +27,9 @@ import org.apache.lucene.document.Field;
 import org.apache.lucene.document.IntPoint;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MockDirectoryWrapper;
+import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.English;
 import org.apache.lucene.util.LuceneTestCase;
 
@@ -150,16 +150,19 @@ public class TestAtomicUpdate extends LuceneTestCase {
     }
   }
 
-  /* */
+  /*
+    Run above stress test against RAMDirectory and then
+    FSDirectory.
+  */
   public void testAtomicUpdates() throws Exception {
     Directory directory;
 
-    // run against a random directory.
-    directory = new MockDirectoryWrapper(random(), new ByteBuffersDirectory());
+    // First in a RAM directory:
+    directory = new MockDirectoryWrapper(random(), new RAMDirectory());
     runTest(directory);
     directory.close();
 
-    // then against an FSDirectory.
+    // Second in an FSDirectory:
     Path dirPath = createTempDir("lucene.test.atomic");
     directory = newFSDirectory(dirPath);
     runTest(directory);

@@ -40,7 +40,7 @@ import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.IntsRefBuilder;
 import org.apache.lucene.util.LuceneTestCase;
 
-public class TestFSTDirectAddressing extends LuceneTestCase {
+public class TestFstDirectAddressing extends LuceneTestCase {
 
   public void testDenseWithGap() throws Exception {
     List<String> words = Arrays.asList("ah", "bi", "cj", "dk", "fl", "gm");
@@ -92,13 +92,13 @@ public class TestFSTDirectAddressing extends LuceneTestCase {
     Collections.sort(wordList);
 
     // Disable direct addressing and measure the FST size.
-    FSTCompiler<Object> fstCompiler = createFSTCompiler(-1f);
-    FST<Object> fst = buildFST(wordList, fstCompiler);
+    Builder<Object> builder = createBuilder(-1f);
+    FST<Object> fst = buildFST(wordList, builder);
     long ramBytesUsedNoDirectAddressing = fst.ramBytesUsed();
 
     // Enable direct addressing and measure the FST size.
-    fstCompiler = createFSTCompiler(FSTCompiler.DIRECT_ADDRESSING_MAX_OVERSIZING_FACTOR);
-    fst = buildFST(wordList, fstCompiler);
+    builder = createBuilder(Builder.DIRECT_ADDRESSING_MAX_OVERSIZING_FACTOR);
+    fst = buildFST(wordList, builder);
     long ramBytesUsed = fst.ramBytesUsed();
 
     // Compute the size increase in percents.
@@ -113,43 +113,42 @@ public class TestFSTDirectAddressing extends LuceneTestCase {
         directAddressingMemoryIncreasePercent < MEMORY_INCREASE_LIMIT_PERCENT);
   }
 
-  private static void printStats(FSTCompiler<Object> fstCompiler, long ramBytesUsed, double directAddressingMemoryIncreasePercent) {
-    System.out.println("directAddressingMaxOversizingFactor = " + fstCompiler.getDirectAddressingMaxOversizingFactor());
+  private static void printStats(Builder<Object> builder, long ramBytesUsed, double directAddressingMemoryIncreasePercent) {
+    System.out.println("directAddressingMaxOversizingFactor = " + builder.getDirectAddressingMaxOversizingFactor());
     System.out.println("ramBytesUsed = "
         + String.format(Locale.ENGLISH, "%.2f MB", ramBytesUsed / 1024d / 1024d)
         + String.format(Locale.ENGLISH, " (%.2f %% increase with direct addressing)", directAddressingMemoryIncreasePercent));
-    System.out.println("num nodes = " + fstCompiler.nodeCount);
-    long fixedLengthArcNodeCount = fstCompiler.directAddressingNodeCount + fstCompiler.binarySearchNodeCount;
+    System.out.println("num nodes = " + builder.nodeCount);
+    long fixedLengthArcNodeCount = builder.directAddressingNodeCount + builder.binarySearchNodeCount;
     System.out.println("num fixed-length-arc nodes = " + fixedLengthArcNodeCount
         + String.format(Locale.ENGLISH, " (%.2f %% of all nodes)",
-        ((double) fixedLengthArcNodeCount / fstCompiler.nodeCount * 100)));
-    System.out.println("num binary-search nodes = " + (fstCompiler.binarySearchNodeCount)
+        ((double) fixedLengthArcNodeCount / builder.nodeCount * 100)));
+    System.out.println("num binary-search nodes = " + (builder.binarySearchNodeCount)
         + String.format(Locale.ENGLISH, " (%.2f %% of fixed-length-arc nodes)",
-        ((double) (fstCompiler.binarySearchNodeCount) / fixedLengthArcNodeCount * 100)));
-    System.out.println("num direct-addressing nodes = " + (fstCompiler.directAddressingNodeCount)
+        ((double) (builder.binarySearchNodeCount) / fixedLengthArcNodeCount * 100)));
+    System.out.println("num direct-addressing nodes = " + (builder.directAddressingNodeCount)
         + String.format(Locale.ENGLISH, " (%.2f %% of fixed-length-arc nodes)",
-        ((double) (fstCompiler.directAddressingNodeCount) / fixedLengthArcNodeCount * 100)));
+        ((double) (builder.directAddressingNodeCount) / fixedLengthArcNodeCount * 100)));
   }
 
-  private static FSTCompiler<Object> createFSTCompiler(float directAddressingMaxOversizingFactor) {
-    return new FSTCompiler.Builder<>(FST.INPUT_TYPE.BYTE1, NoOutputs.getSingleton())
-        .directAddressingMaxOversizingFactor(directAddressingMaxOversizingFactor)
-        .build();
+  private static Builder<Object> createBuilder(float directAddressingMaxOversizingFactor) {
+    return new Builder<>(FST.INPUT_TYPE.BYTE1, 0, 0, true, true, Integer.MAX_VALUE, NoOutputs.getSingleton(), true, 15)
+        .setDirectAddressingMaxOversizingFactor(directAddressingMaxOversizingFactor);
   }
 
   private FST<Object> buildFST(List<BytesRef> entries) throws Exception {
-    return buildFST(entries, createFSTCompiler(FSTCompiler.DIRECT_ADDRESSING_MAX_OVERSIZING_FACTOR));
+    return buildFST(entries, createBuilder(Builder.DIRECT_ADDRESSING_MAX_OVERSIZING_FACTOR));
   }
 
-  private static FST<Object> buildFST(List<BytesRef> entries, FSTCompiler<Object> fstCompiler) throws Exception {
+  private static FST<Object> buildFST(List<BytesRef> entries, Builder<Object> builder) throws Exception {
     BytesRef last = null;
     for (BytesRef entry : entries) {
       if (entry.equals(last) == false) {
-        fstCompiler.add(Util.toIntsRef(entry, new IntsRefBuilder()), NoOutputs.getSingleton().getNoOutput());
+        builder.add(Util.toIntsRef(entry, new IntsRefBuilder()), NoOutputs.getSingleton().getNoOutput());
       }
       last = entry;
     }
-    return fstCompiler.compile();
+    return builder.finish();
   }
 
   public static void main(String... args) throws Exception {
@@ -208,19 +207,19 @@ public class TestFSTDirectAddressing extends LuceneTestCase {
     Collections.sort(wordList);
 
     // Disable direct addressing and measure the FST size.
-    FSTCompiler<Object> fstCompiler = createFSTCompiler(-1f);
-    FST<Object> fst = buildFST(wordList, fstCompiler);
+    Builder<Object> builder = createBuilder(-1f);
+    FST<Object> fst = buildFST(wordList, builder);
     long ramBytesUsedNoDirectAddressing = fst.ramBytesUsed();
 
     // Enable direct addressing and measure the FST size.
-    fstCompiler = createFSTCompiler(FSTCompiler.DIRECT_ADDRESSING_MAX_OVERSIZING_FACTOR);
-    fst = buildFST(wordList, fstCompiler);
+    builder = createBuilder(Builder.DIRECT_ADDRESSING_MAX_OVERSIZING_FACTOR);
+    fst = buildFST(wordList, builder);
     long ramBytesUsed = fst.ramBytesUsed();
 
     // Compute the size increase in percents.
     double directAddressingMemoryIncreasePercent = ((double) ramBytesUsed / ramBytesUsedNoDirectAddressing - 1) * 100;
 
-    printStats(fstCompiler, ramBytesUsed, directAddressingMemoryIncreasePercent);
+    printStats(builder, ramBytesUsed, directAddressingMemoryIncreasePercent);
   }
 
   private static void recompileAndWalk(String fstFilePath) throws IOException {
@@ -232,7 +231,7 @@ public class TestFSTDirectAddressing extends LuceneTestCase {
       long endTimeMs = System.currentTimeMillis();
       System.out.println("time = " + (endTimeMs - startTimeMs) + " ms");
 
-      for (float oversizingFactor : List.of(0f, 0f, 0f, 1f, 1f, 1f)) {
+      for (float oversizingFactor : Arrays.asList(0f, 1f)) {
         System.out.println("\nFST construction (oversizingFactor=" + oversizingFactor + ")");
         startTimeMs = System.currentTimeMillis();
         FST<CharsRef> fst = recompile(originalFst, oversizingFactor);
@@ -259,15 +258,14 @@ public class TestFSTDirectAddressing extends LuceneTestCase {
   }
 
   private static FST<CharsRef> recompile(FST<CharsRef> fst, float oversizingFactor) throws IOException {
-    FSTCompiler<CharsRef> fstCompiler = new FSTCompiler.Builder<>(FST.INPUT_TYPE.BYTE4, CharSequenceOutputs.getSingleton())
-        .directAddressingMaxOversizingFactor(oversizingFactor)
-        .build();
+    Builder<CharsRef> builder = new Builder<>(FST.INPUT_TYPE.BYTE4, CharSequenceOutputs.getSingleton())
+        .setDirectAddressingMaxOversizingFactor(oversizingFactor);
     IntsRefFSTEnum<CharsRef> fstEnum = new IntsRefFSTEnum<>(fst);
     IntsRefFSTEnum.InputOutput<CharsRef> inputOutput;
     while ((inputOutput = fstEnum.next()) != null) {
-      fstCompiler.add(inputOutput.input, CharsRef.deepCopyOf(inputOutput.output));
+      builder.add(inputOutput.input, CharsRef.deepCopyOf(inputOutput.output));
     }
-    return fstCompiler.compile();
+    return builder.finish();
   }
 
   private static int walk(FST<CharsRef> read) throws IOException {

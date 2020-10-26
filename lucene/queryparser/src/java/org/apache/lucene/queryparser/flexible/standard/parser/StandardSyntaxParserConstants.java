@@ -51,19 +51,19 @@ public interface StandardSyntaxParserConstants {
   /** RegularExpression Id. */
   int CARAT = 21;
   /** RegularExpression Id. */
-  int TILDE = 22;
+  int QUOTED = 22;
   /** RegularExpression Id. */
-  int QUOTED = 23;
+  int TERM = 23;
   /** RegularExpression Id. */
-  int NUMBER = 24;
+  int FUZZY_SLOP = 24;
   /** RegularExpression Id. */
-  int TERM = 25;
+  int REGEXPTERM = 25;
   /** RegularExpression Id. */
-  int REGEXPTERM = 26;
+  int RANGEIN_START = 26;
   /** RegularExpression Id. */
-  int RANGEIN_START = 27;
+  int RANGEEX_START = 27;
   /** RegularExpression Id. */
-  int RANGEEX_START = 28;
+  int NUMBER = 28;
   /** RegularExpression Id. */
   int RANGE_TO = 29;
   /** RegularExpression Id. */
@@ -76,9 +76,11 @@ public interface StandardSyntaxParserConstants {
   int RANGE_GOOP = 33;
 
   /** Lexical state. */
-  int Range = 0;
+  int Boost = 0;
   /** Lexical state. */
-  int DEFAULT = 1;
+  int Range = 1;
+  /** Lexical state. */
+  int DEFAULT = 2;
 
   /** Literal token values. */
   String[] tokenImage = {
@@ -104,13 +106,13 @@ public interface StandardSyntaxParserConstants {
     "\">\"",
     "\">=\"",
     "\"^\"",
-    "\"~\"",
     "<QUOTED>",
-    "<NUMBER>",
     "<TERM>",
+    "<FUZZY_SLOP>",
     "<REGEXPTERM>",
     "\"[\"",
     "\"{\"",
+    "<NUMBER>",
     "\"TO\"",
     "\"]\"",
     "\"}\"",

@@ -70,7 +70,7 @@ class NormValuesWriter {
 
   public void flush(SegmentWriteState state, Sorter.DocMap sortMap, NormsConsumer normsConsumer) throws IOException {
     final PackedLongValues values = pending.build();
-    final NumericDocValuesWriter.NumericDVs sorted;
+    final SortingLeafReader.CachedNumericDVs sorted;
     if (sortMap != null) {
       sorted = NumericDocValuesWriter.sortDocValues(state.segmentInfo.maxDoc(), sortMap,
           new BufferedNorms(values, docsWithField.iterator()));
@@ -87,7 +87,7 @@ class NormValuesWriter {
                                    if (sorted == null) {
                                      return new BufferedNorms(values, docsWithField.iterator());
                                    } else {
-                                     return new NumericDocValuesWriter.SortingNumericDocValues(sorted);
+                                     return new SortingLeafReader.SortingNumericDocValues(sorted);
                                    }
                                   }
 

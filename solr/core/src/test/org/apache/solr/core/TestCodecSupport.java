@@ -20,8 +20,8 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.apache.lucene.codecs.Codec;
-import org.apache.lucene.codecs.lucene87.Lucene87StoredFieldsFormat;
-import org.apache.lucene.codecs.lucene87.Lucene87StoredFieldsFormat.Mode;
+import org.apache.lucene.codecs.lucene50.Lucene50StoredFieldsFormat;
+import org.apache.lucene.codecs.lucene50.Lucene50StoredFieldsFormat.Mode;
 import org.apache.lucene.codecs.perfield.PerFieldDocValuesFormat;
 import org.apache.lucene.codecs.perfield.PerFieldPostingsFormat;
 import org.apache.lucene.index.SegmentInfo;
@@ -56,15 +56,13 @@ public class TestCodecSupport extends SolrTestCaseJ4 {
   }
 
   public void testDocValuesFormats() {
-    // NOTE: Direct (and Disk) DocValues formats were removed, so we use "Asserting" 
-    // as a way to vet that the configuration actually matters.
     Codec codec = h.getCore().getCodec();
     Map<String, SchemaField> fields = h.getCore().getLatestSchema().getFields();
     SchemaField schemaField = fields.get("string_disk_f");
     PerFieldDocValuesFormat format = (PerFieldDocValuesFormat) codec.docValuesFormat();
     assertEquals(TestUtil.getDefaultDocValuesFormat().getName(), format.getDocValuesFormatForField(schemaField.getName()).getName());
     schemaField = fields.get("string_direct_f");
-    assertEquals("Asserting", format.getDocValuesFormatForField(schemaField.getName()).getName());
+    assertEquals("Direct", format.getDocValuesFormatForField(schemaField.getName()).getName());
     schemaField = fields.get("string_f");
     assertEquals(TestUtil.getDefaultDocValuesFormat().getName(),
         format.getDocValuesFormatForField(schemaField.getName()).getName());
@@ -81,15 +79,13 @@ public class TestCodecSupport extends SolrTestCaseJ4 {
   }
 
   public void testDynamicFieldsDocValuesFormats() {
-    // NOTE: Direct (and Disk) DocValues formats were removed, so we use "Asserting" 
-    // as a way to vet that the configuration actually matters.
     Codec codec = h.getCore().getCodec();
     PerFieldDocValuesFormat format = (PerFieldDocValuesFormat) codec.docValuesFormat();
 
     assertEquals(TestUtil.getDefaultDocValuesFormat().getName(), format.getDocValuesFormatForField("foo_disk").getName());
     assertEquals(TestUtil.getDefaultDocValuesFormat().getName(), format.getDocValuesFormatForField("bar_disk").getName());
-    assertEquals("Asserting", format.getDocValuesFormatForField("foo_direct").getName());
-    assertEquals("Asserting", format.getDocValuesFormatForField("bar_direct").getName());
+    assertEquals("Direct", format.getDocValuesFormatForField("foo_direct").getName());
+    assertEquals("Direct", format.getDocValuesFormatForField("bar_direct").getName());
   }
   
   private void reloadCoreAndRecreateIndex() {
@@ -117,11 +113,11 @@ public class TestCodecSupport extends SolrTestCaseJ4 {
       SegmentInfos infos = SegmentInfos.readLatestCommit(searcher.getIndexReader().directory());
       SegmentInfo info = infos.info(infos.size() - 1).info;
       assertEquals("Expecting compression mode string to be " + expectedModeString +
-              " but got: " + info.getAttribute(Lucene87StoredFieldsFormat.MODE_KEY) +
+              " but got: " + info.getAttribute(Lucene50StoredFieldsFormat.MODE_KEY) +
               "\n SegmentInfo: " + info +
               "\n SegmentInfos: " + infos +
               "\n Codec: " + core.getCodec(),
-          expectedModeString, info.getAttribute(Lucene87StoredFieldsFormat.MODE_KEY));
+          expectedModeString, info.getAttribute(Lucene50StoredFieldsFormat.MODE_KEY));
       return null;
     });
   }
@@ -210,7 +206,7 @@ public class TestCodecSupport extends SolrTestCaseJ4 {
     try {
       CoreDescriptor cd = new CoreDescriptor(newCoreName, testSolrHome.resolve(newCoreName), coreContainer);
       c = new SolrCore(coreContainer, cd,
-          new ConfigSet("fakeConfigset", config, forceFetch -> schema, null, true));
+          new ConfigSet("fakeConfigset", config, schema, null, true));
       assertNull(coreContainer.registerCore(cd, c, false, false));
       h.coreName = newCoreName;
       assertEquals("We are not using the correct core", "solrconfig_codec2.xml", h.getCore().getConfigResource());

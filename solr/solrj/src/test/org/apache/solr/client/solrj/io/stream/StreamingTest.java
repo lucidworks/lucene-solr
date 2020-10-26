@@ -50,8 +50,6 @@ import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.routing.RequestReplicaListTransformerGenerator;
 import org.apache.solr.cloud.SolrCloudTestCase;
-import org.apache.solr.common.cloud.DocCollection;
-import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.ShardParams;
@@ -123,6 +121,7 @@ public static void configureCluster() throws Exception {
     collection = MULTI_REPLICA_COLLECTIONORALIAS;
   }
   CollectionAdminRequest.createCollection(collection, "conf", numShards, 1, 1, 1)
+      .setMaxShardsPerNode(numShards * 3)
       .process(cluster.getSolrClient());
   cluster.waitForActiveCollection(collection, numShards, numShards * 3);
   if (useAlias) {
@@ -2323,123 +2322,6 @@ public void testParallelRankStream() throws Exception {
     }
   }
 
-  /**
-   * This test verifies that setting a core into the stream context entries and streamContext.local = true causes the
-   * streaming expression to only consider data found on the local node.
-   */
-  @Test
-  @SuppressWarnings({"unchecked"})
-  public void streamLocalTests() throws Exception {
-
-    new UpdateRequest()
-        .add(id, "0", "a_s", "hello0", "a_i", "0", "a_f", "0")
-        .add(id, "2", "a_s", "hello2", "a_i", "2", "a_f", "0")
-        .add(id, "3", "a_s", "hello3", "a_i", "3", "a_f", "3")
-        .add(id, "4", "a_s", "hello4", "a_i", "4", "a_f", "4")
-        .add(id, "1", "a_s", "hello1", "a_i", "1", "a_f", "1")
-        .commit(cluster.getSolrClient(), COLLECTIONORALIAS);
-
-    StreamContext streamContext = new StreamContext();
-    streamContext.setLocal(true);
-    ZkStateReader zkStateReader = cluster.getSolrClient().getZkStateReader();
-    List<String> strings = zkStateReader.aliasesManager.getAliases().resolveAliases(COLLECTIONORALIAS);
-    String collName = strings.size() > 0 ? strings.get(0) : COLLECTIONORALIAS;
-      zkStateReader.forceUpdateCollection(collName);
-    DocCollection collection = zkStateReader.getClusterState().getCollectionOrNull(collName);
-    List<Replica> replicas = collection.getReplicas();
-    streamContext.getEntries().put("core",replicas.get(random().nextInt(replicas.size())).getCoreName());
-    SolrClientCache solrClientCache = new SolrClientCache();
-    streamContext.setSolrClientCache(solrClientCache);
-    //Basic CloudSolrStream Test with Descending Sort
-
-    try {
-      SolrParams sParams = mapParams("q", "*:*", "fl", "id,a_s,a_i", "sort", "a_i desc");
-      CloudSolrStream stream = new CloudSolrStream(zkHost, COLLECTIONORALIAS, sParams);
-      stream.setStreamContext(streamContext);
-      List<Tuple> tuples = getTuples(stream);
-
-      // note if hashing algo changes this might break
-      switch (tuples.size()) {
-        case 5: // 1 shard
-          assertOrder(tuples, 4, 3, 2, 1, 0);
-          break;
-        case 3: // 2 shards case 1 (randomized)
-          assertOrder(tuples, 4, 1, 0);
-          break;
-        case 2: // 2 shards case 2 (randomized)
-          assertOrder(tuples,  3, 2);
-          break;
-        default: // nope, no way, no how, never good.
-          fail("should have 3, 5 or 2 tuples, has hashing algorithm changed?");
-      }
-
-      //With Ascending Sort
-      sParams = mapParams("q", "*:*", "fl", "id,a_s,a_i", "sort", "a_i asc");
-      stream = new CloudSolrStream(zkHost, COLLECTIONORALIAS, sParams);
-      stream.setStreamContext(streamContext);
-      tuples = getTuples(stream);
-
-      // note if hashing algo changes this might break
-      switch (tuples.size()) {
-        case 5: // 1 shard
-          assertOrder(tuples, 0, 1, 2, 3, 4);
-          break;
-        case 3: // 2 shards case 1 (randomized)
-          assertOrder(tuples, 0, 1, 4);
-          break;
-        case 2: // 2 shards case 2 (randomized)
-          assertOrder(tuples, 2, 3);
-          break;
-        default: // nope, no way, no how, never good.
-          fail("should have 3, 5 or 2 tuples, has hashing algorithm changed?");
-      }
-
-      //Test compound sort
-      sParams = mapParams("q", "*:*", "fl", "id,a_s,a_i,a_f", "sort", "a_f asc,a_i desc");
-      stream = new CloudSolrStream(zkHost, COLLECTIONORALIAS, sParams);
-      stream.setStreamContext(streamContext);
-      tuples = getTuples(stream);
-
-      // note if hashing algo changes this might break
-      switch (tuples.size()) {
-        case 5: // 1 shard
-          assertOrder(tuples, 2, 0, 1, 3, 4);
-          break;
-        case 3: // 2 shards case 1 (randomized)
-          assertOrder(tuples, 0, 1, 4);
-          break;
-        case 2: // 2 shards case 2 (randomized)
-          assertOrder(tuples, 2, 3);
-          break;
-        default: // nope, no way, no how, never good.
-          fail("should have 3, 5 or 2 tuples, has hashing algorithm changed?");
-      }
-
-      sParams = mapParams("q", "*:*", "fl", "id,a_s,a_i,a_f", "sort", "a_f asc,a_i asc");
-      stream = new CloudSolrStream(zkHost, COLLECTIONORALIAS, sParams);
-      stream.setStreamContext(streamContext);
-      tuples = getTuples(stream);
-
-      // note if hashing algo changes this might break
-      switch (tuples.size()) {
-        case 5: // 1 shard
-          assertOrder(tuples, 0, 2, 1, 3, 4);
-          break;
-        case 3: // 2 shards case 1 (randomized)
-          assertOrder(tuples, 0, 1, 4);
-          break;
-        case 2: // 2 shards case 2 (randomized)
-          assertOrder(tuples, 2, 3);
-          break;
-        default: // nope, no way, no how, never good.
-          fail("should have 3, 5 or 2 tuples, has hashing algorithm changed?");
-      }
-
-    } finally {
-      solrClientCache.close();
-    }
-  }
-
   @Test
   public void testDateBoolSorting() throws Exception {
 
@@ -2643,9 +2525,8 @@ public void testParallelRankStream() throws Exception {
     for(int val : ids) {
       Tuple t = tuples.get(i);
       String tip = (String)t.get("id");
-      String valStr = Integer.toString(val);
-      if(!tip.equals(valStr)) {
-        assertEquals("Found value:"+tip+" expecting:"+valStr, val, tip);
+      if(!tip.equals(Integer.toString(val))) {
+        throw new Exception("Found value:"+tip+" expecting:"+val);
       }
       ++i;
     }
@@ -2714,13 +2595,6 @@ public void testParallelRankStream() throws Exception {
   private ParallelStream parallelStream(TupleStream stream, FieldComparator comparator) throws IOException {
     ParallelStream pstream = new ParallelStream(zkHost, COLLECTIONORALIAS, stream, numWorkers, comparator);
     return pstream;
-  }
-
-  public void testCloudSolrStreamWithoutStreamContext() throws Exception {
-    SolrParams sParams = StreamingTest.mapParams("q", "*:*", "fl", "id", "sort", "id asc");
-    try (CloudSolrStream stream = new CloudSolrStream(zkHost, COLLECTIONORALIAS, sParams)) {
-      stream.open();
-    }
   }
 
 }

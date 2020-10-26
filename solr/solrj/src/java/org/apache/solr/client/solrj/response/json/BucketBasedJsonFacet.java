@@ -90,8 +90,22 @@ public class BucketBasedJsonFacet {
    * This value can only be computed on "terms" facets where the user has specifically requested it with the
    * {@code numBuckets} option.  {@link #UNSET_FLAG} is returned if this is a "range" facet or {@code numBuckets}
    * computation was not requested in the intiial request.
+   *
+   * @deprecated this method can trigger ClassCastException's if the returned value is a long.  In the future it will
+   * return a 'long' instead to avoid this problem.  Until then, use {@link #getNumBucketsCount()} instead.
    */
-  public long getNumBuckets() {
+  public int getNumBuckets() {
+    return (int) numBuckets;
+  }
+
+  /**
+   * The total number of buckets found in the domain (of which the returned buckets are only a part).
+   *
+   * This value can only be computed on "terms" facets where the user has specifically requested it with the
+   * {@code numBuckets} option.  {@link #UNSET_FLAG} is returned if this is a "range" facet or {@code numBuckets}
+   * computation was not requested in the intiial request.
+   */
+  public long getNumBucketsCount() {
     return numBuckets;
   }
 
@@ -113,9 +127,33 @@ public class BucketBasedJsonFacet {
    *
    * This value is only present if the user has specifically requested it with the {@code other} option.
    * {@link #UNSET_FLAG} is returned if this is not the case.
+   *
+   * @deprecated this method can trigger ClassCastException's if the returned value is a long.  In the future it will
+   * return a 'long' instead to avoid this problem.  Until then, use {@link #getBeforeCount()} instead.
    */
-  public long getBefore() {
-    return beforeFirstBucketCount;
+  public int getBefore() {
+    return (int) beforeFirstBucketCount;
+  }
+
+  /**
+   * The count of all records whose field value precedes the {@code start} of this "range" facet
+   *
+   * This value is only present if the user has specifically requested it with the {@code other} option.
+   * {@link #UNSET_FLAG} is returned if this is not the case.
+   */
+  public long getBeforeCount() { return beforeFirstBucketCount; }
+
+  /**
+   * The count of all records whose field value follows the {@code end} of this "range" facet
+   *
+   * This value is only present if the user has specifically requested it with the {@code other} option.
+   * {@link #UNSET_FLAG} is returned if this is not the case.
+   *
+   * @deprecated this method can trigger ClassCastException's if the returned value is a long.  In the future it will
+   * return a 'long' instead to avoid this problem.  Until then, use {@link #getAfterCount()} instead.
+   */
+  public int getAfter() {
+    return (int) afterLastBucketCount;
   }
 
   /**
@@ -124,7 +162,7 @@ public class BucketBasedJsonFacet {
    * This value is only present if the user has specifically requested it with the {@code other} option.
    * {@link #UNSET_FLAG} is returned if this is not the case.
    */
-  public long getAfter() {
+  public long getAfterCount() {
     return afterLastBucketCount;
   }
 
@@ -133,8 +171,21 @@ public class BucketBasedJsonFacet {
    *
    * This value is only present if the user has specifically requested it with the {@code other} option.
    * {@link #UNSET_FLAG} is returned if this is not the case.
+   *
+   * @deprecated this method can trigger ClassCastException's if the returned value is a long.  In the future it will
+   * return a 'long' instead to avoid this problem.  Until then, use {@link #getBetweenCount()} instead.
    */
-  public long getBetween() {
+  public int getBetween() {
+    return (int) betweenAllBucketsCount;
+  }
+
+  /**
+   * The count of all records whose field value falls between {@code start} and {@code end}.
+   *
+   * This value is only present if the user has specifically requested it with the {@code other} option.
+   * {@link #UNSET_FLAG} is returned if this is not the case.
+   */
+  public long getBetweenCount() {
     return betweenAllBucketsCount;
   }
 }

@@ -39,7 +39,7 @@ public abstract class DocIDMerger<T extends DocIDMerger.Sub> {
     final MergeState.DocMap docMap;
 
     /** Sole constructor */
-    protected Sub(MergeState.DocMap docMap) {
+    public Sub(MergeState.DocMap docMap) {
       this.docMap = docMap;
     }
 

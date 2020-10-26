@@ -139,7 +139,8 @@ public abstract class BaseHttpClusterStateProvider implements ClusterStateProvid
     Set<String> liveNodes = new HashSet((List<String>)(cluster.get("live_nodes")));
     this.liveNodes = liveNodes;
     liveNodesTimestamp = System.nanoTime();
-    ClusterState cs = ClusterState.createFromCollectionMap(znodeVersion, collectionsMap, liveNodes);
+    //TODO SOLR-11877 we don't know the znode path; CLUSTER_STATE is probably wrong leading to bad stateFormat
+    ClusterState cs = ClusterState.load(znodeVersion, collectionsMap, liveNodes, ZkStateReader.CLUSTER_STATE);
     if (clusterProperties != null) {
       Map<String, Object> properties = (Map<String, Object>) cluster.get("properties");
       if (properties != null) {
@@ -261,7 +262,7 @@ public abstract class BaseHttpClusterStateProvider implements ClusterStateProvid
       String baseUrl = Utils.getBaseUrlForNodeName(nodeName, urlScheme);
       try (SolrClient client = getSolrClient(baseUrl)) {
         return fetchClusterState(client, null, null);
-      } catch (SolrServerException | BaseHttpSolrClient.RemoteSolrException | IOException e) {
+      } catch (SolrServerException | HttpSolrClient.RemoteSolrException | IOException e) {
         log.warn("Attempt to fetch cluster state from {} failed.", baseUrl, e);
       } catch (NotACollectionException e) {
         // not possible! (we passed in null for collection so it can't be an alias)
@@ -284,7 +285,7 @@ public abstract class BaseHttpClusterStateProvider implements ClusterStateProvid
         Map<String, Object> clusterProperties = new HashMap<>();
         fetchClusterState(client, null, clusterProperties);
         return clusterProperties;
-      } catch (SolrServerException | BaseHttpSolrClient.RemoteSolrException | IOException e) {
+      } catch (SolrServerException | HttpSolrClient.RemoteSolrException | IOException e) {
         log.warn("Attempt to fetch cluster state from {} failed.", baseUrl, e);
       } catch (NotACollectionException e) {
         // not possible! (we passed in null for collection so it can't be an alias)

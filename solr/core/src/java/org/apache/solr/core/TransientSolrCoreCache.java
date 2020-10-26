@@ -19,7 +19,11 @@ package org.apache.solr.core;
 
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Set;
+
+import org.apache.http.annotation.Experimental;
 
 /**
  * The base class for custom transient core maintenance. Any custom plugin that want's to take control of transient
@@ -40,7 +44,7 @@ import java.util.Set;
  *          necessary and to coordinate shutting down cores, manipulating the internal structures and the like..
  *          
  *          The only real action you should _initiate_ is to close a core for whatever reason, and do that by 
- *          calling notifyCoreCloseListener(coreToClose); The observer will call back to removeCore(name) at the appropriate 
+ *          calling notifyObservers(coreToClose); The observer will call back to removeCore(name) at the appropriate 
  *          time. There is no need to directly remove the core _at that time_ from the transientCores list, a call
  *          will come back to this class when CoreContainer is closing this core.
  *          
@@ -101,12 +105,18 @@ public abstract class TransientSolrCoreCache {
   // Remove the core descriptor from your list of transient descriptors.
   public abstract CoreDescriptor removeTransientDescriptor(String name);
 
+  // Find all the names a specific core is mapped to. Should not return null, return empty set instead.
+  @Experimental
+  public List<String> getNamesForCore(SolrCore core) {
+    return Collections.emptyList();
+  }
+  
   /**
    * Must be called in order to free resources!
    */
-  public  void close(){
-    // Nothing to do currently
-  };
+  public void close() {
+    // Nothing to do for now
+  }
 
 
   // These two methods allow custom implementations to communicate arbitrary information as necessary.

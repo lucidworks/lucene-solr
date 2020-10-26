@@ -21,10 +21,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.lucene.index.Impact;
@@ -92,8 +92,8 @@ public final class SynonymQuery extends Query {
         throw new IllegalArgumentException("boost must be a positive float between 0 (exclusive) and 1 (inclusive)");
       }
       terms.add(new TermAndBoost(term, boost));
-      if (terms.size() > IndexSearcher.getMaxClauseCount()) {
-        throw new IndexSearcher.TooManyClauses();
+      if (terms.size() > BooleanQuery.getMaxClauseCount()) {
+        throw new BooleanQuery.TooManyClauses();
       }
       return this;
     }
@@ -102,9 +102,38 @@ public final class SynonymQuery extends Query {
      * Builds the {@link SynonymQuery}.
      */
     public SynonymQuery build() {
-      Collections.sort(terms, Comparator.comparing(a -> a.term));
+      Collections.sort(terms);
       return new SynonymQuery(terms.toArray(new TermAndBoost[0]), field);
     }
+  }
+
+  /**
+   * Creates a new SynonymQuery, matching any of the supplied terms.
+   * <p>
+   * The terms must all have the same field.
+   *
+   * @deprecated Please use a {@link Builder} instead.
+   */
+  @Deprecated
+  public SynonymQuery(Term... terms) {
+    Objects.requireNonNull(terms);
+    if (terms.length > BooleanQuery.getMaxClauseCount()) {
+      throw new BooleanQuery.TooManyClauses();
+    }
+    this.terms = new TermAndBoost[terms.length];
+    // check that all terms are the same field
+    String field = null;
+    for (int i = 0; i < terms.length; i++) {
+      Term term = terms[i];
+      this.terms[i] = new TermAndBoost(term, 1.0f);
+      if (field == null) {
+        field = term.field();
+      } else if (!term.field().equals(field)) {
+        throw new IllegalArgumentException("Synonyms must be across the same field");
+      }
+    }
+    Arrays.sort(this.terms);
+    this.field = field;
   }
   
   /**
@@ -223,10 +252,17 @@ public final class SynonymQuery extends Query {
     }
 
     @Override
+    public void extractTerms(Set<Term> terms) {
+      for (TermAndBoost term : SynonymQuery.this.terms) {
+        terms.add(term.term);
+      }
+    }
+
+    @Override
     public Matches matches(LeafReaderContext context, int doc) throws IOException {
       String field = terms[0].term.field();
       Terms indexTerms = context.reader().terms(field);
-      if (indexTerms == null) {
+      if (indexTerms == null || indexTerms.hasPositions() == false) {
         return super.matches(context, doc);
       }
       List<Term> termList = Arrays.stream(terms)
@@ -616,7 +652,7 @@ public final class SynonymQuery extends Query {
     }
   }
 
-  private static class TermAndBoost {
+  private static class TermAndBoost implements Comparable<TermAndBoost> {
     final Term term;
     final float boost;
 
@@ -641,6 +677,11 @@ public final class SynonymQuery extends Query {
     @Override
     public int hashCode() {
       return Objects.hash(term, boost);
+    }
+
+    @Override
+    public int compareTo(TermAndBoost o) {
+      return term.compareTo(o.term);
     }
   }
 }

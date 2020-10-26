@@ -32,7 +32,7 @@ import org.apache.lucene.analysis.core.FlattenGraphFilterFactory;  // javadocs
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.synonym.SynonymFilterFactory;
 import org.apache.lucene.analysis.synonym.SynonymMap;
-import org.apache.lucene.util.ResourceLoader;
+import org.apache.lucene.analysis.util.ResourceLoader;
 import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.CharsRefBuilder;
 import org.apache.solr.common.SolrException;
@@ -43,6 +43,8 @@ import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.rest.BaseSolrResource;
 import org.apache.solr.rest.ManagedResource;
 import org.apache.solr.rest.ManagedResourceStorage.StorageIO;
+import org.restlet.data.Status;
+import org.restlet.resource.ResourceException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -178,7 +180,7 @@ public class ManagedSynonymFilterFactory extends BaseManagedTokenFilterFactory {
       } else if (updates instanceof Map) {
         madeChanges = applyMapUpdates((Map<String,Object>)updates, ignoreCase);
       } else {
-        throw new SolrException(ErrorCode.BAD_REQUEST,
+        throw new ResourceException(Status.CLIENT_ERROR_BAD_REQUEST,
             "Unsupported data format (" + updates.getClass().getName() + "); expected a JSON object (Map or List)!");
       }
       return madeChanges ? getStoredView() : null;
@@ -248,7 +250,7 @@ public class ManagedSynonymFilterFactory extends BaseManagedTokenFilterFactory {
           }
 
         } else {
-          throw new SolrException(ErrorCode.BAD_REQUEST, "Unsupported value "+val+
+          throw new ResourceException(Status.CLIENT_ERROR_BAD_REQUEST, "Unsupported value "+val+
               " for "+term+"; expected single value or a JSON array!");
         }
 
@@ -382,11 +384,6 @@ public class ManagedSynonymFilterFactory extends BaseManagedTokenFilterFactory {
           
   public ManagedSynonymFilterFactory(Map<String,String> args) {
     super(args);    
-  }
-
-  /** Default ctor for compatibility with SPI */
-  public ManagedSynonymFilterFactory() {
-    throw defaultCtorException();
   }
 
   @Override

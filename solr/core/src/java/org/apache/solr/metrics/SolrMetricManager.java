@@ -71,7 +71,7 @@ import org.slf4j.MDC;
  * {@link MetricRegistry} instances are automatically created when first referenced by name. Similarly,
  * instances of {@link Metric} implementations, such as {@link Meter}, {@link Counter}, {@link Timer} and
  * {@link Histogram} are automatically created and registered under hierarchical names, in a specified
- * registry, when {@link #meter(SolrMetricsContext, String, String, String...)} and other similar methods are called.
+ * registry, when {@link #meter(SolrInfoBean, String, String, String...)} and other similar methods are called.
  * <p>This class enforces a common prefix ({@link #REGISTRY_NAME_PREFIX}) in all registry
  * names.</p>
  * <p>Solr uses several different registries for collecting metrics belonging to different groups, using
@@ -110,14 +110,12 @@ public class SolrMetricManager {
 
   public static final int DEFAULT_CLOUD_REPORTER_PERIOD = 60;
 
-  private final MetricsConfig metricsConfig;
-  private final MetricRegistry.MetricSupplier<Counter> counterSupplier;
-  private final MetricRegistry.MetricSupplier<Meter> meterSupplier;
-  private final MetricRegistry.MetricSupplier<Timer> timerSupplier;
-  private final MetricRegistry.MetricSupplier<Histogram> histogramSupplier;
+  private MetricRegistry.MetricSupplier<Counter> counterSupplier;
+  private MetricRegistry.MetricSupplier<Meter> meterSupplier;
+  private MetricRegistry.MetricSupplier<Timer> timerSupplier;
+  private MetricRegistry.MetricSupplier<Histogram> histogramSupplier;
 
   public SolrMetricManager() {
-    metricsConfig = new MetricsConfig.MetricsConfigBuilder().build();
     counterSupplier = MetricSuppliers.counterSupplier(null, null);
     meterSupplier = MetricSuppliers.meterSupplier(null, null);
     timerSupplier = MetricSuppliers.timerSupplier(null, null);
@@ -125,7 +123,6 @@ public class SolrMetricManager {
   }
 
   public SolrMetricManager(SolrResourceLoader loader, MetricsConfig metricsConfig) {
-    this.metricsConfig = metricsConfig;
     counterSupplier = MetricSuppliers.counterSupplier(loader, metricsConfig.getCounterSupplier());
     meterSupplier = MetricSuppliers.meterSupplier(loader, metricsConfig.getMeterSupplier());
     timerSupplier = MetricSuppliers.timerSupplier(loader, metricsConfig.getTimerSupplier());
@@ -530,8 +527,7 @@ public class SolrMetricManager {
    */
   public enum ResolutionStrategy {
     /**
-     * The existing metric will be kept and the new metric will be ignored. If no metric exists, then the new metric
-     * will be registered.
+     * The existing metric will be kept and the new metric will be ignored
      */
     IGNORE,
     /**
@@ -560,11 +556,13 @@ public class SolrMetricManager {
       Map<String, Metric> existingMetrics = metricRegistry.getMetrics();
       for (Map.Entry<String, Metric> entry : metrics.getMetrics().entrySet()) {
         String fullName = mkName(entry.getKey(), metricPath);
-        if (strategy == ResolutionStrategy.REPLACE) {
-          metricRegistry.remove(fullName);
-        } else if (strategy == ResolutionStrategy.IGNORE && existingMetrics.containsKey(fullName)) {
-          continue;
-        } // strategy == ERROR will fail when we try to register
+        if (existingMetrics.containsKey(fullName)) {
+          if (strategy == ResolutionStrategy.REPLACE) {
+            metricRegistry.remove(fullName);
+          } else if (strategy == ResolutionStrategy.IGNORE) {
+            continue;
+          } // strategy == ERROR will fail when we try to register later
+        }
         metricRegistry.register(fullName, entry.getValue());
       }
     }
@@ -627,10 +625,10 @@ public class SolrMetricManager {
    * @param metricPath (optional) additional top-most metric name path elements
    * @return existing or a newly created {@link Meter}
    */
-  public Meter meter(SolrMetricsContext context, String registry, String metricName, String... metricPath) {
+  public Meter meter(SolrInfoBean info, String registry, String metricName, String... metricPath) {
     final String name = mkName(metricName, metricPath);
-    if (context != null) {
-      context.registerMetricName(name);
+    if (info != null) {
+      info.registerMetricName(name);
     }
     return registry(registry).meter(name, meterSupplier);
   }
@@ -644,10 +642,10 @@ public class SolrMetricManager {
    * @param metricPath (optional) additional top-most metric name path elements
    * @return existing or a newly created {@link Timer}
    */
-  public Timer timer(SolrMetricsContext context, String registry, String metricName, String... metricPath) {
+  public Timer timer(SolrInfoBean info, String registry, String metricName, String... metricPath) {
     final String name = mkName(metricName, metricPath);
-    if (context != null) {
-      context.registerMetricName(name);
+    if (info != null) {
+      info.registerMetricName(name);
     }
     return registry(registry).timer(name, timerSupplier);
   }
@@ -661,10 +659,10 @@ public class SolrMetricManager {
    * @param metricPath (optional) additional top-most metric name path elements
    * @return existing or a newly created {@link Counter}
    */
-  public Counter counter(SolrMetricsContext context, String registry, String metricName, String... metricPath) {
+  public Counter counter(SolrInfoBean info, String registry, String metricName, String... metricPath) {
     final String name = mkName(metricName, metricPath);
-    if (context != null) {
-      context.registerMetricName(name);
+    if (info != null) {
+      info.registerMetricName(name);
     }
     return registry(registry).counter(name, counterSupplier);
   }
@@ -678,20 +676,12 @@ public class SolrMetricManager {
    * @param metricPath (optional) additional top-most metric name path elements
    * @return existing or a newly created {@link Histogram}
    */
-  public Histogram histogram(SolrMetricsContext context, String registry, String metricName, String... metricPath) {
+  public Histogram histogram(SolrInfoBean info, String registry, String metricName, String... metricPath) {
     final String name = mkName(metricName, metricPath);
-    if (context != null) {
-      context.registerMetricName(name);
+    if (info != null) {
+      info.registerMetricName(name);
     }
     return registry(registry).histogram(name, histogramSupplier);
-  }
-
-  /**
-   * @deprecated use {@link #registerMetric(SolrMetricsContext, String, Metric, ResolutionStrategy, String, String...)}
-   */
-  @Deprecated
-  public void registerMetric(SolrMetricsContext context, String registry, Metric metric, boolean force, String metricName, String... metricPath) {
-    registerMetric(context, registry, metric, force ? ResolutionStrategy.REPLACE : ResolutionStrategy.IGNORE, metricName, metricPath);
   }
 
   /**
@@ -699,23 +689,23 @@ public class SolrMetricManager {
    *
    * @param registry   registry name
    * @param metric     metric instance
-   * @param strategy   the conflict resolution strategy to use if the named metric already exists.
+   * @param force      if true then an already existing metric with the same name will be replaced.
+   *                   When false and a metric with the same name already exists an exception
+   *                   will be thrown.
    * @param metricName metric name, either final name or a fully-qualified name
    *                   using dotted notation
    * @param metricPath (optional) additional top-most metric name path elements
    */
-  public void registerMetric(SolrMetricsContext context, String registry, Metric metric, ResolutionStrategy strategy, String metricName, String... metricPath) {
+  public void registerMetric(SolrInfoBean info, String registry, Metric metric, boolean force, String metricName, String... metricPath) {
     MetricRegistry metricRegistry = registry(registry);
     String fullName = mkName(metricName, metricPath);
-    if (context != null) {
-      context.registerMetricName(fullName);
+    if (info != null) {
+      info.registerMetricName(fullName);
     }
     synchronized (metricRegistry) { // prevent race; register() throws if metric is already present
-      if (strategy == ResolutionStrategy.REPLACE) { // must remove any existing one if present
+      if (force) { // must remove any existing one if present
         metricRegistry.remove(fullName);
-      } else if (strategy == ResolutionStrategy.IGNORE && metricRegistry.getMetrics().containsKey(fullName)) {
-        return;
-      } // strategy == ERROR will fail when we try to register
+      }
       metricRegistry.register(fullName, metric);
     }
   }
@@ -749,20 +739,9 @@ public class SolrMetricManager {
       return gauge;
     }
   }
-
-  /**
-   * @deprecated use {@link #registerGauge(SolrMetricsContext, String, Gauge, String, ResolutionStrategy, String, String...)}
-   */
-  @Deprecated
-  public void registerGauge(SolrMetricsContext context, String registry, Gauge<?> gauge, String tag, boolean force, String metricName, String... metricPath) {
-    registerGauge(context, registry, gauge, tag, force ? ResolutionStrategy.REPLACE : ResolutionStrategy.ERROR, metricName, metricPath);
-  }
-
-  public <T> void registerGauge(SolrMetricsContext context, String registry, Gauge<T> gauge, String tag, ResolutionStrategy strategy, String metricName, String... metricPath) {
-    if (!metricsConfig.isEnabled()) {
-      gauge = MetricSuppliers.getNoOpGauge(gauge);
-    }
-    registerMetric(context, registry, new GaugeWrapper<>(gauge, tag), strategy, metricName, metricPath);
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  public void registerGauge(SolrInfoBean info, String registry, Gauge<?> gauge, String tag, boolean force, String metricName, String... metricPath) {
+    registerMetric(info, registry, new GaugeWrapper(gauge, tag), force, metricName, metricPath);
   }
 
   public int unregisterGauges(String registryName, String tagSegment) {
