@@ -132,6 +132,13 @@ public abstract class SolrCoreState {
   }
 
   /**
+   * Unpauses all updates to this core
+   */
+  public void unpauseUpdates() {
+    pauseUpdateRequests.set(false);
+  }
+
+  /**
    * Registers in-flight update requests to this core.
    *
    * @return true if request was registered, false if update requests are paused

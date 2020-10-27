@@ -2212,6 +2212,48 @@ public class ZkController implements Closeable {
 
   }
 
+  /**
+   * This method is functionally identical to {@link #rejoinShardLeaderElection(SolrParams)} but accepts a
+   * CoreDescriptor instead and does not use a specific election node.
+   *
+   * We keep them separated so that forward-porting or merge with main branch later
+   * becomes easier.
+   */
+  public void rejoinShardLeaderElection(CoreDescriptor coreDescriptor, boolean rejoinAtHead) {
+    CloudDescriptor cloudDescriptor = coreDescriptor.getCloudDescriptor();
+    if (cloudDescriptor == null) {
+      return;
+    }
+
+    try {
+      ContextKey contextKey = new ContextKey(coreDescriptor.getCollectionName(), cloudDescriptor.getCoreNodeName());
+      ElectionContext prevContext = electionContexts.get(contextKey);
+      if (prevContext == null) {
+        return;
+      }
+
+      ShardLeaderElectionContext prevElectionContext = (ShardLeaderElectionContext) prevContext;
+      prevElectionContext.getLeaderElector().retryElection(prevContext, rejoinAtHead);
+
+      Replica.Type replicaType = cloudDescriptor.getReplicaType();
+      if (replicaType == Type.TLOG) {
+        String coreName = coreDescriptor.getName();
+        String leaderUrl = getLeader(cloudDescriptor, cloudConfig.getLeaderVoteWait());
+        String ourUrl = ZkCoreNodeProps.getCoreUrl(getBaseUrl(), coreDescriptor.getName());
+        if (!leaderUrl.equals(ourUrl)) {
+          // restart the replication thread to ensure the replication is running in each new replica
+          // especially if previous role is "leader" (i.e., no replication thread)
+          stopReplicationFromLeader(coreName);
+          startReplicationFromLeader(coreName, false);
+        }
+      }
+    } catch (Exception e) {
+      throw new SolrException(ErrorCode.SERVER_ERROR, "Unable to rejoin election", e);
+    } finally {
+      MDCLoggingContext.clear();
+    }
+  }
+
   public void rejoinShardLeaderElection(SolrParams params) {
 
 

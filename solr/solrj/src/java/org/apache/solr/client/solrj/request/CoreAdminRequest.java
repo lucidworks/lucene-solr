@@ -406,6 +406,12 @@ public class CoreAdminRequest extends SolrRequest<CoreAdminResponse> {
     }
   }
 
+  public static class AbdicateLeadership extends CoreAdminRequest {
+    public AbdicateLeadership() {
+      action = CoreAdminAction.ABDICATE_LEADERSHIP;
+    }
+  }
+
   public static class Unload extends CoreAdminRequest {
     protected boolean deleteIndex;
     protected boolean deleteDataDir;
@@ -641,6 +647,10 @@ public class CoreAdminRequest extends SolrRequest<CoreAdminResponse> {
     req.setAction(CoreAdminAction.STATUS);
     req.setIndexInfoNeeded(getIndexInfo);
     return new CoreStatus(req.process(client).getCoreStatus(coreName));
+  }
+
+  public static CoreAdminResponse abdicateLeadership(SolrClient client) throws IOException, SolrServerException {
+    return new AbdicateLeadership().process(client);
   }
 
   public static CoreAdminResponse getStatus( String name, SolrClient client ) throws SolrServerException, IOException

@@ -338,3 +338,22 @@ The name of the core to re-sync. This parameter is required.
 http://localhost:8981/solr/admin/cores?action=REQUESTRECOVERY&core=gettingstarted_shard1_replica1
 
 The core to specify can be found by expanding the appropriate ZooKeeper node via the admin UI.
+
+[[coreadmin-abdicateleadership]]
+== ABDICATE_LEADERSHIP
+
+The `ABDICATE_LEADERSHIP` action makes specified cores (or, if no cores are specified, all leader cores) to give up their leadership triggering new leader elections in the cluster.
+This is an _expert_ API and should be called only prior to shutting down the node. The API pauses updates to the leader cores, waits for in-flight update requests to be replicated to replicas
+and makes the node rejoin leader election.
+
+`admin/cores?action=ABDICATE_LEADERSHIP&cores=_core-name1_,_core-name2_,...`
+
+=== ABDICATE_LEADERSHIP Parameters
+
+`cores`::
+A comma-separated list of names of leader cores. If the given core is not a leader or does not exist then no action is taken. If the core is a leader of a shard with no replicas or if there are no other active replicas for the shard then no action is taken.
+
+[IMPORTANT]
+====
+ABDICATE_LEADERSHIP pauses updates for the leader core. In case of unexpected failures, indexing on one or more erstwhile leader cores can remain paused. Therefore, whether the API succeeds or fails, the node must be shutdown regardless.
+====
