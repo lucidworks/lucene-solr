@@ -19,15 +19,21 @@ package org.apache.solr.handler.admin;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.solr.cloud.CloudDescriptor;
 import org.apache.solr.cloud.ZkController;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
+import org.apache.solr.common.cloud.ClusterState;
+import org.apache.solr.common.cloud.DocCollection;
+import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.params.CoreAdminParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
@@ -224,6 +230,52 @@ enum CoreAdminOperation implements CoreAdminOp {
         zkController.rejoinOverseerElection(electionNode, "rejoinAtHead".equals(op));
       } else {
         log().info("electionNode is required param");
+      }
+    }
+  }),
+
+  ABDICATE_LEADERSHIP_OP(ABDICATE_LEADERSHIP, it -> {
+    CoreContainer cc = it.handler.coreContainer;
+    if (!cc.isZooKeeperAware()) {
+      throw new SolrException(ErrorCode.BAD_REQUEST, "This api only works in SolrCloud env");
+    }
+    String cores = it.req.getParams().get("cores");
+    Set<String> selectedCores = null;
+    if (cores != null) {
+      selectedCores = new HashSet<>(Arrays.asList(cores.split(",")));
+    } else {
+      selectedCores = new HashSet<>(cc.getAllCoreNames());
+    }
+    ClusterState clusterState = cc.getZkController().getClusterState();
+    for (String coreName : selectedCores) {
+      try (SolrCore core = cc.getCore(coreName))  {
+        if (core == null
+                || core.getCoreDescriptor() == null
+                || core.getCoreDescriptor().getCloudDescriptor() == null
+                || !core.getCoreDescriptor().getCloudDescriptor().isLeader())  {
+          // we are only interested in cores which are leaders
+          continue;
+        }
+        CoreDescriptor cd = core.getCoreDescriptor();
+        DocCollection docCollection = clusterState.getCollection(cd.getCollectionName());
+        Slice slice = docCollection.getSlice(cd.getCloudDescriptor().getShardId());
+        if (slice.getReplicas().size() < 2) {
+          log().info("Skipping abdicate leadership of core:{} since it is the only replica in the shard", cd.getName());
+        }
+        if (slice.getReplicas(replica -> replica.isActive(clusterState.getLiveNodes())).size() < 2) {
+          log().info("Skipping abdicate leadership of core:{} since it is the only one active replica", cd.getName());
+        }
+
+        try {
+          core.getSolrCoreState().pauseUpdatesAndAwaitInflightRequests();
+          cc.getZkController().rejoinShardLeaderElection(cd, false);
+        } finally {
+          core.getSolrCoreState().unpauseUpdates();
+          // after this point this core can still receive more updates since it did not explicitly
+          // unset its leader role from cluster state, but that is fine since it has already unset its leader role locally
+          // (by setting cloudDescriptor.isLeader() flag) so it will keep refusing updates or route update requests
+          // to a new leader
+        }
       }
     }
   }),

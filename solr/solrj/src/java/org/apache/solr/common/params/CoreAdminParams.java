@@ -151,6 +151,7 @@ public abstract class CoreAdminParams
     REQUESTBUFFERUPDATES,
     REQUESTAPPLYUPDATES,
     OVERSEEROP,
+    ABDICATE_LEADERSHIP,
     REQUESTSTATUS(true),
     REJOINLEADERELECTION,
     //internal API used by force shard leader election
