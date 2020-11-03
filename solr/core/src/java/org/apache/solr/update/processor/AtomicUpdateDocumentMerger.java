@@ -399,11 +399,10 @@ public class AtomicUpdateDocumentMerger {
       final Collection<Object> original = existingField.getValues();
       if (fieldVal instanceof Collection) {
         for (Object object : (Collection) fieldVal) {
-          Object o = sf.getType().toNativeType(object);
-          original.remove(o);
+          removeFieldValueWithNumericFudging(sf, original, object);
         }
       } else {
-        original.remove(sf.getType().toNativeType(fieldVal));
+        removeFieldValueWithNumericFudging(sf, original, fieldVal);
       }
 
       toDoc.setField(name, original);
@@ -441,6 +440,48 @@ public class AtomicUpdateDocumentMerger {
       patterns.add(Pattern.compile(fieldVal.toString()));
     }
     return patterns;
+  }
+
+  /**
+   * Removes the value 'toRemove' from a provided list of values
+   *
+   * Both 'original' and 'toRemove' may be of different types based on the format of the user request and on where the
+   * existing document was pulled from (tlog vs index).  As a result this method can't merely call
+   * {@link Collection#remove(Object)}, as doing so relies on equality checks that (rightly) fail across the variety of
+   * types that this method needs to handle.  Instead this method anticipates some of the common type differences and
+   * only attempts removal after converting to compatible types.
+   *
+   * @param sf the schema definition for the field involved in this atomic update operation
+   * @param original the list of values currently present in the existing document
+   * @param toRemove a value to be removed from 'original'
+   */
+  private void removeFieldValueWithNumericFudging(SchemaField sf, @SuppressWarnings({"rawtypes"}) Collection<?> original, Object toRemove) {
+    if (original.size() == 0) {
+      return;
+    }
+
+    final Object nativeFieldValueToRemove = sf.getType().toNativeType(toRemove);
+    if (nativeFieldValueToRemove instanceof Double || nativeFieldValueToRemove instanceof Float) {
+      final Number toRemoveNumber = (Number) nativeFieldValueToRemove;
+      original.stream()
+              .filter(val ->
+                      val.equals(toRemove) ||
+                              val.equals(nativeFieldValueToRemove) ||
+                              val instanceof Number && ((Number) val).doubleValue() == toRemoveNumber.doubleValue())
+              .findFirst()
+              .ifPresent(match -> original.remove(match));
+    } else if (nativeFieldValueToRemove instanceof Long || nativeFieldValueToRemove instanceof Integer) {
+      final Number toRemoveNumber = (Number) nativeFieldValueToRemove;
+      original.stream()
+              .filter(val ->
+                      val.equals(toRemove) ||
+                              val.equals(nativeFieldValueToRemove) ||
+                              val instanceof Number && ((Number) val).longValue() == toRemoveNumber.longValue())
+              .findFirst()
+              .ifPresent(match -> original.remove(match));
+    } else {
+      original.remove(nativeFieldValueToRemove);
+    }
   }
   
 }

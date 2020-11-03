@@ -176,6 +176,22 @@ public class AtomicUpdatesTest extends SolrTestCaseJ4 {
 
     assertQ(req("q", "intRemove:[* TO *]", "indent", "true"), "//result[@numFound = '4']");
     assertQ(req("q", "intRemove:111", "indent", "true"), "//result[@numFound = '3']");
+
+    // Test that mv int fields can have values removed prior to being committed to index (see SOLR-14971)
+    doc = new SolrInputDocument();
+    doc.setField("id", "4242");
+    doc.setField("intRemove", new String[] {"123", "456", "789"});
+    assertU(adoc(doc));
+
+    doc = new SolrInputDocument();
+    doc.setField("id", "4242");
+    doc.setField("intRemove", ImmutableMap.of("remove", 123));
+    assertU(adoc(doc));
+    assertU(commit());
+
+    assertQ(req("q", "intRemove:123", "indent", "true"), "//result[@numFound = '0']");
+    assertQ(req("q", "intRemove:456", "indent", "true"), "//result[@numFound = '1']");
+    assertQ(req("q", "intRemove:789", "indent", "true"), "//result[@numFound = '1']");
   }
 
 
@@ -244,6 +260,22 @@ public class AtomicUpdatesTest extends SolrTestCaseJ4 {
 
     assertQ(req("q", "intRemove:[* TO *]", "indent", "true"), "//result[@numFound = '4']");
     assertQ(req("q", "intRemove:111", "indent", "true"), "//result[@numFound = '3']");
+
+    // Test that mv int fields can have values removed prior to being committed to index (see SOLR-14971)
+    doc = new SolrInputDocument();
+    doc.setField("id", "4242");
+    doc.setField("intRemove", new Integer[] {123, 456, 789});
+    assertU(adoc(doc));
+
+    doc = new SolrInputDocument();
+    doc.setField("id", "4242");
+    doc.setField("intRemove", ImmutableMap.of("remove", 123));
+    assertU(adoc(doc));
+    assertU(commit());
+
+    assertQ(req("q", "intRemove:123", "indent", "true"), "//result[@numFound = '0']");
+    assertQ(req("q", "intRemove:456", "indent", "true"), "//result[@numFound = '1']");
+    assertQ(req("q", "intRemove:789", "indent", "true"), "//result[@numFound = '1']");
   }
 
   @Test

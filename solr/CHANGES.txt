@@ -46,6 +46,8 @@ Bug fixes
   all the cores.
   (Danyal Prout via shalin)
 
+* SOLR-14971: AtomicUpdate 'remove' operations now works on numeric fields in uncommitted docs (Jason Gerlowski)
+
 ==================  7.7.2 ==================
 
 Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.
