@@ -79,6 +79,7 @@ public class Policy implements MapWriter {
   public static final String CLUSTER_POLICY = "cluster-policy";
   public static final String CLUSTER_PREFERENCES = "cluster-preferences";
   public static final Set<String> GLOBAL_ONLY_TAGS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList("cores", CollectionAdminParams.WITH_COLLECTION)));
+  @SuppressWarnings({"unchecked"})
   public static final List<Preference> DEFAULT_PREFERENCES = Collections.unmodifiableList(
       Arrays.asList(
           // NOTE - if you change this, make sure to update the solrcloud-autoscaling-overview.adoc which
@@ -91,21 +92,21 @@ public class Policy implements MapWriter {
    */
   private static final List<String> DEFAULT_PARAMS_OF_INTEREST = Arrays.asList(ImplicitSnitch.DISK, ImplicitSnitch.CORES);
 
-  final Map<String, List<Clause>> policies;
-  final List<Clause> clusterPolicy;
-  final List<Preference> clusterPreferences;
-  final List<Pair<String, Type>> params;
-  final List<String> perReplicaAttributes;
-  final int zkVersion;
+  private final Map<String, List<Clause>> policies;
+  private final List<Clause> clusterPolicy;
+  private final List<Preference> clusterPreferences;
+  private final List<Pair<String, Type>> params;
+  private final List<String> perReplicaAttributes;
+  private final int zkVersion;
   /**
    * True if cluster policy, preferences and custom policies are all non-existent
    */
-  final boolean empty;
+  private final boolean empty;
   /**
    * True if cluster preferences was originally empty, false otherwise. It is used to figure out if
    * the current preferences were implicitly added or not.
    */
-  final boolean emptyPreferences;
+  private final boolean emptyPreferences;
 
   public Policy() {
     this(Collections.emptyMap());
@@ -215,11 +216,11 @@ public class Policy implements MapWriter {
   }
 
   public List<Clause> getClusterPolicy() {
-    return clusterPolicy;
+    return Collections.unmodifiableList(clusterPolicy);
   }
 
   public List<Preference> getClusterPreferences() {
-    return clusterPreferences;
+    return Collections.unmodifiableList(clusterPreferences);
   }
 
   @Override
@@ -260,6 +261,9 @@ public class Policy implements MapWriter {
     if (!getClusterPolicy().equals(policy.getClusterPolicy())) return false;
     return getClusterPreferences().equals(policy.getClusterPreferences());
   }
+
+  @Override
+  public int hashCode() { return Objects.hash(getPolicies()); }
 
   public static Map<String, List<Clause>> clausesFromMap(Map<String, List<Map<String, Object>>> map, List<String> newParams) {
     Map<String, List<Clause>> newPolicies = new HashMap<>();
@@ -303,6 +307,7 @@ public class Policy implements MapWriter {
           });
         } catch (Exception e) {
           try {
+            @SuppressWarnings({"rawtypes"})
             Map m = Collections.singletonMap("diagnostics", (MapWriter) ew -> {
               PolicyHelper.writeNodes(ew, matrixCopy);
               ew.put("config", matrix.get(0).session.getPolicy());
@@ -358,6 +363,10 @@ public class Policy implements MapWriter {
     return createSession(cloudManager, null);
   }
 
+  public Session createSession(SolrCloudManager cloudManager, Transaction tx) {
+    return new Session(cloudManager, this, tx);
+  }
+
   public enum SortParam {
     freedisk(0, Integer.MAX_VALUE), cores(0, Integer.MAX_VALUE), heapUsage(0, Integer.MAX_VALUE), sysLoadAvg(0, 100);
 
@@ -390,10 +399,6 @@ public class Policy implements MapWriter {
       if (m.containsKey(minimize.name())) return minimize;
       throw new RuntimeException("must have either 'maximize' or 'minimize'");
     }
-  }
-
-  private Session createSession(SolrCloudManager cloudManager, Transaction tx) {
-    return new Session(cloudManager, tx);
   }
 
   public static List<Clause> mergePolicies(String coll,
@@ -462,12 +467,20 @@ public class Policy implements MapWriter {
     return policies;
   }
 
-  public List<String> getParams() {
+  public List<Pair<String, Type>> getParams() {
+    return Collections.unmodifiableList(params);
+  }
+
+  public List<String> getParamNames() {
     return params.stream().map(Pair::first).collect(toList());
   }
 
   public List<String> getPerReplicaAttributes() {
     return Collections.unmodifiableList(perReplicaAttributes);
+  }
+
+  public int getZkVersion() {
+    return zkVersion;
   }
 
   /**
@@ -503,33 +516,25 @@ public class Policy implements MapWriter {
    * a cluster state.
    *
    */
-  public class Session implements MapWriter {
+  public static class Session implements MapWriter {
     final List<String> nodes;
     final SolrCloudManager cloudManager;
     final List<Row> matrix;
     final NodeStateProvider nodeStateProvider;
-    final int znodeVersion;
     Set<String> collections = new HashSet<>();
+    final Policy policy;
     List<Clause> expandedClauses;
     List<Violation> violations = new ArrayList<>();
     Transaction transaction;
 
-    private Session(List<String> nodes, SolrCloudManager cloudManager,
-                    List<Row> matrix, List<Clause> expandedClauses, int znodeVersion,
-                    NodeStateProvider nodeStateProvider, Transaction transaction) {
-      this.transaction = transaction;
-      this.nodes = nodes;
-      this.cloudManager = cloudManager;
-      this.matrix = matrix;
-      this.expandedClauses = expandedClauses;
-      this.znodeVersion = znodeVersion;
-      this.nodeStateProvider = nodeStateProvider;
-      for (Row row : matrix) row.session = this;
-    }
 
-
-    Session(SolrCloudManager cloudManager, Transaction transaction) {
+    /**
+     * This constructor creates a Session from the current Zookeeper collection, replica and node states.
+     */
+    Session(SolrCloudManager cloudManager, Policy policy, Transaction transaction) {
+      collections = new HashSet<>();
       this.transaction = transaction;
+      this.policy = policy;
       ClusterState state = null;
       this.nodeStateProvider = cloudManager.getNodeStateProvider();
       try {
@@ -538,14 +543,13 @@ public class Policy implements MapWriter {
       } catch (Exception e) {
         log.trace("-- session created, can't obtain cluster state", e);
       }
-      this.znodeVersion = state != null ? state.getZNodeVersion() : -1;
       this.nodes = new ArrayList<>(cloudManager.getClusterStateProvider().getLiveNodes());
       this.cloudManager = cloudManager;
       for (String node : nodes) {
         collections.addAll(nodeStateProvider.getReplicaInfo(node, Collections.emptyList()).keySet());
       }
 
-      expandedClauses = clusterPolicy.stream()
+      expandedClauses = policy.getClusterPolicy().stream()
           .filter(clause -> !clause.isPerCollectiontag())
           .collect(Collectors.toList());
 
@@ -553,8 +557,10 @@ public class Policy implements MapWriter {
         //if any collection has 'withCollection' irrespective of the node, the NodeStateProvider returns a map value
         Map<String, Object> vals = nodeStateProvider.getNodeValues(nodes.get(0), Collections.singleton("withCollection"));
         if (!vals.isEmpty() && vals.get("withCollection") != null) {
+          @SuppressWarnings({"unchecked"})
           Map<String, String> withCollMap = (Map<String, String>) vals.get("withCollection");
           if (!withCollMap.isEmpty()) {
+            @SuppressWarnings({"unchecked"})
             Clause withCollClause = new Clause((Map<String,Object>)Utils.fromJSONString("{withCollection:'*' , node: '#ANY'}") ,
                 new Condition(NODE.tagName, "#ANY", Operand.EQUAL, null, null),
                 new Condition(WITH_COLLECTION.tagName,"*" , Operand.EQUAL, null, null), true, null, false
@@ -566,29 +572,118 @@ public class Policy implements MapWriter {
 
       ClusterStateProvider stateProvider = cloudManager.getClusterStateProvider();
       for (String c : collections) {
-        addClausesForCollection(stateProvider, c);
+        addClausesForCollection(policy, expandedClauses, stateProvider, c);
       }
 
       Collections.sort(expandedClauses);
 
       matrix = new ArrayList<>(nodes.size());
-      for (String node : nodes) matrix.add(new Row(node, params, perReplicaAttributes, this));
+      for (String node : nodes) matrix.add(new Row(node, policy.getParams(), policy.getPerReplicaAttributes(), this));
       applyRules();
     }
 
-    void addClausesForCollection(ClusterStateProvider stateProvider, String c) {
-      String p = stateProvider.getPolicyNameByCollection(c);
+    /**
+     * Creates a new Session and updates the Rows in the internal matrix to reference this session.
+     */
+    private Session(List<String> nodes, SolrCloudManager cloudManager,
+                   List<Row> matrix, Set<String> collections, List<Clause> expandedClauses,
+                   NodeStateProvider nodeStateProvider, Policy policy, Transaction transaction) {
+      this.transaction = transaction;
+      this.policy = policy;
+      this.nodes = nodes;
+      this.cloudManager = cloudManager;
+      this.collections = collections;
+      this.matrix = matrix;
+      this.expandedClauses = expandedClauses;
+      this.nodeStateProvider = nodeStateProvider;
+      for (Row row : matrix) row.session = this;
+    }
+
+    /**
+     * Given a session (this one), creates a new one for placement simulations that retains all the relevant information,
+     * whether or not that info already made it to Zookeeper.
+     */
+    public Session cloneToNewSession(SolrCloudManager cloudManager) {
+      NodeStateProvider nodeStateProvider = cloudManager.getNodeStateProvider();
+      ClusterStateProvider clusterStateProvider = cloudManager.getClusterStateProvider();
+
+      List<String> nodes = new ArrayList<>(clusterStateProvider.getLiveNodes());
+
+      // Copy all collections from old session, even those not yet in ZK state
+      Set<String> collections = new HashSet<>(this.collections);
+
+      // (shallow) copy the expanded clauses
+      List<Clause> expandedClauses = new ArrayList<>(this.expandedClauses);
+
+      List<Row> matrix = new ArrayList<>(nodes.size());
+      Map<String, Row> copyNodes = new HashMap<>();
+      for (Row oldRow: this.matrix) {
+        copyNodes.put(oldRow.node, oldRow.copy());
+      }
+      for (String node : nodes) {
+        // Do we have a row for that node in this session? If yes, reuse without trying to fetch from cluster state (latest changes might not be there)
+        Row newRow = copyNodes.get(node);
+        if (newRow == null) {
+          // Dealing with a node that doesn't exist in this Session. Need to create related data from scratch.
+          // We pass null for the Session in purpose. The current (this) session in not the correct one for this Row.
+          // The correct session will be set when we build the new Session instance at the end of this method.
+          newRow = new Row(node, this.policy.getParams(), this.policy.getPerReplicaAttributes(), null, nodeStateProvider, cloudManager);
+          // Get info for collections on that node
+          Set<String> collectionsOnNewNode = nodeStateProvider.getReplicaInfo(node, Collections.emptyList()).keySet();
+          collections.addAll(collectionsOnNewNode);
+
+          // Adjust policies to take into account new collections
+          for (String collection : collectionsOnNewNode) {
+            // We pass this.policy but it is not modified so will not impact this session being cloned
+            addClausesForCollection(this.policy, expandedClauses, clusterStateProvider, collection);
+          }
+        }
+        matrix.add(newRow);
+      }
+
+      if (nodes.size() > 0) {
+        //if any collection has 'withCollection' irrespective of the node, the NodeStateProvider returns a map value
+        Map<String, Object> vals = nodeStateProvider.getNodeValues(nodes.get(0), Collections.singleton("withCollection"));
+        if (!vals.isEmpty() && vals.get("withCollection") != null) {
+          @SuppressWarnings({"unchecked"})
+          Map<String, String> withCollMap = (Map<String, String>) vals.get("withCollection");
+          if (!withCollMap.isEmpty()) {
+            @SuppressWarnings({"unchecked"})
+            Clause withCollClause = new Clause((Map<String,Object>)Utils.fromJSONString("{withCollection:'*' , node: '#ANY'}") ,
+                new Condition(NODE.tagName, "#ANY", Operand.EQUAL, null, null),
+                new Condition(WITH_COLLECTION.tagName,"*" , Operand.EQUAL, null, null), true, null, false
+            );
+            expandedClauses.add(withCollClause);
+          }
+        }
+      }
+
+      Collections.sort(expandedClauses);
+
+      Session newSession = new Session(nodes, cloudManager, matrix, collections, expandedClauses,
+          nodeStateProvider, this.policy, this.transaction);
+      newSession.applyRules();
+
+      return newSession;
+    }
+
+    void addClausesForCollection(ClusterStateProvider stateProvider, String collection) {
+      addClausesForCollection(policy, expandedClauses, stateProvider, collection);
+    }
+
+    public static void addClausesForCollection(Policy policy, List<Clause> clauses, ClusterStateProvider stateProvider, String collectionName) {
+      String p = stateProvider.getPolicyNameByCollection(collectionName);
       if (p != null) {
-        List<Clause> perCollPolicy = policies.get(p);
+        List<Clause> perCollPolicy = policy.getPolicies().get(p);
         if (perCollPolicy == null) {
           return;
         }
       }
-      expandedClauses.addAll(mergePolicies(c, policies.getOrDefault(p, emptyList()), clusterPolicy));
+      clauses.addAll(mergePolicies(collectionName, policy.getPolicies().getOrDefault(p, emptyList()), policy.getClusterPolicy()));
     }
 
     Session copy() {
-      return new Session(nodes, cloudManager, getMatrixCopy(), expandedClauses, znodeVersion, nodeStateProvider, transaction);
+      return new Session(nodes, cloudManager, getMatrixCopy(), new HashSet<>(), expandedClauses,  nodeStateProvider, policy, transaction);
     }
 
     public Row getNode(String node) {
@@ -598,12 +693,12 @@ public class Policy implements MapWriter {
 
     List<Row> getMatrixCopy() {
       return matrix.stream()
-          .map(row -> row.copy(this))
+          .map(row -> row.copy())
           .collect(Collectors.toList());
     }
 
     public Policy getPolicy() {
-      return Policy.this;
+      return policy;
 
     }
 
@@ -620,7 +715,7 @@ public class Policy implements MapWriter {
     }
 
     void sortNodes() {
-      setApproxValuesAndSortNodes(clusterPreferences, matrix);
+      setApproxValuesAndSortNodes(policy.getClusterPreferences(), matrix);
     }
 
 
@@ -637,7 +732,6 @@ public class Policy implements MapWriter {
 
     @Override
     public void writeMap(EntryWriter ew) throws IOException {
-      ew.put("znodeVersion", znodeVersion);
       for (Row row : matrix) {
         ew.put(row.node, row);
       }

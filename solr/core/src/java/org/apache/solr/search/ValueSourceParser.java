@@ -67,7 +67,8 @@ import org.apache.solr.search.facet.StddevAgg;
 import org.apache.solr.search.facet.SumAgg;
 import org.apache.solr.search.facet.SumsqAgg;
 import org.apache.solr.search.facet.UniqueAgg;
-import org.apache.solr.search.facet.UniqueBlockAgg;
+import org.apache.solr.search.facet.UniqueBlockFieldAgg;
+import org.apache.solr.search.facet.UniqueBlockQueryAgg;
 import org.apache.solr.search.facet.VarianceAgg;
 import org.apache.solr.search.function.CollapseScoreFunction;
 import org.apache.solr.search.function.ConcatStringFunction;
@@ -97,7 +98,7 @@ public abstract class ValueSourceParser implements NamedListInitializedPlugin {
    * Initialize the plugin.
    */
   @Override
-  public void init(NamedList args) {}
+  public void init(@SuppressWarnings({"rawtypes"})NamedList args) {}
 
   /**
    * Parse the user input into a ValueSource.
@@ -971,7 +972,10 @@ public abstract class ValueSourceParser implements NamedListInitializedPlugin {
     addParser("agg_uniqueBlock", new ValueSourceParser() {
       @Override
       public ValueSource parse(FunctionQParser fp) throws SyntaxError {
-        return new UniqueBlockAgg(fp.parseArg());
+        if (fp.sp.peek() == QueryParsing.LOCALPARAM_START.charAt(0) ) {
+          return new UniqueBlockQueryAgg(fp.parseNestedQuery());
+        }
+        return new UniqueBlockFieldAgg(fp.parseArg());
       }
     });
 
@@ -1185,7 +1189,7 @@ public abstract class ValueSourceParser implements NamedListInitializedPlugin {
 
 class DateValueSourceParser extends ValueSourceParser {
   @Override
-  public void init(NamedList args) {
+    public void init(@SuppressWarnings({"rawtypes"})NamedList args) {
   }
 
   public Date getDate(FunctionQParser fp, String arg) {
@@ -1304,7 +1308,8 @@ class LongConstValueSource extends ConstNumberSource {
   }
 
   @Override
-  public FunctionValues getValues(Map context, LeafReaderContext readerContext) throws IOException {
+    public FunctionValues getValues(@SuppressWarnings({"rawtypes"})Map context
+            , LeafReaderContext readerContext) throws IOException {
     return new LongDocValues(this) {
       @Override
       public float floatVal(int doc) {
@@ -1411,7 +1416,8 @@ abstract class DoubleParser extends NamedParser {
     }
 
     @Override
-    public FunctionValues getValues(Map context, LeafReaderContext readerContext) throws IOException {
+      public FunctionValues getValues(@SuppressWarnings({"rawtypes"})Map context, LeafReaderContext readerContext) throws IOException {
+        @SuppressWarnings({"unchecked"})
       final FunctionValues vals =  source.getValues(context, readerContext);
       return new DoubleDocValues(this) {
         @Override
@@ -1459,8 +1465,10 @@ abstract class Double2Parser extends NamedParser {
     }
 
     @Override
-    public FunctionValues getValues(Map context, LeafReaderContext readerContext) throws IOException {
+      public FunctionValues getValues(@SuppressWarnings({"rawtypes"})Map context, LeafReaderContext readerContext) throws IOException {
+        @SuppressWarnings({"unchecked"})
       final FunctionValues aVals =  a.getValues(context, readerContext);
+        @SuppressWarnings({"unchecked"})
       final FunctionValues bVals =  b.getValues(context, readerContext);
       return new DoubleDocValues(this) {
         @Override
@@ -1475,7 +1483,7 @@ abstract class Double2Parser extends NamedParser {
     }
 
     @Override
-    public void createWeight(Map context, IndexSearcher searcher) throws IOException {
+      public void createWeight(@SuppressWarnings({"rawtypes"})Map context, IndexSearcher searcher) throws IOException {
     }
 
     @Override
@@ -1513,7 +1521,8 @@ class BoolConstValueSource extends ConstNumberSource {
   }
 
   @Override
-  public FunctionValues getValues(Map context, LeafReaderContext readerContext) throws IOException {
+    public FunctionValues getValues(@SuppressWarnings({"rawtypes"})Map context,
+                                    LeafReaderContext readerContext) throws IOException {
     return new BoolDocValues(this) {
       @Override
       public boolean boolVal(int doc) {
@@ -1568,13 +1577,15 @@ class BoolConstValueSource extends ConstNumberSource {
 
 class TestValueSource extends ValueSource {
   ValueSource source;
-  
+
   public TestValueSource(ValueSource source) {
     this.source = source;
   }
-  
+
   @Override
-  public FunctionValues getValues(Map context, LeafReaderContext readerContext) throws IOException {
+    @SuppressWarnings({"unchecked"})
+    public FunctionValues getValues(@SuppressWarnings({"rawtypes"})Map context
+            , LeafReaderContext readerContext) throws IOException {
     if (context.get(this) == null) {
       SolrRequestInfo requestInfo = SolrRequestInfo.getRequestInfo();
       throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "testfunc: unweighted value source detected.  delegate="+source + " request=" + (requestInfo==null ? "null" : requestInfo.getReq()));
@@ -1598,7 +1609,8 @@ class TestValueSource extends ValueSource {
   }
 
   @Override
-  public void createWeight(Map context, IndexSearcher searcher) throws IOException {
+    @SuppressWarnings({"unchecked"})
+    public void createWeight(@SuppressWarnings({"rawtypes"})Map context, IndexSearcher searcher) throws IOException {
     context.put(this, this);
   }
 

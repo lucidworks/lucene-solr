@@ -79,7 +79,7 @@ public final class FieldTypePluginLoader
   @Override
   protected FieldType create( SolrResourceLoader loader, 
                               String name, 
-                              String className, 
+                              String className,
                               Node node ) throws Exception {
 
     FieldType ft = loader.newInstance(className, FieldType.class);
@@ -109,10 +109,8 @@ public final class FieldTypePluginLoader
     if (ft instanceof HasImplicitIndexAnalyzer) {
       ft.setIsExplicitAnalyzer(false);
       if (null != queryAnalyzer && null != analyzer) {
-        if (log.isWarnEnabled()) {
-          log.warn("Ignoring index-time analyzer for field: " + name);
-        }
-      } else if (null == queryAnalyzer) { // Accept non-query-time analyzer as a query-time analyzer 
+        log.warn("Ignoring index-time analyzer for field: {}", name);
+      } else if (null == queryAnalyzer) { // Accept non-query-time analyzer as a query-time analyzer
         queryAnalyzer = analyzer;
       }
       if (null != queryAnalyzer) {
@@ -164,7 +162,7 @@ public final class FieldTypePluginLoader
   protected FieldType register(String name, 
                                FieldType plugin) throws Exception {
 
-    log.trace("fieldtype defined: " + plugin );
+    log.trace("fieldtype defined: {}", plugin);
     return fieldTypes.put( name, plugin );
   }
 
@@ -240,7 +238,7 @@ public final class FieldTypePluginLoader
         analyzer.setVersion(luceneMatchVersion);
         return analyzer;
       } catch (Exception e) {
-        log.error("Cannot load analyzer: "+analyzerName, e);
+        log.error("Cannot load analyzer: {}", analyzerName, e);
         throw new SolrException( SolrException.ErrorCode.SERVER_ERROR,
                                  "Cannot load analyzer: "+analyzerName, e );
       }
@@ -255,6 +253,7 @@ public final class FieldTypePluginLoader
       ("[schema.xml] analyzer/charFilter", CharFilterFactory.class, false, false) {
 
       @Override
+      @SuppressWarnings({"rawtypes"})
       protected CharFilterFactory create(SolrResourceLoader loader, String name, String className, Node node) throws Exception {
         final Map<String,String> params = DOMUtil.toMap(node.getAttributes());
         String configuredVersion = params.remove(LUCENE_MATCH_VERSION_PARAM);
@@ -291,6 +290,7 @@ public final class FieldTypePluginLoader
       ("[schema.xml] analyzer/tokenizer", TokenizerFactory.class, false, false) {
       
       @Override
+      @SuppressWarnings({"rawtypes"})
       protected TokenizerFactory create(SolrResourceLoader loader, String name, String className, Node node) throws Exception {
         final Map<String,String> params = DOMUtil.toMap(node.getAttributes());
         String configuredVersion = params.remove(LUCENE_MATCH_VERSION_PARAM);
@@ -331,6 +331,7 @@ public final class FieldTypePluginLoader
       new AbstractPluginLoader<TokenFilterFactory>("[schema.xml] analyzer/filter", TokenFilterFactory.class, false, false)
     {
       @Override
+      @SuppressWarnings({"rawtypes"})
       protected TokenFilterFactory create(SolrResourceLoader loader, String name, String className, Node node) throws Exception {
         final Map<String,String> params = DOMUtil.toMap(node.getAttributes());
         String configuredVersion = params.remove(LUCENE_MATCH_VERSION_PARAM);
@@ -364,9 +365,12 @@ public final class FieldTypePluginLoader
             SolrConfig.parseLuceneVersionString(configuredVersion) : schema.getDefaultLuceneMatchVersion();
 
     if (!version.onOrAfter(Version.LUCENE_7_0_0)) {
-      log.warn(pluginClassName + " is using deprecated " + version +
-        " emulation. You should at some point declare and reindex to at least 7.0, because " +
-        "6.x emulation is deprecated and will be removed in 8.0");
+      if (log.isWarnEnabled()) {
+        log.warn("{} is using deprecated {} "
+            + "emulation. You should at some point declare and reindex to at least 7.0, because "
+            + "6.x emulation is deprecated and will be removed in 8.0"
+            , pluginClassName, version);
+      }
     }
     return version;
   }

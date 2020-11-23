@@ -112,7 +112,7 @@ public class TestLRUQueryCache extends LuceneTestCase {
     final SearcherManager mgr = new SearcherManager(w.w, applyDeletes, false, searcherFactory);
     final AtomicBoolean indexing = new AtomicBoolean(true);
     final AtomicReference<Throwable> error = new AtomicReference<>();
-    final int numDocs = atLeast(10000);
+    final int numDocs = atLeast(1000);
     Thread[] threads = new Thread[3];
     threads[0] = new Thread() {
       public void run() {
@@ -181,14 +181,17 @@ public class TestLRUQueryCache extends LuceneTestCase {
       thread.join();
     }
 
-    if (error.get() != null) {
-      throw error.get();
+    try {
+      if (error.get() != null) {
+        throw error.get();
+      }
+      queryCache.assertConsistent();
+    } finally {
+      mgr.close();
+      w.close();
+      dir.close();
+      queryCache.assertConsistent();
     }
-    queryCache.assertConsistent();
-    mgr.close();
-    w.close();
-    dir.close();
-    queryCache.assertConsistent();
   }
 
   public void testLRUEviction() throws Exception {

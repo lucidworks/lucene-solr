@@ -45,11 +45,12 @@ import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.response.SolrQueryResponse;
+import org.apache.solr.security.PKIAuthenticationPlugin;
 import org.apache.solr.update.AddUpdateCommand;
 import org.apache.solr.update.CommitUpdateCommand;
 import org.apache.solr.update.DeleteUpdateCommand;
 import org.apache.solr.util.DateMathParser;
-import org.apache.solr.util.DefaultSolrThreadFactory;
+import org.apache.solr.common.util.SolrNamedThreadFactory;
 import org.apache.solr.util.plugin.SolrCoreAware;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -194,7 +195,8 @@ public final class DocExpirationUpdateProcessorFactory
   private SolrException confErr(final String msg, SolrException root) {
     return new SolrException(SERVER_ERROR, this.getClass().getSimpleName()+": "+msg, root);
   }
-  private String removeArgStr(final NamedList args, final String arg, final String def,
+  private String removeArgStr(@SuppressWarnings({"rawtypes"})final NamedList args,
+                              final String arg, final String def,
                               final String errMsg) {
 
     if (args.indexOf(arg,0) < 0) return def;
@@ -209,7 +211,7 @@ public final class DocExpirationUpdateProcessorFactory
 
   @SuppressWarnings("unchecked")
   @Override
-  public void init(NamedList args) {
+  public void init(@SuppressWarnings({"rawtypes"})NamedList args) {
 
     deleteChainName = removeArgStr(args, DEL_CHAIN_NAME_CONF, null,
                                    "must be a <str> or <null/> for default chain");
@@ -258,7 +260,7 @@ public final class DocExpirationUpdateProcessorFactory
 
   private void initDeleteExpiredDocsScheduler(SolrCore core) {
     executor = new ScheduledThreadPoolExecutor
-      (1, new DefaultSolrThreadFactory("autoExpireDocs"),
+      (1, new SolrNamedThreadFactory("autoExpireDocs"),
        new RejectedExecutionHandler() {
         public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
           log.warn("Skipping execution of '{}' using '{}'", r, e);
@@ -381,9 +383,13 @@ public final class DocExpirationUpdateProcessorFactory
     public void run() {
       // setup the request context early so the logging (including any from 
       // shouldWeDoPeriodicDelete() ) includes the core context info
-      final SolrQueryRequest req = new LocalSolrQueryRequest
+      final LocalSolrQueryRequest req = new LocalSolrQueryRequest
         (factory.core, Collections.<String,String[]>emptyMap());
       try {
+        // HACK: to indicate to PKI that this is a server initiated request for the purposes
+        // of distributed requet/credential forwarding...
+        req.setUserPrincipalName(PKIAuthenticationPlugin.NODE_IS_USER);
+        
         final SolrQueryResponse rsp = new SolrQueryResponse();
         rsp.addResponseHeader(new SimpleOrderedMap<>(1));
         SolrRequestInfo.setRequestInfo(new SolrRequestInfo(req, rsp));
@@ -398,8 +404,8 @@ public final class DocExpirationUpdateProcessorFactory
           UpdateRequestProcessorChain chain = core.getUpdateProcessingChain(deleteChainName);
           UpdateRequestProcessor proc = chain.createProcessor(req, rsp);
           if (null == proc) {
-            log.warn("No active processors, skipping automatic deletion " + 
-                     "of expired docs using chain: {}", deleteChainName);
+            log.warn("No active processors, skipping automatic deletion of expired docs using chain: {}"
+                     , deleteChainName);
             return;
           }
           try {
@@ -426,11 +432,11 @@ public final class DocExpirationUpdateProcessorFactory
 
           log.info("Finished periodic deletion of expired docs");
         } catch (IOException ioe) {
-          log.error("IOException in periodic deletion of expired docs: " +
+          log.error("IOException in periodic deletion of expired docs: {}",
                     ioe.getMessage(), ioe);
           // DO NOT RETHROW: ScheduledExecutor will suppress subsequent executions
         } catch (RuntimeException re) {
-          log.error("Runtime error in periodic deletion of expired docs: " + 
+          log.error("Runtime error in periodic deletion of expired docs: {}",
                     re.getMessage(), re);
           // DO NOT RETHROW: ScheduledExecutor will suppress subsequent executions
         } finally {
@@ -495,7 +501,7 @@ public final class DocExpirationUpdateProcessorFactory
     if (previouslyInChargeOfDeletes && ! inChargeOfDeletesRightNow) {
       // don't spam the logs constantly, just log when we know that we're not the guy
       // (the first time -- or anytime we were, but no longer are)
-      log.info("Not currently in charge of periodic deletes for this collection, " + 
+      log.info("Not currently in charge of periodic deletes for this collection, {}",
                "will not trigger delete or log again until this changes");
     }
 

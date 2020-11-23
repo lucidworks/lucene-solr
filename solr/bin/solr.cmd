@@ -129,6 +129,11 @@ IF "%SOLR_SSL_ENABLED%"=="true" (
   set SOLR_SSL_OPTS=
 )
 
+REM Requestlog options
+IF "%SOLR_REQUESTLOG_ENABLED%"=="true" (
+  set "SOLR_JETTY_CONFIG=!SOLR_JETTY_CONFIG! --module=requestlog"
+)
+
 REM Authentication options
 
 IF NOT DEFINED SOLR_AUTH_TYPE (
@@ -722,11 +727,13 @@ goto parse_args
 
 :set_debug
 set SOLR_LOG_LEVEL=DEBUG
+set "PASS_TO_RUN_EXAMPLE=!PASS_TO_RUN_EXAMPLE! -Dsolr.log.level=%SOLR_LOG_LEVEL%"
 SHIFT
 goto parse_args
 
 :set_warn
 set SOLR_LOG_LEVEL=WARN
+set "PASS_TO_RUN_EXAMPLE=!PASS_TO_RUN_EXAMPLE! -Dsolr.log.level=%SOLR_LOG_LEVEL%"
 SHIFT
 goto parse_args
 
@@ -998,7 +1005,7 @@ set "EXAMPLE_DIR=%SOLR_TIP%\example"
 set TMP_SOLR_HOME=!SOLR_HOME:%EXAMPLE_DIR%=!
 IF NOT "%TMP_SOLR_HOME%"=="%SOLR_HOME%" (
   set "SOLR_LOGS_DIR=%SOLR_HOME%\..\logs"
-  set "LOG4J_CONFIG=file:///%SOLR_SERVER_DIR%\resources\log4j2.xml"
+  set "LOG4J_CONFIG=%SOLR_SERVER_DIR%\resources\log4j2.xml"
 )
 
 set IS_RESTART=0
@@ -1031,13 +1038,10 @@ IF "%SCRIPT_CMD%"=="stop" (
                 del "%SOLR_TIP%"\bin\solr-!SOME_SOLR_PORT!.port
                 timeout /T 5
                 REM Kill it if it is still running after the graceful shutdown
-                For /f "tokens=2,5" %%M in ('netstat -nao ^| find "TCP " ^| find ":0 " ^| find ":!SOME_SOLR_PORT! "') do (
-                  IF "%%N"=="%%k" (
-                    IF "%%M"=="%SOLR_JETTY_HOST%:!SOME_SOLR_PORT!" (
-                      @echo Forcefully killing process %%N
-                      taskkill /f /PID %%N
-                    )
-                  )
+                IF EXIST "%JAVA_HOME%\bin\jstack.exe" (
+                  qprocess "%%k" >nul 2>nul && "%JAVA_HOME%\bin\jstack.exe" %%k && taskkill /f /PID %%k
+                ) else (
+                  qprocess "%%k" >nul 2>nul && taskkill /f /PID %%k
                 )
               )
             )
@@ -1061,13 +1065,10 @@ IF "%SCRIPT_CMD%"=="stop" (
           del "%SOLR_TIP%"\bin\solr-%SOLR_PORT%.port
           timeout /T 5
           REM Kill it if it is still running after the graceful shutdown
-          For /f "tokens=2,5" %%j in ('netstat -nao ^| find "TCP " ^| find ":0 " ^| find ":%SOLR_PORT% "') do (
-            IF "%%N"=="%%k" (
-              IF "%%j"=="%SOLR_JETTY_HOST%:%SOLR_PORT%" (
-                @echo Forcefully killing process %%N
-                taskkill /f /PID %%N
-              )
-            )
+          IF EXIST "%JAVA_HOME%\bin\jstack.exe" (
+            qprocess "%%N" >nul 2>nul && "%JAVA_HOME%\bin\jstack.exe" %%N && taskkill /f /PID %%N
+          ) else (
+            qprocess "%%N" >nul 2>nul && taskkill /f /PID %%N
           )
         )
       )
@@ -1153,6 +1154,10 @@ IF "%SOLR_MODE%"=="solrcloud" (
   )
 )
 
+REM IP-based access control
+set IP_ACL_OPTS=-Dsolr.jetty.inetaccess.includes="%SOLR_IP_WHITELIST%" ^
+-Dsolr.jetty.inetaccess.excludes="%SOLR_IP_BLACKLIST%"
+
 REM These are useful for attaching remove profilers like VisualVM/JConsole
 IF "%ENABLE_REMOTE_JMX_OPTS%"=="true" (
   IF "!RMI_PORT!"=="" set RMI_PORT=1%SOLR_PORT%
@@ -1168,6 +1173,14 @@ IF "%ENABLE_REMOTE_JMX_OPTS%"=="true" (
   set REMOTE_JMX_OPTS=
 )
 
+REM Enable java security manager (limiting filesystem access and other things)
+IF "%SOLR_SECURITY_MANAGER_ENABLED%"=="true" (
+  set SECURITY_MANAGER_OPTS=-Djava.security.manager ^
+-Djava.security.policy="%SOLR_SERVER_DIR%\etc\security.policy" ^
+-Djava.security.properties="%SOLR_SERVER_DIR%\etc\security.properties" ^
+-Dsolr.internal.network.permission=*
+)
+
 IF NOT "%SOLR_HEAP%"=="" set SOLR_JAVA_MEM=-Xms%SOLR_HEAP% -Xmx%SOLR_HEAP%
 IF "%SOLR_JAVA_MEM%"=="" set SOLR_JAVA_MEM=-Xms512m -Xmx512m
 IF "%SOLR_JAVA_STACK_SIZE%"=="" set SOLR_JAVA_STACK_SIZE=-Xss256k
@@ -1180,7 +1193,8 @@ IF "%GC_TUNE%"=="" (
     -XX:+ParallelRefProcEnabled ^
     -XX:MaxGCPauseMillis=250 ^
     -XX:+UseLargePages ^
-    -XX:+AlwaysPreTouch
+    -XX:+AlwaysPreTouch ^
+    -XX:+ExplicitGCInvokesConcurrent
 )
 
 if !JAVA_MAJOR_VERSION! GEQ 9  (
@@ -1253,12 +1267,17 @@ IF "%verbose%"=="1" (
 )
 
 set START_OPTS=-Duser.timezone=%SOLR_TIMEZONE%
+REM '-OmitStackTraceInFastThrow' ensures stack traces in errors,
+REM users who don't care about useful error msgs can override in SOLR_OPTS with +OmitStackTraceInFastThrow
+set "START_OPTS=%START_OPTS% -XX:-OmitStackTraceInFastThrow"
 set START_OPTS=%START_OPTS% !GC_TUNE! %GC_LOG_OPTS%
 IF NOT "!CLOUD_MODE_OPTS!"=="" set "START_OPTS=%START_OPTS% !CLOUD_MODE_OPTS!"
+IF NOT "!IP_ACL_OPTS!"=="" set "START_OPTS=%START_OPTS% !IP_ACL_OPTS!"
 IF NOT "%REMOTE_JMX_OPTS%"=="" set "START_OPTS=%START_OPTS% %REMOTE_JMX_OPTS%"
 IF NOT "%SOLR_ADDL_ARGS%"=="" set "START_OPTS=%START_OPTS% %SOLR_ADDL_ARGS%"
 IF NOT "%SOLR_HOST_ARG%"=="" set "START_OPTS=%START_OPTS% %SOLR_HOST_ARG%"
 IF NOT "%SOLR_OPTS%"=="" set "START_OPTS=%START_OPTS% %SOLR_OPTS%"
+IF NOT "!SECURITY_MANAGER_OPTS!"=="" set "START_OPTS=%START_OPTS% !SECURITY_MANAGER_OPTS!"
 IF "%SOLR_SSL_ENABLED%"=="true" (
   set "SSL_PORT_PROP=-Dsolr.jetty.https.port=%SOLR_PORT%"
   set "START_OPTS=%START_OPTS% %SOLR_SSL_OPTS% !SSL_PORT_PROP!"
@@ -1270,7 +1289,7 @@ set SOLR_DATA_HOME_QUOTED="%SOLR_DATA_HOME%"
 
 set "START_OPTS=%START_OPTS% -Dsolr.log.dir=%SOLR_LOGS_DIR_QUOTED%"
 IF NOT "%SOLR_DATA_HOME%"=="" set "START_OPTS=%START_OPTS% -Dsolr.data.home=%SOLR_DATA_HOME_QUOTED%"
-IF NOT DEFINED LOG4J_CONFIG set "LOG4J_CONFIG=file:///%SOLR_SERVER_DIR%\resources\log4j2.xml"
+IF NOT DEFINED LOG4J_CONFIG set "LOG4J_CONFIG=%SOLR_SERVER_DIR%\resources\log4j2.xml"
 
 cd /d "%SOLR_SERVER_DIR%"
 

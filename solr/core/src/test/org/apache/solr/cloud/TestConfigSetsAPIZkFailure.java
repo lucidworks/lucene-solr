@@ -136,7 +136,6 @@ public class TestConfigSetsAPIZkFailure extends SolrTestCaseJ4 {
           getConfigSetProps(oldProps), StandardCharsets.UTF_8);
     }
     solrCluster.uploadConfigSet(tmpConfigDir.toPath(), baseConfigSetName);
-
     //Make configset untrusted
     solrCluster.getZkClient().setData("/configs/" + baseConfigSetName, "{\"trusted\": false}".getBytes(StandardCharsets.UTF_8), true);
   }

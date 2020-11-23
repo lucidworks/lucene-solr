@@ -84,7 +84,7 @@ import org.apache.solr.handler.component.ShardHandler;
 import org.apache.solr.handler.component.ShardRequest;
 import org.apache.solr.handler.component.ShardResponse;
 import org.apache.solr.logging.MDCLoggingContext;
-import org.apache.solr.util.DefaultSolrThreadFactory;
+import org.apache.solr.common.util.SolrNamedThreadFactory;
 import org.apache.solr.util.RTimer;
 import org.apache.solr.util.TimeOut;
 import org.apache.zookeeper.CreateMode;
@@ -174,7 +174,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
   final private LockTree lockTree = new LockTree();
   ExecutorService tpe = new ExecutorUtil.MDCAwareThreadPoolExecutor(5, 10, 0L, TimeUnit.MILLISECONDS,
       new SynchronousQueue<>(),
-      new DefaultSolrThreadFactory("OverseerCollectionMessageHandlerThreadFactory"));
+      new SolrNamedThreadFactory("OverseerCollectionMessageHandlerThreadFactory"));
 
   protected static final Random RANDOM;
   static {
@@ -249,12 +249,13 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
 
   @Override
   @SuppressWarnings("unchecked")
-  public SolrResponse processMessage(ZkNodeProps message, String operation) {
+  public OverseerSolrResponse processMessage(ZkNodeProps message, String operation) {
     MDCLoggingContext.setCollection(message.getStr(COLLECTION));
     MDCLoggingContext.setShard(message.getStr(SHARD_ID_PROP));
     MDCLoggingContext.setReplica(message.getStr(REPLICA_PROP));
     log.debug("OverseerCollectionMessageHandler.processMessage : {} , {}", operation, message);
 
+    @SuppressWarnings({"rawtypes"})
     NamedList results = new NamedList();
     try {
       CollectionAction action = getCollectionAction(operation);
@@ -277,7 +278,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
       }
 
       results.add("Operation " + operation + " caused exception:", e);
-      SimpleOrderedMap nl = new SimpleOrderedMap();
+      SimpleOrderedMap<Object> nl = new SimpleOrderedMap<>();
       nl.add("msg", e.getMessage());
       nl.add("rspCode", e instanceof SolrException ? ((SolrException)e).code() : -1);
       results.add("exception", nl);
@@ -286,10 +287,13 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
   }
 
   @SuppressForbidden(reason = "Needs currentTimeMillis for mock requests")
-  private void mockOperation(ClusterState state, ZkNodeProps message, NamedList results) throws InterruptedException {
+  @SuppressWarnings({"unchecked"})
+  private void mockOperation(ClusterState state, ZkNodeProps message, @SuppressWarnings({"rawtypes"})NamedList results) throws InterruptedException {
     //only for test purposes
     Thread.sleep(message.getInt("sleep", 1));
-    log.info("MOCK_TASK_EXECUTED time {} data {}", System.currentTimeMillis(), Utils.toJSONString(message));
+    if (log.isInfoEnabled()) {
+      log.info("MOCK_TASK_EXECUTED time {} data {}", System.currentTimeMillis(), Utils.toJSONString(message));
+    }
     results.add("MOCK_FINISHED", System.currentTimeMillis());
   }
 
@@ -301,7 +305,8 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
     return action;
   }
 
-  private void reloadCollection(ClusterState clusterState, ZkNodeProps message, NamedList results) {
+  @SuppressWarnings({"unchecked"})
+  private void reloadCollection(ClusterState clusterState, ZkNodeProps message, @SuppressWarnings({"rawtypes"})NamedList results) {
     ModifiableSolrParams params = new ModifiableSolrParams();
     params.set(CoreAdminParams.ACTION, CoreAdminAction.RELOAD.toString());
 
@@ -310,7 +315,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
   }
 
   @SuppressWarnings("unchecked")
-  private void processRebalanceLeaders(ClusterState clusterState, ZkNodeProps message, NamedList results)
+  private void processRebalanceLeaders(ClusterState clusterState, ZkNodeProps message, @SuppressWarnings({"rawtypes"})NamedList results)
       throws Exception {
     checkRequired(message, COLLECTION_PROP, SHARD_ID_PROP, CORE_NAME_PROP, ELECTION_NODE_PROP,
         CORE_NODE_NAME_PROP, BASE_URL_PROP, REJOIN_AT_HEAD_PROP);
@@ -339,7 +344,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
   }
 
   @SuppressWarnings("unchecked")
-  private void processReplicaAddPropertyCommand(ClusterState clusterState, ZkNodeProps message, NamedList results)
+  private void processReplicaAddPropertyCommand(ClusterState clusterState, ZkNodeProps message, @SuppressWarnings({"rawtypes"})NamedList results)
       throws Exception {
     checkRequired(message, COLLECTION_PROP, SHARD_ID_PROP, REPLICA_PROP, PROPERTY_PROP, PROPERTY_VALUE_PROP);
     SolrZkClient zkClient = zkStateReader.getZkClient();
@@ -350,7 +355,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
     overseer.offerStateUpdate(Utils.toJSON(m));
   }
 
-  private void processReplicaDeletePropertyCommand(ClusterState clusterState, ZkNodeProps message, NamedList results)
+  private void processReplicaDeletePropertyCommand(ClusterState clusterState, ZkNodeProps message, @SuppressWarnings({"rawtypes"})NamedList results)
       throws Exception {
     checkRequired(message, COLLECTION_PROP, SHARD_ID_PROP, REPLICA_PROP, PROPERTY_PROP);
     SolrZkClient zkClient = zkStateReader.getZkClient();
@@ -361,7 +366,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
     overseer.offerStateUpdate(Utils.toJSON(m));
   }
 
-  private void balanceProperty(ClusterState clusterState, ZkNodeProps message, NamedList results) throws Exception {
+  private void balanceProperty(ClusterState clusterState, ZkNodeProps message, @SuppressWarnings({"rawtypes"})NamedList results) throws Exception {
     if (StringUtils.isBlank(message.getStr(COLLECTION_PROP)) || StringUtils.isBlank(message.getStr(PROPERTY_PROP))) {
       throw new SolrException(ErrorCode.BAD_REQUEST,
           "The '" + COLLECTION_PROP + "' and '" + PROPERTY_PROP +
@@ -407,7 +412,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
   }
 
   @SuppressWarnings("unchecked")
-  void deleteReplica(ClusterState clusterState, ZkNodeProps message, NamedList results, Runnable onComplete)
+  void deleteReplica(ClusterState clusterState, ZkNodeProps message, @SuppressWarnings({"rawtypes"})NamedList results, Runnable onComplete)
       throws Exception {
     ((DeleteReplicaCmd) commandMap.get(DELETEREPLICA)).deleteReplica(clusterState, message, results, onComplete);
 
@@ -468,7 +473,8 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
 
 
   //TODO should we not remove in the next release ?
-  private void migrateStateFormat(ClusterState state, ZkNodeProps message, NamedList results) throws Exception {
+  @SuppressWarnings({"unchecked"})
+  private void migrateStateFormat(ClusterState state, ZkNodeProps message, @SuppressWarnings({"rawtypes"})NamedList results) throws Exception {
     final String collectionName = message.getStr(COLLECTION_PROP);
 
     boolean firstLoop = true;
@@ -496,7 +502,8 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
     throw new SolrException(ErrorCode.SERVER_ERROR, "Could not migrate state format for collection: " + collectionName);
   }
 
-  void commit(NamedList results, String slice, Replica parentShardLeader) {
+  @SuppressWarnings({"unchecked"})
+  void commit(@SuppressWarnings({"rawtypes"})NamedList results, String slice, Replica parentShardLeader) {
     log.debug("Calling soft commit to make sub shard updates visible");
     String coreUrl = new ZkCoreNodeProps(parentShardLeader).getCoreUrl();
     // HttpShardHandler is hard coded to send a QueryRequest hence we go direct
@@ -567,8 +574,10 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
       }
       Slice slice = collection.getSlice(sliceName);
       if (slice != null) {
-        log.debug("Waited for {}ms for slice {} of collection {} to be available",
-            timer.getTime(), sliceName, collectionName);
+        if (log.isDebugEnabled()) {
+          log.debug("Waited for {}ms for slice {} of collection {} to be available",
+              timer.getTime(), sliceName, collectionName);
+        }
         return clusterState;
       }
       Thread.sleep(1000);
@@ -612,7 +621,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
   }
 
 
-  private void modifyCollection(ClusterState clusterState, ZkNodeProps message, NamedList results)
+  private void modifyCollection(ClusterState clusterState, ZkNodeProps message, @SuppressWarnings({"rawtypes"})NamedList results)
       throws Exception {
 
     final String collectionName = message.getStr(ZkStateReader.COLLECTION_PROP);
@@ -664,8 +673,8 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
     }
   }
 
-  void cleanupCollection(String collectionName, NamedList results) throws Exception {
-    log.error("Cleaning up collection [" + collectionName + "]." );
+  void cleanupCollection(String collectionName, @SuppressWarnings({"rawtypes"})NamedList results) throws Exception {
+    log.error("Cleaning up collection [{}].", collectionName);
     Map<String, Object> props = makeMap(
         Overseer.QUEUE_OPERATION, DELETE.toLower(),
         NAME, collectionName);
@@ -703,7 +712,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
     }
   }
 
-  List<ZkNodeProps> addReplica(ClusterState clusterState, ZkNodeProps message, NamedList results, Runnable onComplete)
+  List<ZkNodeProps> addReplica(ClusterState clusterState, ZkNodeProps message, @SuppressWarnings({"rawtypes"})NamedList results, Runnable onComplete)
       throws Exception {
 
     return ((AddReplicaCmd) commandMap.get(ADDREPLICA)).addReplica(clusterState, message, results, onComplete);
@@ -785,7 +794,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
     }
 
     if (e != null && (rootThrowable == null || !okayExceptions.contains(rootThrowable))) {
-      log.error("Error from shard: " + shard, e);
+      log.error("Error from shard: {}", shard, e);
       addFailure(results, nodeName, e.getClass().getName() + ":" + e.getMessage());
     } else {
       addSuccess(results, nodeName, solrResponse.getResponse());
@@ -935,7 +944,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
   }
 
   protected interface Cmd {
-    void call(ClusterState state, ZkNodeProps message, NamedList results) throws Exception;
+    void call(ClusterState state, ZkNodeProps message, @SuppressWarnings({"rawtypes"})NamedList results) throws Exception;
   }
 
   /*

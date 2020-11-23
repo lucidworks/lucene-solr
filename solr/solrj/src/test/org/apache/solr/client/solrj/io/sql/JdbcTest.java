@@ -417,6 +417,7 @@ public class JdbcTest extends SolrCloudTestCase {
 
   @Ignore("Fix error checking")
   @Test
+  @SuppressWarnings({"try"})
   public void testErrorPropagation() throws Exception {
     //Test error propagation
     Properties props = new Properties();
@@ -434,6 +435,7 @@ public class JdbcTest extends SolrCloudTestCase {
   }
 
   @Test
+  @SuppressWarnings({"try"})
   public void testSQLExceptionThrownWhenQueryAndConnUseDiffCollections() throws Exception  {
     String badCollection = COLLECTIONORALIAS + "bad";
     String connectionString = "jdbc:solr://" + zkHost + "?collection=" + badCollection;
@@ -496,6 +498,8 @@ public class JdbcTest extends SolrCloudTestCase {
   private void testJDBCMethods(String collection, String connectionString, Properties properties, String sql) throws Exception {
     try (Connection con = DriverManager.getConnection(connectionString, properties)) {
       assertTrue(con.isValid(DEFAULT_CONNECTION_TIMEOUT));
+      assertTrue("connection should be valid when checked with timeout = 0 -> con.isValid(0)", con.isValid(0));
+
 
       assertEquals(zkHost, con.getCatalog());
       con.setCatalog(zkHost);

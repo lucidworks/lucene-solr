@@ -24,7 +24,7 @@ import java.util.Locale;
 /**
  * Use by certain classes to match version compatibility
  * across releases of Lucene.
- * 
+ *
  * <p><b>WARNING</b>: When changing the version parameter
  * that you supply to components in Lucene, do not simply
  * change the version at search-time, but instead also adjust
@@ -125,6 +125,13 @@ public final class Version {
   public static final Version LUCENE_7_7_2 = new Version(7, 7, 2);
 
   /**
+   * Match settings and bugs in Lucene's 7.7.2 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_7_7_3 = new Version(7, 7, 3);
+
+  /**
    * Match settings and bugs in Lucene's 7.8.0 release.
    * @deprecated Use latest
    */
@@ -175,18 +182,60 @@ public final class Version {
 
   /**
    * Match settings and bugs in Lucene's 8.4.0 release.
-   * @deprecated (8.4.1) Use latest
+   * @deprecated (8.5.0) Use latest
    */
   @Deprecated
   public static final Version LUCENE_8_4_0 = new Version(8, 4, 0);
 
   /**
    * Match settings and bugs in Lucene's 8.4.1 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_8_4_1 = new Version(8, 4, 1);
+
+  /**
+   * Match settings and bugs in Lucene's 8.5.0 release.
+   * @deprecated (8.6.0) Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_8_5_0 = new Version(8, 5, 0);
+
+  /**
+   * Match settings and bugs in Lucene's 8.5.1 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_8_5_1 = new Version(8, 5, 1);
+
+  /**
+   * Match settings and bugs in Lucene's 8.5.2 release.
+   * @deprecated Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_8_5_2 = new Version(8, 5, 2);
+
+  /**
+   * Match settings and bugs in Lucene's 8.6.0 release.
+   * @deprecated (8.6.1) Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_8_6_0 = new Version(8, 6, 0);
+
+  /**
+   * Match settings and bugs in Lucene's 8.6.1 release.
+   * @deprecated (8.6.2) Use latest
+   */
+  @Deprecated
+  public static final Version LUCENE_8_6_1 = new Version(8, 6, 1);
+
+  /**
+   * Match settings and bugs in Lucene's 8.6.2 release.
    * <p>
    * Use this to get the latest &amp; greatest settings, bug
    * fixes, etc, for Lucene.
    */
-  public static final Version LUCENE_8_4_1 = new Version(8, 4, 1);
+  public static final Version LUCENE_8_6_2 = new Version(8, 6, 2);
 
   // To add a new version:
   //  * Only add above this comment
@@ -199,15 +248,15 @@ public final class Version {
    * then you should instead explicitly specify an actual
    * version.
    * <p>
-   * If you use this constant then you  may need to 
+   * If you use this constant then you  may need to
    * <b>re-index all of your documents</b> when upgrading
-   * Lucene, as the way text is indexed may have changed. 
+   * Lucene, as the way text is indexed may have changed.
    * Additionally, you may need to <b>re-test your entire
-   * application</b> to ensure it behaves as expected, as 
-   * some defaults may have changed and may break functionality 
+   * application</b> to ensure it behaves as expected, as
+   * some defaults may have changed and may break functionality
    * in your application.
    */
-  public static final Version LATEST = LUCENE_8_4_1;
+  public static final Version LATEST = LUCENE_8_6_2;
 
   /**
    * Constant for backwards compatibility.
@@ -314,9 +363,9 @@ public final class Version {
         return LATEST;
       default:
         version = version
-          .replaceFirst("^LUCENE_(\\d+)_(\\d+)_(\\d+)$", "$1.$2.$3")
-          .replaceFirst("^LUCENE_(\\d+)_(\\d+)$", "$1.$2.0")
-          .replaceFirst("^LUCENE_(\\d)(\\d)$", "$1.$2.0");
+                .replaceFirst("^LUCENE_(\\d+)_(\\d+)_(\\d+)$", "$1.$2.$3")
+                .replaceFirst("^LUCENE_(\\d+)_(\\d+)$", "$1.$2.0")
+                .replaceFirst("^LUCENE_(\\d)(\\d)$", "$1.$2.0");
         try {
           return parse(version);
         } catch (ParseException pe) {
@@ -326,7 +375,7 @@ public final class Version {
         }
     }
   }
-  
+
   /** Returns a new version based on raw numbers
    *
    *  @lucene.internal */

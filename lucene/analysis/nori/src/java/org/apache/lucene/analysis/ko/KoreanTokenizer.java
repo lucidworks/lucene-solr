@@ -164,37 +164,64 @@ public final class KoreanTokenizer extends Tokenizer {
   }
 
   /**
-   * Create a new KoreanTokenizer.
+   * Create a new KoreanTokenizer using the system and unknown dictionaries shipped with Lucene.
    *
    * @param factory the AttributeFactory to use
    * @param userDictionary Optional: if non-null, user dictionary.
    * @param mode Decompound mode.
-   * @param outputUnknownUnigrams If true outputs unigrams for unknown words.
+   * @param outputUnknownUnigrams if true outputs unigrams for unknown words.
    */
   public KoreanTokenizer(AttributeFactory factory, UserDictionary userDictionary, DecompoundMode mode, boolean outputUnknownUnigrams) {
     this(factory, userDictionary, mode, outputUnknownUnigrams, true);
   }
 
   /**
-   * Create a new KoreanTokenizer.
+   * Create a new KoreanTokenizer using the system and unknown dictionaries shipped with Lucene.
    *
    * @param factory the AttributeFactory to use
    * @param userDictionary Optional: if non-null, user dictionary.
    * @param mode Decompound mode.
-   * @param outputUnknownUnigrams If true outputs unigrams for unknown words.
+   * @param outputUnknownUnigrams if true outputs unigrams for unknown words.
    * @param discardPunctuation true if punctuation tokens should be dropped from the output.
    */
   public KoreanTokenizer(AttributeFactory factory, UserDictionary userDictionary, DecompoundMode mode, boolean outputUnknownUnigrams, boolean discardPunctuation) {
+    this(factory,
+        TokenInfoDictionary.getInstance(),
+        UnknownDictionary.getInstance(),
+        ConnectionCosts.getInstance(),
+        userDictionary, mode, outputUnknownUnigrams, discardPunctuation);
+  }
+
+  /**
+   * <p>Create a new KoreanTokenizer supplying a custom system dictionary and unknown dictionary.
+   * This constructor provides an entry point for users that want to construct custom language models
+   * that can be used as input to {@link org.apache.lucene.analysis.ko.util.DictionaryBuilder}.</p>
+   *
+   * @param factory the AttributeFactory to use
+   * @param systemDictionary a custom known token dictionary
+   * @param unkDictionary a custom unknown token dictionary
+   * @param connectionCosts custom token transition costs
+   * @param userDictionary Optional: if non-null, user dictionary.
+   * @param mode Decompound mode.
+   * @param outputUnknownUnigrams if true outputs unigrams for unknown words.
+   * @param discardPunctuation true if punctuation tokens should be dropped from the output.
+   * @lucene.experimental
+   */
+  public KoreanTokenizer(AttributeFactory factory,
+                         TokenInfoDictionary systemDictionary,
+                         UnknownDictionary unkDictionary,
+                         ConnectionCosts connectionCosts,
+                         UserDictionary userDictionary,
+                         DecompoundMode mode,
+                         boolean outputUnknownUnigrams,
+                         boolean discardPunctuation) {
     super(factory);
-    this.mode = mode;
-    this.discardPunctuation = discardPunctuation;
-    this.outputUnknownUnigrams = outputUnknownUnigrams;
-    dictionary = TokenInfoDictionary.getInstance();
-    fst = dictionary.getFST();
-    unkDictionary = UnknownDictionary.getInstance();
-    characterDefinition = unkDictionary.getCharacterDefinition();
+    this.dictionary = systemDictionary;
+    this.fst = dictionary.getFST();
+    this.unkDictionary = unkDictionary;
+    this.characterDefinition = unkDictionary.getCharacterDefinition();
+    this.costs = connectionCosts;
     this.userDictionary = userDictionary;
-    costs = ConnectionCosts.getInstance();
     fstReader = fst.getBytesReader();
     if (userDictionary != null) {
       userFST = userDictionary.getFST();
@@ -203,7 +230,9 @@ public final class KoreanTokenizer extends Tokenizer {
       userFST = null;
       userFSTReader = null;
     }
-
+    this.mode = mode;
+    this.outputUnknownUnigrams = outputUnknownUnigrams;
+    this.discardPunctuation = discardPunctuation;
     buffer.reset(this.input);
 
     resetState();
@@ -340,7 +369,7 @@ public final class KoreanTokenizer extends Tokenizer {
 
   }
 
-  private void add(Dictionary dict, Position fromPosData, int wordPos, int endPos, int wordID, Type type) throws IOException {
+  private void add(Dictionary dict, Position fromPosData, int wordPos, int endPos, int wordID, Type type) {
     final POS.Tag leftPOS = dict.getLeftPOS(wordID);
     final int wordCost = dict.getWordCost(wordID);
     final int leftID = dict.getLeftId(wordID);
@@ -533,15 +562,9 @@ public final class KoreanTokenizer extends Tokenizer {
     int userWordMaxPosAhead = -1;
 
     // Advances over each position (character):
-    while (true) {
-
-      if (buffer.get(pos) == -1) {
-        // End
-        break;
-      }
-
+    while (buffer.get(pos) != -1) {
       final Position posData = positions.get(pos);
-      final boolean isFrontier = positions.getNextPos() == pos+1;
+      final boolean isFrontier = positions.getNextPos() == pos + 1;
 
       if (posData.count == 0) {
         // No arcs arrive here; move to next position:
@@ -585,9 +608,9 @@ public final class KoreanTokenizer extends Tokenizer {
         int leastIDX = -1;
         int leastCost = Integer.MAX_VALUE;
         Position leastPosData = null;
-        for(int pos2=pos;pos2<positions.getNextPos();pos2++) {
+        for (int pos2 = pos; pos2 < positions.getNextPos(); pos2++) {
           final Position posData2 = positions.get(pos2);
-          for(int idx=0;idx<posData2.count;idx++) {
+          for (int idx = 0; idx < posData2.count; idx++) {
             //System.out.println("    idx=" + idx + " cost=" + cost);
             final int cost = posData2.costs[idx];
             if (cost < leastCost) {
@@ -602,7 +625,7 @@ public final class KoreanTokenizer extends Tokenizer {
         assert leastIDX != -1;
 
         // Second pass: prune all but the best path:
-        for(int pos2=pos;pos2<positions.getNextPos();pos2++) {
+        for (int pos2 = pos; pos2 < positions.getNextPos(); pos2++) {
           final Position posData2 = positions.get(pos2);
           if (posData2 != leastPosData) {
             posData2.reset();
@@ -655,7 +678,7 @@ public final class KoreanTokenizer extends Tokenizer {
       if (Character.getType(buffer.get(pos)) == Character.SPACE_SEPARATOR) {
         int nextChar = buffer.get(++pos);
         while (nextChar != -1 && Character.getType(nextChar) == Character.SPACE_SEPARATOR) {
-          pos ++;
+          pos++;
           nextChar = buffer.get(pos);
         }
       }
@@ -673,7 +696,7 @@ public final class KoreanTokenizer extends Tokenizer {
         int outputMaxPosAhead = 0;
         int arcFinalOutMaxPosAhead = 0;
 
-        for(int posAhead=pos;;posAhead++) {
+        for (int posAhead = pos; ; posAhead++) {
           final int ch = buffer.get(posAhead);
           if (ch == -1) {
             break;
@@ -695,9 +718,9 @@ public final class KoreanTokenizer extends Tokenizer {
           if (VERBOSE) {
             System.out.println("    USER word " + new String(buffer.get(pos, maxPosAhead + 1)) + " toPos=" + (maxPosAhead + 1));
           }
-          add(userDictionary, posData, pos, maxPosAhead+1, outputMaxPosAhead+arcFinalOutMaxPosAhead, Type.USER);
+          add(userDictionary, posData, pos, maxPosAhead + 1, outputMaxPosAhead + arcFinalOutMaxPosAhead, Type.USER);
           userWordMaxPosAhead = Math.max(userWordMaxPosAhead, maxPosAhead);
-        } 
+        }
       }
 
       // TODO: we can be more aggressive about user
@@ -709,7 +732,7 @@ public final class KoreanTokenizer extends Tokenizer {
         fst.getFirstArc(arc);
         int output = 0;
 
-        for(int posAhead=pos;;posAhead++) {
+        for (int posAhead = pos; ; posAhead++) {
           final int ch = buffer.get(posAhead);
           if (ch == -1) {
             break;
@@ -734,7 +757,7 @@ public final class KoreanTokenizer extends Tokenizer {
               System.out.println("    KNOWN word " + new String(buffer.get(pos, posAhead - pos + 1)) + " toPos=" + (posAhead + 1) + " " + wordIdRef.length + " wordIDs");
             }
             for (int ofs = 0; ofs < wordIdRef.length; ofs++) {
-              add(dictionary, posData, pos, posAhead+1, wordIdRef.ints[wordIdRef.offset + ofs], Type.KNOWN);
+              add(dictionary, posData, pos, posAhead + 1, wordIdRef.ints[wordIdRef.offset + ofs], Type.KNOWN);
               anyMatches = true;
             }
           }
@@ -758,7 +781,7 @@ public final class KoreanTokenizer extends Tokenizer {
         } else {
           // Extract unknown word. Characters with the same script are considered to be part of unknown word
           unknownWordLength = 1;
-          UnicodeScript scriptCode = UnicodeScript.of((int) firstCharacter);
+          UnicodeScript scriptCode = UnicodeScript.of(firstCharacter);
           final boolean isPunct = isPunctuation(firstCharacter);
           final boolean isDigit = Character.isDigit(firstCharacter);
           for (int posAhead = pos + 1; unknownWordLength < MAX_UNKNOWN_WORD_LENGTH; posAhead++) {

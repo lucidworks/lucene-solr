@@ -47,6 +47,7 @@ import org.apache.solr.common.cloud.ImplicitDocRouter;
 import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.params.CollectionAdminParams;
 import org.apache.solr.common.params.CoreAdminParams;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -72,6 +73,12 @@ public abstract class AbstractCloudBackupRestoreTestCase extends SolrCloudTestCa
   @BeforeClass
   public static void createCluster() throws Exception {
     docsSeed = random().nextLong();
+    System.setProperty("solr.allowPaths", "*");
+  }
+
+  @AfterClass
+  public static void afterClass() throws Exception {
+    System.clearProperty("solr.allowPaths");
   }
 
   /**
@@ -346,8 +353,10 @@ public abstract class AbstractCloudBackupRestoreTestCase extends SolrCloudTestCa
     int computeRestoreMaxShardsPerNode = (int) Math.ceil((restoreReplFactor * numShards/(double) cluster.getJettySolrRunners().size()));
 
     if (restoreReplFactor > backupReplFactor) { //else the backup maxShardsPerNode should be enough
-      log.info("numShards={} restoreReplFactor={} maxShardsPerNode={} totalNodes={}",
-          numShards, restoreReplFactor, computeRestoreMaxShardsPerNode, cluster.getJettySolrRunners().size());
+      if (log.isInfoEnabled()) {
+        log.info("numShards={} restoreReplFactor={} maxShardsPerNode={} totalNodes={}",
+            numShards, restoreReplFactor, computeRestoreMaxShardsPerNode, cluster.getJettySolrRunners().size());
+      }
 
       if (random().nextBoolean()) { //set it to -1
         isMaxShardsUnlimited = true;
@@ -430,7 +439,9 @@ public abstract class AbstractCloudBackupRestoreTestCase extends SolrCloudTestCa
       Map<String, Integer> restoredCollectionPerShardCountAfterIndexing = getShardToDocCountMap(client, restoreCollection);
       int restoredCollectionFinalDocCount = restoredCollectionPerShardCountAfterIndexing.values().stream().mapToInt(Number::intValue).sum();
 
-      log.info("Original doc count in restored collection:" + restoredCollectionDocCount + ", number of newly added documents to the restored collection: " + numberNewDocsIndexed + ", after indexing: " + restoredCollectionFinalDocCount);
+      log.info("Original doc count in restored collection:{} , number of newly added documents to the restored collection: {}"
+          + ", after indexing: {}"
+          , restoredCollectionDocCount, numberNewDocsIndexed, restoredCollectionFinalDocCount);
       assertEquals((restoredCollectionDocCount + numberNewDocsIndexed), restoredCollectionFinalDocCount);
     }
 

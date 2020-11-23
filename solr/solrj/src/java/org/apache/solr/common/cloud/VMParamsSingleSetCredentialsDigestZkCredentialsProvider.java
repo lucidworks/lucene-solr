@@ -16,21 +16,15 @@
  */
 package org.apache.solr.common.cloud;
 
-import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Properties;
-import java.io.FileInputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.io.IOException;
-import org.apache.solr.common.SolrException;
+
 import org.apache.solr.common.StringUtils;
 
 public class VMParamsSingleSetCredentialsDigestZkCredentialsProvider extends DefaultZkCredentialsProvider {
-  public static final String DEFAULT_DIGEST_FILE_VM_PARAM_NAME = "zkDigestCredentialsFile";
+  
   public static final String DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME = "zkDigestUsername";
   public static final String DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME = "zkDigestPassword";
   
@@ -46,35 +40,17 @@ public class VMParamsSingleSetCredentialsDigestZkCredentialsProvider extends Def
     this.zkDigestPasswordVMParamName = zkDigestPasswordVMParamName;
   }
 
-  public static Properties readCredentialsFile(final String credentialsFilePath) {
-    Properties props = System.getProperties();
-    if (null != credentialsFilePath) {
-      try (Reader in = new InputStreamReader(new FileInputStream(credentialsFilePath), StandardCharsets.UTF_8)) {
-        props = new Properties(props);
-        props.load(in);
-      } catch (IOException ioe) {
-        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
-                                "Unable to read " + DEFAULT_DIGEST_FILE_VM_PARAM_NAME + ": " + credentialsFilePath,
-                                ioe);
-      }
-    }
-    return props;
-  }
-
   @Override
   protected Collection<ZkCredentials> createCredentials() {
-    Properties props = readCredentialsFile(System.getProperty(DEFAULT_DIGEST_FILE_VM_PARAM_NAME));
     List<ZkCredentials> result = new ArrayList<ZkCredentials>();
-    String digestUsername = props.getProperty(zkDigestUsernameVMParamName);
-    String digestPassword = props.getProperty(zkDigestPasswordVMParamName);
+    String digestUsername = System.getProperty(zkDigestUsernameVMParamName);
+    String digestPassword = System.getProperty(zkDigestPasswordVMParamName);
     if (!StringUtils.isEmpty(digestUsername) && !StringUtils.isEmpty(digestPassword)) {
-      try {
-        result.add(new ZkCredentials("digest", (digestUsername + ":" + digestPassword).getBytes("UTF-8")));
-      } catch (UnsupportedEncodingException e) {
-        throw new RuntimeException(e);
-      }
+      result.add(new ZkCredentials("digest",
+          (digestUsername + ":" + digestPassword).getBytes(StandardCharsets.UTF_8)));
     }
     return result;
   }
+  
 }
 

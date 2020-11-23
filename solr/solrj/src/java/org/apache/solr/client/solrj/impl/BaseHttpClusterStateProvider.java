@@ -44,6 +44,7 @@ import org.slf4j.LoggerFactory;
 
 import static org.apache.solr.client.solrj.impl.BaseHttpSolrClient.*;
 
+@SuppressWarnings({"unchecked"})
 public abstract class BaseHttpClusterStateProvider implements ClusterStateProvider {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -63,7 +64,7 @@ public abstract class BaseHttpClusterStateProvider implements ClusterStateProvid
         this.liveNodes = fetchLiveNodes(initialClient);
         liveNodesTimestamp = System.nanoTime();
         break;
-      } catch (IOException e) {
+      } catch (SolrServerException | IOException e) {
         log.warn("Attempt to fetch cluster state from {} failed.", solrUrl, e);
       }
     }
@@ -87,8 +88,8 @@ public abstract class BaseHttpClusterStateProvider implements ClusterStateProvid
         ClusterState cs = fetchClusterState(client, collection, null);
         return cs.getCollectionRef(collection);
       } catch (SolrServerException | IOException e) {
-        log.warn("Attempt to fetch cluster state from " +
-            Utils.getBaseUrlForNodeName(nodeName, urlScheme) + " failed.", e);
+        log.warn("Attempt to fetch cluster state from {} failed."
+            , Utils.getBaseUrlForNodeName(nodeName, urlScheme), e);
       } catch (RemoteSolrException e) {
         if ("NOT_FOUND".equals(e.getMetadata("CLUSTERSTATUS"))) {
           return null;
@@ -108,7 +109,7 @@ public abstract class BaseHttpClusterStateProvider implements ClusterStateProvid
         + " solrUrl(s) or zkHost(s).");
   }
 
-  @SuppressWarnings({"rawtypes", "unchecked"})
+  @SuppressWarnings({"rawtypes"})
   private ClusterState fetchClusterState(SolrClient client, String collection, Map<String, Object> clusterProperties) throws SolrServerException, IOException, NotACollectionException {
     ModifiableSolrParams params = new ModifiableSolrParams();
     if (collection != null) {
@@ -180,6 +181,7 @@ public abstract class BaseHttpClusterStateProvider implements ClusterStateProvid
     }
   }
 
+  @SuppressWarnings({"rawtypes"})
   private static Set<String> fetchLiveNodes(SolrClient client) throws Exception {
     ModifiableSolrParams params = new ModifiableSolrParams();
     params.set("action", "CLUSTERSTATUS");
@@ -226,8 +228,9 @@ public abstract class BaseHttpClusterStateProvider implements ClusterStateProvid
         } catch (SolrServerException | RemoteSolrException | IOException e) {
           // Situation where we're hitting an older Solr which doesn't have LISTALIASES
           if (e instanceof RemoteSolrException && ((RemoteSolrException)e).code()==400) {
-            log.warn("LISTALIASES not found, possibly using older Solr server. Aliases won't work"
-                + " unless you re-create the CloudSolrClient using zkHost(s) or upgrade Solr server", e);
+            log.warn("LISTALIASES not found, possibly using older Solr server. Aliases won't work {}"
+                ,"unless you re-create the CloudSolrClient using zkHost(s) or upgrade Solr server"
+                , e);
             this.aliases = Collections.emptyMap();
             this.aliasProperties = Collections.emptyMap();
             this.aliasesTimestamp = System.nanoTime();

@@ -31,6 +31,7 @@ import org.apache.lucene.util.LuceneTestCase.Nightly;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.util.TestInjection;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -93,17 +94,22 @@ public class CdcrUpdateLogTest extends SolrTestCaseJ4 {
   }
 
   private static Long getVer(SolrQueryRequest req) throws Exception {
+    @SuppressWarnings({"rawtypes"})
     Map rsp = (Map) fromJSONString(JQ(req));
+    @SuppressWarnings({"rawtypes"})
     Map doc = null;
     if (rsp.containsKey("doc")) {
       doc = (Map) rsp.get("doc");
     } else if (rsp.containsKey("docs")) {
+      @SuppressWarnings({"rawtypes"})
       List lst = (List) rsp.get("docs");
       if (lst.size() > 0) {
         doc = (Map) lst.get(0);
       }
     } else if (rsp.containsKey("response")) {
+      @SuppressWarnings({"rawtypes"})
       Map responseMap = (Map) rsp.get("response");
+      @SuppressWarnings({"rawtypes"})
       List lst = (List) responseMap.get("docs");
       if (lst.size() > 0) {
         doc = (Map) lst.get(0);
@@ -139,6 +145,7 @@ public class CdcrUpdateLogTest extends SolrTestCaseJ4 {
     Object o = reader.next();
     assertNotNull(o);
 
+    @SuppressWarnings({"rawtypes"})
     List entry = (List) o;
     int opAndFlags = (Integer) entry.get(0);
     assertEquals(UpdateLog.COMMIT, opAndFlags & UpdateLog.OPERATION_MASK);
@@ -202,6 +209,7 @@ public class CdcrUpdateLogTest extends SolrTestCaseJ4 {
     assertTrue(reader1.seek(targetVersion));
     Object o = reader1.next();
     assertNotNull(o);
+    @SuppressWarnings({"rawtypes"})
     List entry = (List) o;
     long version = (Long) entry.get(1);
 
@@ -415,7 +423,7 @@ public class CdcrUpdateLogTest extends SolrTestCaseJ4 {
   public void testClosingOutputStreamAfterLogReplay() throws Exception {
     this.clearCore();
     try {
-      DirectUpdateHandler2.commitOnClose = false;
+      TestInjection.skipIndexWriterCommitOnClose = true;
       final Semaphore logReplay = new Semaphore(0);
       final Semaphore logReplayFinish = new Semaphore(0);
 
@@ -464,7 +472,7 @@ public class CdcrUpdateLogTest extends SolrTestCaseJ4 {
       assertTrue(ulog.logs.peekLast().endsWithCommit());
       ulog.logs.peekLast().decref();
     } finally {
-      DirectUpdateHandler2.commitOnClose = true; // reset
+      TestInjection.skipIndexWriterCommitOnClose = false; // reset
       UpdateLog.testing_logReplayHook = null;
       UpdateLog.testing_logReplayFinishHook = null;
     }
@@ -578,6 +586,7 @@ public class CdcrUpdateLogTest extends SolrTestCaseJ4 {
     subReader.close();
 
     // After fast forward, the parent reader should be position on the doc15
+    @SuppressWarnings({"rawtypes"})
     List o = (List) reader.next();
     assertNotNull(o);
     assertTrue("Expected SolrInputDocument but got" + o.toString() ,o.get(3) instanceof SolrInputDocument);
@@ -641,7 +650,7 @@ public class CdcrUpdateLogTest extends SolrTestCaseJ4 {
   @Test
   public void testGetNumberOfRemainingRecords() throws Exception {
     try {
-      DirectUpdateHandler2.commitOnClose = false;
+      TestInjection.skipIndexWriterCommitOnClose = true;
       final Semaphore logReplayFinish = new Semaphore(0);
       UpdateLog.testing_logReplayFinishHook = () -> logReplayFinish.release();
 
@@ -685,7 +694,7 @@ public class CdcrUpdateLogTest extends SolrTestCaseJ4 {
       addDocs(10, start, versions);
       assertEquals(10, reader.getNumberOfRemainingRecords());
     } finally {
-      DirectUpdateHandler2.commitOnClose = true;
+      TestInjection.skipIndexWriterCommitOnClose = false; // reset
       UpdateLog.testing_logReplayFinishHook = null;
     }
   }

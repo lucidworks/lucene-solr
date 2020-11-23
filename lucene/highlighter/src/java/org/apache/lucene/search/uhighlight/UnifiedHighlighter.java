@@ -62,6 +62,7 @@ import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.search.spans.SpanQuery;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.InPlaceMergeSorter;
 
 /**
@@ -644,6 +645,7 @@ public class UnifiedHighlighter {
 
       batchDocIdx += fieldValsByDoc.size();
     }
+    IOUtils.close(indexReaderWithTermVecCache); // FYI won't close underlying reader
     assert docIdIter.docID() == DocIdSetIterator.NO_MORE_DOCS
         || docIdIter.nextDoc() == DocIdSetIterator.NO_MORE_DOCS;
 
@@ -1086,8 +1088,7 @@ public class UnifiedHighlighter {
           .toArray(LeafReader[]::new);
       return new BaseCompositeReader<IndexReader>(leafReaders) {
         @Override
-        protected void doClose() throws IOException {
-          reader.close();
+        protected void doClose() { // don't close the underlying reader
         }
 
         @Override

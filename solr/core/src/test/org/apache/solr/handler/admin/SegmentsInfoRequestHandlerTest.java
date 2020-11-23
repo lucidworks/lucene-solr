@@ -17,6 +17,7 @@
 package org.apache.solr.handler.admin;
 
 import java.io.IOException;
+
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.SegmentCommitInfo;
 import org.apache.lucene.index.SegmentInfos;
@@ -73,12 +74,10 @@ public class SegmentsInfoRequestHandlerTest extends SolrTestCaseJ4 {
           NUM_SEGMENTS, numSegments);
       return null;
     });
-
     // see SOLR-14431
     RefCounted<IndexWriter> iwRef = h.getCore().getSolrCoreState().getIndexWriter(h.getCore());
     initialRefCount = iwRef.getRefcount();
     iwRef.decref();
-    
   }
   
   @AfterClass

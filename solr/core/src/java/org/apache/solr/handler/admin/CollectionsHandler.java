@@ -16,25 +16,6 @@
  */
 package org.apache.solr.handler.admin;
 
-import java.io.IOException;
-import java.lang.invoke.MethodHandles;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
-
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import org.apache.commons.io.IOUtils;
@@ -48,6 +29,7 @@ import org.apache.solr.client.solrj.request.CoreAdminRequest.RequestSyncShard;
 import org.apache.solr.client.solrj.response.RequestStatusState;
 import org.apache.solr.client.solrj.util.SolrIdentifierValidator;
 import org.apache.solr.cloud.OverseerSolrResponse;
+import org.apache.solr.cloud.OverseerSolrResponseSerializer;
 import org.apache.solr.cloud.OverseerTaskQueue;
 import org.apache.solr.cloud.OverseerTaskQueue.QueueEvent;
 import org.apache.solr.cloud.ZkController;
@@ -102,6 +84,25 @@ import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.lang.invoke.MethodHandles;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
+
 import static org.apache.solr.client.solrj.cloud.autoscaling.Policy.POLICY;
 import static org.apache.solr.client.solrj.response.RequestStatusState.COMPLETED;
 import static org.apache.solr.client.solrj.response.RequestStatusState.FAILED;
@@ -149,10 +150,10 @@ import static org.apache.solr.common.params.CollectionParams.CollectionAction.*;
 import static org.apache.solr.common.params.CommonAdminParams.ASYNC;
 import static org.apache.solr.common.params.CommonAdminParams.IN_PLACE_MOVE;
 import static org.apache.solr.common.params.CommonAdminParams.NUM_SUB_SHARDS;
+import static org.apache.solr.common.params.CommonAdminParams.SPLIT_BY_PREFIX;
 import static org.apache.solr.common.params.CommonAdminParams.SPLIT_FUZZ;
 import static org.apache.solr.common.params.CommonAdminParams.SPLIT_METHOD;
 import static org.apache.solr.common.params.CommonAdminParams.WAIT_FOR_FINAL_STATE;
-import static org.apache.solr.common.params.CommonAdminParams.SPLIT_BY_PREFIX;
 import static org.apache.solr.common.params.CommonParams.NAME;
 import static org.apache.solr.common.params.CommonParams.TIMING;
 import static org.apache.solr.common.params.CommonParams.VALUE_LONG;
@@ -203,7 +204,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
   }
 
   @Override
-  final public void init(NamedList args) {
+  final public void init(@SuppressWarnings({"rawtypes"})NamedList args) {
 
   }
 
@@ -248,7 +249,10 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
         throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Unknown action: " + a);
       }
       CollectionOperation operation = CollectionOperation.get(action);
-      log.info("Invoked Collection Action :{} with params {} and sendToOCPQueue={}", action.toLower(), req.getParamString(), operation.sendToOCPQueue);
+      if (log.isInfoEnabled()) {
+        log.info("Invoked Collection Action :{} with params {} and sendToOCPQueue={}"
+            , action.toLower(), req.getParamString(), operation.sendToOCPQueue);
+      }
       MDCLoggingContext.setCollection(req.getParams().get(COLLECTION));
       invokeAction(req, rsp, cores, action, operation);
     } else {
@@ -257,6 +261,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
     rsp.setHttpCaching(false);
   }
 
+  @SuppressWarnings({"unchecked"})
   void invokeAction(SolrQueryRequest req, SolrQueryResponse rsp, CoreContainer cores, CollectionAction action, CollectionOperation operation) throws Exception {
     if (!coreContainer.isZooKeeperAware()) {
       throw new SolrException(BAD_REQUEST,
@@ -368,7 +373,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
         .getOverseerCollectionQueue()
         .offer(Utils.toJSON(m), timeout);
     if (event.getBytes() != null) {
-      return SolrResponse.deserialize(event.getBytes());
+      return OverseerSolrResponseSerializer.deserialize(event.getBytes());
     } else {
       if (System.nanoTime() - time >= TimeUnit.NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS)) {
         throw new SolrException(ErrorCode.SERVER_ERROR, operation
@@ -526,6 +531,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
       return copyPropertiesWithPrefix(req.getParams(), props, "router.");
 
     }),
+    @SuppressWarnings({"unchecked"})
     COLSTATUS_OP(COLSTATUS, (req, rsp, h) -> {
       Map<String, Object> props = copy(req.getParams(), null,
           COLLECTION_PROP,
@@ -541,7 +547,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
       if (props.containsKey(CoreAdminParams.NAME) && !props.containsKey(COLLECTION_PROP)) {
         props.put(COLLECTION_PROP, props.get(CoreAdminParams.NAME));
       }
-      new ColStatus(h.coreContainer.getUpdateShardHandler().getDefaultHttpClient(),
+      new ColStatus(h.coreContainer.getSolrClientCache(),
           h.coreContainer.getZkController().getZkStateReader().getClusterState(), new ZkNodeProps(props))
           .getColStatus(rsp.getValues());
       return null;
@@ -615,6 +621,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
       return null;
     }),
 
+    @SuppressWarnings({"unchecked"})
     CREATEALIAS_OP(CREATEALIAS, (req, rsp, h) -> {
       String alias = req.getParams().get(NAME);
       SolrIdentifierValidator.validateAliasName(alias);
@@ -629,7 +636,6 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
         // we'll throw this later if we are in fact creating a routed alias.
         ex = e;
       }
-      @SuppressWarnings("unchecked")
       ModifiableSolrParams finalParams = new ModifiableSolrParams();
       for (Map.Entry<String, Object> entry : possiblyModifiedParams.entrySet()) {
         if (entry.getValue().getClass().isArray() ) {
@@ -717,6 +723,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
     /**
      * List the aliases and associated properties.
      */
+    @SuppressWarnings({"unchecked"})
     LISTALIASES_OP(LISTALIASES, (req, rsp, h) -> {
       ZkStateReader zkStateReader = h.coreContainer.getZkController().getZkStateReader();
       // if someone calls listAliases, lets ensure we return an up to date response
@@ -864,6 +871,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
       cp.setCollectionProperty(collection, name, val);
       return null;
     }),
+    @SuppressWarnings({"unchecked"})
     REQUESTSTATUS_OP(REQUESTSTATUS, (req, rsp, h) -> {
       req.getParams().required().check(REQUESTID);
 
@@ -874,11 +882,11 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
       final NamedList<Object> results = new NamedList<>();
       if (zkController.getOverseerCompletedMap().contains(requestId)) {
         final byte[] mapEntry = zkController.getOverseerCompletedMap().get(requestId);
-        rsp.getValues().addAll(SolrResponse.deserialize(mapEntry).getResponse());
+        rsp.getValues().addAll(OverseerSolrResponseSerializer.deserialize(mapEntry).getResponse());
         addStatusToResponse(results, COMPLETED, "found [" + requestId + "] in completed tasks");
       } else if (zkController.getOverseerFailureMap().contains(requestId)) {
         final byte[] mapEntry = zkController.getOverseerFailureMap().get(requestId);
-        rsp.getValues().addAll(SolrResponse.deserialize(mapEntry).getResponse());
+        rsp.getValues().addAll(OverseerSolrResponseSerializer.deserialize(mapEntry).getResponse());
         addStatusToResponse(results, FAILED, "found [" + requestId + "] in failed tasks");
       } else if (zkController.getOverseerRunningMap().contains(requestId)) {
         addStatusToResponse(results, RUNNING, "found [" + requestId + "] in running tasks");
@@ -964,6 +972,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
      * Handle list collection request.
      * Do list collection request to zk host
      */
+    @SuppressWarnings({"unchecked"})
     LIST_OP(LIST, (req, rsp, h) -> {
       NamedList<Object> results = new NamedList<>();
       Map<String, DocCollection> collections = h.coreContainer.getZkController().getZkStateReader().getClusterState().getCollectionsMap();
@@ -1373,7 +1382,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
           success = true;
           break;
         }
-        log.warn("Force leader attempt {}. Waiting 5 secs for an active leader. State of the slice: {}", (i + 1), slice);
+        log.warn("Force leader attempt {}. Waiting 5 secs for an active leader. State of the slice: {}", (i + 1), slice); //logok
       }
 
       if (success) {
@@ -1394,7 +1403,9 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
 
     if (createCollResponse.getResponse().get("exception") != null) {
       // the main called failed, don't wait
-      log.info("Not waiting for active collection due to exception: " + createCollResponse.getResponse().get("exception"));
+      if (log.isInfoEnabled()) {
+        log.info("Not waiting for active collection due to exception: {}", createCollResponse.getResponse().get("exception"));
+      }
       return;
     }
 
@@ -1408,8 +1419,10 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
     CloudConfig ccfg = cc.getConfig().getCloudConfig();
     Integer seconds = ccfg.getCreateCollectionWaitTimeTillActive();
     Boolean checkLeaderOnly = ccfg.isCreateCollectionCheckLeaderActive();
-    log.info("Wait for new collection to be active for at most " + seconds + " seconds. Check all shard "
-        + (checkLeaderOnly ? "leaders" : "replicas"));
+    if (log.isInfoEnabled()) {
+      log.info("Wait for new collection to be active for at most {} seconds. Check all shard {}"
+          , seconds, (checkLeaderOnly ? "leaders" : "replicas"));
+    }
 
     try {
       cc.getZkController().getZkStateReader().waitForState(collectionName, seconds, TimeUnit.SECONDS, (n, c) -> {
@@ -1431,8 +1444,10 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
             }
             for (Replica replica : replicas) {
               String state = replica.getStr(ZkStateReader.STATE_PROP);
-              log.debug("Checking replica status, collection={} replica={} state={}", collectionName,
-                  replica.getCoreUrl(), state);
+              if (log.isDebugEnabled()) {
+                log.debug("Checking replica status, collection={} replica={} state={}", collectionName,
+                    replica.getCoreUrl(), state);
+              }
               if (!n.contains(replica.getNodeName())
                   || !state.equals(Replica.State.ACTIVE.toString())) {
                 replicaNotAliveCnt++;
@@ -1454,9 +1469,11 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
   }
 
   public static void verifyRuleParams(CoreContainer cc, Map<String, Object> m) {
+    @SuppressWarnings({"rawtypes"})
     List l = (List) m.get(RULE);
     if (l != null) {
       for (Object o : l) {
+        @SuppressWarnings({"rawtypes"})
         Map map = (Map) o;
         try {
           new Rule(map);
@@ -1482,6 +1499,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
       val.add(v.toString());
     }
     if (val.size() > 0) {
+      @SuppressWarnings({"rawtypes"})
       ArrayList<Map> l = new ArrayList<>();
       for (String rule : val) l.add(Rule.parseRule(rule));
       props.put(key, l);

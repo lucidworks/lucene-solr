@@ -386,29 +386,28 @@ public final class Lucene84PostingsFormat extends PostingsFormat {
 
   // Increment version to change it
   final static int VERSION_START = 0;
-  final static int VERSION_CURRENT = VERSION_START;
+  // Better compression of the terms dictionary in case most terms have a docFreq of 1
+  final static int VERSION_COMPRESSED_TERMS_DICT_IDS = 1;
+  final static int VERSION_CURRENT = VERSION_COMPRESSED_TERMS_DICT_IDS;
 
   private final int minTermBlockSize;
   private final int maxTermBlockSize;
 
-  private final BlockTreeTermsReader.FSTLoadMode fstLoadMode;
-
   /** Creates {@code Lucene84PostingsFormat} with default
    *  settings. */
   public Lucene84PostingsFormat() {
-    this(BlockTreeTermsWriter.DEFAULT_MIN_BLOCK_SIZE, BlockTreeTermsWriter.DEFAULT_MAX_BLOCK_SIZE, BlockTreeTermsReader.FSTLoadMode.AUTO);
+    this(BlockTreeTermsWriter.DEFAULT_MIN_BLOCK_SIZE, BlockTreeTermsWriter.DEFAULT_MAX_BLOCK_SIZE);
   }
 
   /** Creates {@code Lucene84PostingsFormat} with custom
    *  values for {@code minBlockSize} and {@code
    *  maxBlockSize} passed to block terms dictionary.
    *  @see BlockTreeTermsWriter#BlockTreeTermsWriter(SegmentWriteState,PostingsWriterBase,int,int) */
-  public Lucene84PostingsFormat(int minTermBlockSize, int maxTermBlockSize, BlockTreeTermsReader.FSTLoadMode loadMode) {
+  public Lucene84PostingsFormat(int minTermBlockSize, int maxTermBlockSize) {
     super("Lucene84");
     BlockTreeTermsWriter.validateSettings(minTermBlockSize, maxTermBlockSize);
     this.minTermBlockSize = minTermBlockSize;
     this.maxTermBlockSize = maxTermBlockSize;
-    this.fstLoadMode = loadMode;
   }
 
   @Override
@@ -439,7 +438,7 @@ public final class Lucene84PostingsFormat extends PostingsFormat {
     PostingsReaderBase postingsReader = new Lucene84PostingsReader(state);
     boolean success = false;
     try {
-      FieldsProducer ret = new BlockTreeTermsReader(postingsReader, state, fstLoadMode);
+      FieldsProducer ret = new BlockTreeTermsReader(postingsReader, state);
       success = true;
       return ret;
     } finally {

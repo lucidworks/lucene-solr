@@ -18,16 +18,15 @@ package org.apache.lucene.search;
 
 
 import java.io.IOException;
+import java.util.Objects;
 
 import org.apache.lucene.index.SingleTermsEnum;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.util.AttributeSource;
-import org.apache.lucene.util.automaton.Automaton;
-import org.apache.lucene.util.automaton.ByteRunAutomaton;
+import org.apache.lucene.util.automaton.CompiledAutomaton;
 import org.apache.lucene.util.automaton.LevenshteinAutomata;
-import org.apache.lucene.util.automaton.Operations;
 
 /** Implements the fuzzy search query. The similarity measurement
  * is based on the Damerau-Levenshtein (optimal string alignment) algorithm,
@@ -150,10 +149,11 @@ public class FuzzyQuery extends MultiTermQuery {
   }
 
   /**
-   * Expert: Constructs an equivalent Automaton accepting terms matched by this query
+   * Returns the compiled automata used to match terms
    */
-  public Automaton toAutomaton() {
-    return FuzzyTermsEnum.buildAutomaton(term.text(), prefixLength, transpositions, maxEdits);
+  public CompiledAutomaton getAutomata() {
+    FuzzyAutomatonBuilder builder = new FuzzyAutomatonBuilder(term.text(), maxEdits, prefixLength, transpositions);
+    return builder.buildMaxEditAutomaton();
   }
 
   @Override
@@ -162,9 +162,7 @@ public class FuzzyQuery extends MultiTermQuery {
       if (maxEdits == 0 || prefixLength >= term.text().length()) {
         visitor.consumeTerms(this, term);
       } else {
-        // Note: we're rebuilding the automaton here, so this can be expensive
-        visitor.consumeTermsMatching(this, field,
-            new ByteRunAutomaton(toAutomaton(), false, Operations.DEFAULT_MAX_DETERMINIZED_STATES));
+        visitor.consumeTermsMatching(this, term.field(), () -> getAutomata().runAutomaton);
       }
     }
   }
@@ -193,7 +191,7 @@ public class FuzzyQuery extends MultiTermQuery {
     }
     buffer.append(term.text());
     buffer.append('~');
-    buffer.append(Integer.toString(maxEdits));
+    buffer.append(maxEdits);
     return buffer.toString();
   }
 
@@ -218,20 +216,9 @@ public class FuzzyQuery extends MultiTermQuery {
     if (getClass() != obj.getClass())
       return false;
     FuzzyQuery other = (FuzzyQuery) obj;
-    if (maxEdits != other.maxEdits)
-      return false;
-    if (prefixLength != other.prefixLength)
-      return false;
-    if (maxExpansions != other.maxExpansions)
-      return false;
-    if (transpositions != other.transpositions)
-      return false;
-    if (term == null) {
-      if (other.term != null)
-        return false;
-    } else if (!term.equals(other.term))
-      return false;
-    return true;
+    return Objects.equals(maxEdits, other.maxEdits) && Objects.equals(prefixLength, other.prefixLength)
+        && Objects.equals(maxExpansions, other.maxExpansions) && Objects.equals(transpositions, other.transpositions)
+        && Objects.equals(term, other.term);
   }
   
   /**
@@ -260,4 +247,5 @@ public class FuzzyQuery extends MultiTermQuery {
         LevenshteinAutomata.MAXIMUM_SUPPORTED_DISTANCE);
     }
   }
+
 }

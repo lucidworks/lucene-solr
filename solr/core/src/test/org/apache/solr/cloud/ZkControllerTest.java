@@ -23,16 +23,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.common.cloud.*;
+import org.apache.solr.common.cloud.ClusterProperties;
+import org.apache.solr.common.cloud.DocCollection;
+import org.apache.solr.common.cloud.SolrZkClient;
+import org.apache.solr.common.cloud.ZkConfigManager;
+import org.apache.solr.common.cloud.ZkNodeProps;
+import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.CollectionParams;
 import org.apache.solr.common.util.Utils;
-import org.apache.solr.core.CloudConfig;
-import org.apache.solr.core.CoreContainer;
-import org.apache.solr.core.CoreDescriptor;
-import org.apache.solr.core.SolrXmlConfig;
+import org.apache.solr.core.*;
 import org.apache.solr.handler.admin.CoreAdminHandler;
 import org.apache.solr.handler.component.HttpShardHandlerFactory;
 import org.apache.solr.update.UpdateShardHandler;
@@ -274,10 +277,11 @@ public class ZkControllerTest extends SolrTestCaseJ4 {
     try {
       server.run();
 
+      AtomicReference<ZkController> zkControllerRef = new AtomicReference<>();
       cc = new MockCoreContainer()  {
         @Override
         public List<CoreDescriptor> getCoreDescriptors() {
-          CoreDescriptor descriptor = new CoreDescriptor(collectionName, TEST_PATH(), Collections.emptyMap(), new Properties(), true);
+          CoreDescriptor descriptor = new CoreDescriptor(collectionName, TEST_PATH(), Collections.emptyMap(), new Properties(), zkControllerRef.get());
           // non-existent coreNodeName, this will cause zkController.publishAndWaitForDownStates to wait indefinitely
           // when using coreNodeName but usage of core name alone will return immediately
           descriptor.getCloudDescriptor().setCoreNodeName("core_node0");
@@ -296,6 +300,7 @@ public class ZkControllerTest extends SolrTestCaseJ4 {
             return null;
           }
         });
+        zkControllerRef.set(zkController);
 
         zkController.getZkClient().makePath(ZkStateReader.getCollectionPathRoot(collectionName), new byte[0], CreateMode.PERSISTENT, true);
 
@@ -353,8 +358,10 @@ public class ZkControllerTest extends SolrTestCaseJ4 {
     UpdateShardHandler updateShardHandler = new UpdateShardHandler(UpdateShardHandlerConfig.DEFAULT);
 
     public MockCoreContainer() {
-      super(SolrXmlConfig.fromString(null, "<solr/>"));
-      this.shardHandlerFactory = new HttpShardHandlerFactory();
+      super(SolrXmlConfig.fromString(TEST_PATH(), "<solr/>"));
+      HttpShardHandlerFactory httpShardHandlerFactory = new HttpShardHandlerFactory();
+      httpShardHandlerFactory.init(new PluginInfo("shardHandlerFactory", Collections.emptyMap()));
+      this.shardHandlerFactory = httpShardHandlerFactory;
       this.coreAdminHandler = new CoreAdminHandler();
     }
 

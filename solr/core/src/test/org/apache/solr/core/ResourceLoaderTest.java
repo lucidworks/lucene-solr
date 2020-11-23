@@ -23,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,11 +69,11 @@ public class ResourceLoaderTest extends SolrTestCaseJ4 {
 
   }
 
+  @SuppressWarnings({"unchecked"})
   public void testAwareCompatibility() throws Exception {
     
     final Class<?> clazz1 = ResourceLoaderAware.class;
     // Check ResourceLoaderAware valid objects
-    //noinspection unchecked
     assertAwareCompatibility(clazz1, new NGramFilterFactory(map("minGramSize", "1", "maxGramSize", "2")));
     assertAwareCompatibility(clazz1, new KeywordTokenizerFactory(new HashMap<>()));
     
@@ -95,7 +96,6 @@ public class ResourceLoaderTest extends SolrTestCaseJ4 {
     assertAwareCompatibility(clazz2, new JSONResponseWriter());
     
     // Make sure it throws an error for invalid objects
-    //noinspection unchecked
     invalid = new Object[] {
         new NGramFilterFactory(map("minGramSize", "1", "maxGramSize", "2")),
         "hello",   12.3f ,
@@ -167,12 +167,13 @@ public class ResourceLoaderTest extends SolrTestCaseJ4 {
     }
 
     SolrResourceLoader loader = new SolrResourceLoader(tmpRoot);
+    loader.addToClassLoader(SolrResourceLoader.getURLs(lib));
 
-    // ./lib is accessible by default
+    // check "lib/aLibFile"
     assertNotNull(loader.getClassLoader().getResource("aLibFile"));
 
     // add inidividual jars from other paths
-    loader.addToClassLoader(otherLib.resolve("jar2.jar").toUri().toURL());
+    loader.addToClassLoader(Collections.singletonList(otherLib.resolve("jar2.jar").toUri().toURL()));
 
     assertNotNull(loader.getClassLoader().getResource("explicitFile"));
     assertNull(loader.getClassLoader().getResource("otherFile"));
@@ -197,7 +198,7 @@ public class ResourceLoaderTest extends SolrTestCaseJ4 {
     
   }
 
-  @SuppressWarnings("deprecation")
+  @SuppressWarnings({"rawtypes", "deprecation"})
   public void testLoadDeprecatedFactory() throws Exception {
     SolrResourceLoader loader = new SolrResourceLoader(Paths.get("solr/collection1"));
     // ensure we get our exception

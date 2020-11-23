@@ -52,9 +52,10 @@ public class ClusterStateMutator {
     this.stateManager = dataProvider.getDistribStateManager();
   }
 
+  @SuppressWarnings({"unchecked"})
   public ZkWriteCommand createCollection(ClusterState clusterState, ZkNodeProps message) {
     String cName = message.getStr(NAME);
-    log.debug("building a new cName: " + cName);
+    log.debug("building a new cName: {}", cName);
     if (clusterState.hasCollection(cName)) {
       log.warn("Collection {} already exists. exit", cName);
       return ZkStateWriter.NO_OP;

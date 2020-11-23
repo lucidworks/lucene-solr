@@ -187,7 +187,6 @@ public class ZkConfigManager {
     }
     copyConfigDirFromZk(fromConfigPath, toConfigPath, copiedToZkPaths);
   }
-
   // This method is used by configSetUploadTool and CreateTool to resolve the configset directory.
   // Check several possibilities:
   // 1> confDir/solrconfig.xml exists

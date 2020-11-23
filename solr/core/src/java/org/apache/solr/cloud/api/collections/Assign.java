@@ -277,6 +277,7 @@ public class Assign {
     return usePolicyFramework(Optional.of(collection), cloudManager);
   }
 
+  @SuppressWarnings({"unchecked"})
   private static boolean usePolicyFramework(Optional<DocCollection> collection, SolrCloudManager cloudManager) throws IOException, InterruptedException {
     boolean useLegacyAssignment = true;
     Map<String, Object> clusterProperties = cloudManager.getClusterStateProvider().getClusterProperties();
@@ -323,12 +324,14 @@ public class Assign {
   //
   // Gets a list of candidate nodes to put the required replica(s) on. Throws errors if not enough replicas
   // could be created on live nodes given maxShardsPerNode, Replication factor (if from createShard) etc.
+  @SuppressWarnings({"unchecked"})
   public static List<ReplicaPosition> getNodesForNewReplicas(ClusterState clusterState, String collectionName,
                                                           String shard, int nrtReplicas, int tlogReplicas, int pullReplicas,
                                                           Object createNodeSet, SolrCloudManager cloudManager) throws IOException, InterruptedException, AssignmentException {
-    log.debug("getNodesForNewReplicas() shard: {} , nrtReplicas : {} , tlogReplicas: {} , pullReplicas: {} , createNodeSet {}", shard, nrtReplicas, tlogReplicas, pullReplicas, createNodeSet );
+    log.debug("getNodesForNewReplicas() shard: {} , nrtReplicas : {} , tlogReplicas: {} , pullReplicas: {} , createNodeSet {}"
+        , shard, nrtReplicas, tlogReplicas, pullReplicas, createNodeSet);
     DocCollection coll = clusterState.getCollection(collectionName);
-    Integer maxShardsPerNode = coll.getMaxShardsPerNode() == -1 ? Integer.MAX_VALUE : coll.getMaxShardsPerNode();
+    int maxShardsPerNode = coll.getMaxShardsPerNode() == -1 ? Integer.MAX_VALUE : coll.getMaxShardsPerNode();
     List<String> createNodeList = null;
 
     if (createNodeSet instanceof List) {
@@ -394,9 +397,14 @@ public class Assign {
       throw new AssignmentException("Error getting replica locations : " + e.getMessage(), e);
     } finally {
       if (log.isTraceEnabled()) {
-        if (replicaPositions != null)
-          log.trace("REPLICA_POSITIONS: " + Utils.toJSONString(Utils.getDeepCopy(replicaPositions, 7, true)));
-        log.trace("AUTOSCALING_CONF: " + Utils.toJSONString(autoScalingConfig));
+        if (replicaPositions != null) {
+          if (log.isTraceEnabled()) {
+            log.trace("REPLICA_POSITIONS: {}", Utils.toJSONString(Utils.getDeepCopy(replicaPositions, 7, true)));
+          }
+        }
+        if (log.isTraceEnabled()) {
+          log.trace("AUTOSCALING_CONF: {}", Utils.toJSONString(autoScalingConfig));
+        }
       }
     }
   }
@@ -569,10 +577,11 @@ public class Assign {
 
   public static class RulesBasedAssignStrategy implements AssignStrategy {
     public List<Rule> rules;
+    @SuppressWarnings({"rawtypes"})
     public List snitches;
     public ClusterState clusterState;
 
-    public RulesBasedAssignStrategy(List<Rule> rules, List snitches, ClusterState clusterState) {
+    public RulesBasedAssignStrategy(List<Rule> rules, @SuppressWarnings({"rawtypes"})List snitches, ClusterState clusterState) {
       this.rules = rules;
       this.snitches = snitches;
       this.clusterState = clusterState;
@@ -642,8 +651,10 @@ public class Assign {
     }
 
     public AssignStrategy create(ClusterState clusterState, DocCollection collection) throws IOException, InterruptedException {
+      @SuppressWarnings({"unchecked", "rawtypes"})
       List<Map> ruleMaps = (List<Map>) collection.get("rule");
       String policyName = collection.getStr(POLICY);
+      @SuppressWarnings({"rawtypes"})
       List snitches = (List) collection.get(SNITCH);
 
       Strategy strategy = null;

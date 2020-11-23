@@ -32,6 +32,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.solr.api.Api;
 import org.apache.solr.client.solrj.SolrResponse;
 import org.apache.solr.cloud.OverseerSolrResponse;
+import org.apache.solr.cloud.OverseerSolrResponseSerializer;
 import org.apache.solr.cloud.OverseerTaskQueue.QueueEvent;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
@@ -89,6 +90,7 @@ public class ConfigSetsHandler extends RequestHandlerBase implements PermissionN
 
   @Override
   public void handleRequestBody(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
+    
     checkErrors();
 
     // Pick the action
@@ -125,7 +127,9 @@ public class ConfigSetsHandler extends RequestHandlerBase implements PermissionN
 
   void invokeAction(SolrQueryRequest req, SolrQueryResponse rsp, ConfigSetAction action) throws Exception {
     ConfigSetOperation operation = ConfigSetOperation.get(action);
-    log.info("Invoked ConfigSet Action :{} with params {} ", action.toLower(), req.getParamString());
+    if (log.isInfoEnabled()) {
+      log.info("Invoked ConfigSet Action :{} with params {} ", action.toLower(), req.getParamString());
+    }
     Map<String, Object> result = operation.call(req, rsp, this);
     sendToZk(rsp, operation, result);
   }
@@ -225,6 +229,7 @@ public class ConfigSetsHandler extends RequestHandlerBase implements PermissionN
     }
   }
 
+  @SuppressWarnings({"unchecked"})
   private void handleResponse(String operation, ZkNodeProps m,
                               SolrQueryResponse rsp, long timeout) throws KeeperException, InterruptedException {
     long time = System.nanoTime();
@@ -233,8 +238,9 @@ public class ConfigSetsHandler extends RequestHandlerBase implements PermissionN
         .getOverseerConfigSetQueue()
         .offer(Utils.toJSON(m), timeout);
     if (event.getBytes() != null) {
-      SolrResponse response = SolrResponse.deserialize(event.getBytes());
+      SolrResponse response = OverseerSolrResponseSerializer.deserialize(event.getBytes());
       rsp.getValues().addAll(response.getResponse());
+      @SuppressWarnings({"rawtypes"})
       SimpleOrderedMap exp = (SimpleOrderedMap) response.getResponse().get("exception");
       if (exp != null) {
         Integer code = (Integer) exp.get("rspCode");
@@ -284,8 +290,9 @@ public class ConfigSetsHandler extends RequestHandlerBase implements PermissionN
 
   enum ConfigSetOperation {
     CREATE_OP(CREATE) {
+      @Override
       public Map<String, Object> call(SolrQueryRequest req, SolrQueryResponse rsp, ConfigSetsHandler h) throws Exception {
-        String baseConfigSetName = req.getParams().get(BASE_CONFIGSET, DEFAULT_CONFIGSET_NAME);
+       String baseConfigSetName = req.getParams().get(BASE_CONFIGSET, DEFAULT_CONFIGSET_NAME);
         String newConfigSetName = req.getParams().get(NAME);
         if (newConfigSetName == null || newConfigSetName.length() == 0) {
           throw new SolrException(ErrorCode.BAD_REQUEST, "ConfigSet name not specified");
@@ -318,6 +325,7 @@ public class ConfigSetsHandler extends RequestHandlerBase implements PermissionN
         return CollectionsHandler.copy(req.getParams().required(), null, NAME);
       }
     },
+    @SuppressWarnings({"unchecked"})
     LIST_OP(LIST) {
       @Override
       public Map<String, Object> call(SolrQueryRequest req, SolrQueryResponse rsp, ConfigSetsHandler h) throws Exception {

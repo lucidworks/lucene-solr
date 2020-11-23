@@ -47,8 +47,6 @@ import org.apache.lucene.index.MultiTerms;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.FilterCollector;
@@ -81,12 +79,12 @@ import org.apache.solr.schema.SchemaField;
 import org.apache.solr.schema.TrieField;
 import org.apache.solr.search.BitDocSet;
 import org.apache.solr.search.DocSet;
-import org.apache.solr.search.Filter;
 import org.apache.solr.search.Grouping;
 import org.apache.solr.search.HashDocSet;
 import org.apache.solr.search.Insanity;
 import org.apache.solr.search.QParser;
 import org.apache.solr.search.QueryParsing;
+import org.apache.solr.search.QueryUtils;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.apache.solr.search.SortedIntDocSet;
 import org.apache.solr.search.SyntaxError;
@@ -270,6 +268,7 @@ public class SimpleFacets {
       } else {
         return base;
       }
+      @SuppressWarnings({"rawtypes"})
       AllGroupHeadsCollector allGroupHeadsCollector = grouping.getCommands().get(0).createAllGroupCollector();
       searcher.search(base.getTopFilter(), allGroupHeadsCollector);
       return new BitDocSet(allGroupHeadsCollector.retrieveGroupHeads(searcher.maxDoc()));
@@ -336,13 +335,9 @@ public class SimpleFacets {
       );
     }
 
+    @SuppressWarnings({"rawtypes"})
     AllGroupsCollector collector = new AllGroupsCollector<>(new TermGroupSelector(groupField));
-    Filter mainQueryFilter = docSet.getTopFilter(); // This returns a filter that only matches documents matching with q param and fq params
-    Query filteredFacetQuery = new BooleanQuery.Builder()
-        .add(facetQuery, Occur.MUST)
-        .add(mainQueryFilter, Occur.FILTER)
-        .build();
-    searcher.search(filteredFacetQuery, collector);
+    searcher.search(QueryUtils.combineQueryAndFilter(facetQuery, docSet.getTopFilter()), collector);
     return collector.getGroupCount();
   }
 
@@ -524,6 +519,7 @@ public class SimpleFacets {
               String warningMessage 
                   = "Raising facet.mincount from " + mincount + " to 1, because field " + field + " is Points-based.";
               log.warn(warningMessage);
+              @SuppressWarnings({"unchecked"})
               List<String> warnings = (List<String>)rb.rsp.getResponseHeader().get("warnings");
               if (null == warnings) {
                 warnings = new ArrayList<>();
@@ -576,13 +572,16 @@ public class SimpleFacets {
             //Go through the response to build the expected output for SimpleFacets
             counts = new NamedList<>();
             if(resObj != null) {
+              @SuppressWarnings({"unchecked"})
               NamedList<Object> res = (NamedList<Object>) resObj;
 
+              @SuppressWarnings({"unchecked"})
               List<NamedList<Object>> buckets = (List<NamedList<Object>>)res.get("buckets");
               for(NamedList<Object> b : buckets) {
                 counts.add(b.get("val").toString(), (Integer)b.get("count"));
               }
               if(missing) {
+                @SuppressWarnings({"unchecked"})
                 NamedList<Object> missingCounts = (NamedList<Object>) res.get("missing");
                 counts.add(null, (Integer)missingCounts.get("count"));
               }
@@ -805,6 +804,7 @@ public class SimpleFacets {
     int maxThreads = req.getParams().getInt(FacetParams.FACET_THREADS, 0);
     Executor executor = maxThreads == 0 ? directExecutor : facetExecutor;
     final Semaphore semaphore = new Semaphore((maxThreads <= 0) ? Integer.MAX_VALUE : maxThreads);
+    @SuppressWarnings({"rawtypes"})
     List<Future<NamedList>> futures = new ArrayList<>(facetFs.length);
 
     if (fdebugParent != null) {
@@ -823,6 +823,7 @@ public class SimpleFacets {
         final String termList = localParams == null ? null : localParams.get(CommonParams.TERMS);
         final String key = parsed.key;
         final String facetValue = parsed.facetValue;
+        @SuppressWarnings({"rawtypes"})
         Callable<NamedList> callable = () -> {
           try {
             NamedList<Object> result = new SimpleOrderedMap<>();
@@ -847,6 +848,7 @@ public class SimpleFacets {
           }
         };
 
+        @SuppressWarnings({"rawtypes"})
         RunnableFuture<NamedList> runnableFuture = new FutureTask<>(callable);
         semaphore.acquire();//may block and/or interrupt
         executor.execute(runnableFuture);//releases semaphore when done
@@ -854,7 +856,7 @@ public class SimpleFacets {
       }//facetFs loop
 
       //Loop over futures to get the values. The order is the same as facetFs but shouldn't matter.
-      for (Future<NamedList> future : futures) {
+      for (@SuppressWarnings({"rawtypes"})Future<NamedList> future : futures) {
         res.addAll(future.get());
       }
       assert semaphore.availablePermits() >= maxThreads;
@@ -1203,6 +1205,7 @@ public class SimpleFacets {
     return res;
   }
 
+  @SuppressWarnings({"rawtypes"})
   public NamedList getHeatmapCounts() throws IOException, SyntaxError {
     final NamedList<Object> resOuter = new SimpleOrderedMap<>();
     String[] unparsedFields = rb.req.getParams().getParams(FacetParams.FACET_HEATMAP);

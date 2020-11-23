@@ -124,6 +124,7 @@ public class SystemCollectionCompatTest extends SolrCloudTestCase {
 
   @After
   public void doAfter() throws Exception {
+    log.info("doAfter: deleting all collections...");
     cluster.deleteAllCollections();
 
     if (null != solrClient) {
@@ -149,31 +150,36 @@ public class SystemCollectionCompatTest extends SolrCloudTestCase {
     CollectionAdminResponse adminResponse = status.process(solrClient);
     NamedList<Object> response = adminResponse.getResponse();
     String leader = (String) response.get("leader");
+    log.info("Overseer Status indicates that the overseer is: {}", leader);
     JettySolrRunner overseerNode = null;
-    int index = -1;
     List<JettySolrRunner> jettySolrRunners = cluster.getJettySolrRunners();
     for (int i = 0; i < jettySolrRunners.size(); i++) {
       JettySolrRunner runner = jettySolrRunners.get(i);
       if (runner.getNodeName().equals(leader)) {
         overseerNode = runner;
-        index = i;
         break;
       }
     }
     assertNotNull(overseerNode);
     LogWatcherConfig watcherCfg = new LogWatcherConfig(true, null, "WARN", 100);
+    @SuppressWarnings({"rawtypes"})
     LogWatcher watcher = LogWatcher.newRegisteredLogWatcher(watcherCfg, null);
 
     watcher.reset();
 
     // restart Overseer to trigger the back-compat check
-    cluster.stopJettySolrRunner(index);
+    if (log.isInfoEnabled()) {
+      log.info("Stopping Overseer Node: {} ({})", overseerNode.getNodeName(), overseerNode.getLocalPort());
+    }
+    cluster.stopJettySolrRunner(overseerNode);
+    log.info("Waiting for new overseer election...");
     TimeOut timeOut = new TimeOut(30, TimeUnit.SECONDS, cloudManager.getTimeSource());
     while (!timeOut.hasTimedOut()) {
       adminResponse = status.process(solrClient);
       response = adminResponse.getResponse();
       String newLeader = (String) response.get("leader");
       if (newLeader != null && !leader.equals(newLeader)) {
+        log.info("...new overseer is: {}", newLeader);
         break;
       }
       timeOut.sleep(200);
@@ -185,6 +191,9 @@ public class SystemCollectionCompatTest extends SolrCloudTestCase {
     TimeOut timeOut1 = new TimeOut(60, TimeUnit.SECONDS, cloudManager.getTimeSource());
     boolean foundWarning = false;
     boolean foundSchemaWarning = false;
+
+    // TODO: replace this polling logic with a LogWatcher that uses a queue we can await() on...
+    log.info("Polling for log watcher to detect expected log messages...");
     while (!timeOut1.hasTimedOut()) {
       timeOut1.sleep(1000);
       SolrDocumentList history = watcher.getHistory(-1, null);
@@ -193,9 +202,15 @@ public class SystemCollectionCompatTest extends SolrCloudTestCase {
           continue;
         }
         if (doc.getFieldValue("message").toString().contains("re-indexing")) {
+          if (log.isInfoEnabled()) {
+            log.info("Found re-indexing message: {}", doc.getFieldValue("message"));
+          }
           foundWarning = true;
         }
         if (doc.getFieldValue("message").toString().contains("timestamp")) {
+          if (log.isInfoEnabled()) {
+            log.info("Found timestamp message: {}", doc.getFieldValue("message"));
+          }
           foundSchemaWarning = true;
         }
       }
@@ -203,9 +218,9 @@ public class SystemCollectionCompatTest extends SolrCloudTestCase {
         break;
       }
     }
+    log.info("Done polling log watcher: foundWarning={} foundSchemaWarning={}", foundWarning, foundSchemaWarning);
     assertTrue("re-indexing warning not found", foundWarning);
     assertTrue("timestamp field incompatibility warning not found", foundSchemaWarning);
-
   }
 
 }

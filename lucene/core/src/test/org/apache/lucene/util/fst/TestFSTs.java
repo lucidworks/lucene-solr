@@ -64,7 +64,6 @@ import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.IntsRefBuilder;
 import org.apache.lucene.util.LineFileDocs;
-import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
@@ -82,7 +81,6 @@ import static org.apache.lucene.util.fst.FSTTester.simpleRandomString;
 import static org.apache.lucene.util.fst.FSTTester.toIntsRef;
 
 @SuppressCodecs({ "SimpleText", "Direct" })
-@Slow
 public class TestFSTs extends LuceneTestCase {
 
   private MockDirectoryWrapper dir;
@@ -306,10 +304,11 @@ public class TestFSTs extends LuceneTestCase {
 
   // Build FST for all unique terms in the test line docs
   // file, up until a doc limit
+  @Slow
   public void testRealTerms() throws Exception {
 
     final LineFileDocs docs = new LineFileDocs(random());
-    final int numDocs = TEST_NIGHTLY ? atLeast(1000) : atLeast(100);
+    final int numDocs = TEST_NIGHTLY ? atLeast(1000) : atLeast(50);
     MockAnalyzer analyzer = new MockAnalyzer(random());
     analyzer.setMaxTokenLength(TestUtil.nextInt(random(), 1, IndexWriter.MAX_TERM_LENGTH));
 
@@ -526,7 +525,7 @@ public class TestFSTs extends LuceneTestCase {
 
         Directory dir = FSDirectory.open(dirOut);
         IndexOutput out = dir.createOutput("fst.bin", IOContext.DEFAULT);
-        fst.save(out);
+        fst.save(out, out);
         out.close();
         System.out.println("Saved FST to fst.bin.");
 
@@ -1188,11 +1187,11 @@ public class TestFSTs extends LuceneTestCase {
     // Make sure it still works after save/load:
     Directory dir = newDirectory();
     IndexOutput out = dir.createOutput("fst", IOContext.DEFAULT);
-    fst.save(out);
+    fst.save(out, out);
     out.close();
 
     IndexInput in = dir.openInput("fst", IOContext.DEFAULT);
-    final FST<Long> fst2 = new FST<>(in, outputs);
+    final FST<Long> fst2 = new FST<>(in, in, outputs);
     checkStopNodes(fst2, outputs);
     in.close();
     dir.close();

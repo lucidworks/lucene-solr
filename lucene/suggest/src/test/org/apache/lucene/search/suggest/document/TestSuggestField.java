@@ -16,9 +16,6 @@
  */
 package org.apache.lucene.search.suggest.document;
 
-import static org.apache.lucene.analysis.BaseTokenStreamTestCase.assertTokenStreamContents;
-import static org.hamcrest.core.IsEqual.equalTo;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -32,6 +29,7 @@ import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CyclicBarrier;
 
+import com.carrotsearch.randomizedtesting.generators.RandomPicks;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.TokenFilter;
@@ -41,7 +39,7 @@ import org.apache.lucene.analysis.tokenattributes.PayloadAttribute;
 import org.apache.lucene.analysis.tokenattributes.TypeAttribute;
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.PostingsFormat;
-import org.apache.lucene.codecs.lucene84.Lucene84Codec;
+import org.apache.lucene.codecs.lucene86.Lucene86Codec;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.IntPoint;
@@ -69,7 +67,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.carrotsearch.randomizedtesting.generators.RandomPicks;
+import static org.apache.lucene.analysis.BaseTokenStreamTestCase.assertTokenStreamContents;
+import static org.hamcrest.core.IsEqual.equalTo;
 
 public class TestSuggestField extends LuceneTestCase {
 
@@ -158,11 +157,11 @@ public class TestSuggestField extends LuceneTestCase {
     assertTokenStreamContents(stream, new String[] {"input"}, null, null, new String[]{payload.utf8ToString()}, new int[]{1}, null, null);
   }
 
-  @Test
+  @Test @Slow
   public void testDupSuggestFieldValues() throws Exception {
     Analyzer analyzer = new MockAnalyzer(random());
     RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwcWithSuggestField(analyzer, "suggest_field"));
-    final int num = Math.min(1000, atLeast(300));
+    final int num = Math.min(1000, atLeast(100));
     int[] weights = new int[num];
     for(int i = 0; i < num; i++) {
       Document document = new Document();
@@ -246,10 +245,11 @@ public class TestSuggestField extends LuceneTestCase {
     iw.close();
   }
 
+  @Slow
   public void testExtremeDeduplication() throws Exception {
     Analyzer analyzer = new MockAnalyzer(random());
     RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwcWithSuggestField(analyzer, "suggest_field"));
-    final int num = atLeast(5000);
+    final int num = atLeast(500);
     int bestWeight = Integer.MIN_VALUE;
     for(int i = 0; i < num; i++) {
       Document document = new Document();
@@ -678,7 +678,7 @@ public class TestSuggestField extends LuceneTestCase {
     Analyzer analyzer = new MockAnalyzer(random());
     RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwcWithSuggestField(analyzer, "suggest_field"));
 
-    int num = Math.min(1000, atLeast(100));
+    int num = Math.min(1000, atLeast(50));
     String[] prefixes = {"abc", "bac", "cab"};
     Map<String, Integer> mappings = new HashMap<>();
     for (int i = 0; i < num; i++) {
@@ -721,7 +721,7 @@ public class TestSuggestField extends LuceneTestCase {
     Analyzer analyzer = new MockAnalyzer(random());
     RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwcWithSuggestField(analyzer, "suggest_field"));
     LineFileDocs lineFileDocs = new LineFileDocs(random());
-    int num = Math.min(1000, atLeast(100));
+    int num = Math.min(1000, atLeast(50));
     Map<String, Integer> mappings = new HashMap<>();
     for (int i = 0; i < num; i++) {
       Document document = lineFileDocs.nextDoc();
@@ -760,7 +760,7 @@ public class TestSuggestField extends LuceneTestCase {
       }
       assertTrue("at least one of the entries should have the score", matched);
     }
-
+    lineFileDocs.close();
     reader.close();
     iw.close();
   }
@@ -887,7 +887,7 @@ public class TestSuggestField extends LuceneTestCase {
   static IndexWriterConfig iwcWithSuggestField(Analyzer analyzer, final Set<String> suggestFields) {
     IndexWriterConfig iwc = newIndexWriterConfig(random(), analyzer);
     iwc.setMergePolicy(newLogMergePolicy());
-    Codec filterCodec = new Lucene84Codec() {
+    Codec filterCodec = new Lucene86Codec() {
       CompletionPostingsFormat.FSTLoadMode fstLoadMode =
           RandomPicks.randomFrom(random(), CompletionPostingsFormat.FSTLoadMode.values());
       PostingsFormat postingsFormat = new Completion84PostingsFormat(fstLoadMode);

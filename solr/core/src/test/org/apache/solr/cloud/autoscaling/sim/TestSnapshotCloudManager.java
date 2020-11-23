@@ -45,6 +45,7 @@ import org.apache.solr.client.solrj.cloud.autoscaling.Suggester;
 import org.apache.solr.client.solrj.cloud.autoscaling.Suggestion;
 import org.apache.solr.client.solrj.cloud.autoscaling.VersionedData;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
+import org.apache.solr.cloud.CloudTestUtils;
 import org.apache.solr.cloud.SolrCloudTestCase;
 import org.apache.solr.common.cloud.ClusterState;
 import org.apache.solr.common.cloud.Replica;
@@ -81,6 +82,9 @@ public class TestSnapshotCloudManager extends SolrCloudTestCase {
         .process(cluster.getSolrClient());
     realManager = cluster.getJettySolrRunner(cluster.getJettySolrRunners().size() - 1).getCoreContainer()
         .getZkController().getSolrCloudManager();
+    // disable .scheduled_maintenance (once it exists)
+    CloudTestUtils.waitForTriggerToBeScheduled(realManager, ".scheduled_maintenance");
+    CloudTestUtils.suspendTrigger(realManager, ".scheduled_maintenance");
   }
 
   @AfterClass
@@ -117,10 +121,11 @@ public class TestSnapshotCloudManager extends SolrCloudTestCase {
   public void testRedaction() throws Exception {
     Path tmpPath = createTempDir();
     File tmpDir = tmpPath.toFile();
-    SnapshotCloudManager snapshotCloudManager = new SnapshotCloudManager(realManager, null);
     Set<String> redacted = new HashSet<>(realManager.getClusterStateProvider().getLiveNodes());
-    redacted.addAll(realManager.getClusterStateProvider().getClusterState().getCollectionStates().keySet());
-    snapshotCloudManager.saveSnapshot(tmpDir, true, true);
+    try (SnapshotCloudManager snapshotCloudManager = new SnapshotCloudManager(realManager, null)) {
+      redacted.addAll(realManager.getClusterStateProvider().getClusterState().getCollectionStates().keySet());
+      snapshotCloudManager.saveSnapshot(tmpDir, true, true);
+    }
     for (String key : SnapshotCloudManager.REQUIRED_KEYS) {
       File src = new File(tmpDir, key + ".json");
       assertTrue(src.toString() + " doesn't exist", src.exists());
@@ -181,6 +186,7 @@ public class TestSnapshotCloudManager extends SolrCloudTestCase {
     }
   }
 
+  @SuppressWarnings({"unchecked"})
   private static void assertNodeStateProvider(SolrCloudManager oneMgr, SolrCloudManager twoMgr, String... ignorableNodeValues) throws Exception {
     NodeStateProvider one = oneMgr.getNodeStateProvider();
     NodeStateProvider two = twoMgr.getNodeStateProvider();

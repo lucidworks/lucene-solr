@@ -217,7 +217,9 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
   }
 
   private void deleteAll() throws IOException {
-    log.info(core.getLogId() + "REMOVING ALL DOCUMENTS FROM INDEX");
+    if (log.isInfoEnabled()) {
+      log.info("{} REMOVING ALL DOCUMENTS FROM INDEX", core.getLogId());
+    }
     RefCounted<IndexWriter> iw = solrCoreState.getIndexWriter(core);
     try {
       iw.get().deleteAll();
@@ -360,8 +362,7 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
 
   private void addAndDelete(AddUpdateCommand cmd, List<UpdateLog.DBQ> deletesAfter) throws IOException {
     // this logic is different enough from doNormalUpdate that it's separate
-    log.info("Reordered DBQs detected.  Update=" + cmd + " DBQs="
-        + deletesAfter);
+    log.info("Reordered DBQs detected.  Update={} DBQs={}", cmd, deletesAfter);
     List<Query> dbqList = new ArrayList<>(deletesAfter.size());
     for (UpdateLog.DBQ dbq : deletesAfter) {
       try {
@@ -370,7 +371,7 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
         tmpDel.version = -dbq.version;
         dbqList.add(getQuery(tmpDel));
       } catch (Exception e) {
-        log.error("Exception parsing reordered query : " + dbq, e);
+        log.error("Exception parsing reordered query : {}", dbq, e);
       }
     }
 
@@ -555,7 +556,7 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
     mergeIndexesCommands.mark();
     int rc;
 
-    log.info("start " + cmd);
+    log.info("start {}", cmd);
     
     List<DirectoryReader> readers = cmd.readers;
     if (readers != null && readers.size() > 0) {
@@ -592,7 +593,7 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
     boolean error=true;
 
     try {
-      log.info("start "+cmd);
+      log.debug("start {}", cmd);
       RefCounted<IndexWriter> iw = solrCoreState.getIndexWriter(core);
       try {
         SolrIndexWriter.setCommitData(iw.get(), cmd.getVersion());
@@ -601,7 +602,7 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
         iw.decref();
       }
 
-      log.info("end_prepareCommit");
+      log.debug("end_prepareCommit");
 
       error=false;
     }
@@ -614,6 +615,7 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
   }
 
   @Override
+  @SuppressWarnings({"rawtypes"})
   public void commit(CommitUpdateCommand cmd) throws IOException {
     TestInjection.injectDirectUpdateLatch();
     if (cmd.prepareCommit) {
@@ -640,7 +642,7 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
         solrCoreState.getCommitLock().lock();
       }
 
-      log.info("start "+cmd);
+      log.debug("start {}", cmd);
 
       // We must cancel pending commits *before* we actually execute the commit.
 
@@ -677,7 +679,7 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
             SolrIndexWriter.setCommitData(writer, cmd.getVersion());
             writer.commit();
           } else {
-            log.info("No uncommitted changes. Skipping IW.commit.");
+            log.debug("No uncommitted changes. Skipping IW.commit.");
           }
 
           // SolrCore.verbose("writer.commit() end");
@@ -726,7 +728,7 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
         commitTracker.didCommit();
       }
       
-      log.info("end_commit_flush");
+      log.debug("end_commit_flush");
 
       error=false;
     }
@@ -775,7 +777,7 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
     boolean error=true;
 
     try {
-      log.info("start "+cmd);
+      log.info("start {}", cmd);
 
       rollbackWriter();
 
@@ -807,7 +809,7 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
 
   @Override
   public void close() throws IOException {
-    log.debug("closing " + this);
+    log.debug("closing {}", this);
 
     commitTracker.close();
     softCommitTracker.close();
@@ -820,13 +822,11 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
     }
   }
 
-
-  public static volatile boolean commitOnClose = true;  // TODO: make this a real config option or move it to TestInjection
-
   // IndexWriterCloser interface method - called from solrCoreState.decref(this)
   @Override
   public void closeWriter(IndexWriter writer) throws IOException {
-
+    log.trace("closeWriter({}): ulog={}", writer, ulog);
+    
     assert TestInjection.injectNonGracefullClose(core.getCoreContainer());
 
     boolean clearRequestInfo = false;
@@ -838,18 +838,21 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
       SolrRequestInfo.setRequestInfo(new SolrRequestInfo(req, rsp)); // important for debugging
     }
     try {
-      if (!commitOnClose) {
+
+      if (TestInjection.injectSkipIndexWriterCommitOnClose(writer)) {
+        // if this TestInjection triggers, we do some simple rollback()
+        // (which closes the underlying IndexWriter) and then return immediately
+        log.warn("Skipping commit for IndexWriter.close() due to TestInjection");
         if (writer != null) {
           writer.rollback();
         }
-
         // we shouldn't close the transaction logs either, but leaving them open
         // means we can't delete them on windows (needed for tests)
         if (ulog != null) ulog.close(false);
 
         return;
       }
-
+      
       // do a commit before we quit?
       boolean tryToCommit = writer != null && ulog != null && ulog.hasUncommittedChanges()
           && ulog.getState() == UpdateLog.State.ACTIVE;
@@ -858,8 +861,11 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
       solrCoreState.getCommitLock().lock();
       try {
         try {
+          if (log.isInfoEnabled()) {
+            log.info("Committing on IndexWriter.close() {}.",
+                (tryToCommit ? "" : " ... SKIPPED (unnecessary)"));
+          }
           if (tryToCommit) {
-            log.info("Committing on IndexWriter close.");
             CommitUpdateCommand cmd = new CommitUpdateCommand(req, false);
             cmd.openSearcher = false;
             cmd.waitSearcher = false;

@@ -77,6 +77,7 @@ public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider,
   private static final String PARAM_REQUIRE_SUBJECT = "requireSub";
   private static final String PARAM_REQUIRE_ISSUER = "requireIss";
   private static final String PARAM_PRINCIPAL_CLAIM = "principalClaim";
+  private static final String PARAM_ROLES_CLAIM = "rolesClaim";
   private static final String PARAM_REQUIRE_EXPIRATIONTIME = "requireExp";
   private static final String PARAM_ALG_WHITELIST = "algWhitelist";
   private static final String PARAM_JWK_CACHE_DURATION = "jwkCacheDur";
@@ -95,7 +96,7 @@ public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider,
 
   private static final Set<String> PROPS = ImmutableSet.of(PARAM_BLOCK_UNKNOWN,
       PARAM_REQUIRE_SUBJECT, PARAM_PRINCIPAL_CLAIM, PARAM_REQUIRE_EXPIRATIONTIME, PARAM_ALG_WHITELIST,
-      PARAM_JWK_CACHE_DURATION, PARAM_CLAIMS_MATCH, PARAM_SCOPE, PARAM_REALM,
+      PARAM_JWK_CACHE_DURATION, PARAM_CLAIMS_MATCH, PARAM_SCOPE, PARAM_REALM, PARAM_ROLES_CLAIM,
       PARAM_ADMINUI_SCOPE, PARAM_REDIRECT_URIS, PARAM_REQUIRE_ISSUER, PARAM_ISSUERS,
       // These keys are supported for now to enable PRIMARY issuer config through top-level keys
       JWTIssuerConfig.PARAM_JWK_URL, JWTIssuerConfig.PARAM_JWKS_URL, JWTIssuerConfig.PARAM_JWK, JWTIssuerConfig.PARAM_ISSUER,
@@ -106,6 +107,7 @@ public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider,
   private boolean requireExpirationTime;
   private List<String> algWhitelist;
   private String principalClaim;
+  private String rolesClaim;
   private HashMap<String, Pattern> claimsMatchCompiled;
   private boolean blockUnknown;
   private List<String> requiredScopes = new ArrayList<>();
@@ -143,6 +145,8 @@ public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider,
           PARAM_REQUIRE_SUBJECT);
     }
     principalClaim = (String) pluginConfig.getOrDefault(PARAM_PRINCIPAL_CLAIM, "sub");
+
+    rolesClaim = (String) pluginConfig.get(PARAM_ROLES_CLAIM);
     algWhitelist = (List<String>) pluginConfig.get(PARAM_ALG_WHITELIST);
     realm = (String) pluginConfig.getOrDefault(PARAM_REALM, DEFAULT_AUTH_REALM);
 
@@ -259,7 +263,9 @@ public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider,
           JWTIssuerConfig ic = new JWTIssuerConfig(issuerConf);
           ic.init();
           configs.add(ic);
-          log.debug("Found issuer with name {} and issuerId {}", ic.getName(), ic.getIss());
+          if (log.isDebugEnabled()) {
+            log.debug("Found issuer with name {} and issuerId {}", ic.getName(), ic.getIss());
+          }
         });
       }
       return configs;
@@ -338,6 +344,7 @@ public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider,
         if (log.isDebugEnabled())
           log.debug("Unknown user, but allow due to {}=false", PARAM_BLOCK_UNKNOWN);
         numPassThrough.inc();
+        request.setAttribute(AuthenticationPlugin.class.getName(), getPromptHeaders(null, null));
         filterChain.doFilter(request, response);
         return true;
 
@@ -411,6 +418,8 @@ public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider,
               // Fail if we require scopes but they don't exist
               return new JWTAuthenticationResponse(AuthCode.CLAIM_MISMATCH, "Claim " + CLAIM_SCOPE + " is required but does not exist in JWT");
             }
+
+            // Find scopes for user
             Set<String> scopes = Collections.emptySet();
             Object scopesObj = jwtClaims.getClaimValue(CLAIM_SCOPE);
             if (scopesObj != null) {
@@ -425,10 +434,27 @@ public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider,
                   return new JWTAuthenticationResponse(AuthCode.SCOPE_MISSING, "Claim " + CLAIM_SCOPE + " does not contain any of the required scopes: " + requiredScopes);
                 }
               }
-              final Set<String> finalScopes = new HashSet<>(scopes);
-              finalScopes.remove("openid"); // Remove standard scope
+            }
+
+            // Determine roles of user, either from 'rolesClaim' or from 'scope' as parsed above
+            final Set<String> finalRoles = new HashSet<>();
+            if (rolesClaim == null) {
               // Pass scopes with principal to signal to any Authorization plugins that user has some verified role claims
-              return new JWTAuthenticationResponse(AuthCode.AUTHENTICATED, new JWTPrincipalWithUserRoles(principal, jwtCompact, jwtClaims.getClaimsMap(), finalScopes));
+              finalRoles.addAll(scopes);
+              finalRoles.remove("openid"); // Remove standard scope
+            } else {
+              // Pull roles from separate claim, either as whitespace separated list or as JSON array
+              Object rolesObj = jwtClaims.getClaimValue(rolesClaim);
+              if (rolesObj != null) {
+                if (rolesObj instanceof String) {
+                  finalRoles.addAll(Arrays.asList(((String) rolesObj).split("\\s+")));
+                } else if (rolesObj instanceof List) {
+                  finalRoles.addAll(jwtClaims.getStringListClaimValue(rolesClaim));
+                }
+              }
+            }
+            if (finalRoles.size() > 0) {
+              return new JWTAuthenticationResponse(AuthCode.AUTHENTICATED, new JWTPrincipalWithUserRoles(principal, jwtCompact, jwtClaims.getClaimsMap(), finalRoles));
             } else {
               return new JWTAuthenticationResponse(AuthCode.AUTHENTICATED, new JWTPrincipal(principal, jwtCompact, jwtClaims.getClaimsMap()));
             }
@@ -536,16 +562,28 @@ public class JWTAuthPlugin extends AuthenticationPlugin implements SpecProvider,
   private enum BearerWwwAuthErrorCode { invalid_request, invalid_token, insufficient_scope}
 
   private void authenticationFailure(HttpServletResponse response, String message, int httpCode, BearerWwwAuthErrorCode responseError) throws IOException {
+    getPromptHeaders(responseError, message).forEach(response::setHeader);
+    response.sendError(httpCode, message);
+    log.info("JWT Authentication attempt failed: {}", message);
+  }
+
+  /**
+   * Generate proper response prompt headers
+   * @param responseError standardized error code. Set to 'null' to generate WWW-Authenticate header with no error
+   * @param message custom message string to return in www-authenticate, or null if no error
+   * @return map of headers to add to response
+   */
+  private Map<String, String> getPromptHeaders(BearerWwwAuthErrorCode responseError, String message) {
+    Map<String,String> headers = new HashMap<>();
     List<String> wwwAuthParams = new ArrayList<>();
     wwwAuthParams.add("Bearer realm=\"" + realm + "\"");
     if (responseError != null) {
       wwwAuthParams.add("error=\"" + responseError + "\"");
       wwwAuthParams.add("error_description=\"" + message + "\"");
     }
-    response.addHeader(HttpHeaders.WWW_AUTHENTICATE, String.join(", ", wwwAuthParams));
-    response.addHeader(AuthenticationPlugin.HTTP_HEADER_X_SOLR_AUTHDATA, generateAuthDataHeader());
-    response.sendError(httpCode, message);
-    log.info("JWT Authentication attempt failed: {}", message);
+    headers.put(HttpHeaders.WWW_AUTHENTICATE, String.join(", ", wwwAuthParams));
+    headers.put(AuthenticationPlugin.HTTP_HEADER_X_SOLR_AUTHDATA, generateAuthDataHeader());
+    return headers;
   }
 
   protected String generateAuthDataHeader() {

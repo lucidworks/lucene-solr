@@ -56,6 +56,28 @@ public class TestScriptTransformer extends AbstractDataImportHandlerTestCase {
     }
   }
 
+  @Test
+  public void testEvil() {
+    assumeTrue("This test only works with security manager", System.getSecurityManager() != null);
+    String script = "function f1(row) {"
+            + "var os = Packages.java.lang.System.getProperty('os.name');"
+            + "row.put('name', os);"
+            + "return row;\n"
+            + "}";
+
+    Context context = getContext("f1", script);
+    Map<String, Object> map = new HashMap<>();
+    map.put("name", "Scott");
+    EntityProcessorWrapper sep = new EntityProcessorWrapper(new SqlEntityProcessor(), null, null);
+    sep.init(context);
+    DataImportHandlerException expected = expectThrows(DataImportHandlerException.class, () -> {
+      sep.applyTransformer(map);
+    });
+    assumeFalse("This JVM does not have JavaScript installed.  Test Skipped.",
+        expected.getMessage().startsWith("Cannot load Script Engine for language"));
+    assertTrue(expected.getCause().toString(), SecurityException.class.isAssignableFrom(expected.getCause().getClass()));
+  }
+
   private Context getContext(String funcName, String script) {
     List<Map<String, String>> fields = new ArrayList<>();
     Map<String, String> entity = new HashMap<>();
@@ -106,6 +128,7 @@ public class TestScriptTransformer extends AbstractDataImportHandlerTestCase {
   }
 
   @Test
+  @SuppressWarnings({"unchecked"})
   public void testCheckScript() throws Exception {
     try {
       DocumentBuilder builder = DocumentBuilderFactory.newInstance()
@@ -115,13 +138,14 @@ public class TestScriptTransformer extends AbstractDataImportHandlerTestCase {
       DIHConfiguration dc = di.readFromXml(document);
       Context c = getContext("checkNextToken", dc.getScript().getText());
 
+      @SuppressWarnings({"rawtypes"})
       Map map = new HashMap();
       map.put("nextToken", "hello");
       EntityProcessorWrapper sep = new EntityProcessorWrapper(new SqlEntityProcessor(), null, null);
       sep.init(c);
       sep.applyTransformer(map);
       assertEquals("true", map.get("$hasMore"));
-      map = new HashMap();
+      map = new HashMap<>();
       map.put("nextToken", "");
       sep.applyTransformer(map);
       assertNull(map.get("$hasMore"));
