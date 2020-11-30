@@ -400,7 +400,7 @@ public abstract class AbstractCloudBackupRestoreTestCase extends SolrCloudTestCa
     // TODO Find the applicable core.properties on the file system but how?
   }
 
-  private Map<String, Integer> getShardToDocCountMap(CloudSolrClient client, DocCollection docCollection) throws SolrServerException, IOException {
+  public static Map<String, Integer> getShardToDocCountMap(CloudSolrClient client, DocCollection docCollection) throws SolrServerException, IOException {
     Map<String,Integer> shardToDocCount = new TreeMap<>();
     for (Slice slice : docCollection.getActiveSlices()) {
       String shardName = slice.getName();

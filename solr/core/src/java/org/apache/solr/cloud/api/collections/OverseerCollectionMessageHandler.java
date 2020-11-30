@@ -18,6 +18,7 @@ package org.apache.solr.cloud.api.collections;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -31,6 +32,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
 import com.google.common.collect.ImmutableMap;
 import org.apache.commons.lang3.StringUtils;
@@ -78,6 +80,8 @@ import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.common.util.SuppressForbidden;
 import org.apache.solr.common.util.TimeSource;
 import org.apache.solr.common.util.Utils;
+import org.apache.solr.core.backup.BackupId;
+import org.apache.solr.core.backup.repository.BackupRepository;
 import org.apache.solr.handler.component.HttpShardHandlerFactory;
 import org.apache.solr.handler.component.ShardHandler;
 import org.apache.solr.handler.component.ShardRequest;
@@ -200,6 +204,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
         .put(DELETENODE, new DeleteNodeCmd(this))
         .put(BACKUP, new BackupCmd(this))
         .put(RESTORE, new RestoreCmd(this))
+        .put(DELETEBACKUP, new DeleteBackupCmd(this))
         .put(CREATESNAPSHOT, new CreateSnapshotCmd(this))
         .put(DELETESNAPSHOT, new DeleteSnapshotCmd(this))
         .put(SPLITSHARD, new SplitShardCmd(this))
@@ -576,7 +581,7 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
   }
 
 
-  private void modifyCollection(ClusterState clusterState, ZkNodeProps message, @SuppressWarnings({"rawtypes"})NamedList results)
+  void modifyCollection(ClusterState clusterState, ZkNodeProps message, @SuppressWarnings({"rawtypes"})NamedList results)
       throws Exception {
 
     final String collectionName = message.getStr(ZkStateReader.COLLECTION_PROP);
@@ -664,6 +669,19 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
 
       Thread.sleep(100);
     }
+  }
+
+  @SuppressWarnings({"rawtypes"})
+  void cleanBackup(BackupRepository  repository, URI backupPath, BackupId backupId) throws Exception {
+    ((DeleteBackupCmd)commandMap.get(DELETEBACKUP))
+            .deleteBackupIds(backupPath, repository, Collections.singleton(backupId), new NamedList());
+  }
+
+  void deleteBackup(BackupRepository repository, URI backupPath,
+                    int maxNumBackup,
+                    @SuppressWarnings({"rawtypes"}) NamedList results) throws Exception {
+    ((DeleteBackupCmd)commandMap.get(DELETEBACKUP))
+            .keepNumberOfBackup(repository, backupPath, maxNumBackup, results);
   }
 
   List<ZkNodeProps> addReplica(ClusterState clusterState, ZkNodeProps message, @SuppressWarnings({"rawtypes"})NamedList results, Runnable onComplete)
@@ -920,6 +938,11 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
   public class ShardRequestTracker{
     private final String asyncId;
     private final NamedList<String> shardAsyncIdByNode = new NamedList<String>();
+    private Consumer<ShardResponse> onResponseListener;
+
+    public void setOnResponseListener(Consumer<ShardResponse> onResponseListener) {
+      this.onResponseListener = onResponseListener;
+    }
 
     private ShardRequestTracker(String asyncId) {
       this.asyncId = asyncId;
@@ -986,6 +1009,9 @@ public class OverseerCollectionMessageHandler implements OverseerMessageHandler,
         srsp = shardHandler.takeCompletedOrError();
         if (srsp != null) {
           processResponse(results, srsp, okayExceptions);
+          if (onResponseListener != null) {
+            onResponseListener.accept(srsp);
+          }
           Throwable exception = srsp.getException();
           if (abortOnError && exception != null) {
             // drain pending requests

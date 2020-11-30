@@ -54,10 +54,7 @@ import org.apache.solr.common.util.TimeSource;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.util.TimeOut;
 import org.apache.solr.util.LogLevel;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
+import org.junit.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -114,11 +111,13 @@ public class TestStressThreadBackup extends SolrCloudTestCase {
     }
   }
 
+  @Test
   public void testCoreAdminHandler() throws Exception {
     // Use default BackupAPIImpl which hits CoreAdmin API for everything
     testSnapshotsAndBackupsDuringConcurrentCommitsAndOptimizes(new BackupAPIImpl());
   }
-  
+
+  @Test
   public void testReplicationHandler() throws Exception {
     // Create a custom BackupAPIImpl which uses ReplicatoinHandler for the backups
     // but still defaults to CoreAdmin for making named snapshots (since that's what's documented)
@@ -329,7 +328,7 @@ public class TestStressThreadBackup extends SolrCloudTestCase {
    * @param id the uniqueKey
    * @param type the type of the doc for use in the 'type_s' field (for term counting later)
    */
-  private static SolrInputDocument makeDoc(String id, String type) {
+  static SolrInputDocument makeDoc(String id, String type) {
     final SolrInputDocument doc = new SolrInputDocument("id", id, "type_s", type);
     for (int f = 0; f < 100; f++) {
       doc.addField(f + "_s", TestUtil.randomUnicodeString(random(), 20));
