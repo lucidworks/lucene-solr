@@ -1063,7 +1063,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
           throw new SolrException(ErrorCode.SERVER_ERROR, "specified location " + uri + " does not exist.");
         }
       } catch (IOException ex) {
-        throw new SolrException(ErrorCode.SERVER_ERROR, "Failed to check the existance of " + uri + ". Is it valid?", ex);
+        throw new SolrException(ErrorCode.SERVER_ERROR, "Failed to check the existence of " + uri + ". Is it valid?", ex);
       }
 
       String strategy = req.getParams().get(CollectionAdminParams.INDEX_BACKUP_STRATEGY, CollectionAdminParams.COPY_FILES_STRATEGY);
