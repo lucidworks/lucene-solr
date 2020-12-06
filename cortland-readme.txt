@@ -1,6 +1,7 @@
 Solr 7.7.2 fixes
 
 Fixes:-
+SOLR-14663 - CVE-2020-13957
 SOLR-13318
 SOLR-13780
 Read zk credentials from file for ZK ACLs(No Solr JIRA)

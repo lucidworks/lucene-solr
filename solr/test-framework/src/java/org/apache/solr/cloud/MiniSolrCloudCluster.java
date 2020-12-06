@@ -45,7 +45,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.embedded.JettyConfig;
 import org.apache.solr.client.solrj.embedded.JettySolrRunner;
 import org.apache.solr.client.solrj.embedded.SSLConfig;
@@ -68,6 +67,7 @@ import org.apache.solr.common.util.ExecutorUtil;
 import org.apache.solr.common.util.IOUtils;
 import org.apache.solr.common.util.SolrjNamedThreadFactory;
 import org.apache.solr.common.util.TimeSource;
+import static org.apache.solr.core.ConfigSetProperties.DEFAULT_FILENAME;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.util.TimeOut;
 import org.apache.zookeeper.KeeperException;
@@ -550,7 +550,7 @@ public class MiniSolrCloudCluster {
 
   }
   
-  public void deleteAllConfigSets() throws SolrServerException, IOException {
+  public void deleteAllConfigSets() throws Exception {
 
     List<String> configSetNames = new ConfigSetAdminRequest.List().process(solrClient).getConfigSets();
 
@@ -558,10 +558,15 @@ public class MiniSolrCloudCluster {
       if (configSet.equals("_default")) {
         continue;
       }
+      try {
+        // cleanup any property before removing the configset
+        getZkClient().delete(ZkConfigManager.CONFIGS_ZKNODE + "/" + configSet + "/" + DEFAULT_FILENAME, -1, true);
+      } catch (KeeperException.NoNodeException nne) { }
       new ConfigSetAdminRequest.Delete()
           .setConfigSetName(configSet)
           .process(solrClient);
     }
+
   }
 
   /**
