@@ -17,9 +17,6 @@
 
 package org.apache.solr.search;
 
-import java.io.IOException;
-import java.lang.invoke.MethodHandles;
-
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
@@ -43,8 +40,13 @@ import org.apache.solr.search.join.MultiValueTermOrdinalCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.lang.invoke.MethodHandles;
+import java.util.Optional;
+
 /**
- * {@link JoinQuery} implementation using global (top-level) DocValues ordinals to efficiently compare values in the "from" and "to" fields.
+ * {@link JoinQuery} implementation using global (top-level) DocValues ordinals to efficiently compare values in the
+ * "from" and "to" fields.
  */
 public class TopLevelJoinQuery extends JoinQuery {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -64,6 +66,7 @@ public class TopLevelJoinQuery extends JoinQuery {
     final JoinQueryWeight weight = new JoinQueryWeight(solrSearcher, ScoreMode.COMPLETE_NO_SCORES, 1.0f);
     final SolrIndexSearcher fromSearcher = weight.fromSearcher;
     final SolrIndexSearcher toSearcher = weight.toSearcher;
+    final boolean isSameCoreSameField = fromSearcher.equals(toSearcher) && fromField.equals(toField);
 
     try {
       final SortedSetDocValues topLevelFromDocValues = validateAndFetchDocValues(fromSearcher, fromField, "from");
@@ -73,13 +76,23 @@ public class TopLevelJoinQuery extends JoinQuery {
       }
 
       final LongBitSet fromOrdBitSet = findFieldOrdinalsMatchingQuery(q, fromField, fromSearcher, topLevelFromDocValues);
-      final LongBitSet toOrdBitSet = new LongBitSet(topLevelToDocValues.getValueCount());
-      final BitsetBounds toBitsetBounds = convertFromOrdinalsIntoToField(fromOrdBitSet, topLevelFromDocValues, toOrdBitSet, topLevelToDocValues);
+      final Optional<BitsetBounds> toBitsetBounds;
+      final LongBitSet toOrdBitSet;
+      if (isSameCoreSameField) {
+        // When the "to" searcher == "from" searcher, and the "to" field == the "from" field,
+        // we do not need to convert the ordinals on the "to" field to match the ordinals on the "from" field
+        // because they are the same ordinals.
+        toOrdBitSet = fromOrdBitSet;
+        toBitsetBounds = Optional.empty();
+      } else {
+        toOrdBitSet = new LongBitSet(topLevelToDocValues.getValueCount());
+        toBitsetBounds = Optional.of(convertFromOrdinalsIntoToField(fromOrdBitSet, topLevelFromDocValues, toOrdBitSet, topLevelToDocValues));
+      }
 
       final boolean toMultivalued = toSearcher.getSchema().getFieldOrNull(toField).multiValued();
       return new ConstantScoreWeight(this, boost) {
         public Scorer scorer(LeafReaderContext context) throws IOException {
-          if (toBitsetBounds.lower == BitsetBounds.NO_MATCHES) {
+          if (toBitsetBounds.isPresent() && toBitsetBounds.get().lower == BitsetBounds.NO_MATCHES) {
             return null;
           }
 
@@ -162,6 +175,42 @@ public class TopLevelJoinQuery extends JoinQuery {
     return fromOrdBitSet;
   }
 
+  /**
+   * When storing ordinals, the ordinal -> DocValue lookup is different per-searcher, and per-core.
+   * So when doing a join, if the "To" searcher is not the same as the "From" searcher, and/or if the
+   * "To" field is not the same as the "From" field, we will need to convert the "to" ordinals so that
+   * they match the "from" ordinals.
+   *
+   * <b>For example:</b> If we have FromCore=Core1, FromField=MyStatus
+   *
+   * <pre>
+   * Ordinal | Term for field "MyStatus"
+   * -------------------
+   * 0       | status_deleted
+   * 1       | status_published
+   * </pre>
+   * <p>
+   * And then if we ToCore=Core2, ToField=SomeOtherStatus
+   *
+   * <pre>
+   * Ordinal | Term for field "SomeOtherStatus"
+   * -------------------
+   * 0       | status_cancel
+   * 1       | status_deleted
+   * 2       | status_published
+   * </pre>
+   * <p>
+   * For the term "status_published", the ordinal on "from" is 1, and the ordinal for "to" is 2.
+   * <p>
+   * This method will iterate through each ordinal and populate a "to" ordinal bit set that is compatible with the
+   * "from" ordinal bit set.
+   *
+   * @param fromOrdBitSet The from ordinal bit set.
+   * @param fromDocValues The from doc values.
+   * @param toOrdBitSet   The to ordinal bit set.
+   * @param toDocValues   The to doc values.
+   * @return A boundary of the first + last to ordinal found in the mapping.
+   */
   private BitsetBounds convertFromOrdinalsIntoToField(LongBitSet fromOrdBitSet, SortedSetDocValues fromDocValues,
                                                       LongBitSet toOrdBitSet, SortedSetDocValues toDocValues) throws IOException {
     long fromOrdinal = 0;
