@@ -24,6 +24,9 @@ See the Solr tutorial at https://lucene.apache.org/solr/guide/solr-tutorial.html
 * SOLR-12859: Fixed DocExpirationUpdateProcessorFactory to work with BasicAuth and other auth plugins
   that delegate to PKI for server initiated node-to-node communication. (hossman)
 
+* SOLR-15249: Properly set ZK ACLs on /security.json (Mike Drob)
+
+
 ==================  8.4.1 ==================
 
 Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.
