@@ -8,6 +8,8 @@ https://github.com/apache/lucene-solr/blob/master/solr/solr-ref-guide/src/solr-u
 
 * SOLR-15249: Properly set ZK ACLs on /security.json (Mike Drob)
 
+* SOLR-15217: Use shardsWhitelist in ReplicationHandler. (Bruno Roustant)
+
 ==================  8.6.3 ==================
 
 Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.

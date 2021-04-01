@@ -37,6 +37,7 @@ import org.apache.solr.client.solrj.embedded.JettySolrRunner;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.util.Utils;
 import org.apache.solr.common.SolrException;
+import org.apache.solr.handler.component.HttpShardHandlerFactory;
 import org.apache.solr.util.LogLevel;
 import org.junit.After;
 import org.junit.Before;
@@ -78,6 +79,7 @@ public class TestReplicationHandlerDiskOverFlow extends SolrTestCaseJ4 {
     master.setUp();
     masterJetty = createAndStartJetty(master);
     masterClient = createNewSolrClient(masterJetty.getLocalPort());
+    System.setProperty("solr.tests." + HttpShardHandlerFactory.INIT_SHARDS_WHITELIST, masterJetty.getBaseUrl().toString());
 
     slave = new TestReplicationHandler.SolrInstance(createTempDir("solr-instance").toFile(), "slave", masterJetty.getLocalPort());
     slave.setUp();
@@ -108,6 +110,7 @@ public class TestReplicationHandlerDiskOverFlow extends SolrTestCaseJ4 {
       slaveClient.close();
       slaveClient = null;
     }
+    System.clearProperty("solr.tests." + HttpShardHandlerFactory.INIT_SHARDS_WHITELIST);
     System.clearProperty("solr.indexfetcher.sotimeout");
     
     IndexFetcher.usableDiskSpaceProvider = originalDiskSpaceprovider;
