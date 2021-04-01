@@ -26,6 +26,7 @@ See the Solr tutorial at https://lucene.apache.org/solr/guide/solr-tutorial.html
 
 * SOLR-15249: Properly set ZK ACLs on /security.json (Mike Drob)
 
+* SOLR-15217: Use shardsWhitelist in ReplicationHandler. (Bruno Roustant)
 
 ==================  8.4.1 ==================
 
