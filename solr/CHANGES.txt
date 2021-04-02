@@ -28,6 +28,8 @@ See the Solr tutorial at https://lucene.apache.org/solr/guide/solr-tutorial.html
 
 * SOLR-15217: Use shardsWhitelist in ReplicationHandler. (Bruno Roustant)
 
+* SOLR-15233: Set doAs param in ConfigurableInternodeAuthHadoopPlugin (Geza Nagy, Jason Gerlowski, Mike Drob)
+
 ==================  8.4.1 ==================
 
 Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.
