@@ -354,7 +354,7 @@ public class TestConfigSetsAPI extends SolrCloudTestCase {
     // Create dummy config files in zookeeper
     zkClient.makePath("/configs/myconf", true);
     zkClient.create("/configs/myconf/firstDummyFile",
-	"first dummy content".getBytes(UTF_8), CreateMode.PERSISTENT, true);
+                    "first dummy content".getBytes(UTF_8), CreateMode.PERSISTENT, true);
     zkClient.create("/configs/myconf/anotherDummyFile",
         "second dummy content".getBytes(UTF_8), CreateMode.PERSISTENT, true);
 
@@ -456,7 +456,7 @@ public class TestConfigSetsAPI extends SolrCloudTestCase {
     ignoreException("without any authentication in place");
     Throwable thrown = expectThrows(BaseHttpSolrClient.RemoteSolrException.class, () -> {
       createCollection("newcollection3", "with-lib-directive" + untrustedSuffix,
-	  1, 1, cluster.getSolrClient());
+                       1, 1, cluster.getSolrClient());
     });
     unIgnoreException("without any authentication in place");
 
@@ -765,7 +765,7 @@ public class TestConfigSetsAPI extends SolrCloudTestCase {
       Set<String> configSets = new HashSet<String>();
       for (int i = 0; i < 5; ++i) {
         String configSet = "configSet" + i;
-	zkConfigManager.uploadConfigDir(configset("configset-2"), configSet);
+        zkConfigManager.uploadConfigDir(configset("configset-2"), configSet);
         configSets.add(configSet);
       }
       response = list.process(solrClient);

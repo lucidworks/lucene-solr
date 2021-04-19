@@ -138,7 +138,7 @@ public class ZkConfigManager {
       for (String file : files) {
         List<String> children = zkClient.getChildren(fromZkPath + "/" + file, null, true);
         if (children.size() == 0) {
-	  copyData(copiedToZkPaths, fromZkPath + "/" + file, toZkPath + "/" + file);
+          copyData(copiedToZkPaths, fromZkPath + "/" + file, toZkPath + "/" + file);
         } else {
           copyConfigDirFromZk(fromZkPath + "/" + file, toZkPath + "/" + file, copiedToZkPaths);
         }
