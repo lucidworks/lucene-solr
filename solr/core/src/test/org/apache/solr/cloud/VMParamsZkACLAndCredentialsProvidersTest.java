@@ -69,7 +69,10 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
     }
   }
 
-  /** Does the correct thing with credential props depending on wether a file is being used */
+  /** Does the correct thing with credential props depending on wether a file is being used 
+   *
+   * NOTE: this only sets the props you ask it to, it doesn't "clear" any existing system props by prefix
+   */
   public static void setCredentialProps(Properties props) throws Exception {
     if (null != credentialsFile) {
       System.setProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_FILE_VM_PARAM_NAME,
@@ -129,7 +132,7 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
     zkClient = new SolrZkClient(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT);
     // Currently no credentials on ZK connection, because those same VM-params are used for adding ACLs, and here we want
     // no (or completely open) ACLs added. Therefore hack your way into being authorized for creating anyway
-    zkClient.getSolrZooKeeper().addAuthInfo("digest", ("connectAndAllACLUsername:connectAndAllACLPassword")
+    zkClient.getSolrZooKeeper().addAuthInfo("digest", ("solradmin:solradminPassword")
         .getBytes(StandardCharsets.UTF_8));
     zkClient.create("/unprotectedCreateNode", "content".getBytes(DATA_ENCODING), CreateMode.PERSISTENT, false);
     zkClient.makePath("/unprotectedMakePathNode", "content".getBytes(DATA_ENCODING), CreateMode.PERSISTENT, false);
@@ -178,8 +181,15 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
   }
 
   @Test
-  public void testAllCredentials() throws Exception {
-    useAllCredentials();
+  public void testAllAccessCredentials() throws Exception {
+    doTestAllAccessCredentials("solradmin");
+  }
+  @Test
+  public void testAllAccessCredentialsAlt() throws Exception {
+    doTestAllAccessCredentials("superUser2");
+  }
+  private void doTestAllAccessCredentials(final String u) throws Exception {
+    useAllAccessCredentials(u);
 
     SolrZkClient zkClient = new SolrZkClient(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT);
     try {
@@ -211,7 +221,7 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
     try (SolrZkClient zkClient = new SolrZkClient(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT)) {
       // Currently no credentials on ZK connection, because those same VM-params are used for adding ACLs, and here we want
       // no (or completely open) ACLs added. Therefore hack your way into being authorized for creating anyway
-      zkClient.getSolrZooKeeper().addAuthInfo("digest", ("connectAndAllACLUsername:connectAndAllACLPassword")
+      zkClient.getSolrZooKeeper().addAuthInfo("digest", ("solradmin:solradminPassword")
           .getBytes(StandardCharsets.UTF_8));
 
       zkClient.create("/security.json", "{}".getBytes(StandardCharsets.UTF_8), CreateMode.PERSISTENT, false);
@@ -231,6 +241,48 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
     }
   }
     
+  @Test
+  public void testUpdateACL() throws Exception {
+
+    useAllAccessCredentials("superUser2", "superUser3");
+    
+    try (SolrZkClient zkClient = new SolrZkClient(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT)) {
+      // 'superUser2' should be able to lock out 'solradmin'...
+      zkClient.updateACLs("/");
+    }
+    
+    // this (locked out) 'solradmin' client shouldn't be able to read anything anymore (even the path that was originally unprotected) ...
+    useAllAccessCredentials("solradmin", "solradminPassword");
+    try (SolrZkClient zkClient = new SolrZkClient(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT)) {
+      for (String path : Arrays.asList(SecurityAwareZkACLProvider.SECURITY_ZNODE_PATH, "/protectedCreateNode", "/unprotectedCreateNode")) {
+        expectThrows(NoAuthException.class, () -> {
+            zkClient.getData(path, null, null, false);
+          });
+      }
+    }
+
+    // read only user client should still have access to basic "protected" paths (but still not security)
+    useReadonlyCredentials();
+    try (SolrZkClient zkClient = new SolrZkClient(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT)) {
+      for (String path : Arrays.asList("/protectedCreateNode", "/unprotectedCreateNode")) {
+        assertNotNull(zkClient.getData(path, null, null, false));
+      }
+      expectThrows(NoAuthException.class, () -> {
+          zkClient.getData(SecurityAwareZkACLProvider.SECURITY_ZNODE_PATH, null, null, false);
+        });
+    }
+
+    // 'superUser2' should still have access to everything ... as should newly minted 'superUser3'
+    for (String user : Arrays.asList("superUser2", "superUser3")) {
+      useAllAccessCredentials(user);
+      try (SolrZkClient zkClient = new SolrZkClient(zkServer.getZkAddress(), AbstractZkTestCase.TIMEOUT)) {
+        for (String path : Arrays.asList(SecurityAwareZkACLProvider.SECURITY_ZNODE_PATH, "/protectedCreateNode", "/unprotectedCreateNode")) {
+          assertNotNull(zkClient.getData(path, null, null, false));
+        }
+      }
+    }
+  }
+  
   protected static void doTest(
       SolrZkClient zkClient,
       boolean getData, boolean list, boolean create, boolean setData, boolean delete,
@@ -313,22 +365,32 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
     
     System.setProperty(SolrZkClient.ZK_CRED_PROVIDER_CLASS_NAME_VM_PARAM_NAME, VMParamsSingleSetCredentialsDigestZkCredentialsProvider.class.getName());
     Properties props = new Properties();
-
-    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME, "connectAndAllACLUsername");
-    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME, "connectAndAllACLPasswordWrong");
+    
+    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME, "solradmin");
+    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME, "solradmin_WRONG_Password");
 
     setCredentialProps(props);
   }
-  
-  private void useAllCredentials() throws Exception {
+
+  private void useAllAccessCredentials(final String... creds) throws Exception {
     clearSecuritySystemProperties();
     
+    System.setProperty(SolrZkClient.ZK_ACL_PROVIDER_CLASS_NAME_VM_PARAM_NAME, VMParamsAllAndReadonlyDigestZkACLProvider.class.getName());
     System.setProperty(SolrZkClient.ZK_CRED_PROVIDER_CLASS_NAME_VM_PARAM_NAME, VMParamsSingleSetCredentialsDigestZkCredentialsProvider.class.getName());
 
     Properties props = new Properties();
 
-    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME, "connectAndAllACLUsername");
-    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME, "connectAndAllACLPassword");
+    // suffix shouldn't matter as long as they user/pass are consistent between user & pass...
+    
+    int aclId = 42;
+    for (String acl : creds) {
+      props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME + "." + aclId, acl);
+      props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME + "." + aclId, acl + "Password");
+      aclId++;
+    }
+    
+    props.put(VMParamsAllAndReadonlyDigestZkACLProvider.DEFAULT_DIGEST_READONLY_USERNAME_VM_PARAM_NAME+".YAK", "readonlyACLUsername");
+    props.put(VMParamsAllAndReadonlyDigestZkACLProvider.DEFAULT_DIGEST_READONLY_PASSWORD_VM_PARAM_NAME+".YAK", "readonlyACLPassword");
 
     setCredentialProps(props);
     
@@ -346,26 +408,45 @@ public class VMParamsZkACLAndCredentialsProvidersTest extends SolrTestCaseJ4 {
 
     setCredentialProps(props);
   }
-  
-  private void setSecuritySystemProperties() {
-    clearSecuritySystemProperties();
 
+  private void setSecuritySystemProperties() throws Exception {
+    clearSecuritySystemProperties();
+    
     System.setProperty(SolrZkClient.ZK_ACL_PROVIDER_CLASS_NAME_VM_PARAM_NAME, VMParamsAllAndReadonlyDigestZkACLProvider.class.getName());
     System.setProperty(SolrZkClient.ZK_CRED_PROVIDER_CLASS_NAME_VM_PARAM_NAME, VMParamsSingleSetCredentialsDigestZkCredentialsProvider.class.getName());
-    System.setProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME, "connectAndAllACLUsername");
-    System.setProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME, "connectAndAllACLPassword");
-    System.setProperty(VMParamsAllAndReadonlyDigestZkACLProvider.DEFAULT_DIGEST_READONLY_USERNAME_VM_PARAM_NAME, "readonlyACLUsername");
-    System.setProperty(VMParamsAllAndReadonlyDigestZkACLProvider.DEFAULT_DIGEST_READONLY_PASSWORD_VM_PARAM_NAME, "readonlyACLPassword");
+    
+    Properties props = new Properties();
+    
+    // suffix shouldn't matter as long as they user/pass are consistent between user & pass...
+    
+    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME, "solradmin");
+    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME, "solradminPassword");
+
+    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME+".ZOT", "superUser2");
+    props.put(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME+".ZOT", "superUser2Password");
+    
+    props.put(VMParamsAllAndReadonlyDigestZkACLProvider.DEFAULT_DIGEST_READONLY_USERNAME_VM_PARAM_NAME+".ABC", "readonlyACLUsername");
+    props.put(VMParamsAllAndReadonlyDigestZkACLProvider.DEFAULT_DIGEST_READONLY_PASSWORD_VM_PARAM_NAME+".ABC", "readonlyACLPassword");
+    
+    setCredentialProps(props);
   }
   
   private void clearSecuritySystemProperties() {
     System.clearProperty(SolrZkClient.ZK_ACL_PROVIDER_CLASS_NAME_VM_PARAM_NAME);
     System.clearProperty(SolrZkClient.ZK_CRED_PROVIDER_CLASS_NAME_VM_PARAM_NAME);
     System.clearProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_FILE_VM_PARAM_NAME);
-    System.clearProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME);
-    System.clearProperty(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME);
-    System.clearProperty(VMParamsAllAndReadonlyDigestZkACLProvider.DEFAULT_DIGEST_READONLY_USERNAME_VM_PARAM_NAME);
-    System.clearProperty(VMParamsAllAndReadonlyDigestZkACLProvider.DEFAULT_DIGEST_READONLY_PASSWORD_VM_PARAM_NAME);
+    
+    for (String p : System.getProperties().stringPropertyNames()) {
+      for (String prefix : Arrays.asList(VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME,
+                                         VMParamsSingleSetCredentialsDigestZkCredentialsProvider.DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME,
+                                         VMParamsAllAndReadonlyDigestZkACLProvider.DEFAULT_DIGEST_READONLY_USERNAME_VM_PARAM_NAME,
+                                         VMParamsAllAndReadonlyDigestZkACLProvider.DEFAULT_DIGEST_READONLY_PASSWORD_VM_PARAM_NAME)) {
+        if (p.startsWith(prefix)) {
+          System.clearProperty(p);
+          break;
+        }
+      }
+    }
   }
   
 }

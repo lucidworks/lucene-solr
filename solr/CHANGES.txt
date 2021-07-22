@@ -12,6 +12,12 @@ https://github.com/apache/lucene-solr/blob/master/solr/solr-ref-guide/src/solr-u
 
 * SOLR-15233: Set doAs param in ConfigurableInternodeAuthHadoopPlugin (Geza Nagy, Jason Gerlowski, Mike Drob)
 
+* LS-2081: Custom modifications to VMParamsAllAndReadonlyDigestZkACLProvider & VMParamsSingleSetCredentialsDigestZkCredentialsProvider
+  to support concurrent use of multiple ZK credentials and ACLs, this allows "rotating" credentials w/o downtime
+  (see RestartCloudWithNewZkCredentialsTest)
+  NOTE: This is custom work for this branch, there is no upstream Apache equivilent of this change.
+  (Dan Fox, hossman)
+
 ==================  8.6.3 ==================
 
 Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.

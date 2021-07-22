@@ -19,12 +19,14 @@ package org.apache.solr.common.cloud;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.StringUtils;
 
@@ -35,6 +37,8 @@ public class VMParamsSingleSetCredentialsDigestZkCredentialsProvider extends Def
   
   final String zkDigestUsernameVMParamName;
   final String zkDigestPasswordVMParamName;
+
+  final Collection<ZkCredentials> creds;
   
   public VMParamsSingleSetCredentialsDigestZkCredentialsProvider() {
     this(DEFAULT_DIGEST_USERNAME_VM_PARAM_NAME, DEFAULT_DIGEST_PASSWORD_VM_PARAM_NAME);
@@ -43,6 +47,29 @@ public class VMParamsSingleSetCredentialsDigestZkCredentialsProvider extends Def
   public VMParamsSingleSetCredentialsDigestZkCredentialsProvider(String zkDigestUsernameVMParamName, String zkDigestPasswordVMParamName) {
     this.zkDigestUsernameVMParamName = zkDigestUsernameVMParamName;
     this.zkDigestPasswordVMParamName = zkDigestPasswordVMParamName;
+    
+    final Properties props = filterProps(readCredentialsFile(System.getProperty(DEFAULT_DIGEST_FILE_VM_PARAM_NAME)),
+                                                             this.zkDigestUsernameVMParamName,
+                                                             this.zkDigestPasswordVMParamName);
+    
+    final List<ZkCredentials> localCreds = new ArrayList<>();
+    this.creds = Collections.unmodifiableList(localCreds);
+
+    try {
+      for (String propkey : props.stringPropertyNames()) {
+        if (propkey.startsWith(zkDigestUsernameVMParamName)) {
+          final String username = props.getProperty(propkey);
+          // look for password prop with same suffix as propkey
+          final String password = props.getProperty(zkDigestPasswordVMParamName + propkey.substring(zkDigestUsernameVMParamName.length()));
+          
+          if (!StringUtils.isEmpty(username) && !StringUtils.isEmpty(password)) {
+            localCreds.add(new ZkCredentials("digest", (username + ":" + password).getBytes("UTF-8")));
+          }
+        }
+      }
+    } catch (UnsupportedEncodingException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   public static Properties readCredentialsFile(final String credentialsFilePath) {
@@ -60,17 +87,21 @@ public class VMParamsSingleSetCredentialsDigestZkCredentialsProvider extends Def
     return props;
   }
 
+  public static Properties filterProps(final Properties props, final String... prefixes) {
+    Properties results = new Properties();
+    for (String propkey : props.stringPropertyNames()) {
+      for (String prefix : prefixes) {
+        if (propkey.startsWith(prefix)) {
+          results.setProperty(propkey, props.getProperty(propkey));
+        }
+      }
+    }
+    return results;
+  }
+  
   @Override
   protected Collection<ZkCredentials> createCredentials() {
-    Properties props = readCredentialsFile(System.getProperty(DEFAULT_DIGEST_FILE_VM_PARAM_NAME));
-    List<ZkCredentials> result = new ArrayList<ZkCredentials>();
-    String digestUsername = props.getProperty(zkDigestUsernameVMParamName);
-    String digestPassword = props.getProperty(zkDigestPasswordVMParamName);
-    if (!StringUtils.isEmpty(digestUsername) && !StringUtils.isEmpty(digestPassword)) {
-      result.add(new ZkCredentials("digest",
-          (digestUsername + ":" + digestPassword).getBytes(StandardCharsets.UTF_8)));
-    }
-    return result;
+    return creds;
   }
   
 }
