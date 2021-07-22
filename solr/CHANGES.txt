@@ -33,6 +33,12 @@ See the Solr tutorial at https://lucene.apache.org/solr/guide/solr-tutorial.html
 * SOLR-14456: Fix Content-Type header usage when a request is forwarded from Solr node to Solr
   node with compression enabled (samuelgmartinez via Houston Putman)
 
+* LS-2081: Custom modifications to VMParamsAllAndReadonlyDigestZkACLProvider & VMParamsSingleSetCredentialsDigestZkCredentialsProvider
+  to support concurrent use of multiple ZK credentials and ACLs, this allows "rotating" credentials w/o downtime
+  (see RestartCloudWithNewZkCredentialsTest)
+  NOTE: This is custom work for this branch, there is no upstream Apache equivilent of this change.
+  (Dan Fox, hossman)
+
 ==================  8.4.1 ==================
 
 Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.
