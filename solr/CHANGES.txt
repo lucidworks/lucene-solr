@@ -18,6 +18,9 @@ https://github.com/apache/lucene-solr/blob/master/solr/solr-ref-guide/src/solr-u
   NOTE: This is custom work for this branch, there is no upstream Apache equivilent of this change.
   (Dan Fox, hossman)
 
+* SOLR-8889: Fixed various problems in Solr and SolrJ that could cause deleteById commands with "_route_" information to processed
+  by the wrong shard, and/or fail when forwarded to replicas from the shard leader. (Dan Fox, Yuki Yano, hossman)
+
 ==================  8.6.3 ==================
 
 Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.
