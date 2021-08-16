@@ -38,6 +38,9 @@ See the Solr tutorial at https://lucene.apache.org/solr/guide/solr-tutorial.html
   (see RestartCloudWithNewZkCredentialsTest)
   NOTE: This is custom work for this branch, there is no upstream Apache equivilent of this change.
   (Dan Fox, hossman)
+  
+* SOLR-8889: Fixed various problems in Solr and SolrJ that could cause deleteById commands with "_route_" information to processed
+  by the wrong shard, and/or fail when forwarded to replicas from the shard leader. (Dan Fox, Yuki Yano, hossman)
 
 ==================  8.4.1 ==================
 
