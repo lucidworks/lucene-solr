@@ -50,8 +50,8 @@ import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.PointField;
-import org.apache.solr.search.QueryParsing;
 import org.apache.solr.search.DocSet;
+import org.apache.solr.search.QueryParsing;
 import org.apache.solr.search.SyntaxError;
 import org.apache.solr.search.facet.FacetDebugInfo;
 import org.apache.solr.util.RTimer;
@@ -76,6 +76,8 @@ public class FacetComponent extends SearchComponent {
 
   private static final String PIVOT_KEY = "facet_pivot";
   private static final String PIVOT_REFINE_PREFIX = "{!"+PivotFacet.REFINE_PARAM+"=";
+
+  private static final boolean REFINE_FACETS = Boolean.parseBoolean(System.getProperty("refine.facets", "true"));
 
   @Override
   public void prepare(ResponseBuilder rb) throws IOException {
@@ -781,65 +783,67 @@ public class FacetComponent extends SearchComponent {
     // request ((with responses from all shards) sent out to get facets...
     // otherwise we would need to wait until all facet responses were received.
     //
-    for (DistribFieldFacet dff : fi.facets.values()) {
-      // no need to check these facets for refinement
-      if (dff.initialLimit <= 0 && dff.initialMincount <= 1) continue;
+    if (REFINE_FACETS) {
+      for (DistribFieldFacet dff : fi.facets.values()) {
+        // no need to check these facets for refinement
+        if (dff.initialLimit <= 0 && dff.initialMincount <= 1) continue;
 
-      // only other case where index-sort doesn't need refinement is if minCount==0
-      if (dff.minCount <= 1 && dff.sort.equals(FacetParams.FACET_SORT_INDEX)) continue;
+        // only other case where index-sort doesn't need refinement is if minCount==0
+        if (dff.minCount <= 1 && dff.sort.equals(FacetParams.FACET_SORT_INDEX)) continue;
 
-      @SuppressWarnings("unchecked") // generic array's are annoying
-      List<String>[] tmp = (List<String>[]) new List[rb.shards.length];
-      dff._toRefine = tmp;
+        @SuppressWarnings("unchecked") // generic array's are annoying
+        List<String>[] tmp = (List<String>[]) new List[rb.shards.length];
+        dff._toRefine = tmp;
 
-      ShardFacetCount[] counts = dff.getCountSorted();
-      int ntop = Math.min(counts.length, 
-                          dff.limit >= 0 ? dff.offset + dff.limit : Integer.MAX_VALUE);
-      long smallestCount = counts.length == 0 ? 0 : counts[ntop - 1].count;
-      
-      for (int i = 0; i < counts.length; i++) {
-        ShardFacetCount sfc = counts[i];
-        boolean needRefinement = false;
+        ShardFacetCount[] counts = dff.getCountSorted();
+        int ntop = Math.min(counts.length,
+            dff.limit >= 0 ? dff.offset + dff.limit : Integer.MAX_VALUE);
+        long smallestCount = counts.length == 0 ? 0 : counts[ntop - 1].count;
 
-        if (i < ntop) {
-          // automatically flag the top values for refinement
-          // this should always be true for facet.sort=index
-          needRefinement = true;
-        } else {
-          // this logic should only be invoked for facet.sort=index (for now)
-          
-          // calculate the maximum value that this term may have
-          // and if it is >= smallestCount, then flag for refinement
-          long maxCount = sfc.count;
-          for (int shardNum = 0; shardNum < rb.shards.length; shardNum++) {
-            FixedBitSet fbs = dff.counted[shardNum];
-            // fbs can be null if a shard request failed
-            if (fbs != null && (sfc.termNum >= fbs.length() || !fbs.get(sfc.termNum))) {
-              // if missing from this shard, add the max it could be
-              maxCount += dff.maxPossible(shardNum);
+        for (int i = 0; i < counts.length; i++) {
+          ShardFacetCount sfc = counts[i];
+          boolean needRefinement = false;
+
+          if (i < ntop) {
+            // automatically flag the top values for refinement
+            // this should always be true for facet.sort=index
+            needRefinement = true;
+          } else {
+            // this logic should only be invoked for facet.sort=index (for now)
+
+            // calculate the maximum value that this term may have
+            // and if it is >= smallestCount, then flag for refinement
+            long maxCount = sfc.count;
+            for (int shardNum = 0; shardNum < rb.shards.length; shardNum++) {
+              FixedBitSet fbs = dff.counted[shardNum];
+              // fbs can be null if a shard request failed
+              if (fbs != null && (sfc.termNum >= fbs.length() || !fbs.get(sfc.termNum))) {
+                // if missing from this shard, add the max it could be
+                maxCount += dff.maxPossible(shardNum);
+              }
+            }
+            if (maxCount >= smallestCount) {
+              // TODO: on a tie, we could check the term values
+              needRefinement = true;
             }
           }
-          if (maxCount >= smallestCount) {
-            // TODO: on a tie, we could check the term values
-            needRefinement = true;
-          }
-        }
 
-        if (needRefinement) {
-          // add a query for each shard missing the term that needs refinement
-          for (int shardNum = 0; shardNum < rb.shards.length; shardNum++) {
-            FixedBitSet fbs = dff.counted[shardNum];
-            // fbs can be null if a shard request failed
-            if (fbs != null &&
-                (sfc.termNum >= fbs.length() || !fbs.get(sfc.termNum)) &&
-                dff.maxPossible(shardNum) > 0) {
+          if (needRefinement) {
+            // add a query for each shard missing the term that needs refinement
+            for (int shardNum = 0; shardNum < rb.shards.length; shardNum++) {
+              FixedBitSet fbs = dff.counted[shardNum];
+              // fbs can be null if a shard request failed
+              if (fbs != null &&
+                  (sfc.termNum >= fbs.length() || !fbs.get(sfc.termNum)) &&
+                  dff.maxPossible(shardNum) > 0) {
 
-              dff.needRefinements = true;
-              List<String> lst = dff._toRefine[shardNum];
-              if (lst == null) {
-                lst = dff._toRefine[shardNum] = new ArrayList<>();
+                dff.needRefinements = true;
+                List<String> lst = dff._toRefine[shardNum];
+                if (lst == null) {
+                  lst = dff._toRefine[shardNum] = new ArrayList<>();
+                }
+                lst.add(sfc.name);
               }
-              lst.add(sfc.name);
             }
           }
         }
