@@ -39,6 +39,8 @@ Bug fixes
   
 * SOLR-14073: Fix segment look ahead NPE in CollapsingQParserPlugin (Joel Bernstein)
 
+* SOLR-15871: Update Log4J to 2.17.1 (weidongkl via janhoy)
+
 ==================  7.7.3 ==================
 
 Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.
