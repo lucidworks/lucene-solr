@@ -42,6 +42,8 @@ See the Solr tutorial at https://lucene.apache.org/solr/guide/solr-tutorial.html
 * SOLR-8889: Fixed various problems in Solr and SolrJ that could cause deleteById commands with "_route_" information to processed
   by the wrong shard, and/or fail when forwarded to replicas from the shard leader. (Dan Fox, Yuki Yano, hossman)
 
+* SOLR-15871: Update Log4J to 2.17.1 (weidongkl via janhoy)
+
 ==================  8.4.1 ==================
 
 Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.
