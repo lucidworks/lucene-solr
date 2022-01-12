@@ -8,6 +8,8 @@ https://github.com/apache/lucene-solr/blob/master/solr/solr-ref-guide/src/solr-u
 
 * LS-1886: Add a zkDigestCredentialsFile option
 
+* SOLR-15871: Update Log4J to 2.17.1 (weidongkl via janhoy)
+
 ==================  8.6.3 ==================
 
 Consult the LUCENE_CHANGES.txt file for additional, low level, changes in this release.
